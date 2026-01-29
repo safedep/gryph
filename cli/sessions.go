@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 
+	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -110,12 +111,5 @@ func sessionToView(s *session.Session) *tui.SessionView {
 
 // getAgentDisplayName returns the display name for an agent.
 func getAgentDisplayName(name string) string {
-	switch name {
-	case "claude-code":
-		return "Claude Code"
-	case "cursor":
-		return "Cursor"
-	default:
-		return name
-	}
+	return agent.AgentDisplayName(name)
 }

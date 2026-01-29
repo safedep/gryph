@@ -7,6 +7,30 @@ import (
 	"github.com/safedep/gryph/core/events"
 )
 
+// Standard agent identifiers.
+const (
+	AgentClaudeCode = "claude-code"
+	AgentCursor     = "cursor"
+)
+
+// Standard agent display names.
+const (
+	DisplayClaudeCode = "Claude Code"
+	DisplayCursor     = "Cursor"
+)
+
+// AgentDisplayName returns the display name for an agent identifier.
+func AgentDisplayName(name string) string {
+	switch name {
+	case AgentClaudeCode:
+		return DisplayClaudeCode
+	case AgentCursor:
+		return DisplayCursor
+	default:
+		return name
+	}
+}
+
 // DetectionResult contains information about a detected agent.
 type DetectionResult struct {
 	// Installed indicates if the agent is installed.

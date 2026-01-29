@@ -10,9 +10,9 @@ import (
 
 const (
 	// AgentName is the machine identifier for Claude Code.
-	AgentName = "claude-code"
+	AgentName = agent.AgentClaudeCode
 	// DisplayName is the human-readable name for Claude Code.
-	DisplayName = "Claude Code"
+	DisplayName = agent.DisplayClaudeCode
 )
 
 // Adapter implements the agent.Adapter interface for Claude Code.
