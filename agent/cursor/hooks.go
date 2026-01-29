@@ -11,14 +11,35 @@ import (
 	"github.com/safedep/gryph/agent"
 )
 
-// HookTypes are the hook types supported by Cursor.
+// HookTypes are the hook types supported by Cursor that we install.
+// These are the hooks that Gryph registers for monitoring.
 var HookTypes = []string{
-	"beforeSubmitPrompt",
+	// Pre-action hooks (can block)
+	"preToolUse",
 	"beforeShellExecution",
 	"beforeMCPExecution",
 	"beforeReadFile",
+	"beforeTabFileRead",
+	"beforeSubmitPrompt",
+
+	// Post-action hooks (for logging)
+	"postToolUse",
+	"postToolUseFailure",
 	"afterFileEdit",
+	"afterTabFileEdit",
+	"afterAgentResponse",
+
+	// Session lifecycle hooks
+	"sessionStart",
+	"sessionEnd",
 	"stop",
+
+	// Subagent hooks
+	"subagentStart",
+	"subagentStop",
+
+	// Other hooks
+	"preCompact",
 }
 
 // HooksConfig represents the Cursor hooks.json structure.

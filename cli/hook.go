@@ -109,7 +109,7 @@ func NewHookCmd() *cobra.Command {
 
 			// Send response to agent
 			// For now, always allow. Future: add policy-based blocking here.
-			return sendHookResponse(agentName)
+			return sendHookResponse(agentName, hookType)
 		},
 	}
 
@@ -118,7 +118,7 @@ func NewHookCmd() *cobra.Command {
 
 // sendHookResponse sends the appropriate response to the agent.
 // Returns nil for success (exit code 0), or an error that triggers non-zero exit.
-func sendHookResponse(agentName string) error {
+func sendHookResponse(agentName, hookType string) error {
 	switch agentName {
 	case agent.AgentClaudeCode:
 		// Claude Code exit codes:
@@ -131,13 +131,47 @@ func sendHookResponse(agentName string) error {
 
 	case agent.AgentCursor:
 		// Cursor: JSON response to stdout
-		response := cursor.GenerateResponse(true, "")
+		// Different hooks have different response schemas
+		response := generateCursorResponse(hookType)
 		os.Stdout.Write(response)
 		return nil
 
 	default:
 		// Unknown agent, just succeed
 		return nil
+	}
+}
+
+// generateCursorResponse generates the appropriate response for a Cursor hook type.
+func generateCursorResponse(hookType string) []byte {
+	// Create an allow response for all hooks (policy enforcement can be added later)
+	allowResponse := cursor.NewAllowResponse()
+
+	switch hookType {
+	case "preToolUse":
+		// preToolUse uses decision: allow/deny
+		return cursor.GeneratePreToolUseResponse(allowResponse)
+
+	case "beforeShellExecution", "beforeMCPExecution", "beforeReadFile", "beforeTabFileRead":
+		// Permission hooks use permission: allow/deny/ask
+		return cursor.GeneratePermissionResponse(allowResponse)
+
+	case "beforeSubmitPrompt", "sessionStart":
+		// Continue hooks use continue: true/false
+		return cursor.GenerateContinueResponse(true, "")
+
+	case "stop", "subagentStop":
+		// Stop hooks can have optional followup_message
+		return cursor.GenerateStopResponse("")
+
+	case "postToolUse", "postToolUseFailure", "afterFileEdit", "afterTabFileEdit",
+		"afterAgentResponse", "sessionEnd", "subagentStart", "preCompact":
+		// Post-action hooks don't require specific responses, return empty JSON
+		return []byte("{}")
+
+	default:
+		// Unknown hook type, return empty JSON
+		return []byte("{}")
 	}
 }
 
