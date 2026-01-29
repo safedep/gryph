@@ -11,6 +11,7 @@ import (
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/cursor"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
 	"github.com/spf13/cobra"
 )
@@ -54,6 +55,12 @@ func NewHookCmd() *cobra.Command {
 			event, err := adapter.ParseEvent(ctx, hookType, rawData)
 			if err != nil {
 				return fmt.Errorf("failed to parse event: %w", err)
+			}
+
+			// Evaluate security checks
+			securityResult := app.Security.Evaluate(ctx, event)
+			if !securityResult.IsAllowed() {
+				return sendSecurityBlockedResponse(agentName, hookType, securityResult)
 			}
 
 			// Get or create session using the session ID from the parsed event
@@ -139,6 +146,42 @@ func sendHookResponse(agentName, hookType string) error {
 	default:
 		// Unknown agent, just succeed
 		return nil
+	}
+}
+
+// sendSecurityBlockedResponse sends a blocked response based on security evaluation.
+func sendSecurityBlockedResponse(agentName, hookType string, result *security.Result) error {
+	switch agentName {
+	case agent.AgentClaudeCode:
+		response := claudecode.NewBlockResponse(result.BlockReason)
+		return handleClaudeCodeResponse(response)
+
+	case agent.AgentCursor:
+		denyResponse := cursor.NewDenyResponse(result.BlockReason)
+		output := generateCursorBlockedResponse(hookType, denyResponse)
+		os.Stdout.Write(output)
+		return nil
+
+	default:
+		return nil
+	}
+}
+
+// generateCursorBlockedResponse generates the appropriate blocked response for a Cursor hook type.
+func generateCursorBlockedResponse(hookType string, response *cursor.HookResponse) []byte {
+	switch hookType {
+	case "preToolUse":
+		return cursor.GeneratePreToolUseResponse(response)
+
+	case "beforeShellExecution", "beforeMCPExecution", "beforeReadFile", "beforeTabFileRead":
+		return cursor.GeneratePermissionResponse(response)
+
+	case "beforeSubmitPrompt", "sessionStart":
+		return cursor.GenerateContinueResponse(false, response.Reason)
+
+	default:
+		// For hooks that don't support blocking, return empty JSON
+		return []byte("{}")
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/cursor"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
@@ -22,6 +23,7 @@ type App struct {
 	Registry  *agent.Registry
 	Presenter tui.Presenter
 	Paths     *config.Paths
+	Security  *security.Evaluator
 }
 
 // NewApp creates a new App with the given configuration.
@@ -39,11 +41,16 @@ func NewApp(cfg *config.Config) *App {
 		UseColors: cfg.ShouldUseColors(),
 	})
 
+	// Create security evaluator with placeholder check
+	sec := security.New(&security.Config{FailOpen: true})
+	sec.RegisterCheck(security.NewPlaceholderCheck())
+
 	return &App{
 		Config:    cfg,
 		Registry:  registry,
 		Presenter: presenter,
 		Paths:     paths,
+		Security:  sec,
 	}
 }
 
