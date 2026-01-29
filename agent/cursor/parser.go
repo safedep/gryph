@@ -55,8 +55,12 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte) (*even
 		actionType = at
 	}
 
+	// Store original conversation ID for correlation
+	agentSessionID := hookEvent.ConversationID
+
 	// Create event
 	event := events.NewEvent(sessionID, AgentName, actionType)
+	event.AgentSessionID = agentSessionID
 	event.ToolName = hookType
 	event.RawEvent = rawData
 
