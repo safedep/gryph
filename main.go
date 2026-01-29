@@ -2,11 +2,14 @@ package main
 
 import (
 	"fmt"
+	"os"
 
-	"github.com/safedep/gryph/internal/version"
+	"github.com/safedep/gryph/internal/cli"
 )
 
 func main() {
-	fmt.Println("Hello World!")
-	fmt.Println("Running: " + version.Version)
+	if err := cli.New().Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
