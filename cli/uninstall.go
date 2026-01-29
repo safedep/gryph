@@ -1,0 +1,92 @@
+package cli
+
+import (
+	"context"
+	"os"
+
+	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/tui"
+	"github.com/spf13/cobra"
+)
+
+// NewUninstallCmd creates the uninstall command.
+func NewUninstallCmd() *cobra.Command {
+	var (
+		agents         []string
+		purge          bool
+		dryRun         bool
+		restoreBackup  bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Remove hooks from AI coding agents",
+		Long: `Remove hooks from AI coding agents.
+
+Removes installed hooks from all or specified agents. Optionally
+removes the database and configuration files as well.`,
+		Example: `  gryph uninstall
+  gryph uninstall --agent claude-code
+  gryph uninstall --purge
+  gryph uninstall --restore-backup`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+
+			app, err := loadApp()
+			if err != nil {
+				return err
+			}
+
+			// Filter agents if specified
+			adapters := app.Registry.All()
+			if len(agents) > 0 {
+				adapters = filterAdapters(adapters, agents)
+			}
+
+			// Build uninstall view
+			view := &tui.UninstallView{
+				Purged: purge,
+			}
+
+			for _, adapter := range adapters {
+				opts := agent.UninstallOptions{
+					DryRun:        dryRun,
+					RestoreBackup: restoreBackup,
+					BackupDir:     app.Paths.BackupsDir,
+				}
+
+				result, err := adapter.Uninstall(ctx, opts)
+				if err != nil {
+					view.Agents = append(view.Agents, tui.AgentUninstallView{
+						Name:        adapter.Name(),
+						DisplayName: adapter.DisplayName(),
+						Error:       err.Error(),
+					})
+					continue
+				}
+
+				view.Agents = append(view.Agents, tui.AgentUninstallView{
+					Name:            adapter.Name(),
+					DisplayName:     adapter.DisplayName(),
+					HooksRemoved:    result.HooksRemoved,
+					BackupsRestored: result.BackupsRestored,
+				})
+			}
+
+			// Purge database and config if requested
+			if purge && !dryRun {
+				os.Remove(app.Paths.DatabaseFile)
+				os.Remove(app.Paths.ConfigFile)
+			}
+
+			return app.Presenter.RenderUninstall(view)
+		},
+	}
+
+	cmd.Flags().StringArrayVar(&agents, "agent", nil, "uninstall from specific agent only (repeatable)")
+	cmd.Flags().BoolVar(&purge, "purge", false, "also remove database and configuration")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be removed")
+	cmd.Flags().BoolVar(&restoreBackup, "restore-backup", false, "restore backed-up hooks if available")
+
+	return cmd
+}
