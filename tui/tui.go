@@ -67,6 +67,9 @@ type PresenterOptions struct {
 	UseColors bool
 	// Verbose increases output verbosity.
 	Verbose bool
+	// TerminalWidth is the width of the terminal for table rendering.
+	// If 0, the width will be auto-detected.
+	TerminalWidth int
 }
 
 // NewPresenter creates a new presenter for the given format.

@@ -8,15 +8,21 @@ import (
 
 // TablePresenter renders output in table format.
 type TablePresenter struct {
-	w     io.Writer
-	color *Colorizer
+	w         io.Writer
+	color     *Colorizer
+	termWidth int
 }
 
 // NewTablePresenter creates a new table presenter.
 func NewTablePresenter(opts PresenterOptions) *TablePresenter {
+	termWidth := opts.TerminalWidth
+	if termWidth == 0 {
+		termWidth = GetTerminalWidth()
+	}
 	return &TablePresenter{
-		w:     opts.Writer,
-		color: NewColorizer(opts.UseColors),
+		w:         opts.Writer,
+		color:     NewColorizer(opts.UseColors),
+		termWidth: termWidth,
 	}
 }
 
@@ -77,7 +83,7 @@ func (p *TablePresenter) RenderSessions(sessions []*SessionView) error {
 	}
 
 	fmt.Fprintf(p.w, "Sessions (%d)\n", len(sessions))
-	fmt.Fprintln(p.w, HorizontalLine(68))
+	fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
 
 	for _, s := range sessions {
 		fmt.Fprintf(p.w, "%s  %s  session %s\n",
@@ -102,7 +108,7 @@ func (p *TablePresenter) RenderSessions(sessions []*SessionView) error {
 // RenderSession renders a single session detail.
 func (p *TablePresenter) RenderSession(session *SessionView, events []*EventView) error {
 	fmt.Fprintf(p.w, "%s\n", p.color.Header("Session Details"))
-	fmt.Fprintln(p.w, HorizontalLine(68))
+	fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
 	fmt.Fprintln(p.w)
 
 	fmt.Fprintf(p.w, "%-16s %s\n", "Session ID", session.ID)
@@ -121,7 +127,7 @@ func (p *TablePresenter) RenderSession(session *SessionView, events []*EventView
 
 	if len(events) > 0 {
 		fmt.Fprintf(p.w, "%s\n", p.color.Header("Actions"))
-		fmt.Fprintln(p.w, HorizontalLine(68))
+		fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
 		fmt.Fprintln(p.w)
 
 		for i, e := range events {
@@ -143,7 +149,7 @@ func (p *TablePresenter) RenderSession(session *SessionView, events []*EventView
 	}
 
 	// Summary line
-	fmt.Fprintln(p.w, HorizontalLine(68))
+	fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
 	summary := fmt.Sprintf("Summary: %d files read, %d files written, %d commands",
 		session.FilesRead, session.FilesWritten, session.CommandsExecuted)
 	if session.Errors > 0 {
@@ -154,6 +160,56 @@ func (p *TablePresenter) RenderSession(session *SessionView, events []*EventView
 	return nil
 }
 
+// eventsColumnWidths holds the calculated widths for events table columns.
+type eventsColumnWidths struct {
+	time    int
+	agent   int
+	session int
+	action  int
+	path    int
+	result  int
+	total   int
+}
+
+// calculateEventsColumnWidths computes column widths based on terminal width.
+// Fixed columns: Time(11), Agent(12), Session(9), Action(6), Result(10)
+// Flexible column: Path (absorbs remaining space)
+func (p *TablePresenter) calculateEventsColumnWidths() eventsColumnWidths {
+	const (
+		timeWidth    = 11
+		agentWidth   = 12
+		sessionWidth = 9
+		actionWidth  = 6
+		resultWidth  = 10
+		minPathWidth = 15
+		maxPathWidth = 80
+		spacing      = 5 // spaces between columns
+	)
+
+	fixedWidth := timeWidth + agentWidth + sessionWidth + actionWidth + resultWidth + spacing
+	availableForPath := p.termWidth - fixedWidth
+
+	pathWidth := availableForPath
+	if pathWidth < minPathWidth {
+		pathWidth = minPathWidth
+	}
+	if pathWidth > maxPathWidth {
+		pathWidth = maxPathWidth
+	}
+
+	totalWidth := fixedWidth + pathWidth
+
+	return eventsColumnWidths{
+		time:    timeWidth,
+		agent:   agentWidth,
+		session: sessionWidth,
+		action:  actionWidth,
+		path:    pathWidth,
+		result:  resultWidth,
+		total:   totalWidth,
+	}
+}
+
 // RenderEvents renders a list of events.
 func (p *TablePresenter) RenderEvents(events []*EventView) error {
 	if len(events) == 0 {
@@ -161,18 +217,26 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 		return nil
 	}
 
+	cols := p.calculateEventsColumnWidths()
+
 	fmt.Fprintf(p.w, "Results (%d events)\n", len(events))
-	fmt.Fprintln(p.w, HorizontalLine(68))
-	fmt.Fprintf(p.w, "%-11s %-12s %-9s %-6s %-20s %s\n",
-		"Time", "Agent", "Session", "Action", "Path/Command", "Result")
-	fmt.Fprintln(p.w, HorizontalLine(68))
+	fmt.Fprintln(p.w, HorizontalLine(cols.total))
+
+	// Build format string dynamically
+	headerFmt := fmt.Sprintf("%%-%ds %%-%ds %%-%ds %%-%ds %%-%ds %%s\n",
+		cols.time, cols.agent, cols.session, cols.action, cols.path)
+	fmt.Fprintf(p.w, headerFmt, "Time", "Agent", "Session", "Action", "Path/Command", "Result")
+	fmt.Fprintln(p.w, HorizontalLine(cols.total))
+
+	rowFmt := fmt.Sprintf("%%-%ds %%-%ds %%-%ds %%-%ds %%-%ds %%s\n",
+		cols.time, cols.agent, cols.session, cols.action, cols.path)
 
 	for _, e := range events {
 		target := e.Path
 		if target == "" {
 			target = e.Command
 		}
-		target = TruncateString(target, 20)
+		target = TruncateString(target, cols.path)
 
 		result := ""
 		if e.LinesAdded > 0 || e.LinesRemoved > 0 {
@@ -182,7 +246,7 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 			result = FormatExitCode(e.ExitCode)
 		}
 
-		fmt.Fprintf(p.w, "%-11s %-12s %-9s %-6s %-20s %s\n",
+		fmt.Fprintf(p.w, rowFmt,
 			FormatTimeShort(e.Timestamp),
 			p.color.Agent(e.AgentName),
 			e.ShortSessionID,
@@ -191,7 +255,7 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 			result)
 	}
 
-	fmt.Fprintln(p.w, HorizontalLine(68))
+	fmt.Fprintln(p.w, HorizontalLine(cols.total))
 	fmt.Fprintf(p.w, "%d results\n", len(events))
 
 	return nil
@@ -273,7 +337,7 @@ func (p *TablePresenter) RenderUninstall(result *UninstallView) error {
 // RenderDoctor renders the doctor check results.
 func (p *TablePresenter) RenderDoctor(result *DoctorView) error {
 	fmt.Fprintf(p.w, "%s\n", p.color.Header("Doctor"))
-	fmt.Fprintln(p.w, HorizontalLine(68))
+	fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
 	fmt.Fprintln(p.w)
 
 	for _, check := range result.Checks {
@@ -310,7 +374,7 @@ func (p *TablePresenter) RenderDoctor(result *DoctorView) error {
 func (p *TablePresenter) RenderConfig(config *ConfigView) error {
 	fmt.Fprintf(p.w, "%s\n", p.color.Header("Configuration"))
 	fmt.Fprintf(p.w, "Location: %s\n", p.color.Path(config.Location))
-	fmt.Fprintln(p.w, HorizontalLine(68))
+	fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
 	fmt.Fprintln(p.w)
 
 	p.renderConfigMap(config.Values, "")
@@ -342,7 +406,7 @@ func (p *TablePresenter) RenderSelfAudits(entries []*SelfAuditView) error {
 	}
 
 	fmt.Fprintf(p.w, "Self-Audit Log (%d entries)\n", len(entries))
-	fmt.Fprintln(p.w, HorizontalLine(68))
+	fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
 
 	for _, e := range entries {
 		resultStr := p.color.Success(e.Result)
