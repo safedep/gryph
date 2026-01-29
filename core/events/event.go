@@ -60,17 +60,21 @@ func NewEvent(sessionID uuid.UUID, agentName string, actionType ActionType) *Eve
 // FileReadPayload represents the payload for file_read actions.
 type FileReadPayload struct {
 	Path        string `json:"path"`
+	Pattern     string `json:"pattern,omitempty"`
 	SizeBytes   int64  `json:"size_bytes,omitempty"`
 	ContentHash string `json:"content_hash,omitempty"`
 }
 
 // FileWritePayload represents the payload for file_write actions.
 type FileWritePayload struct {
-	Path         string `json:"path"`
-	SizeBytes    int64  `json:"size_bytes,omitempty"`
-	ContentHash  string `json:"content_hash,omitempty"`
-	LinesAdded   int    `json:"lines_added,omitempty"`
-	LinesRemoved int    `json:"lines_removed,omitempty"`
+	Path           string `json:"path"`
+	SizeBytes      int64  `json:"size_bytes,omitempty"`
+	ContentHash    string `json:"content_hash,omitempty"`
+	ContentPreview string `json:"content_preview,omitempty"`
+	OldString      string `json:"old_string,omitempty"`
+	NewString      string `json:"new_string,omitempty"`
+	LinesAdded     int    `json:"lines_added,omitempty"`
+	LinesRemoved   int    `json:"lines_removed,omitempty"`
 }
 
 // FileDeletePayload represents the payload for file_delete actions.
@@ -81,8 +85,10 @@ type FileDeletePayload struct {
 // CommandExecPayload represents the payload for command_exec actions.
 type CommandExecPayload struct {
 	Command       string   `json:"command"`
+	Description   string   `json:"description,omitempty"`
 	Args          []string `json:"args,omitempty"`
 	ExitCode      int      `json:"exit_code"`
+	Output        string   `json:"output,omitempty"`
 	DurationMs    int64    `json:"duration_ms,omitempty"`
 	StdoutPreview string   `json:"stdout_preview,omitempty"`
 	StderrPreview string   `json:"stderr_preview,omitempty"`
@@ -92,7 +98,26 @@ type CommandExecPayload struct {
 type ToolUsePayload struct {
 	ToolName      string          `json:"tool_name"`
 	Input         json.RawMessage `json:"input,omitempty"`
+	Output        json.RawMessage `json:"output,omitempty"`
 	OutputPreview string          `json:"output_preview,omitempty"`
+}
+
+// SessionPayload represents the payload for session_start actions.
+type SessionPayload struct {
+	Source    string `json:"source,omitempty"`
+	Model     string `json:"model,omitempty"`
+	AgentType string `json:"agent_type,omitempty"`
+}
+
+// SessionEndPayload represents the payload for session_end actions.
+type SessionEndPayload struct {
+	Reason string `json:"reason,omitempty"`
+}
+
+// NotificationPayload represents the payload for notification actions.
+type NotificationPayload struct {
+	Message string `json:"message,omitempty"`
+	Type    string `json:"type,omitempty"`
 }
 
 // SetPayload marshals the given payload and sets it on the event.

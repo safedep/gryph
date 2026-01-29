@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/safedep/gryph/agent"
@@ -87,12 +88,26 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 
 	if existingConfig != nil {
 		if opts.Backup && !opts.DryRun {
-			backupPath := fmt.Sprintf("%s.backup.%s", hooksFile, time.Now().Format("20060102150405"))
-			data, _ := json.MarshalIndent(existingConfig, "", "  ")
-			if err := os.WriteFile(backupPath, data, 0600); err == nil {
-				result.BackupPaths["hooks.json"] = backupPath
+			var backupPath string
+			if opts.BackupDir != "" {
+				// Use centralized backup directory
+				backupDir := filepath.Join(opts.BackupDir, "cursor")
+				if err := os.MkdirAll(backupDir, 0700); err != nil {
+					result.Warnings = append(result.Warnings, fmt.Sprintf("failed to create backup directory: %v", err))
+				} else {
+					backupPath = filepath.Join(backupDir, fmt.Sprintf("hooks.json.backup.%s", time.Now().Format("20060102150405")))
+				}
 			} else {
-				result.Warnings = append(result.Warnings, fmt.Sprintf("failed to backup hooks.json: %v", err))
+				// Fallback to inline backup
+				backupPath = fmt.Sprintf("%s.backup.%s", hooksFile, time.Now().Format("20060102150405"))
+			}
+			if backupPath != "" {
+				data, _ := json.MarshalIndent(existingConfig, "", "  ")
+				if err := os.WriteFile(backupPath, data, 0600); err == nil {
+					result.BackupPaths["hooks.json"] = backupPath
+				} else {
+					result.Warnings = append(result.Warnings, fmt.Sprintf("failed to backup hooks.json: %v", err))
+				}
 			}
 		}
 
@@ -128,6 +143,16 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	result.HooksInstalled = HookTypes
+
+	// Verify installation
+	status, err := GetHookStatus(ctx)
+	if err != nil {
+		result.Warnings = append(result.Warnings, fmt.Sprintf("verification failed: %v", err))
+	} else if !status.Valid {
+		result.Warnings = append(result.Warnings, "hooks installed but validation failed")
+		result.Warnings = append(result.Warnings, status.Issues...)
+	}
+
 	result.Success = true
 	result.Warnings = append(result.Warnings, "Note: Limited hook support. Some actions may not be logged.")
 
@@ -193,6 +218,25 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		return result, nil
 	}
 
+	// Check if we should restore backup
+	if opts.RestoreBackup && opts.BackupDir != "" {
+		// Look for backup files
+		pattern := filepath.Join(opts.BackupDir, "cursor", "hooks.json.backup.*")
+		matches, _ := filepath.Glob(pattern)
+		if len(matches) > 0 {
+			// Use most recent backup (last in sorted list)
+			backupPath := matches[len(matches)-1]
+			if backupData, err := os.ReadFile(backupPath); err == nil {
+				if err := os.WriteFile(hooksFile, backupData, 0600); err == nil {
+					result.BackupsRestored = true
+					result.HooksRemoved = HookTypes
+					result.Success = true
+					return result, nil
+				}
+			}
+		}
+	}
+
 	// Remove gryph commands from each hook type
 	for hookType := range config.Hooks {
 		filtered := []HookCommand{}
@@ -225,6 +269,29 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 // isGryphCommand checks if a command is a gryph command.
 func isGryphCommand(cmd string) bool {
 	return len(cmd) >= 5 && cmd[:5] == "gryph"
+}
+
+// ValidateHooksContent checks if hooks.json contains correctly formatted gryph commands.
+func ValidateHooksContent(config *HooksConfig) []string {
+	var issues []string
+
+	for _, hookType := range HookTypes {
+		expectedCmd := fmt.Sprintf("gryph _hook cursor %s", hookType)
+		found := false
+
+		for _, cmd := range config.Hooks[hookType] {
+			if cmd.Command == expectedCmd {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			issues = append(issues, fmt.Sprintf("%s: missing or incorrect gryph command", hookType))
+		}
+	}
+
+	return issues
 }
 
 // GetHookStatus checks the current hook state.
@@ -265,6 +332,15 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 				status.Hooks = append(status.Hooks, hookType)
 				break
 			}
+		}
+	}
+
+	// Validate content if hooks are installed
+	if status.Installed {
+		issues := ValidateHooksContent(&config)
+		if len(issues) > 0 {
+			status.Valid = false
+			status.Issues = append(status.Issues, issues...)
 		}
 	}
 

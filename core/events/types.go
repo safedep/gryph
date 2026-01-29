@@ -17,6 +17,12 @@ const (
 	ActionNetworkRequest ActionType = "network_request"
 	// ActionToolUse indicates other tool invocation.
 	ActionToolUse ActionType = "tool_use"
+	// ActionSessionStart indicates a session started.
+	ActionSessionStart ActionType = "session_start"
+	// ActionSessionEnd indicates a session ended.
+	ActionSessionEnd ActionType = "session_end"
+	// ActionNotification indicates a notification was sent.
+	ActionNotification ActionType = "notification"
 	// ActionUnknown indicates an unrecognized action type.
 	ActionUnknown ActionType = "unknown"
 )
@@ -30,7 +36,8 @@ func (a ActionType) String() string {
 func (a ActionType) IsValid() bool {
 	switch a {
 	case ActionFileRead, ActionFileWrite, ActionFileDelete,
-		ActionCommandExec, ActionNetworkRequest, ActionToolUse, ActionUnknown:
+		ActionCommandExec, ActionNetworkRequest, ActionToolUse,
+		ActionSessionStart, ActionSessionEnd, ActionNotification, ActionUnknown:
 		return true
 	default:
 		return false
