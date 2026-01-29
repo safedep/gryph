@@ -1,0 +1,16 @@
+{
+  "session_id": "test-session-123",
+  "transcript_path": "/home/user/.claude/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/home/user/project/README.md"
+  },
+  "tool_response": {
+    "content": "# Project README\n\nThis is the project description.",
+    "success": true
+  },
+  "tool_use_id": "tool-use-003"
+}

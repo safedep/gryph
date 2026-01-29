@@ -43,7 +43,7 @@ a file_write action or if diff was not captured.`,
 
 			// Initialize store
 			if err := app.InitStore(ctx); err != nil {
-				return err
+				return ErrDatabase("failed to open database", err)
 			}
 			defer app.Close()
 

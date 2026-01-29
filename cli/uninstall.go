@@ -51,6 +51,9 @@ removes the database and configuration files as well.`,
 			adapters := app.Registry.All()
 			if len(agents) > 0 {
 				adapters = filterAdapters(adapters, agents)
+				if len(adapters) == 0 {
+					return ErrAgentNotFound(agents[0])
+				}
 			}
 
 			// Build uninstall view

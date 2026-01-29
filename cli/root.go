@@ -132,6 +132,7 @@ native hook systems to create a comprehensive audit trail of all agent actions.`
 		NewSelfLogCmd(),
 		NewDiffCmd(),
 		NewHookCmd(),
+		NewRetentionCmd(),
 	)
 
 	return rootCmd

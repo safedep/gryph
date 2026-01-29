@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"os"
+	"time"
 
 	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/tui"
@@ -83,6 +84,15 @@ Displays the current status of the tool including:
 				Location:      app.Paths.ConfigFile,
 				LoggingLevel:  string(app.Config.Logging.Level),
 				RetentionDays: app.Config.Storage.RetentionDays,
+			}
+
+			// If retention is enabled, count events that would be cleaned up
+			if app.Config.Storage.RetentionDays > 0 && app.Store != nil {
+				cutoff := time.Now().AddDate(0, 0, -app.Config.Storage.RetentionDays)
+				view.Config.RetentionCutoff = cutoff
+				if count, err := app.Store.CountEventsBefore(ctx, cutoff); err == nil {
+					view.Config.EventsToClean = count
+				}
 			}
 
 			return app.Presenter.RenderStatus(view)

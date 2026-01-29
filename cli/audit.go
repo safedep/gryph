@@ -11,14 +11,15 @@ import (
 
 // SelfAuditAction constants for self-audit logging.
 const (
-	SelfAuditActionInstall        = "install"
-	SelfAuditActionUninstall      = "uninstall"
-	SelfAuditActionConfigChange   = "config_change"
-	SelfAuditActionPurge          = "purge"
-	SelfAuditActionDatabaseInit   = "database_init"
-	SelfAuditResultSuccess        = "success"
-	SelfAuditResultError          = "error"
-	SelfAuditResultSkipped        = "skipped"
+	SelfAuditActionInstall          = "install"
+	SelfAuditActionUninstall        = "uninstall"
+	SelfAuditActionConfigChange     = "config_change"
+	SelfAuditActionPurge            = "purge"
+	SelfAuditActionDatabaseInit     = "database_init"
+	SelfAuditActionRetentionCleanup = "retention_cleanup"
+	SelfAuditResultSuccess          = "success"
+	SelfAuditResultError            = "error"
+	SelfAuditResultSkipped          = "skipped"
 )
 
 // logSelfAudit logs a self-audit entry.

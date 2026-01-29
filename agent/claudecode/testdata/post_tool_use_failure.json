@@ -1,0 +1,16 @@
+{
+  "session_id": "test-session-123",
+  "transcript_path": "/home/user/.claude/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUseFailure",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "npm run build"
+  },
+  "tool_response": {
+    "error": "Command failed with exit code 1",
+    "output": "Build failed: missing dependency"
+  },
+  "tool_use_id": "tool-use-004"
+}

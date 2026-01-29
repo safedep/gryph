@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/safedep/gryph/core/events"
@@ -12,14 +14,15 @@ import (
 // NewLogsCmd creates the logs command.
 func NewLogsCmd() *cobra.Command {
 	var (
-		follow  bool
-		since   string
-		until   string
-		today   bool
-		limit   int
-		session string
-		agent   string
-		format  string
+		follow   bool
+		interval time.Duration
+		since    string
+		until    string
+		today    bool
+		limit    int
+		session  string
+		agent    string
+		format   string
 	)
 
 	cmd := &cobra.Command{
@@ -42,15 +45,21 @@ the results.`,
 				return err
 			}
 
+			// In follow mode, force JSONL format for streaming compatibility
+			outputFormat := getFormat(format)
+			if follow {
+				outputFormat = tui.FormatJSONL
+			}
+
 			// Update presenter format
-			app.Presenter = tui.NewPresenter(getFormat(format), tui.PresenterOptions{
+			app.Presenter = tui.NewPresenter(outputFormat, tui.PresenterOptions{
 				Writer:    cmd.OutOrStdout(),
-				UseColors: app.Config.ShouldUseColors(),
+				UseColors: app.Config.ShouldUseColors() && !follow,
 			})
 
 			// Initialize store
 			if err := app.InitStore(ctx); err != nil {
-				return err
+				return ErrDatabase("failed to open database", err)
 			}
 			defer app.Close()
 
@@ -78,28 +87,88 @@ the results.`,
 				filter = filter.WithAgents(agent)
 			}
 
-			// Query events (placeholder data for now)
+			// Query initial events
 			evts, err := app.Store.QueryEvents(ctx, filter)
 			if err != nil {
 				return err
 			}
 
-			// For demo, create placeholder events if none exist
-			if len(evts) == 0 {
-				return app.Presenter.RenderMessage("No events found. Run 'gryph install' to start logging agent activity.")
+			// If not in follow mode, just display results and exit
+			if !follow {
+				if len(evts) == 0 {
+					return app.Presenter.RenderMessage("No events found. Run 'gryph install' to start logging agent activity.")
+				}
+
+				eventViews := make([]*tui.EventView, len(evts))
+				for i, e := range evts {
+					eventViews[i] = eventToView(e)
+				}
+				return app.Presenter.RenderEvents(eventViews)
 			}
 
-			// Convert to view models
-			eventViews := make([]*tui.EventView, len(evts))
-			for i, e := range evts {
-				eventViews[i] = eventToView(e)
+			// Follow mode: display initial events, then poll for new ones
+			var lastTimestamp time.Time
+			if len(evts) > 0 {
+				eventViews := make([]*tui.EventView, len(evts))
+				for i, e := range evts {
+					eventViews[i] = eventToView(e)
+				}
+				if err := app.Presenter.RenderEvents(eventViews); err != nil {
+					return err
+				}
+				// Events are returned newest first, so the last event has oldest timestamp
+				// We want to poll for events newer than the newest (first in slice)
+				lastTimestamp = evts[0].Timestamp
+			} else {
+				lastTimestamp = time.Now()
 			}
 
-			return app.Presenter.RenderEvents(eventViews)
+			// Set up signal handling for graceful exit
+			sigCtx, cancel := signal.NotifyContext(ctx, os.Interrupt)
+			defer cancel()
+
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+
+			// Polling loop
+			for {
+				select {
+				case <-sigCtx.Done():
+					return nil
+				case <-ticker.C:
+					// Query for events newer than last timestamp
+					// Use a small delta to avoid missing events due to timestamp precision
+					pollFilter := events.NewEventFilter().
+						WithSince(lastTimestamp.Add(time.Millisecond))
+
+					if agent != "" {
+						pollFilter = pollFilter.WithAgents(agent)
+					}
+
+					newEvts, err := app.Store.QueryEvents(sigCtx, pollFilter)
+					if err != nil {
+						// Log warning but don't exit on transient errors
+						continue
+					}
+
+					if len(newEvts) > 0 {
+						eventViews := make([]*tui.EventView, len(newEvts))
+						for i, e := range newEvts {
+							eventViews[i] = eventToView(e)
+						}
+						if err := app.Presenter.RenderEvents(eventViews); err != nil {
+							return err
+						}
+						// Update timestamp to newest event
+						lastTimestamp = newEvts[0].Timestamp
+					}
+				}
+			}
 		},
 	}
 
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream new events")
+	cmd.Flags().DurationVar(&interval, "interval", 2*time.Second, "poll interval for follow mode")
 	cmd.Flags().StringVar(&since, "since", "", "show events since (e.g., \"1h\", \"2d\", \"2025-01-15\")")
 	cmd.Flags().StringVar(&until, "until", "", "show events until")
 	cmd.Flags().BoolVar(&today, "today", false, "shorthand for since midnight")

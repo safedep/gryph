@@ -42,7 +42,7 @@ installation, uninstallation, and configuration changes.`,
 
 			// Initialize store
 			if err := app.InitStore(ctx); err != nil {
-				return err
+				return ErrDatabase("failed to open database", err)
 			}
 			defer app.Close()
 

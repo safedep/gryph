@@ -29,6 +29,9 @@ type EventStore interface {
 
 	// DeleteEventsBefore deletes events older than the given time.
 	DeleteEventsBefore(ctx context.Context, before time.Time) (int, error)
+
+	// CountEventsBefore returns the count of events older than the given time.
+	CountEventsBefore(ctx context.Context, before time.Time) (int, error)
 }
 
 // SessionStore defines the interface for storing and querying sessions.

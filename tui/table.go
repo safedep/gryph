@@ -70,7 +70,14 @@ func (p *TablePresenter) RenderStatus(status *StatusView) error {
 	fmt.Fprintf(p.w, "%s\n", p.color.Header("Config"))
 	fmt.Fprintf(p.w, "  %-14s %s\n", "Location", p.color.Path(status.Config.Location))
 	fmt.Fprintf(p.w, "  %-14s %s\n", "Logging level", status.Config.LoggingLevel)
-	fmt.Fprintf(p.w, "  %-14s %d days\n", "Retention", status.Config.RetentionDays)
+	if status.Config.RetentionDays == 0 {
+		fmt.Fprintf(p.w, "  %-14s %s\n", "Retention", "disabled")
+	} else {
+		fmt.Fprintf(p.w, "  %-14s %d days\n", "Retention", status.Config.RetentionDays)
+		if status.Config.EventsToClean > 0 {
+			fmt.Fprintf(p.w, "  %-14s %d events ready for cleanup\n", "", status.Config.EventsToClean)
+		}
+	}
 
 	return nil
 }

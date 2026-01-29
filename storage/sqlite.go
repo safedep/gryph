@@ -231,6 +231,18 @@ func (s *SQLiteStore) DeleteEventsBefore(ctx context.Context, before time.Time) 
 	return deleted, nil
 }
 
+// CountEventsBefore returns the count of events older than the given time.
+func (s *SQLiteStore) CountEventsBefore(ctx context.Context, before time.Time) (int, error) {
+	count, err := s.client.AuditEvent.Query().
+		Where(auditevent.TimestampLT(before)).
+		Count(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count events: %w", err)
+	}
+
+	return count, nil
+}
+
 // SaveSession persists a new session.
 func (s *SQLiteStore) SaveSession(ctx context.Context, sess *session.Session) error {
 	create := s.client.Session.Create().

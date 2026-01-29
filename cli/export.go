@@ -55,7 +55,7 @@ Exports audit events to various formats for external analysis.`,
 
 			// Initialize store
 			if err := app.InitStore(ctx); err != nil {
-				return err
+				return ErrDatabase("failed to open database", err)
 			}
 			defer app.Close()
 

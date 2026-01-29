@@ -45,7 +45,7 @@ to enable audit logging. Existing hooks are backed up by default.`,
 
 				// Initialize store
 				if err := app.InitStore(ctx); err != nil {
-					return err
+					return ErrDatabase("failed to initialize database", err)
 				}
 				defer app.Close()
 			}
@@ -54,6 +54,9 @@ to enable audit logging. Existing hooks are backed up by default.`,
 			adapters := app.Registry.All()
 			if len(agents) > 0 {
 				adapters = filterAdapters(adapters, agents)
+				if len(adapters) == 0 {
+					return ErrAgentNotFound(agents[0])
+				}
 			}
 
 			// Build install view

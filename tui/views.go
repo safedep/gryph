@@ -35,9 +35,11 @@ type DatabaseView struct {
 
 // ConfigStatusView represents configuration status.
 type ConfigStatusView struct {
-	Location      string
-	LoggingLevel  string
-	RetentionDays int
+	Location       string
+	LoggingLevel   string
+	RetentionDays  int
+	EventsToClean  int  // Events that would be deleted by retention policy
+	RetentionCutoff time.Time // The cutoff date for retention
 }
 
 // SessionView represents a session for display.
