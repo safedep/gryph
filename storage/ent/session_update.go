@@ -30,6 +30,26 @@ func (_u *SessionUpdate) Where(ps ...predicate.Session) *SessionUpdate {
 	return _u
 }
 
+// SetExternalID sets the "external_id" field.
+func (_u *SessionUpdate) SetExternalID(v string) *SessionUpdate {
+	_u.mutation.SetExternalID(v)
+	return _u
+}
+
+// SetNillableExternalID sets the "external_id" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableExternalID(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetExternalID(*v)
+	}
+	return _u
+}
+
+// ClearExternalID clears the value of the "external_id" field.
+func (_u *SessionUpdate) ClearExternalID() *SessionUpdate {
+	_u.mutation.ClearExternalID()
+	return _u
+}
+
 // SetAgentName sets the "agent_name" field.
 func (_u *SessionUpdate) SetAgentName(v string) *SessionUpdate {
 	_u.mutation.SetAgentName(v)
@@ -319,6 +339,12 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.ExternalID(); ok {
+		_spec.SetField(session.FieldExternalID, field.TypeString, value)
+	}
+	if _u.mutation.ExternalIDCleared() {
+		_spec.ClearField(session.FieldExternalID, field.TypeString)
+	}
 	if value, ok := _u.mutation.AgentName(); ok {
 		_spec.SetField(session.FieldAgentName, field.TypeString, value)
 	}
@@ -439,6 +465,26 @@ type SessionUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *SessionMutation
+}
+
+// SetExternalID sets the "external_id" field.
+func (_u *SessionUpdateOne) SetExternalID(v string) *SessionUpdateOne {
+	_u.mutation.SetExternalID(v)
+	return _u
+}
+
+// SetNillableExternalID sets the "external_id" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableExternalID(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetExternalID(*v)
+	}
+	return _u
+}
+
+// ClearExternalID clears the value of the "external_id" field.
+func (_u *SessionUpdateOne) ClearExternalID() *SessionUpdateOne {
+	_u.mutation.ClearExternalID()
+	return _u
 }
 
 // SetAgentName sets the "agent_name" field.
@@ -759,6 +805,12 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.ExternalID(); ok {
+		_spec.SetField(session.FieldExternalID, field.TypeString, value)
+	}
+	if _u.mutation.ExternalIDCleared() {
+		_spec.ClearField(session.FieldExternalID, field.TypeString)
 	}
 	if value, ok := _u.mutation.AgentName(); ok {
 		_spec.SetField(session.FieldAgentName, field.TypeString, value)

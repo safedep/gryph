@@ -11,6 +11,8 @@ import (
 type Session struct {
 	// ID is the unique identifier for this session.
 	ID uuid.UUID `json:"id"`
+	// ExternalID is the session ID from the agent (e.g., Claude Code's session_id).
+	ExternalID string `json:"external_id,omitempty"`
 	// AgentName is the agent identifier (e.g., "claude-code").
 	AgentName string `json:"agent_name"`
 	// AgentVersion is the agent version if detectable.
@@ -41,6 +43,16 @@ func NewSession(agentName string) *Session {
 		ID:        uuid.New(),
 		AgentName: agentName,
 		StartedAt: time.Now().UTC(),
+	}
+}
+
+// NewSessionWithExternalID creates a new Session with the given external ID.
+func NewSessionWithExternalID(agentName, externalID string) *Session {
+	return &Session{
+		ID:         uuid.New(),
+		ExternalID: externalID,
+		AgentName:  agentName,
+		StartedAt:  time.Now().UTC(),
 	}
 }
 

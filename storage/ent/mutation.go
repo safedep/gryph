@@ -2194,6 +2194,7 @@ type SessionMutation struct {
 	op                   Op
 	typ                  string
 	id                   *uuid.UUID
+	external_id          *string
 	agent_name           *string
 	agent_version        *string
 	started_at           *time.Time
@@ -2321,6 +2322,55 @@ func (m *SessionMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetExternalID sets the "external_id" field.
+func (m *SessionMutation) SetExternalID(s string) {
+	m.external_id = &s
+}
+
+// ExternalID returns the value of the "external_id" field in the mutation.
+func (m *SessionMutation) ExternalID() (r string, exists bool) {
+	v := m.external_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExternalID returns the old "external_id" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldExternalID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExternalID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExternalID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExternalID: %w", err)
+	}
+	return oldValue.ExternalID, nil
+}
+
+// ClearExternalID clears the value of the "external_id" field.
+func (m *SessionMutation) ClearExternalID() {
+	m.external_id = nil
+	m.clearedFields[session.FieldExternalID] = struct{}{}
+}
+
+// ExternalIDCleared returns if the "external_id" field was cleared in this mutation.
+func (m *SessionMutation) ExternalIDCleared() bool {
+	_, ok := m.clearedFields[session.FieldExternalID]
+	return ok
+}
+
+// ResetExternalID resets all changes to the "external_id" field.
+func (m *SessionMutation) ResetExternalID() {
+	m.external_id = nil
+	delete(m.clearedFields, session.FieldExternalID)
 }
 
 // SetAgentName sets the "agent_name" field.
@@ -2959,7 +3009,10 @@ func (m *SessionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SessionMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 12)
+	if m.external_id != nil {
+		fields = append(fields, session.FieldExternalID)
+	}
 	if m.agent_name != nil {
 		fields = append(fields, session.FieldAgentName)
 	}
@@ -3001,6 +3054,8 @@ func (m *SessionMutation) Fields() []string {
 // schema.
 func (m *SessionMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case session.FieldExternalID:
+		return m.ExternalID()
 	case session.FieldAgentName:
 		return m.AgentName()
 	case session.FieldAgentVersion:
@@ -3032,6 +3087,8 @@ func (m *SessionMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *SessionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case session.FieldExternalID:
+		return m.OldExternalID(ctx)
 	case session.FieldAgentName:
 		return m.OldAgentName(ctx)
 	case session.FieldAgentVersion:
@@ -3063,6 +3120,13 @@ func (m *SessionMutation) OldField(ctx context.Context, name string) (ent.Value,
 // type.
 func (m *SessionMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case session.FieldExternalID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExternalID(v)
+		return nil
 	case session.FieldAgentName:
 		v, ok := value.(string)
 		if !ok {
@@ -3233,6 +3297,9 @@ func (m *SessionMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *SessionMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(session.FieldExternalID) {
+		fields = append(fields, session.FieldExternalID)
+	}
 	if m.FieldCleared(session.FieldAgentVersion) {
 		fields = append(fields, session.FieldAgentVersion)
 	}
@@ -3259,6 +3326,9 @@ func (m *SessionMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *SessionMutation) ClearField(name string) error {
 	switch name {
+	case session.FieldExternalID:
+		m.ClearExternalID()
+		return nil
 	case session.FieldAgentVersion:
 		m.ClearAgentVersion()
 		return nil
@@ -3279,6 +3349,9 @@ func (m *SessionMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *SessionMutation) ResetField(name string) error {
 	switch name {
+	case session.FieldExternalID:
+		m.ResetExternalID()
+		return nil
 	case session.FieldAgentName:
 		m.ResetAgentName()
 		return nil

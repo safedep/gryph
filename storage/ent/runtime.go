@@ -55,31 +55,31 @@ func init() {
 	sessionFields := schema.Session{}.Fields()
 	_ = sessionFields
 	// sessionDescAgentName is the schema descriptor for agent_name field.
-	sessionDescAgentName := sessionFields[1].Descriptor()
+	sessionDescAgentName := sessionFields[2].Descriptor()
 	// session.AgentNameValidator is a validator for the "agent_name" field. It is called by the builders before save.
 	session.AgentNameValidator = sessionDescAgentName.Validators[0].(func(string) error)
 	// sessionDescStartedAt is the schema descriptor for started_at field.
-	sessionDescStartedAt := sessionFields[3].Descriptor()
+	sessionDescStartedAt := sessionFields[4].Descriptor()
 	// session.DefaultStartedAt holds the default value on creation for the started_at field.
 	session.DefaultStartedAt = sessionDescStartedAt.Default.(func() time.Time)
 	// sessionDescTotalActions is the schema descriptor for total_actions field.
-	sessionDescTotalActions := sessionFields[7].Descriptor()
+	sessionDescTotalActions := sessionFields[8].Descriptor()
 	// session.DefaultTotalActions holds the default value on creation for the total_actions field.
 	session.DefaultTotalActions = sessionDescTotalActions.Default.(int)
 	// sessionDescFilesRead is the schema descriptor for files_read field.
-	sessionDescFilesRead := sessionFields[8].Descriptor()
+	sessionDescFilesRead := sessionFields[9].Descriptor()
 	// session.DefaultFilesRead holds the default value on creation for the files_read field.
 	session.DefaultFilesRead = sessionDescFilesRead.Default.(int)
 	// sessionDescFilesWritten is the schema descriptor for files_written field.
-	sessionDescFilesWritten := sessionFields[9].Descriptor()
+	sessionDescFilesWritten := sessionFields[10].Descriptor()
 	// session.DefaultFilesWritten holds the default value on creation for the files_written field.
 	session.DefaultFilesWritten = sessionDescFilesWritten.Default.(int)
 	// sessionDescCommandsExecuted is the schema descriptor for commands_executed field.
-	sessionDescCommandsExecuted := sessionFields[10].Descriptor()
+	sessionDescCommandsExecuted := sessionFields[11].Descriptor()
 	// session.DefaultCommandsExecuted holds the default value on creation for the commands_executed field.
 	session.DefaultCommandsExecuted = sessionDescCommandsExecuted.Default.(int)
 	// sessionDescErrors is the schema descriptor for errors field.
-	sessionDescErrors := sessionFields[11].Descriptor()
+	sessionDescErrors := sessionFields[12].Descriptor()
 	// session.DefaultErrors holds the default value on creation for the errors field.
 	session.DefaultErrors = sessionDescErrors.Default.(int)
 	// sessionDescID is the schema descriptor for id field.

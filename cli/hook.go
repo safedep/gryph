@@ -14,6 +14,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// hookInputBase is used to extract common fields from hook input.
+type hookInputBase struct {
+	SessionID string `json:"session_id"`
+}
+
 // NewHookCmd creates the internal _hook command.
 func NewHookCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -55,13 +60,28 @@ func NewHookCmd() *cobra.Command {
 				return fmt.Errorf("failed to parse event: %w", err)
 			}
 
-			// Get or create active session
-			sess, err := app.Store.GetActiveSession(ctx, agentName)
-			if err != nil {
-				return fmt.Errorf("failed to get active session: %w", err)
+			// Extract external session ID from raw data
+			var baseInput hookInputBase
+			json.Unmarshal(rawData, &baseInput)
+			externalSessionID := baseInput.SessionID
+
+			// Get or create session by external ID
+			var sess *session.Session
+			if externalSessionID != "" {
+				// Look up session by external ID
+				sess, err = app.Store.GetSessionByExternalID(ctx, agentName, externalSessionID)
+				if err != nil {
+					return fmt.Errorf("failed to get session by external ID: %w", err)
+				}
 			}
+
 			if sess == nil {
-				sess = session.NewSession(agentName)
+				// Create new session with external ID
+				if externalSessionID != "" {
+					sess = session.NewSessionWithExternalID(agentName, externalSessionID)
+				} else {
+					sess = session.NewSession(agentName)
+				}
 				sess.WorkingDirectory = event.WorkingDirectory
 				sess.ProjectName = detectProjectName(event.WorkingDirectory)
 				if err := app.Store.SaveSession(ctx, sess); err != nil {
@@ -95,8 +115,9 @@ func NewHookCmd() *cobra.Command {
 				return fmt.Errorf("failed to update session: %w", err)
 			}
 
-			// Handle session end for Cursor "stop" hook
-			if agentName == "cursor" && hookType == "stop" {
+			// Handle session end events
+			if (agentName == "cursor" && hookType == "stop") ||
+				(agentName == "claude-code" && hookType == "SessionEnd") {
 				sess.End()
 				if err := app.Store.UpdateSession(ctx, sess); err != nil {
 					return fmt.Errorf("failed to end session: %w", err)

@@ -244,6 +244,9 @@ func (s *SQLiteStore) SaveSession(ctx context.Context, sess *session.Session) er
 		SetErrors(sess.Errors)
 
 	// Set optional fields
+	if sess.ExternalID != "" {
+		create.SetExternalID(sess.ExternalID)
+	}
 	if sess.AgentVersion != "" {
 		create.SetAgentVersion(sess.AgentVersion)
 	}
@@ -377,6 +380,25 @@ func (s *SQLiteStore) GetActiveSession(ctx context.Context, agentName string) (*
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get active session: %w", err)
+	}
+
+	return entToSession(entSession), nil
+}
+
+// GetSessionByExternalID retrieves a session by its external ID (e.g., Claude Code session_id).
+func (s *SQLiteStore) GetSessionByExternalID(ctx context.Context, agentName, externalID string) (*session.Session, error) {
+	entSession, err := s.client.Session.Query().
+		Where(
+			entsession.AgentNameEQ(agentName),
+			entsession.ExternalIDEQ(externalID),
+		).
+		Order(entsession.ByStartedAt(entsql.OrderDesc())).
+		First(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get session by external ID: %w", err)
 	}
 
 	return entToSession(entSession), nil
@@ -565,6 +587,7 @@ func entToEvent(e *ent.AuditEvent) *events.Event {
 func entToSession(e *ent.Session) *session.Session {
 	sess := &session.Session{
 		ID:               e.ID,
+		ExternalID:       e.ExternalID,
 		AgentName:        e.AgentName,
 		AgentVersion:     e.AgentVersion,
 		StartedAt:        e.StartedAt,

@@ -101,6 +101,7 @@ var (
 	// SessionsColumns holds the columns for the "sessions" table.
 	SessionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
+		{Name: "external_id", Type: field.TypeString, Nullable: true},
 		{Name: "agent_name", Type: field.TypeString},
 		{Name: "agent_version", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime},
@@ -122,17 +123,22 @@ var (
 			{
 				Name:    "session_started_at",
 				Unique:  false,
-				Columns: []*schema.Column{SessionsColumns[3]},
+				Columns: []*schema.Column{SessionsColumns[4]},
 			},
 			{
 				Name:    "session_agent_name",
 				Unique:  false,
-				Columns: []*schema.Column{SessionsColumns[1]},
+				Columns: []*schema.Column{SessionsColumns[2]},
 			},
 			{
 				Name:    "session_agent_name_started_at",
 				Unique:  false,
-				Columns: []*schema.Column{SessionsColumns[1], SessionsColumns[3]},
+				Columns: []*schema.Column{SessionsColumns[2], SessionsColumns[4]},
+			},
+			{
+				Name:    "session_external_id_agent_name",
+				Unique:  false,
+				Columns: []*schema.Column{SessionsColumns[1], SessionsColumns[2]},
 			},
 		},
 	}
