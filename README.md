@@ -165,6 +165,14 @@ Sensitive files (`.env`, `*.pem`, `*secret*`, etc.) are detected automatically -
 
 Gryph installs lightweight hooks into your AI agents. When the agent performs an action (read file, write file, execute command), the hook sends a JSON event to Gryph, which stores it locally. You can then query this audit trail anytime.
 
+## Community
+
+Questions, feedback, or want to discuss AI agent security? Join us on Discord.
+
+<p align="center">
+  <a href="https://discord.gg/kAGEj25dCn"><strong>Join the SafeDep Discord</strong></a>
+</p>
+
 ## License
 
 Apache 2.0 - See [LICENSE](LICENSE) for details.
@@ -172,5 +180,5 @@ Apache 2.0 - See [LICENSE](LICENSE) for details.
 ---
 
 <p align="center">
-  Built by <a href="https://safedep.io">SafeDep</a>
+  Built by <a href="https://safedep.io">SafeDep</a> · <a href="https://discord.gg/kAGEj25dCn">Discord</a>
 </p>
