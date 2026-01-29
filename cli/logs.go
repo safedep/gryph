@@ -209,6 +209,14 @@ func actionDisplay(action events.ActionType) string {
 		return "http"
 	case events.ActionToolUse:
 		return "tool"
+	case events.ActionSessionStart:
+		return "session_start"
+	case events.ActionSessionEnd:
+		return "session_end"
+	case events.ActionNotification:
+		return "notification"
+	case events.ActionUnknown:
+		return "unknown"
 	default:
 		return "unknown"
 	}
