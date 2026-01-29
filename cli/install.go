@@ -92,9 +92,24 @@ to enable audit logging. Existing hooks are backed up by default.`,
 					result, err := adapter.Install(ctx, opts)
 					if err != nil {
 						agentView.Error = err.Error()
+						// Log self-audit for failed install
+						if !dryRun {
+							logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
+								map[string]interface{}{"error": err.Error()},
+								SelfAuditResultError, err.Error())
+						}
 					} else {
 						agentView.HooksInstalled = result.HooksInstalled
 						agentView.Warnings = result.Warnings
+						// Log self-audit for successful install
+						if !dryRun && len(result.HooksInstalled) > 0 {
+							logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
+								map[string]interface{}{
+									"hooks_installed": result.HooksInstalled,
+									"warnings":        result.Warnings,
+								},
+								SelfAuditResultSuccess, "")
+						}
 					}
 				}
 

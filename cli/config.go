@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -126,6 +128,7 @@ func newConfigSetCmd() *cobra.Command {
 		Short: "Set config value",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
 			key := args[0]
 			value := args[1]
 
@@ -139,11 +142,21 @@ func newConfigSetCmd() *cobra.Command {
 				return fmt.Errorf("failed to create config directory: %w", err)
 			}
 
+			// Initialize store for audit logging
+			if err := config.EnsureDirectories(); err == nil {
+				if err := app.InitStore(ctx); err == nil {
+					defer app.Close()
+				}
+			}
+
 			// Load or create config
 			v := viper.New()
 			v.SetConfigFile(app.Paths.ConfigFile)
 			v.SetConfigType("yaml")
 			v.ReadInConfig() // Ignore error if file doesn't exist
+
+			// Get old value for audit
+			oldValue := v.Get(key)
 
 			// Parse value type
 			var parsedValue interface{} = value
@@ -175,6 +188,15 @@ func newConfigSetCmd() *cobra.Command {
 				return fmt.Errorf("failed to write config: %w", err)
 			}
 
+			// Log self-audit for config change
+			logSelfAudit(ctx, app.Store, SelfAuditActionConfigChange, "",
+				map[string]interface{}{
+					"key":       key,
+					"old_value": oldValue,
+					"new_value": parsedValue,
+				},
+				SelfAuditResultSuccess, "")
+
 			fmt.Fprintf(cmd.OutOrStdout(), "Set %s = %v\n", key, parsedValue)
 			return nil
 		},
@@ -188,15 +210,31 @@ func newConfigResetCmd() *cobra.Command {
 		Use:   "reset",
 		Short: "Reset to default configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+
 			app, err := loadApp()
 			if err != nil {
 				return err
+			}
+
+			// Initialize store for audit logging
+			if err := config.EnsureDirectories(); err == nil {
+				if err := app.InitStore(ctx); err == nil {
+					defer app.Close()
+				}
 			}
 
 			// Remove existing config file
 			if err := os.Remove(app.Paths.ConfigFile); err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("failed to remove config: %w", err)
 			}
+
+			// Log self-audit for config reset
+			logSelfAudit(ctx, app.Store, SelfAuditActionConfigChange, "",
+				map[string]interface{}{
+					"action": "reset",
+				},
+				SelfAuditResultSuccess, "")
 
 			fmt.Fprintln(cmd.OutOrStdout(), "Configuration reset to defaults.")
 			return nil

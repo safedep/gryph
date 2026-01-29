@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -37,6 +38,15 @@ removes the database and configuration files as well.`,
 				return err
 			}
 
+			// Initialize store for audit logging (unless purging or dry-run)
+			if !dryRun && !purge {
+				if err := config.EnsureDirectories(); err == nil {
+					if err := app.InitStore(ctx); err == nil {
+						defer app.Close()
+					}
+				}
+			}
+
 			// Filter agents if specified
 			adapters := app.Registry.All()
 			if len(agents) > 0 {
@@ -62,6 +72,12 @@ removes the database and configuration files as well.`,
 						DisplayName: adapter.DisplayName(),
 						Error:       err.Error(),
 					})
+					// Log self-audit for failed uninstall
+					if !dryRun {
+						logSelfAudit(ctx, app.Store, SelfAuditActionUninstall, adapter.Name(),
+							map[string]interface{}{"error": err.Error()},
+							SelfAuditResultError, err.Error())
+					}
 					continue
 				}
 
@@ -71,10 +87,29 @@ removes the database and configuration files as well.`,
 					HooksRemoved:    result.HooksRemoved,
 					BackupsRestored: result.BackupsRestored,
 				})
+
+				// Log self-audit for successful uninstall
+				if !dryRun && len(result.HooksRemoved) > 0 {
+					logSelfAudit(ctx, app.Store, SelfAuditActionUninstall, adapter.Name(),
+						map[string]interface{}{
+							"hooks_removed":     result.HooksRemoved,
+							"backups_restored":  result.BackupsRestored,
+							"restore_backup":    restoreBackup,
+						},
+						SelfAuditResultSuccess, "")
+				}
 			}
 
 			// Purge database and config if requested
 			if purge && !dryRun {
+				// Log purge before removing files
+				logSelfAudit(ctx, app.Store, SelfAuditActionPurge, "",
+					map[string]interface{}{
+						"database_removed": app.Paths.DatabaseFile,
+						"config_removed":   app.Paths.ConfigFile,
+					},
+					SelfAuditResultSuccess, "")
+
 				os.Remove(app.Paths.DatabaseFile)
 				os.Remove(app.Paths.ConfigFile)
 			}

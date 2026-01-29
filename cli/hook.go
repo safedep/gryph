@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/safedep/gryph/agent/cursor"
+	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/session"
 	"github.com/spf13/cobra"
 )
 
@@ -52,9 +55,52 @@ func NewHookCmd() *cobra.Command {
 				return fmt.Errorf("failed to parse event: %w", err)
 			}
 
+			// Get or create active session
+			sess, err := app.Store.GetActiveSession(ctx, agentName)
+			if err != nil {
+				return fmt.Errorf("failed to get active session: %w", err)
+			}
+			if sess == nil {
+				sess = session.NewSession(agentName)
+				sess.WorkingDirectory = event.WorkingDirectory
+				sess.ProjectName = detectProjectName(event.WorkingDirectory)
+				if err := app.Store.SaveSession(ctx, sess); err != nil {
+					return fmt.Errorf("failed to save session: %w", err)
+				}
+			}
+
+			// Associate event with session
+			event.SessionID = sess.ID
+			event.Sequence = sess.TotalActions + 1
+
 			// Save event
 			if err := app.Store.SaveEvent(ctx, event); err != nil {
 				return fmt.Errorf("failed to save event: %w", err)
+			}
+
+			// Update session counts
+			sess.TotalActions++
+			switch event.ActionType {
+			case events.ActionFileRead:
+				sess.FilesRead++
+			case events.ActionFileWrite:
+				sess.FilesWritten++
+			case events.ActionCommandExec:
+				sess.CommandsExecuted++
+			}
+			if event.ResultStatus == events.ResultError {
+				sess.Errors++
+			}
+			if err := app.Store.UpdateSession(ctx, sess); err != nil {
+				return fmt.Errorf("failed to update session: %w", err)
+			}
+
+			// Handle session end for Cursor "stop" hook
+			if agentName == "cursor" && hookType == "stop" {
+				sess.End()
+				if err := app.Store.UpdateSession(ctx, sess); err != nil {
+					return fmt.Errorf("failed to end session: %w", err)
+				}
 			}
 
 			// For Cursor hooks, output allow response
@@ -86,4 +132,162 @@ func writeHookResponse(allow bool, message string) {
 		resp.Message = message
 	}
 	json.NewEncoder(os.Stdout).Encode(resp)
+}
+
+// detectProjectName detects the project name from the working directory.
+// It checks for common project manifest files and extracts the name.
+func detectProjectName(workDir string) string {
+	if workDir == "" {
+		return ""
+	}
+
+	// Project indicators in priority order
+	indicators := []struct {
+		file  string
+		parse func(string) string
+	}{
+		{"package.json", parsePackageJSON},
+		{"Cargo.toml", parseCargoToml},
+		{"go.mod", parseGoMod},
+		{"pyproject.toml", parsePyprojectToml},
+		{"setup.py", nil}, // fallback to directory name
+		{".git", nil},     // fallback to directory name
+	}
+
+	for _, ind := range indicators {
+		path := filepath.Join(workDir, ind.file)
+		if _, err := os.Stat(path); err == nil {
+			if ind.parse != nil {
+				if name := ind.parse(path); name != "" {
+					return name
+				}
+			}
+			// Fallback to directory basename
+			return filepath.Base(workDir)
+		}
+	}
+
+	return filepath.Base(workDir)
+}
+
+// parsePackageJSON extracts the name from a package.json file.
+func parsePackageJSON(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var pkg struct {
+		Name string `json:"name"`
+	}
+	if json.Unmarshal(data, &pkg) == nil {
+		return pkg.Name
+	}
+	return ""
+}
+
+// parseCargoToml extracts the name from a Cargo.toml file.
+func parseCargoToml(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	// Simple parser for [package] name = "..."
+	content := string(data)
+	for _, line := range filepath.SplitList(content) {
+		if len(line) > 7 && line[:7] == "name = " {
+			name := line[7:]
+			name = trimQuotes(name)
+			return name
+		}
+	}
+	return ""
+}
+
+// parseGoMod extracts the module name from a go.mod file.
+func parseGoMod(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	// First line should be "module <name>"
+	content := string(data)
+	for _, line := range splitLines(content) {
+		if len(line) > 7 && line[:7] == "module " {
+			mod := line[7:]
+			// Return the last path component
+			if idx := lastIndex(mod, '/'); idx >= 0 {
+				return mod[idx+1:]
+			}
+			return mod
+		}
+	}
+	return ""
+}
+
+// parsePyprojectToml extracts the name from a pyproject.toml file.
+func parsePyprojectToml(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	// Simple parser for name = "..."
+	content := string(data)
+	for _, line := range splitLines(content) {
+		line = trimSpace(line)
+		if len(line) > 7 && line[:7] == "name = " {
+			name := line[7:]
+			name = trimQuotes(name)
+			return name
+		}
+	}
+	return ""
+}
+
+// trimQuotes removes surrounding quotes from a string.
+func trimQuotes(s string) string {
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
+}
+
+// splitLines splits a string into lines.
+func splitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
+}
+
+// lastIndex returns the index of the last occurrence of substr in s.
+func lastIndex(s string, c byte) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
+}
+
+// trimSpace removes leading and trailing whitespace.
+func trimSpace(s string) string {
+	start := 0
+	end := len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
+		end--
+	}
+	return s[start:end]
 }

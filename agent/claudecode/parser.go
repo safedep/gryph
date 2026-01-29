@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/events"
@@ -116,5 +117,41 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte) (*even
 		}
 	}
 
+	// Detect errors from tool output
+	if hookEvent.ToolOutput != "" {
+		lowerOutput := strings.ToLower(hookEvent.ToolOutput)
+		if strings.Contains(lowerOutput, "error") ||
+			strings.Contains(lowerOutput, "failed") ||
+			strings.Contains(lowerOutput, "permission denied") ||
+			strings.Contains(lowerOutput, "not found") ||
+			strings.Contains(lowerOutput, "no such file") {
+			event.ResultStatus = events.ResultError
+			event.ErrorMessage = truncateString(hookEvent.ToolOutput, 500)
+		}
+	}
+
+	// Mark sensitive paths using default patterns
+	privacyChecker, _ := events.NewPrivacyChecker(events.DefaultSensitivePatterns(), nil)
+	if privacyChecker != nil {
+		switch actionType {
+		case events.ActionFileRead:
+			if path, ok := hookEvent.ToolInput["file_path"].(string); ok {
+				event.IsSensitive = privacyChecker.IsSensitivePath(path)
+			}
+		case events.ActionFileWrite:
+			if path, ok := hookEvent.ToolInput["file_path"].(string); ok {
+				event.IsSensitive = privacyChecker.IsSensitivePath(path)
+			}
+		}
+	}
+
 	return event, nil
+}
+
+// truncateString truncates a string to the given max length.
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

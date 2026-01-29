@@ -96,6 +96,12 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte) (*even
 		event.SetPayload(payload)
 	}
 
+	// Mark sensitive paths using default patterns
+	privacyChecker, _ := events.NewPrivacyChecker(events.DefaultSensitivePatterns(), nil)
+	if privacyChecker != nil && hookEvent.FilePath != "" {
+		event.IsSensitive = privacyChecker.IsSensitivePath(hookEvent.FilePath)
+	}
+
 	return event, nil
 }
 
