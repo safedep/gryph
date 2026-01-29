@@ -21,9 +21,9 @@ func (Session) Fields() []ent.Field {
 		field.UUID("id", uuid.UUID{}).
 			Default(uuid.New).
 			Immutable(),
-		field.String("external_id").
+		field.String("agent_session_id").
 			Optional().
-			Comment("External session ID from agent (e.g., Claude Code session_id)"),
+			Comment("Original session ID from the agent for correlation"),
 		field.String("agent_name").
 			NotEmpty(),
 		field.String("agent_version").
@@ -64,6 +64,5 @@ func (Session) Indexes() []ent.Index {
 		index.Fields("started_at"),
 		index.Fields("agent_name"),
 		index.Fields("agent_name", "started_at"),
-		index.Fields("external_id", "agent_name"),
 	}
 }

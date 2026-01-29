@@ -10,9 +10,11 @@ import (
 // Session represents a single agent working session.
 type Session struct {
 	// ID is the unique identifier for this session.
+	// For agents that provide their own session_id, this is a deterministic UUID derived from it.
 	ID uuid.UUID `json:"id"`
-	// ExternalID is the session ID from the agent (e.g., Claude Code's session_id).
-	ExternalID string `json:"external_id,omitempty"`
+	// AgentSessionID is the original session ID from the agent (e.g., Claude Code's session_id).
+	// Stored for correlation with agent's own storage. May be empty if agent doesn't provide one.
+	AgentSessionID string `json:"agent_session_id,omitempty"`
 	// AgentName is the agent identifier (e.g., "claude-code").
 	AgentName string `json:"agent_name"`
 	// AgentVersion is the agent version if detectable.
@@ -46,13 +48,12 @@ func NewSession(agentName string) *Session {
 	}
 }
 
-// NewSessionWithExternalID creates a new Session with the given external ID.
-func NewSessionWithExternalID(agentName, externalID string) *Session {
+// NewSessionWithID creates a new Session with the given ID.
+func NewSessionWithID(id uuid.UUID, agentName string) *Session {
 	return &Session{
-		ID:         uuid.New(),
-		ExternalID: externalID,
-		AgentName:  agentName,
-		StartedAt:  time.Now().UTC(),
+		ID:        id,
+		AgentName: agentName,
+		StartedAt: time.Now().UTC(),
 	}
 }
 

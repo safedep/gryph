@@ -300,12 +300,12 @@ func (_q *SessionQuery) WithEvents(opts ...func(*AuditEventQuery)) *SessionQuery
 // Example:
 //
 //	var v []struct {
-//		ExternalID string `json:"external_id,omitempty"`
+//		AgentSessionID string `json:"agent_session_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Session.Query().
-//		GroupBy(session.FieldExternalID).
+//		GroupBy(session.FieldAgentSessionID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *SessionQuery) GroupBy(field string, fields ...string) *SessionGroupBy {
@@ -323,11 +323,11 @@ func (_q *SessionQuery) GroupBy(field string, fields ...string) *SessionGroupBy 
 // Example:
 //
 //	var v []struct {
-//		ExternalID string `json:"external_id,omitempty"`
+//		AgentSessionID string `json:"agent_session_id,omitempty"`
 //	}
 //
 //	client.Session.Query().
-//		Select(session.FieldExternalID).
+//		Select(session.FieldAgentSessionID).
 //		Scan(ctx, &v)
 func (_q *SessionQuery) Select(fields ...string) *SessionSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

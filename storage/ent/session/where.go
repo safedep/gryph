@@ -56,9 +56,9 @@ func IDLTE(id uuid.UUID) predicate.Session {
 	return predicate.Session(sql.FieldLTE(FieldID, id))
 }
 
-// ExternalID applies equality check predicate on the "external_id" field. It's identical to ExternalIDEQ.
-func ExternalID(v string) predicate.Session {
-	return predicate.Session(sql.FieldEQ(FieldExternalID, v))
+// AgentSessionID applies equality check predicate on the "agent_session_id" field. It's identical to AgentSessionIDEQ.
+func AgentSessionID(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldAgentSessionID, v))
 }
 
 // AgentName applies equality check predicate on the "agent_name" field. It's identical to AgentNameEQ.
@@ -116,79 +116,79 @@ func Errors(v int) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldErrors, v))
 }
 
-// ExternalIDEQ applies the EQ predicate on the "external_id" field.
-func ExternalIDEQ(v string) predicate.Session {
-	return predicate.Session(sql.FieldEQ(FieldExternalID, v))
+// AgentSessionIDEQ applies the EQ predicate on the "agent_session_id" field.
+func AgentSessionIDEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldAgentSessionID, v))
 }
 
-// ExternalIDNEQ applies the NEQ predicate on the "external_id" field.
-func ExternalIDNEQ(v string) predicate.Session {
-	return predicate.Session(sql.FieldNEQ(FieldExternalID, v))
+// AgentSessionIDNEQ applies the NEQ predicate on the "agent_session_id" field.
+func AgentSessionIDNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldAgentSessionID, v))
 }
 
-// ExternalIDIn applies the In predicate on the "external_id" field.
-func ExternalIDIn(vs ...string) predicate.Session {
-	return predicate.Session(sql.FieldIn(FieldExternalID, vs...))
+// AgentSessionIDIn applies the In predicate on the "agent_session_id" field.
+func AgentSessionIDIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldAgentSessionID, vs...))
 }
 
-// ExternalIDNotIn applies the NotIn predicate on the "external_id" field.
-func ExternalIDNotIn(vs ...string) predicate.Session {
-	return predicate.Session(sql.FieldNotIn(FieldExternalID, vs...))
+// AgentSessionIDNotIn applies the NotIn predicate on the "agent_session_id" field.
+func AgentSessionIDNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldAgentSessionID, vs...))
 }
 
-// ExternalIDGT applies the GT predicate on the "external_id" field.
-func ExternalIDGT(v string) predicate.Session {
-	return predicate.Session(sql.FieldGT(FieldExternalID, v))
+// AgentSessionIDGT applies the GT predicate on the "agent_session_id" field.
+func AgentSessionIDGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldAgentSessionID, v))
 }
 
-// ExternalIDGTE applies the GTE predicate on the "external_id" field.
-func ExternalIDGTE(v string) predicate.Session {
-	return predicate.Session(sql.FieldGTE(FieldExternalID, v))
+// AgentSessionIDGTE applies the GTE predicate on the "agent_session_id" field.
+func AgentSessionIDGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldAgentSessionID, v))
 }
 
-// ExternalIDLT applies the LT predicate on the "external_id" field.
-func ExternalIDLT(v string) predicate.Session {
-	return predicate.Session(sql.FieldLT(FieldExternalID, v))
+// AgentSessionIDLT applies the LT predicate on the "agent_session_id" field.
+func AgentSessionIDLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldAgentSessionID, v))
 }
 
-// ExternalIDLTE applies the LTE predicate on the "external_id" field.
-func ExternalIDLTE(v string) predicate.Session {
-	return predicate.Session(sql.FieldLTE(FieldExternalID, v))
+// AgentSessionIDLTE applies the LTE predicate on the "agent_session_id" field.
+func AgentSessionIDLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldAgentSessionID, v))
 }
 
-// ExternalIDContains applies the Contains predicate on the "external_id" field.
-func ExternalIDContains(v string) predicate.Session {
-	return predicate.Session(sql.FieldContains(FieldExternalID, v))
+// AgentSessionIDContains applies the Contains predicate on the "agent_session_id" field.
+func AgentSessionIDContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldAgentSessionID, v))
 }
 
-// ExternalIDHasPrefix applies the HasPrefix predicate on the "external_id" field.
-func ExternalIDHasPrefix(v string) predicate.Session {
-	return predicate.Session(sql.FieldHasPrefix(FieldExternalID, v))
+// AgentSessionIDHasPrefix applies the HasPrefix predicate on the "agent_session_id" field.
+func AgentSessionIDHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldAgentSessionID, v))
 }
 
-// ExternalIDHasSuffix applies the HasSuffix predicate on the "external_id" field.
-func ExternalIDHasSuffix(v string) predicate.Session {
-	return predicate.Session(sql.FieldHasSuffix(FieldExternalID, v))
+// AgentSessionIDHasSuffix applies the HasSuffix predicate on the "agent_session_id" field.
+func AgentSessionIDHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldAgentSessionID, v))
 }
 
-// ExternalIDIsNil applies the IsNil predicate on the "external_id" field.
-func ExternalIDIsNil() predicate.Session {
-	return predicate.Session(sql.FieldIsNull(FieldExternalID))
+// AgentSessionIDIsNil applies the IsNil predicate on the "agent_session_id" field.
+func AgentSessionIDIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldAgentSessionID))
 }
 
-// ExternalIDNotNil applies the NotNil predicate on the "external_id" field.
-func ExternalIDNotNil() predicate.Session {
-	return predicate.Session(sql.FieldNotNull(FieldExternalID))
+// AgentSessionIDNotNil applies the NotNil predicate on the "agent_session_id" field.
+func AgentSessionIDNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldAgentSessionID))
 }
 
-// ExternalIDEqualFold applies the EqualFold predicate on the "external_id" field.
-func ExternalIDEqualFold(v string) predicate.Session {
-	return predicate.Session(sql.FieldEqualFold(FieldExternalID, v))
+// AgentSessionIDEqualFold applies the EqualFold predicate on the "agent_session_id" field.
+func AgentSessionIDEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldAgentSessionID, v))
 }
 
-// ExternalIDContainsFold applies the ContainsFold predicate on the "external_id" field.
-func ExternalIDContainsFold(v string) predicate.Session {
-	return predicate.Session(sql.FieldContainsFold(FieldExternalID, v))
+// AgentSessionIDContainsFold applies the ContainsFold predicate on the "agent_session_id" field.
+func AgentSessionIDContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldAgentSessionID, v))
 }
 
 // AgentNameEQ applies the EQ predicate on the "agent_name" field.

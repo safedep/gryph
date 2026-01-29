@@ -14,11 +14,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// hookInputBase is used to extract common fields from hook input.
-type hookInputBase struct {
-	SessionID string `json:"session_id"`
-}
-
 // NewHookCmd creates the internal _hook command.
 func NewHookCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -54,34 +49,22 @@ func NewHookCmd() *cobra.Command {
 				return fmt.Errorf("unknown agent: %s", agentName)
 			}
 
-			// Parse event
+			// Parse event - parser extracts session_id and converts to deterministic UUID
 			event, err := adapter.ParseEvent(ctx, hookType, rawData)
 			if err != nil {
 				return fmt.Errorf("failed to parse event: %w", err)
 			}
 
-			// Extract external session ID from raw data
-			var baseInput hookInputBase
-			json.Unmarshal(rawData, &baseInput)
-			externalSessionID := baseInput.SessionID
-
-			// Get or create session by external ID
-			var sess *session.Session
-			if externalSessionID != "" {
-				// Look up session by external ID
-				sess, err = app.Store.GetSessionByExternalID(ctx, agentName, externalSessionID)
-				if err != nil {
-					return fmt.Errorf("failed to get session by external ID: %w", err)
-				}
+			// Get or create session using the session ID from the parsed event
+			sess, err := app.Store.GetSession(ctx, event.SessionID)
+			if err != nil {
+				return fmt.Errorf("failed to get session: %w", err)
 			}
 
 			if sess == nil {
-				// Create new session with external ID
-				if externalSessionID != "" {
-					sess = session.NewSessionWithExternalID(agentName, externalSessionID)
-				} else {
-					sess = session.NewSession(agentName)
-				}
+				// Create new session with the ID from the event
+				sess = session.NewSessionWithID(event.SessionID, agentName)
+				sess.AgentSessionID = event.AgentSessionID // Store original agent session ID for correlation
 				sess.WorkingDirectory = event.WorkingDirectory
 				sess.ProjectName = detectProjectName(event.WorkingDirectory)
 				if err := app.Store.SaveSession(ctx, sess); err != nil {
@@ -89,8 +72,7 @@ func NewHookCmd() *cobra.Command {
 				}
 			}
 
-			// Associate event with session
-			event.SessionID = sess.ID
+			// Set sequence number
 			event.Sequence = sess.TotalActions + 1
 
 			// Save event

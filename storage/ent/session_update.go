@@ -30,23 +30,23 @@ func (_u *SessionUpdate) Where(ps ...predicate.Session) *SessionUpdate {
 	return _u
 }
 
-// SetExternalID sets the "external_id" field.
-func (_u *SessionUpdate) SetExternalID(v string) *SessionUpdate {
-	_u.mutation.SetExternalID(v)
+// SetAgentSessionID sets the "agent_session_id" field.
+func (_u *SessionUpdate) SetAgentSessionID(v string) *SessionUpdate {
+	_u.mutation.SetAgentSessionID(v)
 	return _u
 }
 
-// SetNillableExternalID sets the "external_id" field if the given value is not nil.
-func (_u *SessionUpdate) SetNillableExternalID(v *string) *SessionUpdate {
+// SetNillableAgentSessionID sets the "agent_session_id" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableAgentSessionID(v *string) *SessionUpdate {
 	if v != nil {
-		_u.SetExternalID(*v)
+		_u.SetAgentSessionID(*v)
 	}
 	return _u
 }
 
-// ClearExternalID clears the value of the "external_id" field.
-func (_u *SessionUpdate) ClearExternalID() *SessionUpdate {
-	_u.mutation.ClearExternalID()
+// ClearAgentSessionID clears the value of the "agent_session_id" field.
+func (_u *SessionUpdate) ClearAgentSessionID() *SessionUpdate {
+	_u.mutation.ClearAgentSessionID()
 	return _u
 }
 
@@ -339,11 +339,11 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
-	if value, ok := _u.mutation.ExternalID(); ok {
-		_spec.SetField(session.FieldExternalID, field.TypeString, value)
+	if value, ok := _u.mutation.AgentSessionID(); ok {
+		_spec.SetField(session.FieldAgentSessionID, field.TypeString, value)
 	}
-	if _u.mutation.ExternalIDCleared() {
-		_spec.ClearField(session.FieldExternalID, field.TypeString)
+	if _u.mutation.AgentSessionIDCleared() {
+		_spec.ClearField(session.FieldAgentSessionID, field.TypeString)
 	}
 	if value, ok := _u.mutation.AgentName(); ok {
 		_spec.SetField(session.FieldAgentName, field.TypeString, value)
@@ -467,23 +467,23 @@ type SessionUpdateOne struct {
 	mutation *SessionMutation
 }
 
-// SetExternalID sets the "external_id" field.
-func (_u *SessionUpdateOne) SetExternalID(v string) *SessionUpdateOne {
-	_u.mutation.SetExternalID(v)
+// SetAgentSessionID sets the "agent_session_id" field.
+func (_u *SessionUpdateOne) SetAgentSessionID(v string) *SessionUpdateOne {
+	_u.mutation.SetAgentSessionID(v)
 	return _u
 }
 
-// SetNillableExternalID sets the "external_id" field if the given value is not nil.
-func (_u *SessionUpdateOne) SetNillableExternalID(v *string) *SessionUpdateOne {
+// SetNillableAgentSessionID sets the "agent_session_id" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableAgentSessionID(v *string) *SessionUpdateOne {
 	if v != nil {
-		_u.SetExternalID(*v)
+		_u.SetAgentSessionID(*v)
 	}
 	return _u
 }
 
-// ClearExternalID clears the value of the "external_id" field.
-func (_u *SessionUpdateOne) ClearExternalID() *SessionUpdateOne {
-	_u.mutation.ClearExternalID()
+// ClearAgentSessionID clears the value of the "agent_session_id" field.
+func (_u *SessionUpdateOne) ClearAgentSessionID() *SessionUpdateOne {
+	_u.mutation.ClearAgentSessionID()
 	return _u
 }
 
@@ -806,11 +806,11 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 			}
 		}
 	}
-	if value, ok := _u.mutation.ExternalID(); ok {
-		_spec.SetField(session.FieldExternalID, field.TypeString, value)
+	if value, ok := _u.mutation.AgentSessionID(); ok {
+		_spec.SetField(session.FieldAgentSessionID, field.TypeString, value)
 	}
-	if _u.mutation.ExternalIDCleared() {
-		_spec.ClearField(session.FieldExternalID, field.TypeString)
+	if _u.mutation.AgentSessionIDCleared() {
+		_spec.ClearField(session.FieldAgentSessionID, field.TypeString)
 	}
 	if value, ok := _u.mutation.AgentName(); ok {
 		_spec.SetField(session.FieldAgentName, field.TypeString, value)

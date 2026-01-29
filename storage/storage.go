@@ -51,9 +51,6 @@ type SessionStore interface {
 	// GetActiveSession retrieves the active session for an agent, if any.
 	GetActiveSession(ctx context.Context, agentName string) (*session.Session, error)
 
-	// GetSessionByExternalID retrieves a session by its external ID (e.g., Claude Code session_id).
-	GetSessionByExternalID(ctx context.Context, agentName, externalID string) (*session.Session, error)
-
 	// GetSessionStats retrieves aggregated session statistics.
 	GetSessionStats(ctx context.Context) (*session.SessionStats, error)
 }

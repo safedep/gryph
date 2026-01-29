@@ -11,8 +11,10 @@ import (
 type Event struct {
 	// ID is the unique identifier for this event.
 	ID uuid.UUID `json:"id"`
-	// SessionID links this event to its parent session.
+	// SessionID links this event to its parent session (deterministic UUID derived from AgentSessionID).
 	SessionID uuid.UUID `json:"session_id"`
+	// AgentSessionID is the original session ID string from the agent (for correlation).
+	AgentSessionID string `json:"agent_session_id,omitempty"`
 	// Sequence is the order within the session (1, 2, 3...).
 	Sequence int `json:"sequence"`
 	// Timestamp is when the action occurred (UTC).

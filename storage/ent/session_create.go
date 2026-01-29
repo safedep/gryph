@@ -22,16 +22,16 @@ type SessionCreate struct {
 	hooks    []Hook
 }
 
-// SetExternalID sets the "external_id" field.
-func (_c *SessionCreate) SetExternalID(v string) *SessionCreate {
-	_c.mutation.SetExternalID(v)
+// SetAgentSessionID sets the "agent_session_id" field.
+func (_c *SessionCreate) SetAgentSessionID(v string) *SessionCreate {
+	_c.mutation.SetAgentSessionID(v)
 	return _c
 }
 
-// SetNillableExternalID sets the "external_id" field if the given value is not nil.
-func (_c *SessionCreate) SetNillableExternalID(v *string) *SessionCreate {
+// SetNillableAgentSessionID sets the "agent_session_id" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableAgentSessionID(v *string) *SessionCreate {
 	if v != nil {
-		_c.SetExternalID(*v)
+		_c.SetAgentSessionID(*v)
 	}
 	return _c
 }
@@ -339,9 +339,9 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 		_node.ID = id
 		_spec.ID.Value = &id
 	}
-	if value, ok := _c.mutation.ExternalID(); ok {
-		_spec.SetField(session.FieldExternalID, field.TypeString, value)
-		_node.ExternalID = value
+	if value, ok := _c.mutation.AgentSessionID(); ok {
+		_spec.SetField(session.FieldAgentSessionID, field.TypeString, value)
+		_node.AgentSessionID = value
 	}
 	if value, ok := _c.mutation.AgentName(); ok {
 		_spec.SetField(session.FieldAgentName, field.TypeString, value)

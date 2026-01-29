@@ -15,8 +15,8 @@ const (
 	Label = "session"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldExternalID holds the string denoting the external_id field in the database.
-	FieldExternalID = "external_id"
+	// FieldAgentSessionID holds the string denoting the agent_session_id field in the database.
+	FieldAgentSessionID = "agent_session_id"
 	// FieldAgentName holds the string denoting the agent_name field in the database.
 	FieldAgentName = "agent_name"
 	// FieldAgentVersion holds the string denoting the agent_version field in the database.
@@ -55,7 +55,7 @@ const (
 // Columns holds all SQL columns for session fields.
 var Columns = []string{
 	FieldID,
-	FieldExternalID,
+	FieldAgentSessionID,
 	FieldAgentName,
 	FieldAgentVersion,
 	FieldStartedAt,
@@ -106,9 +106,9 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByExternalID orders the results by the external_id field.
-func ByExternalID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldExternalID, opts...).ToFunc()
+// ByAgentSessionID orders the results by the agent_session_id field.
+func ByAgentSessionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAgentSessionID, opts...).ToFunc()
 }
 
 // ByAgentName orders the results by the agent_name field.

@@ -104,30 +104,34 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte) (*even
 		sessionID = uuid.New()
 	}
 
+	// Store original agent session ID for correlation
+	agentSessionID := baseInput.SessionID
+
 	// Handle different event types
 	switch eventName {
 	case "PreToolUse":
-		return parsePreToolUse(sessionID, baseInput, rawData)
+		return parsePreToolUse(sessionID, agentSessionID, baseInput, rawData)
 	case "PostToolUse":
-		return parsePostToolUse(sessionID, baseInput, rawData, false)
+		return parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, false)
 	case "PostToolUseFailure":
-		return parsePostToolUse(sessionID, baseInput, rawData, true)
+		return parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, true)
 	case "SessionStart":
-		return parseSessionStart(sessionID, baseInput, rawData)
+		return parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
 	case "SessionEnd":
-		return parseSessionEnd(sessionID, baseInput, rawData)
+		return parseSessionEnd(sessionID, agentSessionID, baseInput, rawData)
 	case "Notification":
-		return parseNotification(sessionID, baseInput, rawData)
+		return parseNotification(sessionID, agentSessionID, baseInput, rawData)
 	default:
 		// Unknown event type - create a generic event
 		event := events.NewEvent(sessionID, AgentName, events.ActionUnknown)
+		event.AgentSessionID = agentSessionID
 		event.WorkingDirectory = baseInput.Cwd
 		event.RawEvent = rawData
 		return event, nil
 	}
 }
 
-func parsePreToolUse(sessionID uuid.UUID, base HookInput, rawData []byte) (*events.Event, error) {
+func parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
 	var input PreToolUseInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse PreToolUse input: %w", err)
@@ -135,6 +139,7 @@ func parsePreToolUse(sessionID uuid.UUID, base HookInput, rawData []byte) (*even
 
 	actionType := getActionType(input.ToolName)
 	event := events.NewEvent(sessionID, AgentName, actionType)
+	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = rawData
@@ -148,7 +153,7 @@ func parsePreToolUse(sessionID uuid.UUID, base HookInput, rawData []byte) (*even
 	return event, nil
 }
 
-func parsePostToolUse(sessionID uuid.UUID, base HookInput, rawData []byte, isFailure bool) (*events.Event, error) {
+func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, isFailure bool) (*events.Event, error) {
 	var input PostToolUseInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse PostToolUse input: %w", err)
@@ -156,6 +161,7 @@ func parsePostToolUse(sessionID uuid.UUID, base HookInput, rawData []byte, isFai
 
 	actionType := getActionType(input.ToolName)
 	event := events.NewEvent(sessionID, AgentName, actionType)
+	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = rawData
@@ -181,13 +187,14 @@ func parsePostToolUse(sessionID uuid.UUID, base HookInput, rawData []byte, isFai
 	return event, nil
 }
 
-func parseSessionStart(sessionID uuid.UUID, base HookInput, rawData []byte) (*events.Event, error) {
+func parseSessionStart(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
 	var input SessionStartInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse SessionStart input: %w", err)
 	}
 
 	event := events.NewEvent(sessionID, AgentName, events.ActionSessionStart)
+	event.AgentSessionID = agentSessionID
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = rawData
 
@@ -202,13 +209,14 @@ func parseSessionStart(sessionID uuid.UUID, base HookInput, rawData []byte) (*ev
 	return event, nil
 }
 
-func parseSessionEnd(sessionID uuid.UUID, base HookInput, rawData []byte) (*events.Event, error) {
+func parseSessionEnd(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
 	var input SessionEndInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse SessionEnd input: %w", err)
 	}
 
 	event := events.NewEvent(sessionID, AgentName, events.ActionSessionEnd)
+	event.AgentSessionID = agentSessionID
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = rawData
 
@@ -221,13 +229,14 @@ func parseSessionEnd(sessionID uuid.UUID, base HookInput, rawData []byte) (*even
 	return event, nil
 }
 
-func parseNotification(sessionID uuid.UUID, base HookInput, rawData []byte) (*events.Event, error) {
+func parseNotification(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
 	var input NotificationInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse Notification input: %w", err)
 	}
 
 	event := events.NewEvent(sessionID, AgentName, events.ActionNotification)
+	event.AgentSessionID = agentSessionID
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = rawData
 
