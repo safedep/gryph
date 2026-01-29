@@ -2,13 +2,13 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/cursor"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
@@ -107,35 +107,77 @@ func NewHookCmd() *cobra.Command {
 				}
 			}
 
-			// For Cursor hooks, output allow response
-			if agentName == agent.AgentCursor {
-				response := cursor.GenerateResponse(true, "")
-				os.Stdout.Write(response)
-			}
-
-			return nil
+			// Send response to agent
+			// For now, always allow. Future: add policy-based blocking here.
+			return sendHookResponse(agentName)
 		},
 	}
 
 	return cmd
 }
 
-// hookResponse is used for responding to agent hooks.
-type hookResponse struct {
-	Status  string `json:"status"`
-	Message string `json:"message,omitempty"`
+// sendHookResponse sends the appropriate response to the agent.
+// Returns nil for success (exit code 0), or an error that triggers non-zero exit.
+func sendHookResponse(agentName string) error {
+	switch agentName {
+	case agent.AgentClaudeCode:
+		// Claude Code exit codes:
+		//   0 = allow (success)
+		//   2 = block (blocking error, stderr shown to Claude)
+		//   1 = non-blocking error (stderr shown to user in verbose mode)
+		// For now, always allow. Future: add policy-based blocking here.
+		response := claudecode.NewAllowResponse()
+		return handleClaudeCodeResponse(response)
+
+	case agent.AgentCursor:
+		// Cursor: JSON response to stdout
+		response := cursor.GenerateResponse(true, "")
+		os.Stdout.Write(response)
+		return nil
+
+	default:
+		// Unknown agent, just succeed
+		return nil
+	}
 }
 
-// writeHookResponse writes a JSON response to stdout for agents that expect it.
-func writeHookResponse(allow bool, message string) {
-	resp := hookResponse{
-		Status: "allow",
+// handleClaudeCodeResponse processes a Claude Code hook response.
+// Returns an exitError with the appropriate code and message for non-allow decisions.
+func handleClaudeCodeResponse(response *claudecode.HookResponse) error {
+	switch response.Decision {
+	case claudecode.HookBlock:
+		// Exit code 2: blocking error, message shown to Claude
+		return &exitError{code: 2, message: response.Message}
+
+	case claudecode.HookError:
+		// Exit code 1: non-blocking error, message shown to user in verbose mode
+		return &exitError{code: 1, message: response.Message}
+
+	default:
+		// Exit code 0: allow
+		return nil
 	}
-	if !allow {
-		resp.Status = "deny"
-		resp.Message = message
-	}
-	json.NewEncoder(os.Stdout).Encode(resp)
+}
+
+// exitError is an error that carries a specific exit code.
+// It implements the ExitCoder interface expected by main.
+type exitError struct {
+	code    int
+	message string
+}
+
+func (e *exitError) Error() string {
+	return e.message
+}
+
+// ExitCode returns the exit code for this error.
+func (e *exitError) ExitCode() int {
+	return e.code
+}
+
+// Message returns the message to write to stderr.
+func (e *exitError) Message() string {
+	return e.message
 }
 
 // detectProjectName returns the project name from the working directory basename.

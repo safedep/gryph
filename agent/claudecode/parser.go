@@ -381,3 +381,67 @@ func truncateString(s string, maxLen int) string {
 	}
 	return s[:maxLen] + "..."
 }
+
+// HookDecision represents the decision for a Claude Code hook.
+type HookDecision int
+
+const (
+	// HookAllow allows the action to proceed (exit code 0).
+	HookAllow HookDecision = iota
+	// HookBlock blocks the action (exit code 2, message to stderr, shown to Claude).
+	HookBlock
+	// HookError is a non-blocking error (exit code 1, message to stderr, shown to user in verbose mode).
+	HookError
+)
+
+// HookResponse represents a response to Claude Code hooks.
+type HookResponse struct {
+	// Decision is whether to allow, block, or report error.
+	Decision HookDecision
+	// Message is the reason (used for HookBlock and HookError).
+	Message string
+}
+
+// ExitCode returns the exit code for this response.
+// Exit code 0 = allow, exit code 2 = block, exit code 1 = non-blocking error.
+func (r *HookResponse) ExitCode() int {
+	switch r.Decision {
+	case HookBlock:
+		return 2
+	case HookError:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// Stderr returns the message to write to stderr (for blocking and error).
+func (r *HookResponse) Stderr() string {
+	if r.Decision == HookBlock || r.Decision == HookError {
+		return r.Message
+	}
+	return ""
+}
+
+// NewAllowResponse creates a response that allows the action.
+func NewAllowResponse() *HookResponse {
+	return &HookResponse{Decision: HookAllow}
+}
+
+// NewBlockResponse creates a response that blocks the action with a reason.
+// The message is shown to Claude.
+func NewBlockResponse(message string) *HookResponse {
+	return &HookResponse{
+		Decision: HookBlock,
+		Message:  message,
+	}
+}
+
+// NewErrorResponse creates a non-blocking error response.
+// The message is shown to the user in verbose mode, execution continues.
+func NewErrorResponse(message string) *HookResponse {
+	return &HookResponse{
+		Decision: HookError,
+		Message:  message,
+	}
+}
