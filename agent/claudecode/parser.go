@@ -78,7 +78,7 @@ var ToolNameMapping = map[string]events.ActionType{
 }
 
 // ParseHookEvent converts a Claude Code event to the common format.
-func ParseHookEvent(ctx context.Context, hookType string, rawData []byte) (*events.Event, error) {
+func ParseHookEvent(ctx context.Context, hookType string, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
 	// First parse the common fields to determine event type
 	var baseInput HookInput
 	if err := json.Unmarshal(rawData, &baseInput); err != nil {
@@ -110,11 +110,11 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte) (*even
 	// Handle different event types
 	switch eventName {
 	case "PreToolUse":
-		return parsePreToolUse(sessionID, agentSessionID, baseInput, rawData)
+		return parsePreToolUse(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
 	case "PostToolUse":
-		return parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, false)
+		return parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, false, privacyChecker)
 	case "PostToolUseFailure":
-		return parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, true)
+		return parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, true, privacyChecker)
 	case "SessionStart":
 		return parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
 	case "SessionEnd":
@@ -131,7 +131,7 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte) (*even
 	}
 }
 
-func parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+func parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
 	var input PreToolUseInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse PreToolUse input: %w", err)
@@ -150,12 +150,12 @@ func parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput,
 	}
 
 	// Mark sensitive paths
-	markSensitivePaths(event, actionType, input.ToolInput)
+	markSensitivePaths(event, actionType, input.ToolInput, privacyChecker)
 
 	return event, nil
 }
 
-func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, isFailure bool) (*events.Event, error) {
+func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, isFailure bool, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
 	var input PostToolUseInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse PostToolUse input: %w", err)
@@ -186,7 +186,7 @@ func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput
 	}
 
 	// Mark sensitive paths
-	markSensitivePaths(event, actionType, input.ToolInput)
+	markSensitivePaths(event, actionType, input.ToolInput, privacyChecker)
 
 	return event, nil
 }
@@ -374,8 +374,7 @@ func detectErrorsInResponse(event *events.Event, response map[string]interface{}
 	}
 }
 
-func markSensitivePaths(event *events.Event, actionType events.ActionType, toolInput map[string]interface{}) {
-	privacyChecker, _ := events.NewPrivacyChecker(events.DefaultSensitivePatterns(), nil)
+func markSensitivePaths(event *events.Event, actionType events.ActionType, toolInput map[string]interface{}, privacyChecker *events.PrivacyChecker) {
 	if privacyChecker == nil {
 		return
 	}
@@ -387,13 +386,7 @@ func markSensitivePaths(event *events.Event, actionType events.ActionType, toolI
 		}
 	case events.ActionCommandExec:
 		if cmd, ok := toolInput["command"].(string); ok {
-			// Check if command accesses sensitive paths
-			for _, pattern := range events.DefaultSensitivePatterns() {
-				if strings.Contains(cmd, pattern) {
-					event.IsSensitive = true
-					break
-				}
-			}
+			event.IsSensitive = privacyChecker.IsSensitivePath(cmd)
 		}
 	}
 }

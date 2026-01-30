@@ -147,7 +147,7 @@ var ToolNameToActionType = map[string]events.ActionType{
 }
 
 // ParseHookEvent converts a Cursor event to the common format.
-func ParseHookEvent(ctx context.Context, hookType string, rawData []byte) (*events.Event, error) {
+func ParseHookEvent(ctx context.Context, hookType string, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
 	// First parse the common fields
 	var baseInput HookInput
 	if err := json.Unmarshal(rawData, &baseInput); err != nil {
@@ -173,17 +173,17 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte) (*even
 	// Handle different event types
 	switch hookType {
 	case "preToolUse":
-		return parsePreToolUse(sessionID, agentSessionID, baseInput, rawData)
+		return parsePreToolUse(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
 	case "postToolUse":
-		return parsePostToolUse(sessionID, agentSessionID, baseInput, rawData)
+		return parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
 	case "postToolUseFailure":
-		return parsePostToolUseFailure(sessionID, agentSessionID, baseInput, rawData)
+		return parsePostToolUseFailure(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
 	case "beforeShellExecution":
 		return parseBeforeShellExecution(sessionID, agentSessionID, baseInput, rawData)
 	case "beforeReadFile":
-		return parseBeforeReadFile(sessionID, agentSessionID, baseInput, rawData)
+		return parseBeforeReadFile(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
 	case "afterFileEdit":
-		return parseAfterFileEdit(sessionID, agentSessionID, baseInput, rawData)
+		return parseAfterFileEdit(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
 	case "beforeSubmitPrompt":
 		return parseBeforeSubmitPrompt(sessionID, agentSessionID, baseInput, rawData)
 	case "sessionStart":
@@ -209,7 +209,7 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte) (*even
 	}
 }
 
-func parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+func parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
 	var input PreToolUseInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse preToolUse input: %w", err)
@@ -228,14 +228,14 @@ func parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput,
 	event.RawEvent = rawData
 
 	// Build payload based on action type
-	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, nil); err != nil {
+	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, nil, privacyChecker); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
 
 	return event, nil
 }
 
-func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
 	var input PostToolUseInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse postToolUse input: %w", err)
@@ -256,14 +256,14 @@ func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput
 
 	// Build payload
 	toolOutput := map[string]interface{}{"output": input.ToolOutput}
-	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, toolOutput); err != nil {
+	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, toolOutput, privacyChecker); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
 
 	return event, nil
 }
 
-func parsePostToolUseFailure(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+func parsePostToolUseFailure(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
 	var input PostToolUseFailureInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse postToolUseFailure input: %w", err)
@@ -283,7 +283,7 @@ func parsePostToolUseFailure(sessionID uuid.UUID, agentSessionID string, base Ho
 	event.ResultStatus = events.ResultError
 	event.ErrorMessage = input.ErrorMessage
 
-	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, nil); err != nil {
+	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, nil, privacyChecker); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
 
@@ -313,7 +313,7 @@ func parseBeforeShellExecution(sessionID uuid.UUID, agentSessionID string, base 
 	return event, nil
 }
 
-func parseBeforeReadFile(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+func parseBeforeReadFile(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
 	var input BeforeReadFileInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse beforeReadFile input: %w", err)
@@ -337,12 +337,12 @@ func parseBeforeReadFile(sessionID uuid.UUID, agentSessionID string, base HookIn
 	}
 
 	// Check sensitive paths
-	markSensitivePath(event, input.FilePath)
+	markSensitivePath(event, input.FilePath, privacyChecker)
 
 	return event, nil
 }
 
-func parseAfterFileEdit(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+func parseAfterFileEdit(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
 	var input AfterFileEditInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse afterFileEdit input: %w", err)
@@ -369,7 +369,7 @@ func parseAfterFileEdit(sessionID uuid.UUID, agentSessionID string, base HookInp
 	}
 
 	// Check sensitive paths
-	markSensitivePath(event, input.FilePath)
+	markSensitivePath(event, input.FilePath, privacyChecker)
 
 	return event, nil
 }
@@ -471,13 +471,13 @@ func parseStop(sessionID uuid.UUID, agentSessionID string, base HookInput, rawDa
 	return event, nil
 }
 
-func buildPayload(event *events.Event, actionType events.ActionType, toolName string, toolInput, toolOutput map[string]interface{}) error {
+func buildPayload(event *events.Event, actionType events.ActionType, toolName string, toolInput, toolOutput map[string]interface{}, privacyChecker *events.PrivacyChecker) error {
 	switch actionType {
 	case events.ActionFileRead:
 		payload := events.FileReadPayload{}
 		if path, ok := toolInput["file_path"].(string); ok {
 			payload.Path = path
-			markSensitivePath(event, path)
+			markSensitivePath(event, path, privacyChecker)
 		}
 		if pattern, ok := toolInput["pattern"].(string); ok {
 			payload.Pattern = pattern
@@ -490,7 +490,7 @@ func buildPayload(event *events.Event, actionType events.ActionType, toolName st
 		payload := events.FileWritePayload{}
 		if path, ok := toolInput["file_path"].(string); ok {
 			payload.Path = path
-			markSensitivePath(event, path)
+			markSensitivePath(event, path, privacyChecker)
 		}
 		if content, ok := toolInput["content"].(string); ok {
 			payload.ContentPreview = truncateString(content, 200)
@@ -539,14 +539,11 @@ func buildPayload(event *events.Event, actionType events.ActionType, toolName st
 	return nil
 }
 
-func markSensitivePath(event *events.Event, path string) {
-	if path == "" {
+func markSensitivePath(event *events.Event, path string, privacyChecker *events.PrivacyChecker) {
+	if path == "" || privacyChecker == nil {
 		return
 	}
-	privacyChecker, _ := events.NewPrivacyChecker(events.DefaultSensitivePatterns(), nil)
-	if privacyChecker != nil {
-		event.IsSensitive = privacyChecker.IsSensitivePath(path)
-	}
+	event.IsSensitive = privacyChecker.IsSensitivePath(path)
 }
 
 func truncateString(s string, maxLen int) string {

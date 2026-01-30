@@ -16,11 +16,13 @@ const (
 )
 
 // Adapter implements the agent.Adapter interface for Claude Code.
-type Adapter struct{}
+type Adapter struct {
+	privacyChecker *events.PrivacyChecker
+}
 
 // New creates a new Claude Code adapter.
-func New() *Adapter {
-	return &Adapter{}
+func New(privacyChecker *events.PrivacyChecker) *Adapter {
+	return &Adapter{privacyChecker: privacyChecker}
 }
 
 // Name returns the machine identifier.
@@ -55,12 +57,12 @@ func (a *Adapter) Status(ctx context.Context) (*agent.HookStatus, error) {
 
 // ParseEvent converts a Claude Code event to the common format.
 func (a *Adapter) ParseEvent(ctx context.Context, hookType string, rawData []byte) (*events.Event, error) {
-	return ParseHookEvent(ctx, hookType, rawData)
+	return ParseHookEvent(ctx, hookType, rawData, a.privacyChecker)
 }
 
 // Register adds this adapter to the given registry.
-func Register(registry *agent.Registry) {
-	registry.Register(New())
+func Register(registry *agent.Registry, privacyChecker *events.PrivacyChecker) {
+	registry.Register(New(privacyChecker))
 }
 
 // Ensure Adapter implements agent.Adapter

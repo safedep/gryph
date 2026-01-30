@@ -10,6 +10,7 @@ import (
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/cursor"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/storage"
@@ -28,13 +29,24 @@ type App struct {
 }
 
 // NewApp creates a new App with the given configuration.
-func NewApp(cfg *config.Config) *App {
+func NewApp(cfg *config.Config) (*App, error) {
 	paths := config.ResolvePaths()
+
+	// Merge default patterns with config patterns
+	// There may be duplicates, but that's okay for now.
+	sensitivePathPatterns := append(events.DefaultSensitivePatterns(), cfg.Privacy.SensitivePaths...)
+	redactPatterns := append(events.DefaultRedactPatterns(), cfg.Privacy.RedactPatterns...)
+
+	// Create shared privacy checker
+	privacyChecker, err := events.NewPrivacyChecker(sensitivePathPatterns, redactPatterns)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create registry and register adapters
 	registry := agent.NewRegistry()
-	claudecode.Register(registry)
-	cursor.Register(registry)
+	claudecode.Register(registry, privacyChecker)
+	cursor.Register(registry, privacyChecker)
 
 	// Create presenter based on config
 	presenter := tui.NewPresenter(tui.FormatTable, tui.PresenterOptions{
@@ -52,7 +64,7 @@ func NewApp(cfg *config.Config) *App {
 		Presenter: presenter,
 		Paths:     paths,
 		Security:  sec,
-	}
+	}, nil
 }
 
 // InitStore initializes the database store.
@@ -161,16 +173,14 @@ func setupInternalLogger() {
 func loadApp() (*App, error) {
 	cfg, err := config.Load(globalFlags.ConfigPath)
 	if err != nil {
-		// Use defaults if config not found
 		cfg = config.Default()
 	}
 
-	// Override with flags
 	if globalFlags.NoColor {
 		cfg.Display.Colors = config.ColorNever
 	}
 
-	return NewApp(cfg), nil
+	return NewApp(cfg)
 }
 
 // getFormat returns the output format from flags or default.

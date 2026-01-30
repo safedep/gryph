@@ -19,11 +19,18 @@ func loadFixture(t *testing.T, name string) []byte {
 	return data
 }
 
+func testPrivacyChecker(t *testing.T) *events.PrivacyChecker {
+	t.Helper()
+	pc, err := events.NewPrivacyChecker(events.DefaultSensitivePatterns(), nil)
+	require.NoError(t, err)
+	return pc
+}
+
 func TestParseHookEvent_PreToolUseBash(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "pre_tool_use_bash.json")
 
-	event, err := ParseHookEvent(ctx, "PreToolUse", data)
+	event, err := ParseHookEvent(ctx, "PreToolUse", data, testPrivacyChecker(t))
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
@@ -44,7 +51,7 @@ func TestParseHookEvent_PreToolUseWrite(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "pre_tool_use_write.json")
 
-	event, err := ParseHookEvent(ctx, "PreToolUse", data)
+	event, err := ParseHookEvent(ctx, "PreToolUse", data, testPrivacyChecker(t))
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
@@ -63,7 +70,7 @@ func TestParseHookEvent_PostToolUseRead(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "post_tool_use_read.json")
 
-	event, err := ParseHookEvent(ctx, "PostToolUse", data)
+	event, err := ParseHookEvent(ctx, "PostToolUse", data, testPrivacyChecker(t))
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
@@ -81,7 +88,7 @@ func TestParseHookEvent_PostToolUseFailure(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "post_tool_use_failure.json")
 
-	event, err := ParseHookEvent(ctx, "PostToolUseFailure", data)
+	event, err := ParseHookEvent(ctx, "PostToolUseFailure", data, testPrivacyChecker(t))
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
@@ -95,7 +102,7 @@ func TestParseHookEvent_SessionStart(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "session_start.json")
 
-	event, err := ParseHookEvent(ctx, "SessionStart", data)
+	event, err := ParseHookEvent(ctx, "SessionStart", data, testPrivacyChecker(t))
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
@@ -108,7 +115,7 @@ func TestParseHookEvent_SessionEnd(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "session_end.json")
 
-	event, err := ParseHookEvent(ctx, "SessionEnd", data)
+	event, err := ParseHookEvent(ctx, "SessionEnd", data, testPrivacyChecker(t))
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
@@ -122,10 +129,10 @@ func TestParseHookEvent_SessionIDDeterministic(t *testing.T) {
 	data := loadFixture(t, "pre_tool_use_bash.json")
 
 	// Parse twice
-	event1, err := ParseHookEvent(ctx, "PreToolUse", data)
+	event1, err := ParseHookEvent(ctx, "PreToolUse", data, testPrivacyChecker(t))
 	require.NoError(t, err)
 
-	event2, err := ParseHookEvent(ctx, "PreToolUse", data)
+	event2, err := ParseHookEvent(ctx, "PreToolUse", data, testPrivacyChecker(t))
 	require.NoError(t, err)
 
 	// Same agent session ID should produce same session ID
@@ -137,7 +144,7 @@ func TestParseHookEvent_InvalidJSON(t *testing.T) {
 	ctx := context.Background()
 	data := []byte("not valid json")
 
-	event, err := ParseHookEvent(ctx, "PreToolUse", data)
+	event, err := ParseHookEvent(ctx, "PreToolUse", data, testPrivacyChecker(t))
 	assert.Error(t, err)
 	assert.Nil(t, event)
 }

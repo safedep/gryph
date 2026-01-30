@@ -20,6 +20,7 @@ func NewPrivacyChecker(sensitivePatterns []string, redactPatterns []string) (*Pr
 		if err != nil {
 			return nil, err
 		}
+
 		compiled = append(compiled, re)
 	}
 
