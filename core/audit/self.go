@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/dry/log"
 )
 
 // SelfAuditAction represents the type of action the tool performed.
@@ -91,7 +92,12 @@ func (s *SelfAudit) WithAgent(agent string) *SelfAudit {
 
 // WithDetails sets the Details from a given struct.
 func (s *SelfAudit) WithDetails(details interface{}) *SelfAudit {
-	data, _ := json.Marshal(details)
+	data, err := json.Marshal(details)
+	if err != nil {
+		log.Errorf("failed to marshal details: %w", err)
+		return s
+	}
+
 	s.Details = data
 	return s
 }
@@ -117,8 +123,8 @@ type InstallDetails struct {
 
 // UninstallDetails contains details for uninstall actions.
 type UninstallDetails struct {
-	HooksRemoved    []string `json:"hooks_removed"`
-	BackupRestored  bool     `json:"backup_restored"`
+	HooksRemoved   []string `json:"hooks_removed"`
+	BackupRestored bool     `json:"backup_restored"`
 }
 
 // ConfigChangeDetails contains details for config change actions.
@@ -137,8 +143,8 @@ type ExportDetails struct {
 
 // RetentionCleanupDetails contains details for retention cleanup actions.
 type RetentionCleanupDetails struct {
-	EventsDeleted    int       `json:"events_deleted"`
-	OldestRemaining  time.Time `json:"oldest_remaining,omitempty"`
+	EventsDeleted   int       `json:"events_deleted"`
+	OldestRemaining time.Time `json:"oldest_remaining,omitempty"`
 }
 
 // DatabaseInitDetails contains details for database initialization.

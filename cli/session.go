@@ -55,8 +55,6 @@ chronological order with full metadata.`,
 				}
 			}()
 
-			// Try to parse as full UUID first
-			var sess *interface{}
 			sessionID, err := uuid.Parse(sessionIDArg)
 			if err != nil {
 				// Try prefix match
@@ -64,10 +62,11 @@ chronological order with full metadata.`,
 				if err != nil {
 					return fmt.Errorf("session not found: %s", sessionIDArg)
 				}
+
 				if s == nil {
 					return fmt.Errorf("session not found: %s", sessionIDArg)
 				}
-				_ = sess // placeholder
+
 				sessionID = s.ID
 			}
 

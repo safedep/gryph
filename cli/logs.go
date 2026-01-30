@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"time"
@@ -218,14 +219,15 @@ func parseDuration(s string) (time.Time, error) {
 		"2006-01-02 15:04:05",
 		time.RFC3339,
 	}
+
 	for _, layout := range layouts {
 		if t, err := time.Parse(layout, s); err == nil {
 			return t, nil
 		}
 	}
 
-	// Default to now
-	return time.Now(), nil
+	// Everything else failed, return an error
+	return time.Time{}, fmt.Errorf("failed to parse duration")
 }
 
 // eventToView converts an event to a view model.
