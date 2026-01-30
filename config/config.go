@@ -10,6 +10,13 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Agent names as constants. Must be in sync with agent/adapter.go.
+// We cannot depend on agent/adapter.go because it would create a circular dependency.
+const (
+	agentNameClaudeCode = "claude-code"
+	agentNameCursor     = "cursor"
+)
+
 // LoggingLevel represents the verbosity level for logging.
 // This is for agent event logging only. Not for our own internal logging.
 type LoggingLevel string
@@ -130,6 +137,7 @@ func Load(configPath string) (*Config, error) {
 		v.SetConfigFile(configPath)
 	} else {
 		paths := ResolvePaths()
+
 		v.SetConfigName("config")
 		v.AddConfigPath(paths.ConfigDir)
 	}
@@ -144,7 +152,6 @@ func Load(configPath string) (*Config, error) {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, fmt.Errorf("error reading config file: %w", err)
 		}
-		// Config file not found; use defaults
 	}
 
 	// Unmarshal into struct
@@ -168,6 +175,7 @@ func Default() *Config {
 
 	var cfg Config
 	_ = v.Unmarshal(&cfg)
+
 	return &cfg
 }
 
@@ -192,6 +200,7 @@ func (c *Config) GetDatabasePath() string {
 	if c.Storage.Path != "" {
 		return c.Storage.Path
 	}
+
 	paths := ResolvePaths()
 	return paths.DatabaseFile
 }
@@ -214,24 +223,25 @@ func (c *Config) ShouldUseColors() bool {
 // Falls back to global level if not set.
 func (c *Config) GetAgentLoggingLevel(agentName string) LoggingLevel {
 	switch agentName {
-	case "claude-code":
+	case agentNameClaudeCode:
 		if c.Agents.ClaudeCode.LoggingLevel != "" {
 			return c.Agents.ClaudeCode.LoggingLevel
 		}
-	case "cursor":
+	case agentNameCursor:
 		if c.Agents.Cursor.LoggingLevel != "" {
 			return c.Agents.Cursor.LoggingLevel
 		}
 	}
+
 	return c.Logging.Level
 }
 
 // IsAgentEnabled returns true if the given agent is enabled.
 func (c *Config) IsAgentEnabled(agentName string) bool {
 	switch agentName {
-	case "claude-code":
+	case agentNameClaudeCode:
 		return c.Agents.ClaudeCode.Enabled
-	case "cursor":
+	case agentNameCursor:
 		return c.Agents.Cursor.Enabled
 	default:
 		return true
