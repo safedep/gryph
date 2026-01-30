@@ -5,7 +5,8 @@ before:
     - go mod tidy
 
 builds:
-  - env:
+  - main: ./cmd/gryph
+    env:
       - CGO_ENABLED=0
     goos:
       - linux

@@ -28,12 +28,15 @@ AI coding agents read files, write code, and execute commands on your behalf. Bu
 
 ## Installation
 
-<!-- PLACEHOLDER: Installation instructions will be added after release -->
-
 ```bash
-# Coming soon
-# brew install safedep/tap/gryph
-# go install github.com/safedep/gryph/cmd/gryph@latest
+# Install with Homebrew on MacOS and Linux
+brew install safedep/tap/gryph
+
+# Install using npm
+npm install -g @safedep/gryph
+
+# Install using Go
+go install github.com/safedep/gryph/cmd/gryph@latest
 ```
 
 ## Quick Start
@@ -122,10 +125,10 @@ gryph doctor
 
 ## Supported Agents
 
-| Agent | Status | Hook Support |
-|-------|--------|--------------|
-| **Claude Code** | Supported | Full (PreToolUse, PostToolUse, Notification) |
-| **Cursor** | Supported | Full (file read/write, shell execution, MCP tools) |
+| Agent           | Status    | Hook Support                                       |
+| --------------- | --------- | -------------------------------------------------- |
+| **Claude Code** | Supported | Full (PreToolUse, PostToolUse, Notification)       |
+| **Cursor**      | Supported | Full (file read/write, shell execution, MCP tools) |
 
 ## Configuration
 
