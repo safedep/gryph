@@ -12,24 +12,30 @@ const (
 	ExitHookFailed    = 5 // Hook installation/removal fails
 )
 
+// ExitCoder is an interface for errors that carry a custom exit code and message.
+type ExitCoder interface {
+	ExitCode() int
+	Message() string
+}
+
 // CLIError is a typed error that carries an exit code.
-type CLIError struct {
+type cliError struct {
 	code    int
 	message string
 	err     error
 }
 
 // NewCLIError creates a new CLIError with the given code and message.
-func NewCLIError(code int, message string) *CLIError {
-	return &CLIError{
+func NewCLIError(code int, message string) *cliError {
+	return &cliError{
 		code:    code,
 		message: message,
 	}
 }
 
 // WrapError creates a new CLIError wrapping an underlying error.
-func WrapError(code int, message string, err error) *CLIError {
-	return &CLIError{
+func WrapError(code int, message string, err error) *cliError {
+	return &cliError{
 		code:    code,
 		message: message,
 		err:     err,
@@ -37,7 +43,7 @@ func WrapError(code int, message string, err error) *CLIError {
 }
 
 // Error implements the error interface.
-func (e *CLIError) Error() string {
+func (e *cliError) Error() string {
 	if e.err != nil {
 		return fmt.Sprintf("%s: %v", e.message, e.err)
 	}
@@ -45,38 +51,36 @@ func (e *CLIError) Error() string {
 }
 
 // ExitCode returns the exit code for this error.
-func (e *CLIError) ExitCode() int {
+func (e *cliError) ExitCode() int {
 	return e.code
 }
 
 // Message returns the formatted message for display.
-func (e *CLIError) Message() string {
+func (e *cliError) Message() string {
 	return fmt.Sprintf("Error: %s\n", e.Error())
 }
 
 // Unwrap returns the underlying error for errors.Is/errors.As support.
-func (e *CLIError) Unwrap() error {
+func (e *cliError) Unwrap() error {
 	return e.err
 }
 
-// Common error constructors for convenience.
-
 // ErrConfig creates a configuration error.
-func ErrConfig(message string, err error) *CLIError {
+func ErrConfig(message string, err error) *cliError {
 	return WrapError(ExitConfig, message, err)
 }
 
 // ErrDatabase creates a database error.
-func ErrDatabase(message string, err error) *CLIError {
+func ErrDatabase(message string, err error) *cliError {
 	return WrapError(ExitDatabase, message, err)
 }
 
 // ErrAgentNotFound creates an agent not found error.
-func ErrAgentNotFound(agentName string) *CLIError {
+func ErrAgentNotFound(agentName string) *cliError {
 	return NewCLIError(ExitAgentNotFound, fmt.Sprintf("agent not found: %s", agentName))
 }
 
 // ErrHookFailed creates a hook operation failure error.
-func ErrHookFailed(message string, err error) *CLIError {
+func ErrHookFailed(message string, err error) *cliError {
 	return WrapError(ExitHookFailed, message, err)
 }

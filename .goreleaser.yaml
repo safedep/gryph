@@ -40,7 +40,7 @@ universal_binaries:
   - replace: true
 
 brews:
-  - name: pmg
+  - name: gryph
     homepage: https://github.com/safedep/gryph
     description: "AI Coding Agent Observability Tool"
     license: "Apache-2.0"

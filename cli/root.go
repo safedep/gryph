@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/cursor"
@@ -102,9 +103,13 @@ native hook systems to create a comprehensive audit trail of all agent actions.`
 			if os.Getenv("NO_COLOR") != "" {
 				globalFlags.NoColor = true
 			}
+
 			if os.Getenv("GRYPH_NO_COLOR") != "" {
 				globalFlags.NoColor = true
 			}
+
+			setupInternalLogger()
+
 			return nil
 		},
 		SilenceUsage:  true,
@@ -141,6 +146,15 @@ native hook systems to create a comprehensive audit trail of all agent actions.`
 // Execute runs the root command.
 func Execute() error {
 	return NewRootCmd().Execute()
+}
+
+// setupLogger sets up the DRY logger
+func setupInternalLogger() {
+	// Always skip the stdout logger since we are running in a CLI context.
+	// with our own TUI.
+	os.Setenv("APP_LOG_SKIP_STDOUT_LOGGER", "true")
+
+	log.Init("gryph", "cli")
 }
 
 // loadApp loads the application with configuration.

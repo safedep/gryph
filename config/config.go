@@ -11,6 +11,7 @@ import (
 )
 
 // LoggingLevel represents the verbosity level for logging.
+// This is for agent event logging only. Not for our own internal logging.
 type LoggingLevel string
 
 const (
@@ -46,13 +47,13 @@ const (
 
 // Config holds all configuration values.
 type Config struct {
-	Logging  LoggingConfig  `mapstructure:"logging"`
-	Storage  StorageConfig  `mapstructure:"storage"`
-	Privacy  PrivacyConfig  `mapstructure:"privacy"`
-	Filters  FiltersConfig  `mapstructure:"filters"`
-	Agents   AgentsConfig   `mapstructure:"agents"`
-	Display  DisplayConfig  `mapstructure:"display"`
-	Sync     SyncConfig     `mapstructure:"sync"`
+	Logging LoggingConfig `mapstructure:"logging"`
+	Storage StorageConfig `mapstructure:"storage"`
+	Privacy PrivacyConfig `mapstructure:"privacy"`
+	Filters FiltersConfig `mapstructure:"filters"`
+	Agents  AgentsConfig  `mapstructure:"agents"`
+	Display DisplayConfig `mapstructure:"display"`
+	Sync    SyncConfig    `mapstructure:"sync"`
 }
 
 // LoggingConfig holds logging-related settings.
