@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -45,7 +46,12 @@ a file_write action or if diff was not captured.`,
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
-			defer app.Close()
+			defer func() {
+				err := app.Close()
+				if err != nil {
+					log.Errorf("failed to close app: %w", err)
+				}
+			}()
 
 			// Parse event ID
 			eventID, err := uuid.Parse(eventIDArg)

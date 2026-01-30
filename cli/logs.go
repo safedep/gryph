@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -61,7 +62,13 @@ the results.`,
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
-			defer app.Close()
+
+			defer func() {
+				err := app.Close()
+				if err != nil {
+					log.Errorf("failed to close app: %w", err)
+				}
+			}()
 
 			// Build filter
 			filter := events.NewEventFilter().WithLimit(limit)

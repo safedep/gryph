@@ -44,8 +44,8 @@ var HookTypes = []string{
 
 // HooksConfig represents the Cursor hooks.json structure.
 type HooksConfig struct {
-	Version int                       `json:"version"`
-	Hooks   map[string][]HookCommand  `json:"hooks"`
+	Version int                      `json:"version"`
+	Hooks   map[string][]HookCommand `json:"hooks"`
 }
 
 // HookCommand represents a single hook command.
@@ -82,7 +82,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	if !detection.Installed {
-		result.Error = fmt.Errorf("Cursor is not installed")
+		result.Error = fmt.Errorf("failed to detect Cursor: %w", err)
 		return result, result.Error
 	}
 

@@ -152,7 +152,7 @@ func Execute() error {
 func setupInternalLogger() {
 	// Always skip the stdout logger since we are running in a CLI context.
 	// with our own TUI.
-	os.Setenv("APP_LOG_SKIP_STDOUT_LOGGER", "true")
+	_ = os.Setenv("APP_LOG_SKIP_STDOUT_LOGGER", "true")
 
 	log.Init("gryph", "cli")
 }

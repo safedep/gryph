@@ -2,8 +2,10 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"os"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/tui"
@@ -13,10 +15,10 @@ import (
 // NewUninstallCmd creates the uninstall command.
 func NewUninstallCmd() *cobra.Command {
 	var (
-		agents         []string
-		purge          bool
-		dryRun         bool
-		restoreBackup  bool
+		agents        []string
+		purge         bool
+		dryRun        bool
+		restoreBackup bool
 	)
 
 	cmd := &cobra.Command{
@@ -42,7 +44,12 @@ removes the database and configuration files as well.`,
 			if !dryRun && !purge {
 				if err := config.EnsureDirectories(); err == nil {
 					if err := app.InitStore(ctx); err == nil {
-						defer app.Close()
+						defer func() {
+							err := app.Close()
+							if err != nil {
+								log.Errorf("failed to close app: %w", err)
+							}
+						}()
 					}
 				}
 			}
@@ -75,12 +82,16 @@ removes the database and configuration files as well.`,
 						DisplayName: adapter.DisplayName(),
 						Error:       err.Error(),
 					})
+
 					// Log self-audit for failed uninstall
 					if !dryRun {
-						logSelfAudit(ctx, app.Store, SelfAuditActionUninstall, adapter.Name(),
+						if err := logSelfAudit(ctx, app.Store, SelfAuditActionUninstall, adapter.Name(),
 							map[string]interface{}{"error": err.Error()},
-							SelfAuditResultError, err.Error())
+							SelfAuditResultError, err.Error()); err != nil {
+							return fmt.Errorf("failed to log self-audit: %w", err)
+						}
 					}
+
 					continue
 				}
 
@@ -93,28 +104,37 @@ removes the database and configuration files as well.`,
 
 				// Log self-audit for successful uninstall
 				if !dryRun && len(result.HooksRemoved) > 0 {
-					logSelfAudit(ctx, app.Store, SelfAuditActionUninstall, adapter.Name(),
+					if err := logSelfAudit(ctx, app.Store, SelfAuditActionUninstall, adapter.Name(),
 						map[string]interface{}{
-							"hooks_removed":     result.HooksRemoved,
-							"backups_restored":  result.BackupsRestored,
-							"restore_backup":    restoreBackup,
+							"hooks_removed":    result.HooksRemoved,
+							"backups_restored": result.BackupsRestored,
+							"restore_backup":   restoreBackup,
 						},
-						SelfAuditResultSuccess, "")
+						SelfAuditResultSuccess, ""); err != nil {
+						return fmt.Errorf("failed to log self-audit: %w", err)
+					}
 				}
 			}
 
 			// Purge database and config if requested
 			if purge && !dryRun {
 				// Log purge before removing files
-				logSelfAudit(ctx, app.Store, SelfAuditActionPurge, "",
+				if err := logSelfAudit(ctx, app.Store, SelfAuditActionPurge, "",
 					map[string]interface{}{
 						"database_removed": app.Paths.DatabaseFile,
 						"config_removed":   app.Paths.ConfigFile,
 					},
-					SelfAuditResultSuccess, "")
+					SelfAuditResultSuccess, ""); err != nil {
+					return fmt.Errorf("failed to log self-audit: %w", err)
+				}
 
-				os.Remove(app.Paths.DatabaseFile)
-				os.Remove(app.Paths.ConfigFile)
+				if err := os.Remove(app.Paths.DatabaseFile); err != nil {
+					log.Errorf("failed to remove database file: %w", err)
+				}
+
+				if err := os.Remove(app.Paths.ConfigFile); err != nil {
+					log.Errorf("failed to remove config file: %w", err)
+				}
 			}
 
 			return app.Presenter.RenderUninstall(view)

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/tui"
@@ -47,7 +48,13 @@ to enable audit logging. Existing hooks are backed up by default.`,
 				if err := app.InitStore(ctx); err != nil {
 					return ErrDatabase("failed to initialize database", err)
 				}
-				defer app.Close()
+
+				defer func() {
+					err := app.Close()
+					if err != nil {
+						log.Errorf("failed to close app: %w", err)
+					}
+				}()
 			}
 
 			// Filter agents if specified
@@ -95,23 +102,25 @@ to enable audit logging. Existing hooks are backed up by default.`,
 					result, err := adapter.Install(ctx, opts)
 					if err != nil {
 						agentView.Error = err.Error()
-						// Log self-audit for failed install
 						if !dryRun {
-							logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
+							if err := logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
 								map[string]interface{}{"error": err.Error()},
-								SelfAuditResultError, err.Error())
+								SelfAuditResultError, err.Error()); err != nil {
+								log.Errorf("failed to log self-audit: %w", err)
+							}
 						}
 					} else {
 						agentView.HooksInstalled = result.HooksInstalled
 						agentView.Warnings = result.Warnings
-						// Log self-audit for successful install
 						if !dryRun && len(result.HooksInstalled) > 0 {
-							logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
+							if err := logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
 								map[string]interface{}{
 									"hooks_installed": result.HooksInstalled,
 									"warnings":        result.Warnings,
 								},
-								SelfAuditResultSuccess, "")
+								SelfAuditResultSuccess, ""); err != nil {
+								log.Errorf("failed to log self-audit: %w", err)
+							}
 						}
 					}
 				}

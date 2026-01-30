@@ -110,7 +110,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	if !detection.Installed {
-		result.Error = fmt.Errorf("Claude Code is not installed")
+		result.Error = fmt.Errorf("failed to detect Claude Code: %w", err)
 		return result, result.Error
 	}
 

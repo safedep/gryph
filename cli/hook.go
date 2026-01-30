@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/cursor"
@@ -37,7 +38,13 @@ func NewHookCmd() *cobra.Command {
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
-			defer app.Close()
+
+			defer func() {
+				err := app.Close()
+				if err != nil {
+					log.Errorf("failed to close app: %w", err)
+				}
+			}()
 
 			// Read event data from stdin
 			rawData, err := io.ReadAll(os.Stdin)
@@ -140,7 +147,10 @@ func sendHookResponse(agentName, hookType string) error {
 		// Cursor: JSON response to stdout
 		// Different hooks have different response schemas
 		response := generateCursorResponse(hookType)
-		os.Stdout.Write(response)
+		if _, err := os.Stdout.Write(response); err != nil {
+			log.Errorf("failed to write to stdout: %w", err)
+		}
+
 		return nil
 
 	default:
@@ -159,7 +169,10 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 	case agent.AgentCursor:
 		denyResponse := cursor.NewDenyResponse(result.BlockReason)
 		output := generateCursorBlockedResponse(hookType, denyResponse)
-		os.Stdout.Write(output)
+		if _, err := os.Stdout.Write(output); err != nil {
+			log.Errorf("failed to write to stdout: %w", err)
+		}
+
 		return nil
 
 	default:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -114,7 +115,13 @@ Performs various health checks:
 				schemaCheck.Suggestion = "Run 'gryph install' to reinitialize"
 				view.AllOK = false
 			} else {
-				defer app.Close()
+				defer func() {
+					err := app.Close()
+					if err != nil {
+						log.Errorf("failed to close app: %w", err)
+					}
+				}()
+
 				schemaCheck.Status = tui.CheckOK
 				schemaCheck.Message = "Schema is up to date"
 			}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -114,7 +115,10 @@ func newConfigGetCmd() *cobra.Command {
 				return fmt.Errorf("key not found: %s", key)
 			}
 
-			fmt.Fprintln(cmd.OutOrStdout(), value)
+			if _, err := fmt.Fprintln(cmd.OutOrStdout(), value); err != nil {
+				return fmt.Errorf("failed to write value: %w", err)
+			}
+
 			return nil
 		},
 	}
@@ -145,7 +149,12 @@ func newConfigSetCmd() *cobra.Command {
 			// Initialize store for audit logging
 			if err := config.EnsureDirectories(); err == nil {
 				if err := app.InitStore(ctx); err == nil {
-					defer app.Close()
+					defer func() {
+						err := app.Close()
+						if err != nil {
+							log.Errorf("failed to close app: %w", err)
+						}
+					}()
 				}
 			}
 
@@ -153,7 +162,11 @@ func newConfigSetCmd() *cobra.Command {
 			v := viper.New()
 			v.SetConfigFile(app.Paths.ConfigFile)
 			v.SetConfigType("yaml")
-			v.ReadInConfig() // Ignore error if file doesn't exist
+
+			// Ignore error if config file doesn't exist
+			if err := v.ReadInConfig(); err != nil {
+				log.Warnf("failed to read config: %w", err)
+			}
 
 			// Get old value for audit
 			oldValue := v.Get(key)
@@ -189,15 +202,20 @@ func newConfigSetCmd() *cobra.Command {
 			}
 
 			// Log self-audit for config change
-			logSelfAudit(ctx, app.Store, SelfAuditActionConfigChange, "",
+			if err := logSelfAudit(ctx, app.Store, SelfAuditActionConfigChange, "",
 				map[string]interface{}{
 					"key":       key,
 					"old_value": oldValue,
 					"new_value": parsedValue,
 				},
-				SelfAuditResultSuccess, "")
+				SelfAuditResultSuccess, ""); err != nil {
+				return fmt.Errorf("failed to log self-audit: %w", err)
+			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Set %s = %v\n", key, parsedValue)
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Set %s = %v\n", key, parsedValue); err != nil {
+				return fmt.Errorf("failed to write value: %w", err)
+			}
+
 			return nil
 		},
 	}
@@ -220,7 +238,12 @@ func newConfigResetCmd() *cobra.Command {
 			// Initialize store for audit logging
 			if err := config.EnsureDirectories(); err == nil {
 				if err := app.InitStore(ctx); err == nil {
-					defer app.Close()
+					defer func() {
+						err := app.Close()
+						if err != nil {
+							log.Errorf("failed to close app: %w", err)
+						}
+					}()
 				}
 			}
 
@@ -230,13 +253,18 @@ func newConfigResetCmd() *cobra.Command {
 			}
 
 			// Log self-audit for config reset
-			logSelfAudit(ctx, app.Store, SelfAuditActionConfigChange, "",
+			if err := logSelfAudit(ctx, app.Store, SelfAuditActionConfigChange, "",
 				map[string]interface{}{
 					"action": "reset",
 				},
-				SelfAuditResultSuccess, "")
+				SelfAuditResultSuccess, ""); err != nil {
+				return fmt.Errorf("failed to log self-audit: %w", err)
+			}
 
-			fmt.Fprintln(cmd.OutOrStdout(), "Configuration reset to defaults.")
+			if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Configuration reset to defaults."); err != nil {
+				return fmt.Errorf("failed to write value: %w", err)
+			}
+
 			return nil
 		},
 	}

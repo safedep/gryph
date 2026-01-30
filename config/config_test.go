@@ -328,27 +328,16 @@ func TestResolvePaths(t *testing.T) {
 }
 
 func TestEnsureDirectories(t *testing.T) {
-	// Save original paths
-	origConfigDir := os.Getenv("XDG_CONFIG_HOME")
-	origDataDir := os.Getenv("XDG_DATA_HOME")
-	origCacheDir := os.Getenv("XDG_CACHE_HOME")
-
-	// Set temporary paths
 	tmpDir := t.TempDir()
-	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "config"))
-	os.Setenv("XDG_DATA_HOME", filepath.Join(tmpDir, "data"))
-	os.Setenv("XDG_CACHE_HOME", filepath.Join(tmpDir, "cache"))
 
-	// Restore at end
-	defer func() {
-		os.Setenv("XDG_CONFIG_HOME", origConfigDir)
-		os.Setenv("XDG_DATA_HOME", origDataDir)
-		os.Setenv("XDG_CACHE_HOME", origCacheDir)
-	}()
+	t.Run("EnsureDirectories", func(t *testing.T) {
+		t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "config"))
+		t.Setenv("XDG_DATA_HOME", filepath.Join(tmpDir, "data"))
+		t.Setenv("XDG_CACHE_HOME", filepath.Join(tmpDir, "cache"))
 
-	// Call EnsureDirectories - this may fail on macOS since it uses Application Support
-	// but we can at least verify it doesn't panic
-	_ = EnsureDirectories()
+		err := EnsureDirectories()
+		require.NoError(t, err)
+	})
 }
 
 func TestClaudeCodeHooksDir(t *testing.T) {

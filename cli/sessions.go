@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/tui"
@@ -45,7 +46,13 @@ Shows all recorded agent sessions with summary statistics.`,
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
-			defer app.Close()
+
+			defer func() {
+				err := app.Close()
+				if err != nil {
+					log.Errorf("failed to close app: %w", err)
+				}
+			}()
 
 			// Build filter
 			filter := session.NewSessionFilter().WithLimit(limit)

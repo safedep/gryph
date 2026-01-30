@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/safedep/dry/log"
 	"github.com/spf13/cobra"
 )
 
@@ -51,7 +52,12 @@ Self-audit entries are preserved and not affected by this cleanup.`,
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
-			defer app.Close()
+			defer func() {
+				err := app.Close()
+				if err != nil {
+					log.Errorf("failed to close app: %w", err)
+				}
+			}()
 
 			days := app.Config.Storage.RetentionDays
 			if days == 0 {
@@ -78,13 +84,15 @@ Self-audit entries are preserved and not affected by this cleanup.`,
 			}
 
 			// Log self-audit
-			logSelfAudit(ctx, app.Store, SelfAuditActionRetentionCleanup, "",
+			if err := logSelfAudit(ctx, app.Store, SelfAuditActionRetentionCleanup, "",
 				map[string]interface{}{
 					"events_deleted": deleted,
 					"cutoff_time":    cutoff.Format(time.RFC3339),
 					"retention_days": days,
 				},
-				SelfAuditResultSuccess, "")
+				SelfAuditResultSuccess, ""); err != nil {
+				log.Errorf("failed to log self-audit: %w", err)
+			}
 
 			fmt.Printf("Deleted %d events older than %d days\n", deleted, days)
 			return nil
@@ -115,9 +123,15 @@ events that would be affected by cleanup.`,
 
 			// Initialize store
 			if err := app.InitStore(ctx); err != nil {
-				return ErrDatabase("failed to open database", err)
+				return ErrDatabase("failed to initialize database", err)
 			}
-			defer app.Close()
+
+			defer func() {
+				err := app.Close()
+				if err != nil {
+					log.Errorf("failed to close app: %w", err)
+				}
+			}()
 
 			days := app.Config.Storage.RetentionDays
 			fmt.Printf("Retention Policy:\n")

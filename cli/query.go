@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -11,21 +12,21 @@ import (
 // NewQueryCmd creates the query command.
 func NewQueryCmd() *cobra.Command {
 	var (
-		since      string
-		until      string
-		today      bool
-		yesterday  bool
-		agents     []string
-		session    string
-		actions    []string
+		since       string
+		until       string
+		today       bool
+		yesterday   bool
+		agents      []string
+		session     string
+		actions     []string
 		filePattern string
-		cmdPattern string
-		status     string
-		showDiff   bool
-		format     string
-		limit      int
-		offset     int
-		count      bool
+		cmdPattern  string
+		status      string
+		showDiff    bool
+		format      string
+		limit       int
+		offset      int
+		count       bool
 	)
 
 	cmd := &cobra.Command{
@@ -57,7 +58,13 @@ through the audit history.`,
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
-			defer app.Close()
+
+			defer func() {
+				err := app.Close()
+				if err != nil {
+					log.Errorf("failed to close app: %w", err)
+				}
+			}()
 
 			// Build filter
 			filter := events.NewEventFilter().WithLimit(limit).WithOffset(offset)

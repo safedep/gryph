@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -69,7 +70,13 @@ Displays the current status of the tool including:
 
 				// Initialize store to get actual counts
 				if err := app.InitStore(ctx); err == nil {
-					defer app.Close()
+					defer func() {
+						err := app.Close()
+						if err != nil {
+							log.Errorf("failed to close app: %w", err)
+						}
+					}()
+
 					if stats, err := app.Store.GetSessionStats(ctx); err == nil {
 						view.Database.SessionCount = stats.TotalSessions
 						view.Database.EventCount = stats.TotalEvents

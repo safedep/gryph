@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -43,7 +44,14 @@ Exports audit events to various formats for external analysis.`,
 				if err != nil {
 					return err
 				}
-				defer file.Close()
+
+				defer func() {
+					err := file.Close()
+					if err != nil {
+						log.Errorf("failed to close file: %w", err)
+					}
+				}()
+
 				writer = file
 			}
 
@@ -57,7 +65,13 @@ Exports audit events to various formats for external analysis.`,
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
-			defer app.Close()
+
+			defer func() {
+				err := app.Close()
+				if err != nil {
+					log.Errorf("failed to close app: %w", err)
+				}
+			}()
 
 			// Build filter
 			filter := events.NewEventFilter().WithLimit(0) // No limit for export

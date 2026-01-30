@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -44,7 +45,13 @@ installation, uninstallation, and configuration changes.`,
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
-			defer app.Close()
+
+			defer func() {
+				err := app.Close()
+				if err != nil {
+					log.Errorf("failed to close app: %w", err)
+				}
+			}()
 
 			// Build filter
 			filter := &storage.SelfAuditFilter{

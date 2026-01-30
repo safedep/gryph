@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -44,9 +45,15 @@ chronological order with full metadata.`,
 
 			// Initialize store
 			if err := app.InitStore(ctx); err != nil {
-				return ErrDatabase("failed to open database", err)
+				return ErrDatabase("failed to initialize database", err)
 			}
-			defer app.Close()
+
+			defer func() {
+				err := app.Close()
+				if err != nil {
+					log.Errorf("failed to close app: %w", err)
+				}
+			}()
 
 			// Try to parse as full UUID first
 			var sess *interface{}

@@ -26,7 +26,8 @@ func setupTestStore(t *testing.T) (*SQLiteStore, func()) {
 	require.NoError(t, err)
 
 	cleanup := func() {
-		store.Close()
+		err := store.Close()
+		require.NoError(t, err)
 	}
 
 	return store, cleanup
