@@ -33,5 +33,3 @@ go.work.sum
 
 bin/
 
-!README.md
-/*.md

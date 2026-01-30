@@ -73,6 +73,7 @@ func (p *PrivacyChecker) IsSensitivePath(path string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -82,6 +83,7 @@ func (p *PrivacyChecker) Redact(content string) string {
 	for _, re := range p.redactPatterns {
 		result = re.ReplaceAllString(result, "[REDACTED]")
 	}
+
 	return result
 }
 
