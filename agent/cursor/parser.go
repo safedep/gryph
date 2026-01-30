@@ -114,36 +114,36 @@ type StopInput struct {
 
 // HookTypeMapping maps Cursor hook types to action types.
 var HookTypeMapping = map[string]events.ActionType{
-	"preToolUse":            events.ActionToolUse,
-	"postToolUse":           events.ActionToolUse,
-	"postToolUseFailure":    events.ActionToolUse,
-	"beforeShellExecution":  events.ActionCommandExec,
-	"afterShellExecution":   events.ActionCommandExec,
-	"beforeMCPExecution":    events.ActionToolUse,
-	"afterMCPExecution":     events.ActionToolUse,
-	"beforeReadFile":        events.ActionFileRead,
-	"afterFileEdit":         events.ActionFileWrite,
-	"beforeTabFileRead":     events.ActionFileRead,
-	"afterTabFileEdit":      events.ActionFileWrite,
-	"beforeSubmitPrompt":    events.ActionToolUse,
-	"afterAgentResponse":    events.ActionToolUse,
-	"subagentStart":         events.ActionToolUse,
-	"subagentStop":          events.ActionToolUse,
-	"sessionStart":          events.ActionSessionStart,
-	"sessionEnd":            events.ActionSessionEnd,
-	"stop":                  events.ActionSessionEnd,
-	"preCompact":            events.ActionToolUse,
+	"preToolUse":           events.ActionToolUse,
+	"postToolUse":          events.ActionToolUse,
+	"postToolUseFailure":   events.ActionToolUse,
+	"beforeShellExecution": events.ActionCommandExec,
+	"afterShellExecution":  events.ActionCommandExec,
+	"beforeMCPExecution":   events.ActionToolUse,
+	"afterMCPExecution":    events.ActionToolUse,
+	"beforeReadFile":       events.ActionFileRead,
+	"afterFileEdit":        events.ActionFileWrite,
+	"beforeTabFileRead":    events.ActionFileRead,
+	"afterTabFileEdit":     events.ActionFileWrite,
+	"beforeSubmitPrompt":   events.ActionToolUse,
+	"afterAgentResponse":   events.ActionToolUse,
+	"subagentStart":        events.ActionToolUse,
+	"subagentStop":         events.ActionToolUse,
+	"sessionStart":         events.ActionSessionStart,
+	"sessionEnd":           events.ActionSessionEnd,
+	"stop":                 events.ActionSessionEnd,
+	"preCompact":           events.ActionToolUse,
 }
 
 // ToolNameToActionType maps Cursor tool names to action types.
 var ToolNameToActionType = map[string]events.ActionType{
-	"Shell":    events.ActionCommandExec,
-	"Read":     events.ActionFileRead,
-	"Write":    events.ActionFileWrite,
-	"Edit":     events.ActionFileWrite,
-	"Grep":     events.ActionFileRead,
-	"Glob":     events.ActionFileRead,
-	"Task":     events.ActionToolUse,
+	"Shell": events.ActionCommandExec,
+	"Read":  events.ActionFileRead,
+	"Write": events.ActionFileWrite,
+	"Edit":  events.ActionFileWrite,
+	"Grep":  events.ActionFileRead,
+	"Glob":  events.ActionFileRead,
+	"Task":  events.ActionToolUse,
 }
 
 // ParseHookEvent converts a Cursor event to the common format.
@@ -228,7 +228,9 @@ func parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput,
 	event.RawEvent = rawData
 
 	// Build payload based on action type
-	buildPayload(event, actionType, input.ToolName, input.ToolInput, nil)
+	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, nil); err != nil {
+		return nil, fmt.Errorf("failed to build payload: %w", err)
+	}
 
 	return event, nil
 }
@@ -254,7 +256,9 @@ func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput
 
 	// Build payload
 	toolOutput := map[string]interface{}{"output": input.ToolOutput}
-	buildPayload(event, actionType, input.ToolName, input.ToolInput, toolOutput)
+	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, toolOutput); err != nil {
+		return nil, fmt.Errorf("failed to build payload: %w", err)
+	}
 
 	return event, nil
 }
@@ -279,7 +283,9 @@ func parsePostToolUseFailure(sessionID uuid.UUID, agentSessionID string, base Ho
 	event.ResultStatus = events.ResultError
 	event.ErrorMessage = input.ErrorMessage
 
-	buildPayload(event, actionType, input.ToolName, input.ToolInput, nil)
+	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, nil); err != nil {
+		return nil, fmt.Errorf("failed to build payload: %w", err)
+	}
 
 	return event, nil
 }
@@ -299,7 +305,10 @@ func parseBeforeShellExecution(sessionID uuid.UUID, agentSessionID string, base 
 	payload := events.CommandExecPayload{
 		Command: input.Command,
 	}
-	event.SetPayload(payload)
+
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
 
 	return event, nil
 }
@@ -314,6 +323,7 @@ func parseBeforeReadFile(sessionID uuid.UUID, agentSessionID string, base HookIn
 	event.AgentSessionID = agentSessionID
 	event.ToolName = "Read"
 	event.RawEvent = rawData
+
 	if len(base.WorkspaceRoots) > 0 {
 		event.WorkingDirectory = base.WorkspaceRoots[0]
 	}
@@ -321,7 +331,10 @@ func parseBeforeReadFile(sessionID uuid.UUID, agentSessionID string, base HookIn
 	payload := events.FileReadPayload{
 		Path: input.FilePath,
 	}
-	event.SetPayload(payload)
+
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
 
 	// Check sensitive paths
 	markSensitivePath(event, input.FilePath)
@@ -350,7 +363,10 @@ func parseAfterFileEdit(sessionID uuid.UUID, agentSessionID string, base HookInp
 		payload.OldString = truncateString(input.Edits[0].OldString, 200)
 		payload.NewString = truncateString(input.Edits[0].NewString, 200)
 	}
-	event.SetPayload(payload)
+
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
 
 	// Check sensitive paths
 	markSensitivePath(event, input.FilePath)
@@ -375,7 +391,10 @@ func parseBeforeSubmitPrompt(sessionID uuid.UUID, agentSessionID string, base Ho
 	payload := events.ToolUsePayload{
 		ToolName: "beforeSubmitPrompt",
 	}
-	event.SetPayload(payload)
+
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
 
 	return event, nil
 }
@@ -397,7 +416,9 @@ func parseSessionStart(sessionID uuid.UUID, agentSessionID string, base HookInpu
 	payload := events.SessionPayload{
 		Model: base.Model,
 	}
-	event.SetPayload(payload)
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
 
 	return event, nil
 }
@@ -419,7 +440,9 @@ func parseSessionEnd(sessionID uuid.UUID, agentSessionID string, base HookInput,
 	payload := events.SessionEndPayload{
 		Reason: input.Reason,
 	}
-	event.SetPayload(payload)
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
 
 	return event, nil
 }
@@ -441,12 +464,14 @@ func parseStop(sessionID uuid.UUID, agentSessionID string, base HookInput, rawDa
 	payload := events.SessionEndPayload{
 		Reason: input.Status,
 	}
-	event.SetPayload(payload)
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
 
 	return event, nil
 }
 
-func buildPayload(event *events.Event, actionType events.ActionType, toolName string, toolInput, toolOutput map[string]interface{}) {
+func buildPayload(event *events.Event, actionType events.ActionType, toolName string, toolInput, toolOutput map[string]interface{}) error {
 	switch actionType {
 	case events.ActionFileRead:
 		payload := events.FileReadPayload{}
@@ -457,7 +482,9 @@ func buildPayload(event *events.Event, actionType events.ActionType, toolName st
 		if pattern, ok := toolInput["pattern"].(string); ok {
 			payload.Pattern = pattern
 		}
-		event.SetPayload(payload)
+		if err := event.SetPayload(payload); err != nil {
+			return fmt.Errorf("failed to set payload: %w", err)
+		}
 
 	case events.ActionFileWrite:
 		payload := events.FileWritePayload{}
@@ -474,7 +501,9 @@ func buildPayload(event *events.Event, actionType events.ActionType, toolName st
 		if newStr, ok := toolInput["new_string"].(string); ok {
 			payload.NewString = truncateString(newStr, 200)
 		}
-		event.SetPayload(payload)
+		if err := event.SetPayload(payload); err != nil {
+			return fmt.Errorf("failed to set payload: %w", err)
+		}
 
 	case events.ActionCommandExec:
 		payload := events.CommandExecPayload{}
@@ -486,7 +515,9 @@ func buildPayload(event *events.Event, actionType events.ActionType, toolName st
 				payload.Output = truncateString(output, 500)
 			}
 		}
-		event.SetPayload(payload)
+		if err := event.SetPayload(payload); err != nil {
+			return fmt.Errorf("failed to set payload: %w", err)
+		}
 
 	default:
 		payload := events.ToolUsePayload{
@@ -500,8 +531,12 @@ func buildPayload(event *events.Event, actionType events.ActionType, toolName st
 				payload.Output = resp
 			}
 		}
-		event.SetPayload(payload)
+		if err := event.SetPayload(payload); err != nil {
+			return fmt.Errorf("failed to set payload: %w", err)
+		}
 	}
+
+	return nil
 }
 
 func markSensitivePath(event *events.Event, path string) {

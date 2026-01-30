@@ -59,22 +59,22 @@ type NotificationInput struct {
 
 // ToolNameMapping maps Claude Code tool names to action types.
 var ToolNameMapping = map[string]events.ActionType{
-	"Read":          events.ActionFileRead,
-	"View":          events.ActionFileRead,
-	"Write":         events.ActionFileWrite,
-	"Edit":          events.ActionFileWrite,
-	"NotebookEdit":  events.ActionFileWrite,
-	"Bash":          events.ActionCommandExec,
-	"Execute":       events.ActionCommandExec,
-	"WebSearch":     events.ActionToolUse,
-	"WebFetch":      events.ActionToolUse,
-	"Grep":          events.ActionFileRead,
-	"Glob":          events.ActionFileRead,
-	"LS":            events.ActionFileRead,
-	"Task":          events.ActionToolUse,
-	"TodoRead":      events.ActionToolUse,
-	"TodoWrite":     events.ActionToolUse,
-	"AskUser":       events.ActionToolUse,
+	"Read":         events.ActionFileRead,
+	"View":         events.ActionFileRead,
+	"Write":        events.ActionFileWrite,
+	"Edit":         events.ActionFileWrite,
+	"NotebookEdit": events.ActionFileWrite,
+	"Bash":         events.ActionCommandExec,
+	"Execute":      events.ActionCommandExec,
+	"WebSearch":    events.ActionToolUse,
+	"WebFetch":     events.ActionToolUse,
+	"Grep":         events.ActionFileRead,
+	"Glob":         events.ActionFileRead,
+	"LS":           events.ActionFileRead,
+	"Task":         events.ActionToolUse,
+	"TodoRead":     events.ActionToolUse,
+	"TodoWrite":    events.ActionToolUse,
+	"AskUser":      events.ActionToolUse,
 }
 
 // ParseHookEvent converts a Claude Code event to the common format.
@@ -145,7 +145,9 @@ func parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput,
 	event.RawEvent = rawData
 
 	// Build payload based on action type
-	buildPayload(event, actionType, input.ToolName, input.ToolInput, nil)
+	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, nil); err != nil {
+		return nil, fmt.Errorf("failed to build payload: %w", err)
+	}
 
 	// Mark sensitive paths
 	markSensitivePaths(event, actionType, input.ToolInput)
@@ -167,7 +169,9 @@ func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput
 	event.RawEvent = rawData
 
 	// Build payload
-	buildPayload(event, actionType, input.ToolName, input.ToolInput, input.ToolResponse)
+	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, input.ToolResponse); err != nil {
+		return nil, fmt.Errorf("failed to build payload: %w", err)
+	}
 
 	// Set result status based on failure flag and response
 	if isFailure {
@@ -204,7 +208,10 @@ func parseSessionStart(sessionID uuid.UUID, agentSessionID string, base HookInpu
 		Model:     input.Model,
 		AgentType: input.AgentType,
 	}
-	event.SetPayload(payload)
+
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
 
 	return event, nil
 }
@@ -224,7 +231,10 @@ func parseSessionEnd(sessionID uuid.UUID, agentSessionID string, base HookInput,
 	payload := events.SessionEndPayload{
 		Reason: input.Reason,
 	}
-	event.SetPayload(payload)
+
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
 
 	return event, nil
 }
@@ -244,7 +254,10 @@ func parseNotification(sessionID uuid.UUID, agentSessionID string, base HookInpu
 		Message: input.Message,
 		Type:    input.NotificationType,
 	}
-	event.SetPayload(payload)
+
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
 
 	return event, nil
 }
@@ -256,7 +269,7 @@ func getActionType(toolName string) events.ActionType {
 	return events.ActionToolUse
 }
 
-func buildPayload(event *events.Event, actionType events.ActionType, toolName string, toolInput, toolResponse map[string]interface{}) {
+func buildPayload(event *events.Event, actionType events.ActionType, toolName string, toolInput, toolResponse map[string]interface{}) error {
 	switch actionType {
 	case events.ActionFileRead:
 		payload := events.FileReadPayload{}
@@ -266,7 +279,10 @@ func buildPayload(event *events.Event, actionType events.ActionType, toolName st
 		if pattern, ok := toolInput["pattern"].(string); ok {
 			payload.Pattern = pattern
 		}
-		event.SetPayload(payload)
+
+		if err := event.SetPayload(payload); err != nil {
+			return fmt.Errorf("failed to set payload: %w", err)
+		}
 
 	case events.ActionFileWrite:
 		payload := events.FileWritePayload{}
@@ -282,7 +298,9 @@ func buildPayload(event *events.Event, actionType events.ActionType, toolName st
 		if newStr, ok := toolInput["new_string"].(string); ok {
 			payload.NewString = truncateString(newStr, 200)
 		}
-		event.SetPayload(payload)
+		if err := event.SetPayload(payload); err != nil {
+			return fmt.Errorf("failed to set payload: %w", err)
+		}
 
 	case events.ActionCommandExec:
 		payload := events.CommandExecPayload{}
@@ -300,7 +318,9 @@ func buildPayload(event *events.Event, actionType events.ActionType, toolName st
 				payload.ExitCode = int(exitCode)
 			}
 		}
-		event.SetPayload(payload)
+		if err := event.SetPayload(payload); err != nil {
+			return fmt.Errorf("failed to set payload: %w", err)
+		}
 
 	default:
 		payload := events.ToolUsePayload{
@@ -314,8 +334,12 @@ func buildPayload(event *events.Event, actionType events.ActionType, toolName st
 				payload.Output = resp
 			}
 		}
-		event.SetPayload(payload)
+		if err := event.SetPayload(payload); err != nil {
+			return fmt.Errorf("failed to set payload: %w", err)
+		}
 	}
+
+	return nil
 }
 
 func detectErrorsInResponse(event *events.Event, response map[string]interface{}) {

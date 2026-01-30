@@ -28,12 +28,15 @@ func NewTablePresenter(opts PresenterOptions) *TablePresenter {
 
 // RenderStatus renders the tool status.
 func (p *TablePresenter) RenderStatus(status *StatusView) error {
-	fmt.Fprintf(p.w, "%s\n\n", p.color.Header("gryph "+status.Version))
+	tw := &tableWriter{w: p.w}
+
+	tw.printf("%s\n\n", p.color.Header("gryph "+status.Version))
 
 	// Agents section
-	fmt.Fprintf(p.w, "%s\n", p.color.Header("Agents"))
+	tw.printf("%s\n", p.color.Header("Agents"))
+
 	for _, agent := range status.Agents {
-		statusStr := p.color.StatusSkip()
+		statusStr := ""
 		versionStr := "-"
 		hooksStr := "-"
 
@@ -49,51 +52,54 @@ func (p *TablePresenter) RenderStatus(status *StatusView) error {
 			statusStr = "not found"
 		}
 
-		fmt.Fprintf(p.w, "  %-14s %-12s %-12s %s\n",
+		tw.printf("  %-14s %-12s %-12s %s\n",
 			p.color.Agent(agent.Name), statusStr, versionStr, hooksStr)
 	}
-	fmt.Fprintln(p.w)
+	tw.println()
 
 	// Database section
-	fmt.Fprintf(p.w, "%s\n", p.color.Header("Database"))
-	fmt.Fprintf(p.w, "  %-14s %s\n", "Location", p.color.Path(status.Database.Location))
-	fmt.Fprintf(p.w, "  %-14s %s\n", "Size", status.Database.SizeHuman)
-	fmt.Fprintf(p.w, "  %-14s %s\n", "Events", p.color.Number(FormatNumber(status.Database.EventCount)))
-	fmt.Fprintf(p.w, "  %-14s %s\n", "Sessions", p.color.Number(FormatNumber(status.Database.SessionCount)))
+	tw.printf("%s\n", p.color.Header("Database"))
+	tw.printf("  %-14s %s\n", "Location", p.color.Path(status.Database.Location))
+	tw.printf("  %-14s %s\n", "Size", status.Database.SizeHuman)
+	tw.printf("  %-14s %s\n", "Events", p.color.Number(FormatNumber(status.Database.EventCount)))
+	tw.printf("  %-14s %s\n", "Sessions", p.color.Number(FormatNumber(status.Database.SessionCount)))
+
 	if !status.Database.OldestEvent.IsZero() {
-		fmt.Fprintf(p.w, "  %-14s %s\n", "Oldest", FormatTime(status.Database.OldestEvent))
-		fmt.Fprintf(p.w, "  %-14s %s\n", "Latest", FormatTime(status.Database.NewestEvent))
+		tw.printf("  %-14s %s\n", "Oldest", FormatTime(status.Database.OldestEvent))
+		tw.printf("  %-14s %s\n", "Latest", FormatTime(status.Database.NewestEvent))
 	}
-	fmt.Fprintln(p.w)
+	tw.println()
 
 	// Config section
-	fmt.Fprintf(p.w, "%s\n", p.color.Header("Config"))
-	fmt.Fprintf(p.w, "  %-14s %s\n", "Location", p.color.Path(status.Config.Location))
-	fmt.Fprintf(p.w, "  %-14s %s\n", "Logging level", status.Config.LoggingLevel)
+	tw.printf("%s\n", p.color.Header("Config"))
+	tw.printf("  %-14s %s\n", "Location", p.color.Path(status.Config.Location))
+	tw.printf("  %-14s %s\n", "Logging level", status.Config.LoggingLevel)
 	if status.Config.RetentionDays == 0 {
-		fmt.Fprintf(p.w, "  %-14s %s\n", "Retention", "disabled")
+		tw.printf("  %-14s %s\n", "Retention", "disabled")
 	} else {
-		fmt.Fprintf(p.w, "  %-14s %d days\n", "Retention", status.Config.RetentionDays)
+		tw.printf("  %-14s %d days\n", "Retention", status.Config.RetentionDays)
 		if status.Config.EventsToClean > 0 {
-			fmt.Fprintf(p.w, "  %-14s %d events ready for cleanup\n", "", status.Config.EventsToClean)
+			tw.printf("  %-14s %d events ready for cleanup\n", "", status.Config.EventsToClean)
 		}
 	}
 
-	return nil
+	return tw.Err()
 }
 
 // RenderSessions renders a list of sessions.
 func (p *TablePresenter) RenderSessions(sessions []*SessionView) error {
+	tw := &tableWriter{w: p.w}
+
 	if len(sessions) == 0 {
-		fmt.Fprintln(p.w, "No sessions found.")
-		return nil
+		tw.println("No sessions found.")
+		return tw.Err()
 	}
 
-	fmt.Fprintf(p.w, "Sessions (%d)\n", len(sessions))
-	fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
+	tw.printf("Sessions (%d)\n", len(sessions))
+	tw.println(HorizontalLine(p.termWidth))
 
 	for _, s := range sessions {
-		fmt.Fprintf(p.w, "%s  %s  session %s\n",
+		tw.printf("%s  %s  session %s\n",
 			FormatTimeShort(s.StartedAt),
 			p.color.Agent(s.AgentName),
 			p.color.Dim(s.ShortID))
@@ -101,70 +107,71 @@ func (p *TablePresenter) RenderSessions(sessions []*SessionView) error {
 		summary := fmt.Sprintf("   %d actions", s.TotalActions)
 		if s.FilesWritten > 0 {
 			summary += fmt.Sprintf("  *  %d files written", s.FilesWritten)
-		}
-		if s.CommandsExecuted > 0 {
 			summary += fmt.Sprintf("  *  %d commands", s.CommandsExecuted)
 		}
-		fmt.Fprintln(p.w, p.color.Dim(summary))
-		fmt.Fprintln(p.w)
+
+		tw.println(p.color.Dim(summary))
+		tw.println()
 	}
 
-	return nil
+	return tw.Err()
 }
 
 // RenderSession renders a single session detail.
 func (p *TablePresenter) RenderSession(session *SessionView, events []*EventView) error {
-	fmt.Fprintf(p.w, "%s\n", p.color.Header("Session Details"))
-	fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
-	fmt.Fprintln(p.w)
+	tw := &tableWriter{w: p.w}
 
-	fmt.Fprintf(p.w, "%-16s %s\n", "Session ID", session.ID)
-	fmt.Fprintf(p.w, "%-16s %s %s\n", "Agent", p.color.Agent(session.AgentDisplayName), session.AgentVersion)
-	fmt.Fprintf(p.w, "%-16s %s\n", "Started", FormatTime(session.StartedAt))
+	tw.printf("%s\n", p.color.Header("Session Details"))
+	tw.println(HorizontalLine(p.termWidth))
+	tw.println()
+
+	tw.printf("%-16s %s\n", "Session ID", session.ID)
+	tw.printf("%-16s %s %s\n", "Agent", p.color.Agent(session.AgentDisplayName), session.AgentVersion)
+	tw.printf("%-16s %s\n", "Started", FormatTime(session.StartedAt))
 	if !session.EndedAt.IsZero() {
-		fmt.Fprintf(p.w, "%-16s %s\n", "Duration", FormatDuration(session.Duration))
+		tw.printf("%-16s %s\n", "Duration", FormatDuration(session.Duration))
+	}
+	tw.printf("%-16s %s\n", "Working Dir", p.color.Path(session.WorkingDirectory))
+	if session.ProjectName != "" {
+		tw.printf("%-16s %s\n", "Project", session.ProjectName)
 	}
 	if session.WorkingDirectory != "" {
-		fmt.Fprintf(p.w, "%-16s %s\n", "Working Dir", p.color.Path(session.WorkingDirectory))
+		tw.printf("%-16s %s\n", "Working Dir", p.color.Path(session.WorkingDirectory))
 	}
-	if session.ProjectName != "" {
-		fmt.Fprintf(p.w, "%-16s %s\n", "Project", session.ProjectName)
-	}
-	fmt.Fprintln(p.w)
 
 	if len(events) > 0 {
-		fmt.Fprintf(p.w, "%s\n", p.color.Header("Actions"))
-		fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
-		fmt.Fprintln(p.w)
+		tw.printf("%s\n", p.color.Header("Actions"))
+		tw.println(HorizontalLine(p.termWidth))
+		tw.println()
 
 		for i, e := range events {
-			fmt.Fprintf(p.w, "#%-2d %s  %s\n", i+1, FormatTimeShort(e.Timestamp), e.ActionDisplay)
+			tw.printf("#%-2d %s  %s\n", i+1, FormatTimeShort(e.Timestamp), e.ActionDisplay)
 			if e.Path != "" {
-				fmt.Fprintf(p.w, "    Path: %s\n", p.color.Path(e.Path))
+				tw.printf("    Path: %s\n", p.color.Path(e.Path))
 			}
 			if e.Command != "" {
-				fmt.Fprintf(p.w, "    Command: %s\n", e.Command)
+				tw.printf("    Command: %s\n", e.Command)
 			}
 			if e.LinesAdded > 0 || e.LinesRemoved > 0 {
-				fmt.Fprintf(p.w, "    Changes: %s\n", FormatLineChanges(e.LinesAdded, e.LinesRemoved))
+				tw.printf("    Changes: %s\n", FormatLineChanges(e.LinesAdded, e.LinesRemoved))
 			}
 			if e.ExitCode != 0 || e.ActionType == "command_exec" {
-				fmt.Fprintf(p.w, "    Exit: %d\n", e.ExitCode)
+				tw.printf("    Exit: %d\n", e.ExitCode)
 			}
-			fmt.Fprintln(p.w)
+			tw.println()
 		}
 	}
 
 	// Summary line
-	fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
+	tw.println(HorizontalLine(p.termWidth))
 	summary := fmt.Sprintf("Summary: %d files read, %d files written, %d commands",
 		session.FilesRead, session.FilesWritten, session.CommandsExecuted)
 	if session.Errors > 0 {
 		summary += fmt.Sprintf(" (%d errors)", session.Errors)
 	}
-	fmt.Fprintln(p.w, summary)
+	tw.println(summary)
 
-	return nil
+	return tw.Err()
 }
 
 // eventsColumnWidths holds the calculated widths for events table columns.
@@ -219,21 +226,23 @@ func (p *TablePresenter) calculateEventsColumnWidths() eventsColumnWidths {
 
 // RenderEvents renders a list of events.
 func (p *TablePresenter) RenderEvents(events []*EventView) error {
+	tw := &tableWriter{w: p.w}
+
 	if len(events) == 0 {
-		fmt.Fprintln(p.w, "No events found.")
-		return nil
+		tw.println("No events found.")
+		return tw.Err()
 	}
 
 	cols := p.calculateEventsColumnWidths()
 
-	fmt.Fprintf(p.w, "Results (%d events)\n", len(events))
-	fmt.Fprintln(p.w, HorizontalLine(cols.total))
+	tw.printf("Results (%d events)\n", len(events))
+	tw.println(HorizontalLine(cols.total))
 
 	// Build format string dynamically
 	headerFmt := fmt.Sprintf("%%-%ds %%-%ds %%-%ds %%-%ds %%-%ds %%s\n",
 		cols.time, cols.agent, cols.session, cols.action, cols.path)
-	fmt.Fprintf(p.w, headerFmt, "Time", "Agent", "Session", "Action", "Path/Command", "Result")
-	fmt.Fprintln(p.w, HorizontalLine(cols.total))
+	tw.printf(headerFmt, "Time", "Agent", "Session", "Action", "Path/Command", "Result")
+	tw.println(HorizontalLine(cols.total))
 
 	rowFmt := fmt.Sprintf("%%-%ds %%-%ds %%-%ds %%-%ds %%-%ds %%s\n",
 		cols.time, cols.agent, cols.session, cols.action, cols.path)
@@ -253,7 +262,7 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 			result = FormatExitCode(e.ExitCode)
 		}
 
-		fmt.Fprintf(p.w, rowFmt,
+		tw.printf(rowFmt,
 			FormatTimeShort(e.Timestamp),
 			p.color.Agent(e.AgentName),
 			e.ShortSessionID,
@@ -262,90 +271,96 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 			result)
 	}
 
-	fmt.Fprintln(p.w, HorizontalLine(cols.total))
-	fmt.Fprintf(p.w, "%d results\n", len(events))
+	tw.println(HorizontalLine(cols.total))
+	tw.printf("%d results\n", len(events))
 
-	return nil
+	return tw.Err()
 }
 
 // RenderInstall renders the installation result.
 func (p *TablePresenter) RenderInstall(result *InstallView) error {
-	fmt.Fprintln(p.w, "Discovering agents...")
-	fmt.Fprintln(p.w)
+	tw := &tableWriter{w: p.w}
+
+	tw.println("Discovering agents...")
+	tw.println()
 
 	for _, agent := range result.Agents {
 		if agent.Installed {
-			fmt.Fprintf(p.w, "  %s  %s %s\n", p.color.StatusOK(), agent.DisplayName, agent.Version)
-			fmt.Fprintf(p.w, "        %s\n", p.color.Path(agent.Path))
+			tw.printf("  %s  %s %s\n", p.color.StatusOK(), agent.DisplayName, agent.Version)
+			tw.printf("        %s\n", p.color.Path(agent.Path))
 		} else {
-			fmt.Fprintf(p.w, "  %s  %s\n", p.color.StatusSkip(), agent.DisplayName)
-			fmt.Fprintf(p.w, "        not installed\n")
+			tw.printf("  %s  %s\n", p.color.StatusSkip(), agent.DisplayName)
+			tw.printf("        not installed\n")
 		}
 	}
-	fmt.Fprintln(p.w)
+	tw.println()
 
-	fmt.Fprintln(p.w, "Installing hooks...")
-	fmt.Fprintln(p.w)
+	tw.println("Installing hooks...")
+	tw.println()
 
 	for _, agent := range result.Agents {
 		if !agent.Installed || len(agent.HooksInstalled) == 0 {
 			continue
 		}
 
-		fmt.Fprintf(p.w, "  %s\n", agent.DisplayName)
+		tw.printf("  %s\n", agent.DisplayName)
 		for _, hook := range agent.HooksInstalled {
-			fmt.Fprintf(p.w, "    -> %-40s %s\n", hook+" hook", p.color.StatusOK())
+			tw.printf("    -> %-40s %s\n", hook+" hook", p.color.StatusOK())
 		}
 		for _, warning := range agent.Warnings {
-			fmt.Fprintf(p.w, "    -> Note: %s\n", warning)
+			tw.printf("    -> Note: %s\n", warning)
 		}
-		fmt.Fprintln(p.w)
+		tw.println()
 	}
 
-	fmt.Fprintln(p.w, "Installation complete.")
-	fmt.Fprintln(p.w)
-	fmt.Fprintf(p.w, "  %-11s %s\n", "Database", p.color.Path(result.Database))
-	fmt.Fprintf(p.w, "  %-11s %s\n", "Config", p.color.Path(result.Config))
-	fmt.Fprintln(p.w)
-	fmt.Fprintln(p.w, "Run 'gryph status' to verify.")
-	fmt.Fprintln(p.w, "Run 'gryph logs -f' to watch activity.")
+	tw.println("Installation complete.")
+	tw.println()
+	tw.printf("  %-11s %s\n", "Database", p.color.Path(result.Database))
+	tw.printf("  %-11s %s\n", "Config", p.color.Path(result.Config))
+	tw.println()
+	tw.println("Run 'gryph status' to verify.")
+	tw.println("Run 'gryph logs -f' to watch activity.")
 
-	return nil
+	return tw.Err()
 }
 
 // RenderUninstall renders the uninstallation result.
 func (p *TablePresenter) RenderUninstall(result *UninstallView) error {
-	fmt.Fprintln(p.w, "Uninstalling hooks...")
-	fmt.Fprintln(p.w)
+	tw := &tableWriter{w: p.w}
+
+	tw.println("Uninstalling hooks...")
+	tw.println()
 
 	for _, agent := range result.Agents {
 		if len(agent.HooksRemoved) == 0 {
 			continue
 		}
 
-		fmt.Fprintf(p.w, "  %s\n", agent.DisplayName)
+		tw.printf("  %s\n", agent.DisplayName)
 		for _, hook := range agent.HooksRemoved {
-			fmt.Fprintf(p.w, "    -> Removed %s hook\n", hook)
+			tw.printf("    -> Removed %s hook\n", hook)
 		}
 		if agent.BackupsRestored {
-			fmt.Fprintf(p.w, "    -> Backups restored\n")
+			tw.printf("    -> Backups restored\n")
 		}
-		fmt.Fprintln(p.w)
+		tw.println()
 	}
 
-	fmt.Fprintln(p.w, "Uninstallation complete.")
+	tw.println("Uninstallation complete.")
 	if result.Purged {
-		fmt.Fprintln(p.w, "Database and config files have been removed.")
+		tw.println("Database and config files have been removed.")
 	}
 
-	return nil
+	return tw.Err()
 }
 
 // RenderDoctor renders the doctor check results.
 func (p *TablePresenter) RenderDoctor(result *DoctorView) error {
-	fmt.Fprintf(p.w, "%s\n", p.color.Header("Doctor"))
-	fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
-	fmt.Fprintln(p.w)
+	tw := &tableWriter{w: p.w}
+
+	tw.printf("%s\n", p.color.Header("Doctor"))
+	tw.println(HorizontalLine(p.termWidth))
+	tw.println()
 
 	for _, check := range result.Checks {
 		var statusStr string
@@ -358,38 +373,40 @@ func (p *TablePresenter) RenderDoctor(result *DoctorView) error {
 			statusStr = p.color.StatusFail()
 		}
 
-		fmt.Fprintf(p.w, "  %s  %s\n", statusStr, check.Name)
+		tw.printf("  %s  %s\n", statusStr, check.Name)
 		if check.Message != "" {
-			fmt.Fprintf(p.w, "        %s\n", check.Message)
+			tw.printf("        %s\n", check.Message)
 		}
 		if check.Suggestion != "" && check.Status != CheckOK {
-			fmt.Fprintf(p.w, "        %s\n", p.color.Dim(check.Suggestion))
+			tw.printf("        %s\n", p.color.Dim(check.Suggestion))
 		}
 	}
-	fmt.Fprintln(p.w)
+	tw.println()
 
 	if result.AllOK {
-		fmt.Fprintln(p.w, p.color.Success("All checks passed."))
+		tw.println(p.color.Success("All checks passed."))
 	} else {
-		fmt.Fprintln(p.w, p.color.Warning("Some checks failed. See suggestions above."))
+		tw.println(p.color.Warning("Some checks failed. See suggestions above."))
 	}
 
-	return nil
+	return tw.Err()
 }
 
 // RenderConfig renders the configuration.
 func (p *TablePresenter) RenderConfig(config *ConfigView) error {
-	fmt.Fprintf(p.w, "%s\n", p.color.Header("Configuration"))
-	fmt.Fprintf(p.w, "Location: %s\n", p.color.Path(config.Location))
-	fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
-	fmt.Fprintln(p.w)
+	tw := &tableWriter{w: p.w}
 
-	p.renderConfigMap(config.Values, "")
+	tw.printf("%s\n", p.color.Header("Configuration"))
+	tw.printf("Location: %s\n", p.color.Path(config.Location))
+	tw.println(HorizontalLine(p.termWidth))
+	tw.println()
 
-	return nil
+	p.renderConfigMap(tw, config.Values, "")
+
+	return tw.Err()
 }
 
-func (p *TablePresenter) renderConfigMap(m map[string]interface{}, prefix string) {
+func (p *TablePresenter) renderConfigMap(tw *tableWriter, m map[string]interface{}, prefix string) {
 	for key, value := range m {
 		fullKey := key
 		if prefix != "" {
@@ -398,86 +415,94 @@ func (p *TablePresenter) renderConfigMap(m map[string]interface{}, prefix string
 
 		switch v := value.(type) {
 		case map[string]interface{}:
-			p.renderConfigMap(v, fullKey)
+			p.renderConfigMap(tw, v, fullKey)
 		default:
-			fmt.Fprintf(p.w, "  %-30s %v\n", fullKey, value)
+			tw.printf("  %-30s %v\n", fullKey, value)
 		}
 	}
 }
 
 // RenderSelfAudits renders self-audit entries.
 func (p *TablePresenter) RenderSelfAudits(entries []*SelfAuditView) error {
+	tw := &tableWriter{w: p.w}
+
 	if len(entries) == 0 {
-		fmt.Fprintln(p.w, "No self-audit entries found.")
-		return nil
+		tw.println("No self-audit entries found.")
+		return tw.Err()
 	}
 
-	fmt.Fprintf(p.w, "Self-Audit Log (%d entries)\n", len(entries))
-	fmt.Fprintln(p.w, HorizontalLine(p.termWidth))
+	tw.printf("Self-Audit Log (%d entries)\n", len(entries))
+	tw.println(HorizontalLine(p.termWidth))
 
 	for _, e := range entries {
-		resultStr := p.color.Success(e.Result)
-		if e.Result == "error" {
+		var resultStr string
+		switch e.Result {
+		case "error":
 			resultStr = p.color.Error(e.Result)
-		} else if e.Result == "skipped" {
+		case "skipped":
 			resultStr = p.color.Dim(e.Result)
+		default:
+			resultStr = p.color.Success(e.Result)
 		}
 
-		fmt.Fprintf(p.w, "%s  %-18s %s\n",
-			FormatTime(e.Timestamp), e.Action, resultStr)
+		tw.printf("%s  %-18s %s\n", FormatTime(e.Timestamp), e.Action, resultStr)
 
 		if e.AgentName != "" {
-			fmt.Fprintf(p.w, "    Agent: %s\n", p.color.Agent(e.AgentName))
+			tw.printf("    Agent: %s\n", p.color.Agent(e.AgentName))
 		}
 		if e.ErrorMessage != "" {
-			fmt.Fprintf(p.w, "    Error: %s\n", p.color.Error(e.ErrorMessage))
+			tw.printf("    Error: %s\n", p.color.Error(e.ErrorMessage))
 		}
 	}
 
-	return nil
+	return tw.Err()
 }
 
 // RenderDiff renders a diff view.
 func (p *TablePresenter) RenderDiff(diff *DiffView) error {
+	tw := &tableWriter{w: p.w}
+
 	if !diff.Available {
-		fmt.Fprintln(p.w, diff.Message)
-		return nil
+		tw.println(diff.Message)
+		return tw.Err()
 	}
 
-	fmt.Fprintf(p.w, "%-10s %s\n", "Event:", diff.EventID)
-	fmt.Fprintf(p.w, "%-10s %s\n", "Session:", diff.SessionID)
-	fmt.Fprintf(p.w, "%-10s %s\n", "File:", p.color.Path(diff.FilePath))
-	fmt.Fprintf(p.w, "%-10s %s\n", "Time:", FormatTime(diff.Timestamp))
-	fmt.Fprintln(p.w)
+	tw.printf("%-10s %s\n", "Event:", diff.EventID)
+	tw.printf("%-10s %s\n", "Session:", diff.SessionID)
+	tw.printf("%-10s %s\n", "File:", p.color.Path(diff.FilePath))
+	tw.printf("%-10s %s\n", "Time:", FormatTime(diff.Timestamp))
+	tw.println()
 
 	// Render diff content with colors
 	for _, line := range strings.Split(diff.Content, "\n") {
 		if strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---") {
-			fmt.Fprintln(p.w, p.color.DiffHeader(line))
+			tw.println(p.color.DiffHeader(line))
 		} else if strings.HasPrefix(line, "+") {
-			fmt.Fprintln(p.w, p.color.DiffAdd(line))
+			tw.println(p.color.DiffAdd(line))
 		} else if strings.HasPrefix(line, "-") {
-			fmt.Fprintln(p.w, p.color.DiffRemove(line))
+			tw.println(p.color.DiffRemove(line))
 		} else if strings.HasPrefix(line, "@@") {
-			fmt.Fprintln(p.w, p.color.Cyan(line))
+			tw.println(p.color.Cyan(line))
 		} else {
-			fmt.Fprintln(p.w, line)
+			tw.println(line)
 		}
 	}
 
-	return nil
+	return tw.Err()
 }
 
 // RenderError renders an error message.
 func (p *TablePresenter) RenderError(err error) error {
-	fmt.Fprintf(p.w, "%s %s\n", p.color.Error("Error:"), err.Error())
-	return nil
+	tw := &tableWriter{w: p.w}
+	tw.printf("%s %s\n", p.color.Error("Error:"), err.Error())
+	return tw.Err()
 }
 
 // RenderMessage renders a simple message.
 func (p *TablePresenter) RenderMessage(message string) error {
-	fmt.Fprintln(p.w, message)
-	return nil
+	tw := &tableWriter{w: p.w}
+	tw.println(message)
+	return tw.Err()
 }
 
 // Ensure TablePresenter implements Presenter

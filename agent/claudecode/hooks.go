@@ -83,6 +83,7 @@ func readSettings(path string) (map[string]interface{}, error) {
 	if err := json.Unmarshal(data, &settings); err != nil {
 		return nil, err
 	}
+
 	return settings, nil
 }
 
@@ -92,6 +93,7 @@ func writeSettings(path string, settings map[string]interface{}) error {
 	if err != nil {
 		return err
 	}
+
 	return os.WriteFile(path, data, 0600)
 }
 
@@ -176,9 +178,15 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 
 	for hookType, matchers := range gryphHooks {
 		// Convert matchers to interface{} for JSON
-		matchersData, _ := json.Marshal(matchers)
+		matchersData, err := json.Marshal(matchers)
+		if err != nil {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("failed to marshal matchers: %v", err))
+		}
+
 		var matchersInterface interface{}
-		json.Unmarshal(matchersData, &matchersInterface)
+		if err := json.Unmarshal(matchersData, &matchersInterface); err != nil {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("failed to unmarshal matchers: %v", err))
+		}
 
 		if opts.Force {
 			// Replace existing hooks for this type
@@ -193,6 +201,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 				hooksSection[hookType] = matchersInterface
 			}
 		}
+
 		result.HooksInstalled = append(result.HooksInstalled, hookType)
 	}
 
