@@ -107,6 +107,8 @@ func (p *TablePresenter) RenderSessions(sessions []*SessionView) error {
 		summary := fmt.Sprintf("   %d actions", s.TotalActions)
 		if s.FilesWritten > 0 {
 			summary += fmt.Sprintf("  *  %d files written", s.FilesWritten)
+		}
+		if s.CommandsExecuted > 0 {
 			summary += fmt.Sprintf("  *  %d commands", s.CommandsExecuted)
 		}
 
@@ -131,12 +133,11 @@ func (p *TablePresenter) RenderSession(session *SessionView, events []*EventView
 	if !session.EndedAt.IsZero() {
 		tw.printf("%-16s %s\n", "Duration", FormatDuration(session.Duration))
 	}
-	tw.printf("%-16s %s\n", "Working Dir", p.color.Path(session.WorkingDirectory))
-	if session.ProjectName != "" {
-		tw.printf("%-16s %s\n", "Project", session.ProjectName)
-	}
 	if session.WorkingDirectory != "" {
 		tw.printf("%-16s %s\n", "Working Dir", p.color.Path(session.WorkingDirectory))
+	}
+	if session.ProjectName != "" {
+		tw.printf("%-16s %s\n", "Project", session.ProjectName)
 	}
 
 	if len(events) > 0 {
