@@ -60,5 +60,17 @@ func stripPayloadContent(event *events.Event) {
 		if data, err := json.Marshal(payload); err == nil {
 			event.Payload = data
 		}
+
+	case events.ActionToolUse:
+		var payload events.ToolUsePayload
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			return
+		}
+		payload.Input = nil
+		payload.Output = nil
+		payload.OutputPreview = ""
+		if data, err := json.Marshal(payload); err == nil {
+			event.Payload = data
+		}
 	}
 }

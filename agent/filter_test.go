@@ -137,6 +137,31 @@ func TestApplyLoggingLevel_Minimal_CommandExec(t *testing.T) {
 	assert.Empty(t, result.Output)
 }
 
+func TestApplyLoggingLevel_Minimal_ToolUse(t *testing.T) {
+	event := newTestEvent(events.ActionToolUse)
+
+	payload := events.ToolUsePayload{
+		ToolName:      "web_search",
+		Input:         json.RawMessage(`{"query": "sensitive search"}`),
+		Output:        json.RawMessage(`{"results": ["secret data"]}`),
+		OutputPreview: "secret data preview",
+	}
+	require.NoError(t, event.SetPayload(payload))
+
+	ApplyLoggingLevel(event, config.LoggingMinimal)
+
+	assert.Nil(t, event.RawEvent)
+	assert.Empty(t, event.DiffContent)
+	assert.Empty(t, event.ConversationContext)
+
+	var result events.ToolUsePayload
+	require.NoError(t, json.Unmarshal(event.Payload, &result))
+	assert.Equal(t, "web_search", result.ToolName)
+	assert.Nil(t, result.Input)
+	assert.Nil(t, result.Output)
+	assert.Empty(t, result.OutputPreview)
+}
+
 func TestApplyLoggingLevel_Minimal_FileRead(t *testing.T) {
 	event := newTestEvent(events.ActionFileRead)
 
