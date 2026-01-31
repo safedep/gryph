@@ -48,7 +48,7 @@ gryph install
 # Verify installation
 gryph status
 
-# Start using your AI coding agent (Claude Code, Cursor, etc.)
+# Start using your AI coding agent (Claude Code, Cursor, Gemini CLI, etc.)
 # ...
 
 # Review what happened
@@ -66,6 +66,7 @@ For transparency, here are the files Gryph modifies when you run `gryph install`
 | ----------- | ------------------------- | ---------------------------------------- |
 | Claude Code | `~/.claude/settings.json` | Adds hook entries to the `hooks` section |
 | Cursor      | `~/.cursor/hooks.json`    | Creates or updates hooks configuration   |
+| Gemini CLI  | `~/.gemini/settings.json` | Adds hook entries to the `hooks` section |
 
 ### Backups
 
@@ -210,6 +211,7 @@ gryph doctor
 | --------------- | --------- | -------------------------------------------------- |
 | **Claude Code** | Supported | Full (PreToolUse, PostToolUse, Notification)       |
 | **Cursor**      | Supported | Full (file read/write, shell execution, MCP tools) |
+| **Gemini CLI**  | Supported | Full (BeforeTool, AfterTool, Notification)         |
 
 ## Configuration
 

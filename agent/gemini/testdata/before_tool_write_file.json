@@ -1,0 +1,11 @@
+{
+  "session_id": "gemini-session-abc",
+  "transcript_path": "/home/user/.gemini/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "BeforeTool",
+  "tool_name": "write_file",
+  "tool_input": {
+    "file_path": "/home/user/project/src/main.go",
+    "content": "package main\n\nfunc main() {\n\t// New content\n}"
+  }
+}

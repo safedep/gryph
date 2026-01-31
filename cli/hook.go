@@ -11,6 +11,7 @@ import (
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/cursor"
+	"github.com/safedep/gryph/agent/gemini"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
@@ -167,6 +168,22 @@ func sendHookResponse(agentName, hookType string) error {
 
 		return nil
 
+	case agent.AgentGemini:
+		// Gemini CLI: same exit code semantics as Claude Code (0=allow, 2=block, 1=error)
+		// BeforeTool: JSON response to stdout
+		// Other hooks: empty JSON to stdout
+		if hookType == "BeforeTool" {
+			resp := gemini.NewAllowResponse()
+			if _, err := os.Stdout.Write(resp.JSON()); err != nil {
+				log.Errorf("failed to write to stdout: %w", err)
+			}
+		} else {
+			if _, err := os.Stdout.Write([]byte("{}")); err != nil {
+				log.Errorf("failed to write to stdout: %w", err)
+			}
+		}
+		return nil
+
 	default:
 		// Unknown agent, just succeed
 		return nil
@@ -188,6 +205,10 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 		}
 
 		return nil
+
+	case agent.AgentGemini:
+		response := gemini.NewBlockResponse(result.BlockReason)
+		return handleGeminiResponse(response)
 
 	default:
 		return nil
@@ -243,6 +264,18 @@ func generateCursorResponse(hookType string) []byte {
 	default:
 		// Unknown hook type, return empty JSON
 		return []byte("{}")
+	}
+}
+
+// handleGeminiResponse processes a Gemini CLI hook response.
+func handleGeminiResponse(response *gemini.HookResponse) error {
+	switch response.Decision {
+	case gemini.HookBlock:
+		return &exitError{code: 2, message: response.Message}
+	case gemini.HookError:
+		return &exitError{code: 1, message: response.Message}
+	default:
+		return nil
 	}
 }
 

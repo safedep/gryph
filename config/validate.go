@@ -57,6 +57,9 @@ func validate(cfg *Config) error {
 	if cfg.Agents.Cursor.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.Cursor.LoggingLevel) {
 		return fmt.Errorf("invalid agents.cursor.logging_level: %s", cfg.Agents.Cursor.LoggingLevel)
 	}
+	if cfg.Agents.Gemini.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.Gemini.LoggingLevel) {
+		return fmt.Errorf("invalid agents.gemini.logging_level: %s", cfg.Agents.Gemini.LoggingLevel)
+	}
 
 	return nil
 }

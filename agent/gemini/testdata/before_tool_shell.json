@@ -1,0 +1,11 @@
+{
+  "session_id": "gemini-session-abc",
+  "transcript_path": "/home/user/.gemini/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "BeforeTool",
+  "tool_name": "run_shell_command",
+  "tool_input": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  }
+}

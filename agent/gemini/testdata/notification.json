@@ -1,0 +1,9 @@
+{
+  "session_id": "gemini-session-abc",
+  "transcript_path": "/home/user/.gemini/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "Notification",
+  "notification_type": "info",
+  "message": "Task completed successfully",
+  "details": "All files processed"
+}

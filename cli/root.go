@@ -9,6 +9,7 @@ import (
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/cursor"
+	"github.com/safedep/gryph/agent/gemini"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
@@ -48,6 +49,7 @@ func NewApp(cfg *config.Config) (*App, error) {
 	registry := agent.NewRegistry()
 	claudecode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentClaudeCode))
 	cursor.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCursor))
+	gemini.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentGemini))
 
 	// Create presenter based on config
 	presenter := tui.NewPresenter(tui.FormatTable, tui.PresenterOptions{
@@ -108,7 +110,7 @@ func NewRootCmd() *cobra.Command {
 		Short: "AI Coding Agent Audit Trail Tool",
 		Long: `Gryph is a local-first CLI tool that logs and audits AI agent actions.
 
-It integrates with AI coding agents (Claude Code, Cursor, etc.) via their
+It integrates with AI coding agents (Claude Code, Cursor, Gemini CLI, etc.) via their
 native hook systems to create a comprehensive audit trail of all agent actions.`,
 		Version: version.Version,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

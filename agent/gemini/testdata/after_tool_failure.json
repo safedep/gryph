@@ -1,0 +1,14 @@
+{
+  "session_id": "gemini-session-abc",
+  "transcript_path": "/home/user/.gemini/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "AfterTool",
+  "tool_name": "run_shell_command",
+  "tool_input": {
+    "command": "npm run build"
+  },
+  "tool_response": {
+    "error": "Command failed with exit code 1",
+    "output": "Build failed: missing dependency"
+  }
+}
