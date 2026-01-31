@@ -83,6 +83,30 @@ Backup files are named with timestamps (e.g., `settings.json.backup.202501311200
 
 ## Commands
 
+> For a complete reference of all commands and flags, see [CLI Reference](docs/cli-reference.md).
+
+### Install & Uninstall Hooks
+
+```bash
+# Install hooks for all detected agents
+gryph install
+
+# Preview what would be installed
+gryph install --dry-run
+
+# Install for a specific agent
+gryph install --agent claude-code
+
+# Remove hooks from all agents
+gryph uninstall
+
+# Remove hooks and purge all data
+gryph uninstall --purge
+
+# Restore original hook config from backup
+gryph uninstall --restore-backup
+```
+
 ### View Recent Activity
 
 ```bash
@@ -97,6 +121,9 @@ gryph logs --agent claude-code
 
 # Stream events in real-time
 gryph logs --follow
+
+# Output as JSON
+gryph logs --format json
 ```
 
 ### Query Historical Data
@@ -110,6 +137,15 @@ gryph query --action command_exec --since "1w"
 
 # Activity from a specific session
 gryph query --session abc123
+
+# Count matching events
+gryph query --action file_write --today --count
+
+# Filter by command pattern
+gryph query --command "npm *" --since "1w"
+
+# Include file diffs in output
+gryph query --action file_write --show-diff
 ```
 
 ### Session Details
@@ -120,6 +156,9 @@ gryph sessions
 
 # View detailed session history
 gryph session <session-id>
+
+# View session with file diffs
+gryph session <session-id> --show-diff
 ```
 
 ### View File Diffs
@@ -137,6 +176,22 @@ gryph export --format json -o audit.json
 
 # Export specific time range
 gryph export --since "1w" --format csv
+```
+
+### Manage Data
+
+```bash
+# View retention policy and stats
+gryph retention status
+
+# Clean up events older than retention period
+gryph retention cleanup
+
+# Preview what would be deleted
+gryph retention cleanup --dry-run
+
+# View gryph's own audit trail (installs, config changes)
+gryph self-log
 ```
 
 ### Health Check
@@ -164,8 +219,14 @@ Gryph works out of the box with sensible defaults. Configuration is optional.
 # View current config
 gryph config show
 
+# Get a specific value
+gryph config get logging.level
+
 # Set logging level (minimal, standard, full)
 gryph config set logging.level full
+
+# Reset to defaults
+gryph config reset
 ```
 
 **Logging levels:**

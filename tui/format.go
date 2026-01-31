@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -119,6 +120,20 @@ func TruncateString(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s[:maxLen-3] + "..."
+}
+
+var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func VisibleLen(s string) int {
+	return len(ansiRegex.ReplaceAllString(s, ""))
+}
+
+func PadRightVisible(s string, width int) string {
+	vis := VisibleLen(s)
+	if vis >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-vis)
 }
 
 // PadRight pads a string to the right to achieve the given width.

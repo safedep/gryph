@@ -52,14 +52,8 @@ func (p *TablePresenter) RenderStatus(status *StatusView) error {
 			statusStr = "not found"
 		}
 
-		agentCol := p.color.Agent(agent.Name)
-		pad := 14 - len(agent.Name)
-		if pad < 0 {
-			pad = 0
-		}
-
-		tw.printf("  %s%s%-12s %-12s %s\n",
-			agentCol, strings.Repeat(" ", pad), statusStr, versionStr, hooksStr)
+		tw.printf("  %s %-12s %-12s %s\n",
+			PadRightVisible(p.color.Agent(agent.Name), 14), statusStr, versionStr, hooksStr)
 	}
 
 	tw.println()
@@ -246,14 +240,14 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 	tw.printf("Results (%d events)\n", len(events))
 	tw.println(HorizontalLine(cols.total))
 
-	// Build format string dynamically
-	headerFmt := fmt.Sprintf("%%-%ds %%-%ds %%-%ds %%-%ds %%-%ds %%s\n",
-		cols.time, cols.agent, cols.session, cols.action, cols.path)
-	tw.printf(headerFmt, "Time", "Agent", "Session", "Action", "Path/Command", "Result")
+	tw.printf("%s %s %s %s %s %s\n",
+		PadRightVisible("Time", cols.time),
+		PadRightVisible("Agent", cols.agent),
+		PadRightVisible("Session", cols.session),
+		PadRightVisible("Action", cols.action),
+		PadRightVisible("Path/Command", cols.path),
+		"Result")
 	tw.println(HorizontalLine(cols.total))
-
-	rowFmt := fmt.Sprintf("%%-%ds %%-%ds %%-%ds %%-%ds %%-%ds %%s\n",
-		cols.time, cols.agent, cols.session, cols.action, cols.path)
 
 	for _, e := range events {
 		target := e.Path
@@ -270,12 +264,12 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 			result = FormatExitCode(e.ExitCode)
 		}
 
-		tw.printf(rowFmt,
-			FormatTimeShort(e.Timestamp),
-			p.color.Agent(e.AgentName),
-			e.ShortSessionID,
-			e.ActionDisplay,
-			target,
+		tw.printf("%s %s %s %s %s %s\n",
+			PadRightVisible(FormatTimeShort(e.Timestamp), cols.time),
+			PadRightVisible(p.color.Agent(e.AgentName), cols.agent),
+			PadRightVisible(e.ShortSessionID, cols.session),
+			PadRightVisible(e.ActionDisplay, cols.action),
+			PadRightVisible(target, cols.path),
 			result)
 	}
 
