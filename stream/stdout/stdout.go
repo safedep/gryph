@@ -7,6 +7,7 @@ import (
 	"os"
 
 	corestream "github.com/safedep/gryph/core/stream"
+	"github.com/safedep/gryph/stream"
 )
 
 // Target implements stream.Target by printing JSON to stdout.
@@ -24,6 +25,7 @@ func New(name string, enabled bool) *Target {
 }
 
 func (t *Target) Name() string  { return t.name }
+func (t *Target) Type() string  { return stream.TargetTypeStdout }
 func (t *Target) Enabled() bool { return t.enabled }
 
 func (t *Target) Send(_ context.Context, items []corestream.StreamItem) error {

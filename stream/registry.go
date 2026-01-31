@@ -6,6 +6,10 @@ import (
 	corestream "github.com/safedep/gryph/core/stream"
 )
 
+const (
+	TargetTypeStdout = "stdout"
+)
+
 // Registry manages registered stream targets.
 type Registry struct {
 	mu      sync.RWMutex

@@ -67,7 +67,7 @@ func buildStreamRegistry(cfg *config.Config) *stream.Registry {
 	registry := stream.NewRegistry()
 	for _, tc := range cfg.Streams.Targets {
 		switch tc.Type {
-		case "stdout":
+		case stream.TargetTypeStdout:
 			registry.Register(stdout.New(tc.Name, tc.Enabled))
 		}
 	}

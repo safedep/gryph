@@ -42,7 +42,10 @@ func TestDefault(t *testing.T) {
 	assert.Equal(t, TimezoneLocal, cfg.Display.Timezone)
 
 	// Verify streams defaults
-	assert.Empty(t, cfg.Streams.Targets)
+	require.Len(t, cfg.Streams.Targets, 1)
+	assert.Equal(t, "stdout", cfg.Streams.Targets[0].Name)
+	assert.Equal(t, "stdout", cfg.Streams.Targets[0].Type)
+	assert.True(t, cfg.Streams.Targets[0].Enabled)
 }
 
 func TestLoad_ValidConfig(t *testing.T) {

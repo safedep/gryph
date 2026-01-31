@@ -66,7 +66,9 @@ func TestManager_Get_ReturnsDefaults(t *testing.T) {
 		{"agents.cursor.enabled", true},
 		{"display.colors", "auto"},
 		{"display.timezone", "local"},
-		{"streams.targets", []StreamTargetConfig{}},
+		{"streams.targets", []StreamTargetConfig{
+			{Name: "stdout", Type: "stdout", Enabled: true},
+		}},
 	}
 
 	for _, tt := range tests {

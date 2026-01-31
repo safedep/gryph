@@ -33,7 +33,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("display.timezone", "local")
 
 	// Streams defaults
-	v.SetDefault("streams.targets", []StreamTargetConfig{})
+	v.SetDefault("streams.targets", []StreamTargetConfig{
+		{
+			Name:    streamTargetTypeStdout,
+			Type:    streamTargetTypeStdout,
+			Enabled: true,
+		},
+	})
 }
 
 // defaultSensitivePaths returns the default list of sensitive path patterns.

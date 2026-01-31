@@ -15,6 +15,8 @@ import (
 const (
 	agentNameClaudeCode = "claude-code"
 	agentNameCursor     = "cursor"
+
+	streamTargetTypeStdout = "stdout"
 )
 
 // LoggingLevel represents the verbosity level for logging.

@@ -17,6 +17,8 @@ type StreamItem struct {
 type Target interface {
 	// Name returns the name of the stream target.
 	Name() string
+	// Type returns the type identifier of the stream target.
+	Type() string
 	// Enabled returns true if the target is enabled.
 	Enabled() bool
 	// Send sends the stream items to the target.
