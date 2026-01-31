@@ -1,0 +1,57 @@
+{
+  "name": "@safedep/gryph",
+  "description": "AI coding agent audit trail tool",
+  "main": "bin/gryph.js",
+  "bin": {
+    "gryph": "bin/gryph.js"
+  },
+  "scripts": {
+    "preinstall": "echo \"Installing Gryph binary for your platform...\"",
+    "postinstall": "node install.js"
+  },
+  "keywords": [
+    "security",
+    "package-manager",
+    "malicious-packages",
+    "npm",
+    "cli",
+    "vulnerability",
+    "dependency-security",
+    "safedep"
+  ],
+  "author": "SafeDep <devops@safedep.io>",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/safedep/gryph#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/safedep/gryph.git"
+  },
+  "bugs": {
+    "url": "https://github.com/safedep/gryph/issues"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64",
+    "ia32"
+  ],
+  "files": [
+    "bin/gryph.js",
+    "install.js",
+    "config.js",
+    "test.js",
+    "README.md",
+    ".npmignore"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {}
+}
