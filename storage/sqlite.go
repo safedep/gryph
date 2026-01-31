@@ -38,7 +38,7 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 
 	// Open database with modernc.org/sqlite driver
 	// Use _pragma=foreign_keys(1) for modernc.org/sqlite
-	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?_pragma=foreign_keys(1)", path))
+	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&_pragma=journal_mode(wal)&_pragma=busy_timeout(5000)", path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
