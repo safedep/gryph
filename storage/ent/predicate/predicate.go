@@ -14,3 +14,6 @@ type SelfAudit func(*sql.Selector)
 
 // Session is the predicate function for session builders.
 type Session func(*sql.Selector)
+
+// StreamCheckpoint is the predicate function for streamcheckpoint builders.
+type StreamCheckpoint func(*sql.Selector)

@@ -480,6 +480,109 @@ func (s *SQLiteStore) QuerySelfAudits(ctx context.Context, filter *SelfAuditFilt
 	return result, nil
 }
 
+// QueryEventsAfter retrieves events after the given time, ordered ascending.
+func (s *SQLiteStore) QueryEventsAfter(ctx context.Context, after time.Time, limit int) ([]*events.Event, error) {
+	query := s.client.AuditEvent.Query().
+		Where(auditevent.TimestampGT(after)).
+		Order(auditevent.ByTimestamp())
+
+	if limit > 0 {
+		query.Limit(limit)
+	}
+
+	entEvents, err := query.All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query events after: %w", err)
+	}
+
+	result := make([]*events.Event, len(entEvents))
+	for i, e := range entEvents {
+		result[i] = entToEvent(e)
+	}
+	return result, nil
+}
+
+// QuerySelfAuditsAfter retrieves self-audit entries after the given time, ordered ascending.
+func (s *SQLiteStore) QuerySelfAuditsAfter(ctx context.Context, after time.Time, limit int) ([]*SelfAuditEntry, error) {
+	query := s.client.SelfAudit.Query().
+		Where(selfaudit.TimestampGT(after)).
+		Order(selfaudit.ByTimestamp())
+
+	if limit > 0 {
+		query.Limit(limit)
+	}
+
+	entAudits, err := query.All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query self-audits after: %w", err)
+	}
+
+	result := make([]*SelfAuditEntry, len(entAudits))
+	for i, a := range entAudits {
+		result[i] = entToSelfAudit(a)
+	}
+	return result, nil
+}
+
+// GetStreamCheckpoint retrieves a checkpoint by target name.
+func (s *SQLiteStore) GetStreamCheckpoint(ctx context.Context, targetName string) (*StreamCheckpoint, error) {
+	entCP, err := s.client.StreamCheckpoint.Get(ctx, targetName)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get stream checkpoint: %w", err)
+	}
+
+	return &StreamCheckpoint{
+		TargetName:      entCP.ID,
+		LastSyncedAt:    entCP.LastSyncedAt,
+		LastEventID:     entCP.LastEventID,
+		LastSelfAuditID: entCP.LastSelfAuditID,
+	}, nil
+}
+
+// SaveStreamCheckpoint persists a stream checkpoint using create-or-update
+// inside an IMMEDIATE transaction to prevent TOCTOU races between concurrent
+// sync processes.
+func (s *SQLiteStore) SaveStreamCheckpoint(ctx context.Context, checkpoint *StreamCheckpoint) error {
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	existing, err := tx.StreamCheckpoint.Get(ctx, checkpoint.TargetName)
+	if err != nil && !ent.IsNotFound(err) {
+		_ = tx.Rollback()
+		return fmt.Errorf("failed to check stream checkpoint: %w", err)
+	}
+
+	if existing != nil {
+		_, err = tx.StreamCheckpoint.UpdateOneID(checkpoint.TargetName).
+			SetLastSyncedAt(checkpoint.LastSyncedAt).
+			SetLastEventID(checkpoint.LastEventID).
+			SetLastSelfAuditID(checkpoint.LastSelfAuditID).
+			Save(ctx)
+	} else {
+		_, err = tx.StreamCheckpoint.Create().
+			SetID(checkpoint.TargetName).
+			SetLastSyncedAt(checkpoint.LastSyncedAt).
+			SetLastEventID(checkpoint.LastEventID).
+			SetLastSelfAuditID(checkpoint.LastSelfAuditID).
+			Save(ctx)
+	}
+
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("failed to save stream checkpoint: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit stream checkpoint: %w", err)
+	}
+	return nil
+}
+
 // GetDatabaseInfo returns information about the database.
 func (s *SQLiteStore) GetDatabaseInfo(ctx context.Context) (*DatabaseInfo, error) {
 	info := &DatabaseInfo{

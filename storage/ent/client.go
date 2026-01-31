@@ -19,6 +19,7 @@ import (
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/selfaudit"
 	"github.com/safedep/gryph/storage/ent/session"
+	"github.com/safedep/gryph/storage/ent/streamcheckpoint"
 )
 
 // Client is the client that holds all ent builders.
@@ -32,6 +33,8 @@ type Client struct {
 	SelfAudit *SelfAuditClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
+	// StreamCheckpoint is the client for interacting with the StreamCheckpoint builders.
+	StreamCheckpoint *StreamCheckpointClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -46,6 +49,7 @@ func (c *Client) init() {
 	c.AuditEvent = NewAuditEventClient(c.config)
 	c.SelfAudit = NewSelfAuditClient(c.config)
 	c.Session = NewSessionClient(c.config)
+	c.StreamCheckpoint = NewStreamCheckpointClient(c.config)
 }
 
 type (
@@ -136,11 +140,12 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:        ctx,
-		config:     cfg,
-		AuditEvent: NewAuditEventClient(cfg),
-		SelfAudit:  NewSelfAuditClient(cfg),
-		Session:    NewSessionClient(cfg),
+		ctx:              ctx,
+		config:           cfg,
+		AuditEvent:       NewAuditEventClient(cfg),
+		SelfAudit:        NewSelfAuditClient(cfg),
+		Session:          NewSessionClient(cfg),
+		StreamCheckpoint: NewStreamCheckpointClient(cfg),
 	}, nil
 }
 
@@ -158,11 +163,12 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:        ctx,
-		config:     cfg,
-		AuditEvent: NewAuditEventClient(cfg),
-		SelfAudit:  NewSelfAuditClient(cfg),
-		Session:    NewSessionClient(cfg),
+		ctx:              ctx,
+		config:           cfg,
+		AuditEvent:       NewAuditEventClient(cfg),
+		SelfAudit:        NewSelfAuditClient(cfg),
+		Session:          NewSessionClient(cfg),
+		StreamCheckpoint: NewStreamCheckpointClient(cfg),
 	}, nil
 }
 
@@ -194,6 +200,7 @@ func (c *Client) Use(hooks ...Hook) {
 	c.AuditEvent.Use(hooks...)
 	c.SelfAudit.Use(hooks...)
 	c.Session.Use(hooks...)
+	c.StreamCheckpoint.Use(hooks...)
 }
 
 // Intercept adds the query interceptors to all the entity clients.
@@ -202,6 +209,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	c.AuditEvent.Intercept(interceptors...)
 	c.SelfAudit.Intercept(interceptors...)
 	c.Session.Intercept(interceptors...)
+	c.StreamCheckpoint.Intercept(interceptors...)
 }
 
 // Mutate implements the ent.Mutator interface.
@@ -213,6 +221,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SelfAudit.mutate(ctx, m)
 	case *SessionMutation:
 		return c.Session.mutate(ctx, m)
+	case *StreamCheckpointMutation:
+		return c.StreamCheckpoint.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -649,12 +659,145 @@ func (c *SessionClient) mutate(ctx context.Context, m *SessionMutation) (Value, 
 	}
 }
 
+// StreamCheckpointClient is a client for the StreamCheckpoint schema.
+type StreamCheckpointClient struct {
+	config
+}
+
+// NewStreamCheckpointClient returns a client for the StreamCheckpoint from the given config.
+func NewStreamCheckpointClient(c config) *StreamCheckpointClient {
+	return &StreamCheckpointClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `streamcheckpoint.Hooks(f(g(h())))`.
+func (c *StreamCheckpointClient) Use(hooks ...Hook) {
+	c.hooks.StreamCheckpoint = append(c.hooks.StreamCheckpoint, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `streamcheckpoint.Intercept(f(g(h())))`.
+func (c *StreamCheckpointClient) Intercept(interceptors ...Interceptor) {
+	c.inters.StreamCheckpoint = append(c.inters.StreamCheckpoint, interceptors...)
+}
+
+// Create returns a builder for creating a StreamCheckpoint entity.
+func (c *StreamCheckpointClient) Create() *StreamCheckpointCreate {
+	mutation := newStreamCheckpointMutation(c.config, OpCreate)
+	return &StreamCheckpointCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of StreamCheckpoint entities.
+func (c *StreamCheckpointClient) CreateBulk(builders ...*StreamCheckpointCreate) *StreamCheckpointCreateBulk {
+	return &StreamCheckpointCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *StreamCheckpointClient) MapCreateBulk(slice any, setFunc func(*StreamCheckpointCreate, int)) *StreamCheckpointCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &StreamCheckpointCreateBulk{err: fmt.Errorf("calling to StreamCheckpointClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*StreamCheckpointCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &StreamCheckpointCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for StreamCheckpoint.
+func (c *StreamCheckpointClient) Update() *StreamCheckpointUpdate {
+	mutation := newStreamCheckpointMutation(c.config, OpUpdate)
+	return &StreamCheckpointUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *StreamCheckpointClient) UpdateOne(_m *StreamCheckpoint) *StreamCheckpointUpdateOne {
+	mutation := newStreamCheckpointMutation(c.config, OpUpdateOne, withStreamCheckpoint(_m))
+	return &StreamCheckpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *StreamCheckpointClient) UpdateOneID(id string) *StreamCheckpointUpdateOne {
+	mutation := newStreamCheckpointMutation(c.config, OpUpdateOne, withStreamCheckpointID(id))
+	return &StreamCheckpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for StreamCheckpoint.
+func (c *StreamCheckpointClient) Delete() *StreamCheckpointDelete {
+	mutation := newStreamCheckpointMutation(c.config, OpDelete)
+	return &StreamCheckpointDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *StreamCheckpointClient) DeleteOne(_m *StreamCheckpoint) *StreamCheckpointDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *StreamCheckpointClient) DeleteOneID(id string) *StreamCheckpointDeleteOne {
+	builder := c.Delete().Where(streamcheckpoint.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &StreamCheckpointDeleteOne{builder}
+}
+
+// Query returns a query builder for StreamCheckpoint.
+func (c *StreamCheckpointClient) Query() *StreamCheckpointQuery {
+	return &StreamCheckpointQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeStreamCheckpoint},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a StreamCheckpoint entity by its id.
+func (c *StreamCheckpointClient) Get(ctx context.Context, id string) (*StreamCheckpoint, error) {
+	return c.Query().Where(streamcheckpoint.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *StreamCheckpointClient) GetX(ctx context.Context, id string) *StreamCheckpoint {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *StreamCheckpointClient) Hooks() []Hook {
+	return c.hooks.StreamCheckpoint
+}
+
+// Interceptors returns the client interceptors.
+func (c *StreamCheckpointClient) Interceptors() []Interceptor {
+	return c.inters.StreamCheckpoint
+}
+
+func (c *StreamCheckpointClient) mutate(ctx context.Context, m *StreamCheckpointMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&StreamCheckpointCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&StreamCheckpointUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&StreamCheckpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&StreamCheckpointDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown StreamCheckpoint mutation op: %q", m.Op())
+	}
+}
+
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuditEvent, SelfAudit, Session []ent.Hook
+		AuditEvent, SelfAudit, Session, StreamCheckpoint []ent.Hook
 	}
 	inters struct {
-		AuditEvent, SelfAudit, Session []ent.Interceptor
+		AuditEvent, SelfAudit, Session, StreamCheckpoint []ent.Interceptor
 	}
 )

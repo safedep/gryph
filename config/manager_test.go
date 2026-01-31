@@ -66,7 +66,7 @@ func TestManager_Get_ReturnsDefaults(t *testing.T) {
 		{"agents.cursor.enabled", true},
 		{"display.colors", "auto"},
 		{"display.timezone", "local"},
-		{"sync.enabled", false},
+		{"streams.targets", []StreamTargetConfig{}},
 	}
 
 	for _, tt := range tests {
@@ -99,7 +99,7 @@ func TestManager_Set_CreatesCompleteConfigFile(t *testing.T) {
 	assert.Contains(t, configMap, "filters")
 	assert.Contains(t, configMap, "agents")
 	assert.Contains(t, configMap, "display")
-	assert.Contains(t, configMap, "sync")
+	assert.Contains(t, configMap, "streams")
 
 	logging, ok := configMap["logging"].(map[string]interface{})
 	require.True(t, ok)
@@ -210,7 +210,7 @@ func TestManager_AllSettings_IncludesDefaults(t *testing.T) {
 	assert.Contains(t, settings, "filters")
 	assert.Contains(t, settings, "agents")
 	assert.Contains(t, settings, "display")
-	assert.Contains(t, settings, "sync")
+	assert.Contains(t, settings, "streams")
 
 	logging, ok := settings["logging"].(map[string]interface{})
 	require.True(t, ok)

@@ -32,8 +32,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("display.colors", "auto")
 	v.SetDefault("display.timezone", "local")
 
-	// Sync defaults
-	v.SetDefault("sync.enabled", false)
+	// Streams defaults
+	v.SetDefault("streams.targets", []StreamTargetConfig{})
 }
 
 // defaultSensitivePaths returns the default list of sensitive path patterns.

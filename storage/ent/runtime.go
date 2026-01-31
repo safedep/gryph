@@ -10,6 +10,7 @@ import (
 	"github.com/safedep/gryph/storage/ent/schema"
 	"github.com/safedep/gryph/storage/ent/selfaudit"
 	"github.com/safedep/gryph/storage/ent/session"
+	"github.com/safedep/gryph/storage/ent/streamcheckpoint"
 )
 
 // The init function reads all schema descriptors with runtime code
@@ -86,4 +87,10 @@ func init() {
 	sessionDescID := sessionFields[0].Descriptor()
 	// session.DefaultID holds the default value on creation for the id field.
 	session.DefaultID = sessionDescID.Default.(func() uuid.UUID)
+	streamcheckpointFields := schema.StreamCheckpoint{}.Fields()
+	_ = streamcheckpointFields
+	// streamcheckpointDescLastSyncedAt is the schema descriptor for last_synced_at field.
+	streamcheckpointDescLastSyncedAt := streamcheckpointFields[1].Descriptor()
+	// streamcheckpoint.DefaultLastSyncedAt holds the default value on creation for the last_synced_at field.
+	streamcheckpoint.DefaultLastSyncedAt = streamcheckpointDescLastSyncedAt.Default.(func() time.Time)
 }

@@ -137,11 +137,25 @@ var (
 			},
 		},
 	}
+	// StreamCheckpointsColumns holds the columns for the "stream_checkpoints" table.
+	StreamCheckpointsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "last_synced_at", Type: field.TypeTime},
+		{Name: "last_event_id", Type: field.TypeString, Nullable: true},
+		{Name: "last_self_audit_id", Type: field.TypeString, Nullable: true},
+	}
+	// StreamCheckpointsTable holds the schema information for the "stream_checkpoints" table.
+	StreamCheckpointsTable = &schema.Table{
+		Name:       "stream_checkpoints",
+		Columns:    StreamCheckpointsColumns,
+		PrimaryKey: []*schema.Column{StreamCheckpointsColumns[0]},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AuditEventsTable,
 		SelfAuditsTable,
 		SessionsTable,
+		StreamCheckpointsTable,
 	}
 )
 

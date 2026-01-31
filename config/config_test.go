@@ -41,8 +41,8 @@ func TestDefault(t *testing.T) {
 	assert.Equal(t, ColorAuto, cfg.Display.Colors)
 	assert.Equal(t, TimezoneLocal, cfg.Display.Timezone)
 
-	// Verify sync defaults
-	assert.False(t, cfg.Sync.Enabled)
+	// Verify streams defaults
+	assert.Empty(t, cfg.Streams.Targets)
 }
 
 func TestLoad_ValidConfig(t *testing.T) {

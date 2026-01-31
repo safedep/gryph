@@ -32,6 +32,9 @@ type EventStore interface {
 
 	// CountEventsBefore returns the count of events older than the given time.
 	CountEventsBefore(ctx context.Context, before time.Time) (int, error)
+
+	// QueryEventsAfter retrieves events after the given time, ordered ascending.
+	QueryEventsAfter(ctx context.Context, after time.Time, limit int) ([]*events.Event, error)
 }
 
 // SessionStore defines the interface for storing and querying sessions.
@@ -65,6 +68,26 @@ type SelfAuditStore interface {
 
 	// QuerySelfAudits retrieves self-audit entries matching the filter.
 	QuerySelfAudits(ctx context.Context, filter *SelfAuditFilter) ([]*SelfAuditEntry, error)
+
+	// QuerySelfAuditsAfter retrieves self-audit entries after the given time, ordered ascending.
+	QuerySelfAuditsAfter(ctx context.Context, after time.Time, limit int) ([]*SelfAuditEntry, error)
+}
+
+// StreamCheckpointStore defines the interface for stream sync checkpoints.
+type StreamCheckpointStore interface {
+	// GetStreamCheckpoint retrieves a checkpoint by target name.
+	GetStreamCheckpoint(ctx context.Context, targetName string) (*StreamCheckpoint, error)
+
+	// SaveStreamCheckpoint persists a stream checkpoint.
+	SaveStreamCheckpoint(ctx context.Context, checkpoint *StreamCheckpoint) error
+}
+
+// StreamCheckpoint represents the sync state for a stream target.
+type StreamCheckpoint struct {
+	TargetName      string
+	LastSyncedAt    time.Time
+	LastEventID     string
+	LastSelfAuditID string
 }
 
 // SelfAuditEntry represents a self-audit log entry for storage.
@@ -91,6 +114,7 @@ type Store interface {
 	EventStore
 	SessionStore
 	SelfAuditStore
+	StreamCheckpointStore
 
 	// Init initializes the database schema.
 	Init(ctx context.Context) error

@@ -60,7 +60,7 @@ type Config struct {
 	Filters FiltersConfig `mapstructure:"filters"`
 	Agents  AgentsConfig  `mapstructure:"agents"`
 	Display DisplayConfig `mapstructure:"display"`
-	Sync    SyncConfig    `mapstructure:"sync"`
+	Streams StreamsConfig `mapstructure:"streams"`
 }
 
 // LoggingConfig holds logging-related settings.
@@ -107,9 +107,17 @@ type DisplayConfig struct {
 	Timezone TimezoneMode `mapstructure:"timezone"`
 }
 
-// SyncConfig holds cloud sync settings (future).
-type SyncConfig struct {
-	Enabled bool `mapstructure:"enabled"`
+// StreamsConfig holds stream target settings.
+type StreamsConfig struct {
+	Targets []StreamTargetConfig `mapstructure:"targets"`
+}
+
+// StreamTargetConfig holds settings for a single stream target.
+type StreamTargetConfig struct {
+	Name    string         `mapstructure:"name"`
+	Type    string         `mapstructure:"type"`
+	Enabled bool           `mapstructure:"enabled"`
+	Config  map[string]any `mapstructure:"config"`
 }
 
 // Paths holds resolved filesystem paths.

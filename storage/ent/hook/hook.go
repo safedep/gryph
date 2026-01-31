@@ -45,6 +45,18 @@ func (f SessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SessionMutation", m)
 }
 
+// The StreamCheckpointFunc type is an adapter to allow the use of ordinary
+// function as StreamCheckpoint mutator.
+type StreamCheckpointFunc func(context.Context, *ent.StreamCheckpointMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f StreamCheckpointFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.StreamCheckpointMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.StreamCheckpointMutation", m)
+}
+
 // Condition is a hook condition function.
 type Condition func(context.Context, ent.Mutation) bool
 

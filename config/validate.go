@@ -45,6 +45,11 @@ func validate(cfg *Config) error {
 		return fmt.Errorf("invalid display.timezone: %s (must be local or utc)", cfg.Display.Timezone)
 	}
 
+	// Validate stream targets
+	if err := validateStreamTargets(cfg.Streams.Targets); err != nil {
+		return err
+	}
+
 	// Validate agent logging levels if set
 	if cfg.Agents.ClaudeCode.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.ClaudeCode.LoggingLevel) {
 		return fmt.Errorf("invalid agents.claude-code.logging_level: %s", cfg.Agents.ClaudeCode.LoggingLevel)
@@ -84,4 +89,29 @@ func isValidTimezoneMode(mode TimezoneMode) bool {
 	default:
 		return false
 	}
+}
+
+// knownStreamTargetTypes lists the valid stream target types.
+var knownStreamTargetTypes = map[string]bool{
+	"stdout": true,
+}
+
+func validateStreamTargets(targets []StreamTargetConfig) error {
+	names := make(map[string]bool, len(targets))
+	for i, t := range targets {
+		if t.Name == "" {
+			return fmt.Errorf("streams.targets[%d]: name must not be empty", i)
+		}
+		if t.Type == "" {
+			return fmt.Errorf("streams.targets[%d]: type must not be empty", i)
+		}
+		if !knownStreamTargetTypes[t.Type] {
+			return fmt.Errorf("streams.targets[%d]: unknown type %q", i, t.Type)
+		}
+		if names[t.Name] {
+			return fmt.Errorf("streams.targets[%d]: duplicate name %q", i, t.Name)
+		}
+		names[t.Name] = true
+	}
+	return nil
 }
