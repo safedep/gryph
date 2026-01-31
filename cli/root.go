@@ -13,6 +13,7 @@ import (
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/internal/version"
+	securitychecks "github.com/safedep/gryph/security"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -56,7 +57,7 @@ func NewApp(cfg *config.Config) (*App, error) {
 
 	// Create security evaluator with placeholder check
 	sec := security.New(&security.Config{FailOpen: true})
-	sec.RegisterCheck(security.NewPlaceholderCheck())
+	sec.RegisterCheck(securitychecks.NewPlaceholderCheck())
 
 	return &App{
 		Config:    cfg,
