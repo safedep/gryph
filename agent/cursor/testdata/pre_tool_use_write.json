@@ -1,0 +1,16 @@
+{
+  "conversation_id": "conv-test-123",
+  "generation_id": "gen-002",
+  "model": "claude-3-opus",
+  "hook_event_name": "preToolUse",
+  "cursor_version": "0.44.0",
+  "workspace_roots": ["/home/user/project"],
+  "user_email": "user@example.com",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "/home/user/project/src/main.go",
+    "content": "package main\n\nfunc main() {\n\t// New content\n}"
+  },
+  "tool_use_id": "tool-use-002",
+  "cwd": "/home/user/project"
+}

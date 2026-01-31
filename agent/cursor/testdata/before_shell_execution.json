@@ -1,0 +1,12 @@
+{
+  "conversation_id": "conv-test-123",
+  "generation_id": "gen-005",
+  "model": "claude-3-opus",
+  "hook_event_name": "beforeShellExecution",
+  "cursor_version": "0.44.0",
+  "workspace_roots": ["/home/user/project"],
+  "user_email": "user@example.com",
+  "command": "ls -la",
+  "cwd": "/home/user/project",
+  "timeout": 30000
+}

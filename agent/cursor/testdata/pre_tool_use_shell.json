@@ -1,0 +1,15 @@
+{
+  "conversation_id": "conv-test-123",
+  "generation_id": "gen-001",
+  "model": "claude-3-opus",
+  "hook_event_name": "preToolUse",
+  "cursor_version": "0.44.0",
+  "workspace_roots": ["/home/user/project"],
+  "user_email": "user@example.com",
+  "tool_name": "Shell",
+  "tool_input": {
+    "command": "npm install"
+  },
+  "tool_use_id": "tool-use-001",
+  "cwd": "/home/user/project"
+}

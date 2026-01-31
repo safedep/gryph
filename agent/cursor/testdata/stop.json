@@ -1,0 +1,11 @@
+{
+  "conversation_id": "conv-test-123",
+  "generation_id": "gen-011",
+  "model": "claude-3-opus",
+  "hook_event_name": "stop",
+  "cursor_version": "0.44.0",
+  "workspace_roots": ["/home/user/project"],
+  "user_email": "user@example.com",
+  "status": "completed",
+  "loop_count": 5
+}

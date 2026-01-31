@@ -1,0 +1,12 @@
+{
+  "conversation_id": "conv-test-123",
+  "generation_id": "gen-009",
+  "model": "claude-3-opus",
+  "hook_event_name": "sessionStart",
+  "cursor_version": "0.44.0",
+  "workspace_roots": ["/home/user/project"],
+  "user_email": "user@example.com",
+  "session_id": "session-inner-001",
+  "is_background_agent": false,
+  "composer_mode": "agent"
+}
