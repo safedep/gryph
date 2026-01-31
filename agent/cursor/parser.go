@@ -424,6 +424,14 @@ func (a *Adapter) parseAfterFileEdit(sessionID uuid.UUID, agentSessionID string,
 		payload.NewString = truncateString(input.Edits[0].NewString, 200)
 	}
 
+	if a.contentHash && len(input.Edits) > 0 {
+		var combined string
+		for _, edit := range input.Edits {
+			combined += edit.OldString + edit.NewString
+		}
+		payload.ContentHash = utils.HashContent(combined)
+	}
+
 	if err := event.SetPayload(payload); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
 	}
@@ -753,6 +761,14 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		fullOldStr, _ := toolInput["old_string"].(string)
 		fullNewStr, _ := toolInput["new_string"].(string)
 		fullContent, _ := toolInput["content"].(string)
+
+		if a.contentHash {
+			if fullContent != "" {
+				payload.ContentHash = utils.HashContent(fullContent)
+			} else if fullOldStr != "" || fullNewStr != "" {
+				payload.ContentHash = utils.HashContent(fullOldStr + fullNewStr)
+			}
+		}
 
 		if fullContent != "" {
 			payload.ContentPreview = truncateString(fullContent, 200)

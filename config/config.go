@@ -84,6 +84,7 @@ type LoggingConfig struct {
 	StdoutMaxChars  int          `mapstructure:"stdout_max_chars"`
 	StderrMaxChars  int          `mapstructure:"stderr_max_chars"`
 	ContextMaxChars int          `mapstructure:"context_max_chars"`
+	ContentHash     bool         `mapstructure:"content_hash"`
 }
 
 // StorageConfig holds storage-related settings.
@@ -94,9 +95,8 @@ type StorageConfig struct {
 
 // PrivacyConfig holds privacy-related settings.
 type PrivacyConfig struct {
-	HashFileContents bool     `mapstructure:"hash_file_contents"`
-	SensitivePaths   []string `mapstructure:"sensitive_paths"`
-	RedactPatterns   []string `mapstructure:"redact_patterns"`
+	SensitivePaths []string `mapstructure:"sensitive_paths"`
+	RedactPatterns []string `mapstructure:"redact_patterns"`
 }
 
 // FiltersConfig holds content filter settings.

@@ -11,13 +11,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("logging.stdout_max_chars", 1000)
 	v.SetDefault("logging.stderr_max_chars", 500)
 	v.SetDefault("logging.context_max_chars", 5000)
+	v.SetDefault("logging.content_hash", true)
 
 	// Storage defaults
 	v.SetDefault("storage.path", "") // Empty means use platform default
 	v.SetDefault("storage.retention_days", 90)
 
 	// Privacy defaults
-	v.SetDefault("privacy.hash_file_contents", true)
 	v.SetDefault("privacy.sensitive_paths", defaultSensitivePaths())
 	v.SetDefault("privacy.redact_patterns", defaultRedactPatterns())
 

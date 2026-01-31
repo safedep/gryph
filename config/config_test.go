@@ -23,8 +23,10 @@ func TestDefault(t *testing.T) {
 	assert.Equal(t, "", cfg.Storage.Path)
 	assert.Equal(t, 90, cfg.Storage.RetentionDays)
 
+	// Verify content hash default
+	assert.True(t, cfg.Logging.ContentHash)
+
 	// Verify privacy defaults
-	assert.True(t, cfg.Privacy.HashFileContents)
 	assert.NotEmpty(t, cfg.Privacy.SensitivePaths)
 	assert.NotEmpty(t, cfg.Privacy.RedactPatterns)
 
@@ -55,10 +57,10 @@ logging:
   stdout_max_chars: 2000
   stderr_max_chars: 1000
   context_max_chars: 10000
+  content_hash: false
 storage:
   retention_days: 30
 privacy:
-  hash_file_contents: false
   sensitive_paths:
     - "**/.env"
   redact_patterns:
@@ -88,7 +90,7 @@ display:
 	assert.Equal(t, 1000, cfg.Logging.StderrMaxChars)
 	assert.Equal(t, 10000, cfg.Logging.ContextMaxChars)
 	assert.Equal(t, 30, cfg.Storage.RetentionDays)
-	assert.False(t, cfg.Privacy.HashFileContents)
+	assert.False(t, cfg.Logging.ContentHash)
 	assert.Equal(t, []string{"**/.env"}, cfg.Privacy.SensitivePaths)
 	assert.False(t, cfg.Agents.ClaudeCode.Enabled)
 	assert.Equal(t, LoggingFull, cfg.Agents.ClaudeCode.LoggingLevel)

@@ -30,12 +30,12 @@ func testPrivacyChecker(t *testing.T) *events.PrivacyChecker {
 
 func testAdapter(t *testing.T) *Adapter {
 	t.Helper()
-	return New(testPrivacyChecker(t), config.LoggingStandard)
+	return New(testPrivacyChecker(t), config.LoggingStandard, true)
 }
 
 func testAdapterWithLevel(t *testing.T, level config.LoggingLevel) *Adapter {
 	t.Helper()
-	return New(testPrivacyChecker(t), level)
+	return New(testPrivacyChecker(t), level, true)
 }
 
 func TestParseHookEvent_BeforeTool_WriteFile(t *testing.T) {
@@ -266,6 +266,34 @@ func TestHookResponse_Stderr(t *testing.T) {
 
 	errResp := NewErrorResponse("error message")
 	assert.Equal(t, "error message", errResp.Stderr())
+}
+
+func TestParseHookEvent_ContentHash_Enabled(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "before_tool_write_file.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "BeforeTool", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	payload, err := event.GetFileWritePayload()
+	require.NoError(t, err)
+	assert.NotEmpty(t, payload.ContentHash, "ContentHash should be populated when content hashing is enabled")
+	assert.Len(t, payload.ContentHash, 64, "ContentHash should be a SHA-256 hex string")
+}
+
+func TestParseHookEvent_ContentHash_Disabled(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "before_tool_write_file.json")
+
+	adapter := New(testPrivacyChecker(t), config.LoggingStandard, false)
+	event, err := adapter.ParseEvent(ctx, "BeforeTool", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	payload, err := event.GetFileWritePayload()
+	require.NoError(t, err)
+	assert.Empty(t, payload.ContentHash, "ContentHash should be empty when content hashing is disabled")
 }
 
 func TestParseHookEvent_DiffGeneration_FullLevel(t *testing.T) {

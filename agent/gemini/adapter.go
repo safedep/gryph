@@ -16,10 +16,11 @@ const (
 type Adapter struct {
 	privacyChecker *events.PrivacyChecker
 	loggingLevel   config.LoggingLevel
+	contentHash    bool
 }
 
-func New(privacyChecker *events.PrivacyChecker, loggingLevel config.LoggingLevel) *Adapter {
-	return &Adapter{privacyChecker: privacyChecker, loggingLevel: loggingLevel}
+func New(privacyChecker *events.PrivacyChecker, loggingLevel config.LoggingLevel, contentHash bool) *Adapter {
+	return &Adapter{privacyChecker: privacyChecker, loggingLevel: loggingLevel, contentHash: contentHash}
 }
 
 func (a *Adapter) Name() string {
@@ -50,8 +51,8 @@ func (a *Adapter) ParseEvent(ctx context.Context, hookType string, rawData []byt
 	return a.parseHookEvent(hookType, rawData)
 }
 
-func Register(registry *agent.Registry, privacyChecker *events.PrivacyChecker, loggingLevel config.LoggingLevel) {
-	registry.Register(New(privacyChecker, loggingLevel))
+func Register(registry *agent.Registry, privacyChecker *events.PrivacyChecker, loggingLevel config.LoggingLevel, contentHash bool) {
+	registry.Register(New(privacyChecker, loggingLevel, contentHash))
 }
 
 var _ agent.Adapter = (*Adapter)(nil)

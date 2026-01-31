@@ -20,11 +20,12 @@ const (
 type Adapter struct {
 	privacyChecker *events.PrivacyChecker
 	loggingLevel   config.LoggingLevel
+	contentHash    bool
 }
 
 // New creates a new Cursor adapter.
-func New(privacyChecker *events.PrivacyChecker, loggingLevel config.LoggingLevel) *Adapter {
-	return &Adapter{privacyChecker: privacyChecker, loggingLevel: loggingLevel}
+func New(privacyChecker *events.PrivacyChecker, loggingLevel config.LoggingLevel, contentHash bool) *Adapter {
+	return &Adapter{privacyChecker: privacyChecker, loggingLevel: loggingLevel, contentHash: contentHash}
 }
 
 // Name returns the machine identifier.
@@ -63,8 +64,8 @@ func (a *Adapter) ParseEvent(ctx context.Context, hookType string, rawData []byt
 }
 
 // Register adds this adapter to the given registry.
-func Register(registry *agent.Registry, privacyChecker *events.PrivacyChecker, loggingLevel config.LoggingLevel) {
-	registry.Register(New(privacyChecker, loggingLevel))
+func Register(registry *agent.Registry, privacyChecker *events.PrivacyChecker, loggingLevel config.LoggingLevel, contentHash bool) {
+	registry.Register(New(privacyChecker, loggingLevel, contentHash))
 }
 
 // Ensure Adapter implements agent.Adapter

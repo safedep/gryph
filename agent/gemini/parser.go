@@ -253,6 +253,14 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		fullOldStr, _ := toolInput["old_string"].(string)
 		fullNewStr, _ := toolInput["new_string"].(string)
 
+		if a.contentHash {
+			if fullContent != "" {
+				payload.ContentHash = utils.HashContent(fullContent)
+			} else if fullOldStr != "" || fullNewStr != "" {
+				payload.ContentHash = utils.HashContent(fullOldStr + fullNewStr)
+			}
+		}
+
 		if fullContent != "" {
 			payload.ContentPreview = truncateString(fullContent, 200)
 		}

@@ -34,12 +34,12 @@ func testPrivacyChecker(t *testing.T) *events.PrivacyChecker {
 
 func testAdapter(t *testing.T) *Adapter {
 	t.Helper()
-	return New(testPrivacyChecker(t), config.LoggingStandard)
+	return New(testPrivacyChecker(t), config.LoggingStandard, true)
 }
 
 func testAdapterWithLevel(t *testing.T, level config.LoggingLevel) *Adapter {
 	t.Helper()
-	return New(testPrivacyChecker(t), level)
+	return New(testPrivacyChecker(t), level, true)
 }
 
 func TestParseHookEvent_PreToolUseShell(t *testing.T) {
@@ -357,6 +357,48 @@ func TestGeneratePermissionResponse(t *testing.T) {
 			assert.Equal(t, tc.expected, result)
 		})
 	}
+}
+
+func TestParseHookEvent_ContentHash_Enabled(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "pre_tool_use_write.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "preToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	payload, err := event.GetFileWritePayload()
+	require.NoError(t, err)
+	assert.NotEmpty(t, payload.ContentHash, "ContentHash should be populated when content hashing is enabled")
+	assert.Len(t, payload.ContentHash, 64, "ContentHash should be a SHA-256 hex string")
+}
+
+func TestParseHookEvent_ContentHash_Disabled(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "pre_tool_use_write.json")
+
+	adapter := New(testPrivacyChecker(t), config.LoggingStandard, false)
+	event, err := adapter.ParseEvent(ctx, "preToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	payload, err := event.GetFileWritePayload()
+	require.NoError(t, err)
+	assert.Empty(t, payload.ContentHash, "ContentHash should be empty when content hashing is disabled")
+}
+
+func TestParseHookEvent_AfterFileEdit_ContentHash(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "after_file_edit.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "afterFileEdit", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	payload, err := event.GetFileWritePayload()
+	require.NoError(t, err)
+	assert.NotEmpty(t, payload.ContentHash, "ContentHash should be populated for afterFileEdit")
+	assert.Len(t, payload.ContentHash, 64)
 }
 
 func TestParseHookEvent_AfterFileEdit_DiffGeneration_FullLevel(t *testing.T) {

@@ -47,9 +47,9 @@ func NewApp(cfg *config.Config) (*App, error) {
 
 	// Create registry and register adapters
 	registry := agent.NewRegistry()
-	claudecode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentClaudeCode))
-	cursor.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCursor))
-	gemini.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentGemini))
+	claudecode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentClaudeCode), cfg.Logging.ContentHash)
+	cursor.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCursor), cfg.Logging.ContentHash)
+	gemini.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentGemini), cfg.Logging.ContentHash)
 
 	// Create presenter based on config
 	presenter := tui.NewPresenter(tui.FormatTable, tui.PresenterOptions{
