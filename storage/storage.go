@@ -18,6 +18,9 @@ type EventStore interface {
 	// GetEvent retrieves an event by ID.
 	GetEvent(ctx context.Context, id uuid.UUID) (*events.Event, error)
 
+	// GetEventByPrefix retrieves an event by ID prefix.
+	GetEventByPrefix(ctx context.Context, prefix string) (*events.Event, error)
+
 	// QueryEvents retrieves events matching the given filter.
 	QueryEvents(ctx context.Context, filter *events.EventFilter) ([]*events.Event, error)
 

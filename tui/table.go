@@ -147,7 +147,7 @@ func (p *TablePresenter) RenderSession(session *SessionView, events []*EventView
 		tw.println()
 
 		for i, e := range events {
-			tw.printf("#%-2d %s  %s\n", i+1, FormatTimeShort(e.Timestamp), e.ActionDisplay)
+			tw.printf("#%-2d %s  %s  %s\n", i+1, FormatTimeShort(e.Timestamp), p.color.Dim(e.ShortID), e.ActionDisplay)
 			if e.Path != "" {
 				tw.printf("    Path: %s\n", p.color.Path(e.Path))
 			}
@@ -179,6 +179,7 @@ func (p *TablePresenter) RenderSession(session *SessionView, events []*EventView
 // eventsColumnWidths holds the calculated widths for events table columns.
 type eventsColumnWidths struct {
 	time    int
+	event   int
 	agent   int
 	session int
 	action  int
@@ -188,21 +189,22 @@ type eventsColumnWidths struct {
 }
 
 // calculateEventsColumnWidths computes column widths based on terminal width.
-// Fixed columns: Time(11), Agent(12), Session(9), Action(6), Result(10)
+// Fixed columns: Time(11), Event(9), Agent(12), Session(9), Action(6), Result(10)
 // Flexible column: Path (absorbs remaining space)
 func (p *TablePresenter) calculateEventsColumnWidths() eventsColumnWidths {
 	const (
 		timeWidth    = 11
+		eventWidth   = 9
 		agentWidth   = 12
 		sessionWidth = 9
 		actionWidth  = 6
 		resultWidth  = 10
 		minPathWidth = 15
 		maxPathWidth = 80
-		spacing      = 5 // spaces between columns
+		spacing      = 6 // spaces between columns
 	)
 
-	fixedWidth := timeWidth + agentWidth + sessionWidth + actionWidth + resultWidth + spacing
+	fixedWidth := timeWidth + eventWidth + agentWidth + sessionWidth + actionWidth + resultWidth + spacing
 	availableForPath := p.termWidth - fixedWidth
 
 	pathWidth := availableForPath
@@ -217,6 +219,7 @@ func (p *TablePresenter) calculateEventsColumnWidths() eventsColumnWidths {
 
 	return eventsColumnWidths{
 		time:    timeWidth,
+		event:   eventWidth,
 		agent:   agentWidth,
 		session: sessionWidth,
 		action:  actionWidth,
@@ -240,8 +243,9 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 	tw.printf("Results (%d events)\n", len(events))
 	tw.println(HorizontalLine(cols.total))
 
-	tw.printf("%s %s %s %s %s %s\n",
+	tw.printf("%s %s %s %s %s %s %s\n",
 		PadRightVisible("Time", cols.time),
+		PadRightVisible("Event", cols.event),
 		PadRightVisible("Agent", cols.agent),
 		PadRightVisible("Session", cols.session),
 		PadRightVisible("Action", cols.action),
@@ -264,8 +268,9 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 			result = FormatExitCode(e.ExitCode)
 		}
 
-		tw.printf("%s %s %s %s %s %s\n",
+		tw.printf("%s %s %s %s %s %s %s\n",
 			PadRightVisible(FormatTimeShort(e.Timestamp), cols.time),
+			PadRightVisible(e.ShortID, cols.event),
 			PadRightVisible(p.color.Agent(e.AgentName), cols.agent),
 			PadRightVisible(e.ShortSessionID, cols.session),
 			PadRightVisible(e.ActionDisplay, cols.action),

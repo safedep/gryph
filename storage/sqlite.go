@@ -149,6 +149,25 @@ func (s *SQLiteStore) GetEvent(ctx context.Context, id uuid.UUID) (*events.Event
 	return entToEvent(entEvent), nil
 }
 
+// GetEventByPrefix retrieves an event by ID prefix.
+func (s *SQLiteStore) GetEventByPrefix(ctx context.Context, prefix string) (*events.Event, error) {
+	entEvents, err := s.client.AuditEvent.Query().
+		Where(func(sel *entsql.Selector) {
+			sel.Where(entsql.Like(auditevent.FieldID, prefix+"%"))
+		}).
+		Limit(1).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get event by prefix: %w", err)
+	}
+
+	if len(entEvents) == 0 {
+		return nil, nil
+	}
+
+	return entToEvent(entEvents[0]), nil
+}
+
 // QueryEvents retrieves events matching the given filter.
 func (s *SQLiteStore) QueryEvents(ctx context.Context, filter *events.EventFilter) ([]*events.Event, error) {
 	query := s.client.AuditEvent.Query()

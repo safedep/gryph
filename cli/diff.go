@@ -56,8 +56,17 @@ a file_write action or if diff was not captured.`,
 			// Parse event ID
 			eventID, err := uuid.Parse(eventIDArg)
 			if err != nil {
-				// Could be a prefix - for now just error
-				return fmt.Errorf("invalid event ID: %s", eventIDArg)
+				// Try prefix match
+				e, err := app.Store.GetEventByPrefix(ctx, eventIDArg)
+				if err != nil {
+					return fmt.Errorf("event not found: %s", eventIDArg)
+				}
+
+				if e == nil {
+					return fmt.Errorf("event not found: %s", eventIDArg)
+				}
+
+				eventID = e.ID
 			}
 
 			// Get event

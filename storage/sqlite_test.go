@@ -108,6 +108,65 @@ func TestSQLiteStore_SaveAndGetEvent(t *testing.T) {
 	assert.False(t, retrieved.IsSensitive)
 }
 
+func TestSQLiteStore_GetEventByPrefix(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	sessionID := uuid.New()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+
+	createTestSession(t, store, sessionID, "claude-code")
+
+	eventID := uuid.New()
+	event := &events.Event{
+		ID:           eventID,
+		SessionID:    sessionID,
+		Sequence:     1,
+		Timestamp:    now,
+		AgentName:    "claude-code",
+		ActionType:   events.ActionFileRead,
+		ResultStatus: events.ResultSuccess,
+	}
+	err := store.SaveEvent(ctx, event)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		prefix  string
+		wantNil bool
+	}{
+		{
+			name:    "full ID matches",
+			prefix:  eventID.String(),
+			wantNil: false,
+		},
+		{
+			name:    "8-char prefix matches",
+			prefix:  eventID.String()[:8],
+			wantNil: false,
+		},
+		{
+			name:    "non-matching prefix",
+			prefix:  "00000000",
+			wantNil: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := store.GetEventByPrefix(ctx, tt.prefix)
+			require.NoError(t, err)
+			if tt.wantNil {
+				assert.Nil(t, result)
+			} else {
+				require.NotNil(t, result)
+				assert.Equal(t, eventID, result.ID)
+			}
+		})
+	}
+}
+
 func TestSQLiteStore_GetEventNotFound(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
