@@ -238,6 +238,18 @@ gryph config reset
 
 Sensitive files (`.env`, `*.pem`, `*secret*`, etc.) are detected automatically - actions are logged but content is never stored.
 
+## Privacy
+
+Gryph is designed with privacy as a core principle. All data stays on your machine. There is no cloud component or telemetry.
+
+- **Sensitive file detection** — Files matching patterns like `.env`, `*.pem`, `*.key`, `*secret*`, `.ssh/**`, `.aws/**`, and others are automatically detected. Actions on these files are logged but their content is never stored.
+- **Content redaction** — Passwords, API keys, tokens, bearer credentials, and AWS keys are automatically redacted from any logged output using pattern matching.
+- **Content hashing** — File contents are stored as SHA-256 hashes by default (`logging.content_hash: true`), allowing you to verify file identity without storing the actual content.
+- **Configurable logging levels** — Control how much detail is captured with `minimal`, `standard`, or `full` logging levels.
+- **Local-only storage** — All audit data is stored in a local SQLite database with configurable retention (default 90 days).
+
+Sensitive path patterns and redaction rules are fully configurable via `gryph config`.
+
 ## How It Works
 
 ```
