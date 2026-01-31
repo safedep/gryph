@@ -55,6 +55,32 @@ gryph status
 gryph logs
 ```
 
+<details>
+  <summary>Files Modified During Installation</summary>
+  
+### Files Modified During Installation
+
+For transparency, here are the files Gryph modifies when you run `gryph install`:
+
+| Agent       | File Modified             | Description                              |
+| ----------- | ------------------------- | ---------------------------------------- |
+| Claude Code | `~/.claude/settings.json` | Adds hook entries to the `hooks` section |
+| Cursor      | `~/.cursor/hooks.json`    | Creates or updates hooks configuration   |
+
+### Backups
+
+Existing files are automatically backed up before modification. Backups are stored in the Gryph data directory:
+
+| Platform | Backup Location                                |
+| -------- | ---------------------------------------------- |
+| macOS    | `~/Library/Application Support/gryph/backups/` |
+| Linux    | `~/.local/share/gryph/backups/`                |
+| Windows  | `%LOCALAPPDATA%\gryph\backups\`                |
+
+Backup files are named with timestamps (e.g., `settings.json.backup.20250131120000`).
+
+</details>
+
 ## Commands
 
 ### View Recent Activity
