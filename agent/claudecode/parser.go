@@ -85,10 +85,10 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte, privac
 		return nil, fmt.Errorf("failed to parse hook input: %w", err)
 	}
 
-	// Use hook_event_name from input if available, otherwise use passed hookType
-	eventName := baseInput.HookEventName
+	// Prefer hookType from CLI args (which gryph controls), fall back to hook_event_name from JSON
+	eventName := hookType
 	if eventName == "" {
-		eventName = hookType
+		eventName = baseInput.HookEventName
 	}
 
 	// Parse session ID

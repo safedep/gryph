@@ -112,6 +112,58 @@ type StopInput struct {
 	LoopCount int    `json:"loop_count"`
 }
 
+// BeforeMCPExecutionInput represents the input for beforeMCPExecution hooks.
+type BeforeMCPExecutionInput struct {
+	HookInput
+	ToolName  string                 `json:"tool_name"`
+	ToolInput map[string]interface{} `json:"tool_input"`
+	URL       string                 `json:"url,omitempty"`
+	Command   string                 `json:"command,omitempty"`
+	Cwd       string                 `json:"cwd,omitempty"`
+}
+
+// AfterShellExecutionInput represents the input for afterShellExecution hooks.
+type AfterShellExecutionInput struct {
+	HookInput
+	Command  string `json:"command"`
+	Output   string `json:"output"`
+	Duration int64  `json:"duration"`
+	Cwd      string `json:"cwd,omitempty"`
+}
+
+// AfterMCPExecutionInput represents the input for afterMCPExecution hooks.
+type AfterMCPExecutionInput struct {
+	HookInput
+	ToolName   string                 `json:"tool_name"`
+	ToolInput  map[string]interface{} `json:"tool_input"`
+	ResultJSON map[string]interface{} `json:"result_json,omitempty"`
+	Duration   int64                  `json:"duration"`
+}
+
+// SubagentStartInput represents the input for subagentStart hooks.
+type SubagentStartInput struct {
+	HookInput
+	SubagentType string `json:"subagent_type"`
+	Prompt       string `json:"prompt,omitempty"`
+	SubModel     string `json:"model,omitempty"`
+}
+
+// SubagentStopInput represents the input for subagentStop hooks.
+type SubagentStopInput struct {
+	HookInput
+	SubagentType string `json:"subagent_type"`
+	Status       string `json:"status"`
+	Result       string `json:"result,omitempty"`
+	Duration     int64  `json:"duration"`
+}
+
+// AfterAgentThoughtInput represents the input for afterAgentThought hooks.
+type AfterAgentThoughtInput struct {
+	HookInput
+	Text       string `json:"text"`
+	DurationMs int64  `json:"duration_ms"`
+}
+
 // HookTypeMapping maps Cursor hook types to action types.
 var HookTypeMapping = map[string]events.ActionType{
 	"preToolUse":           events.ActionToolUse,
@@ -129,6 +181,7 @@ var HookTypeMapping = map[string]events.ActionType{
 	"afterAgentResponse":   events.ActionToolUse,
 	"subagentStart":        events.ActionToolUse,
 	"subagentStop":         events.ActionToolUse,
+	"afterAgentThought":    events.ActionToolUse,
 	"sessionStart":         events.ActionSessionStart,
 	"sessionEnd":           events.ActionSessionEnd,
 	"stop":                 events.ActionSessionEnd,
@@ -192,6 +245,22 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte, privac
 		return parseSessionEnd(sessionID, agentSessionID, baseInput, rawData)
 	case "stop":
 		return parseStop(sessionID, agentSessionID, baseInput, rawData)
+	case "beforeTabFileRead":
+		return parseBeforeReadFile(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
+	case "afterTabFileEdit":
+		return parseAfterFileEdit(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
+	case "beforeMCPExecution":
+		return parseBeforeMCPExecution(sessionID, agentSessionID, baseInput, rawData)
+	case "afterShellExecution":
+		return parseAfterShellExecution(sessionID, agentSessionID, baseInput, rawData)
+	case "afterMCPExecution":
+		return parseAfterMCPExecution(sessionID, agentSessionID, baseInput, rawData)
+	case "subagentStart":
+		return parseSubagentStart(sessionID, agentSessionID, baseInput, rawData)
+	case "subagentStop":
+		return parseSubagentStop(sessionID, agentSessionID, baseInput, rawData)
+	case "afterAgentThought":
+		return parseAfterAgentThought(sessionID, agentSessionID, baseInput, rawData)
 	default:
 		// Generic handling for other hooks
 		actionType := events.ActionUnknown
@@ -463,6 +532,194 @@ func parseStop(sessionID uuid.UUID, agentSessionID string, base HookInput, rawDa
 
 	payload := events.SessionEndPayload{
 		Reason: input.Status,
+	}
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+
+	return event, nil
+}
+
+func parseBeforeMCPExecution(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+	var input BeforeMCPExecutionInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse beforeMCPExecution input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionToolUse)
+	event.AgentSessionID = agentSessionID
+	event.ToolName = input.ToolName
+	event.RawEvent = rawData
+	if input.Cwd != "" {
+		event.WorkingDirectory = input.Cwd
+	} else if len(base.WorkspaceRoots) > 0 {
+		event.WorkingDirectory = base.WorkspaceRoots[0]
+	}
+
+	payload := events.ToolUsePayload{
+		ToolName: input.ToolName,
+	}
+	if inputBytes, err := json.Marshal(input.ToolInput); err == nil {
+		payload.Input = inputBytes
+	}
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+
+	return event, nil
+}
+
+func parseAfterShellExecution(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+	var input AfterShellExecutionInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse afterShellExecution input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionCommandExec)
+	event.AgentSessionID = agentSessionID
+	event.ToolName = "Shell"
+	event.DurationMs = input.Duration
+	event.RawEvent = rawData
+	event.ResultStatus = events.ResultSuccess
+	if input.Cwd != "" {
+		event.WorkingDirectory = input.Cwd
+	} else if len(base.WorkspaceRoots) > 0 {
+		event.WorkingDirectory = base.WorkspaceRoots[0]
+	}
+
+	payload := events.CommandExecPayload{
+		Command: input.Command,
+		Output:  truncateString(input.Output, 500),
+	}
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+
+	return event, nil
+}
+
+func parseAfterMCPExecution(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+	var input AfterMCPExecutionInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse afterMCPExecution input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionToolUse)
+	event.AgentSessionID = agentSessionID
+	event.ToolName = input.ToolName
+	event.DurationMs = input.Duration
+	event.RawEvent = rawData
+	event.ResultStatus = events.ResultSuccess
+	if len(base.WorkspaceRoots) > 0 {
+		event.WorkingDirectory = base.WorkspaceRoots[0]
+	}
+
+	payload := events.ToolUsePayload{
+		ToolName: input.ToolName,
+	}
+	if inputBytes, err := json.Marshal(input.ToolInput); err == nil {
+		payload.Input = inputBytes
+	}
+	if input.ResultJSON != nil {
+		if resultBytes, err := json.Marshal(input.ResultJSON); err == nil {
+			payload.Output = resultBytes
+		}
+	}
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+
+	return event, nil
+}
+
+func parseSubagentStart(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+	var input SubagentStartInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse subagentStart input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionToolUse)
+	event.AgentSessionID = agentSessionID
+	event.ToolName = "subagentStart"
+	event.RawEvent = rawData
+	if len(base.WorkspaceRoots) > 0 {
+		event.WorkingDirectory = base.WorkspaceRoots[0]
+	}
+
+	payload := events.ToolUsePayload{
+		ToolName: "subagentStart",
+	}
+	inputMap := map[string]interface{}{
+		"subagent_type": input.SubagentType,
+		"prompt":        input.Prompt,
+		"model":         input.SubModel,
+	}
+	if inputBytes, err := json.Marshal(inputMap); err == nil {
+		payload.Input = inputBytes
+	}
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+
+	return event, nil
+}
+
+func parseSubagentStop(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+	var input SubagentStopInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse subagentStop input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionToolUse)
+	event.AgentSessionID = agentSessionID
+	event.ToolName = "subagentStop"
+	event.DurationMs = input.Duration
+	event.RawEvent = rawData
+	if len(base.WorkspaceRoots) > 0 {
+		event.WorkingDirectory = base.WorkspaceRoots[0]
+	}
+
+	payload := events.ToolUsePayload{
+		ToolName: "subagentStop",
+	}
+	inputMap := map[string]interface{}{
+		"subagent_type": input.SubagentType,
+		"status":        input.Status,
+		"result":        input.Result,
+	}
+	if inputBytes, err := json.Marshal(inputMap); err == nil {
+		payload.Input = inputBytes
+	}
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+
+	return event, nil
+}
+
+func parseAfterAgentThought(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+	var input AfterAgentThoughtInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse afterAgentThought input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionToolUse)
+	event.AgentSessionID = agentSessionID
+	event.ToolName = "afterAgentThought"
+	event.DurationMs = input.DurationMs
+	event.RawEvent = rawData
+	if len(base.WorkspaceRoots) > 0 {
+		event.WorkingDirectory = base.WorkspaceRoots[0]
+	}
+
+	payload := events.ToolUsePayload{
+		ToolName: "afterAgentThought",
+	}
+	inputMap := map[string]interface{}{
+		"text": input.Text,
+	}
+	if inputBytes, err := json.Marshal(inputMap); err == nil {
+		payload.Input = inputBytes
 	}
 	if err := event.SetPayload(payload); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)

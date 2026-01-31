@@ -27,7 +27,10 @@ var HookTypes = []string{
 	"postToolUseFailure",
 	"afterFileEdit",
 	"afterTabFileEdit",
+	"afterShellExecution",
+	"afterMCPExecution",
 	"afterAgentResponse",
+	"afterAgentThought",
 
 	// Session lifecycle hooks
 	"sessionStart",

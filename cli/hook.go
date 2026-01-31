@@ -114,16 +114,17 @@ func NewHookCmd() *cobra.Command {
 			case events.ActionCommandExec:
 				sess.CommandsExecuted++
 			}
+
 			if event.ResultStatus == events.ResultError {
 				sess.Errors++
 			}
+
 			if err := app.Store.UpdateSession(ctx, sess); err != nil {
 				return fmt.Errorf("failed to update session: %w", err)
 			}
 
 			// Handle session end events
-			if (agentName == agent.AgentCursor && hookType == "stop") ||
-				(agentName == agent.AgentClaudeCode && hookType == "SessionEnd") {
+			if event.ActionType == events.ActionSessionEnd {
 				sess.End()
 				if err := app.Store.UpdateSession(ctx, sess); err != nil {
 					return fmt.Errorf("failed to end session: %w", err)
@@ -230,6 +231,7 @@ func generateCursorResponse(hookType string) []byte {
 		return cursor.GenerateStopResponse("")
 
 	case "postToolUse", "postToolUseFailure", "afterFileEdit", "afterTabFileEdit",
+		"afterShellExecution", "afterMCPExecution", "afterAgentThought",
 		"afterAgentResponse", "sessionEnd", "subagentStart", "preCompact":
 		// Post-action hooks don't require specific responses, return empty JSON
 		return []byte("{}")
@@ -264,6 +266,9 @@ type exitError struct {
 	code    int
 	message string
 }
+
+// Validate that exitError implements the ExitCoder interface.
+var _ ExitCoder = &exitError{}
 
 func (e *exitError) Error() string {
 	return e.message
