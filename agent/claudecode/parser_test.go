@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,11 +27,21 @@ func testPrivacyChecker(t *testing.T) *events.PrivacyChecker {
 	return pc
 }
 
+func testAdapter(t *testing.T) *Adapter {
+	t.Helper()
+	return New(testPrivacyChecker(t), config.LoggingStandard)
+}
+
+func testAdapterWithLevel(t *testing.T, level config.LoggingLevel) *Adapter {
+	t.Helper()
+	return New(testPrivacyChecker(t), level)
+}
+
 func TestParseHookEvent_PreToolUseBash(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "pre_tool_use_bash.json")
 
-	event, err := ParseHookEvent(ctx, "PreToolUse", data, testPrivacyChecker(t))
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
@@ -40,7 +51,6 @@ func TestParseHookEvent_PreToolUseBash(t *testing.T) {
 	assert.Equal(t, "/home/user/project", event.WorkingDirectory)
 	assert.Equal(t, "test-session-123", event.AgentSessionID)
 
-	// Check payload
 	payload, err := event.GetCommandExecPayload()
 	require.NoError(t, err)
 	assert.Equal(t, "npm install", payload.Command)
@@ -51,7 +61,7 @@ func TestParseHookEvent_PreToolUseWrite(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "pre_tool_use_write.json")
 
-	event, err := ParseHookEvent(ctx, "PreToolUse", data, testPrivacyChecker(t))
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
@@ -59,7 +69,6 @@ func TestParseHookEvent_PreToolUseWrite(t *testing.T) {
 	assert.Equal(t, "Write", event.ToolName)
 	assert.Equal(t, "/home/user/project", event.WorkingDirectory)
 
-	// Check payload
 	payload, err := event.GetFileWritePayload()
 	require.NoError(t, err)
 	assert.Equal(t, "/home/user/project/src/main.go", payload.Path)
@@ -70,7 +79,7 @@ func TestParseHookEvent_PostToolUseRead(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "post_tool_use_read.json")
 
-	event, err := ParseHookEvent(ctx, "PostToolUse", data, testPrivacyChecker(t))
+	event, err := testAdapter(t).ParseEvent(ctx, "PostToolUse", data)
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
@@ -78,7 +87,6 @@ func TestParseHookEvent_PostToolUseRead(t *testing.T) {
 	assert.Equal(t, "Read", event.ToolName)
 	assert.Equal(t, events.ResultSuccess, event.ResultStatus)
 
-	// Check payload
 	payload, err := event.GetFileReadPayload()
 	require.NoError(t, err)
 	assert.Equal(t, "/home/user/project/README.md", payload.Path)
@@ -88,7 +96,7 @@ func TestParseHookEvent_PostToolUseFailure(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "post_tool_use_failure.json")
 
-	event, err := ParseHookEvent(ctx, "PostToolUseFailure", data, testPrivacyChecker(t))
+	event, err := testAdapter(t).ParseEvent(ctx, "PostToolUseFailure", data)
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
@@ -102,7 +110,7 @@ func TestParseHookEvent_SessionStart(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "session_start.json")
 
-	event, err := ParseHookEvent(ctx, "SessionStart", data, testPrivacyChecker(t))
+	event, err := testAdapter(t).ParseEvent(ctx, "SessionStart", data)
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
@@ -115,7 +123,7 @@ func TestParseHookEvent_SessionEnd(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "session_end.json")
 
-	event, err := ParseHookEvent(ctx, "SessionEnd", data, testPrivacyChecker(t))
+	event, err := testAdapter(t).ParseEvent(ctx, "SessionEnd", data)
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
@@ -127,15 +135,14 @@ func TestParseHookEvent_SessionEnd(t *testing.T) {
 func TestParseHookEvent_SessionIDDeterministic(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "pre_tool_use_bash.json")
+	adapter := testAdapter(t)
 
-	// Parse twice
-	event1, err := ParseHookEvent(ctx, "PreToolUse", data, testPrivacyChecker(t))
+	event1, err := adapter.ParseEvent(ctx, "PreToolUse", data)
 	require.NoError(t, err)
 
-	event2, err := ParseHookEvent(ctx, "PreToolUse", data, testPrivacyChecker(t))
+	event2, err := adapter.ParseEvent(ctx, "PreToolUse", data)
 	require.NoError(t, err)
 
-	// Same agent session ID should produce same session ID
 	assert.Equal(t, event1.SessionID, event2.SessionID)
 	assert.Equal(t, event1.AgentSessionID, event2.AgentSessionID)
 }
@@ -144,9 +151,33 @@ func TestParseHookEvent_InvalidJSON(t *testing.T) {
 	ctx := context.Background()
 	data := []byte("not valid json")
 
-	event, err := ParseHookEvent(ctx, "PreToolUse", data, testPrivacyChecker(t))
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
 	assert.Error(t, err)
 	assert.Nil(t, event)
+}
+
+func TestParseHookEvent_DiffGeneration_FullLevel(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "pre_tool_use_write.json")
+
+	event, err := testAdapterWithLevel(t, config.LoggingFull).ParseEvent(ctx, "PreToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.NotEmpty(t, event.DiffContent, "DiffContent should be populated at full logging level")
+	assert.Contains(t, event.DiffContent, "--- a/")
+	assert.Contains(t, event.DiffContent, "+++ b/")
+}
+
+func TestParseHookEvent_NoDiff_StandardLevel(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "pre_tool_use_write.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Empty(t, event.DiffContent, "DiffContent should be empty at standard logging level")
 }
 
 func TestToolNameMapping(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 // setDefaults sets all default configuration values.
 func setDefaults(v *viper.Viper) {
 	// Logging defaults
-	v.SetDefault("logging.level", "minimal")
+	v.SetDefault("logging.level", "standard")
 	v.SetDefault("logging.stdout_max_chars", 1000)
 	v.SetDefault("logging.stderr_max_chars", 500)
 	v.SetDefault("logging.context_max_chars", 5000)

@@ -1,12 +1,13 @@
 package claudecode
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 )
 
@@ -77,44 +78,37 @@ var ToolNameMapping = map[string]events.ActionType{
 	"AskUser":      events.ActionToolUse,
 }
 
-// ParseHookEvent converts a Claude Code event to the common format.
-func ParseHookEvent(ctx context.Context, hookType string, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
-	// First parse the common fields to determine event type
+func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event, error) {
 	var baseInput HookInput
 	if err := json.Unmarshal(rawData, &baseInput); err != nil {
 		return nil, fmt.Errorf("failed to parse hook input: %w", err)
 	}
 
-	// Prefer hookType from CLI args (which gryph controls), fall back to hook_event_name from JSON
 	eventName := hookType
 	if eventName == "" {
 		eventName = baseInput.HookEventName
 	}
 
-	// Parse session ID
 	var sessionID uuid.UUID
 	if baseInput.SessionID != "" {
 		var err error
 		sessionID, err = uuid.Parse(baseInput.SessionID)
 		if err != nil {
-			// Generate a deterministic UUID from the session ID string
 			sessionID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(baseInput.SessionID))
 		}
 	} else {
 		sessionID = uuid.New()
 	}
 
-	// Store original agent session ID for correlation
 	agentSessionID := baseInput.SessionID
 
-	// Handle different event types
 	switch eventName {
 	case "PreToolUse":
-		return parsePreToolUse(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
+		return a.parsePreToolUse(sessionID, agentSessionID, baseInput, rawData)
 	case "PostToolUse":
-		return parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, false, privacyChecker)
+		return a.parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, false)
 	case "PostToolUseFailure":
-		return parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, true, privacyChecker)
+		return a.parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, true)
 	case "SessionStart":
 		return parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
 	case "SessionEnd":
@@ -122,7 +116,6 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte, privac
 	case "Notification":
 		return parseNotification(sessionID, agentSessionID, baseInput, rawData)
 	default:
-		// Unknown event type - create a generic event
 		event := events.NewEvent(sessionID, AgentName, events.ActionUnknown)
 		event.AgentSessionID = agentSessionID
 		event.WorkingDirectory = baseInput.Cwd
@@ -131,7 +124,7 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte, privac
 	}
 }
 
-func parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
+func (a *Adapter) parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
 	var input PreToolUseInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse PreToolUse input: %w", err)
@@ -144,18 +137,16 @@ func parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput,
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = rawData
 
-	// Build payload based on action type
-	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, nil); err != nil {
+	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, nil); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
 
-	// Mark sensitive paths
-	markSensitivePaths(event, actionType, input.ToolInput, privacyChecker)
+	a.markSensitivePaths(event, actionType, input.ToolInput)
 
 	return event, nil
 }
 
-func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, isFailure bool, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
+func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, isFailure bool) (*events.Event, error) {
 	var input PostToolUseInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse PostToolUse input: %w", err)
@@ -168,12 +159,10 @@ func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = rawData
 
-	// Build payload
-	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, input.ToolResponse); err != nil {
+	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, input.ToolResponse); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
 
-	// Set result status based on failure flag and response
 	if isFailure {
 		event.ResultStatus = events.ResultError
 		if errMsg, ok := input.ToolResponse["error"].(string); ok {
@@ -181,12 +170,10 @@ func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput
 		}
 	} else {
 		event.ResultStatus = events.ResultSuccess
-		// Check for errors in response
 		detectErrorsInResponse(event, input.ToolResponse)
 	}
 
-	// Mark sensitive paths
-	markSensitivePaths(event, actionType, input.ToolInput, privacyChecker)
+	a.markSensitivePaths(event, actionType, input.ToolInput)
 
 	return event, nil
 }
@@ -269,7 +256,7 @@ func getActionType(toolName string) events.ActionType {
 	return events.ActionToolUse
 }
 
-func buildPayload(event *events.Event, actionType events.ActionType, toolName string, toolInput, toolResponse map[string]interface{}) error {
+func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType, toolName string, toolInput, toolResponse map[string]interface{}) error {
 	switch actionType {
 	case events.ActionFileRead:
 		payload := events.FileReadPayload{}
@@ -286,20 +273,36 @@ func buildPayload(event *events.Event, actionType events.ActionType, toolName st
 
 	case events.ActionFileWrite:
 		payload := events.FileWritePayload{}
+		filePath := ""
 		if path, ok := toolInput["file_path"].(string); ok {
 			payload.Path = path
+			filePath = path
 		}
-		if content, ok := toolInput["content"].(string); ok {
-			payload.ContentPreview = truncateString(content, 200)
+
+		fullOldStr, _ := toolInput["old_string"].(string)
+		fullNewStr, _ := toolInput["new_string"].(string)
+		fullContent, _ := toolInput["content"].(string)
+
+		if fullContent != "" {
+			payload.ContentPreview = truncateString(fullContent, 200)
 		}
-		if oldStr, ok := toolInput["old_string"].(string); ok {
-			payload.OldString = truncateString(oldStr, 200)
+		if fullOldStr != "" {
+			payload.OldString = truncateString(fullOldStr, 200)
 		}
-		if newStr, ok := toolInput["new_string"].(string); ok {
-			payload.NewString = truncateString(newStr, 200)
+		if fullNewStr != "" {
+			payload.NewString = truncateString(fullNewStr, 200)
 		}
+
 		if err := event.SetPayload(payload); err != nil {
 			return fmt.Errorf("failed to set payload: %w", err)
+		}
+
+		if a.loggingLevel.IsAtLeast(config.LoggingFull) {
+			if fullOldStr != "" || fullNewStr != "" {
+				event.DiffContent = utils.GenerateDiff(filePath, fullOldStr, fullNewStr)
+			} else if fullContent != "" {
+				event.DiffContent = utils.GenerateDiff(filePath, "", fullContent)
+			}
 		}
 
 	case events.ActionCommandExec:
@@ -374,19 +377,19 @@ func detectErrorsInResponse(event *events.Event, response map[string]interface{}
 	}
 }
 
-func markSensitivePaths(event *events.Event, actionType events.ActionType, toolInput map[string]interface{}, privacyChecker *events.PrivacyChecker) {
-	if privacyChecker == nil {
+func (a *Adapter) markSensitivePaths(event *events.Event, actionType events.ActionType, toolInput map[string]interface{}) {
+	if a.privacyChecker == nil {
 		return
 	}
 
 	switch actionType {
 	case events.ActionFileRead, events.ActionFileWrite:
 		if path, ok := toolInput["file_path"].(string); ok {
-			event.IsSensitive = privacyChecker.IsSensitivePath(path)
+			event.IsSensitive = a.privacyChecker.IsSensitivePath(path)
 		}
 	case events.ActionCommandExec:
 		if cmd, ok := toolInput["command"].(string); ok {
-			event.IsSensitive = privacyChecker.IsSensitivePath(cmd)
+			event.IsSensitive = a.privacyChecker.IsSensitivePath(cmd)
 		}
 	}
 }

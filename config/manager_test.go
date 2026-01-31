@@ -20,7 +20,7 @@ func TestNewManager_NoConfigFile(t *testing.T) {
 
 	assert.Equal(t, configFile, mgr.ConfigPath())
 	assert.NotNil(t, mgr.AllSettings())
-	assert.Equal(t, "minimal", mgr.Get("logging.level"))
+	assert.Equal(t, "standard", mgr.Get("logging.level"))
 }
 
 func TestNewManager_WithExistingConfig(t *testing.T) {
@@ -55,7 +55,7 @@ func TestManager_Get_ReturnsDefaults(t *testing.T) {
 		key      string
 		expected interface{}
 	}{
-		{"logging.level", "minimal"},
+		{"logging.level", "standard"},
 		{"logging.stdout_max_chars", 1000},
 		{"logging.stderr_max_chars", 500},
 		{"logging.context_max_chars", 5000},
@@ -183,7 +183,7 @@ logging:
 	_, err = os.Stat(configFile)
 	assert.True(t, os.IsNotExist(err))
 
-	assert.Equal(t, "minimal", mgr.Get("logging.level"))
+	assert.Equal(t, "standard", mgr.Get("logging.level"))
 }
 
 func TestManager_Reset_NonExistentFile(t *testing.T) {
@@ -216,7 +216,7 @@ func TestManager_AllSettings_IncludesDefaults(t *testing.T) {
 
 	logging, ok := settings["logging"].(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, "minimal", logging["level"])
+	assert.Equal(t, "standard", logging["level"])
 	assert.Equal(t, 1000, logging["stdout_max_chars"])
 }
 

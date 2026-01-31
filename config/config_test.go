@@ -14,7 +14,7 @@ func TestDefault(t *testing.T) {
 	require.NotNil(t, cfg)
 
 	// Verify logging defaults
-	assert.Equal(t, LoggingMinimal, cfg.Logging.Level)
+	assert.Equal(t, LoggingStandard, cfg.Logging.Level)
 	assert.Equal(t, 1000, cfg.Logging.StdoutMaxChars)
 	assert.Equal(t, 500, cfg.Logging.StderrMaxChars)
 	assert.Equal(t, 5000, cfg.Logging.ContextMaxChars)

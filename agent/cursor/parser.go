@@ -1,11 +1,13 @@
 package cursor
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 )
 
@@ -199,44 +201,38 @@ var ToolNameToActionType = map[string]events.ActionType{
 	"Task":  events.ActionToolUse,
 }
 
-// ParseHookEvent converts a Cursor event to the common format.
-func ParseHookEvent(ctx context.Context, hookType string, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
-	// First parse the common fields
+func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event, error) {
 	var baseInput HookInput
 	if err := json.Unmarshal(rawData, &baseInput); err != nil {
 		return nil, fmt.Errorf("failed to parse hook input: %w", err)
 	}
 
-	// Determine session ID from conversation_id
 	var sessionID uuid.UUID
 	if baseInput.ConversationID != "" {
 		var err error
 		sessionID, err = uuid.Parse(baseInput.ConversationID)
 		if err != nil {
-			// Generate a deterministic UUID from the conversation ID string
 			sessionID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(baseInput.ConversationID))
 		}
 	} else {
 		sessionID = uuid.New()
 	}
 
-	// Store original conversation ID for correlation
 	agentSessionID := baseInput.ConversationID
 
-	// Handle different event types
 	switch hookType {
 	case "preToolUse":
-		return parsePreToolUse(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
+		return a.parsePreToolUse(sessionID, agentSessionID, baseInput, rawData)
 	case "postToolUse":
-		return parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
+		return a.parsePostToolUse(sessionID, agentSessionID, baseInput, rawData)
 	case "postToolUseFailure":
-		return parsePostToolUseFailure(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
+		return a.parsePostToolUseFailure(sessionID, agentSessionID, baseInput, rawData)
 	case "beforeShellExecution":
 		return parseBeforeShellExecution(sessionID, agentSessionID, baseInput, rawData)
 	case "beforeReadFile":
-		return parseBeforeReadFile(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
+		return a.parseBeforeReadFile(sessionID, agentSessionID, baseInput, rawData)
 	case "afterFileEdit":
-		return parseAfterFileEdit(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
+		return a.parseAfterFileEdit(sessionID, agentSessionID, baseInput, rawData)
 	case "beforeSubmitPrompt":
 		return parseBeforeSubmitPrompt(sessionID, agentSessionID, baseInput, rawData)
 	case "sessionStart":
@@ -246,9 +242,9 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte, privac
 	case "stop":
 		return parseStop(sessionID, agentSessionID, baseInput, rawData)
 	case "beforeTabFileRead":
-		return parseBeforeReadFile(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
+		return a.parseBeforeReadFile(sessionID, agentSessionID, baseInput, rawData)
 	case "afterTabFileEdit":
-		return parseAfterFileEdit(sessionID, agentSessionID, baseInput, rawData, privacyChecker)
+		return a.parseAfterFileEdit(sessionID, agentSessionID, baseInput, rawData)
 	case "beforeMCPExecution":
 		return parseBeforeMCPExecution(sessionID, agentSessionID, baseInput, rawData)
 	case "afterShellExecution":
@@ -262,7 +258,6 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte, privac
 	case "afterAgentThought":
 		return parseAfterAgentThought(sessionID, agentSessionID, baseInput, rawData)
 	default:
-		// Generic handling for other hooks
 		actionType := events.ActionUnknown
 		if at, ok := HookTypeMapping[hookType]; ok {
 			actionType = at
@@ -278,13 +273,12 @@ func ParseHookEvent(ctx context.Context, hookType string, rawData []byte, privac
 	}
 }
 
-func parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
+func (a *Adapter) parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
 	var input PreToolUseInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse preToolUse input: %w", err)
 	}
 
-	// Determine action type from tool name
 	actionType := events.ActionToolUse
 	if at, ok := ToolNameToActionType[input.ToolName]; ok {
 		actionType = at
@@ -296,15 +290,14 @@ func parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput,
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = rawData
 
-	// Build payload based on action type
-	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, nil, privacyChecker); err != nil {
+	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, nil); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
 
 	return event, nil
 }
 
-func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
+func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
 	var input PostToolUseInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse postToolUse input: %w", err)
@@ -323,16 +316,15 @@ func parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput
 	event.RawEvent = rawData
 	event.ResultStatus = events.ResultSuccess
 
-	// Build payload
 	toolOutput := map[string]interface{}{"output": input.ToolOutput}
-	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, toolOutput, privacyChecker); err != nil {
+	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, toolOutput); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
 
 	return event, nil
 }
 
-func parsePostToolUseFailure(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
+func (a *Adapter) parsePostToolUseFailure(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
 	var input PostToolUseFailureInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse postToolUseFailure input: %w", err)
@@ -352,7 +344,7 @@ func parsePostToolUseFailure(sessionID uuid.UUID, agentSessionID string, base Ho
 	event.ResultStatus = events.ResultError
 	event.ErrorMessage = input.ErrorMessage
 
-	if err := buildPayload(event, actionType, input.ToolName, input.ToolInput, nil, privacyChecker); err != nil {
+	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, nil); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
 
@@ -382,7 +374,7 @@ func parseBeforeShellExecution(sessionID uuid.UUID, agentSessionID string, base 
 	return event, nil
 }
 
-func parseBeforeReadFile(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
+func (a *Adapter) parseBeforeReadFile(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
 	var input BeforeReadFileInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse beforeReadFile input: %w", err)
@@ -405,13 +397,12 @@ func parseBeforeReadFile(sessionID uuid.UUID, agentSessionID string, base HookIn
 		return nil, fmt.Errorf("failed to set payload: %w", err)
 	}
 
-	// Check sensitive paths
-	markSensitivePath(event, input.FilePath, privacyChecker)
+	a.markSensitivePath(event, input.FilePath)
 
 	return event, nil
 }
 
-func parseAfterFileEdit(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, privacyChecker *events.PrivacyChecker) (*events.Event, error) {
+func (a *Adapter) parseAfterFileEdit(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
 	var input AfterFileEditInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse afterFileEdit input: %w", err)
@@ -437,8 +428,15 @@ func parseAfterFileEdit(sessionID uuid.UUID, agentSessionID string, base HookInp
 		return nil, fmt.Errorf("failed to set payload: %w", err)
 	}
 
-	// Check sensitive paths
-	markSensitivePath(event, input.FilePath, privacyChecker)
+	if a.loggingLevel.IsAtLeast(config.LoggingFull) && len(input.Edits) > 0 {
+		var diffBuilder strings.Builder
+		for _, edit := range input.Edits {
+			diffBuilder.WriteString(utils.GenerateDiff(input.FilePath, edit.OldString, edit.NewString))
+		}
+		event.DiffContent = diffBuilder.String()
+	}
+
+	a.markSensitivePath(event, input.FilePath)
 
 	return event, nil
 }
@@ -728,13 +726,13 @@ func parseAfterAgentThought(sessionID uuid.UUID, agentSessionID string, base Hoo
 	return event, nil
 }
 
-func buildPayload(event *events.Event, actionType events.ActionType, toolName string, toolInput, toolOutput map[string]interface{}, privacyChecker *events.PrivacyChecker) error {
+func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType, toolName string, toolInput, toolOutput map[string]interface{}) error {
 	switch actionType {
 	case events.ActionFileRead:
 		payload := events.FileReadPayload{}
 		if path, ok := toolInput["file_path"].(string); ok {
 			payload.Path = path
-			markSensitivePath(event, path, privacyChecker)
+			a.markSensitivePath(event, path)
 		}
 		if pattern, ok := toolInput["pattern"].(string); ok {
 			payload.Pattern = pattern
@@ -745,21 +743,36 @@ func buildPayload(event *events.Event, actionType events.ActionType, toolName st
 
 	case events.ActionFileWrite:
 		payload := events.FileWritePayload{}
+		filePath := ""
 		if path, ok := toolInput["file_path"].(string); ok {
 			payload.Path = path
-			markSensitivePath(event, path, privacyChecker)
+			filePath = path
+			a.markSensitivePath(event, path)
 		}
-		if content, ok := toolInput["content"].(string); ok {
-			payload.ContentPreview = truncateString(content, 200)
+
+		fullOldStr, _ := toolInput["old_string"].(string)
+		fullNewStr, _ := toolInput["new_string"].(string)
+		fullContent, _ := toolInput["content"].(string)
+
+		if fullContent != "" {
+			payload.ContentPreview = truncateString(fullContent, 200)
 		}
-		if oldStr, ok := toolInput["old_string"].(string); ok {
-			payload.OldString = truncateString(oldStr, 200)
+		if fullOldStr != "" {
+			payload.OldString = truncateString(fullOldStr, 200)
 		}
-		if newStr, ok := toolInput["new_string"].(string); ok {
-			payload.NewString = truncateString(newStr, 200)
+		if fullNewStr != "" {
+			payload.NewString = truncateString(fullNewStr, 200)
 		}
 		if err := event.SetPayload(payload); err != nil {
 			return fmt.Errorf("failed to set payload: %w", err)
+		}
+
+		if a.loggingLevel.IsAtLeast(config.LoggingFull) {
+			if fullOldStr != "" || fullNewStr != "" {
+				event.DiffContent = utils.GenerateDiff(filePath, fullOldStr, fullNewStr)
+			} else if fullContent != "" {
+				event.DiffContent = utils.GenerateDiff(filePath, "", fullContent)
+			}
 		}
 
 	case events.ActionCommandExec:
@@ -796,11 +809,11 @@ func buildPayload(event *events.Event, actionType events.ActionType, toolName st
 	return nil
 }
 
-func markSensitivePath(event *events.Event, path string, privacyChecker *events.PrivacyChecker) {
-	if path == "" || privacyChecker == nil {
+func (a *Adapter) markSensitivePath(event *events.Event, path string) {
+	if path == "" || a.privacyChecker == nil {
 		return
 	}
-	event.IsSensitive = privacyChecker.IsSensitivePath(path)
+	event.IsSensitive = a.privacyChecker.IsSensitivePath(path)
 }
 
 func truncateString(s string, maxLen int) string {

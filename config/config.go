@@ -32,6 +32,18 @@ const (
 	LoggingFull LoggingLevel = "full"
 )
 
+// loggingLevelOrder maps each level to a numeric value for comparison.
+var loggingLevelOrder = map[LoggingLevel]int{
+	LoggingMinimal:  0,
+	LoggingStandard: 1,
+	LoggingFull:     2,
+}
+
+// IsAtLeast returns true if this logging level is at least as verbose as other.
+func (l LoggingLevel) IsAtLeast(other LoggingLevel) bool {
+	return loggingLevelOrder[l] >= loggingLevelOrder[other]
+}
+
 // ColorMode represents the color output mode.
 type ColorMode string
 

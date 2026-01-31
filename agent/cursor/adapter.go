@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 )
 
@@ -18,11 +19,12 @@ const (
 // Adapter implements the agent.Adapter interface for Cursor.
 type Adapter struct {
 	privacyChecker *events.PrivacyChecker
+	loggingLevel   config.LoggingLevel
 }
 
 // New creates a new Cursor adapter.
-func New(privacyChecker *events.PrivacyChecker) *Adapter {
-	return &Adapter{privacyChecker: privacyChecker}
+func New(privacyChecker *events.PrivacyChecker, loggingLevel config.LoggingLevel) *Adapter {
+	return &Adapter{privacyChecker: privacyChecker, loggingLevel: loggingLevel}
 }
 
 // Name returns the machine identifier.
@@ -57,12 +59,12 @@ func (a *Adapter) Status(ctx context.Context) (*agent.HookStatus, error) {
 
 // ParseEvent converts a Cursor event to the common format.
 func (a *Adapter) ParseEvent(ctx context.Context, hookType string, rawData []byte) (*events.Event, error) {
-	return ParseHookEvent(ctx, hookType, rawData, a.privacyChecker)
+	return a.parseHookEvent(hookType, rawData)
 }
 
 // Register adds this adapter to the given registry.
-func Register(registry *agent.Registry, privacyChecker *events.PrivacyChecker) {
-	registry.Register(New(privacyChecker))
+func Register(registry *agent.Registry, privacyChecker *events.PrivacyChecker, loggingLevel config.LoggingLevel) {
+	registry.Register(New(privacyChecker, loggingLevel))
 }
 
 // Ensure Adapter implements agent.Adapter

@@ -65,6 +65,10 @@ func NewHookCmd() *cobra.Command {
 				return fmt.Errorf("failed to parse event: %w", err)
 			}
 
+			// Apply logging level filtering before saving
+			loggingLevel := app.Config.GetAgentLoggingLevel(agentName)
+			agent.ApplyLoggingLevel(event, loggingLevel)
+
 			// Evaluate security checks
 			securityResult := app.Security.Evaluate(ctx, event)
 			if !securityResult.IsAllowed() {
