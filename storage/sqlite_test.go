@@ -657,3 +657,293 @@ func TestSQLiteStore_GetDatabaseInfo(t *testing.T) {
 	assert.Equal(t, 1, info.SessionCount)
 	assert.Greater(t, info.SizeBytes, int64(0))
 }
+
+func TestSQLiteStore_QueryEventsWithFilePattern(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	sessionID := uuid.New()
+	now := time.Now().UTC()
+
+	createTestSession(t, store, sessionID, "claude-code")
+
+	files := []string{
+		"/src/main.go",
+		"/src/utils/helper.go",
+		"/src/utils/helper_test.go",
+		"/docs/readme.md",
+		"/config.yaml",
+	}
+
+	for i, path := range files {
+		payload, _ := json.Marshal(events.FileReadPayload{Path: path})
+		event := &events.Event{
+			ID:           uuid.New(),
+			SessionID:    sessionID,
+			Sequence:     i + 1,
+			Timestamp:    now.Add(time.Duration(i) * time.Minute),
+			AgentName:    "claude-code",
+			ActionType:   events.ActionFileRead,
+			ResultStatus: events.ResultSuccess,
+			Payload:      payload,
+		}
+		err := store.SaveEvent(ctx, event)
+		require.NoError(t, err)
+	}
+
+	tests := []struct {
+		name    string
+		pattern string
+		want    int
+	}{
+		{
+			name:    "match all go files",
+			pattern: "*.go",
+			want:    3,
+		},
+		{
+			name:    "match test files",
+			pattern: "*_test.go",
+			want:    1,
+		},
+		{
+			name:    "match files in utils directory",
+			pattern: "/src/utils/*",
+			want:    2,
+		},
+		{
+			name:    "match markdown files",
+			pattern: "*.md",
+			want:    1,
+		},
+		{
+			name:    "no matches",
+			pattern: "*.rs",
+			want:    0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter := events.NewEventFilter().WithFilePattern(tt.pattern)
+			results, err := store.QueryEvents(ctx, filter)
+			require.NoError(t, err)
+			assert.Len(t, results, tt.want)
+		})
+	}
+}
+
+func TestSQLiteStore_QueryEventsWithCommandPattern(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	sessionID := uuid.New()
+	now := time.Now().UTC()
+
+	createTestSession(t, store, sessionID, "claude-code")
+
+	commands := []string{
+		"npm install",
+		"npm test",
+		"go build ./...",
+		"git status",
+		"git commit -m 'fix'",
+	}
+
+	for i, cmd := range commands {
+		payload, _ := json.Marshal(events.CommandExecPayload{Command: cmd})
+		event := &events.Event{
+			ID:           uuid.New(),
+			SessionID:    sessionID,
+			Sequence:     i + 1,
+			Timestamp:    now.Add(time.Duration(i) * time.Minute),
+			AgentName:    "claude-code",
+			ActionType:   events.ActionCommandExec,
+			ResultStatus: events.ResultSuccess,
+			Payload:      payload,
+		}
+		err := store.SaveEvent(ctx, event)
+		require.NoError(t, err)
+	}
+
+	tests := []struct {
+		name    string
+		pattern string
+		want    int
+	}{
+		{
+			name:    "match npm commands",
+			pattern: "npm *",
+			want:    2,
+		},
+		{
+			name:    "match git commands",
+			pattern: "git *",
+			want:    2,
+		},
+		{
+			name:    "match go commands",
+			pattern: "go *",
+			want:    1,
+		},
+		{
+			name:    "no matches",
+			pattern: "docker *",
+			want:    0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter := events.NewEventFilter().WithCommandPattern(tt.pattern)
+			results, err := store.QueryEvents(ctx, filter)
+			require.NoError(t, err)
+			assert.Len(t, results, tt.want)
+		})
+	}
+}
+
+func TestSQLiteStore_QueryEventsWithSessionFilter(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	sessionID1 := uuid.New()
+	sessionID2 := uuid.New()
+	now := time.Now().UTC()
+
+	createTestSession(t, store, sessionID1, "claude-code")
+	createTestSession(t, store, sessionID2, "cursor")
+
+	for i := 0; i < 3; i++ {
+		event := &events.Event{
+			ID:           uuid.New(),
+			SessionID:    sessionID1,
+			Sequence:     i + 1,
+			Timestamp:    now.Add(time.Duration(i) * time.Minute),
+			AgentName:    "claude-code",
+			ActionType:   events.ActionFileRead,
+			ResultStatus: events.ResultSuccess,
+		}
+		require.NoError(t, store.SaveEvent(ctx, event))
+	}
+
+	for i := 0; i < 2; i++ {
+		event := &events.Event{
+			ID:           uuid.New(),
+			SessionID:    sessionID2,
+			Sequence:     i + 1,
+			Timestamp:    now.Add(time.Duration(i) * time.Minute),
+			AgentName:    "cursor",
+			ActionType:   events.ActionFileWrite,
+			ResultStatus: events.ResultSuccess,
+		}
+		require.NoError(t, store.SaveEvent(ctx, event))
+	}
+
+	tests := []struct {
+		name      string
+		sessionID uuid.UUID
+		want      int
+	}{
+		{
+			name:      "filter by session 1",
+			sessionID: sessionID1,
+			want:      3,
+		},
+		{
+			name:      "filter by session 2",
+			sessionID: sessionID2,
+			want:      2,
+		},
+		{
+			name:      "filter by non-existent session",
+			sessionID: uuid.New(),
+			want:      0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter := events.NewEventFilter().WithSession(tt.sessionID)
+			results, err := store.QueryEvents(ctx, filter)
+			require.NoError(t, err)
+			assert.Len(t, results, tt.want)
+		})
+	}
+}
+
+func TestSQLiteStore_QueryEventsWithStatusFilter(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	sessionID := uuid.New()
+	now := time.Now().UTC()
+
+	createTestSession(t, store, sessionID, "claude-code")
+
+	statuses := []events.ResultStatus{
+		events.ResultSuccess,
+		events.ResultSuccess,
+		events.ResultError,
+		events.ResultBlocked,
+		events.ResultError,
+	}
+
+	for i, s := range statuses {
+		event := &events.Event{
+			ID:           uuid.New(),
+			SessionID:    sessionID,
+			Sequence:     i + 1,
+			Timestamp:    now.Add(time.Duration(i) * time.Minute),
+			AgentName:    "claude-code",
+			ActionType:   events.ActionFileRead,
+			ResultStatus: s,
+		}
+		require.NoError(t, store.SaveEvent(ctx, event))
+	}
+
+	tests := []struct {
+		name     string
+		statuses []events.ResultStatus
+		want     int
+	}{
+		{
+			name:     "filter by success",
+			statuses: []events.ResultStatus{events.ResultSuccess},
+			want:     2,
+		},
+		{
+			name:     "filter by error",
+			statuses: []events.ResultStatus{events.ResultError},
+			want:     2,
+		},
+		{
+			name:     "filter by blocked",
+			statuses: []events.ResultStatus{events.ResultBlocked},
+			want:     1,
+		},
+		{
+			name:     "filter by multiple statuses",
+			statuses: []events.ResultStatus{events.ResultError, events.ResultBlocked},
+			want:     3,
+		},
+		{
+			name:     "filter by rejected returns none",
+			statuses: []events.ResultStatus{events.ResultRejected},
+			want:     0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter := events.NewEventFilter().WithStatuses(tt.statuses...)
+			results, err := store.QueryEvents(ctx, filter)
+			require.NoError(t, err)
+			assert.Len(t, results, tt.want)
+		})
+	}
+}

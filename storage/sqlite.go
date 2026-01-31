@@ -766,7 +766,24 @@ func buildEventPredicates(filter *events.EventFilter) []predicate.AuditEvent {
 		}
 		predicates = append(predicates, auditevent.ResultStatusIn(statuses...))
 	}
-	// FilePattern and CommandPattern would need custom SQL; skipping for now
+	if filter.FilePattern != "" {
+		pattern := filter.FilePattern
+		predicates = append(predicates, predicate.AuditEvent(func(s *entsql.Selector) {
+			s.Where(entsql.P(func(b *entsql.Builder) {
+				b.WriteString("json_extract(payload, '$.path') GLOB ")
+				b.Arg(pattern)
+			}))
+		}))
+	}
+	if filter.CommandPattern != "" {
+		pattern := filter.CommandPattern
+		predicates = append(predicates, predicate.AuditEvent(func(s *entsql.Selector) {
+			s.Where(entsql.P(func(b *entsql.Builder) {
+				b.WriteString("json_extract(payload, '$.command') GLOB ")
+				b.Arg(pattern)
+			}))
+		}))
+	}
 
 	return predicates
 }

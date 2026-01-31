@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/tui"
@@ -89,6 +91,29 @@ through the audit history.`,
 
 			if len(agents) > 0 {
 				filter = filter.WithAgents(agents...)
+			}
+
+			if session != "" {
+				sessionID, err := uuid.Parse(session)
+				if err != nil {
+					s, err := app.Store.GetSessionByPrefix(ctx, session)
+					if err != nil {
+						return fmt.Errorf("session not found: %s", session)
+					}
+					if s == nil {
+						return fmt.Errorf("session not found: %s", session)
+					}
+					sessionID = s.ID
+				}
+				filter = filter.WithSession(sessionID)
+			}
+
+			if status != "" {
+				rs := events.ResultStatus(status)
+				if !rs.IsValid() {
+					return fmt.Errorf("invalid status: %s", status)
+				}
+				filter = filter.WithStatuses(rs)
 			}
 
 			if len(actions) > 0 {
