@@ -14,6 +14,7 @@ import (
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
+	"github.com/safedep/gryph/utils/projectdetection"
 	"github.com/spf13/cobra"
 )
 
@@ -79,9 +80,17 @@ func NewHookCmd() *cobra.Command {
 			if sess == nil {
 				// Create new session with the ID from the event
 				sess = session.NewSessionWithID(event.SessionID, agentName)
-				sess.AgentSessionID = event.AgentSessionID // Store original agent session ID for correlation
+				sess.AgentSessionID = event.AgentSessionID
 				sess.WorkingDirectory = event.WorkingDirectory
-				sess.ProjectName = detectProjectName(event.WorkingDirectory)
+
+				if event.WorkingDirectory != "" {
+					if info, err := projectdetection.DetectProject(event.WorkingDirectory); err == nil && info != nil && info.Name != "" {
+						sess.ProjectName = info.Name
+					} else {
+						sess.ProjectName = filepath.Base(event.WorkingDirectory)
+					}
+				}
+
 				if err := app.Store.SaveSession(ctx, sess); err != nil {
 					return fmt.Errorf("failed to save session: %w", err)
 				}
@@ -268,12 +277,4 @@ func (e *exitError) ExitCode() int {
 // Message returns the message to write to stderr.
 func (e *exitError) Message() string {
 	return e.message
-}
-
-// detectProjectName returns the project name from the working directory basename.
-func detectProjectName(workDir string) string {
-	if workDir == "" {
-		return ""
-	}
-	return filepath.Base(workDir)
 }
