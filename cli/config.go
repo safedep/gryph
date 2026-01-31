@@ -3,18 +3,13 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"gopkg.in/yaml.v3"
 )
 
-// NewConfigCmd creates the config command.
 func NewConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
@@ -47,30 +42,19 @@ func newConfigShowCmd() *cobra.Command {
 				return err
 			}
 
-			// Update presenter format
 			app.Presenter = tui.NewPresenter(getFormat(format), tui.PresenterOptions{
 				Writer:    cmd.OutOrStdout(),
 				UseColors: app.Config.ShouldUseColors(),
 			})
 
-			// Convert config to map for display
-			v := viper.New()
-			v.SetConfigFile(app.Paths.ConfigFile)
-			if err := v.ReadInConfig(); err != nil {
-				// Use defaults if config not found
-				v.Set("logging.level", app.Config.Logging.Level)
-				v.Set("logging.stdout_max_chars", app.Config.Logging.StdoutMaxChars)
-				v.Set("logging.stderr_max_chars", app.Config.Logging.StderrMaxChars)
-				v.Set("logging.context_max_chars", app.Config.Logging.ContextMaxChars)
-				v.Set("storage.retention_days", app.Config.Storage.RetentionDays)
-				v.Set("privacy.hash_file_contents", app.Config.Privacy.HashFileContents)
-				v.Set("display.colors", app.Config.Display.Colors)
-				v.Set("display.timezone", app.Config.Display.Timezone)
+			mgr, err := config.NewManager(app.Paths.ConfigFile)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
 			}
 
 			view := &tui.ConfigView{
-				Location: app.Paths.ConfigFile,
-				Values:   v.AllSettings(),
+				Location: mgr.ConfigPath(),
+				Values:   mgr.AllSettings(),
 			}
 
 			return app.Presenter.RenderConfig(view)
@@ -95,26 +79,16 @@ func newConfigGetCmd() *cobra.Command {
 				return err
 			}
 
-			// Use viper to get the value
-			v := viper.New()
-			v.SetConfigFile(app.Paths.ConfigFile)
-			if err := v.ReadInConfig(); err != nil {
-				// Use defaults if config not found
-				v.Set("logging.level", app.Config.Logging.Level)
-				v.Set("logging.stdout_max_chars", app.Config.Logging.StdoutMaxChars)
-				v.Set("logging.stderr_max_chars", app.Config.Logging.StderrMaxChars)
-				v.Set("logging.context_max_chars", app.Config.Logging.ContextMaxChars)
-				v.Set("storage.retention_days", app.Config.Storage.RetentionDays)
-				v.Set("privacy.hash_file_contents", app.Config.Privacy.HashFileContents)
-				v.Set("display.colors", app.Config.Display.Colors)
-				v.Set("display.timezone", app.Config.Display.Timezone)
+			mgr, err := config.NewManager(app.Paths.ConfigFile)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			value := v.Get(key)
-			if value == nil {
+			if !mgr.HasKey(key) {
 				return fmt.Errorf("key not found: %s", key)
 			}
 
+			value := mgr.Get(key)
 			if _, err := fmt.Fprintln(cmd.OutOrStdout(), value); err != nil {
 				return fmt.Errorf("failed to write value: %w", err)
 			}
@@ -141,12 +115,6 @@ func newConfigSetCmd() *cobra.Command {
 				return err
 			}
 
-			// Ensure config directory exists
-			if err := os.MkdirAll(app.Paths.ConfigDir, 0700); err != nil {
-				return fmt.Errorf("failed to create config directory: %w", err)
-			}
-
-			// Initialize store for audit logging
 			if err := config.EnsureDirectories(); err == nil {
 				if err := app.InitStore(ctx); err == nil {
 					defer func() {
@@ -158,50 +126,18 @@ func newConfigSetCmd() *cobra.Command {
 				}
 			}
 
-			// Load or create config
-			v := viper.New()
-			v.SetConfigFile(app.Paths.ConfigFile)
-			v.SetConfigType("yaml")
-
-			// Ignore error if config file doesn't exist
-			if err := v.ReadInConfig(); err != nil {
-				log.Warnf("failed to read config: %w", err)
-			}
-
-			// Get old value for audit
-			oldValue := v.Get(key)
-
-			// Parse value type
-			var parsedValue interface{} = value
-			if value == "true" {
-				parsedValue = true
-			} else if value == "false" {
-				parsedValue = false
-			} else if strings.HasPrefix(value, "[") {
-				// Simple array parsing
-				inner := strings.TrimPrefix(strings.TrimSuffix(value, "]"), "[")
-				parts := strings.Split(inner, ",")
-				for i, p := range parts {
-					parts[i] = strings.TrimSpace(p)
-				}
-				parsedValue = parts
-			}
-
-			// Set the value
-			v.Set(key, parsedValue)
-
-			// Write config
-			configMap := v.AllSettings()
-			data, err := yaml.Marshal(configMap)
+			mgr, err := config.NewManager(app.Paths.ConfigFile)
 			if err != nil {
-				return fmt.Errorf("failed to marshal config: %w", err)
+				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			if err := os.WriteFile(app.Paths.ConfigFile, data, 0600); err != nil {
-				return fmt.Errorf("failed to write config: %w", err)
+			oldValue := mgr.Get(key)
+			parsedValue := config.ParseValue(value)
+
+			if err := mgr.Set(key, parsedValue); err != nil {
+				return err
 			}
 
-			// Log self-audit for config change
 			if err := logSelfAudit(ctx, app.Store, SelfAuditActionConfigChange, "",
 				map[string]interface{}{
 					"key":       key,
@@ -235,7 +171,6 @@ func newConfigResetCmd() *cobra.Command {
 				return err
 			}
 
-			// Initialize store for audit logging
 			if err := config.EnsureDirectories(); err == nil {
 				if err := app.InitStore(ctx); err == nil {
 					defer func() {
@@ -247,12 +182,15 @@ func newConfigResetCmd() *cobra.Command {
 				}
 			}
 
-			// Remove existing config file
-			if err := os.Remove(app.Paths.ConfigFile); err != nil && !os.IsNotExist(err) {
-				return fmt.Errorf("failed to remove config: %w", err)
+			mgr, err := config.NewManager(app.Paths.ConfigFile)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			// Log self-audit for config reset
+			if err := mgr.Reset(); err != nil {
+				return err
+			}
+
 			if err := logSelfAudit(ctx, app.Store, SelfAuditActionConfigChange, "",
 				map[string]interface{}{
 					"action": "reset",

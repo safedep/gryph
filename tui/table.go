@@ -61,6 +61,7 @@ func (p *TablePresenter) RenderStatus(status *StatusView) error {
 		tw.printf("  %s%s%-12s %-12s %s\n",
 			agentCol, strings.Repeat(" ", pad), statusStr, versionStr, hooksStr)
 	}
+
 	tw.println()
 
 	// Database section
