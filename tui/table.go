@@ -52,8 +52,14 @@ func (p *TablePresenter) RenderStatus(status *StatusView) error {
 			statusStr = "not found"
 		}
 
-		tw.printf("  %-14s %-12s %-12s %s\n",
-			p.color.Agent(agent.Name), statusStr, versionStr, hooksStr)
+		agentCol := p.color.Agent(agent.Name)
+		pad := 14 - len(agent.Name)
+		if pad < 0 {
+			pad = 0
+		}
+
+		tw.printf("  %s%s%-12s %-12s %s\n",
+			agentCol, strings.Repeat(" ", pad), statusStr, versionStr, hooksStr)
 	}
 	tw.println()
 

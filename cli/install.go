@@ -80,6 +80,7 @@ to enable audit logging. Existing hooks are backed up by default.`,
 						DisplayName: adapter.DisplayName(),
 						Error:       err.Error(),
 					})
+
 					continue
 				}
 
@@ -152,5 +153,6 @@ func filterAdapters(adapters []agent.Adapter, names []string) []agent.Adapter {
 			filtered = append(filtered, adapter)
 		}
 	}
+
 	return filtered
 }
