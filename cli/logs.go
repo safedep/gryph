@@ -7,25 +7,31 @@ import (
 	"os/signal"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/tui"
+	"github.com/safedep/gryph/tui/component/livelog"
 	"github.com/spf13/cobra"
 )
 
+type logParams struct {
+	follow   bool
+	live     bool
+	interval time.Duration
+	since    string
+	until    string
+	today    bool
+	limit    int
+	session  string
+	agent    string
+	format   string
+}
+
 // NewLogsCmd creates the logs command.
 func NewLogsCmd() *cobra.Command {
-	var (
-		follow   bool
-		interval time.Duration
-		since    string
-		until    string
-		today    bool
-		limit    int
-		session  string
-		agent    string
-		format   string
-	)
+	var p logParams
 
 	cmd := &cobra.Command{
 		Use:   "logs",
@@ -36,10 +42,15 @@ Shows audit logs grouped by session. Use filters to narrow down
 the results.`,
 		Example: `  gryph logs
   gryph logs --follow
+  gryph logs --live
   gryph logs --since "1h"
   gryph logs --today
   gryph logs --agent claude-code`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if p.live && p.follow {
+				return fmt.Errorf("--live and --follow are mutually exclusive")
+			}
+
 			ctx := context.Background()
 
 			app, err := loadApp()
@@ -47,19 +58,6 @@ the results.`,
 				return err
 			}
 
-			// In follow mode, force JSONL format for streaming compatibility
-			outputFormat := getFormat(format)
-			if follow {
-				outputFormat = tui.FormatJSONL
-			}
-
-			// Update presenter format
-			app.Presenter = tui.NewPresenter(outputFormat, tui.PresenterOptions{
-				Writer:    cmd.OutOrStdout(),
-				UseColors: app.Config.ShouldUseColors() && !follow,
-			})
-
-			// Initialize store
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
@@ -71,121 +69,191 @@ the results.`,
 				}
 			}()
 
-			// Build filter
-			filter := events.NewEventFilter().WithLimit(limit)
-
-			if today {
-				filter = events.Today().WithLimit(limit)
-			} else if since != "" {
-				if sinceTime, err := parseDuration(since); err == nil {
-					filter = filter.WithSince(sinceTime)
-				}
-			} else {
-				// Default to last 24 hours
-				filter = filter.WithSince(time.Now().Add(-24 * time.Hour))
+			if p.live {
+				return runLiveLogs(app, p)
 			}
 
-			if until != "" {
-				if untilTime, err := parseDuration(until); err == nil {
-					filter = filter.WithUntil(untilTime)
-				}
+			outputFormat := getFormat(p.format)
+			if p.follow {
+				outputFormat = tui.FormatJSONL
 			}
 
-			if agent != "" {
-				filter = filter.WithAgents(agent)
+			app.Presenter = tui.NewPresenter(outputFormat, tui.PresenterOptions{
+				Writer:    cmd.OutOrStdout(),
+				UseColors: app.Config.ShouldUseColors() && !p.follow,
+			})
+
+			if p.follow {
+				return runFollowLogs(ctx, app, p)
+			}
+			return runListLogs(ctx, app, p)
+		},
+	}
+
+	cmd.Flags().BoolVarP(&p.follow, "follow", "f", false, "stream new events")
+	cmd.Flags().BoolVar(&p.live, "live", false, "interactive full-screen TUI monitor")
+	cmd.Flags().DurationVar(&p.interval, "interval", 2*time.Second, "poll interval for follow mode")
+	cmd.Flags().StringVar(&p.since, "since", "", "show events since (e.g., \"1h\", \"2d\", \"2025-01-15\")")
+	cmd.Flags().StringVar(&p.until, "until", "", "show events until")
+	cmd.Flags().BoolVar(&p.today, "today", false, "shorthand for since midnight")
+	cmd.Flags().IntVar(&p.limit, "limit", 50, "maximum events")
+	cmd.Flags().StringVar(&p.session, "session", "", "filter by session ID")
+	cmd.Flags().StringVar(&p.agent, "agent", "", "filter by agent")
+	cmd.Flags().StringVar(&p.format, "format", "table", "output format: table, json, jsonl")
+
+	return cmd
+}
+
+func runLiveLogs(app *App, p logParams) error {
+	sinceTime, err := parseSinceTime(p)
+	if err != nil {
+		return err
+	}
+
+	opts := livelog.Options{
+		Store:        app.Store,
+		PollInterval: p.interval,
+		AgentFilter:  p.agent,
+		InitialLimit: p.limit,
+		Since:        sinceTime,
+	}
+
+	prog := tea.NewProgram(livelog.New(opts), tea.WithAltScreen())
+	_, err = prog.Run()
+
+	return err
+}
+
+func parseSinceTime(p logParams) (time.Time, error) {
+	if p.today {
+		now := time.Now()
+		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()), nil
+	}
+	if p.since != "" {
+		t, err := parseDuration(p.since)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("invalid --since value: %w", err)
+		}
+		return t, nil
+	}
+	return time.Now().Add(-24 * time.Hour), nil
+}
+
+func buildEventFilter(p logParams) (*events.EventFilter, error) {
+	filter := events.NewEventFilter().WithLimit(p.limit)
+
+	sinceTime, err := parseSinceTime(p)
+	if err != nil {
+		return nil, err
+	}
+	filter = filter.WithSince(sinceTime)
+
+	if p.until != "" {
+		untilTime, err := parseDuration(p.until)
+		if err != nil {
+			return nil, fmt.Errorf("invalid --until value: %w", err)
+		}
+		filter = filter.WithUntil(untilTime)
+	}
+
+	if p.agent != "" {
+		filter = filter.WithAgents(p.agent)
+	}
+
+	if p.session != "" {
+		sessionID, err := uuid.Parse(p.session)
+		if err != nil {
+			return nil, fmt.Errorf("invalid --session value: %w", err)
+		}
+		filter = filter.WithSession(sessionID)
+	}
+
+	return filter, nil
+}
+
+func runListLogs(ctx context.Context, app *App, p logParams) error {
+	filter, err := buildEventFilter(p)
+	if err != nil {
+		return err
+	}
+
+	evts, err := app.Store.QueryEvents(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	if len(evts) == 0 {
+		return app.Presenter.RenderMessage("No events found. Run 'gryph install' to start logging agent activity.")
+	}
+
+	eventViews := make([]*tui.EventView, len(evts))
+	for i, e := range evts {
+		eventViews[i] = eventToView(e)
+	}
+
+	return app.Presenter.RenderEvents(eventViews)
+}
+
+func runFollowLogs(ctx context.Context, app *App, p logParams) error {
+	filter, err := buildEventFilter(p)
+	if err != nil {
+		return err
+	}
+
+	evts, err := app.Store.QueryEvents(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	var lastTimestamp time.Time
+	if len(evts) > 0 {
+		eventViews := make([]*tui.EventView, len(evts))
+		for i, e := range evts {
+			eventViews[i] = eventToView(e)
+		}
+		if err := app.Presenter.RenderEvents(eventViews); err != nil {
+			return err
+		}
+		lastTimestamp = evts[0].Timestamp
+	} else {
+		lastTimestamp = time.Now()
+	}
+
+	sigCtx, cancel := signal.NotifyContext(ctx, os.Interrupt)
+	defer cancel()
+
+	ticker := time.NewTicker(p.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-sigCtx.Done():
+			return nil
+		case <-ticker.C:
+			pollFilter := events.NewEventFilter().
+				WithSince(lastTimestamp.Add(time.Millisecond))
+
+			if p.agent != "" {
+				pollFilter = pollFilter.WithAgents(p.agent)
 			}
 
-			// Query initial events
-			evts, err := app.Store.QueryEvents(ctx, filter)
+			newEvts, err := app.Store.QueryEvents(sigCtx, pollFilter)
 			if err != nil {
-				return err
+				continue
 			}
 
-			// If not in follow mode, just display results and exit
-			if !follow {
-				if len(evts) == 0 {
-					return app.Presenter.RenderMessage("No events found. Run 'gryph install' to start logging agent activity.")
-				}
-
-				eventViews := make([]*tui.EventView, len(evts))
-				for i, e := range evts {
-					eventViews[i] = eventToView(e)
-				}
-				return app.Presenter.RenderEvents(eventViews)
-			}
-
-			// Follow mode: display initial events, then poll for new ones
-			var lastTimestamp time.Time
-			if len(evts) > 0 {
-				eventViews := make([]*tui.EventView, len(evts))
-				for i, e := range evts {
+			if len(newEvts) > 0 {
+				eventViews := make([]*tui.EventView, len(newEvts))
+				for i, e := range newEvts {
 					eventViews[i] = eventToView(e)
 				}
 				if err := app.Presenter.RenderEvents(eventViews); err != nil {
 					return err
 				}
-				// Events are returned newest first, so the last event has oldest timestamp
-				// We want to poll for events newer than the newest (first in slice)
-				lastTimestamp = evts[0].Timestamp
-			} else {
-				lastTimestamp = time.Now()
+				lastTimestamp = newEvts[0].Timestamp
 			}
-
-			// Set up signal handling for graceful exit
-			sigCtx, cancel := signal.NotifyContext(ctx, os.Interrupt)
-			defer cancel()
-
-			ticker := time.NewTicker(interval)
-			defer ticker.Stop()
-
-			// Polling loop
-			for {
-				select {
-				case <-sigCtx.Done():
-					return nil
-				case <-ticker.C:
-					// Query for events newer than last timestamp
-					// Use a small delta to avoid missing events due to timestamp precision
-					pollFilter := events.NewEventFilter().
-						WithSince(lastTimestamp.Add(time.Millisecond))
-
-					if agent != "" {
-						pollFilter = pollFilter.WithAgents(agent)
-					}
-
-					newEvts, err := app.Store.QueryEvents(sigCtx, pollFilter)
-					if err != nil {
-						// Log warning but don't exit on transient errors
-						continue
-					}
-
-					if len(newEvts) > 0 {
-						eventViews := make([]*tui.EventView, len(newEvts))
-						for i, e := range newEvts {
-							eventViews[i] = eventToView(e)
-						}
-						if err := app.Presenter.RenderEvents(eventViews); err != nil {
-							return err
-						}
-						// Update timestamp to newest event
-						lastTimestamp = newEvts[0].Timestamp
-					}
-				}
-			}
-		},
+		}
 	}
-
-	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream new events")
-	cmd.Flags().DurationVar(&interval, "interval", 2*time.Second, "poll interval for follow mode")
-	cmd.Flags().StringVar(&since, "since", "", "show events since (e.g., \"1h\", \"2d\", \"2025-01-15\")")
-	cmd.Flags().StringVar(&until, "until", "", "show events until")
-	cmd.Flags().BoolVar(&today, "today", false, "shorthand for since midnight")
-	cmd.Flags().IntVar(&limit, "limit", 50, "maximum events")
-	cmd.Flags().StringVar(&session, "session", "", "filter by session ID")
-	cmd.Flags().StringVar(&agent, "agent", "", "filter by agent")
-	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json, jsonl")
-
-	return cmd
 }
 
 // parseDuration parses a duration string like "1h", "2d", or a date.
@@ -233,21 +301,21 @@ func parseDuration(s string) (time.Time, error) {
 // eventToView converts an event to a view model.
 func eventToView(e *events.Event) *tui.EventView {
 	view := &tui.EventView{
-		ID:             e.ID.String(),
-		ShortID:        tui.FormatShortID(e.ID.String()),
-		SessionID:      e.SessionID.String(),
-		ShortSessionID: tui.FormatShortID(e.SessionID.String()),
-		Sequence:       e.Sequence,
-		Timestamp:      e.Timestamp,
+		ID:               e.ID.String(),
+		ShortID:          tui.FormatShortID(e.ID.String()),
+		SessionID:        e.SessionID.String(),
+		ShortSessionID:   tui.FormatShortID(e.SessionID.String()),
+		Sequence:         e.Sequence,
+		Timestamp:        e.Timestamp,
 		AgentName:        e.AgentName,
 		AgentDisplayName: getAgentDisplayName(e.AgentName),
-		ActionType:     string(e.ActionType),
-		ActionDisplay:  actionDisplay(e.ActionType),
-		ToolName:       e.ToolName,
-		ResultStatus:   string(e.ResultStatus),
-		ErrorMessage:   e.ErrorMessage,
-		IsSensitive:    e.IsSensitive,
-		HasDiff:        e.DiffContent != "",
+		ActionType:       string(e.ActionType),
+		ActionDisplay:    actionDisplay(e.ActionType),
+		ToolName:         e.ToolName,
+		ResultStatus:     string(e.ResultStatus),
+		ErrorMessage:     e.ErrorMessage,
+		IsSensitive:      e.IsSensitive,
+		HasDiff:          e.DiffContent != "",
 	}
 
 	// Extract path/command from payload
