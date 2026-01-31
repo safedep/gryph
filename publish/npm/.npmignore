@@ -1,6 +1,6 @@
 # Exclude the actual binary (but keep the wrapper script)
-bin/pmg
-bin/pmg.exe
+bin/gryph
+bin/gryph.exe
 
 # Exclude temp files and directories
 temp/
@@ -14,4 +14,4 @@ node_modules/
 .DS_Store
 
 # Keep only the wrapper script in bin/
-!bin/pmg.js
+!bin/gryph.js

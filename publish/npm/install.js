@@ -64,7 +64,7 @@ function downloadFile(url, dest, maxRedirects = 5) {
       .get(url, (response) => {
         if (response.statusCode === 302 || response.statusCode === 301) {
           file.close();
-          fs.unlink(dest, () => {});
+          fs.unlink(dest, () => { });
           return downloadFile(response.headers.location, dest, maxRedirects - 1)
             .then(resolve)
             .catch(reject);
@@ -72,7 +72,7 @@ function downloadFile(url, dest, maxRedirects = 5) {
 
         if (response.statusCode !== 200) {
           file.close();
-          fs.unlink(dest, () => {});
+          fs.unlink(dest, () => { });
           reject(new Error(`Download failed: ${response.statusCode}`));
           return;
         }
@@ -85,7 +85,7 @@ function downloadFile(url, dest, maxRedirects = 5) {
         });
 
         file.on("error", (err) => {
-          fs.unlink(dest, () => {});
+          fs.unlink(dest, () => { });
           reject(err);
         });
       })
@@ -119,7 +119,7 @@ async function install() {
   let tempWorkspace;
 
   try {
-    console.log("📦 Installing PMG binary...");
+    console.log("📦 Installing Gryph binary...");
 
     // Get platform-specific URL
     const platformKey = getPlatformKey();
@@ -134,7 +134,7 @@ async function install() {
 
     // Create directories
     const binDir = path.join(__dirname, "bin");
-    tempWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), "pmg-install-"));
+    tempWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), "gryph-install-"));
 
     fs.mkdirSync(binDir, { recursive: true });
 
@@ -213,7 +213,7 @@ async function install() {
     // Clean up
     fs.rmSync(tempWorkspace, { recursive: true, force: true });
 
-    console.log("✅ PMG binary installed successfully!");
+    console.log("✅ Gryph binary installed successfully!");
   } catch (error) {
     console.error("❌ Installation failed:", error.message);
 
