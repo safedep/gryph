@@ -279,18 +279,22 @@ Sensitive path patterns and redaction rules are fully configurable via `gryph co
 ## How It Works
 
 ```
-┌─────────────────┐     ┌─────────────┐     ┌─────────────┐
-│   AI Agent      │────>│   Gryph     │────>│   SQLite    │
-│ (Claude/Cursor) │     │   Hooks     │     │   Database  │
-└─────────────────┘     └─────────────┘     └─────────────┘
-                                                   │
-                              ┌────────────────────┘
+┌─────────────────┐     ┌─────────────┐
+│   AI Agent      │────>│   Gryph     │
+│ (Claude/Cursor) │     │   Hooks     │
+└─────────────────┘     └─────────────┘
                               │
                               ▼
-                        ┌─────────────┐
-                        │  gryph CLI  │
-                        │  logs/query │
-                        └─────────────┘
+                        ┌─────────────┐     ┌─────────────┐
+                        │   Privacy   │────>│   SQLite    │
+                        │   Checker   │     │   Database  │
+                        └─────────────┘     └─────────────┘
+                                                  │
+                                                  ▼
+                                            ┌─────────────┐
+                                            │  gryph CLI  │
+                                            │  logs/query │
+                                            └─────────────┘
 ```
 
 Gryph installs lightweight hooks into your AI agents. When the agent performs an action (read file, write file, execute command), the hook sends a JSON event to Gryph, which stores it locally. You can then query this audit trail anytime.
