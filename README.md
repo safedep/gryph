@@ -31,7 +31,7 @@
 
 <div align="center">
   <picture>
-    <img src="docs/assets/gryph-demo-livelogs.png" alt="Gryph - AI Coding Agent Audit Trail - Live Logs" width="60%">
+    <img src="docs/assets/gryph-demo-livelogs.png" alt="Gryph - AI Coding Agent Audit Trail - Live Logs" width="90%">
   </picture>
 </div>
 
@@ -86,12 +86,12 @@ gryph logs
 
 For transparency, here are the files Gryph modifies when you run `gryph install`:
 
-| Agent       | File Modified                              | Description                              |
-| ----------- | ------------------------------------------ | ---------------------------------------- |
-| Claude Code | `~/.claude/settings.json`                  | Adds hook entries to the `hooks` section |
-| Cursor      | `~/.cursor/hooks.json`                     | Creates or updates hooks configuration   |
-| Gemini CLI  | `~/.gemini/settings.json`                  | Adds hook entries to the `hooks` section |
-| OpenCode    | `~/.config/opencode/plugins/gryph.mjs`     | Installs JS plugin that bridges to gryph |
+| Agent       | File Modified                          | Description                              |
+| ----------- | -------------------------------------- | ---------------------------------------- |
+| Claude Code | `~/.claude/settings.json`              | Adds hook entries to the `hooks` section |
+| Cursor      | `~/.cursor/hooks.json`                 | Creates or updates hooks configuration   |
+| Gemini CLI  | `~/.gemini/settings.json`              | Adds hook entries to the `hooks` section |
+| OpenCode    | `~/.config/opencode/plugins/gryph.mjs` | Installs JS plugin that bridges to gryph |
 
 ### Backups
 
