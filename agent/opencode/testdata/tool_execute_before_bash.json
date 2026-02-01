@@ -1,0 +1,9 @@
+{
+  "hook_type": "tool.execute.before",
+  "tool": "bash",
+  "args": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  },
+  "cwd": "/home/user/project"
+}

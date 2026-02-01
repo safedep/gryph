@@ -1,0 +1,42 @@
+<svg width="1280" height="200" viewBox="0 0 1280 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="tealSweepLight" cx="0.1" cy="0.95" r="0.6" fx="0.02" fy="1">
+      <stop offset="0%" stop-color="#0D9488" stop-opacity="0.08"/>
+      <stop offset="50%" stop-color="#0D9488" stop-opacity="0.02"/>
+      <stop offset="100%" stop-color="#0D9488" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1280" height="200" fill="#FFFFFF"/>
+  
+  <!-- Teal light sweep -->
+  <rect width="1280" height="200" fill="url(#tealSweepLight)"/>
+  
+  <!-- Headline: Gryph -->
+  <text 
+    x="640" 
+    y="85" 
+    text-anchor="middle" 
+    dominant-baseline="middle"
+    font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" 
+    font-weight="300" 
+    font-size="64" 
+    fill="#111827"
+    letter-spacing="-0.02em"
+  >Gryph</text>
+  
+  <!-- Descriptor: AI Coding Agent Audit Trail -->
+  <text 
+    x="640" 
+    y="130" 
+    text-anchor="middle" 
+    dominant-baseline="middle"
+    font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" 
+    font-weight="400" 
+    font-size="20" 
+    fill="#0D9488"
+    letter-spacing="-0.01em"
+  >AI Coding Agent Audit Trail</text>
+  
+</svg>

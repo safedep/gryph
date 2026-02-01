@@ -1,0 +1,7 @@
+{
+  "hook_type": "session.idle",
+  "properties": {
+    "sessionId": "opencode-session-abc123"
+  },
+  "cwd": "/home/user/project"
+}

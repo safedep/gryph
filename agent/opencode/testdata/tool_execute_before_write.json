@@ -1,0 +1,9 @@
+{
+  "hook_type": "tool.execute.before",
+  "tool": "write",
+  "args": {
+    "file_path": "/home/user/project/src/main.go",
+    "content": "package main\n\nfunc main() {\n\t// New content\n}"
+  },
+  "cwd": "/home/user/project"
+}

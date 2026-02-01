@@ -28,6 +28,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("agents.claude-code.enabled", true)
 	v.SetDefault("agents.cursor.enabled", true)
 	v.SetDefault("agents.gemini.enabled", true)
+	v.SetDefault("agents.opencode.enabled", true)
 
 	// Display defaults
 	v.SetDefault("display.colors", "auto")

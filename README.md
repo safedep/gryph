@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="docs/assets/gryph-banner.png" alt="Gryph - AI Coding Agent Audit Trail" width="100%">
+  <picture>
+    <source srcset="docs/assets/gryph-banner-dark.svg" media="(prefers-color-scheme: dark)">
+    <source srcset="docs/assets/gryph-banner-light.svg" media="(prefers-color-scheme: light)">
+    <img src="docs/assets/gryph-banner-light.svg" alt="Gryph - AI Coding Agent Audit Trail" width="100%">
+  </picture>
 </p>
 
 <p align="center">
@@ -13,16 +17,32 @@
   <a href="#supported-agents">Supported Agents</a>
 </p>
 
----
+<div align="center">
 
-AI coding agents read files, write code, and execute commands on your behalf. But what exactly did they do?
+[![Website](https://img.shields.io/badge/Website-safedep.io-3b82f6?style=flat-square)](https://safedep.io)
+[![Discord](https://img.shields.io/discord/1090352019379851304?style=flat-square)](https://discord.gg/kAGEj25dCn)
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/safedep/gryph)](https://goreportcard.com/report/github.com/safedep/gryph)
+![License](https://img.shields.io/github/license/safedep/gryph)
+![Release](https://img.shields.io/github/v/release/safedep/gryph)
+[![CodeQL](https://github.com/safedep/gryph/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/safedep/gryph/actions/workflows/codeql.yml)
+
+</div>
+
+<div align="center">
+  <picture>
+    <img src="docs/assets/gryph-demo-livelogs.png" alt="Gryph - AI Coding Agent Audit Trail - Live Logs" width="60%">
+  </picture>
+</div>
+
+---
 
 **Gryph** is a local-first audit trail for AI coding agents. It hooks into your agents, logs every action to a local SQLite database, and gives you powerful querying capabilities to understand, review, and debug agent activity.
 
 ## Why Gryph?
 
 - **Transparency** - See exactly what files were read, written, and what commands were run
-- **Pre-commit review** - Verify agent changes before committing to git
+- **Audit Trail** - See exactly what your AI coding agent did
 - **Debugging** - Replay sessions to understand what went wrong
 - **Privacy** - All data stays local. No cloud, no telemetry
 
@@ -48,12 +68,16 @@ gryph install
 # Verify installation
 gryph status
 
-# Start using your AI coding agent (Claude Code, Cursor, Gemini CLI, etc.)
+# Start using your AI coding agent (Claude Code, Cursor, Gemini CLI, OpenCode, etc.)
 # ...
 
 # Review what happened
 gryph logs
 ```
+
+> [!TIP]
+> Set `logging.level` to `full` in your `gryph config` to see file diffs and raw events.
+> You can do this by running `gryph config set logging.level full`. See [Configuration](#configuration) for more details.
 
 <details>
   <summary>Files Modified During Installation</summary>
@@ -62,11 +86,12 @@ gryph logs
 
 For transparency, here are the files Gryph modifies when you run `gryph install`:
 
-| Agent       | File Modified             | Description                              |
-| ----------- | ------------------------- | ---------------------------------------- |
-| Claude Code | `~/.claude/settings.json` | Adds hook entries to the `hooks` section |
-| Cursor      | `~/.cursor/hooks.json`    | Creates or updates hooks configuration   |
-| Gemini CLI  | `~/.gemini/settings.json` | Adds hook entries to the `hooks` section |
+| Agent       | File Modified                              | Description                              |
+| ----------- | ------------------------------------------ | ---------------------------------------- |
+| Claude Code | `~/.claude/settings.json`                  | Adds hook entries to the `hooks` section |
+| Cursor      | `~/.cursor/hooks.json`                     | Creates or updates hooks configuration   |
+| Gemini CLI  | `~/.gemini/settings.json`                  | Adds hook entries to the `hooks` section |
+| OpenCode    | `~/.config/opencode/plugins/gryph.mjs`     | Installs JS plugin that bridges to gryph |
 
 ### Backups
 
@@ -212,6 +237,7 @@ gryph doctor
 | **Claude Code** | Supported | Full (PreToolUse, PostToolUse, Notification)       |
 | **Cursor**      | Supported | Full (file read/write, shell execution, MCP tools) |
 | **Gemini CLI**  | Supported | Full (BeforeTool, AfterTool, Notification)         |
+| **OpenCode**    | Supported | Full (tool.execute, session events)                |
 
 ## Configuration
 
@@ -253,18 +279,18 @@ Sensitive path patterns and redaction rules are fully configurable via `gryph co
 ## How It Works
 
 ```
-┌─────────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   AI Agent      │────>│   Gryph     │────>│   Privacy   │────>│   SQLite    │
-│ (Claude/Cursor) │     │   Hooks     │     │   Checker   │     │   Database  │
-└─────────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-                                                                       │
-                                              ┌────────────────────────┘
-                                              │
-                                              ▼
-                                        ┌─────────────┐
-                                        │  gryph CLI  │
-                                        │  logs/query │
-                                        └─────────────┘
+┌─────────────────┐     ┌─────────────┐     ┌─────────────┐
+│   AI Agent      │────>│   Gryph     │────>│   SQLite    │
+│ (Claude/Cursor) │     │   Hooks     │     │   Database  │
+└─────────────────┘     └─────────────┘     └─────────────┘
+                                                   │
+                              ┌────────────────────┘
+                              │
+                              ▼
+                        ┌─────────────┐
+                        │  gryph CLI  │
+                        │  logs/query │
+                        └─────────────┘
 ```
 
 Gryph installs lightweight hooks into your AI agents. When the agent performs an action (read file, write file, execute command), the hook sends a JSON event to Gryph, which stores it locally. You can then query this audit trail anytime.

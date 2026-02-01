@@ -1,0 +1,8 @@
+{
+  "hook_type": "tool.execute.after",
+  "tool": "read",
+  "args": {
+    "file_path": "/home/user/project/README.md"
+  },
+  "cwd": "/home/user/project"
+}

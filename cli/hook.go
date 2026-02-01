@@ -12,6 +12,7 @@ import (
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/cursor"
 	"github.com/safedep/gryph/agent/gemini"
+	"github.com/safedep/gryph/agent/opencode"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
@@ -184,6 +185,15 @@ func sendHookResponse(agentName, hookType string) error {
 		}
 		return nil
 
+	case agent.AgentOpenCode:
+		// OpenCode: exit code semantics (0=allow, 2=block via thrown Error in JS shim)
+		// Only tool.execute.before needs a blocking response
+		if hookType == "tool.execute.before" {
+			resp := opencode.NewAllowResponse()
+			return handleOpenCodeResponse(resp)
+		}
+		return nil
+
 	default:
 		// Unknown agent, just succeed
 		return nil
@@ -209,6 +219,10 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 	case agent.AgentGemini:
 		response := gemini.NewBlockResponse(result.BlockReason)
 		return handleGeminiResponse(response)
+
+	case agent.AgentOpenCode:
+		response := opencode.NewBlockResponse(result.BlockReason)
+		return handleOpenCodeResponse(response)
 
 	default:
 		return nil
@@ -264,6 +278,18 @@ func generateCursorResponse(hookType string) []byte {
 	default:
 		// Unknown hook type, return empty JSON
 		return []byte("{}")
+	}
+}
+
+// handleOpenCodeResponse processes an OpenCode hook response.
+func handleOpenCodeResponse(response *opencode.HookResponse) error {
+	switch response.Decision {
+	case opencode.HookBlock:
+		return &exitError{code: 2, message: response.Message}
+	case opencode.HookError:
+		return &exitError{code: 1, message: response.Message}
+	default:
+		return nil
 	}
 }
 

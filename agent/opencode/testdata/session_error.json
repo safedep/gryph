@@ -1,0 +1,8 @@
+{
+  "hook_type": "session.error",
+  "properties": {
+    "sessionId": "opencode-session-abc123",
+    "message": "Connection lost"
+  },
+  "cwd": "/home/user/project"
+}
