@@ -1,0 +1,5 @@
+{
+  "hook_type": "session_start",
+  "session_id": "openclaw-session-abc123",
+  "agent_id": "pi-agent"
+}

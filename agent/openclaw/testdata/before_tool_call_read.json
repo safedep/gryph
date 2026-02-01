@@ -1,0 +1,9 @@
+{
+  "hook_type": "before_tool_call",
+  "tool": "read",
+  "args": {
+    "file_path": "/home/user/project/README.md"
+  },
+  "session_id": "openclaw-session-abc123",
+  "agent_id": "pi-agent"
+}

@@ -1,0 +1,10 @@
+{
+  "hook_type": "before_tool_call",
+  "tool": "write",
+  "args": {
+    "file_path": "/home/user/project/src/main.go",
+    "content": "package main\n\nfunc main() {\n\t// New content\n}"
+  },
+  "session_id": "openclaw-session-abc123",
+  "agent_id": "pi-agent"
+}

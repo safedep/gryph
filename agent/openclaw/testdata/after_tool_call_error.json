@@ -1,0 +1,11 @@
+{
+  "hook_type": "after_tool_call",
+  "tool": "exec",
+  "args": {
+    "command": "npm test"
+  },
+  "error": "command failed with exit code 1",
+  "duration_ms": 3000,
+  "session_id": "openclaw-session-abc123",
+  "agent_id": "pi-agent"
+}

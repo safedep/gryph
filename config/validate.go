@@ -63,6 +63,9 @@ func validate(cfg *Config) error {
 	if cfg.Agents.OpenCode.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.OpenCode.LoggingLevel) {
 		return fmt.Errorf("invalid agents.opencode.logging_level: %s", cfg.Agents.OpenCode.LoggingLevel)
 	}
+	if cfg.Agents.OpenClaw.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.OpenClaw.LoggingLevel) {
+		return fmt.Errorf("invalid agents.openclaw.logging_level: %s", cfg.Agents.OpenClaw.LoggingLevel)
+	}
 
 	return nil
 }

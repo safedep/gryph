@@ -17,6 +17,7 @@ const (
 	agentNameCursor     = "cursor"
 	agentNameGemini     = "gemini"
 	agentNameOpenCode   = "opencode"
+	agentNameOpenClaw   = "openclaw"
 
 	streamTargetTypeStdout = "stdout"
 )
@@ -117,6 +118,7 @@ type AgentsConfig struct {
 	Cursor     AgentConfig `mapstructure:"cursor"`
 	Gemini     AgentConfig `mapstructure:"gemini"`
 	OpenCode   AgentConfig `mapstructure:"opencode"`
+	OpenClaw   AgentConfig `mapstructure:"openclaw"`
 }
 
 // DisplayConfig holds display-related settings.
@@ -265,6 +267,10 @@ func (c *Config) GetAgentLoggingLevel(agentName string) LoggingLevel {
 		if c.Agents.OpenCode.LoggingLevel != "" {
 			return c.Agents.OpenCode.LoggingLevel
 		}
+	case agentNameOpenClaw:
+		if c.Agents.OpenClaw.LoggingLevel != "" {
+			return c.Agents.OpenClaw.LoggingLevel
+		}
 	}
 
 	return c.Logging.Level
@@ -281,6 +287,8 @@ func (c *Config) IsAgentEnabled(agentName string) bool {
 		return c.Agents.Gemini.Enabled
 	case agentNameOpenCode:
 		return c.Agents.OpenCode.Enabled
+	case agentNameOpenClaw:
+		return c.Agents.OpenClaw.Enabled
 	default:
 		return true
 	}

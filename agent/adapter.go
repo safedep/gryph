@@ -13,6 +13,7 @@ const (
 	AgentCursor     = "cursor"
 	AgentGemini     = "gemini"
 	AgentOpenCode   = "opencode"
+	AgentOpenClaw   = "openclaw"
 )
 
 // Standard agent display names.
@@ -21,6 +22,7 @@ const (
 	DisplayCursor     = "Cursor"
 	DisplayGemini     = "Gemini CLI"
 	DisplayOpenCode   = "OpenCode"
+	DisplayOpenClaw   = "OpenClaw"
 )
 
 // AgentDisplayName returns the display name for an agent identifier.
@@ -34,6 +36,8 @@ func AgentDisplayName(name string) string {
 		return DisplayGemini
 	case AgentOpenCode:
 		return DisplayOpenCode
+	case AgentOpenClaw:
+		return DisplayOpenClaw
 	default:
 		return name
 	}

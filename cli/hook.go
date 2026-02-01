@@ -12,6 +12,7 @@ import (
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/cursor"
 	"github.com/safedep/gryph/agent/gemini"
+	"github.com/safedep/gryph/agent/openclaw"
 	"github.com/safedep/gryph/agent/opencode"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
@@ -194,6 +195,15 @@ func sendHookResponse(agentName, hookType string) error {
 		}
 		return nil
 
+	case agent.AgentOpenClaw:
+		// OpenClaw: exit code semantics (0=allow, 2=block via thrown Error in TS plugin)
+		// Only before_tool_call needs a blocking response
+		if hookType == "before_tool_call" {
+			resp := openclaw.NewAllowResponse()
+			return handleOpenClawResponse(resp)
+		}
+		return nil
+
 	default:
 		// Unknown agent, just succeed
 		return nil
@@ -223,6 +233,10 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 	case agent.AgentOpenCode:
 		response := opencode.NewBlockResponse(result.BlockReason)
 		return handleOpenCodeResponse(response)
+
+	case agent.AgentOpenClaw:
+		response := openclaw.NewBlockResponse(result.BlockReason)
+		return handleOpenClawResponse(response)
 
 	default:
 		return nil
@@ -278,6 +292,18 @@ func generateCursorResponse(hookType string) []byte {
 	default:
 		// Unknown hook type, return empty JSON
 		return []byte("{}")
+	}
+}
+
+// handleOpenClawResponse processes an OpenClaw hook response.
+func handleOpenClawResponse(response *openclaw.HookResponse) error {
+	switch response.Decision {
+	case openclaw.HookBlock:
+		return &exitError{code: 2, message: response.Message}
+	case openclaw.HookError:
+		return &exitError{code: 1, message: response.Message}
+	default:
+		return nil
 	}
 }
 

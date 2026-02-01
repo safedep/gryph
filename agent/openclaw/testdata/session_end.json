@@ -1,0 +1,7 @@
+{
+  "hook_type": "session_end",
+  "session_id": "openclaw-session-abc123",
+  "agent_id": "pi-agent",
+  "message_count": 15,
+  "duration_ms": 120000
+}

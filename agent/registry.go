@@ -83,6 +83,7 @@ func SupportedAgents() []string {
 		"cursor",
 		"gemini",
 		"opencode",
+		"openclaw",
 	}
 }
 
