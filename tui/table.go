@@ -288,7 +288,6 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 func (p *TablePresenter) RenderInstall(result *InstallView) error {
 	tw := &tableWriter{w: p.w}
 
-	tw.println("Discovering agents...")
 	tw.println()
 
 	for _, agent := range result.Agents {

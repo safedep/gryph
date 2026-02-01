@@ -66,67 +66,78 @@ to enable audit logging. Existing hooks are backed up by default.`,
 				}
 			}
 
-			// Build install view
-			view := &tui.InstallView{
-				Database: app.Paths.DatabaseFile,
-				Config:   app.Paths.ConfigFile,
+			spinnerMsg := "Discovering agents and installing hooks..."
+			if len(agents) > 0 {
+				spinnerMsg = "Installing hooks..."
 			}
 
-			for _, adapter := range adapters {
-				detection, err := adapter.Detect(ctx)
-				if err != nil {
-					view.Agents = append(view.Agents, tui.AgentInstallView{
+			view, err := tui.RunWithSpinner(spinnerMsg, func() (*tui.InstallView, error) {
+				v := &tui.InstallView{
+					Database: app.Paths.DatabaseFile,
+					Config:   app.Paths.ConfigFile,
+				}
+
+				for _, adapter := range adapters {
+					detection, err := adapter.Detect(ctx)
+					if err != nil {
+						v.Agents = append(v.Agents, tui.AgentInstallView{
+							Name:        adapter.Name(),
+							DisplayName: adapter.DisplayName(),
+							Error:       err.Error(),
+						})
+
+						continue
+					}
+
+					agentView := tui.AgentInstallView{
 						Name:        adapter.Name(),
 						DisplayName: adapter.DisplayName(),
-						Error:       err.Error(),
-					})
-
-					continue
-				}
-
-				agentView := tui.AgentInstallView{
-					Name:        adapter.Name(),
-					DisplayName: adapter.DisplayName(),
-					Installed:   detection.Installed,
-					Version:     detection.Version,
-					Path:        detection.Path,
-				}
-
-				if detection.Installed {
-					opts := agent.InstallOptions{
-						DryRun:    dryRun,
-						Force:     force,
-						Backup:    !noBackup,
-						BackupDir: app.Paths.BackupsDir,
+						Installed:   detection.Installed,
+						Version:     detection.Version,
+						Path:        detection.Path,
 					}
 
-					result, err := adapter.Install(ctx, opts)
-					if err != nil {
-						agentView.Error = err.Error()
-						if !dryRun {
-							if err := logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
-								map[string]interface{}{"error": err.Error()},
-								SelfAuditResultError, err.Error()); err != nil {
-								log.Errorf("failed to log self-audit: %w", err)
-							}
+					if detection.Installed {
+						opts := agent.InstallOptions{
+							DryRun:    dryRun,
+							Force:     force,
+							Backup:    !noBackup,
+							BackupDir: app.Paths.BackupsDir,
 						}
-					} else {
-						agentView.HooksInstalled = result.HooksInstalled
-						agentView.Warnings = result.Warnings
-						if !dryRun && len(result.HooksInstalled) > 0 {
-							if err := logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
-								map[string]interface{}{
-									"hooks_installed": result.HooksInstalled,
-									"warnings":        result.Warnings,
-								},
-								SelfAuditResultSuccess, ""); err != nil {
-								log.Errorf("failed to log self-audit: %w", err)
+
+						result, err := adapter.Install(ctx, opts)
+						if err != nil {
+							agentView.Error = err.Error()
+							if !dryRun {
+								if err := logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
+									map[string]interface{}{"error": err.Error()},
+									SelfAuditResultError, err.Error()); err != nil {
+									log.Errorf("failed to log self-audit: %w", err)
+								}
+							}
+						} else {
+							agentView.HooksInstalled = result.HooksInstalled
+							agentView.Warnings = result.Warnings
+							if !dryRun && len(result.HooksInstalled) > 0 {
+								if err := logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
+									map[string]interface{}{
+										"hooks_installed": result.HooksInstalled,
+										"warnings":        result.Warnings,
+									},
+									SelfAuditResultSuccess, ""); err != nil {
+									log.Errorf("failed to log self-audit: %w", err)
+								}
 							}
 						}
 					}
+
+					v.Agents = append(v.Agents, agentView)
 				}
 
-				view.Agents = append(view.Agents, agentView)
+				return v, nil
+			})
+			if err != nil {
+				return err
 			}
 
 			return app.Presenter.RenderInstall(view)
