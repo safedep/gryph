@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	colTimeWidth    = 8  // "15:04:05"
+	colTimeWidth    = 19 // "2006-01-02 15:04:05"
 	colIconWidth    = 1  // single symbol
 	colAgentWidth   = 12 // "claude-code " padded
 	colSessWidth    = 4  // short session ID
@@ -42,7 +42,7 @@ func formatEvent(e *events.Event, width int) string {
 
 	tw := targetWidth(width)
 
-	ts := eventTimeStyle.Render(tui.FormatTimeShort(e.Timestamp))
+	ts := eventTimeStyle.Render(tui.FormatTime(e.Timestamp))
 	icon := iconStyle.Render(as.symbol)
 	agent := agentBadge(e.AgentName)
 	sess := lipgloss.NewStyle().Foreground(colorDim).Render(tui.FormatShortID(e.SessionID.String())[:4])
@@ -68,7 +68,7 @@ func extractTargetDetail(e *events.Event, maxTarget int) (string, string) {
 	switch e.ActionType {
 	case events.ActionFileRead:
 		if p, err := e.GetFileReadPayload(); err == nil && p != nil {
-			return truncatePath(p.Path, maxTarget), ""
+			return truncatePath(p.DisplayTarget(), maxTarget), ""
 		}
 	case events.ActionFileWrite:
 		if p, err := e.GetFileWritePayload(); err == nil && p != nil {

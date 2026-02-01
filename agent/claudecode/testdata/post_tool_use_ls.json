@@ -1,0 +1,16 @@
+{
+  "session_id": "test-session-123",
+  "transcript_path": "/home/user/.claude/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "LS",
+  "tool_input": {
+    "path": "/home/user/project/src"
+  },
+  "tool_response": {
+    "content": "main.go\nutils.go",
+    "success": true
+  },
+  "tool_use_id": "tool-use-ls-001"
+}

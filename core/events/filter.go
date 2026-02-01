@@ -101,7 +101,7 @@ func (f *EventFilter) WithOffset(offset int) *EventFilter {
 func Today() *EventFilter {
 	now := time.Now()
 	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	return NewEventFilter().WithSince(midnight)
+	return NewEventFilter().WithSince(midnight.UTC())
 }
 
 // Yesterday returns a filter for events from yesterday.
@@ -109,11 +109,11 @@ func Yesterday() *EventFilter {
 	now := time.Now()
 	yesterdayStart := time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, now.Location())
 	yesterdayEnd := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	return NewEventFilter().WithSince(yesterdayStart).WithUntil(yesterdayEnd)
+	return NewEventFilter().WithSince(yesterdayStart.UTC()).WithUntil(yesterdayEnd.UTC())
 }
 
 // Last24Hours returns a filter for events in the last 24 hours.
 func Last24Hours() *EventFilter {
-	since := time.Now().Add(-24 * time.Hour)
+	since := time.Now().UTC().Add(-24 * time.Hour)
 	return NewEventFilter().WithSince(since)
 }

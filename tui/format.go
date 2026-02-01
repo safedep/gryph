@@ -44,7 +44,7 @@ func FormatTime(t time.Time) string {
 	if t.IsZero() {
 		return "-"
 	}
-	return t.Format("2006-01-02 15:04:05")
+	return t.Local().Format("2006-01-02 15:04:05")
 }
 
 // FormatTimeShort formats a time with just hour:minute:second.
@@ -52,7 +52,7 @@ func FormatTimeShort(t time.Time) string {
 	if t.IsZero() {
 		return "-"
 	}
-	return t.Format("15:04:05")
+	return t.Local().Format("15:04:05")
 }
 
 // FormatDate formats a date for display.
@@ -60,7 +60,7 @@ func FormatDate(t time.Time) string {
 	if t.IsZero() {
 		return "-"
 	}
-	return t.Format("2006-01-02")
+	return t.Local().Format("2006-01-02")
 }
 
 // FormatNumber formats a number with thousand separators.

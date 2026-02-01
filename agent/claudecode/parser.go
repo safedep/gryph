@@ -262,6 +262,8 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		payload := events.FileReadPayload{}
 		if path, ok := toolInput["file_path"].(string); ok {
 			payload.Path = path
+		} else if path, ok := toolInput["path"].(string); ok {
+			payload.Path = path
 		}
 		if pattern, ok := toolInput["pattern"].(string); ok {
 			payload.Pattern = pattern

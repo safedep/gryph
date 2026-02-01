@@ -11,13 +11,10 @@
   },
   "keywords": [
     "security",
-    "package-manager",
-    "malicious-packages",
-    "npm",
     "cli",
-    "vulnerability",
-    "dependency-security",
-    "safedep"
+    "safedep",
+    "ai",
+    "ai-agents"
   ],
   "author": "SafeDep <devops@safedep.io>",
   "license": "Apache-2.0",

@@ -1,7 +1,5 @@
 # Gryph
 
-AI coding agents read files, write code, and execute commands on your behalf. But what exactly did they do?
-
 **Gryph** is a local-first audit trail for AI coding agents. It hooks into your agents, logs every action to a local SQLite database, and gives you powerful querying capabilities to understand, review, and debug agent activity.
 
 ## Why Gryph?

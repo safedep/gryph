@@ -127,7 +127,8 @@ func runLiveLogs(app *App, p logParams) error {
 func parseSinceTime(p logParams) (time.Time, error) {
 	if p.today {
 		now := time.Now()
-		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()), nil
+		midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		return midnight.UTC(), nil
 	}
 	if p.since != "" {
 		t, err := parseDuration(p.since)
@@ -136,7 +137,7 @@ func parseSinceTime(p logParams) (time.Time, error) {
 		}
 		return t, nil
 	}
-	return time.Now().Add(-24 * time.Hour), nil
+	return time.Now().UTC().Add(-24 * time.Hour), nil
 }
 
 func buildEventFilter(p logParams) (*events.EventFilter, error) {
@@ -216,7 +217,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 		}
 		lastTimestamp = evts[0].Timestamp
 	} else {
-		lastTimestamp = time.Now()
+		lastTimestamp = time.Now().UTC()
 	}
 
 	sigCtx, cancel := signal.NotifyContext(ctx, os.Interrupt)
@@ -260,7 +261,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 func parseDuration(s string) (time.Time, error) {
 	// Try parsing as duration
 	if d, err := time.ParseDuration(s); err == nil {
-		return time.Now().Add(-d), nil
+		return time.Now().UTC().Add(-d), nil
 	}
 
 	// Try parsing as relative duration (e.g., "1d", "1w")
@@ -276,7 +277,7 @@ func parseDuration(s string) (time.Time, error) {
 		}
 		if multiplier > 0 {
 			if d, err := time.ParseDuration(value + "h"); err == nil {
-				return time.Now().Add(-d * time.Duration(multiplier/time.Hour)), nil
+				return time.Now().UTC().Add(-d * time.Duration(multiplier/time.Hour)), nil
 			}
 		}
 	}
@@ -289,8 +290,14 @@ func parseDuration(s string) (time.Time, error) {
 	}
 
 	for _, layout := range layouts {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t, nil
+		if layout == time.RFC3339 {
+			if t, err := time.Parse(layout, s); err == nil {
+				return t.UTC(), nil
+			}
+		} else {
+			if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {
+				return t.UTC(), nil
+			}
 		}
 	}
 
@@ -322,7 +329,7 @@ func eventToView(e *events.Event) *tui.EventView {
 	switch e.ActionType {
 	case events.ActionFileRead:
 		if p, err := e.GetFileReadPayload(); err == nil && p != nil {
-			view.Path = p.Path
+			view.Path = p.DisplayTarget()
 		}
 	case events.ActionFileWrite:
 		if p, err := e.GetFileWritePayload(); err == nil && p != nil {

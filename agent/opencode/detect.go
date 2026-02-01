@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/safedep/gryph/agent"
 )
@@ -35,7 +36,9 @@ func Detect(ctx context.Context) (*agent.DetectionResult, error) {
 		HooksPath:  filepath.Join(opencodeDir, "plugins"),
 	}
 
-	if output, err := exec.CommandContext(ctx, "opencode", "--version").Output(); err == nil {
+	cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if output, err := exec.CommandContext(cmdCtx, "opencode", "--version").Output(); err == nil {
 		version := strings.TrimSpace(string(output))
 		if idx := strings.Index(version, " "); idx > 0 {
 			version = version[:idx]

@@ -92,6 +92,76 @@ func TestParseHookEvent_PostToolUseRead(t *testing.T) {
 	assert.Equal(t, "/home/user/project/README.md", payload.Path)
 }
 
+func TestParseHookEvent_PostToolUseGlob(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "post_tool_use_glob.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PostToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionFileRead, event.ActionType)
+	assert.Equal(t, "Glob", event.ToolName)
+
+	payload, err := event.GetFileReadPayload()
+	require.NoError(t, err)
+	assert.Equal(t, "/home/user/project/src", payload.Path)
+	assert.Equal(t, "**/*.go", payload.Pattern)
+	assert.Equal(t, "/home/user/project/src", payload.DisplayTarget())
+}
+
+func TestParseHookEvent_PostToolUseGlobNoPath(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "post_tool_use_glob_no_path.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PostToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionFileRead, event.ActionType)
+	assert.Equal(t, "Glob", event.ToolName)
+
+	payload, err := event.GetFileReadPayload()
+	require.NoError(t, err)
+	assert.Empty(t, payload.Path)
+	assert.Equal(t, "**/*.go", payload.Pattern)
+	assert.Equal(t, "**/*.go", payload.DisplayTarget())
+}
+
+func TestParseHookEvent_PostToolUseGrep(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "post_tool_use_grep.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PostToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionFileRead, event.ActionType)
+	assert.Equal(t, "Grep", event.ToolName)
+
+	payload, err := event.GetFileReadPayload()
+	require.NoError(t, err)
+	assert.Equal(t, "/home/user/project/src", payload.Path)
+	assert.Equal(t, "func main", payload.Pattern)
+}
+
+func TestParseHookEvent_PostToolUseLS(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "post_tool_use_ls.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PostToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionFileRead, event.ActionType)
+	assert.Equal(t, "LS", event.ToolName)
+
+	payload, err := event.GetFileReadPayload()
+	require.NoError(t, err)
+	assert.Equal(t, "/home/user/project/src", payload.Path)
+	assert.Empty(t, payload.Pattern)
+}
+
 func TestParseHookEvent_PostToolUseFailure(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "post_tool_use_failure.json")

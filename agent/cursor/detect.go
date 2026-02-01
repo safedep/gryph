@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/safedep/gryph/agent"
 )
@@ -84,8 +85,9 @@ func Detect(ctx context.Context) (*agent.DetectionResult, error) {
 
 // getVersion attempts to get the Cursor version.
 func getVersion(ctx context.Context) string {
-	// Try running cursor --version
-	cmd := exec.CommandContext(ctx, "cursor", "--version")
+	cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(cmdCtx, "cursor", "--version")
 	output, err := cmd.Output()
 	if err == nil {
 		version := strings.TrimSpace(string(output))

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/safedep/gryph/agent"
 )
@@ -40,7 +41,9 @@ func Detect(ctx context.Context) (*agent.DetectionResult, error) {
 	}
 
 	// Try to get version from claude CLI
-	if output, err := exec.CommandContext(ctx, "claude", "-v").Output(); err == nil {
+	cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if output, err := exec.CommandContext(cmdCtx, "claude", "-v").Output(); err == nil {
 		// Output format: "2.1.15 (Claude Code)"
 		version := strings.TrimSpace(string(output))
 		if idx := strings.Index(version, " "); idx > 0 {

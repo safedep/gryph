@@ -67,6 +67,16 @@ type FileReadPayload struct {
 	ContentHash string `json:"content_hash,omitempty"`
 }
 
+// DisplayTarget returns the best available identifier for display purposes.
+// It prefers Path, falling back to Pattern for tools like Glob/Grep that
+// may only have a search pattern and no explicit directory.
+func (p *FileReadPayload) DisplayTarget() string {
+	if p.Path != "" {
+		return p.Path
+	}
+	return p.Pattern
+}
+
 // FileWritePayload represents the payload for file_write actions.
 type FileWritePayload struct {
 	Path           string `json:"path"`

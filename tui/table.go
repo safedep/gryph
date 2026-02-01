@@ -101,7 +101,7 @@ func (p *TablePresenter) RenderSessions(sessions []*SessionView) error {
 
 	for _, s := range sessions {
 		tw.printf("%s  %s  session %s\n",
-			FormatTimeShort(s.StartedAt),
+			FormatTime(s.StartedAt),
 			p.color.Agent(s.AgentName),
 			p.color.Dim(s.ShortID))
 
@@ -147,7 +147,7 @@ func (p *TablePresenter) RenderSession(session *SessionView, events []*EventView
 		tw.println()
 
 		for i, e := range events {
-			tw.printf("#%-2d %s  %s  %s\n", i+1, FormatTimeShort(e.Timestamp), p.color.Dim(e.ShortID), e.ActionDisplay)
+			tw.printf("#%-2d %s  %s  %s\n", i+1, FormatTime(e.Timestamp), p.color.Dim(e.ShortID), e.ActionDisplay)
 			if e.Path != "" {
 				tw.printf("    Path: %s\n", p.color.Path(e.Path))
 			}
@@ -193,7 +193,7 @@ type eventsColumnWidths struct {
 // Flexible column: Path (absorbs remaining space)
 func (p *TablePresenter) calculateEventsColumnWidths() eventsColumnWidths {
 	const (
-		timeWidth    = 11
+		timeWidth    = 21
 		eventWidth   = 9
 		agentWidth   = 12
 		sessionWidth = 9
@@ -269,7 +269,7 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 		}
 
 		tw.printf("%s %s %s %s %s %s %s\n",
-			PadRightVisible(FormatTimeShort(e.Timestamp), cols.time),
+			PadRightVisible(FormatTime(e.Timestamp), cols.time),
 			PadRightVisible(e.ShortID, cols.event),
 			PadRightVisible(p.color.Agent(e.AgentName), cols.agent),
 			PadRightVisible(e.ShortSessionID, cols.session),

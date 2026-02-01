@@ -1,0 +1,17 @@
+{
+  "session_id": "test-session-123",
+  "transcript_path": "/home/user/.claude/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Grep",
+  "tool_input": {
+    "pattern": "func main",
+    "path": "/home/user/project/src"
+  },
+  "tool_response": {
+    "content": "src/main.go:10:func main() {",
+    "success": true
+  },
+  "tool_use_id": "tool-use-grep-001"
+}

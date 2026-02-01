@@ -741,6 +741,9 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		if path, ok := toolInput["file_path"].(string); ok {
 			payload.Path = path
 			a.markSensitivePath(event, path)
+		} else if path, ok := toolInput["path"].(string); ok {
+			payload.Path = path
+			a.markSensitivePath(event, path)
 		}
 		if pattern, ok := toolInput["pattern"].(string); ok {
 			payload.Pattern = pattern

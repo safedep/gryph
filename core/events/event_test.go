@@ -150,6 +150,41 @@ func TestEvent_GetFileReadPayload(t *testing.T) {
 	assert.Equal(t, payload.Pattern, retrieved.Pattern)
 }
 
+func TestFileReadPayload_DisplayTarget(t *testing.T) {
+	testCases := []struct {
+		name     string
+		payload  FileReadPayload
+		expected string
+	}{
+		{
+			name:     "path only",
+			payload:  FileReadPayload{Path: "/home/user/file.go"},
+			expected: "/home/user/file.go",
+		},
+		{
+			name:     "pattern only",
+			payload:  FileReadPayload{Pattern: "**/*.go"},
+			expected: "**/*.go",
+		},
+		{
+			name:     "both path and pattern prefers path",
+			payload:  FileReadPayload{Path: "/home/user/src", Pattern: "**/*.go"},
+			expected: "/home/user/src",
+		},
+		{
+			name:     "empty returns empty",
+			payload:  FileReadPayload{},
+			expected: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.payload.DisplayTarget())
+		})
+	}
+}
+
 func TestEvent_GetFileReadPayload_WrongActionType(t *testing.T) {
 	event := NewEvent(uuid.New(), "claude-code", ActionCommandExec)
 	event.Payload = []byte(`{"path": "/test"}`)
