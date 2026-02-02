@@ -1,9 +1,11 @@
 <p align="center">
-  <picture>
-    <source srcset="docs/assets/gryph-banner-dark.svg" media="(prefers-color-scheme: dark)">
-    <source srcset="docs/assets/gryph-banner-light.svg" media="(prefers-color-scheme: light)">
-    <img src="docs/assets/gryph-banner-light.svg" alt="Gryph - AI Coding Agent Audit Trail" width="100%">
-  </picture>
+  <a href="https://safedep.io">
+    <picture>
+      <source srcset="docs/assets/gryph-banner-dark.svg" media="(prefers-color-scheme: dark)">
+      <source srcset="docs/assets/gryph-banner-light.svg" media="(prefers-color-scheme: light)">
+      <img src="docs/assets/gryph-banner-light.svg" alt="Gryph - AI Coding Agent Audit Trail" width="100%">
+    </picture>
+  </a>
 </p>
 
 <p align="center">
@@ -278,24 +280,11 @@ Sensitive path patterns and redaction rules are fully configurable via `gryph co
 
 ## How It Works
 
-```
-┌─────────────────┐     ┌─────────────┐
-│   AI Agent      │────>│   Gryph     │
-│ (Claude/Cursor) │     │   Hooks     │
-└─────────────────┘     └─────────────┘
-                              │
-                              ▼
-                        ┌─────────────┐     ┌─────────────┐
-                        │   Privacy   │────>│   SQLite    │
-                        │   Checker   │     │   Database  │
-                        └─────────────┘     └─────────────┘
-                                                  │
-                                                  ▼
-                                            ┌─────────────┐
-                                            │  gryph CLI  │
-                                            │  logs/query │
-                                            └─────────────┘
-```
+<picture>
+  <source srcset="docs/assets/gryph-architecture-dark.svg" media="(prefers-color-scheme: dark)">
+  <source srcset="docs/assets/gryph-architecture-light.svg" media="(prefers-color-scheme: light)">
+  <img src="docs/assets/gryph-architecture-light.svg" alt="Gryph Architecture" width="100%">
+</picture>
 
 Gryph installs lightweight hooks into your AI agents. When the agent performs an action (read file, write file, execute command), the hook sends a JSON event to Gryph, which stores it locally. You can then query this audit trail anytime.
 

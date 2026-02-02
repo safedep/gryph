@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 260" width="800" height="260">
+  <!-- Light Mode: Frame #374151, Text #111827, Subtitle #6B7280, Accent #0891B2 -->
+  
+  <!-- Box dimensions: 150 × 65 px -->
+  <!-- Row 1 y=25, Row 2 y=170 -->
+  
+  <!-- ==================== ROW 1 ==================== -->
+  
+  <!-- Box 1: AI Agent -->
+  <g transform="translate(85, 25)">
+    <rect width="150" height="65" fill="none" stroke="#374151" stroke-width="3"/>
+    <rect x="5" y="5" width="140" height="55" fill="none" stroke="#374151" stroke-width="1"/>
+    <text x="75" y="30" text-anchor="middle" font-family="'SF Mono', 'Cascadia Code', 'Consolas', monospace" font-size="13" font-weight="bold" fill="#111827">AI Agent</text>
+    <text x="75" y="48" text-anchor="middle" font-family="'SF Mono', 'Cascadia Code', 'Consolas', monospace" font-size="10" fill="#6B7280">Claude / Cursor</text>
+  </g>
+  
+  <!-- Arrow 1: AI Agent → Gryph Hooks -->
+  <g stroke="#0891B2" stroke-width="2" fill="#0891B2">
+    <line x1="235" y1="57" x2="308" y2="57"/>
+    <polygon points="318,57 306,51 306,63"/>
+  </g>
+  
+  <!-- Box 2: Gryph Hooks -->
+  <g transform="translate(320, 25)">
+    <rect width="150" height="65" fill="none" stroke="#374151" stroke-width="3"/>
+    <rect x="5" y="5" width="140" height="55" fill="none" stroke="#374151" stroke-width="1"/>
+    <!-- Watcher Eye -->
+    <circle cx="130" cy="18" r="6" fill="none" stroke="#0891B2" stroke-width="1.5"/>
+    <circle cx="130" cy="18" r="2.5" fill="#0891B2"/>
+    <text x="70" y="38" text-anchor="middle" font-family="'SF Mono', 'Cascadia Code', 'Consolas', monospace" font-size="13" font-weight="bold" fill="#111827">Gryph Hooks</text>
+  </g>
+  
+  <!-- Arrow 2: Gryph Hooks → Privacy Checker -->
+  <g stroke="#0891B2" stroke-width="2" fill="#0891B2">
+    <line x1="470" y1="57" x2="543" y2="57"/>
+    <polygon points="553,57 541,51 541,63"/>
+  </g>
+  
+  <!-- Box 3: Privacy Checker -->
+  <g transform="translate(555, 25)">
+    <rect width="150" height="65" fill="none" stroke="#374151" stroke-width="3"/>
+    <rect x="5" y="5" width="140" height="55" fill="none" stroke="#374151" stroke-width="1"/>
+    <text x="75" y="30" text-anchor="middle" font-family="'SF Mono', 'Cascadia Code', 'Consolas', monospace" font-size="13" font-weight="bold" fill="#111827">Privacy</text>
+    <text x="75" y="48" text-anchor="middle" font-family="'SF Mono', 'Cascadia Code', 'Consolas', monospace" font-size="13" font-weight="bold" fill="#111827">Checker</text>
+  </g>
+  
+  <!-- ==================== VERTICAL ARROW ==================== -->
+  
+  <!-- Arrow 3: Privacy Checker → SQLite -->
+  <g stroke="#0891B2" stroke-width="2" fill="#0891B2">
+    <line x1="630" y1="90" x2="630" y2="158"/>
+    <polygon points="630,168 624,156 636,156"/>
+  </g>
+  
+  <!-- ==================== ROW 2 ==================== -->
+  
+  <!-- Box 4: gryph CLI -->
+  <g transform="translate(320, 170)">
+    <rect width="150" height="65" fill="none" stroke="#374151" stroke-width="3"/>
+    <rect x="5" y="5" width="140" height="55" fill="none" stroke="#374151" stroke-width="1"/>
+    <text x="75" y="30" text-anchor="middle" font-family="'SF Mono', 'Cascadia Code', 'Consolas', monospace" font-size="13" font-weight="bold" fill="#111827">gryph CLI</text>
+    <text x="75" y="48" text-anchor="middle" font-family="'SF Mono', 'Cascadia Code', 'Consolas', monospace" font-size="10" fill="#6B7280">logs / query</text>
+  </g>
+  
+  <!-- Arrow 4: SQLite → gryph CLI -->
+  <g stroke="#0891B2" stroke-width="2" fill="#0891B2">
+    <line x1="555" y1="202" x2="482" y2="202"/>
+    <polygon points="472,202 484,196 484,208"/>
+  </g>
+  
+  <!-- Box 5: SQLite Database -->
+  <g transform="translate(555, 170)">
+    <rect width="150" height="65" fill="none" stroke="#374151" stroke-width="3"/>
+    <rect x="5" y="5" width="140" height="55" fill="none" stroke="#374151" stroke-width="1"/>
+    <text x="75" y="30" text-anchor="middle" font-family="'SF Mono', 'Cascadia Code', 'Consolas', monospace" font-size="13" font-weight="bold" fill="#111827">SQLite</text>
+    <text x="75" y="48" text-anchor="middle" font-family="'SF Mono', 'Cascadia Code', 'Consolas', monospace" font-size="13" font-weight="bold" fill="#111827">Database</text>
+  </g>
+</svg>
