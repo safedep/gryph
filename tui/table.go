@@ -154,6 +154,9 @@ func (p *TablePresenter) RenderSession(session *SessionView, events []*EventView
 			if e.Command != "" {
 				tw.printf("    Command: %s\n", e.Command)
 			}
+			if e.ToolName != "" && e.Path == "" && e.Command == "" {
+				tw.printf("    Tool: %s\n", e.ToolName)
+			}
 			if e.LinesAdded > 0 || e.LinesRemoved > 0 {
 				tw.printf("    Changes: %s\n", FormatLineChanges(e.LinesAdded, e.LinesRemoved))
 			}
@@ -257,6 +260,9 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 		target := e.Path
 		if target == "" {
 			target = e.Command
+		}
+		if target == "" {
+			target = e.ToolName
 		}
 		target = TruncateString(target, cols.path)
 
