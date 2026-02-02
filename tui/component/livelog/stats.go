@@ -68,7 +68,7 @@ func (s statsModel) view(height int) string {
 	for _, a := range actionOrder {
 		if count, ok := s.byAction[a]; ok && count > 0 {
 			as := actionStyleFor(a)
-			label := fmt.Sprintf(" %s %-8s", as.symbol, actionShort(a))
+			label := fmt.Sprintf(" %s %-8s", as.symbol, a.DisplayName())
 			b.WriteString(fmt.Sprintf("%s %s\n",
 				sidebarLabelStyle.Render(label),
 				sidebarValueStyle.Render(fmt.Sprintf("%d", count))))

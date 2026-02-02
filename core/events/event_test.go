@@ -363,6 +363,93 @@ func TestActionType_IsValid(t *testing.T) {
 	assert.False(t, invalidType.IsValid())
 }
 
+func TestActionType_DisplayName(t *testing.T) {
+	testCases := []struct {
+		actionType  ActionType
+		displayName string
+	}{
+		{ActionFileRead, "read"},
+		{ActionFileWrite, "write"},
+		{ActionFileDelete, "delete"},
+		{ActionCommandExec, "exec"},
+		{ActionNetworkRequest, "http"},
+		{ActionToolUse, "tool"},
+		{ActionSessionStart, "session_start"},
+		{ActionSessionEnd, "session_end"},
+		{ActionNotification, "notification"},
+		{ActionUnknown, "unknown"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.actionType.String(), func(t *testing.T) {
+			assert.Equal(t, tc.displayName, tc.actionType.DisplayName())
+		})
+	}
+
+	assert.Equal(t, "unknown", ActionType("bogus").DisplayName())
+}
+
+func TestActionType_DisplayName_AllActionsCovered(t *testing.T) {
+	allActions := []ActionType{
+		ActionFileRead, ActionFileWrite, ActionFileDelete,
+		ActionCommandExec, ActionNetworkRequest, ActionToolUse,
+		ActionSessionStart, ActionSessionEnd, ActionNotification, ActionUnknown,
+	}
+
+	for _, at := range allActions {
+		t.Run(at.String(), func(t *testing.T) {
+			dn := at.DisplayName()
+			assert.NotEqual(t, "", dn, "missing display name for %s", at)
+
+			parsed, err := ParseActionType(dn)
+			assert.NoError(t, err, "display name %q should round-trip via ParseActionType", dn)
+			assert.Equal(t, at, parsed)
+		})
+	}
+}
+
+func TestParseActionType(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected ActionType
+		wantErr  bool
+	}{
+		{"full name file_read", "file_read", ActionFileRead, false},
+		{"full name file_write", "file_write", ActionFileWrite, false},
+		{"full name file_delete", "file_delete", ActionFileDelete, false},
+		{"full name command_exec", "command_exec", ActionCommandExec, false},
+		{"full name network_request", "network_request", ActionNetworkRequest, false},
+		{"full name tool_use", "tool_use", ActionToolUse, false},
+		{"full name session_start", "session_start", ActionSessionStart, false},
+		{"full name session_end", "session_end", ActionSessionEnd, false},
+		{"full name notification", "notification", ActionNotification, false},
+		{"full name unknown", "unknown", ActionUnknown, false},
+		{"display name read", "read", ActionFileRead, false},
+		{"display name write", "write", ActionFileWrite, false},
+		{"display name delete", "delete", ActionFileDelete, false},
+		{"display name exec", "exec", ActionCommandExec, false},
+		{"display name http", "http", ActionNetworkRequest, false},
+		{"display name tool", "tool", ActionToolUse, false},
+		{"invalid empty", "", ActionType(""), true},
+		{"invalid bogus", "bogus", ActionType(""), true},
+		{"invalid partial", "file_", ActionType(""), true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ParseActionType(tc.input)
+			if tc.wantErr {
+				assert.Error(t, err)
+				assert.Equal(t, ActionType(""), got)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expected, got)
+			}
+		})
+	}
+}
+
 func TestResultStatus_String(t *testing.T) {
 	testCases := []struct {
 		status   ResultStatus

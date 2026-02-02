@@ -46,7 +46,7 @@ func formatEvent(e *events.Event, width int) string {
 	icon := iconStyle.Render(as.symbol)
 	agent := agentBadge(e.AgentName)
 	sess := lipgloss.NewStyle().Foreground(colorDim).Render(tui.FormatShortID(e.SessionID.String())[:4])
-	action := iconStyle.Render(fmt.Sprintf("%-6s", actionShort(e.ActionType)))
+	action := iconStyle.Render(fmt.Sprintf("%-6s", e.ActionType.DisplayName()))
 
 	target, detail := extractTargetDetail(e, tw)
 
@@ -123,27 +123,3 @@ func truncatePath(p string, maxWidth int) string {
 	return tui.TruncateString(base, maxWidth)
 }
 
-func actionShort(a events.ActionType) string {
-	switch a {
-	case events.ActionFileRead:
-		return "read"
-	case events.ActionFileWrite:
-		return "write"
-	case events.ActionFileDelete:
-		return "delete"
-	case events.ActionCommandExec:
-		return "exec"
-	case events.ActionNetworkRequest:
-		return "http"
-	case events.ActionToolUse:
-		return "tool"
-	case events.ActionSessionStart:
-		return "start"
-	case events.ActionSessionEnd:
-		return "end"
-	case events.ActionNotification:
-		return "notice"
-	default:
-		return "?"
-	}
-}

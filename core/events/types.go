@@ -1,6 +1,8 @@
 // Package events provides the core event model and types for audit logging.
 package events
 
+import "fmt"
+
 // ActionType represents the type of action performed by an agent.
 type ActionType string
 
@@ -27,6 +29,31 @@ const (
 	ActionUnknown ActionType = "unknown"
 )
 
+// actionDisplayNames is the single source of truth mapping each ActionType
+// to its short display name. All lookups (DisplayName, IsValid, ParseActionType)
+// are derived from this map.
+var actionDisplayNames = map[ActionType]string{
+	ActionFileRead:       "read",
+	ActionFileWrite:      "write",
+	ActionFileDelete:     "delete",
+	ActionCommandExec:    "exec",
+	ActionNetworkRequest: "http",
+	ActionToolUse:        "tool",
+	ActionSessionStart:   "session_start",
+	ActionSessionEnd:     "session_end",
+	ActionNotification:   "notification",
+	ActionUnknown:        "unknown",
+}
+
+var displayToAction map[string]ActionType
+
+func init() {
+	displayToAction = make(map[string]ActionType, len(actionDisplayNames))
+	for at, dn := range actionDisplayNames {
+		displayToAction[dn] = at
+	}
+}
+
 // String returns the string representation of an ActionType.
 func (a ActionType) String() string {
 	return string(a)
@@ -34,14 +61,29 @@ func (a ActionType) String() string {
 
 // IsValid returns true if the ActionType is a known type.
 func (a ActionType) IsValid() bool {
-	switch a {
-	case ActionFileRead, ActionFileWrite, ActionFileDelete,
-		ActionCommandExec, ActionNetworkRequest, ActionToolUse,
-		ActionSessionStart, ActionSessionEnd, ActionNotification, ActionUnknown:
-		return true
-	default:
-		return false
+	_, ok := actionDisplayNames[a]
+	return ok
+}
+
+// DisplayName returns a short human-readable name for the action type.
+func (a ActionType) DisplayName() string {
+	if dn, ok := actionDisplayNames[a]; ok {
+		return dn
 	}
+	return "unknown"
+}
+
+// ParseActionType parses a string into an ActionType, accepting both
+// full names (e.g. "file_write") and display names (e.g. "write").
+func ParseActionType(s string) (ActionType, error) {
+	if at, ok := displayToAction[s]; ok {
+		return at, nil
+	}
+	at := ActionType(s)
+	if at.IsValid() {
+		return at, nil
+	}
+	return "", fmt.Errorf("invalid action type: %q", s)
 }
 
 // ResultStatus represents the outcome of an agent action.

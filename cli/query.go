@@ -119,7 +119,11 @@ through the audit history.`,
 			if len(actions) > 0 {
 				actionTypes := make([]events.ActionType, len(actions))
 				for i, a := range actions {
-					actionTypes[i] = events.ActionType(a)
+					at, err := events.ParseActionType(a)
+					if err != nil {
+						return err
+					}
+					actionTypes[i] = at
 				}
 				filter = filter.WithActions(actionTypes...)
 			}

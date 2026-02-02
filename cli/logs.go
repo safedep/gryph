@@ -317,7 +317,7 @@ func eventToView(e *events.Event) *tui.EventView {
 		AgentName:        e.AgentName,
 		AgentDisplayName: getAgentDisplayName(e.AgentName),
 		ActionType:       string(e.ActionType),
-		ActionDisplay:    actionDisplay(e.ActionType),
+		ActionDisplay:    e.ActionType.DisplayName(),
 		ToolName:         e.ToolName,
 		ResultStatus:     string(e.ResultStatus),
 		ErrorMessage:     e.ErrorMessage,
@@ -348,30 +348,3 @@ func eventToView(e *events.Event) *tui.EventView {
 	return view
 }
 
-// actionDisplay returns a short display name for an action type.
-func actionDisplay(action events.ActionType) string {
-	switch action {
-	case events.ActionFileRead:
-		return "read"
-	case events.ActionFileWrite:
-		return "write"
-	case events.ActionFileDelete:
-		return "delete"
-	case events.ActionCommandExec:
-		return "exec"
-	case events.ActionNetworkRequest:
-		return "http"
-	case events.ActionToolUse:
-		return "tool"
-	case events.ActionSessionStart:
-		return "session_start"
-	case events.ActionSessionEnd:
-		return "session_end"
-	case events.ActionNotification:
-		return "notification"
-	case events.ActionUnknown:
-		return "unknown"
-	default:
-		return "unknown"
-	}
-}
