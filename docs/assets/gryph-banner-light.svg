@@ -1,42 +1,107 @@
-<svg width="1280" height="200" viewBox="0 0 1280 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <radialGradient id="tealSweepLight" cx="0.1" cy="0.95" r="0.6" fx="0.02" fy="1">
-      <stop offset="0%" stop-color="#0D9488" stop-opacity="0.08"/>
-      <stop offset="50%" stop-color="#0D9488" stop-opacity="0.02"/>
-      <stop offset="100%" stop-color="#0D9488" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" width="800" height="200">
+  <!-- Light Mode: Frame #374151, Text #111827, Accent #0891B2, Tagline #6B7280 -->
   
-  <!-- Background -->
-  <rect width="1280" height="200" fill="#FFFFFF"/>
+  <!-- Terminal Frame - Outer -->
+  <rect x="50" y="15" width="700" height="170" fill="none" stroke="#374151" stroke-width="3"/>
   
-  <!-- Teal light sweep -->
-  <rect width="1280" height="200" fill="url(#tealSweepLight)"/>
+  <!-- Terminal Frame - Inner (double-line effect) -->
+  <rect x="58" y="23" width="684" height="154" fill="none" stroke="#374151" stroke-width="1"/>
   
-  <!-- Headline: Gryph -->
-  <text 
-    x="640" 
-    y="85" 
-    text-anchor="middle" 
-    dominant-baseline="middle"
-    font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" 
-    font-weight="300" 
-    font-size="64" 
-    fill="#111827"
-    letter-spacing="-0.02em"
-  >Gryph</text>
+  <!-- Horizontal Divider -->
+  <line x1="58" y1="135" x2="742" y2="135" stroke="#374151" stroke-width="1"/>
   
-  <!-- Descriptor: AI Coding Agent Audit Trail -->
-  <text 
-    x="640" 
-    y="130" 
-    text-anchor="middle" 
-    dominant-baseline="middle"
-    font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" 
-    font-weight="400" 
-    font-size="20" 
-    fill="#0D9488"
-    letter-spacing="-0.01em"
-  >AI Coding Agent Audit Trail</text>
+  <!-- GRYPH Pixel Letters - 10px blocks, 7 rows tall -->
+  <!-- Centered horizontally -->
   
+  <g fill="#111827">
+    <!-- Letter G starting at x=235 -->
+    <g>
+      <rect x="245" y="40" width="40" height="10"/>
+      <rect x="235" y="50" width="10" height="10"/>
+      <rect x="275" y="50" width="10" height="10"/>
+      <rect x="235" y="60" width="10" height="10"/>
+      <rect x="235" y="70" width="10" height="10"/>
+      <rect x="255" y="70" width="30" height="10"/>
+      <rect x="235" y="80" width="10" height="10"/>
+      <rect x="275" y="80" width="10" height="10"/>
+      <rect x="235" y="90" width="10" height="10"/>
+      <rect x="275" y="90" width="10" height="10"/>
+      <rect x="245" y="100" width="40" height="10"/>
+    </g>
+    
+    <!-- Letter R starting at x=305 -->
+    <g>
+      <rect x="305" y="40" width="40" height="10"/>
+      <rect x="305" y="50" width="10" height="10"/>
+      <rect x="345" y="50" width="10" height="10"/>
+      <rect x="305" y="60" width="10" height="10"/>
+      <rect x="345" y="60" width="10" height="10"/>
+      <rect x="305" y="70" width="50" height="10"/>
+      <rect x="305" y="80" width="10" height="10"/>
+      <rect x="335" y="80" width="10" height="10"/>
+      <rect x="305" y="90" width="10" height="10"/>
+      <rect x="345" y="90" width="10" height="10"/>
+      <rect x="305" y="100" width="10" height="10"/>
+      <rect x="345" y="100" width="10" height="10"/>
+    </g>
+    
+    <!-- Letter Y starting at x=375 -->
+    <g>
+      <rect x="375" y="40" width="10" height="10"/>
+      <rect x="415" y="40" width="10" height="10"/>
+      <rect x="375" y="50" width="10" height="10"/>
+      <rect x="415" y="50" width="10" height="10"/>
+      <rect x="385" y="60" width="10" height="10"/>
+      <rect x="405" y="60" width="10" height="10"/>
+      <rect x="395" y="70" width="10" height="10"/>
+      <rect x="395" y="80" width="10" height="10"/>
+      <rect x="395" y="90" width="10" height="10"/>
+      <rect x="395" y="100" width="10" height="10"/>
+    </g>
+    
+    <!-- Letter P starting at x=445 -->
+    <g>
+      <rect x="445" y="40" width="40" height="10"/>
+      <rect x="445" y="50" width="10" height="10"/>
+      <rect x="485" y="50" width="10" height="10"/>
+      <rect x="445" y="60" width="10" height="10"/>
+      <rect x="485" y="60" width="10" height="10"/>
+      <rect x="445" y="70" width="50" height="10"/>
+      <rect x="445" y="80" width="10" height="10"/>
+      <rect x="445" y="90" width="10" height="10"/>
+      <rect x="445" y="100" width="10" height="10"/>
+    </g>
+    
+    <!-- Letter H starting at x=515 -->
+    <g>
+      <rect x="515" y="40" width="10" height="10"/>
+      <rect x="555" y="40" width="10" height="10"/>
+      <rect x="515" y="50" width="10" height="10"/>
+      <rect x="555" y="50" width="10" height="10"/>
+      <rect x="515" y="60" width="10" height="10"/>
+      <rect x="555" y="60" width="10" height="10"/>
+      <rect x="515" y="70" width="50" height="10"/>
+      <rect x="515" y="80" width="10" height="10"/>
+      <rect x="555" y="80" width="10" height="10"/>
+      <rect x="515" y="90" width="10" height="10"/>
+      <rect x="555" y="90" width="10" height="10"/>
+      <rect x="515" y="100" width="10" height="10"/>
+      <rect x="555" y="100" width="10" height="10"/>
+    </g>
+  </g>
+  
+  <!-- Watcher Eye ◉ + Tagline (centered as a group) -->
+  <g transform="translate(400, 156)">
+    <!-- Eye positioned left of center -->
+    <circle cx="-155" cy="0" r="8" fill="none" stroke="#0891B2" stroke-width="2"/>
+    <circle cx="-155" cy="0" r="3.5" fill="#0891B2"/>
+    
+    <!-- Tagline centered -->
+    <text x="12" y="5" 
+          text-anchor="middle"
+          font-family="'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace" 
+          font-size="14" 
+          fill="#6B7280" 
+          letter-spacing="0.05em">AI CODING AGENT AUDIT TRAIL</text>
+  </g>
 </svg>

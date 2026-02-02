@@ -1,5 +1,6 @@
 {
   "hook_type": "tool.execute.before",
+  "session_id": "opencode-session-abc123",
   "tool": "write",
   "args": {
     "file_path": "/home/user/project/src/main.go",

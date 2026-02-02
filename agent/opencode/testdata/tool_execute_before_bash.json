@@ -1,5 +1,6 @@
 {
   "hook_type": "tool.execute.before",
+  "session_id": "opencode-session-abc123",
   "tool": "bash",
   "args": {
     "command": "npm install",

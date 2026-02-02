@@ -1,8 +1,11 @@
 {
   "hook_type": "tool.execute.after",
+  "session_id": "opencode-session-abc123",
   "tool": "read",
-  "args": {
-    "file_path": "/home/user/project/README.md"
+  "result": {
+    "title": "Read file",
+    "output": "# README\nThis is a project readme.",
+    "metadata": {}
   },
   "cwd": "/home/user/project"
 }

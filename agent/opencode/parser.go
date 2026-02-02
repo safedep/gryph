@@ -13,10 +13,12 @@ import (
 )
 
 type ToolEventInput struct {
-	HookType string                 `json:"hook_type"`
-	Tool     string                 `json:"tool"`
-	Args     map[string]interface{} `json:"args"`
-	Cwd      string                 `json:"cwd"`
+	HookType  string                 `json:"hook_type"`
+	SessionID string                 `json:"session_id"`
+	Tool      string                 `json:"tool"`
+	Args      map[string]interface{} `json:"args"`
+	Result    map[string]interface{} `json:"result"`
+	Cwd       string                 `json:"cwd"`
 }
 
 type SessionEventInput struct {
@@ -68,7 +70,7 @@ func (a *Adapter) parseToolEvent(hookType string, rawData []byte, isAfter bool) 
 		return nil, fmt.Errorf("failed to parse tool event input: %w", err)
 	}
 
-	sessionID := resolveSessionID("")
+	sessionID := resolveSessionID(input.SessionID)
 	toolName := strings.ToLower(input.Tool)
 	actionType := getActionType(toolName)
 
@@ -77,12 +79,14 @@ func (a *Adapter) parseToolEvent(hookType string, rawData []byte, isAfter bool) 
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = rawData
 
-	if err := a.buildPayload(event, actionType, toolName, input.Args, nil); err != nil {
-		return nil, fmt.Errorf("failed to build payload: %w", err)
+	var toolResponse map[string]interface{}
+	if isAfter {
+		toolResponse = input.Result
+		event.ResultStatus = events.ResultSuccess
 	}
 
-	if isAfter {
-		event.ResultStatus = events.ResultSuccess
+	if err := a.buildPayload(event, actionType, toolName, input.Args, toolResponse); err != nil {
+		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
 
 	a.markSensitivePaths(event, actionType, input.Args)

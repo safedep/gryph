@@ -103,10 +103,45 @@ func TestParseHookEvent_ToolExecuteAfter_Read(t *testing.T) {
 	assert.Equal(t, events.ActionFileRead, event.ActionType)
 	assert.Equal(t, "read", event.ToolName)
 	assert.Equal(t, events.ResultSuccess, event.ResultStatus)
+}
 
-	payload, err := event.GetFileReadPayload()
+func TestParseHookEvent_ToolExecuteAfter_Bash(t *testing.T) {
+	ctx := context.Background()
+	data := []byte(`{
+		"hook_type": "tool.execute.after",
+		"session_id": "opencode-session-abc123",
+		"tool": "bash",
+		"result": {
+			"title": "Run command",
+			"output": "installed 42 packages",
+			"metadata": {"exitCode": 0}
+		},
+		"cwd": "/home/user/project"
+	}`)
+
+	event, err := testAdapter(t).ParseEvent(ctx, "tool.execute.after", data)
 	require.NoError(t, err)
-	assert.Equal(t, "/home/user/project/README.md", payload.Path)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionCommandExec, event.ActionType)
+	assert.Equal(t, "bash", event.ToolName)
+	assert.Equal(t, events.ResultSuccess, event.ResultStatus)
+}
+
+func TestParseHookEvent_ToolSessionIDCorrelation(t *testing.T) {
+	ctx := context.Background()
+	adapter := testAdapter(t)
+
+	toolData := loadFixture(t, "tool_execute_before_read.json")
+	toolEvent, err := adapter.ParseEvent(ctx, "tool.execute.before", toolData)
+	require.NoError(t, err)
+
+	sessionData := loadFixture(t, "session_created.json")
+	sessionEvent, err := adapter.ParseEvent(ctx, "session.created", sessionData)
+	require.NoError(t, err)
+
+	assert.Equal(t, sessionEvent.SessionID, toolEvent.SessionID,
+		"Tool events and session events with the same agent session ID should produce the same session UUID")
 }
 
 func TestParseHookEvent_SessionCreated(t *testing.T) {
