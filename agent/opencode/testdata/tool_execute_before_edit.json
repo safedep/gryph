@@ -1,10 +1,11 @@
 {
   "hook_type": "tool.execute.before",
   "session_id": "opencode-session-abc123",
-  "tool": "write",
+  "tool": "edit",
   "args": {
     "filePath": "/home/user/project/src/main.go",
-    "content": "package main\n\nfunc main() {\n\t// New content\n}"
+    "oldString": "func main() {\n\t// Old content\n}",
+    "newString": "func main() {\n\t// New content\n\tfmt.Println(\"hello\")\n}"
   },
   "cwd": "/home/user/project"
 }

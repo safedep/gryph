@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"slices"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -187,6 +188,8 @@ func runListLogs(ctx context.Context, app *App, p logParams) error {
 		return app.Presenter.RenderMessage("No events found. Run 'gryph install' to start logging agent activity.")
 	}
 
+	slices.Reverse(evts)
+
 	eventViews := make([]*tui.EventView, len(evts))
 	for i, e := range evts {
 		eventViews[i] = eventToView(e)
@@ -208,6 +211,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 
 	var lastTimestamp time.Time
 	if len(evts) > 0 {
+		slices.Reverse(evts)
 		eventViews := make([]*tui.EventView, len(evts))
 		for i, e := range evts {
 			eventViews[i] = eventToView(e)
@@ -215,7 +219,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 		if err := app.Presenter.RenderEvents(eventViews); err != nil {
 			return err
 		}
-		lastTimestamp = evts[0].Timestamp
+		lastTimestamp = evts[len(evts)-1].Timestamp
 	} else {
 		lastTimestamp = time.Now().UTC()
 	}
@@ -244,6 +248,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 			}
 
 			if len(newEvts) > 0 {
+				slices.Reverse(newEvts)
 				eventViews := make([]*tui.EventView, len(newEvts))
 				for i, e := range newEvts {
 					eventViews[i] = eventToView(e)
@@ -251,7 +256,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 				if err := app.Presenter.RenderEvents(eventViews); err != nil {
 					return err
 				}
-				lastTimestamp = newEvts[0].Timestamp
+				lastTimestamp = newEvts[len(newEvts)-1].Timestamp
 			}
 		}
 	}

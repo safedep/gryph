@@ -74,6 +74,27 @@ func TestParseHookEvent_ToolExecuteBefore_Read(t *testing.T) {
 	assert.Equal(t, "/home/user/project/README.md", payload.Path)
 }
 
+func TestParseHookEvent_ToolExecuteBefore_Edit(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "tool_execute_before_edit.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "tool.execute.before", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionFileWrite, event.ActionType)
+	assert.Equal(t, "edit", event.ToolName)
+	assert.Equal(t, "/home/user/project", event.WorkingDirectory)
+
+	payload, err := event.GetFileWritePayload()
+	require.NoError(t, err)
+	assert.Equal(t, "/home/user/project/src/main.go", payload.Path)
+	assert.Greater(t, payload.LinesAdded, 0)
+	assert.Greater(t, payload.LinesRemoved, 0)
+	assert.NotEmpty(t, payload.OldString)
+	assert.NotEmpty(t, payload.NewString)
+}
+
 func TestParseHookEvent_ToolExecuteBefore_Bash(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "tool_execute_before_bash.json")

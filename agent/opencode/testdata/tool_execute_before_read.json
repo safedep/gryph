@@ -3,7 +3,7 @@
   "session_id": "opencode-session-abc123",
   "tool": "read",
   "args": {
-    "file_path": "/home/user/project/README.md"
+    "filePath": "/home/user/project/README.md"
   },
   "cwd": "/home/user/project"
 }

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
@@ -153,6 +154,8 @@ through the audit history.`,
 			if len(evts) == 0 {
 				return app.Presenter.RenderMessage("No events found matching the query.")
 			}
+
+			slices.Reverse(evts)
 
 			// Convert to view models
 			eventViews := make([]*tui.EventView, len(evts))

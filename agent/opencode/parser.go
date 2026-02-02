@@ -171,6 +171,8 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		payload := events.FileReadPayload{}
 		if path, ok := toolInput["file_path"].(string); ok {
 			payload.Path = path
+		} else if path, ok := toolInput["filePath"].(string); ok {
+			payload.Path = path
 		} else if path, ok := toolInput["path"].(string); ok {
 			payload.Path = path
 		}
@@ -187,11 +189,20 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		if path, ok := toolInput["file_path"].(string); ok {
 			payload.Path = path
 			filePath = path
+		} else if path, ok := toolInput["filePath"].(string); ok {
+			payload.Path = path
+			filePath = path
 		}
 
 		fullContent, _ := toolInput["content"].(string)
 		fullOldStr, _ := toolInput["old_string"].(string)
+		if fullOldStr == "" {
+			fullOldStr, _ = toolInput["oldString"].(string)
+		}
 		fullNewStr, _ := toolInput["new_string"].(string)
+		if fullNewStr == "" {
+			fullNewStr, _ = toolInput["newString"].(string)
+		}
 
 		if a.contentHash {
 			if fullContent != "" {
@@ -277,6 +288,8 @@ func (a *Adapter) markSensitivePaths(event *events.Event, actionType events.Acti
 	switch actionType {
 	case events.ActionFileRead, events.ActionFileWrite:
 		if path, ok := toolInput["file_path"].(string); ok {
+			event.IsSensitive = a.privacyChecker.IsSensitivePath(path)
+		} else if path, ok := toolInput["filePath"].(string); ok {
 			event.IsSensitive = a.privacyChecker.IsSensitivePath(path)
 		} else if path, ok := toolInput["path"].(string); ok {
 			event.IsSensitive = a.privacyChecker.IsSensitivePath(path)
