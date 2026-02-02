@@ -128,10 +128,10 @@ type Store interface {
 
 // DatabaseInfo contains information about the database.
 type DatabaseInfo struct {
-	Path        string
-	SizeBytes   int64
-	EventCount  int
+	Path         string
+	SizeBytes    int64
+	EventCount   int
 	SessionCount int
-	OldestEvent time.Time
-	NewestEvent time.Time
+	OldestEvent  time.Time
+	NewestEvent  time.Time
 }

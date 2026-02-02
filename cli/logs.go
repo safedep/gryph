@@ -352,4 +352,3 @@ func eventToView(e *events.Event) *tui.EventView {
 
 	return view
 }
-

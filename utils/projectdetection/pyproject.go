@@ -2,6 +2,7 @@ package projectdetection
 
 import (
 	"bufio"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,7 +21,13 @@ func (pyprojectDetector) Detect(path string) (*ProjectInfo, error) {
 	if err != nil {
 		return nil, nil
 	}
-	defer file.Close()
+
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("error closing file: %v", err)
+		}
+	}()
+
 	inProject := false
 	sc := bufio.NewScanner(file)
 	for sc.Scan() {
@@ -36,5 +43,6 @@ func (pyprojectDetector) Detect(path string) (*ProjectInfo, error) {
 			}
 		}
 	}
+
 	return nil, nil
 }

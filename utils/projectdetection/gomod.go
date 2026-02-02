@@ -2,6 +2,7 @@ package projectdetection
 
 import (
 	"bufio"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +18,13 @@ func (gomodDetector) Detect(path string) (*ProjectInfo, error) {
 	if err != nil {
 		return nil, nil
 	}
-	defer file.Close()
+
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("error closing file: %v", err)
+		}
+	}()
+
 	sc := bufio.NewScanner(file)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
@@ -34,5 +41,6 @@ func (gomodDetector) Detect(path string) (*ProjectInfo, error) {
 			return &ProjectInfo{Name: name}, nil
 		}
 	}
+
 	return nil, nil
 }

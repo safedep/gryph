@@ -6,7 +6,7 @@ import (
 )
 
 type headerModel struct {
-	agentFilter string
+	agentFilter  string
 	sessionCount int
 }
 

@@ -30,7 +30,12 @@ func newStreamSyncCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer app.Close()
+
+			defer func() {
+				if err := app.Close(); err != nil {
+					fmt.Printf("Error closing app: %v\n", err)
+				}
+			}()
 
 			ctx := cmd.Context()
 			if err := app.InitStore(ctx); err != nil {

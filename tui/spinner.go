@@ -12,43 +12,54 @@ import (
 
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
-type spinnerConfig struct {
+type spinnerWriter struct {
 	writer   io.Writer
 	interval time.Duration
+	err      error
 }
 
-type SpinnerOption func(*spinnerConfig)
+func (sw *spinnerWriter) printf(format string, args ...any) {
+	if sw.err != nil {
+		return
+	}
+
+	_, sw.err = fmt.Fprintf(sw.writer, format, args...)
+}
+
+func (sw *spinnerWriter) isTerminal() bool {
+	f, ok := sw.writer.(*os.File)
+	if !ok {
+		return false
+	}
+
+	return term.IsTerminal(int(f.Fd()))
+}
+
+type SpinnerOption func(*spinnerWriter)
 
 func WithWriter(w io.Writer) SpinnerOption {
-	return func(c *spinnerConfig) {
+	return func(c *spinnerWriter) {
 		c.writer = w
 	}
 }
 
 func WithInterval(d time.Duration) SpinnerOption {
-	return func(c *spinnerConfig) {
+	return func(c *spinnerWriter) {
 		c.interval = d
 	}
 }
 
-func isWriterTerminal(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	return term.IsTerminal(int(f.Fd()))
-}
-
 func RunWithSpinner[T any](message string, fn func() (T, error), opts ...SpinnerOption) (T, error) {
-	cfg := spinnerConfig{
+	writer := spinnerWriter{
 		writer:   os.Stderr,
 		interval: 100 * time.Millisecond,
 	}
+
 	for _, opt := range opts {
-		opt(&cfg)
+		opt(&writer)
 	}
 
-	if !isWriterTerminal(cfg.writer) {
+	if !writer.isTerminal() {
 		return fn()
 	}
 
@@ -58,24 +69,30 @@ func RunWithSpinner[T any](message string, fn func() (T, error), opts ...Spinner
 
 	go func() {
 		defer wg.Done()
+
 		i := 0
 		for {
 			select {
 			case <-stop:
-				fmt.Fprintf(cfg.writer, "\033[2K\r")
+				writer.printf("\033[2K\r")
 				return
 			default:
 				frame := spinnerFrames[i%len(spinnerFrames)]
-				fmt.Fprintf(cfg.writer, "\033[2K\r%s%s%s %s", Cyan, frame, Reset, message)
+				writer.printf("\033[2K\r%s%s%s %s", Cyan, frame, Reset, message)
 				i++
-				time.Sleep(cfg.interval)
+				time.Sleep(writer.interval)
 			}
 		}
 	}()
 
 	result, err := fn()
+
 	close(stop)
 	wg.Wait()
 
-	return result, err
+	if err != nil {
+		return result, err
+	}
+
+	return result, writer.err
 }

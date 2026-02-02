@@ -6,10 +6,10 @@ import (
 
 // StatusView represents the status output data.
 type StatusView struct {
-	Version string
-	Agents  []AgentStatusView
+	Version  string
+	Agents   []AgentStatusView
 	Database DatabaseView
-	Config  ConfigStatusView
+	Config   ConfigStatusView
 }
 
 // AgentStatusView represents an agent's status.
@@ -35,10 +35,10 @@ type DatabaseView struct {
 
 // ConfigStatusView represents configuration status.
 type ConfigStatusView struct {
-	Location       string
-	LoggingLevel   string
-	RetentionDays  int
-	EventsToClean  int  // Events that would be deleted by retention policy
+	Location        string
+	LoggingLevel    string
+	RetentionDays   int
+	EventsToClean   int       // Events that would be deleted by retention policy
 	RetentionCutoff time.Time // The cutoff date for retention
 }
 
@@ -90,7 +90,7 @@ type EventView struct {
 
 // InstallView represents installation results.
 type InstallView struct {
-	Agents []AgentInstallView
+	Agents   []AgentInstallView
 	Database string
 	Config   string
 }

@@ -11,14 +11,14 @@ import (
 )
 
 const (
-	colTimeWidth    = 19 // "2006-01-02 15:04:05"
-	colIconWidth    = 1  // single symbol
-	colAgentWidth   = 12 // "claude-code " padded
-	colSessWidth    = 4  // short session ID
-	colActionWidth  = 6  // "write " padded
-	colSpacing      = 6  // spaces between fixed columns
-	colMinTarget    = 15
-	colMaxTarget    = 120
+	colTimeWidth   = 19 // "2006-01-02 15:04:05"
+	colIconWidth   = 1  // single symbol
+	colAgentWidth  = 12 // "claude-code " padded
+	colSessWidth   = 4  // short session ID
+	colActionWidth = 6  // "write " padded
+	colSpacing     = 6  // spaces between fixed columns
+	colMinTarget   = 15
+	colMaxTarget   = 120
 )
 
 func fixedColumnsWidth() int {
@@ -122,4 +122,3 @@ func truncatePath(p string, maxWidth int) string {
 	}
 	return tui.TruncateString(base, maxWidth)
 }
-

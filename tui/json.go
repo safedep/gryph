@@ -34,8 +34,8 @@ func (p *JSONPresenter) RenderSessions(sessions []*SessionView) error {
 // RenderSession renders a single session detail as JSON.
 func (p *JSONPresenter) RenderSession(session *SessionView, events []*EventView) error {
 	output := struct {
-		Session *SessionView   `json:"session"`
-		Events  []*EventView   `json:"events"`
+		Session *SessionView `json:"session"`
+		Events  []*EventView `json:"events"`
 	}{
 		Session: session,
 		Events:  events,

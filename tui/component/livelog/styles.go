@@ -6,19 +6,18 @@ import (
 )
 
 var (
-	colorBlue    = lipgloss.Color("#5B9BD5")
-	colorGreen   = lipgloss.Color("#6BCB77")
-	colorRed     = lipgloss.Color("#E74C3C")
-	colorAmber   = lipgloss.Color("#F0AD4E")
-	colorViolet  = lipgloss.Color("#9B59B6")
-	colorIndigo  = lipgloss.Color("#6C5CE7")
-	colorTeal    = lipgloss.Color("#1ABC9C")
-	colorOrange  = lipgloss.Color("#E67E22")
-	colorPink    = lipgloss.Color("#E91E63")
-	colorWhite   = lipgloss.Color("#ECF0F1")
-	colorDim     = lipgloss.Color("#7F8C8D")
-	colorBg      = lipgloss.Color("#1E1E2E")
-	colorBgLight = lipgloss.Color("#2E2E3E")
+	colorBlue   = lipgloss.Color("#5B9BD5")
+	colorGreen  = lipgloss.Color("#6BCB77")
+	colorRed    = lipgloss.Color("#E74C3C")
+	colorAmber  = lipgloss.Color("#F0AD4E")
+	colorViolet = lipgloss.Color("#9B59B6")
+	colorIndigo = lipgloss.Color("#6C5CE7")
+	colorTeal   = lipgloss.Color("#1ABC9C")
+	colorOrange = lipgloss.Color("#E67E22")
+	colorPink   = lipgloss.Color("#E91E63")
+	colorWhite  = lipgloss.Color("#ECF0F1")
+	colorDim    = lipgloss.Color("#7F8C8D")
+	colorBg     = lipgloss.Color("#1E1E2E")
 
 	headerStyle = lipgloss.NewStyle().
 			Background(colorBg).
@@ -80,16 +79,16 @@ type actionStyle struct {
 }
 
 var actionStyles = map[events.ActionType]actionStyle{
-	events.ActionFileRead:        {symbol: ">", color: colorBlue},
-	events.ActionFileWrite:       {symbol: "+", color: colorGreen},
-	events.ActionFileDelete:      {symbol: "x", color: colorRed},
-	events.ActionCommandExec:     {symbol: "$", color: colorAmber},
-	events.ActionNetworkRequest:  {symbol: "~", color: colorViolet},
-	events.ActionToolUse:         {symbol: "*", color: colorIndigo},
-	events.ActionSessionStart:    {symbol: "[", color: colorTeal},
-	events.ActionSessionEnd:      {symbol: "]", color: colorTeal},
-	events.ActionNotification:    {symbol: "!", color: colorOrange},
-	events.ActionUnknown:         {symbol: "?", color: colorDim},
+	events.ActionFileRead:       {symbol: ">", color: colorBlue},
+	events.ActionFileWrite:      {symbol: "+", color: colorGreen},
+	events.ActionFileDelete:     {symbol: "x", color: colorRed},
+	events.ActionCommandExec:    {symbol: "$", color: colorAmber},
+	events.ActionNetworkRequest: {symbol: "~", color: colorViolet},
+	events.ActionToolUse:        {symbol: "*", color: colorIndigo},
+	events.ActionSessionStart:   {symbol: "[", color: colorTeal},
+	events.ActionSessionEnd:     {symbol: "]", color: colorTeal},
+	events.ActionNotification:   {symbol: "!", color: colorOrange},
+	events.ActionUnknown:        {symbol: "?", color: colorDim},
 }
 
 func actionStyleFor(action events.ActionType) actionStyle {
