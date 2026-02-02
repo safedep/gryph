@@ -49,3 +49,84 @@ func TestGenerateDiff_MultilineEdit(t *testing.T) {
 	assert.Contains(t, diff, "+\tfmt.Println(\"world\")")
 	assert.Contains(t, diff, "+\tfmt.Println(\"!\")")
 }
+
+func TestCountDiffLines(t *testing.T) {
+	tests := []struct {
+		name        string
+		oldStr      string
+		newStr      string
+		wantAdded   int
+		wantRemoved int
+	}{
+		{
+			name:        "empty to content",
+			oldStr:      "",
+			newStr:      "line1\nline2\nline3\n",
+			wantAdded:   3,
+			wantRemoved: 0,
+		},
+		{
+			name:        "edit with additions",
+			oldStr:      "line1\nline2\n",
+			newStr:      "line1\nline2\nline3\nline4\n",
+			wantAdded:   2,
+			wantRemoved: 0,
+		},
+		{
+			name:        "edit with deletions",
+			oldStr:      "line1\nline2\nline3\n",
+			newStr:      "line1\n",
+			wantAdded:   0,
+			wantRemoved: 2,
+		},
+		{
+			name:        "mixed add and remove",
+			oldStr:      "line1\nline2\nline3\n",
+			newStr:      "line1\nchanged\nline3\nnew\n",
+			wantAdded:   2,
+			wantRemoved: 1,
+		},
+		{
+			name:        "empty to empty",
+			oldStr:      "",
+			newStr:      "",
+			wantAdded:   0,
+			wantRemoved: 0,
+		},
+		{
+			name:        "identical content",
+			oldStr:      "same\ncontent\n",
+			newStr:      "same\ncontent\n",
+			wantAdded:   0,
+			wantRemoved: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			added, removed := CountDiffLines(tt.oldStr, tt.newStr)
+			assert.Equal(t, tt.wantAdded, added, "added lines")
+			assert.Equal(t, tt.wantRemoved, removed, "removed lines")
+		})
+	}
+}
+
+func TestCountNewFileLines(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    int
+	}{
+		{name: "empty", content: "", want: 0},
+		{name: "single line with newline", content: "hello\n", want: 1},
+		{name: "single line without newline", content: "hello", want: 1},
+		{name: "multiple lines", content: "a\nb\nc\n", want: 3},
+		{name: "multiple lines no trailing newline", content: "a\nb\nc", want: 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, CountNewFileLines(tt.content))
+		})
+	}
+}

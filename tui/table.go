@@ -160,8 +160,13 @@ func (p *TablePresenter) RenderSession(session *SessionView, events []*EventView
 			if e.LinesAdded > 0 || e.LinesRemoved > 0 {
 				tw.printf("    Changes: %s\n", FormatLineChanges(e.LinesAdded, e.LinesRemoved))
 			}
-			if e.ExitCode != 0 || e.ActionType == "command_exec" {
-				tw.printf("    Exit: %d\n", e.ExitCode)
+			if e.ExitCode != 0 {
+				tw.printf("    Exit: %s\n", FormatExitCode(e.ExitCode))
+			} else if e.ActionType == "command_exec" {
+				tw.printf("    Exit: 0\n")
+			}
+			if e.ResultStatus == "error" && e.ExitCode == 0 {
+				tw.printf("    Status: error\n")
 			}
 			tw.println()
 		}
@@ -267,11 +272,17 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 		target = TruncateString(target, cols.path)
 
 		result := ""
-		if e.LinesAdded > 0 || e.LinesRemoved > 0 {
+		switch {
+		case e.LinesAdded > 0 || e.LinesRemoved > 0:
 			result = FormatLineChanges(e.LinesAdded, e.LinesRemoved)
-		}
-		if e.ExitCode != 0 {
+		case e.ExitCode != 0:
 			result = FormatExitCode(e.ExitCode)
+		case e.ActionType == "command_exec":
+			result = "exit:0"
+		case e.ResultStatus == "error":
+			result = "error"
+		case e.ResultStatus == "blocked":
+			result = "blocked"
 		}
 
 		tw.printf("%s %s %s %s %s %s %s\n",

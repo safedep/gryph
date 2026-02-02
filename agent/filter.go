@@ -45,6 +45,8 @@ func stripPayloadContent(event *events.Event) {
 		payload.ContentPreview = ""
 		payload.OldString = ""
 		payload.NewString = ""
+		payload.LinesAdded = 0
+		payload.LinesRemoved = 0
 		if data, err := json.Marshal(payload); err == nil {
 			event.Payload = data
 		}

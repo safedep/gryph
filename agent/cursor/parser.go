@@ -420,6 +420,11 @@ func (a *Adapter) parseAfterFileEdit(sessionID uuid.UUID, agentSessionID string,
 		Path: input.FilePath,
 	}
 	if len(input.Edits) > 0 {
+		for _, edit := range input.Edits {
+			a, r := utils.CountDiffLines(edit.OldString, edit.NewString)
+			payload.LinesAdded += a
+			payload.LinesRemoved += r
+		}
 		payload.OldString = truncateString(input.Edits[0].OldString, 200)
 		payload.NewString = truncateString(input.Edits[0].NewString, 200)
 	}
@@ -771,6 +776,12 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 			} else if fullOldStr != "" || fullNewStr != "" {
 				payload.ContentHash = utils.HashContent(fullOldStr + fullNewStr)
 			}
+		}
+
+		if fullOldStr != "" || fullNewStr != "" {
+			payload.LinesAdded, payload.LinesRemoved = utils.CountDiffLines(fullOldStr, fullNewStr)
+		} else if fullContent != "" {
+			payload.LinesAdded = utils.CountNewFileLines(fullContent)
 		}
 
 		if fullContent != "" {

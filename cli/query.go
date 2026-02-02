@@ -24,7 +24,6 @@ func NewQueryCmd() *cobra.Command {
 		filePattern string
 		cmdPattern  string
 		status      string
-		showDiff    bool
 		format      string
 		limit       int
 		offset      int
@@ -175,7 +174,6 @@ through the audit history.`,
 	cmd.Flags().StringVar(&filePattern, "file", "", "filter by file path (glob)")
 	cmd.Flags().StringVar(&cmdPattern, "command", "", "filter by command (glob)")
 	cmd.Flags().StringVar(&status, "status", "", "filter by result status")
-	cmd.Flags().BoolVar(&showDiff, "show-diff", false, "include diff content in output")
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json, jsonl, csv")
 	cmd.Flags().IntVar(&limit, "limit", 100, "maximum results")
 	cmd.Flags().IntVar(&offset, "offset", 0, "skip first n results")

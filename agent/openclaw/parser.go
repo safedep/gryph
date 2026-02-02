@@ -201,6 +201,12 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 			}
 		}
 
+		if fullOldStr != "" || fullNewStr != "" {
+			payload.LinesAdded, payload.LinesRemoved = utils.CountDiffLines(fullOldStr, fullNewStr)
+		} else if fullContent != "" {
+			payload.LinesAdded = utils.CountNewFileLines(fullContent)
+		}
+
 		if fullContent != "" {
 			payload.ContentPreview = truncateString(fullContent, 200)
 		}
