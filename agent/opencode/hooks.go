@@ -22,7 +22,7 @@ var HookTypes = []string{
 	"session.error",
 }
 
-const pluginFileName = "gryph.mjs"
+const pluginFileName = "gryph.js"
 
 func pluginPath(configPath string) string {
 	return filepath.Join(configPath, "plugins", pluginFileName)
