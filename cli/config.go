@@ -10,6 +10,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// resolveConfigPath returns the config file path, preferring the --config flag
+// over the platform default.
+func resolveConfigPath(app *App) string {
+	if globalFlags.ConfigPath != "" {
+		return globalFlags.ConfigPath
+	}
+
+	return app.Paths.ConfigFile
+}
+
 func NewConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
@@ -47,7 +57,7 @@ func newConfigShowCmd() *cobra.Command {
 				UseColors: app.Config.ShouldUseColors(),
 			})
 
-			mgr, err := config.NewManager(app.Paths.ConfigFile)
+			mgr, err := config.NewManager(resolveConfigPath(app))
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -79,7 +89,7 @@ func newConfigGetCmd() *cobra.Command {
 				return err
 			}
 
-			mgr, err := config.NewManager(app.Paths.ConfigFile)
+			mgr, err := config.NewManager(resolveConfigPath(app))
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -126,7 +136,7 @@ func newConfigSetCmd() *cobra.Command {
 				}
 			}
 
-			mgr, err := config.NewManager(app.Paths.ConfigFile)
+			mgr, err := config.NewManager(resolveConfigPath(app))
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
@@ -182,7 +192,7 @@ func newConfigResetCmd() *cobra.Command {
 				}
 			}
 
-			mgr, err := config.NewManager(app.Paths.ConfigFile)
+			mgr, err := config.NewManager(resolveConfigPath(app))
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}

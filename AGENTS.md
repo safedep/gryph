@@ -53,6 +53,11 @@ tui/            → Output formatters (table, json, csv)
 - Sessions are created on first event and updated on subsequent events
 - Session end detected from `SessionEnd` (Claude Code) or `stop` (Cursor) hook types
 
+## Dev Docs
+
+- `docs/e2e.md` - Writing and running E2E tests (`test/cli/`)
+- `docs/agent-adapter.md` - Adding a new agent adapter
+
 ## IMPORTANT
 
 - Do not use unnecessary code comments
