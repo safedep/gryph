@@ -29,28 +29,6 @@ func renderBar(filled, total, width int) string {
 	return strings.Repeat("█", filledW) + strings.Repeat("░", emptyW)
 }
 
-func renderSparkline(values []int, width int) string {
-	if len(values) == 0 || width <= 0 {
-		return ""
-	}
-
-	blocks := []rune(" ▁▂▃▄▅▆▇█")
-	subsPerRow := len(blocks) - 1 // 8 sub-levels per row
-
-	max := 0
-	for _, v := range values {
-		if v > max {
-			max = v
-		}
-	}
-	if max == 0 {
-		return strings.Repeat(string(blocks[0]), width)
-	}
-
-	// Single-row fallback
-	return renderSparklineMultiRow(values, width, 1, blocks, subsPerRow, max)
-}
-
 func renderSparklineMultiRow(values []int, width, rows int, blocks []rune, subsPerRow, max int) string {
 	totalSubs := rows * subsPerRow
 
