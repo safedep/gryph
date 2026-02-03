@@ -159,6 +159,7 @@ native hook systems to create a comprehensive audit trail of all agent actions.`
 		NewHookCmd(),
 		NewRetentionCmd(),
 		NewStreamCmd(),
+		NewStatsCmd(),
 		NewVersionCmd(),
 	)
 
