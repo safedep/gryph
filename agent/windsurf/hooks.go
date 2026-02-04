@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/agent/utils"
 )
 
 var HookTypes = []string{
@@ -83,6 +84,12 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	if existingConfig != nil {
+		if !opts.Force && !opts.DryRun && hasGryphHooks(existingConfig) {
+			result.Warnings = append(result.Warnings, "gryph hooks already installed (use --force to overwrite)")
+			result.Success = true
+			return result, nil
+		}
+
 		if opts.Backup && !opts.DryRun {
 			var backupPath string
 			if opts.BackupDir != "" {
@@ -223,7 +230,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 	for hookType := range config.Hooks {
 		filtered := []HookCommand{}
 		for _, cmd := range config.Hooks[hookType] {
-			if !isGryphCommand(cmd.Command) {
+			if !utils.IsGryphCommand(cmd.Command) {
 				filtered = append(filtered, cmd)
 			} else {
 				result.HooksRemoved = append(result.HooksRemoved, hookType)
@@ -247,8 +254,15 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 	return result, nil
 }
 
-func isGryphCommand(cmd string) bool {
-	return len(cmd) >= 5 && cmd[:5] == "gryph"
+func hasGryphHooks(config *HooksConfig) bool {
+	for _, hookType := range HookTypes {
+		for _, cmd := range config.Hooks[hookType] {
+			if utils.IsGryphCommand(cmd.Command) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func ValidateHooksContent(config *HooksConfig) []string {
@@ -305,7 +319,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 
 	for hookType, commands := range config.Hooks {
 		for _, cmd := range commands {
-			if isGryphCommand(cmd.Command) {
+			if utils.IsGryphCommand(cmd.Command) {
 				status.Installed = true
 				status.Hooks = append(status.Hooks, hookType)
 				break
