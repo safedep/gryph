@@ -1,0 +1,14 @@
+{
+  "agent_action_name": "pre_mcp_tool_use",
+  "trajectory_id": "traj-test-123",
+  "execution_id": "exec-004",
+  "timestamp": "2025-01-15T10:33:00Z",
+  "tool_info": {
+    "mcp_server_name": "github",
+    "mcp_tool_name": "create_issue",
+    "mcp_tool_arguments": {
+      "title": "Bug fix",
+      "body": "Fix the login issue"
+    }
+  }
+}

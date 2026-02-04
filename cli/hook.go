@@ -14,6 +14,7 @@ import (
 	"github.com/safedep/gryph/agent/gemini"
 	"github.com/safedep/gryph/agent/openclaw"
 	"github.com/safedep/gryph/agent/opencode"
+	"github.com/safedep/gryph/agent/windsurf"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
@@ -204,6 +205,11 @@ func sendHookResponse(agentName, hookType string) error {
 		}
 		return nil
 
+	case agent.AgentWindsurf:
+		// Windsurf: exit code semantics (0=allow, 2=block for pre-hooks)
+		// Pre-hooks can block via exit code 2; post-hooks just exit 0
+		return handleWindsurfResponse(windsurf.NewAllowResponse())
+
 	default:
 		// Unknown agent, just succeed
 		return nil
@@ -237,6 +243,10 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 	case agent.AgentOpenClaw:
 		response := openclaw.NewBlockResponse(result.BlockReason)
 		return handleOpenClawResponse(response)
+
+	case agent.AgentWindsurf:
+		response := windsurf.NewBlockResponse(result.BlockReason)
+		return handleWindsurfResponse(response)
 
 	default:
 		return nil
@@ -301,6 +311,18 @@ func handleOpenClawResponse(response *openclaw.HookResponse) error {
 	case openclaw.HookBlock:
 		return &exitError{code: 2, message: response.Message}
 	case openclaw.HookError:
+		return &exitError{code: 1, message: response.Message}
+	default:
+		return nil
+	}
+}
+
+// handleWindsurfResponse processes a Windsurf hook response.
+func handleWindsurfResponse(response *windsurf.HookResponse) error {
+	switch response.Decision {
+	case windsurf.HookBlock:
+		return &exitError{code: 2, message: response.Message}
+	case windsurf.HookError:
 		return &exitError{code: 1, message: response.Message}
 	default:
 		return nil

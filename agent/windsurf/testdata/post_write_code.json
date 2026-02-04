@@ -1,0 +1,15 @@
+{
+  "agent_action_name": "post_write_code",
+  "trajectory_id": "traj-test-123",
+  "execution_id": "exec-006",
+  "timestamp": "2025-01-15T10:35:00Z",
+  "tool_info": {
+    "file_path": "/home/user/project/src/main.go",
+    "edits": [
+      {
+        "old_string": "fmt.Println(\"hello\")",
+        "new_string": "fmt.Println(\"world\")"
+      }
+    ]
+  }
+}

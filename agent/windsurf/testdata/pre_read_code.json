@@ -1,0 +1,9 @@
+{
+  "agent_action_name": "pre_read_code",
+  "trajectory_id": "traj-test-123",
+  "execution_id": "exec-001",
+  "timestamp": "2025-01-15T10:30:00Z",
+  "tool_info": {
+    "file_path": "/home/user/project/.env"
+  }
+}

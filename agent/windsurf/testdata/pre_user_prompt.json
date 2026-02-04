@@ -1,0 +1,9 @@
+{
+  "agent_action_name": "pre_user_prompt",
+  "trajectory_id": "traj-test-123",
+  "execution_id": "exec-005",
+  "timestamp": "2025-01-15T10:34:00Z",
+  "tool_info": {
+    "user_prompt": "Help me fix the login bug"
+  }
+}

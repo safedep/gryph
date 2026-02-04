@@ -70,7 +70,7 @@ gryph install
 # Verify installation
 gryph status
 
-# Start using your AI coding agent (Claude Code, Cursor, Gemini CLI, OpenCode, etc.)
+# Start using your AI coding agent
 # ...
 
 # Review what happened
@@ -94,6 +94,7 @@ For transparency, here are the files Gryph modifies when you run `gryph install`
 | Cursor      | `~/.cursor/hooks.json`                 | Creates or updates hooks configuration   |
 | Gemini CLI  | `~/.gemini/settings.json`              | Adds hook entries to the `hooks` section |
 | OpenCode    | `~/.config/opencode/plugins/gryph.mjs` | Installs JS plugin that bridges to gryph |
+| Windsurf    | `~/.codeium/windsurf/hooks.json`       | Creates or updates hooks configuration   |
 
 ### Backups
 
@@ -253,6 +254,7 @@ gryph doctor
 | **Cursor**      | Supported | Full (file read/write, shell execution, MCP tools) |
 | **Gemini CLI**  | Supported | Full (BeforeTool, AfterTool, Notification)         |
 | **OpenCode**    | Supported | Full (tool.execute, session events)                |
+| **Windsurf**    | Supported | Full (file read/write, commands, MCP tools)        |
 
 ## Configuration
 

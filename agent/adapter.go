@@ -14,6 +14,7 @@ const (
 	AgentGemini     = "gemini"
 	AgentOpenCode   = "opencode"
 	AgentOpenClaw   = "openclaw"
+	AgentWindsurf   = "windsurf"
 )
 
 // Standard agent display names.
@@ -23,6 +24,7 @@ const (
 	DisplayGemini     = "Gemini CLI"
 	DisplayOpenCode   = "OpenCode"
 	DisplayOpenClaw   = "OpenClaw"
+	DisplayWindsurf   = "Windsurf"
 )
 
 // AgentDisplayName returns the display name for an agent identifier.
@@ -38,6 +40,8 @@ func AgentDisplayName(name string) string {
 		return DisplayOpenCode
 	case AgentOpenClaw:
 		return DisplayOpenClaw
+	case AgentWindsurf:
+		return DisplayWindsurf
 	default:
 		return name
 	}

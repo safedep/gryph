@@ -84,6 +84,7 @@ func SupportedAgents() []string {
 		"gemini",
 		"opencode",
 		"openclaw",
+		"windsurf",
 	}
 }
 

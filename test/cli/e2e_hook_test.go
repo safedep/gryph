@@ -467,6 +467,131 @@ func TestHook_OpenCode(t *testing.T) {
 	}
 }
 
+func TestHook_Windsurf(t *testing.T) {
+	tests := []struct {
+		name     string
+		hookType string
+		fixture  string
+		assert   func(t *testing.T, env *testEnv, stdout, stderr string, err error)
+	}{
+		{
+			name:     "pre_read_code",
+			hookType: "pre_read_code",
+			fixture:  "../../agent/windsurf/testdata/pre_read_code.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionFileRead, evts[0].ActionType)
+			},
+		},
+		{
+			name:     "pre_write_code",
+			hookType: "pre_write_code",
+			fixture:  "../../agent/windsurf/testdata/pre_write_code.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionFileWrite, evts[0].ActionType)
+			},
+		},
+		{
+			name:     "pre_run_command",
+			hookType: "pre_run_command",
+			fixture:  "../../agent/windsurf/testdata/pre_run_command.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionCommandExec, evts[0].ActionType)
+				p, pErr := evts[0].GetCommandExecPayload()
+				require.NoError(t, pErr)
+				assert.Equal(t, "npm install", p.Command)
+			},
+		},
+		{
+			name:     "pre_mcp_tool_use",
+			hookType: "pre_mcp_tool_use",
+			fixture:  "../../agent/windsurf/testdata/pre_mcp_tool_use.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionToolUse, evts[0].ActionType)
+			},
+		},
+		{
+			name:     "post_cascade_response",
+			hookType: "post_cascade_response",
+			fixture:  "../../agent/windsurf/testdata/post_cascade_response.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionNotification, evts[0].ActionType)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newTestEnv(t)
+			payload, err := os.ReadFile(tt.fixture)
+			require.NoError(t, err)
+			stdout, stderr, runErr := env.runHook("windsurf", tt.hookType, payload)
+			tt.assert(t, env, stdout, stderr, runErr)
+		})
+	}
+}
+
+func TestHook_Windsurf_DeterministicSessionID(t *testing.T) {
+	env := newTestEnv(t)
+
+	payload1, err := os.ReadFile("../../agent/windsurf/testdata/pre_read_code.json")
+	require.NoError(t, err)
+	_, _, err = env.runHook("windsurf", "pre_read_code", payload1)
+	require.NoError(t, err)
+
+	payload2, err := os.ReadFile("../../agent/windsurf/testdata/pre_run_command.json")
+	require.NoError(t, err)
+	_, _, err = env.runHook("windsurf", "pre_run_command", payload2)
+	require.NoError(t, err)
+
+	store, cleanup := env.openStore()
+	defer cleanup()
+	ctx := context.Background()
+
+	evts, err := store.QueryEvents(ctx, events.NewEventFilter())
+	require.NoError(t, err)
+	require.Len(t, evts, 2)
+
+	assert.Equal(t, evts[0].SessionID, evts[1].SessionID)
+
+	expected := uuid.NewSHA1(uuid.NameSpaceOID, []byte("traj-test-123"))
+	assert.Equal(t, expected, evts[0].SessionID)
+}
+
 func TestHook_LoggingLevel(t *testing.T) {
 	tests := []struct {
 		name          string

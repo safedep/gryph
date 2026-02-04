@@ -66,6 +66,9 @@ func validate(cfg *Config) error {
 	if cfg.Agents.OpenClaw.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.OpenClaw.LoggingLevel) {
 		return fmt.Errorf("invalid agents.openclaw.logging_level: %s", cfg.Agents.OpenClaw.LoggingLevel)
 	}
+	if cfg.Agents.Windsurf.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.Windsurf.LoggingLevel) {
+		return fmt.Errorf("invalid agents.windsurf.logging_level: %s", cfg.Agents.Windsurf.LoggingLevel)
+	}
 
 	return nil
 }

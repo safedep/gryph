@@ -1,0 +1,10 @@
+{
+  "agent_action_name": "pre_run_command",
+  "trajectory_id": "traj-test-123",
+  "execution_id": "exec-003",
+  "timestamp": "2025-01-15T10:32:00Z",
+  "tool_info": {
+    "command_line": "npm install",
+    "cwd": "/home/user/project"
+  }
+}

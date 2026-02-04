@@ -1,0 +1,10 @@
+{
+  "agent_action_name": "post_setup_worktree",
+  "trajectory_id": "traj-test-123",
+  "execution_id": "exec-008",
+  "timestamp": "2025-01-15T10:37:00Z",
+  "tool_info": {
+    "worktree_path": "/tmp/worktree-abc123",
+    "root_workspace_path": "/home/user/project"
+  }
+}
