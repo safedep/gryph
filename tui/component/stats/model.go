@@ -20,24 +20,33 @@ type Model struct {
 	footer footerModel
 	help   helpModel
 
-	data      *StatsData
-	timeRange TimeRange
-	ready     bool
+	data        *StatsData
+	timeRange   TimeRange
+	customSince *time.Time
+	ready       bool
 }
 
 func New(opts Options) Model {
 	return Model{
-		opts:      opts,
-		header:    newHeaderModel(opts.TimeRange, opts.AgentFilter),
-		footer:    newFooterModel(),
-		help:      newHelpModel(),
-		timeRange: opts.TimeRange,
+		opts:        opts,
+		header:      newHeaderModel(opts.TimeRange, opts.AgentFilter, opts.Since),
+		footer:      newFooterModel(),
+		help:        newHelpModel(),
+		timeRange:   opts.TimeRange,
+		customSince: opts.Since,
 	}
+}
+
+func (m Model) sinceTime() *time.Time {
+	if m.customSince != nil {
+		return m.customSince
+	}
+	return m.timeRange.Since()
 }
 
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
-		loadStats(m.opts.Store, m.timeRange, m.opts.AgentFilter),
+		loadStats(m.opts.Store, m.sinceTime(), m.opts.AgentFilter),
 		scheduleRefresh(),
 	)
 }
@@ -65,7 +74,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		return m, tea.Batch(
-			loadStats(m.opts.Store, m.timeRange, m.opts.AgentFilter),
+			loadStats(m.opts.Store, m.sinceTime(), m.opts.AgentFilter),
 			scheduleRefresh(),
 		)
 	}
@@ -92,7 +101,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.setTimeRange(RangeAll)
 
 	case "r":
-		return m, loadStats(m.opts.Store, m.timeRange, m.opts.AgentFilter)
+		return m, loadStats(m.opts.Store, m.sinceTime(), m.opts.AgentFilter)
 	}
 
 	return m, nil
@@ -100,8 +109,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) setTimeRange(r TimeRange) (tea.Model, tea.Cmd) {
 	m.timeRange = r
+	m.customSince = nil
 	m.header.timeRange = r
-	return m, loadStats(m.opts.Store, m.timeRange, m.opts.AgentFilter)
+	m.header.customSince = nil
+	return m, loadStats(m.opts.Store, m.sinceTime(), m.opts.AgentFilter)
 }
 
 func (m Model) View() string {
@@ -182,10 +193,10 @@ func (m Model) singleColumnLayout(height int) string {
 	)
 }
 
-func loadStats(store storage.Store, timeRange TimeRange, agentFilter string) tea.Cmd {
+func loadStats(store storage.Store, since *time.Time, agentFilter string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
-		data, err := computeStats(ctx, store, timeRange, agentFilter)
+		data, err := computeStats(ctx, store, since, agentFilter)
 		if err != nil {
 			return statsErrorMsg{err: err}
 		}

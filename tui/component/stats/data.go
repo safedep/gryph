@@ -74,11 +74,11 @@ type StatsData struct {
 	TimeSpanEnd   time.Time
 }
 
-func computeStats(ctx context.Context, store storage.Store, timeRange TimeRange, agentFilter string) (*StatsData, error) {
+func computeStats(ctx context.Context, store storage.Store, since *time.Time, agentFilter string) (*StatsData, error) {
 	data := &StatsData{}
 
 	sessionFilter := session.NewSessionFilter().WithLimit(10000)
-	if since := timeRange.Since(); since != nil {
+	if since != nil {
 		sessionFilter = sessionFilter.WithSince(*since)
 	}
 	if agentFilter != "" {
@@ -144,7 +144,7 @@ func computeStats(ctx context.Context, store storage.Store, timeRange TimeRange,
 	})
 
 	eventFilter := events.NewEventFilter().WithLimit(0)
-	if since := timeRange.Since(); since != nil {
+	if since != nil {
 		eventFilter = eventFilter.WithSince(*since)
 	}
 	if agentFilter != "" {

@@ -52,4 +52,5 @@ type Options struct {
 	Store       storage.Store
 	TimeRange   TimeRange
 	AgentFilter string
+	Since       *time.Time
 }

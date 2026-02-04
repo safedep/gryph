@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/safedep/dry/log"
@@ -45,12 +46,26 @@ code changes, command results, error rates, and session info.`,
 				}
 			}()
 
-			timeRange := parseTimeRange(p.since)
-
 			opts := stats.Options{
 				Store:       app.Store,
-				TimeRange:   timeRange,
 				AgentFilter: p.agent,
+			}
+
+			switch p.since {
+			case "today", "":
+				opts.TimeRange = stats.RangeToday
+			case "7d", "week":
+				opts.TimeRange = stats.Range7Days
+			case "30d", "month":
+				opts.TimeRange = stats.Range30Days
+			case "all":
+				opts.TimeRange = stats.RangeAll
+			default:
+				t, err := parseDuration(p.since)
+				if err != nil {
+					return fmt.Errorf("invalid --since value %q: %w", p.since, err)
+				}
+				opts.Since = &t
 			}
 
 			prog := tea.NewProgram(stats.New(opts), tea.WithAltScreen())
@@ -60,21 +75,8 @@ code changes, command results, error rates, and session info.`,
 		},
 	}
 
-	cmd.Flags().StringVar(&p.since, "since", "today", "time range: today, 7d, 30d, all")
+	cmd.Flags().StringVar(&p.since, "since", "today", "time range: today, 7d, 30d, all, or duration (30m, 1h, 2w)")
 	cmd.Flags().StringVar(&p.agent, "agent", "", "filter by agent name")
 
 	return cmd
-}
-
-func parseTimeRange(s string) stats.TimeRange {
-	switch s {
-	case "7d", "week":
-		return stats.Range7Days
-	case "30d", "month":
-		return stats.Range30Days
-	case "all":
-		return stats.RangeAll
-	default:
-		return stats.RangeToday
-	}
 }
