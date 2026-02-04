@@ -222,6 +222,19 @@ gryph retention cleanup --dry-run
 gryph self-log
 ```
 
+### Statistics Dashboard
+
+```bash
+# Launch interactive stats TUI
+gryph stats
+
+# Stats for the last 7 days
+gryph stats --since 7d
+
+# Filter by agent
+gryph stats --since 30d --agent claude-code
+```
+
 ### Health Check
 
 ```bash
