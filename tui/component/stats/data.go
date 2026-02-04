@@ -143,7 +143,7 @@ func computeStats(ctx context.Context, store storage.Store, since *time.Time, ag
 		return data.Agents[i].Events > data.Agents[j].Events
 	})
 
-	eventFilter := events.NewEventFilter().WithLimit(0)
+	eventFilter := events.NewEventFilter().WithLimit(50000)
 	if since != nil {
 		eventFilter = eventFilter.WithSince(*since)
 	}
@@ -239,12 +239,18 @@ func computeStats(ctx context.Context, store storage.Store, since *time.Time, ag
 		data.WorkingDirs = append(data.WorkingDirs, dir)
 	}
 	sort.Strings(data.WorkingDirs)
+	if len(data.WorkingDirs) > 20 {
+		data.WorkingDirs = data.WorkingDirs[:20]
+	}
 
 	for _, fs := range fileStats {
 		data.TopFiles = append(data.TopFiles, *fs)
 	}
 	sort.Slice(data.TopFiles, func(i, j int) bool {
-		return data.TopFiles[i].WriteCount > data.TopFiles[j].WriteCount
+		if data.TopFiles[i].WriteCount != data.TopFiles[j].WriteCount {
+			return data.TopFiles[i].WriteCount > data.TopFiles[j].WriteCount
+		}
+		return data.TopFiles[i].Path < data.TopFiles[j].Path
 	})
 	if len(data.TopFiles) > 10 {
 		data.TopFiles = data.TopFiles[:10]
@@ -254,7 +260,10 @@ func computeStats(ctx context.Context, store storage.Store, since *time.Time, ag
 		data.TopCommands = append(data.TopCommands, *cs)
 	}
 	sort.Slice(data.TopCommands, func(i, j int) bool {
-		return data.TopCommands[i].Count > data.TopCommands[j].Count
+		if data.TopCommands[i].Count != data.TopCommands[j].Count {
+			return data.TopCommands[i].Count > data.TopCommands[j].Count
+		}
+		return data.TopCommands[i].Command < data.TopCommands[j].Command
 	})
 	if len(data.TopCommands) > 10 {
 		data.TopCommands = data.TopCommands[:10]

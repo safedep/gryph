@@ -21,7 +21,15 @@ func renderAgents(data *StatsData, width, height int) string {
 		labelStyle.Width(6).Align(lipgloss.Right).Render("Errs"),
 	))
 
-	for _, a := range data.Agents {
+	maxAgents := height - 3
+	if maxAgents < 1 {
+		maxAgents = 1
+	}
+	if maxAgents > len(data.Agents) {
+		maxAgents = len(data.Agents)
+	}
+
+	for _, a := range data.Agents[:maxAgents] {
 		name := lipgloss.NewStyle().Foreground(agentColor(a.Name)).Render(
 			tui.TruncateString(a.Name, 14),
 		)
