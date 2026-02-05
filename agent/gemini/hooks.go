@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/agent/utils"
 )
 
 var HookTypes = []string{
@@ -39,7 +40,7 @@ func GenerateHooksConfig() SettingsHooks {
 			Hooks: []HookCommand{
 				{
 					Type:    "command",
-					Command: fmt.Sprintf("gryph _hook gemini %s", hookType),
+					Command: fmt.Sprintf("%s _hook gemini %s", utils.GryphCommand(), hookType),
 				},
 			},
 		}
@@ -382,7 +383,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 					continue
 				}
 				cmd, _ := hook["command"].(string)
-				expectedCmd := fmt.Sprintf("gryph _hook gemini %s", hookType)
+				expectedCmd := fmt.Sprintf("%s _hook gemini %s", utils.GryphCommand(), hookType)
 				if cmd == expectedCmd {
 					status.Installed = true
 					status.Hooks = append(status.Hooks, hookType)

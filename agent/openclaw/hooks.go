@@ -9,10 +9,15 @@ import (
 	"path/filepath"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/agent/utils"
 )
 
 //go:embed plugin.ts
 var pluginTS []byte
+
+func processedPlugin() []byte {
+	return bytes.ReplaceAll(pluginTS, []byte(utils.GryphCommandPlaceholder), []byte(utils.GryphCommand()))
+}
 
 var HookTypes = []string{
 	"before_tool_call",
@@ -96,7 +101,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		return result, result.Error
 	}
 
-	if err := os.WriteFile(pluginFile, pluginTS, 0644); err != nil {
+	if err := os.WriteFile(pluginFile, processedPlugin(), 0644); err != nil {
 		result.Error = fmt.Errorf("failed to write plugin file: %w", err)
 		return result, result.Error
 	}
@@ -191,7 +196,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 
 	status.Installed = true
 	status.Hooks = HookTypes
-	status.Valid = bytes.Equal(data, pluginTS)
+	status.Valid = bytes.Equal(data, processedPlugin())
 	if !status.Valid {
 		status.Issues = append(status.Issues, "plugin file differs from expected content (may need update)")
 	}

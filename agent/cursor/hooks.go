@@ -66,7 +66,7 @@ func GenerateHooksConfig() *HooksConfig {
 
 	for _, hookType := range HookTypes {
 		config.Hooks[hookType] = []HookCommand{
-			{Command: fmt.Sprintf("gryph _hook cursor %s", hookType)},
+			{Command: fmt.Sprintf("%s _hook cursor %s", utils.GryphCommand(), hookType)},
 		}
 	}
 
@@ -314,7 +314,7 @@ func ValidateHooksContent(config *HooksConfig) []string {
 	var issues []string
 
 	for _, hookType := range HookTypes {
-		expectedCmd := fmt.Sprintf("gryph _hook cursor %s", hookType)
+		expectedCmd := fmt.Sprintf("%s _hook cursor %s", utils.GryphCommand(), hookType)
 		found := false
 
 		for _, cmd := range config.Hooks[hookType] {

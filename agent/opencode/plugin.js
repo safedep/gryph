@@ -12,7 +12,7 @@ export const GryphPlugin = async ({ directory }) => {
       } catch (_) {}
     }
     try {
-      execFileSync("gryph", ["_hook", "opencode", hookType], {
+      execFileSync("__GRYPH_COMMAND__", ["_hook", "opencode", hookType], {
         input: JSON.stringify(payload),
         stdio: ["pipe", "pipe", "pipe"],
         timeout: 5000,
