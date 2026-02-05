@@ -3,7 +3,7 @@ import { execFileSync } from "child_process";
 export default function gryphPlugin(api) {
   function invokeGryph(hookType, payload) {
     try {
-      execFileSync("gryph", ["_hook", "openclaw", hookType], {
+      execFileSync("__GRYPH_COMMAND__", ["_hook", "openclaw", hookType], {
         input: JSON.stringify(payload),
         stdio: ["pipe", "pipe", "pipe"],
         timeout: 5000,

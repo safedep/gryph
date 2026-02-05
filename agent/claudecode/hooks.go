@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/agent/utils"
 )
 
 // HookTypes are the hook types supported by Claude Code that we want to capture.
@@ -52,7 +53,7 @@ func GenerateHooksConfig() SettingsHooks {
 			Hooks: []HookCommand{
 				{
 					Type:    "command",
-					Command: fmt.Sprintf("gryph _hook claude-code %s", hookType),
+					Command: fmt.Sprintf("%s _hook claude-code %s", utils.GryphCommand(), hookType),
 				},
 			},
 		}
@@ -419,7 +420,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 					continue
 				}
 				cmd, _ := hook["command"].(string)
-				expectedCmd := fmt.Sprintf("gryph _hook claude-code %s", hookType)
+				expectedCmd := fmt.Sprintf("%s _hook claude-code %s", utils.GryphCommand(), hookType)
 				if cmd == expectedCmd {
 					status.Installed = true
 					status.Hooks = append(status.Hooks, hookType)
