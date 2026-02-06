@@ -98,5 +98,10 @@ func (p *JSONPresenter) RenderMessage(message string) error {
 	return p.encoder.Encode(output)
 }
 
+// RenderStreamSync renders stream sync results as JSON.
+func (p *JSONPresenter) RenderStreamSync(result *StreamSyncView) error {
+	return p.encoder.Encode(result)
+}
+
 // Ensure JSONPresenter implements Presenter
 var _ Presenter = (*JSONPresenter)(nil)

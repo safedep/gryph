@@ -13,9 +13,10 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/safedep/gryph/storage/ent/auditevent"
+	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
+	"github.com/safedep/gryph/storage/ent/eventstreamcursor"
 	"github.com/safedep/gryph/storage/ent/selfaudit"
 	"github.com/safedep/gryph/storage/ent/session"
-	"github.com/safedep/gryph/storage/ent/streamcheckpoint"
 )
 
 // ent aliases to avoid import conflicts in user's code.
@@ -76,10 +77,11 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			auditevent.Table:       auditevent.ValidColumn,
-			selfaudit.Table:        selfaudit.ValidColumn,
-			session.Table:          session.ValidColumn,
-			streamcheckpoint.Table: streamcheckpoint.ValidColumn,
+			auditevent.Table:        auditevent.ValidColumn,
+			auditstreamcursor.Table: auditstreamcursor.ValidColumn,
+			eventstreamcursor.Table: eventstreamcursor.ValidColumn,
+			selfaudit.Table:         selfaudit.ValidColumn,
+			session.Table:           session.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

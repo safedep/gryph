@@ -7,7 +7,10 @@ make deps      # Install dependencies
 make generate  # Generate ent code
 make gryph     # Build binary
 make test      # Run tests
+make lint      # Run linter (golangci-lint)
 ```
+
+Always run `make lint` before submitting changes to catch issues early.
 
 ## Architecture
 

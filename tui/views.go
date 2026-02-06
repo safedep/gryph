@@ -181,3 +181,19 @@ type ExportView struct {
 	EventCount int
 	OutputPath string
 }
+
+// StreamSyncView represents stream sync results for display.
+type StreamSyncView struct {
+	TargetResults []StreamTargetResultView
+	TotalEvents   int
+	TotalAudits   int
+	HasErrors     bool
+}
+
+// StreamTargetResultView represents a single target's sync result.
+type StreamTargetResultView struct {
+	TargetName string
+	EventsSent int
+	AuditsSent int
+	Error      string
+}

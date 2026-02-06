@@ -13,10 +13,11 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/storage/ent/auditevent"
+	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
+	"github.com/safedep/gryph/storage/ent/eventstreamcursor"
 	"github.com/safedep/gryph/storage/ent/predicate"
 	"github.com/safedep/gryph/storage/ent/selfaudit"
 	"github.com/safedep/gryph/storage/ent/session"
-	"github.com/safedep/gryph/storage/ent/streamcheckpoint"
 )
 
 const (
@@ -28,10 +29,11 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeAuditEvent       = "AuditEvent"
-	TypeSelfAudit        = "SelfAudit"
-	TypeSession          = "Session"
-	TypeStreamCheckpoint = "StreamCheckpoint"
+	TypeAuditEvent        = "AuditEvent"
+	TypeAuditStreamCursor = "AuditStreamCursor"
+	TypeEventStreamCursor = "EventStreamCursor"
+	TypeSelfAudit         = "SelfAudit"
+	TypeSession           = "Session"
 )
 
 // AuditEventMutation represents an operation that mutates the AuditEvent nodes in the graph.
@@ -1472,6 +1474,822 @@ func (m *AuditEventMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent edge %s", name)
+}
+
+// AuditStreamCursorMutation represents an operation that mutates the AuditStreamCursor nodes in the graph.
+type AuditStreamCursorMutation struct {
+	config
+	op             Op
+	typ            string
+	id             *string
+	last_synced_at *time.Time
+	last_id        *string
+	clearedFields  map[string]struct{}
+	done           bool
+	oldValue       func(context.Context) (*AuditStreamCursor, error)
+	predicates     []predicate.AuditStreamCursor
+}
+
+var _ ent.Mutation = (*AuditStreamCursorMutation)(nil)
+
+// auditstreamcursorOption allows management of the mutation configuration using functional options.
+type auditstreamcursorOption func(*AuditStreamCursorMutation)
+
+// newAuditStreamCursorMutation creates new mutation for the AuditStreamCursor entity.
+func newAuditStreamCursorMutation(c config, op Op, opts ...auditstreamcursorOption) *AuditStreamCursorMutation {
+	m := &AuditStreamCursorMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAuditStreamCursor,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAuditStreamCursorID sets the ID field of the mutation.
+func withAuditStreamCursorID(id string) auditstreamcursorOption {
+	return func(m *AuditStreamCursorMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *AuditStreamCursor
+		)
+		m.oldValue = func(ctx context.Context) (*AuditStreamCursor, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().AuditStreamCursor.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAuditStreamCursor sets the old AuditStreamCursor of the mutation.
+func withAuditStreamCursor(node *AuditStreamCursor) auditstreamcursorOption {
+	return func(m *AuditStreamCursorMutation) {
+		m.oldValue = func(context.Context) (*AuditStreamCursor, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AuditStreamCursorMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AuditStreamCursorMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of AuditStreamCursor entities.
+func (m *AuditStreamCursorMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AuditStreamCursorMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AuditStreamCursorMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().AuditStreamCursor.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetLastSyncedAt sets the "last_synced_at" field.
+func (m *AuditStreamCursorMutation) SetLastSyncedAt(t time.Time) {
+	m.last_synced_at = &t
+}
+
+// LastSyncedAt returns the value of the "last_synced_at" field in the mutation.
+func (m *AuditStreamCursorMutation) LastSyncedAt() (r time.Time, exists bool) {
+	v := m.last_synced_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastSyncedAt returns the old "last_synced_at" field's value of the AuditStreamCursor entity.
+// If the AuditStreamCursor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditStreamCursorMutation) OldLastSyncedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastSyncedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastSyncedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastSyncedAt: %w", err)
+	}
+	return oldValue.LastSyncedAt, nil
+}
+
+// ResetLastSyncedAt resets all changes to the "last_synced_at" field.
+func (m *AuditStreamCursorMutation) ResetLastSyncedAt() {
+	m.last_synced_at = nil
+}
+
+// SetLastID sets the "last_id" field.
+func (m *AuditStreamCursorMutation) SetLastID(s string) {
+	m.last_id = &s
+}
+
+// LastID returns the value of the "last_id" field in the mutation.
+func (m *AuditStreamCursorMutation) LastID() (r string, exists bool) {
+	v := m.last_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastID returns the old "last_id" field's value of the AuditStreamCursor entity.
+// If the AuditStreamCursor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditStreamCursorMutation) OldLastID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastID: %w", err)
+	}
+	return oldValue.LastID, nil
+}
+
+// ClearLastID clears the value of the "last_id" field.
+func (m *AuditStreamCursorMutation) ClearLastID() {
+	m.last_id = nil
+	m.clearedFields[auditstreamcursor.FieldLastID] = struct{}{}
+}
+
+// LastIDCleared returns if the "last_id" field was cleared in this mutation.
+func (m *AuditStreamCursorMutation) LastIDCleared() bool {
+	_, ok := m.clearedFields[auditstreamcursor.FieldLastID]
+	return ok
+}
+
+// ResetLastID resets all changes to the "last_id" field.
+func (m *AuditStreamCursorMutation) ResetLastID() {
+	m.last_id = nil
+	delete(m.clearedFields, auditstreamcursor.FieldLastID)
+}
+
+// Where appends a list predicates to the AuditStreamCursorMutation builder.
+func (m *AuditStreamCursorMutation) Where(ps ...predicate.AuditStreamCursor) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AuditStreamCursorMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AuditStreamCursorMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.AuditStreamCursor, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AuditStreamCursorMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AuditStreamCursorMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (AuditStreamCursor).
+func (m *AuditStreamCursorMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AuditStreamCursorMutation) Fields() []string {
+	fields := make([]string, 0, 2)
+	if m.last_synced_at != nil {
+		fields = append(fields, auditstreamcursor.FieldLastSyncedAt)
+	}
+	if m.last_id != nil {
+		fields = append(fields, auditstreamcursor.FieldLastID)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AuditStreamCursorMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case auditstreamcursor.FieldLastSyncedAt:
+		return m.LastSyncedAt()
+	case auditstreamcursor.FieldLastID:
+		return m.LastID()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AuditStreamCursorMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case auditstreamcursor.FieldLastSyncedAt:
+		return m.OldLastSyncedAt(ctx)
+	case auditstreamcursor.FieldLastID:
+		return m.OldLastID(ctx)
+	}
+	return nil, fmt.Errorf("unknown AuditStreamCursor field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AuditStreamCursorMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case auditstreamcursor.FieldLastSyncedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastSyncedAt(v)
+		return nil
+	case auditstreamcursor.FieldLastID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AuditStreamCursor field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AuditStreamCursorMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AuditStreamCursorMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AuditStreamCursorMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown AuditStreamCursor numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AuditStreamCursorMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(auditstreamcursor.FieldLastID) {
+		fields = append(fields, auditstreamcursor.FieldLastID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AuditStreamCursorMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AuditStreamCursorMutation) ClearField(name string) error {
+	switch name {
+	case auditstreamcursor.FieldLastID:
+		m.ClearLastID()
+		return nil
+	}
+	return fmt.Errorf("unknown AuditStreamCursor nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AuditStreamCursorMutation) ResetField(name string) error {
+	switch name {
+	case auditstreamcursor.FieldLastSyncedAt:
+		m.ResetLastSyncedAt()
+		return nil
+	case auditstreamcursor.FieldLastID:
+		m.ResetLastID()
+		return nil
+	}
+	return fmt.Errorf("unknown AuditStreamCursor field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AuditStreamCursorMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AuditStreamCursorMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AuditStreamCursorMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AuditStreamCursorMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AuditStreamCursorMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AuditStreamCursorMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AuditStreamCursorMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown AuditStreamCursor unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AuditStreamCursorMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown AuditStreamCursor edge %s", name)
+}
+
+// EventStreamCursorMutation represents an operation that mutates the EventStreamCursor nodes in the graph.
+type EventStreamCursorMutation struct {
+	config
+	op             Op
+	typ            string
+	id             *string
+	last_synced_at *time.Time
+	last_id        *string
+	clearedFields  map[string]struct{}
+	done           bool
+	oldValue       func(context.Context) (*EventStreamCursor, error)
+	predicates     []predicate.EventStreamCursor
+}
+
+var _ ent.Mutation = (*EventStreamCursorMutation)(nil)
+
+// eventstreamcursorOption allows management of the mutation configuration using functional options.
+type eventstreamcursorOption func(*EventStreamCursorMutation)
+
+// newEventStreamCursorMutation creates new mutation for the EventStreamCursor entity.
+func newEventStreamCursorMutation(c config, op Op, opts ...eventstreamcursorOption) *EventStreamCursorMutation {
+	m := &EventStreamCursorMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeEventStreamCursor,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withEventStreamCursorID sets the ID field of the mutation.
+func withEventStreamCursorID(id string) eventstreamcursorOption {
+	return func(m *EventStreamCursorMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *EventStreamCursor
+		)
+		m.oldValue = func(ctx context.Context) (*EventStreamCursor, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().EventStreamCursor.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withEventStreamCursor sets the old EventStreamCursor of the mutation.
+func withEventStreamCursor(node *EventStreamCursor) eventstreamcursorOption {
+	return func(m *EventStreamCursorMutation) {
+		m.oldValue = func(context.Context) (*EventStreamCursor, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m EventStreamCursorMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m EventStreamCursorMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of EventStreamCursor entities.
+func (m *EventStreamCursorMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *EventStreamCursorMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *EventStreamCursorMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().EventStreamCursor.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetLastSyncedAt sets the "last_synced_at" field.
+func (m *EventStreamCursorMutation) SetLastSyncedAt(t time.Time) {
+	m.last_synced_at = &t
+}
+
+// LastSyncedAt returns the value of the "last_synced_at" field in the mutation.
+func (m *EventStreamCursorMutation) LastSyncedAt() (r time.Time, exists bool) {
+	v := m.last_synced_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastSyncedAt returns the old "last_synced_at" field's value of the EventStreamCursor entity.
+// If the EventStreamCursor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventStreamCursorMutation) OldLastSyncedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastSyncedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastSyncedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastSyncedAt: %w", err)
+	}
+	return oldValue.LastSyncedAt, nil
+}
+
+// ResetLastSyncedAt resets all changes to the "last_synced_at" field.
+func (m *EventStreamCursorMutation) ResetLastSyncedAt() {
+	m.last_synced_at = nil
+}
+
+// SetLastID sets the "last_id" field.
+func (m *EventStreamCursorMutation) SetLastID(s string) {
+	m.last_id = &s
+}
+
+// LastID returns the value of the "last_id" field in the mutation.
+func (m *EventStreamCursorMutation) LastID() (r string, exists bool) {
+	v := m.last_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastID returns the old "last_id" field's value of the EventStreamCursor entity.
+// If the EventStreamCursor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventStreamCursorMutation) OldLastID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastID: %w", err)
+	}
+	return oldValue.LastID, nil
+}
+
+// ClearLastID clears the value of the "last_id" field.
+func (m *EventStreamCursorMutation) ClearLastID() {
+	m.last_id = nil
+	m.clearedFields[eventstreamcursor.FieldLastID] = struct{}{}
+}
+
+// LastIDCleared returns if the "last_id" field was cleared in this mutation.
+func (m *EventStreamCursorMutation) LastIDCleared() bool {
+	_, ok := m.clearedFields[eventstreamcursor.FieldLastID]
+	return ok
+}
+
+// ResetLastID resets all changes to the "last_id" field.
+func (m *EventStreamCursorMutation) ResetLastID() {
+	m.last_id = nil
+	delete(m.clearedFields, eventstreamcursor.FieldLastID)
+}
+
+// Where appends a list predicates to the EventStreamCursorMutation builder.
+func (m *EventStreamCursorMutation) Where(ps ...predicate.EventStreamCursor) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the EventStreamCursorMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *EventStreamCursorMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.EventStreamCursor, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *EventStreamCursorMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *EventStreamCursorMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (EventStreamCursor).
+func (m *EventStreamCursorMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *EventStreamCursorMutation) Fields() []string {
+	fields := make([]string, 0, 2)
+	if m.last_synced_at != nil {
+		fields = append(fields, eventstreamcursor.FieldLastSyncedAt)
+	}
+	if m.last_id != nil {
+		fields = append(fields, eventstreamcursor.FieldLastID)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *EventStreamCursorMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case eventstreamcursor.FieldLastSyncedAt:
+		return m.LastSyncedAt()
+	case eventstreamcursor.FieldLastID:
+		return m.LastID()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *EventStreamCursorMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case eventstreamcursor.FieldLastSyncedAt:
+		return m.OldLastSyncedAt(ctx)
+	case eventstreamcursor.FieldLastID:
+		return m.OldLastID(ctx)
+	}
+	return nil, fmt.Errorf("unknown EventStreamCursor field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EventStreamCursorMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case eventstreamcursor.FieldLastSyncedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastSyncedAt(v)
+		return nil
+	case eventstreamcursor.FieldLastID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown EventStreamCursor field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *EventStreamCursorMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *EventStreamCursorMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EventStreamCursorMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown EventStreamCursor numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *EventStreamCursorMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(eventstreamcursor.FieldLastID) {
+		fields = append(fields, eventstreamcursor.FieldLastID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *EventStreamCursorMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *EventStreamCursorMutation) ClearField(name string) error {
+	switch name {
+	case eventstreamcursor.FieldLastID:
+		m.ClearLastID()
+		return nil
+	}
+	return fmt.Errorf("unknown EventStreamCursor nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *EventStreamCursorMutation) ResetField(name string) error {
+	switch name {
+	case eventstreamcursor.FieldLastSyncedAt:
+		m.ResetLastSyncedAt()
+		return nil
+	case eventstreamcursor.FieldLastID:
+		m.ResetLastID()
+		return nil
+	}
+	return fmt.Errorf("unknown EventStreamCursor field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *EventStreamCursorMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *EventStreamCursorMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *EventStreamCursorMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *EventStreamCursorMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *EventStreamCursorMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *EventStreamCursorMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *EventStreamCursorMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown EventStreamCursor unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *EventStreamCursorMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown EventStreamCursor edge %s", name)
 }
 
 // SelfAuditMutation represents an operation that mutates the SelfAudit nodes in the graph.
@@ -3473,485 +4291,4 @@ func (m *SessionMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Session edge %s", name)
-}
-
-// StreamCheckpointMutation represents an operation that mutates the StreamCheckpoint nodes in the graph.
-type StreamCheckpointMutation struct {
-	config
-	op                 Op
-	typ                string
-	id                 *string
-	last_synced_at     *time.Time
-	last_event_id      *string
-	last_self_audit_id *string
-	clearedFields      map[string]struct{}
-	done               bool
-	oldValue           func(context.Context) (*StreamCheckpoint, error)
-	predicates         []predicate.StreamCheckpoint
-}
-
-var _ ent.Mutation = (*StreamCheckpointMutation)(nil)
-
-// streamcheckpointOption allows management of the mutation configuration using functional options.
-type streamcheckpointOption func(*StreamCheckpointMutation)
-
-// newStreamCheckpointMutation creates new mutation for the StreamCheckpoint entity.
-func newStreamCheckpointMutation(c config, op Op, opts ...streamcheckpointOption) *StreamCheckpointMutation {
-	m := &StreamCheckpointMutation{
-		config:        c,
-		op:            op,
-		typ:           TypeStreamCheckpoint,
-		clearedFields: make(map[string]struct{}),
-	}
-	for _, opt := range opts {
-		opt(m)
-	}
-	return m
-}
-
-// withStreamCheckpointID sets the ID field of the mutation.
-func withStreamCheckpointID(id string) streamcheckpointOption {
-	return func(m *StreamCheckpointMutation) {
-		var (
-			err   error
-			once  sync.Once
-			value *StreamCheckpoint
-		)
-		m.oldValue = func(ctx context.Context) (*StreamCheckpoint, error) {
-			once.Do(func() {
-				if m.done {
-					err = errors.New("querying old values post mutation is not allowed")
-				} else {
-					value, err = m.Client().StreamCheckpoint.Get(ctx, id)
-				}
-			})
-			return value, err
-		}
-		m.id = &id
-	}
-}
-
-// withStreamCheckpoint sets the old StreamCheckpoint of the mutation.
-func withStreamCheckpoint(node *StreamCheckpoint) streamcheckpointOption {
-	return func(m *StreamCheckpointMutation) {
-		m.oldValue = func(context.Context) (*StreamCheckpoint, error) {
-			return node, nil
-		}
-		m.id = &node.ID
-	}
-}
-
-// Client returns a new `ent.Client` from the mutation. If the mutation was
-// executed in a transaction (ent.Tx), a transactional client is returned.
-func (m StreamCheckpointMutation) Client() *Client {
-	client := &Client{config: m.config}
-	client.init()
-	return client
-}
-
-// Tx returns an `ent.Tx` for mutations that were executed in transactions;
-// it returns an error otherwise.
-func (m StreamCheckpointMutation) Tx() (*Tx, error) {
-	if _, ok := m.driver.(*txDriver); !ok {
-		return nil, errors.New("ent: mutation is not running in a transaction")
-	}
-	tx := &Tx{config: m.config}
-	tx.init()
-	return tx, nil
-}
-
-// SetID sets the value of the id field. Note that this
-// operation is only accepted on creation of StreamCheckpoint entities.
-func (m *StreamCheckpointMutation) SetID(id string) {
-	m.id = &id
-}
-
-// ID returns the ID value in the mutation. Note that the ID is only available
-// if it was provided to the builder or after it was returned from the database.
-func (m *StreamCheckpointMutation) ID() (id string, exists bool) {
-	if m.id == nil {
-		return
-	}
-	return *m.id, true
-}
-
-// IDs queries the database and returns the entity ids that match the mutation's predicate.
-// That means, if the mutation is applied within a transaction with an isolation level such
-// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
-// or updated by the mutation.
-func (m *StreamCheckpointMutation) IDs(ctx context.Context) ([]string, error) {
-	switch {
-	case m.op.Is(OpUpdateOne | OpDeleteOne):
-		id, exists := m.ID()
-		if exists {
-			return []string{id}, nil
-		}
-		fallthrough
-	case m.op.Is(OpUpdate | OpDelete):
-		return m.Client().StreamCheckpoint.Query().Where(m.predicates...).IDs(ctx)
-	default:
-		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
-	}
-}
-
-// SetLastSyncedAt sets the "last_synced_at" field.
-func (m *StreamCheckpointMutation) SetLastSyncedAt(t time.Time) {
-	m.last_synced_at = &t
-}
-
-// LastSyncedAt returns the value of the "last_synced_at" field in the mutation.
-func (m *StreamCheckpointMutation) LastSyncedAt() (r time.Time, exists bool) {
-	v := m.last_synced_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldLastSyncedAt returns the old "last_synced_at" field's value of the StreamCheckpoint entity.
-// If the StreamCheckpoint object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *StreamCheckpointMutation) OldLastSyncedAt(ctx context.Context) (v time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldLastSyncedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldLastSyncedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldLastSyncedAt: %w", err)
-	}
-	return oldValue.LastSyncedAt, nil
-}
-
-// ResetLastSyncedAt resets all changes to the "last_synced_at" field.
-func (m *StreamCheckpointMutation) ResetLastSyncedAt() {
-	m.last_synced_at = nil
-}
-
-// SetLastEventID sets the "last_event_id" field.
-func (m *StreamCheckpointMutation) SetLastEventID(s string) {
-	m.last_event_id = &s
-}
-
-// LastEventID returns the value of the "last_event_id" field in the mutation.
-func (m *StreamCheckpointMutation) LastEventID() (r string, exists bool) {
-	v := m.last_event_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldLastEventID returns the old "last_event_id" field's value of the StreamCheckpoint entity.
-// If the StreamCheckpoint object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *StreamCheckpointMutation) OldLastEventID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldLastEventID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldLastEventID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldLastEventID: %w", err)
-	}
-	return oldValue.LastEventID, nil
-}
-
-// ClearLastEventID clears the value of the "last_event_id" field.
-func (m *StreamCheckpointMutation) ClearLastEventID() {
-	m.last_event_id = nil
-	m.clearedFields[streamcheckpoint.FieldLastEventID] = struct{}{}
-}
-
-// LastEventIDCleared returns if the "last_event_id" field was cleared in this mutation.
-func (m *StreamCheckpointMutation) LastEventIDCleared() bool {
-	_, ok := m.clearedFields[streamcheckpoint.FieldLastEventID]
-	return ok
-}
-
-// ResetLastEventID resets all changes to the "last_event_id" field.
-func (m *StreamCheckpointMutation) ResetLastEventID() {
-	m.last_event_id = nil
-	delete(m.clearedFields, streamcheckpoint.FieldLastEventID)
-}
-
-// SetLastSelfAuditID sets the "last_self_audit_id" field.
-func (m *StreamCheckpointMutation) SetLastSelfAuditID(s string) {
-	m.last_self_audit_id = &s
-}
-
-// LastSelfAuditID returns the value of the "last_self_audit_id" field in the mutation.
-func (m *StreamCheckpointMutation) LastSelfAuditID() (r string, exists bool) {
-	v := m.last_self_audit_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldLastSelfAuditID returns the old "last_self_audit_id" field's value of the StreamCheckpoint entity.
-// If the StreamCheckpoint object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *StreamCheckpointMutation) OldLastSelfAuditID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldLastSelfAuditID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldLastSelfAuditID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldLastSelfAuditID: %w", err)
-	}
-	return oldValue.LastSelfAuditID, nil
-}
-
-// ClearLastSelfAuditID clears the value of the "last_self_audit_id" field.
-func (m *StreamCheckpointMutation) ClearLastSelfAuditID() {
-	m.last_self_audit_id = nil
-	m.clearedFields[streamcheckpoint.FieldLastSelfAuditID] = struct{}{}
-}
-
-// LastSelfAuditIDCleared returns if the "last_self_audit_id" field was cleared in this mutation.
-func (m *StreamCheckpointMutation) LastSelfAuditIDCleared() bool {
-	_, ok := m.clearedFields[streamcheckpoint.FieldLastSelfAuditID]
-	return ok
-}
-
-// ResetLastSelfAuditID resets all changes to the "last_self_audit_id" field.
-func (m *StreamCheckpointMutation) ResetLastSelfAuditID() {
-	m.last_self_audit_id = nil
-	delete(m.clearedFields, streamcheckpoint.FieldLastSelfAuditID)
-}
-
-// Where appends a list predicates to the StreamCheckpointMutation builder.
-func (m *StreamCheckpointMutation) Where(ps ...predicate.StreamCheckpoint) {
-	m.predicates = append(m.predicates, ps...)
-}
-
-// WhereP appends storage-level predicates to the StreamCheckpointMutation builder. Using this method,
-// users can use type-assertion to append predicates that do not depend on any generated package.
-func (m *StreamCheckpointMutation) WhereP(ps ...func(*sql.Selector)) {
-	p := make([]predicate.StreamCheckpoint, len(ps))
-	for i := range ps {
-		p[i] = ps[i]
-	}
-	m.Where(p...)
-}
-
-// Op returns the operation name.
-func (m *StreamCheckpointMutation) Op() Op {
-	return m.op
-}
-
-// SetOp allows setting the mutation operation.
-func (m *StreamCheckpointMutation) SetOp(op Op) {
-	m.op = op
-}
-
-// Type returns the node type of this mutation (StreamCheckpoint).
-func (m *StreamCheckpointMutation) Type() string {
-	return m.typ
-}
-
-// Fields returns all fields that were changed during this mutation. Note that in
-// order to get all numeric fields that were incremented/decremented, call
-// AddedFields().
-func (m *StreamCheckpointMutation) Fields() []string {
-	fields := make([]string, 0, 3)
-	if m.last_synced_at != nil {
-		fields = append(fields, streamcheckpoint.FieldLastSyncedAt)
-	}
-	if m.last_event_id != nil {
-		fields = append(fields, streamcheckpoint.FieldLastEventID)
-	}
-	if m.last_self_audit_id != nil {
-		fields = append(fields, streamcheckpoint.FieldLastSelfAuditID)
-	}
-	return fields
-}
-
-// Field returns the value of a field with the given name. The second boolean
-// return value indicates that this field was not set, or was not defined in the
-// schema.
-func (m *StreamCheckpointMutation) Field(name string) (ent.Value, bool) {
-	switch name {
-	case streamcheckpoint.FieldLastSyncedAt:
-		return m.LastSyncedAt()
-	case streamcheckpoint.FieldLastEventID:
-		return m.LastEventID()
-	case streamcheckpoint.FieldLastSelfAuditID:
-		return m.LastSelfAuditID()
-	}
-	return nil, false
-}
-
-// OldField returns the old value of the field from the database. An error is
-// returned if the mutation operation is not UpdateOne, or the query to the
-// database failed.
-func (m *StreamCheckpointMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
-	switch name {
-	case streamcheckpoint.FieldLastSyncedAt:
-		return m.OldLastSyncedAt(ctx)
-	case streamcheckpoint.FieldLastEventID:
-		return m.OldLastEventID(ctx)
-	case streamcheckpoint.FieldLastSelfAuditID:
-		return m.OldLastSelfAuditID(ctx)
-	}
-	return nil, fmt.Errorf("unknown StreamCheckpoint field %s", name)
-}
-
-// SetField sets the value of a field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *StreamCheckpointMutation) SetField(name string, value ent.Value) error {
-	switch name {
-	case streamcheckpoint.FieldLastSyncedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetLastSyncedAt(v)
-		return nil
-	case streamcheckpoint.FieldLastEventID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetLastEventID(v)
-		return nil
-	case streamcheckpoint.FieldLastSelfAuditID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetLastSelfAuditID(v)
-		return nil
-	}
-	return fmt.Errorf("unknown StreamCheckpoint field %s", name)
-}
-
-// AddedFields returns all numeric fields that were incremented/decremented during
-// this mutation.
-func (m *StreamCheckpointMutation) AddedFields() []string {
-	return nil
-}
-
-// AddedField returns the numeric value that was incremented/decremented on a field
-// with the given name. The second boolean return value indicates that this field
-// was not set, or was not defined in the schema.
-func (m *StreamCheckpointMutation) AddedField(name string) (ent.Value, bool) {
-	return nil, false
-}
-
-// AddField adds the value to the field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *StreamCheckpointMutation) AddField(name string, value ent.Value) error {
-	switch name {
-	}
-	return fmt.Errorf("unknown StreamCheckpoint numeric field %s", name)
-}
-
-// ClearedFields returns all nullable fields that were cleared during this
-// mutation.
-func (m *StreamCheckpointMutation) ClearedFields() []string {
-	var fields []string
-	if m.FieldCleared(streamcheckpoint.FieldLastEventID) {
-		fields = append(fields, streamcheckpoint.FieldLastEventID)
-	}
-	if m.FieldCleared(streamcheckpoint.FieldLastSelfAuditID) {
-		fields = append(fields, streamcheckpoint.FieldLastSelfAuditID)
-	}
-	return fields
-}
-
-// FieldCleared returns a boolean indicating if a field with the given name was
-// cleared in this mutation.
-func (m *StreamCheckpointMutation) FieldCleared(name string) bool {
-	_, ok := m.clearedFields[name]
-	return ok
-}
-
-// ClearField clears the value of the field with the given name. It returns an
-// error if the field is not defined in the schema.
-func (m *StreamCheckpointMutation) ClearField(name string) error {
-	switch name {
-	case streamcheckpoint.FieldLastEventID:
-		m.ClearLastEventID()
-		return nil
-	case streamcheckpoint.FieldLastSelfAuditID:
-		m.ClearLastSelfAuditID()
-		return nil
-	}
-	return fmt.Errorf("unknown StreamCheckpoint nullable field %s", name)
-}
-
-// ResetField resets all changes in the mutation for the field with the given name.
-// It returns an error if the field is not defined in the schema.
-func (m *StreamCheckpointMutation) ResetField(name string) error {
-	switch name {
-	case streamcheckpoint.FieldLastSyncedAt:
-		m.ResetLastSyncedAt()
-		return nil
-	case streamcheckpoint.FieldLastEventID:
-		m.ResetLastEventID()
-		return nil
-	case streamcheckpoint.FieldLastSelfAuditID:
-		m.ResetLastSelfAuditID()
-		return nil
-	}
-	return fmt.Errorf("unknown StreamCheckpoint field %s", name)
-}
-
-// AddedEdges returns all edge names that were set/added in this mutation.
-func (m *StreamCheckpointMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// AddedIDs returns all IDs (to other nodes) that were added for the given edge
-// name in this mutation.
-func (m *StreamCheckpointMutation) AddedIDs(name string) []ent.Value {
-	return nil
-}
-
-// RemovedEdges returns all edge names that were removed in this mutation.
-func (m *StreamCheckpointMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
-// the given name in this mutation.
-func (m *StreamCheckpointMutation) RemovedIDs(name string) []ent.Value {
-	return nil
-}
-
-// ClearedEdges returns all edge names that were cleared in this mutation.
-func (m *StreamCheckpointMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// EdgeCleared returns a boolean which indicates if the edge with the given name
-// was cleared in this mutation.
-func (m *StreamCheckpointMutation) EdgeCleared(name string) bool {
-	return false
-}
-
-// ClearEdge clears the value of the edge with the given name. It returns an error
-// if that edge is not defined in the schema.
-func (m *StreamCheckpointMutation) ClearEdge(name string) error {
-	return fmt.Errorf("unknown StreamCheckpoint unique edge %s", name)
-}
-
-// ResetEdge resets all changes to the edge with the given name in this mutation.
-// It returns an error if the edge is not defined in the schema.
-func (m *StreamCheckpointMutation) ResetEdge(name string) error {
-	return fmt.Errorf("unknown StreamCheckpoint edge %s", name)
 }

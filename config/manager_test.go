@@ -67,7 +67,7 @@ func TestManager_Get_ReturnsDefaults(t *testing.T) {
 		{"display.colors", "auto"},
 		{"display.timezone", "local"},
 		{"streams.targets", []StreamTargetConfig{
-			{Name: "stdout", Type: "stdout", Enabled: true},
+			{Name: "nop", Type: "nop", Enabled: true},
 		}},
 	}
 

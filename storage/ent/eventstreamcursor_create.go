@@ -10,77 +10,63 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/safedep/gryph/storage/ent/streamcheckpoint"
+	"github.com/safedep/gryph/storage/ent/eventstreamcursor"
 )
 
-// StreamCheckpointCreate is the builder for creating a StreamCheckpoint entity.
-type StreamCheckpointCreate struct {
+// EventStreamCursorCreate is the builder for creating a EventStreamCursor entity.
+type EventStreamCursorCreate struct {
 	config
-	mutation *StreamCheckpointMutation
+	mutation *EventStreamCursorMutation
 	hooks    []Hook
 }
 
 // SetLastSyncedAt sets the "last_synced_at" field.
-func (_c *StreamCheckpointCreate) SetLastSyncedAt(v time.Time) *StreamCheckpointCreate {
+func (_c *EventStreamCursorCreate) SetLastSyncedAt(v time.Time) *EventStreamCursorCreate {
 	_c.mutation.SetLastSyncedAt(v)
 	return _c
 }
 
 // SetNillableLastSyncedAt sets the "last_synced_at" field if the given value is not nil.
-func (_c *StreamCheckpointCreate) SetNillableLastSyncedAt(v *time.Time) *StreamCheckpointCreate {
+func (_c *EventStreamCursorCreate) SetNillableLastSyncedAt(v *time.Time) *EventStreamCursorCreate {
 	if v != nil {
 		_c.SetLastSyncedAt(*v)
 	}
 	return _c
 }
 
-// SetLastEventID sets the "last_event_id" field.
-func (_c *StreamCheckpointCreate) SetLastEventID(v string) *StreamCheckpointCreate {
-	_c.mutation.SetLastEventID(v)
+// SetLastID sets the "last_id" field.
+func (_c *EventStreamCursorCreate) SetLastID(v string) *EventStreamCursorCreate {
+	_c.mutation.SetLastID(v)
 	return _c
 }
 
-// SetNillableLastEventID sets the "last_event_id" field if the given value is not nil.
-func (_c *StreamCheckpointCreate) SetNillableLastEventID(v *string) *StreamCheckpointCreate {
+// SetNillableLastID sets the "last_id" field if the given value is not nil.
+func (_c *EventStreamCursorCreate) SetNillableLastID(v *string) *EventStreamCursorCreate {
 	if v != nil {
-		_c.SetLastEventID(*v)
-	}
-	return _c
-}
-
-// SetLastSelfAuditID sets the "last_self_audit_id" field.
-func (_c *StreamCheckpointCreate) SetLastSelfAuditID(v string) *StreamCheckpointCreate {
-	_c.mutation.SetLastSelfAuditID(v)
-	return _c
-}
-
-// SetNillableLastSelfAuditID sets the "last_self_audit_id" field if the given value is not nil.
-func (_c *StreamCheckpointCreate) SetNillableLastSelfAuditID(v *string) *StreamCheckpointCreate {
-	if v != nil {
-		_c.SetLastSelfAuditID(*v)
+		_c.SetLastID(*v)
 	}
 	return _c
 }
 
 // SetID sets the "id" field.
-func (_c *StreamCheckpointCreate) SetID(v string) *StreamCheckpointCreate {
+func (_c *EventStreamCursorCreate) SetID(v string) *EventStreamCursorCreate {
 	_c.mutation.SetID(v)
 	return _c
 }
 
-// Mutation returns the StreamCheckpointMutation object of the builder.
-func (_c *StreamCheckpointCreate) Mutation() *StreamCheckpointMutation {
+// Mutation returns the EventStreamCursorMutation object of the builder.
+func (_c *EventStreamCursorCreate) Mutation() *EventStreamCursorMutation {
 	return _c.mutation
 }
 
-// Save creates the StreamCheckpoint in the database.
-func (_c *StreamCheckpointCreate) Save(ctx context.Context) (*StreamCheckpoint, error) {
+// Save creates the EventStreamCursor in the database.
+func (_c *EventStreamCursorCreate) Save(ctx context.Context) (*EventStreamCursor, error) {
 	_c.defaults()
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (_c *StreamCheckpointCreate) SaveX(ctx context.Context) *StreamCheckpoint {
+func (_c *EventStreamCursorCreate) SaveX(ctx context.Context) *EventStreamCursor {
 	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
@@ -89,35 +75,35 @@ func (_c *StreamCheckpointCreate) SaveX(ctx context.Context) *StreamCheckpoint {
 }
 
 // Exec executes the query.
-func (_c *StreamCheckpointCreate) Exec(ctx context.Context) error {
+func (_c *EventStreamCursorCreate) Exec(ctx context.Context) error {
 	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *StreamCheckpointCreate) ExecX(ctx context.Context) {
+func (_c *EventStreamCursorCreate) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_c *StreamCheckpointCreate) defaults() {
+func (_c *EventStreamCursorCreate) defaults() {
 	if _, ok := _c.mutation.LastSyncedAt(); !ok {
-		v := streamcheckpoint.DefaultLastSyncedAt()
+		v := eventstreamcursor.DefaultLastSyncedAt()
 		_c.mutation.SetLastSyncedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (_c *StreamCheckpointCreate) check() error {
+func (_c *EventStreamCursorCreate) check() error {
 	if _, ok := _c.mutation.LastSyncedAt(); !ok {
-		return &ValidationError{Name: "last_synced_at", err: errors.New(`ent: missing required field "StreamCheckpoint.last_synced_at"`)}
+		return &ValidationError{Name: "last_synced_at", err: errors.New(`ent: missing required field "EventStreamCursor.last_synced_at"`)}
 	}
 	return nil
 }
 
-func (_c *StreamCheckpointCreate) sqlSave(ctx context.Context) (*StreamCheckpoint, error) {
+func (_c *EventStreamCursorCreate) sqlSave(ctx context.Context) (*EventStreamCursor, error) {
 	if err := _c.check(); err != nil {
 		return nil, err
 	}
@@ -132,7 +118,7 @@ func (_c *StreamCheckpointCreate) sqlSave(ctx context.Context) (*StreamCheckpoin
 		if id, ok := _spec.ID.Value.(string); ok {
 			_node.ID = id
 		} else {
-			return nil, fmt.Errorf("unexpected StreamCheckpoint.ID type: %T", _spec.ID.Value)
+			return nil, fmt.Errorf("unexpected EventStreamCursor.ID type: %T", _spec.ID.Value)
 		}
 	}
 	_c.mutation.id = &_node.ID
@@ -140,51 +126,47 @@ func (_c *StreamCheckpointCreate) sqlSave(ctx context.Context) (*StreamCheckpoin
 	return _node, nil
 }
 
-func (_c *StreamCheckpointCreate) createSpec() (*StreamCheckpoint, *sqlgraph.CreateSpec) {
+func (_c *EventStreamCursorCreate) createSpec() (*EventStreamCursor, *sqlgraph.CreateSpec) {
 	var (
-		_node = &StreamCheckpoint{config: _c.config}
-		_spec = sqlgraph.NewCreateSpec(streamcheckpoint.Table, sqlgraph.NewFieldSpec(streamcheckpoint.FieldID, field.TypeString))
+		_node = &EventStreamCursor{config: _c.config}
+		_spec = sqlgraph.NewCreateSpec(eventstreamcursor.Table, sqlgraph.NewFieldSpec(eventstreamcursor.FieldID, field.TypeString))
 	)
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
 	if value, ok := _c.mutation.LastSyncedAt(); ok {
-		_spec.SetField(streamcheckpoint.FieldLastSyncedAt, field.TypeTime, value)
+		_spec.SetField(eventstreamcursor.FieldLastSyncedAt, field.TypeTime, value)
 		_node.LastSyncedAt = value
 	}
-	if value, ok := _c.mutation.LastEventID(); ok {
-		_spec.SetField(streamcheckpoint.FieldLastEventID, field.TypeString, value)
-		_node.LastEventID = value
-	}
-	if value, ok := _c.mutation.LastSelfAuditID(); ok {
-		_spec.SetField(streamcheckpoint.FieldLastSelfAuditID, field.TypeString, value)
-		_node.LastSelfAuditID = value
+	if value, ok := _c.mutation.LastID(); ok {
+		_spec.SetField(eventstreamcursor.FieldLastID, field.TypeString, value)
+		_node.LastID = value
 	}
 	return _node, _spec
 }
 
-// StreamCheckpointCreateBulk is the builder for creating many StreamCheckpoint entities in bulk.
-type StreamCheckpointCreateBulk struct {
+// EventStreamCursorCreateBulk is the builder for creating many EventStreamCursor entities in bulk.
+type EventStreamCursorCreateBulk struct {
 	config
 	err      error
-	builders []*StreamCheckpointCreate
+	builders []*EventStreamCursorCreate
 }
 
-// Save creates the StreamCheckpoint entities in the database.
-func (_c *StreamCheckpointCreateBulk) Save(ctx context.Context) ([]*StreamCheckpoint, error) {
+// Save creates the EventStreamCursor entities in the database.
+func (_c *EventStreamCursorCreateBulk) Save(ctx context.Context) ([]*EventStreamCursor, error) {
 	if _c.err != nil {
 		return nil, _c.err
 	}
 	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
-	nodes := make([]*StreamCheckpoint, len(_c.builders))
+	nodes := make([]*EventStreamCursor, len(_c.builders))
 	mutators := make([]Mutator, len(_c.builders))
 	for i := range _c.builders {
 		func(i int, root context.Context) {
 			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-				mutation, ok := m.(*StreamCheckpointMutation)
+				mutation, ok := m.(*EventStreamCursorMutation)
 				if !ok {
 					return nil, fmt.Errorf("unexpected mutation type %T", m)
 				}
@@ -227,7 +209,7 @@ func (_c *StreamCheckpointCreateBulk) Save(ctx context.Context) ([]*StreamCheckp
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_c *StreamCheckpointCreateBulk) SaveX(ctx context.Context) []*StreamCheckpoint {
+func (_c *EventStreamCursorCreateBulk) SaveX(ctx context.Context) []*EventStreamCursor {
 	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
@@ -236,13 +218,13 @@ func (_c *StreamCheckpointCreateBulk) SaveX(ctx context.Context) []*StreamCheckp
 }
 
 // Exec executes the query.
-func (_c *StreamCheckpointCreateBulk) Exec(ctx context.Context) error {
+func (_c *EventStreamCursorCreateBulk) Exec(ctx context.Context) error {
 	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *StreamCheckpointCreateBulk) ExecX(ctx context.Context) {
+func (_c *EventStreamCursorCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}

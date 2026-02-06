@@ -268,5 +268,22 @@ func (p *CSVPresenter) RenderMessage(message string) error {
 	return p.writer.Error()
 }
 
+// RenderStreamSync renders stream sync results as CSV.
+func (p *CSVPresenter) RenderStreamSync(result *StreamSyncView) error {
+	_ = p.writer.Write([]string{"target", "events_sent", "audits_sent", "error"})
+
+	for _, tr := range result.TargetResults {
+		_ = p.writer.Write([]string{
+			tr.TargetName,
+			fmt.Sprintf("%d", tr.EventsSent),
+			fmt.Sprintf("%d", tr.AuditsSent),
+			tr.Error,
+		})
+	}
+
+	p.writer.Flush()
+	return p.writer.Error()
+}
+
 // Ensure CSVPresenter implements Presenter
 var _ Presenter = (*CSVPresenter)(nil)

@@ -106,6 +106,7 @@ func isValidTimezoneMode(mode TimezoneMode) bool {
 // knownStreamTargetTypes lists the valid stream target types.
 var knownStreamTargetTypes = map[string]bool{
 	streamTargetTypeStdout: true,
+	streamTargetTypeNop:    true,
 }
 
 func validateStreamTargets(targets []StreamTargetConfig) error {

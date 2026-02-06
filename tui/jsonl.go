@@ -121,5 +121,15 @@ func (p *JSONLPresenter) RenderMessage(message string) error {
 	return p.encoder.Encode(output)
 }
 
+// RenderStreamSync renders stream sync results as JSONL (one per line).
+func (p *JSONLPresenter) RenderStreamSync(result *StreamSyncView) error {
+	for _, tr := range result.TargetResults {
+		if err := p.encoder.Encode(tr); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Ensure JSONLPresenter implements Presenter
 var _ Presenter = (*JSONLPresenter)(nil)

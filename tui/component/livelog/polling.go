@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/storage"
 )
@@ -12,7 +13,7 @@ import (
 func pollEvents(store storage.Store, after time.Time, agentFilter string, limit int) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
-		evts, err := store.QueryEventsAfter(ctx, after, limit)
+		evts, err := store.QueryEventsAfter(ctx, after, uuid.Nil, limit)
 		if err != nil {
 			return pollErrorMsg{err: err}
 		}

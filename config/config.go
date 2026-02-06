@@ -21,6 +21,7 @@ const (
 	agentNameWindsurf   = "windsurf"
 
 	streamTargetTypeStdout = "stdout"
+	streamTargetTypeNop    = "nop"
 )
 
 // LoggingLevel represents the verbosity level for logging.
