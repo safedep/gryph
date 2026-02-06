@@ -14,12 +14,14 @@ type Tx struct {
 	config
 	// AuditEvent is the client for interacting with the AuditEvent builders.
 	AuditEvent *AuditEventClient
+	// AuditStreamCursor is the client for interacting with the AuditStreamCursor builders.
+	AuditStreamCursor *AuditStreamCursorClient
+	// EventStreamCursor is the client for interacting with the EventStreamCursor builders.
+	EventStreamCursor *EventStreamCursorClient
 	// SelfAudit is the client for interacting with the SelfAudit builders.
 	SelfAudit *SelfAuditClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
-	// StreamCheckpoint is the client for interacting with the StreamCheckpoint builders.
-	StreamCheckpoint *StreamCheckpointClient
 
 	// lazily loaded.
 	client     *Client
@@ -152,9 +154,10 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.AuditEvent = NewAuditEventClient(tx.config)
+	tx.AuditStreamCursor = NewAuditStreamCursorClient(tx.config)
+	tx.EventStreamCursor = NewEventStreamCursorClient(tx.config)
 	tx.SelfAudit = NewSelfAuditClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)
-	tx.StreamCheckpoint = NewStreamCheckpointClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

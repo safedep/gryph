@@ -21,6 +21,30 @@ func (f AuditEventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, 
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuditEventMutation", m)
 }
 
+// The AuditStreamCursorFunc type is an adapter to allow the use of ordinary
+// function as AuditStreamCursor mutator.
+type AuditStreamCursorFunc func(context.Context, *ent.AuditStreamCursorMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuditStreamCursorFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuditStreamCursorMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuditStreamCursorMutation", m)
+}
+
+// The EventStreamCursorFunc type is an adapter to allow the use of ordinary
+// function as EventStreamCursor mutator.
+type EventStreamCursorFunc func(context.Context, *ent.EventStreamCursorMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EventStreamCursorFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EventStreamCursorMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EventStreamCursorMutation", m)
+}
+
 // The SelfAuditFunc type is an adapter to allow the use of ordinary
 // function as SelfAudit mutator.
 type SelfAuditFunc func(context.Context, *ent.SelfAuditMutation) (ent.Value, error)
@@ -43,18 +67,6 @@ func (f SessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SessionMutation", m)
-}
-
-// The StreamCheckpointFunc type is an adapter to allow the use of ordinary
-// function as StreamCheckpoint mutator.
-type StreamCheckpointFunc func(context.Context, *ent.StreamCheckpointMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f StreamCheckpointFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.StreamCheckpointMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.StreamCheckpointMutation", m)
 }
 
 // Condition is a hook condition function.

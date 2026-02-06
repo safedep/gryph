@@ -81,21 +81,19 @@ type SelfAuditStore interface {
 	QuerySelfAuditsAfter(ctx context.Context, after time.Time, afterID uuid.UUID, limit int) ([]*SelfAuditEntry, error)
 }
 
-// StreamCheckpointStore defines the interface for stream sync checkpoints.
-type StreamCheckpointStore interface {
-	// GetStreamCheckpoint retrieves a checkpoint by target name.
-	GetStreamCheckpoint(ctx context.Context, targetName string) (*StreamCheckpoint, error)
-
-	// SaveStreamCheckpoint persists a stream checkpoint.
-	SaveStreamCheckpoint(ctx context.Context, checkpoint *StreamCheckpoint) error
+// StreamCursorStore defines the interface for stream sync cursors.
+type StreamCursorStore interface {
+	GetEventCursor(ctx context.Context, targetName string) (*StreamCursor, error)
+	SaveEventCursor(ctx context.Context, cursor *StreamCursor) error
+	GetAuditCursor(ctx context.Context, targetName string) (*StreamCursor, error)
+	SaveAuditCursor(ctx context.Context, cursor *StreamCursor) error
 }
 
-// StreamCheckpoint represents the sync state for a stream target.
-type StreamCheckpoint struct {
-	TargetName      string
-	LastSyncedAt    time.Time
-	LastEventID     string
-	LastSelfAuditID string
+// StreamCursor represents the sync cursor for a single collection (events or audits).
+type StreamCursor struct {
+	TargetName   string
+	LastSyncedAt time.Time
+	LastID       string
 }
 
 // SelfAuditEntry represents a self-audit log entry for storage.
@@ -122,7 +120,7 @@ type Store interface {
 	EventStore
 	SessionStore
 	SelfAuditStore
-	StreamCheckpointStore
+	StreamCursorStore
 
 	// Init initializes the database schema.
 	Init(ctx context.Context) error

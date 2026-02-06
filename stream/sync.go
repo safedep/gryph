@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/core/events"
 	corestream "github.com/safedep/gryph/core/stream"
 	"github.com/safedep/gryph/storage"
 )
@@ -121,33 +122,54 @@ func (s *Syncer) syncTarget(ctx context.Context, target corestream.Target, batch
 
 	reportProgress(false)
 
-	cp, err := s.store.GetStreamCheckpoint(ctx, target.Name())
+	eventCursor, err := s.store.GetEventCursor(ctx, target.Name())
+	if err != nil {
+		tr.Error = err
+		return tr
+	}
+	auditCursor, err := s.store.GetAuditCursor(ctx, target.Name())
 	if err != nil {
 		tr.Error = err
 		return tr
 	}
 
-	var after time.Time
+	var eventAfter, auditAfter time.Time
 	var lastEventID, lastAuditID uuid.UUID
-	if cp != nil {
-		after = cp.LastSyncedAt
-		lastEventID, _ = uuid.Parse(cp.LastEventID)
-		lastAuditID, _ = uuid.Parse(cp.LastSelfAuditID)
+	if eventCursor != nil {
+		eventAfter = eventCursor.LastSyncedAt
+		lastEventID, _ = uuid.Parse(eventCursor.LastID)
+	}
+	if auditCursor != nil {
+		auditAfter = auditCursor.LastSyncedAt
+		lastAuditID, _ = uuid.Parse(auditCursor.LastID)
 	}
 
+	eventsDrained := false
+	auditsDrained := false
 	iteration := 0
 	for maxIterations <= 0 || iteration < maxIterations {
-
-		evts, err := s.store.QueryEventsAfter(ctx, after, lastEventID, batchSize)
-		if err != nil {
-			tr.Error = err
-			return tr
+		var evts []*events.Event
+		if !eventsDrained {
+			evts, err = s.store.QueryEventsAfter(ctx, eventAfter, lastEventID, batchSize)
+			if err != nil {
+				tr.Error = err
+				return tr
+			}
+			if len(evts) < batchSize {
+				eventsDrained = true
+			}
 		}
 
-		audits, err := s.store.QuerySelfAuditsAfter(ctx, after, lastAuditID, batchSize)
-		if err != nil {
-			tr.Error = err
-			return tr
+		var audits []*storage.SelfAuditEntry
+		if !auditsDrained {
+			audits, err = s.store.QuerySelfAuditsAfter(ctx, auditAfter, lastAuditID, batchSize)
+			if err != nil {
+				tr.Error = err
+				return tr
+			}
+			if len(audits) < batchSize {
+				auditsDrained = true
+			}
 		}
 
 		if len(evts) == 0 && len(audits) == 0 {
@@ -155,21 +177,16 @@ func (s *Syncer) syncTarget(ctx context.Context, target corestream.Target, batch
 		}
 
 		items := make([]corestream.StreamItem, 0, len(evts)+len(audits))
-		var latestTime time.Time
 
 		for _, e := range evts {
 			items = append(items, corestream.StreamItem{Event: e})
-			if e.Timestamp.After(latestTime) {
-				latestTime = e.Timestamp
-			}
+			eventAfter = e.Timestamp
 			lastEventID = e.ID
 		}
 
 		for _, a := range audits {
 			items = append(items, corestream.StreamItem{SelfAudit: a})
-			if a.Timestamp.After(latestTime) {
-				latestTime = a.Timestamp
-			}
+			auditAfter = a.Timestamp
 			lastAuditID = a.ID
 		}
 
@@ -181,23 +198,32 @@ func (s *Syncer) syncTarget(ctx context.Context, target corestream.Target, batch
 		tr.EventsSent += len(evts)
 		tr.AuditsSent += len(audits)
 
-		newCP := &storage.StreamCheckpoint{
-			TargetName:      target.Name(),
-			LastSyncedAt:    latestTime,
-			LastEventID:     lastEventID.String(),
-			LastSelfAuditID: lastAuditID.String(),
+		if len(evts) > 0 {
+			if err := s.store.SaveEventCursor(ctx, &storage.StreamCursor{
+				TargetName:   target.Name(),
+				LastSyncedAt: eventAfter,
+				LastID:       lastEventID.String(),
+			}); err != nil {
+				tr.Error = err
+				return tr
+			}
 		}
 
-		if err := s.store.SaveStreamCheckpoint(ctx, newCP); err != nil {
-			tr.Error = err
-			return tr
+		if len(audits) > 0 {
+			if err := s.store.SaveAuditCursor(ctx, &storage.StreamCursor{
+				TargetName:   target.Name(),
+				LastSyncedAt: auditAfter,
+				LastID:       lastAuditID.String(),
+			}); err != nil {
+				tr.Error = err
+				return tr
+			}
 		}
 
-		after = latestTime
 		iteration++
 		reportProgress(false)
 
-		if len(evts) < batchSize && len(audits) < batchSize {
+		if eventsDrained && auditsDrained {
 			break
 		}
 	}
