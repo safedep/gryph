@@ -528,5 +528,48 @@ func (p *TablePresenter) RenderMessage(message string) error {
 	return tw.Err()
 }
 
+// RenderStreamSync renders stream sync results.
+func (p *TablePresenter) RenderStreamSync(result *StreamSyncView) error {
+	tw := &tableWriter{w: p.w}
+
+	tw.printf("%s\n", p.color.Header("Stream Sync Complete"))
+	tw.println(HorizontalLine(30))
+	tw.println()
+
+	for _, tr := range result.TargetResults {
+		if tr.Error != "" {
+			tw.printf("  %s  %-14s %s\n",
+				p.color.StatusFail(),
+				tr.TargetName,
+				p.color.Error("error: "+tr.Error))
+		} else {
+			tw.printf("  %s  %-14s %d events, %d audits\n",
+				p.color.StatusOK(),
+				tr.TargetName,
+				tr.EventsSent,
+				tr.AuditsSent)
+		}
+	}
+
+	tw.println()
+
+	if result.HasErrors {
+		errCount := 0
+		for _, tr := range result.TargetResults {
+			if tr.Error != "" {
+				errCount++
+			}
+		}
+		successCount := len(result.TargetResults) - errCount
+		tw.printf("Synced %d events, %d audits to %d target(s) with %d error(s).\n",
+			result.TotalEvents, result.TotalAudits, successCount, errCount)
+	} else {
+		tw.printf("Synced %d events, %d audits to %d target(s).\n",
+			result.TotalEvents, result.TotalAudits, len(result.TargetResults))
+	}
+
+	return tw.Err()
+}
+
 // Ensure TablePresenter implements Presenter
 var _ Presenter = (*TablePresenter)(nil)

@@ -39,8 +39,8 @@ func setDefaults(v *viper.Viper) {
 	// Streams defaults
 	v.SetDefault("streams.targets", []StreamTargetConfig{
 		{
-			Name:    streamTargetTypeStdout,
-			Type:    streamTargetTypeStdout,
+			Name:    streamTargetTypeNop,
+			Type:    streamTargetTypeNop,
 			Enabled: true,
 		},
 	})
