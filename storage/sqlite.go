@@ -500,10 +500,24 @@ func (s *SQLiteStore) QuerySelfAudits(ctx context.Context, filter *SelfAuditFilt
 }
 
 // QueryEventsAfter retrieves events after the given time, ordered ascending.
-func (s *SQLiteStore) QueryEventsAfter(ctx context.Context, after time.Time, limit int) ([]*events.Event, error) {
-	query := s.client.AuditEvent.Query().
-		Where(auditevent.TimestampGT(after)).
-		Order(auditevent.ByTimestamp())
+func (s *SQLiteStore) QueryEventsAfter(ctx context.Context, after time.Time, afterID uuid.UUID, limit int) ([]*events.Event, error) {
+	query := s.client.AuditEvent.Query()
+
+	if afterID != uuid.Nil {
+		query.Where(
+			auditevent.Or(
+				auditevent.TimestampGT(after),
+				auditevent.And(
+					auditevent.TimestampEQ(after),
+					auditevent.IDGT(afterID),
+				),
+			),
+		)
+	} else {
+		query.Where(auditevent.TimestampGT(after))
+	}
+
+	query.Order(auditevent.ByTimestamp(), auditevent.ByID())
 
 	if limit > 0 {
 		query.Limit(limit)
@@ -522,10 +536,24 @@ func (s *SQLiteStore) QueryEventsAfter(ctx context.Context, after time.Time, lim
 }
 
 // QuerySelfAuditsAfter retrieves self-audit entries after the given time, ordered ascending.
-func (s *SQLiteStore) QuerySelfAuditsAfter(ctx context.Context, after time.Time, limit int) ([]*SelfAuditEntry, error) {
-	query := s.client.SelfAudit.Query().
-		Where(selfaudit.TimestampGT(after)).
-		Order(selfaudit.ByTimestamp())
+func (s *SQLiteStore) QuerySelfAuditsAfter(ctx context.Context, after time.Time, afterID uuid.UUID, limit int) ([]*SelfAuditEntry, error) {
+	query := s.client.SelfAudit.Query()
+
+	if afterID != uuid.Nil {
+		query.Where(
+			selfaudit.Or(
+				selfaudit.TimestampGT(after),
+				selfaudit.And(
+					selfaudit.TimestampEQ(after),
+					selfaudit.IDGT(afterID),
+				),
+			),
+		)
+	} else {
+		query.Where(selfaudit.TimestampGT(after))
+	}
+
+	query.Order(selfaudit.ByTimestamp(), selfaudit.ByID())
 
 	if limit > 0 {
 		query.Limit(limit)

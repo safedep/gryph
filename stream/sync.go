@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	corestream "github.com/safedep/gryph/core/stream"
 	"github.com/safedep/gryph/storage"
 )
@@ -127,39 +128,41 @@ func (s *Syncer) syncTarget(ctx context.Context, target corestream.Target, batch
 	}
 
 	var after time.Time
+	var lastEventID, lastAuditID uuid.UUID
 	if cp != nil {
 		after = cp.LastSyncedAt
+		lastEventID, _ = uuid.Parse(cp.LastEventID)
+		lastAuditID, _ = uuid.Parse(cp.LastSelfAuditID)
 	}
 
 	iteration := 0
 	for maxIterations <= 0 || iteration < maxIterations {
 
-		events, err := s.store.QueryEventsAfter(ctx, after, batchSize)
+		evts, err := s.store.QueryEventsAfter(ctx, after, lastEventID, batchSize)
 		if err != nil {
 			tr.Error = err
 			return tr
 		}
 
-		audits, err := s.store.QuerySelfAuditsAfter(ctx, after, batchSize)
+		audits, err := s.store.QuerySelfAuditsAfter(ctx, after, lastAuditID, batchSize)
 		if err != nil {
 			tr.Error = err
 			return tr
 		}
 
-		if len(events) == 0 && len(audits) == 0 {
+		if len(evts) == 0 && len(audits) == 0 {
 			break
 		}
 
-		items := make([]corestream.StreamItem, 0, len(events)+len(audits))
+		items := make([]corestream.StreamItem, 0, len(evts)+len(audits))
 		var latestTime time.Time
-		var lastEventID, lastAuditID string
 
-		for _, e := range events {
+		for _, e := range evts {
 			items = append(items, corestream.StreamItem{Event: e})
 			if e.Timestamp.After(latestTime) {
 				latestTime = e.Timestamp
 			}
-			lastEventID = e.ID.String()
+			lastEventID = e.ID
 		}
 
 		for _, a := range audits {
@@ -167,7 +170,7 @@ func (s *Syncer) syncTarget(ctx context.Context, target corestream.Target, batch
 			if a.Timestamp.After(latestTime) {
 				latestTime = a.Timestamp
 			}
-			lastAuditID = a.ID.String()
+			lastAuditID = a.ID
 		}
 
 		if err := target.Send(ctx, items); err != nil {
@@ -175,20 +178,14 @@ func (s *Syncer) syncTarget(ctx context.Context, target corestream.Target, batch
 			return tr
 		}
 
-		tr.EventsSent += len(events)
+		tr.EventsSent += len(evts)
 		tr.AuditsSent += len(audits)
 
 		newCP := &storage.StreamCheckpoint{
-			TargetName:   target.Name(),
-			LastSyncedAt: latestTime,
-		}
-
-		if lastEventID != "" {
-			newCP.LastEventID = lastEventID
-		}
-
-		if lastAuditID != "" {
-			newCP.LastSelfAuditID = lastAuditID
+			TargetName:      target.Name(),
+			LastSyncedAt:    latestTime,
+			LastEventID:     lastEventID.String(),
+			LastSelfAuditID: lastAuditID.String(),
 		}
 
 		if err := s.store.SaveStreamCheckpoint(ctx, newCP); err != nil {
@@ -200,7 +197,7 @@ func (s *Syncer) syncTarget(ctx context.Context, target corestream.Target, batch
 		iteration++
 		reportProgress(false)
 
-		if len(events) < batchSize && len(audits) < batchSize {
+		if len(evts) < batchSize && len(audits) < batchSize {
 			break
 		}
 	}

@@ -37,7 +37,10 @@ type EventStore interface {
 	CountEventsBefore(ctx context.Context, before time.Time) (int, error)
 
 	// QueryEventsAfter retrieves events after the given time, ordered ascending.
-	QueryEventsAfter(ctx context.Context, after time.Time, limit int) ([]*events.Event, error)
+	// When afterID is non-nil, a compound cursor (timestamp, id) is used so that
+	// events sharing the same timestamp as after are only included when their ID
+	// is greater than afterID. This prevents skipping records at batch boundaries.
+	QueryEventsAfter(ctx context.Context, after time.Time, afterID uuid.UUID, limit int) ([]*events.Event, error)
 }
 
 // SessionStore defines the interface for storing and querying sessions.
@@ -73,7 +76,9 @@ type SelfAuditStore interface {
 	QuerySelfAudits(ctx context.Context, filter *SelfAuditFilter) ([]*SelfAuditEntry, error)
 
 	// QuerySelfAuditsAfter retrieves self-audit entries after the given time, ordered ascending.
-	QuerySelfAuditsAfter(ctx context.Context, after time.Time, limit int) ([]*SelfAuditEntry, error)
+	// When afterID is non-nil, a compound cursor (timestamp, id) is used to avoid
+	// skipping records that share the same timestamp at batch boundaries.
+	QuerySelfAuditsAfter(ctx context.Context, after time.Time, afterID uuid.UUID, limit int) ([]*SelfAuditEntry, error)
 }
 
 // StreamCheckpointStore defines the interface for stream sync checkpoints.
