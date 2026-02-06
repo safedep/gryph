@@ -23,7 +23,7 @@ func NewProgressWriter(w io.Writer, useColors bool) *ProgressWriter {
 	return &ProgressWriter{
 		w:          w,
 		color:      NewColorizer(useColors),
-		isTerminal: IsTerminal(),
+		isTerminal: IsWriterTerminal(w),
 	}
 }
 

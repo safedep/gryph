@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"io"
 	"os"
 
 	"golang.org/x/term"
@@ -34,4 +35,12 @@ func GetTerminalWidth() int {
 // IsTerminal returns true if stdout is a terminal.
 func IsTerminal() bool {
 	return term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+// IsWriterTerminal returns true if w is backed by a terminal file descriptor.
+func IsWriterTerminal(w io.Writer) bool {
+	if f, ok := w.(*os.File); ok {
+		return term.IsTerminal(int(f.Fd()))
+	}
+	return false
 }

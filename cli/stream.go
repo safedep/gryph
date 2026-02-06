@@ -66,7 +66,7 @@ func newStreamSyncCmd() *cobra.Command {
 			}
 
 			var progress *tui.ProgressWriter
-			if !quiet && tui.IsTerminal() {
+			if !quiet && tui.IsWriterTerminal(os.Stderr) {
 				progress = tui.NewProgressWriter(os.Stderr, app.Config.ShouldUseColors())
 			}
 
