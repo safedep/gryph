@@ -132,10 +132,7 @@ func (s *Syncer) syncTarget(ctx context.Context, target corestream.Target, batch
 	}
 
 	iteration := 0
-	for {
-		if maxIterations > 0 && iteration >= maxIterations {
-			break
-		}
+	for maxIterations <= 0 || iteration < maxIterations {
 
 		events, err := s.store.QueryEventsAfter(ctx, after, batchSize)
 		if err != nil {

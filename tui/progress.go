@@ -33,7 +33,7 @@ func (p *ProgressWriter) Update(format string, args ...any) {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
-	fmt.Fprint(p.w, clearLineReturn+p.color.Dim(msg))
+	_, _ = fmt.Fprint(p.w, clearLineReturn+p.color.Dim(msg))
 }
 
 // Clear clears the progress line.
@@ -41,5 +41,5 @@ func (p *ProgressWriter) Clear() {
 	if !p.isTerminal {
 		return
 	}
-	fmt.Fprint(p.w, clearLineReturn)
+	_, _ = fmt.Fprint(p.w, clearLineReturn)
 }
