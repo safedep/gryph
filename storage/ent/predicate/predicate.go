@@ -9,11 +9,14 @@ import (
 // AuditEvent is the predicate function for auditevent builders.
 type AuditEvent func(*sql.Selector)
 
+// AuditStreamCursor is the predicate function for auditstreamcursor builders.
+type AuditStreamCursor func(*sql.Selector)
+
+// EventStreamCursor is the predicate function for eventstreamcursor builders.
+type EventStreamCursor func(*sql.Selector)
+
 // SelfAudit is the predicate function for selfaudit builders.
 type SelfAudit func(*sql.Selector)
 
 // Session is the predicate function for session builders.
 type Session func(*sql.Selector)
-
-// StreamCheckpoint is the predicate function for streamcheckpoint builders.
-type StreamCheckpoint func(*sql.Selector)

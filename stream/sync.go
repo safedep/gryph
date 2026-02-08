@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/safedep/gryph/core/events"
 	corestream "github.com/safedep/gryph/core/stream"
 	"github.com/safedep/gryph/storage"
 )
@@ -23,6 +25,46 @@ type TargetSyncResult struct {
 	Error      error
 }
 
+// SyncProgress reports progress during sync.
+type SyncProgress struct {
+	TargetName string
+	EventsSent int
+	AuditsSent int
+	IsComplete bool
+}
+
+// SyncOption configures sync behavior.
+type SyncOption func(*syncOptions)
+
+type syncOptions struct {
+	onProgress func(SyncProgress)
+	batchSize  int
+	iterations int // 0 = unlimited (drain all)
+}
+
+// WithProgressCallback sets a callback for progress updates.
+func WithProgressCallback(fn func(SyncProgress)) SyncOption {
+	return func(o *syncOptions) {
+		o.onProgress = fn
+	}
+}
+
+// WithBatchSize sets the number of events and audits to fetch per iteration.
+// A value of 0 uses the Syncer's default batch size.
+func WithBatchSize(size int) SyncOption {
+	return func(o *syncOptions) {
+		o.batchSize = size
+	}
+}
+
+// WithIterations sets the maximum number of batch iterations.
+// A value of 0 means unlimited (drain all pending items).
+func WithIterations(n int) SyncOption {
+	return func(o *syncOptions) {
+		o.iterations = n
+	}
+}
+
 // Syncer orchestrates syncing events and self-audits to stream targets.
 type Syncer struct {
 	store     storage.Store
@@ -40,94 +82,152 @@ func NewSyncer(store storage.Store, registry *Registry) *Syncer {
 }
 
 // Sync sends unsent events and self-audits to all enabled targets.
-func (s *Syncer) Sync(ctx context.Context) (*SyncResult, error) {
+func (s *Syncer) Sync(ctx context.Context, opts ...SyncOption) (*SyncResult, error) {
+	var options syncOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	batchSize := options.batchSize
+	if batchSize <= 0 {
+		batchSize = s.batchSize
+	}
+
 	targets := s.registry.Enabled()
 	result := &SyncResult{
 		TargetResults: make([]TargetSyncResult, 0, len(targets)),
 	}
 
 	for _, target := range targets {
-		tr := s.syncTarget(ctx, target)
+		tr := s.syncTarget(ctx, target, batchSize, options.iterations, options.onProgress)
 		result.TargetResults = append(result.TargetResults, tr)
 	}
 
 	return result, nil
 }
 
-func (s *Syncer) syncTarget(ctx context.Context, target corestream.Target) TargetSyncResult {
+func (s *Syncer) syncTarget(ctx context.Context, target corestream.Target, batchSize, maxIterations int, onProgress func(SyncProgress)) TargetSyncResult {
 	tr := TargetSyncResult{TargetName: target.Name()}
 
-	cp, err := s.store.GetStreamCheckpoint(ctx, target.Name())
-	if err != nil {
-		tr.Error = err
-		return tr
-	}
-
-	var after time.Time
-	if cp != nil {
-		after = cp.LastSyncedAt
-	}
-
-	events, err := s.store.QueryEventsAfter(ctx, after, s.batchSize)
-	if err != nil {
-		tr.Error = err
-		return tr
-	}
-
-	audits, err := s.store.QuerySelfAuditsAfter(ctx, after, s.batchSize)
-	if err != nil {
-		tr.Error = err
-		return tr
-	}
-
-	if len(events) == 0 && len(audits) == 0 {
-		return tr
-	}
-
-	items := make([]corestream.StreamItem, 0, len(events)+len(audits))
-	var latestTime time.Time
-	var lastEventID, lastAuditID string
-
-	for _, e := range events {
-		items = append(items, corestream.StreamItem{Event: e})
-		if e.Timestamp.After(latestTime) {
-			latestTime = e.Timestamp
+	reportProgress := func(complete bool) {
+		if onProgress != nil {
+			onProgress(SyncProgress{
+				TargetName: target.Name(),
+				EventsSent: tr.EventsSent,
+				AuditsSent: tr.AuditsSent,
+				IsComplete: complete,
+			})
 		}
-		lastEventID = e.ID.String()
 	}
 
-	for _, a := range audits {
-		items = append(items, corestream.StreamItem{SelfAudit: a})
-		if a.Timestamp.After(latestTime) {
-			latestTime = a.Timestamp
-		}
-		lastAuditID = a.ID.String()
-	}
+	reportProgress(false)
 
-	if err := target.Send(ctx, items); err != nil {
+	eventCursor, err := s.store.GetEventCursor(ctx, target.Name())
+	if err != nil {
+		tr.Error = err
+		return tr
+	}
+	auditCursor, err := s.store.GetAuditCursor(ctx, target.Name())
+	if err != nil {
 		tr.Error = err
 		return tr
 	}
 
-	tr.EventsSent = len(events)
-	tr.AuditsSent = len(audits)
-
-	newCP := &storage.StreamCheckpoint{
-		TargetName:   target.Name(),
-		LastSyncedAt: latestTime,
+	var eventAfter, auditAfter time.Time
+	var lastEventID, lastAuditID uuid.UUID
+	if eventCursor != nil {
+		eventAfter = eventCursor.LastSyncedAt
+		lastEventID, _ = uuid.Parse(eventCursor.LastID)
+	}
+	if auditCursor != nil {
+		auditAfter = auditCursor.LastSyncedAt
+		lastAuditID, _ = uuid.Parse(auditCursor.LastID)
 	}
 
-	if lastEventID != "" {
-		newCP.LastEventID = lastEventID
+	eventsDrained := false
+	auditsDrained := false
+	iteration := 0
+	for maxIterations <= 0 || iteration < maxIterations {
+		var evts []*events.Event
+		if !eventsDrained {
+			evts, err = s.store.QueryEventsAfter(ctx, eventAfter, lastEventID, batchSize)
+			if err != nil {
+				tr.Error = err
+				return tr
+			}
+			if len(evts) < batchSize {
+				eventsDrained = true
+			}
+		}
+
+		var audits []*storage.SelfAuditEntry
+		if !auditsDrained {
+			audits, err = s.store.QuerySelfAuditsAfter(ctx, auditAfter, lastAuditID, batchSize)
+			if err != nil {
+				tr.Error = err
+				return tr
+			}
+			if len(audits) < batchSize {
+				auditsDrained = true
+			}
+		}
+
+		if len(evts) == 0 && len(audits) == 0 {
+			break
+		}
+
+		items := make([]corestream.StreamItem, 0, len(evts)+len(audits))
+
+		for _, e := range evts {
+			items = append(items, corestream.StreamItem{Event: e})
+			eventAfter = e.Timestamp
+			lastEventID = e.ID
+		}
+
+		for _, a := range audits {
+			items = append(items, corestream.StreamItem{SelfAudit: a})
+			auditAfter = a.Timestamp
+			lastAuditID = a.ID
+		}
+
+		if err := target.Send(ctx, items); err != nil {
+			tr.Error = err
+			return tr
+		}
+
+		tr.EventsSent += len(evts)
+		tr.AuditsSent += len(audits)
+
+		if len(evts) > 0 {
+			if err := s.store.SaveEventCursor(ctx, &storage.StreamCursor{
+				TargetName:   target.Name(),
+				LastSyncedAt: eventAfter,
+				LastID:       lastEventID.String(),
+			}); err != nil {
+				tr.Error = err
+				return tr
+			}
+		}
+
+		if len(audits) > 0 {
+			if err := s.store.SaveAuditCursor(ctx, &storage.StreamCursor{
+				TargetName:   target.Name(),
+				LastSyncedAt: auditAfter,
+				LastID:       lastAuditID.String(),
+			}); err != nil {
+				tr.Error = err
+				return tr
+			}
+		}
+
+		iteration++
+		reportProgress(false)
+
+		if eventsDrained && auditsDrained {
+			break
+		}
 	}
 
-	if lastAuditID != "" {
-		newCP.LastSelfAuditID = lastAuditID
-	}
-
-	if err := s.store.SaveStreamCheckpoint(ctx, newCP); err != nil {
-		tr.Error = err
-	}
-
+	reportProgress(true)
 	return tr
 }

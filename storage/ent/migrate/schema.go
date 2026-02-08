@@ -69,6 +69,30 @@ var (
 			},
 		},
 	}
+	// AuditStreamCursorsColumns holds the columns for the "audit_stream_cursors" table.
+	AuditStreamCursorsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "last_synced_at", Type: field.TypeTime},
+		{Name: "last_id", Type: field.TypeString, Nullable: true},
+	}
+	// AuditStreamCursorsTable holds the schema information for the "audit_stream_cursors" table.
+	AuditStreamCursorsTable = &schema.Table{
+		Name:       "audit_stream_cursors",
+		Columns:    AuditStreamCursorsColumns,
+		PrimaryKey: []*schema.Column{AuditStreamCursorsColumns[0]},
+	}
+	// EventStreamCursorsColumns holds the columns for the "event_stream_cursors" table.
+	EventStreamCursorsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "last_synced_at", Type: field.TypeTime},
+		{Name: "last_id", Type: field.TypeString, Nullable: true},
+	}
+	// EventStreamCursorsTable holds the schema information for the "event_stream_cursors" table.
+	EventStreamCursorsTable = &schema.Table{
+		Name:       "event_stream_cursors",
+		Columns:    EventStreamCursorsColumns,
+		PrimaryKey: []*schema.Column{EventStreamCursorsColumns[0]},
+	}
 	// SelfAuditsColumns holds the columns for the "self_audits" table.
 	SelfAuditsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -137,25 +161,13 @@ var (
 			},
 		},
 	}
-	// StreamCheckpointsColumns holds the columns for the "stream_checkpoints" table.
-	StreamCheckpointsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "last_synced_at", Type: field.TypeTime},
-		{Name: "last_event_id", Type: field.TypeString, Nullable: true},
-		{Name: "last_self_audit_id", Type: field.TypeString, Nullable: true},
-	}
-	// StreamCheckpointsTable holds the schema information for the "stream_checkpoints" table.
-	StreamCheckpointsTable = &schema.Table{
-		Name:       "stream_checkpoints",
-		Columns:    StreamCheckpointsColumns,
-		PrimaryKey: []*schema.Column{StreamCheckpointsColumns[0]},
-	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AuditEventsTable,
+		AuditStreamCursorsTable,
+		EventStreamCursorsTable,
 		SelfAuditsTable,
 		SessionsTable,
-		StreamCheckpointsTable,
 	}
 )
 

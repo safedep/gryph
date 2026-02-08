@@ -57,6 +57,9 @@ type Presenter interface {
 
 	// RenderMessage renders a simple message.
 	RenderMessage(message string) error
+
+	// RenderStreamSync renders stream sync results.
+	RenderStreamSync(result *StreamSyncView) error
 }
 
 // PresenterOptions configures presenter behavior.

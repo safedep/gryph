@@ -500,10 +500,24 @@ func (s *SQLiteStore) QuerySelfAudits(ctx context.Context, filter *SelfAuditFilt
 }
 
 // QueryEventsAfter retrieves events after the given time, ordered ascending.
-func (s *SQLiteStore) QueryEventsAfter(ctx context.Context, after time.Time, limit int) ([]*events.Event, error) {
-	query := s.client.AuditEvent.Query().
-		Where(auditevent.TimestampGT(after)).
-		Order(auditevent.ByTimestamp())
+func (s *SQLiteStore) QueryEventsAfter(ctx context.Context, after time.Time, afterID uuid.UUID, limit int) ([]*events.Event, error) {
+	query := s.client.AuditEvent.Query()
+
+	if afterID != uuid.Nil {
+		query.Where(
+			auditevent.Or(
+				auditevent.TimestampGT(after),
+				auditevent.And(
+					auditevent.TimestampEQ(after),
+					auditevent.IDGT(afterID),
+				),
+			),
+		)
+	} else {
+		query.Where(auditevent.TimestampGT(after))
+	}
+
+	query.Order(auditevent.ByTimestamp(), auditevent.ByID())
 
 	if limit > 0 {
 		query.Limit(limit)
@@ -522,10 +536,24 @@ func (s *SQLiteStore) QueryEventsAfter(ctx context.Context, after time.Time, lim
 }
 
 // QuerySelfAuditsAfter retrieves self-audit entries after the given time, ordered ascending.
-func (s *SQLiteStore) QuerySelfAuditsAfter(ctx context.Context, after time.Time, limit int) ([]*SelfAuditEntry, error) {
-	query := s.client.SelfAudit.Query().
-		Where(selfaudit.TimestampGT(after)).
-		Order(selfaudit.ByTimestamp())
+func (s *SQLiteStore) QuerySelfAuditsAfter(ctx context.Context, after time.Time, afterID uuid.UUID, limit int) ([]*SelfAuditEntry, error) {
+	query := s.client.SelfAudit.Query()
+
+	if afterID != uuid.Nil {
+		query.Where(
+			selfaudit.Or(
+				selfaudit.TimestampGT(after),
+				selfaudit.And(
+					selfaudit.TimestampEQ(after),
+					selfaudit.IDGT(afterID),
+				),
+			),
+		)
+	} else {
+		query.Where(selfaudit.TimestampGT(after))
+	}
+
+	query.Order(selfaudit.ByTimestamp(), selfaudit.ByID())
 
 	if limit > 0 {
 		query.Limit(limit)
@@ -543,61 +571,112 @@ func (s *SQLiteStore) QuerySelfAuditsAfter(ctx context.Context, after time.Time,
 	return result, nil
 }
 
-// GetStreamCheckpoint retrieves a checkpoint by target name.
-func (s *SQLiteStore) GetStreamCheckpoint(ctx context.Context, targetName string) (*StreamCheckpoint, error) {
-	entCP, err := s.client.StreamCheckpoint.Get(ctx, targetName)
+// GetEventCursor retrieves the event stream cursor for a target.
+func (s *SQLiteStore) GetEventCursor(ctx context.Context, targetName string) (*StreamCursor, error) {
+	e, err := s.client.EventStreamCursor.Get(ctx, targetName)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get stream checkpoint: %w", err)
+		return nil, fmt.Errorf("failed to get event cursor: %w", err)
 	}
 
-	return &StreamCheckpoint{
-		TargetName:      entCP.ID,
-		LastSyncedAt:    entCP.LastSyncedAt,
-		LastEventID:     entCP.LastEventID,
-		LastSelfAuditID: entCP.LastSelfAuditID,
+	return &StreamCursor{
+		TargetName:   e.ID,
+		LastSyncedAt: e.LastSyncedAt,
+		LastID:       e.LastID,
 	}, nil
 }
 
-// SaveStreamCheckpoint persists a stream checkpoint using create-or-update
-// inside an IMMEDIATE transaction to prevent TOCTOU races between concurrent
-// sync processes.
-func (s *SQLiteStore) SaveStreamCheckpoint(ctx context.Context, checkpoint *StreamCheckpoint) error {
+// SaveEventCursor persists an event stream cursor using create-or-update
+// inside a transaction to prevent TOCTOU races.
+func (s *SQLiteStore) SaveEventCursor(ctx context.Context, cursor *StreamCursor) error {
 	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
-	existing, err := tx.StreamCheckpoint.Get(ctx, checkpoint.TargetName)
+	existing, err := tx.EventStreamCursor.Get(ctx, cursor.TargetName)
 	if err != nil && !ent.IsNotFound(err) {
 		_ = tx.Rollback()
-		return fmt.Errorf("failed to check stream checkpoint: %w", err)
+		return fmt.Errorf("failed to check event cursor: %w", err)
 	}
 
 	if existing != nil {
-		_, err = tx.StreamCheckpoint.UpdateOneID(checkpoint.TargetName).
-			SetLastSyncedAt(checkpoint.LastSyncedAt).
-			SetLastEventID(checkpoint.LastEventID).
-			SetLastSelfAuditID(checkpoint.LastSelfAuditID).
+		_, err = tx.EventStreamCursor.UpdateOneID(cursor.TargetName).
+			SetLastSyncedAt(cursor.LastSyncedAt).
+			SetLastID(cursor.LastID).
 			Save(ctx)
 	} else {
-		_, err = tx.StreamCheckpoint.Create().
-			SetID(checkpoint.TargetName).
-			SetLastSyncedAt(checkpoint.LastSyncedAt).
-			SetLastEventID(checkpoint.LastEventID).
-			SetLastSelfAuditID(checkpoint.LastSelfAuditID).
+		_, err = tx.EventStreamCursor.Create().
+			SetID(cursor.TargetName).
+			SetLastSyncedAt(cursor.LastSyncedAt).
+			SetLastID(cursor.LastID).
 			Save(ctx)
 	}
 
 	if err != nil {
 		_ = tx.Rollback()
-		return fmt.Errorf("failed to save stream checkpoint: %w", err)
+		return fmt.Errorf("failed to save event cursor: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit stream checkpoint: %w", err)
+		return fmt.Errorf("failed to commit event cursor: %w", err)
+	}
+	return nil
+}
+
+// GetAuditCursor retrieves the audit stream cursor for a target.
+func (s *SQLiteStore) GetAuditCursor(ctx context.Context, targetName string) (*StreamCursor, error) {
+	e, err := s.client.AuditStreamCursor.Get(ctx, targetName)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get audit cursor: %w", err)
+	}
+
+	return &StreamCursor{
+		TargetName:   e.ID,
+		LastSyncedAt: e.LastSyncedAt,
+		LastID:       e.LastID,
+	}, nil
+}
+
+// SaveAuditCursor persists an audit stream cursor using create-or-update
+// inside a transaction to prevent TOCTOU races.
+func (s *SQLiteStore) SaveAuditCursor(ctx context.Context, cursor *StreamCursor) error {
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	existing, err := tx.AuditStreamCursor.Get(ctx, cursor.TargetName)
+	if err != nil && !ent.IsNotFound(err) {
+		_ = tx.Rollback()
+		return fmt.Errorf("failed to check audit cursor: %w", err)
+	}
+
+	if existing != nil {
+		_, err = tx.AuditStreamCursor.UpdateOneID(cursor.TargetName).
+			SetLastSyncedAt(cursor.LastSyncedAt).
+			SetLastID(cursor.LastID).
+			Save(ctx)
+	} else {
+		_, err = tx.AuditStreamCursor.Create().
+			SetID(cursor.TargetName).
+			SetLastSyncedAt(cursor.LastSyncedAt).
+			SetLastID(cursor.LastID).
+			Save(ctx)
+	}
+
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("failed to save audit cursor: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit audit cursor: %w", err)
 	}
 	return nil
 }

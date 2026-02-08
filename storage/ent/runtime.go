@@ -7,10 +7,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/storage/ent/auditevent"
+	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
+	"github.com/safedep/gryph/storage/ent/eventstreamcursor"
 	"github.com/safedep/gryph/storage/ent/schema"
 	"github.com/safedep/gryph/storage/ent/selfaudit"
 	"github.com/safedep/gryph/storage/ent/session"
-	"github.com/safedep/gryph/storage/ent/streamcheckpoint"
 )
 
 // The init function reads all schema descriptors with runtime code
@@ -39,6 +40,18 @@ func init() {
 	auditeventDescID := auditeventFields[0].Descriptor()
 	// auditevent.DefaultID holds the default value on creation for the id field.
 	auditevent.DefaultID = auditeventDescID.Default.(func() uuid.UUID)
+	auditstreamcursorFields := schema.AuditStreamCursor{}.Fields()
+	_ = auditstreamcursorFields
+	// auditstreamcursorDescLastSyncedAt is the schema descriptor for last_synced_at field.
+	auditstreamcursorDescLastSyncedAt := auditstreamcursorFields[1].Descriptor()
+	// auditstreamcursor.DefaultLastSyncedAt holds the default value on creation for the last_synced_at field.
+	auditstreamcursor.DefaultLastSyncedAt = auditstreamcursorDescLastSyncedAt.Default.(func() time.Time)
+	eventstreamcursorFields := schema.EventStreamCursor{}.Fields()
+	_ = eventstreamcursorFields
+	// eventstreamcursorDescLastSyncedAt is the schema descriptor for last_synced_at field.
+	eventstreamcursorDescLastSyncedAt := eventstreamcursorFields[1].Descriptor()
+	// eventstreamcursor.DefaultLastSyncedAt holds the default value on creation for the last_synced_at field.
+	eventstreamcursor.DefaultLastSyncedAt = eventstreamcursorDescLastSyncedAt.Default.(func() time.Time)
 	selfauditFields := schema.SelfAudit{}.Fields()
 	_ = selfauditFields
 	// selfauditDescTimestamp is the schema descriptor for timestamp field.
@@ -87,10 +100,4 @@ func init() {
 	sessionDescID := sessionFields[0].Descriptor()
 	// session.DefaultID holds the default value on creation for the id field.
 	session.DefaultID = sessionDescID.Default.(func() uuid.UUID)
-	streamcheckpointFields := schema.StreamCheckpoint{}.Fields()
-	_ = streamcheckpointFields
-	// streamcheckpointDescLastSyncedAt is the schema descriptor for last_synced_at field.
-	streamcheckpointDescLastSyncedAt := streamcheckpointFields[1].Descriptor()
-	// streamcheckpoint.DefaultLastSyncedAt holds the default value on creation for the last_synced_at field.
-	streamcheckpoint.DefaultLastSyncedAt = streamcheckpointDescLastSyncedAt.Default.(func() time.Time)
 }

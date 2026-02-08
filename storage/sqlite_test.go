@@ -947,3 +947,200 @@ func TestSQLiteStore_QueryEventsWithStatusFilter(t *testing.T) {
 		})
 	}
 }
+
+func TestQueryEventsAfterCompoundCursor(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	sessionID := uuid.New()
+	createTestSession(t, store, sessionID, "claude-code")
+
+	sameTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	laterTime := sameTime.Add(time.Second)
+
+	ids := make([]uuid.UUID, 4)
+	for i := range ids {
+		ids[i] = uuid.New()
+	}
+	// Sort IDs so we know ordering
+	for i := 0; i < len(ids); i++ {
+		for j := i + 1; j < len(ids); j++ {
+			if ids[i].String() > ids[j].String() {
+				ids[i], ids[j] = ids[j], ids[i]
+			}
+		}
+	}
+
+	// 3 events at sameTime, 1 at laterTime
+	for i := 0; i < 3; i++ {
+		err := store.SaveEvent(ctx, &events.Event{
+			ID:           ids[i],
+			SessionID:    sessionID,
+			Sequence:     i + 1,
+			Timestamp:    sameTime,
+			AgentName:    "claude-code",
+			ActionType:   events.ActionFileRead,
+			ResultStatus: events.ResultSuccess,
+		})
+		require.NoError(t, err)
+	}
+	err := store.SaveEvent(ctx, &events.Event{
+		ID:           ids[3],
+		SessionID:    sessionID,
+		Sequence:     4,
+		Timestamp:    laterTime,
+		AgentName:    "claude-code",
+		ActionType:   events.ActionFileRead,
+		ResultStatus: events.ResultSuccess,
+	})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		after   time.Time
+		afterID uuid.UUID
+		limit   int
+		wantIDs []uuid.UUID
+	}{
+		{
+			name:    "nil afterID returns all after timestamp",
+			after:   sameTime.Add(-time.Second),
+			afterID: uuid.Nil,
+			limit:   10,
+			wantIDs: ids,
+		},
+		{
+			name:    "compound cursor skips first event at same timestamp",
+			after:   sameTime,
+			afterID: ids[0],
+			limit:   10,
+			wantIDs: []uuid.UUID{ids[1], ids[2], ids[3]},
+		},
+		{
+			name:    "compound cursor skips first two events at same timestamp",
+			after:   sameTime,
+			afterID: ids[1],
+			limit:   10,
+			wantIDs: []uuid.UUID{ids[2], ids[3]},
+		},
+		{
+			name:    "compound cursor at last same-timestamp event returns only later",
+			after:   sameTime,
+			afterID: ids[2],
+			limit:   10,
+			wantIDs: []uuid.UUID{ids[3]},
+		},
+		{
+			name:    "batch limit respected with compound cursor",
+			after:   sameTime,
+			afterID: ids[0],
+			limit:   2,
+			wantIDs: []uuid.UUID{ids[1], ids[2]},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results, err := store.QueryEventsAfter(ctx, tt.after, tt.afterID, tt.limit)
+			require.NoError(t, err)
+			gotIDs := make([]uuid.UUID, len(results))
+			for i, r := range results {
+				gotIDs[i] = r.ID
+			}
+			assert.Equal(t, tt.wantIDs, gotIDs)
+		})
+	}
+}
+
+func TestQuerySelfAuditsAfterCompoundCursor(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	sameTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	laterTime := sameTime.Add(time.Second)
+
+	ids := make([]uuid.UUID, 4)
+	for i := range ids {
+		ids[i] = uuid.New()
+	}
+	for i := 0; i < len(ids); i++ {
+		for j := i + 1; j < len(ids); j++ {
+			if ids[i].String() > ids[j].String() {
+				ids[i], ids[j] = ids[j], ids[i]
+			}
+		}
+	}
+
+	for i := 0; i < 3; i++ {
+		err := store.SaveSelfAudit(ctx, &SelfAuditEntry{
+			ID:          ids[i],
+			Timestamp:   sameTime,
+			Action:      "install",
+			AgentName:   "claude-code",
+			Result:      "success",
+			ToolVersion: "1.0.0",
+		})
+		require.NoError(t, err)
+	}
+	err := store.SaveSelfAudit(ctx, &SelfAuditEntry{
+		ID:          ids[3],
+		Timestamp:   laterTime,
+		Action:      "install",
+		AgentName:   "claude-code",
+		Result:      "success",
+		ToolVersion: "1.0.0",
+	})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		after   time.Time
+		afterID uuid.UUID
+		limit   int
+		wantIDs []uuid.UUID
+	}{
+		{
+			name:    "nil afterID returns all after timestamp",
+			after:   sameTime.Add(-time.Second),
+			afterID: uuid.Nil,
+			limit:   10,
+			wantIDs: ids,
+		},
+		{
+			name:    "compound cursor skips first audit at same timestamp",
+			after:   sameTime,
+			afterID: ids[0],
+			limit:   10,
+			wantIDs: []uuid.UUID{ids[1], ids[2], ids[3]},
+		},
+		{
+			name:    "compound cursor at last same-timestamp audit returns only later",
+			after:   sameTime,
+			afterID: ids[2],
+			limit:   10,
+			wantIDs: []uuid.UUID{ids[3]},
+		},
+		{
+			name:    "batch limit respected with compound cursor",
+			after:   sameTime,
+			afterID: ids[0],
+			limit:   2,
+			wantIDs: []uuid.UUID{ids[1], ids[2]},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results, err := store.QuerySelfAuditsAfter(ctx, tt.after, tt.afterID, tt.limit)
+			require.NoError(t, err)
+			gotIDs := make([]uuid.UUID, len(results))
+			for i, r := range results {
+				gotIDs[i] = r.ID
+			}
+			assert.Equal(t, tt.wantIDs, gotIDs)
+		})
+	}
+}

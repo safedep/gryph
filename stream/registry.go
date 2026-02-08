@@ -8,6 +8,7 @@ import (
 
 const (
 	TargetTypeStdout = "stdout"
+	TargetTypeNop    = "nop"
 )
 
 // Registry manages registered stream targets.

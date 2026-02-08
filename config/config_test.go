@@ -45,8 +45,8 @@ func TestDefault(t *testing.T) {
 
 	// Verify streams defaults
 	require.Len(t, cfg.Streams.Targets, 1)
-	assert.Equal(t, "stdout", cfg.Streams.Targets[0].Name)
-	assert.Equal(t, "stdout", cfg.Streams.Targets[0].Type)
+	assert.Equal(t, "nop", cfg.Streams.Targets[0].Name)
+	assert.Equal(t, "nop", cfg.Streams.Targets[0].Type)
 	assert.True(t, cfg.Streams.Targets[0].Enabled)
 }
 

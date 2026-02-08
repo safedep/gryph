@@ -17,9 +17,10 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/safedep/gryph/storage/ent/auditevent"
+	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
+	"github.com/safedep/gryph/storage/ent/eventstreamcursor"
 	"github.com/safedep/gryph/storage/ent/selfaudit"
 	"github.com/safedep/gryph/storage/ent/session"
-	"github.com/safedep/gryph/storage/ent/streamcheckpoint"
 )
 
 // Client is the client that holds all ent builders.
@@ -29,12 +30,14 @@ type Client struct {
 	Schema *migrate.Schema
 	// AuditEvent is the client for interacting with the AuditEvent builders.
 	AuditEvent *AuditEventClient
+	// AuditStreamCursor is the client for interacting with the AuditStreamCursor builders.
+	AuditStreamCursor *AuditStreamCursorClient
+	// EventStreamCursor is the client for interacting with the EventStreamCursor builders.
+	EventStreamCursor *EventStreamCursorClient
 	// SelfAudit is the client for interacting with the SelfAudit builders.
 	SelfAudit *SelfAuditClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
-	// StreamCheckpoint is the client for interacting with the StreamCheckpoint builders.
-	StreamCheckpoint *StreamCheckpointClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -47,9 +50,10 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.AuditEvent = NewAuditEventClient(c.config)
+	c.AuditStreamCursor = NewAuditStreamCursorClient(c.config)
+	c.EventStreamCursor = NewEventStreamCursorClient(c.config)
 	c.SelfAudit = NewSelfAuditClient(c.config)
 	c.Session = NewSessionClient(c.config)
-	c.StreamCheckpoint = NewStreamCheckpointClient(c.config)
 }
 
 type (
@@ -140,12 +144,13 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		AuditEvent:       NewAuditEventClient(cfg),
-		SelfAudit:        NewSelfAuditClient(cfg),
-		Session:          NewSessionClient(cfg),
-		StreamCheckpoint: NewStreamCheckpointClient(cfg),
+		ctx:               ctx,
+		config:            cfg,
+		AuditEvent:        NewAuditEventClient(cfg),
+		AuditStreamCursor: NewAuditStreamCursorClient(cfg),
+		EventStreamCursor: NewEventStreamCursorClient(cfg),
+		SelfAudit:         NewSelfAuditClient(cfg),
+		Session:           NewSessionClient(cfg),
 	}, nil
 }
 
@@ -163,12 +168,13 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		AuditEvent:       NewAuditEventClient(cfg),
-		SelfAudit:        NewSelfAuditClient(cfg),
-		Session:          NewSessionClient(cfg),
-		StreamCheckpoint: NewStreamCheckpointClient(cfg),
+		ctx:               ctx,
+		config:            cfg,
+		AuditEvent:        NewAuditEventClient(cfg),
+		AuditStreamCursor: NewAuditStreamCursorClient(cfg),
+		EventStreamCursor: NewEventStreamCursorClient(cfg),
+		SelfAudit:         NewSelfAuditClient(cfg),
+		Session:           NewSessionClient(cfg),
 	}, nil
 }
 
@@ -198,18 +204,20 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	c.AuditEvent.Use(hooks...)
+	c.AuditStreamCursor.Use(hooks...)
+	c.EventStreamCursor.Use(hooks...)
 	c.SelfAudit.Use(hooks...)
 	c.Session.Use(hooks...)
-	c.StreamCheckpoint.Use(hooks...)
 }
 
 // Intercept adds the query interceptors to all the entity clients.
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	c.AuditEvent.Intercept(interceptors...)
+	c.AuditStreamCursor.Intercept(interceptors...)
+	c.EventStreamCursor.Intercept(interceptors...)
 	c.SelfAudit.Intercept(interceptors...)
 	c.Session.Intercept(interceptors...)
-	c.StreamCheckpoint.Intercept(interceptors...)
 }
 
 // Mutate implements the ent.Mutator interface.
@@ -217,12 +225,14 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *AuditEventMutation:
 		return c.AuditEvent.mutate(ctx, m)
+	case *AuditStreamCursorMutation:
+		return c.AuditStreamCursor.mutate(ctx, m)
+	case *EventStreamCursorMutation:
+		return c.EventStreamCursor.mutate(ctx, m)
 	case *SelfAuditMutation:
 		return c.SelfAudit.mutate(ctx, m)
 	case *SessionMutation:
 		return c.Session.mutate(ctx, m)
-	case *StreamCheckpointMutation:
-		return c.StreamCheckpoint.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -374,6 +384,272 @@ func (c *AuditEventClient) mutate(ctx context.Context, m *AuditEventMutation) (V
 		return (&AuditEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AuditEvent mutation op: %q", m.Op())
+	}
+}
+
+// AuditStreamCursorClient is a client for the AuditStreamCursor schema.
+type AuditStreamCursorClient struct {
+	config
+}
+
+// NewAuditStreamCursorClient returns a client for the AuditStreamCursor from the given config.
+func NewAuditStreamCursorClient(c config) *AuditStreamCursorClient {
+	return &AuditStreamCursorClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `auditstreamcursor.Hooks(f(g(h())))`.
+func (c *AuditStreamCursorClient) Use(hooks ...Hook) {
+	c.hooks.AuditStreamCursor = append(c.hooks.AuditStreamCursor, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `auditstreamcursor.Intercept(f(g(h())))`.
+func (c *AuditStreamCursorClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AuditStreamCursor = append(c.inters.AuditStreamCursor, interceptors...)
+}
+
+// Create returns a builder for creating a AuditStreamCursor entity.
+func (c *AuditStreamCursorClient) Create() *AuditStreamCursorCreate {
+	mutation := newAuditStreamCursorMutation(c.config, OpCreate)
+	return &AuditStreamCursorCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AuditStreamCursor entities.
+func (c *AuditStreamCursorClient) CreateBulk(builders ...*AuditStreamCursorCreate) *AuditStreamCursorCreateBulk {
+	return &AuditStreamCursorCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AuditStreamCursorClient) MapCreateBulk(slice any, setFunc func(*AuditStreamCursorCreate, int)) *AuditStreamCursorCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AuditStreamCursorCreateBulk{err: fmt.Errorf("calling to AuditStreamCursorClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AuditStreamCursorCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AuditStreamCursorCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AuditStreamCursor.
+func (c *AuditStreamCursorClient) Update() *AuditStreamCursorUpdate {
+	mutation := newAuditStreamCursorMutation(c.config, OpUpdate)
+	return &AuditStreamCursorUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AuditStreamCursorClient) UpdateOne(_m *AuditStreamCursor) *AuditStreamCursorUpdateOne {
+	mutation := newAuditStreamCursorMutation(c.config, OpUpdateOne, withAuditStreamCursor(_m))
+	return &AuditStreamCursorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AuditStreamCursorClient) UpdateOneID(id string) *AuditStreamCursorUpdateOne {
+	mutation := newAuditStreamCursorMutation(c.config, OpUpdateOne, withAuditStreamCursorID(id))
+	return &AuditStreamCursorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AuditStreamCursor.
+func (c *AuditStreamCursorClient) Delete() *AuditStreamCursorDelete {
+	mutation := newAuditStreamCursorMutation(c.config, OpDelete)
+	return &AuditStreamCursorDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AuditStreamCursorClient) DeleteOne(_m *AuditStreamCursor) *AuditStreamCursorDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AuditStreamCursorClient) DeleteOneID(id string) *AuditStreamCursorDeleteOne {
+	builder := c.Delete().Where(auditstreamcursor.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AuditStreamCursorDeleteOne{builder}
+}
+
+// Query returns a query builder for AuditStreamCursor.
+func (c *AuditStreamCursorClient) Query() *AuditStreamCursorQuery {
+	return &AuditStreamCursorQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAuditStreamCursor},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AuditStreamCursor entity by its id.
+func (c *AuditStreamCursorClient) Get(ctx context.Context, id string) (*AuditStreamCursor, error) {
+	return c.Query().Where(auditstreamcursor.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AuditStreamCursorClient) GetX(ctx context.Context, id string) *AuditStreamCursor {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AuditStreamCursorClient) Hooks() []Hook {
+	return c.hooks.AuditStreamCursor
+}
+
+// Interceptors returns the client interceptors.
+func (c *AuditStreamCursorClient) Interceptors() []Interceptor {
+	return c.inters.AuditStreamCursor
+}
+
+func (c *AuditStreamCursorClient) mutate(ctx context.Context, m *AuditStreamCursorMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AuditStreamCursorCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AuditStreamCursorUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AuditStreamCursorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AuditStreamCursorDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AuditStreamCursor mutation op: %q", m.Op())
+	}
+}
+
+// EventStreamCursorClient is a client for the EventStreamCursor schema.
+type EventStreamCursorClient struct {
+	config
+}
+
+// NewEventStreamCursorClient returns a client for the EventStreamCursor from the given config.
+func NewEventStreamCursorClient(c config) *EventStreamCursorClient {
+	return &EventStreamCursorClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `eventstreamcursor.Hooks(f(g(h())))`.
+func (c *EventStreamCursorClient) Use(hooks ...Hook) {
+	c.hooks.EventStreamCursor = append(c.hooks.EventStreamCursor, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `eventstreamcursor.Intercept(f(g(h())))`.
+func (c *EventStreamCursorClient) Intercept(interceptors ...Interceptor) {
+	c.inters.EventStreamCursor = append(c.inters.EventStreamCursor, interceptors...)
+}
+
+// Create returns a builder for creating a EventStreamCursor entity.
+func (c *EventStreamCursorClient) Create() *EventStreamCursorCreate {
+	mutation := newEventStreamCursorMutation(c.config, OpCreate)
+	return &EventStreamCursorCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of EventStreamCursor entities.
+func (c *EventStreamCursorClient) CreateBulk(builders ...*EventStreamCursorCreate) *EventStreamCursorCreateBulk {
+	return &EventStreamCursorCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *EventStreamCursorClient) MapCreateBulk(slice any, setFunc func(*EventStreamCursorCreate, int)) *EventStreamCursorCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &EventStreamCursorCreateBulk{err: fmt.Errorf("calling to EventStreamCursorClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*EventStreamCursorCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &EventStreamCursorCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for EventStreamCursor.
+func (c *EventStreamCursorClient) Update() *EventStreamCursorUpdate {
+	mutation := newEventStreamCursorMutation(c.config, OpUpdate)
+	return &EventStreamCursorUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *EventStreamCursorClient) UpdateOne(_m *EventStreamCursor) *EventStreamCursorUpdateOne {
+	mutation := newEventStreamCursorMutation(c.config, OpUpdateOne, withEventStreamCursor(_m))
+	return &EventStreamCursorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *EventStreamCursorClient) UpdateOneID(id string) *EventStreamCursorUpdateOne {
+	mutation := newEventStreamCursorMutation(c.config, OpUpdateOne, withEventStreamCursorID(id))
+	return &EventStreamCursorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for EventStreamCursor.
+func (c *EventStreamCursorClient) Delete() *EventStreamCursorDelete {
+	mutation := newEventStreamCursorMutation(c.config, OpDelete)
+	return &EventStreamCursorDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *EventStreamCursorClient) DeleteOne(_m *EventStreamCursor) *EventStreamCursorDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *EventStreamCursorClient) DeleteOneID(id string) *EventStreamCursorDeleteOne {
+	builder := c.Delete().Where(eventstreamcursor.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &EventStreamCursorDeleteOne{builder}
+}
+
+// Query returns a query builder for EventStreamCursor.
+func (c *EventStreamCursorClient) Query() *EventStreamCursorQuery {
+	return &EventStreamCursorQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeEventStreamCursor},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a EventStreamCursor entity by its id.
+func (c *EventStreamCursorClient) Get(ctx context.Context, id string) (*EventStreamCursor, error) {
+	return c.Query().Where(eventstreamcursor.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *EventStreamCursorClient) GetX(ctx context.Context, id string) *EventStreamCursor {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *EventStreamCursorClient) Hooks() []Hook {
+	return c.hooks.EventStreamCursor
+}
+
+// Interceptors returns the client interceptors.
+func (c *EventStreamCursorClient) Interceptors() []Interceptor {
+	return c.inters.EventStreamCursor
+}
+
+func (c *EventStreamCursorClient) mutate(ctx context.Context, m *EventStreamCursorMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&EventStreamCursorCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&EventStreamCursorUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&EventStreamCursorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&EventStreamCursorDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown EventStreamCursor mutation op: %q", m.Op())
 	}
 }
 
@@ -659,145 +935,13 @@ func (c *SessionClient) mutate(ctx context.Context, m *SessionMutation) (Value, 
 	}
 }
 
-// StreamCheckpointClient is a client for the StreamCheckpoint schema.
-type StreamCheckpointClient struct {
-	config
-}
-
-// NewStreamCheckpointClient returns a client for the StreamCheckpoint from the given config.
-func NewStreamCheckpointClient(c config) *StreamCheckpointClient {
-	return &StreamCheckpointClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `streamcheckpoint.Hooks(f(g(h())))`.
-func (c *StreamCheckpointClient) Use(hooks ...Hook) {
-	c.hooks.StreamCheckpoint = append(c.hooks.StreamCheckpoint, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `streamcheckpoint.Intercept(f(g(h())))`.
-func (c *StreamCheckpointClient) Intercept(interceptors ...Interceptor) {
-	c.inters.StreamCheckpoint = append(c.inters.StreamCheckpoint, interceptors...)
-}
-
-// Create returns a builder for creating a StreamCheckpoint entity.
-func (c *StreamCheckpointClient) Create() *StreamCheckpointCreate {
-	mutation := newStreamCheckpointMutation(c.config, OpCreate)
-	return &StreamCheckpointCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of StreamCheckpoint entities.
-func (c *StreamCheckpointClient) CreateBulk(builders ...*StreamCheckpointCreate) *StreamCheckpointCreateBulk {
-	return &StreamCheckpointCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *StreamCheckpointClient) MapCreateBulk(slice any, setFunc func(*StreamCheckpointCreate, int)) *StreamCheckpointCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &StreamCheckpointCreateBulk{err: fmt.Errorf("calling to StreamCheckpointClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*StreamCheckpointCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &StreamCheckpointCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for StreamCheckpoint.
-func (c *StreamCheckpointClient) Update() *StreamCheckpointUpdate {
-	mutation := newStreamCheckpointMutation(c.config, OpUpdate)
-	return &StreamCheckpointUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *StreamCheckpointClient) UpdateOne(_m *StreamCheckpoint) *StreamCheckpointUpdateOne {
-	mutation := newStreamCheckpointMutation(c.config, OpUpdateOne, withStreamCheckpoint(_m))
-	return &StreamCheckpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *StreamCheckpointClient) UpdateOneID(id string) *StreamCheckpointUpdateOne {
-	mutation := newStreamCheckpointMutation(c.config, OpUpdateOne, withStreamCheckpointID(id))
-	return &StreamCheckpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for StreamCheckpoint.
-func (c *StreamCheckpointClient) Delete() *StreamCheckpointDelete {
-	mutation := newStreamCheckpointMutation(c.config, OpDelete)
-	return &StreamCheckpointDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *StreamCheckpointClient) DeleteOne(_m *StreamCheckpoint) *StreamCheckpointDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *StreamCheckpointClient) DeleteOneID(id string) *StreamCheckpointDeleteOne {
-	builder := c.Delete().Where(streamcheckpoint.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &StreamCheckpointDeleteOne{builder}
-}
-
-// Query returns a query builder for StreamCheckpoint.
-func (c *StreamCheckpointClient) Query() *StreamCheckpointQuery {
-	return &StreamCheckpointQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeStreamCheckpoint},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a StreamCheckpoint entity by its id.
-func (c *StreamCheckpointClient) Get(ctx context.Context, id string) (*StreamCheckpoint, error) {
-	return c.Query().Where(streamcheckpoint.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *StreamCheckpointClient) GetX(ctx context.Context, id string) *StreamCheckpoint {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *StreamCheckpointClient) Hooks() []Hook {
-	return c.hooks.StreamCheckpoint
-}
-
-// Interceptors returns the client interceptors.
-func (c *StreamCheckpointClient) Interceptors() []Interceptor {
-	return c.inters.StreamCheckpoint
-}
-
-func (c *StreamCheckpointClient) mutate(ctx context.Context, m *StreamCheckpointMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&StreamCheckpointCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&StreamCheckpointUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&StreamCheckpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&StreamCheckpointDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown StreamCheckpoint mutation op: %q", m.Op())
-	}
-}
-
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuditEvent, SelfAudit, Session, StreamCheckpoint []ent.Hook
+		AuditEvent, AuditStreamCursor, EventStreamCursor, SelfAudit, Session []ent.Hook
 	}
 	inters struct {
-		AuditEvent, SelfAudit, Session, StreamCheckpoint []ent.Interceptor
+		AuditEvent, AuditStreamCursor, EventStreamCursor, SelfAudit,
+		Session []ent.Interceptor
 	}
 )
