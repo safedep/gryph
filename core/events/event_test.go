@@ -2,6 +2,7 @@ package events
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -260,6 +261,17 @@ func TestEvent_JSONSerialization(t *testing.T) {
 	assert.Equal(t, event.AgentVersion, decoded.AgentVersion)
 	assert.Equal(t, event.DurationMs, decoded.DurationMs)
 	assert.Equal(t, event.IsSensitive, decoded.IsSensitive)
+
+	// Verify $schema field is present in JSON output
+	var raw map[string]json.RawMessage
+	err = json.Unmarshal(data, &raw)
+	require.NoError(t, err)
+	assert.Contains(t, raw, "$schema")
+
+	var schemaURL string
+	err = json.Unmarshal(raw["$schema"], &schemaURL)
+	require.NoError(t, err)
+	assert.Equal(t, EventSchemaURL, schemaURL)
 }
 
 func TestEvent_PayloadTypes(t *testing.T) {
@@ -523,4 +535,38 @@ func TestEvent_ConversationContext(t *testing.T) {
 	event.ConversationContext = "User asked to build the project"
 
 	assert.Equal(t, "User asked to build the project", event.ConversationContext)
+}
+
+func TestEvent_MarshalJSON_SchemaField(t *testing.T) {
+	event := NewEvent(uuid.New(), "claude-code", ActionFileRead)
+
+	data, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	var raw map[string]json.RawMessage
+	err = json.Unmarshal(data, &raw)
+	require.NoError(t, err)
+
+	schemaRaw, ok := raw["$schema"]
+	require.True(t, ok, "$schema field must be present in JSON output")
+
+	var schemaURL string
+	err = json.Unmarshal(schemaRaw, &schemaURL)
+	require.NoError(t, err)
+	assert.Equal(t, EventSchemaURL, schemaURL)
+}
+
+func TestEvent_MarshalJSON_SchemaIsFirstField(t *testing.T) {
+	event := NewEvent(uuid.New(), "claude-code", ActionFileRead)
+
+	data, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	// $schema should appear before other fields in the JSON output
+	jsonStr := string(data)
+	schemaIdx := strings.Index(jsonStr, `"$schema"`)
+	idIdx := strings.Index(jsonStr, `"id"`)
+	require.Greater(t, schemaIdx, -1, "$schema must be present")
+	require.Greater(t, idIdx, -1, "id must be present")
+	assert.Less(t, schemaIdx, idIdx, "$schema should appear before id in JSON output")
 }

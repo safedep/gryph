@@ -1,0 +1,304 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/safedep/gryph/main/schema/event.schema.json",
+  "title": "Gryph Event",
+  "description": "An audit event recorded by gryph representing a single action performed by an AI coding agent.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema URL for validation.",
+      "const": "https://raw.githubusercontent.com/safedep/gryph/main/schema/event.schema.json"
+    },
+    "action_type": {
+      "type": "string",
+      "description": "The category of action performed.",
+      "enum": [
+        "file_read",
+        "file_write",
+        "file_delete",
+        "command_exec",
+        "network_request",
+        "tool_use",
+        "session_start",
+        "session_end",
+        "notification",
+        "unknown"
+      ]
+    },
+    "agent_name": {
+      "type": "string"
+    },
+    "agent_session_id": {
+      "type": "string"
+    },
+    "agent_version": {
+      "type": "string"
+    },
+    "conversation_context": {
+      "type": "string"
+    },
+    "diff_content": {
+      "type": "string"
+    },
+    "duration_ms": {
+      "type": "integer"
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "is_sensitive": {
+      "type": "boolean"
+    },
+    "payload": {
+      "oneOf": [
+        {
+          "type": "object"
+        },
+        {
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "raw_event": {
+      "oneOf": [
+        {
+          "type": "object"
+        },
+        {
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "result_status": {
+      "type": "string",
+      "description": "The outcome of the action.",
+      "enum": [
+        "success",
+        "error",
+        "blocked",
+        "rejected"
+      ]
+    },
+    "sequence": {
+      "type": "integer"
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tool_name": {
+      "type": "string"
+    },
+    "working_directory": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema",
+    "id",
+    "session_id",
+    "sequence",
+    "timestamp",
+    "agent_name",
+    "action_type",
+    "result_status",
+    "is_sensitive"
+  ],
+  "$defs": {
+    "command_exec_payload": {
+      "type": "object",
+      "description": "Payload for command execution actions.",
+      "properties": {
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "command": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer"
+        },
+        "exit_code": {
+          "type": "integer"
+        },
+        "output": {
+          "type": "string"
+        },
+        "stderr_preview": {
+          "type": "string"
+        },
+        "stdout_preview": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "exit_code"
+      ]
+    },
+    "file_delete_payload": {
+      "type": "object",
+      "description": "Payload for file delete actions.",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "file_read_payload": {
+      "type": "object",
+      "description": "Payload for file read actions.",
+      "properties": {
+        "content_hash": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "file_write_payload": {
+      "type": "object",
+      "description": "Payload for file write actions.",
+      "properties": {
+        "content_hash": {
+          "type": "string"
+        },
+        "content_preview": {
+          "type": "string"
+        },
+        "lines_added": {
+          "type": "integer"
+        },
+        "lines_removed": {
+          "type": "integer"
+        },
+        "new_string": {
+          "type": "string"
+        },
+        "old_string": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "notification_payload": {
+      "type": "object",
+      "description": "Payload for notification actions.",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      }
+    },
+    "session_end_payload": {
+      "type": "object",
+      "description": "Payload for session end actions.",
+      "properties": {
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "session_payload": {
+      "type": "object",
+      "description": "Payload for session start actions.",
+      "properties": {
+        "agent_type": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "tool_use_payload": {
+      "type": "object",
+      "description": "Payload for tool use actions.",
+      "properties": {
+        "input": {
+          "oneOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output": {
+          "oneOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output_preview": {
+          "type": "string"
+        },
+        "tool_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool_name"
+      ]
+    }
+  }
+}

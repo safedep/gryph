@@ -7,6 +7,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// EventSchemaURL is the canonical URL for the Event JSON Schema hosted on GitHub.
+const EventSchemaURL = "https://raw.githubusercontent.com/safedep/gryph/main/schema/event.schema.json"
+
 // Event represents a single action performed by an agent.
 type Event struct {
 	// ID is the unique identifier for this event.
@@ -130,6 +133,19 @@ type SessionEndPayload struct {
 type NotificationPayload struct {
 	Message string `json:"message,omitempty"`
 	Type    string `json:"type,omitempty"`
+}
+
+// MarshalJSON implements json.Marshaler to include $schema in the JSON output.
+func (e Event) MarshalJSON() ([]byte, error) {
+	// Alias avoids infinite recursion by stripping MarshalJSON from the type.
+	type eventAlias Event
+	return json.Marshal(struct {
+		Schema string `json:"$schema"`
+		eventAlias
+	}{
+		Schema:     EventSchemaURL,
+		eventAlias: eventAlias(e),
+	})
 }
 
 // SetPayload marshals the given payload and sets it on the event.

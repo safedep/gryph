@@ -12,6 +12,8 @@ make lint      # Run linter (golangci-lint)
 
 Always run `make lint` before submitting changes to catch issues early.
 
+When modifying the Event model (`core/events/event.go`) or any payload types, run `make generate-schema`.
+
 ## Architecture
 
 ```
