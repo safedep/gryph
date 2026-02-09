@@ -8,7 +8,7 @@ VERSION := "$(shell git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)-$
 GO_CFLAGS=-X 'github.com/safedep/gryph/internal/version.Commit=$(GITCOMMIT)' -X 'github.com/safedep/gryph/internal/version.Version=$(VERSION)'
 GO_LDFLAGS=-ldflags "-w $(GO_CFLAGS)"
 
-.PHONY: all deps generate gryph clean test
+.PHONY: all deps generate generate-schema verify-schema gryph clean test
 
 all: gryph
 
@@ -20,6 +20,14 @@ deps:
 # Generate ent code
 generate:
 	$(GO) generate ./storage/ent/...
+
+# Generate Event JSON Schema
+generate-schema:
+	$(GO) run ./cmd/jsonschema-gen
+
+# Verify Event JSON Schema is up-to-date
+verify-schema: generate-schema
+	@git diff --exit-code schema/event.schema.json || (echo "ERROR: schema/event.schema.json is out of date. Run 'make generate-schema' and commit the result." && exit 1)
 
 # Build gryph binary
 gryph: create_bin
