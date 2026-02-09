@@ -137,6 +137,7 @@ type NotificationPayload struct {
 
 // MarshalJSON implements json.Marshaler to include $schema in the JSON output.
 func (e Event) MarshalJSON() ([]byte, error) {
+	// Alias avoids infinite recursion by stripping MarshalJSON from the type.
 	type eventAlias Event
 	return json.Marshal(struct {
 		Schema string `json:"$schema"`
