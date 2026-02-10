@@ -79,7 +79,7 @@ type githubRelease struct {
 }
 
 func (c *Checker) Check(ctx context.Context, input *CheckInput) (*UpdateResult, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest", c.baseURL, c.owner, c.repo)
+	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest", strings.TrimRight(c.baseURL, "/"), c.owner, c.repo)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

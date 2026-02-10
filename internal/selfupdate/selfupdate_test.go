@@ -106,6 +106,19 @@ func TestCheck(t *testing.T) {
 	}
 }
 
+func TestCheckTrailingSlashBaseURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/repos/safedep/gryph/releases/latest", r.URL.Path)
+		_, _ = w.Write([]byte(`{"tag_name": "v1.1.0", "html_url": "https://example.com/v1.1.0"}`))
+	}))
+	defer server.Close()
+
+	checker := NewChecker(WithBaseURL(server.URL + "/"))
+	result, err := checker.Check(context.Background(), &CheckInput{Version: "v1.0.0"})
+	require.NoError(t, err)
+	assert.True(t, result.UpdateAvailable)
+}
+
 func TestCheckAsync(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"tag_name": "v2.0.0", "html_url": "https://example.com/v2.0.0"}`))
