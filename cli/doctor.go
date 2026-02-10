@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/internal/selfupdate"
+	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -28,6 +30,9 @@ Performs various health checks:
 			if err != nil {
 				return err
 			}
+
+			checker := selfupdate.NewChecker()
+			updateCh := checker.CheckAsync(ctx, &selfupdate.CheckInput{Version: version.Version})
 
 			view, err := tui.RunWithSpinner("Checking installation health...", func() (*tui.DoctorView, error) {
 				v := &tui.DoctorView{
@@ -134,7 +139,12 @@ Performs various health checks:
 				}
 			}()
 
-			return app.Presenter.RenderDoctor(view)
+			if err := app.Presenter.RenderDoctor(view); err != nil {
+				return err
+			}
+
+			renderUpdateNotice(app.Presenter, updateCh)
+			return nil
 		},
 	}
 

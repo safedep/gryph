@@ -285,5 +285,13 @@ func (p *CSVPresenter) RenderStreamSync(result *StreamSyncView) error {
 	return p.writer.Error()
 }
 
+// RenderUpdateNotice renders an update availability notice as CSV.
+func (p *CSVPresenter) RenderUpdateNotice(notice *UpdateNoticeView) error {
+	_ = p.writer.Write([]string{"current_version", "latest_version", "release_url"})
+	_ = p.writer.Write([]string{notice.CurrentVersion, notice.LatestVersion, notice.ReleaseURL})
+	p.writer.Flush()
+	return p.writer.Error()
+}
+
 // Ensure CSVPresenter implements Presenter
 var _ Presenter = (*CSVPresenter)(nil)

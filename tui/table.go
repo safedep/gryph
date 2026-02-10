@@ -571,5 +571,17 @@ func (p *TablePresenter) RenderStreamSync(result *StreamSyncView) error {
 	return tw.Err()
 }
 
+// RenderUpdateNotice renders an update availability notice.
+func (p *TablePresenter) RenderUpdateNotice(notice *UpdateNoticeView) error {
+	tw := &tableWriter{w: p.w}
+	tw.println()
+	tw.printf("%s %s → %s\n",
+		p.color.Warning("A new version of gryph is available:"),
+		p.color.Dim(notice.CurrentVersion),
+		p.color.Success(notice.LatestVersion))
+	tw.printf("  %s\n", p.color.Dim(notice.ReleaseURL))
+	return tw.Err()
+}
+
 // Ensure TablePresenter implements Presenter
 var _ Presenter = (*TablePresenter)(nil)

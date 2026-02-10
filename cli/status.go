@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/internal/selfupdate"
 	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -30,6 +31,9 @@ Displays the current status of the tool including:
 			if err != nil {
 				return err
 			}
+
+			checker := selfupdate.NewChecker()
+			updateCh := checker.CheckAsync(ctx, &selfupdate.CheckInput{Version: version.Version})
 
 			view, err := tui.RunWithSpinner("Checking installation status...", func() (*tui.StatusView, error) {
 				v := &tui.StatusView{
@@ -108,7 +112,12 @@ Displays the current status of the tool including:
 				}
 			}()
 
-			return app.Presenter.RenderStatus(view)
+			if err := app.Presenter.RenderStatus(view); err != nil {
+				return err
+			}
+
+			renderUpdateNotice(app.Presenter, updateCh)
+			return nil
 		},
 	}
 

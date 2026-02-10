@@ -103,5 +103,10 @@ func (p *JSONPresenter) RenderStreamSync(result *StreamSyncView) error {
 	return p.encoder.Encode(result)
 }
 
+// RenderUpdateNotice renders an update availability notice as JSON.
+func (p *JSONPresenter) RenderUpdateNotice(notice *UpdateNoticeView) error {
+	return p.encoder.Encode(notice)
+}
+
 // Ensure JSONPresenter implements Presenter
 var _ Presenter = (*JSONPresenter)(nil)

@@ -190,3 +190,10 @@ type StreamTargetResultView struct {
 	AuditsSent int
 	Error      string
 }
+
+// UpdateNoticeView represents an available update for display.
+type UpdateNoticeView struct {
+	CurrentVersion string `json:"current_version"`
+	LatestVersion  string `json:"latest_version"`
+	ReleaseURL     string `json:"release_url"`
+}
