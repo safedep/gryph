@@ -439,6 +439,64 @@ func seed3Sessions(env *testEnv) {
 	})
 }
 
+// seedSensitiveEvents seeds n normal events and n sensitive events within the last hour.
+func seedSensitiveEvents(normal, sensitive int) func(env *testEnv) {
+	return func(env *testEnv) {
+		env.seedStore(func(ctx context.Context, store storage.Store) {
+			sessID := uuid.New()
+			sess := session.NewSessionWithID(sessID, "claude-code")
+			sess.StartedAt = time.Now().UTC().Add(-1 * time.Hour)
+			sess.WorkingDirectory = "/tmp/project"
+			require.NoError(env.t, store.SaveSession(ctx, sess))
+
+			total := normal + sensitive
+			for i := 0; i < total; i++ {
+				evt := events.NewEvent(sessID, "claude-code", events.ActionFileRead)
+				evt.Sequence = i + 1
+				evt.Timestamp = time.Now().UTC().Add(-time.Duration(total-i) * time.Minute)
+				evt.ResultStatus = events.ResultSuccess
+				evt.ToolName = "Read"
+				if i >= normal {
+					evt.IsSensitive = true
+				}
+				payload := &events.FileReadPayload{Path: fmt.Sprintf("/tmp/project/file%d.go", i)}
+				require.NoError(env.t, evt.SetPayload(payload))
+				require.NoError(env.t, store.SaveEvent(ctx, evt))
+			}
+
+			sess.TotalActions = total
+			require.NoError(env.t, store.UpdateSession(ctx, sess))
+		})
+	}
+}
+
+// seedEventsOlderThan1h seeds events that are older than 1 hour (outside default --since window).
+func seedEventsOlderThan1h(n int) func(env *testEnv) {
+	return func(env *testEnv) {
+		env.seedStore(func(ctx context.Context, store storage.Store) {
+			sessID := uuid.New()
+			sess := session.NewSessionWithID(sessID, "claude-code")
+			sess.StartedAt = time.Now().UTC().Add(-3 * time.Hour)
+			sess.WorkingDirectory = "/tmp/project"
+			require.NoError(env.t, store.SaveSession(ctx, sess))
+
+			for i := 0; i < n; i++ {
+				evt := events.NewEvent(sessID, "claude-code", events.ActionFileRead)
+				evt.Sequence = i + 1
+				evt.Timestamp = time.Now().UTC().Add(-2*time.Hour - time.Duration(n-i)*time.Minute)
+				evt.ResultStatus = events.ResultSuccess
+				evt.ToolName = "Read"
+				payload := &events.FileReadPayload{Path: fmt.Sprintf("/tmp/project/old%d.go", i)}
+				require.NoError(env.t, evt.SetPayload(payload))
+				require.NoError(env.t, store.SaveEvent(ctx, evt))
+			}
+
+			sess.TotalActions = n
+			require.NoError(env.t, store.UpdateSession(ctx, sess))
+		})
+	}
+}
+
 // --- Assertion helpers ---
 
 func assertEventCount(n int) func(*testing.T, string, error) {

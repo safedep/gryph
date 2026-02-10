@@ -175,13 +175,6 @@ type DiffView struct {
 	Message   string
 }
 
-// ExportView represents export results.
-type ExportView struct {
-	Format     string
-	EventCount int
-	OutputPath string
-}
-
 // StreamSyncView represents stream sync results for display.
 type StreamSyncView struct {
 	TargetResults []StreamTargetResultView

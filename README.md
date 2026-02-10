@@ -200,12 +200,23 @@ gryph diff <event-id>
 ### Export for Analysis
 
 ```bash
-# Export to JSON
-gryph export --format json -o audit.json
+# Export last hour (default) as JSONL to stdout
+gryph export
 
-# Export specific time range
-gryph export --since "1w" --format csv
+# Export last week to file
+gryph export --since "1w" -o audit.jsonl
+
+# Export a specific agent, including sensitive events
+gryph export --agent claude-code --sensitive
+
+# Pipe to jq for ad-hoc analysis
+gryph export --since 1d | jq -r '.action_type' | sort | uniq -c | sort -rn
 ```
+
+**Note:** The `export` sub-command outputs raw events as schema-verifiable JSONL.
+Each line includes a `$schema` field pointing to [event.schema.json](./schema/event.schema.json).
+Sensitive events are excluded by default; use `--sensitive` to include them.
+See [CLI Automation](./docs/cli-automation.md) for more `jq` recipes.
 
 ### Manage Data
 
