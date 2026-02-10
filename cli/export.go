@@ -98,7 +98,7 @@ for validation. Sensitive events are excluded by default.`,
 			// Determine output destination
 			writer := cmd.OutOrStdout()
 			if output != "" {
-				file, err := os.Create(output)
+				file, err := os.OpenFile(output, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 				if err != nil {
 					return err
 				}
