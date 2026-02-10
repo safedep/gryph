@@ -207,6 +207,10 @@ gryph export --format json -o audit.json
 gryph export --since "1w" --format csv
 ```
 
+**Note:** The `export` sub-command export raw events following a verifiable JSON schema. 
+This schema is different from the TUI views used to render user friendly log, query etc.
+See [event.schema.json](./schema/event.schema.json).
+
 ### Manage Data
 
 ```bash
