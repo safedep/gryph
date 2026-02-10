@@ -60,6 +60,9 @@ type Presenter interface {
 
 	// RenderStreamSync renders stream sync results.
 	RenderStreamSync(result *StreamSyncView) error
+
+	// RenderUpdateNotice renders an update availability notice.
+	RenderUpdateNotice(notice *UpdateNoticeView) error
 }
 
 // PresenterOptions configures presenter behavior.
