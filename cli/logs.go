@@ -348,6 +348,12 @@ func eventToView(e *events.Event) *tui.EventView {
 			view.ExitCode = p.ExitCode
 			view.DurationMs = p.DurationMs
 		}
+	case events.ActionToolUse:
+		if p, err := e.GetToolUsePayload(); err == nil && p != nil {
+			if target := p.DisplayTarget(); target != "" {
+				view.Path = e.ToolName + " " + target
+			}
+		}
 	}
 
 	return view

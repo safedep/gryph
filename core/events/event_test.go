@@ -556,6 +556,123 @@ func TestEvent_MarshalJSON_SchemaField(t *testing.T) {
 	assert.Equal(t, EventSchemaURL, schemaURL)
 }
 
+func TestToolUsePayload_DisplayTarget(t *testing.T) {
+	testCases := []struct {
+		name     string
+		payload  ToolUsePayload
+		expected string
+	}{
+		{
+			name: "WebFetch url",
+			payload: ToolUsePayload{
+				ToolName: "WebFetch",
+				Input:    json.RawMessage(`{"url":"https://example.com","prompt":"summarize"}`),
+			},
+			expected: "https://example.com",
+		},
+		{
+			name: "WebSearch query",
+			payload: ToolUsePayload{
+				ToolName: "WebSearch",
+				Input:    json.RawMessage(`{"query":"golang testing best practices"}`),
+			},
+			expected: "golang testing best practices",
+		},
+		{
+			name: "Task description",
+			payload: ToolUsePayload{
+				ToolName: "Task",
+				Input:    json.RawMessage(`{"description":"explore auth module","subagent_type":"Explore"}`),
+			},
+			expected: "explore auth module",
+		},
+		{
+			name: "TodoWrite subject",
+			payload: ToolUsePayload{
+				ToolName: "TodoWrite",
+				Input:    json.RawMessage(`{"subject":"Fix login bug"}`),
+			},
+			expected: "Fix login bug",
+		},
+		{
+			name:     "nil input",
+			payload:  ToolUsePayload{ToolName: "Unknown"},
+			expected: "",
+		},
+		{
+			name: "empty input object",
+			payload: ToolUsePayload{
+				ToolName: "Unknown",
+				Input:    json.RawMessage(`{}`),
+			},
+			expected: "",
+		},
+		{
+			name: "invalid JSON",
+			payload: ToolUsePayload{
+				ToolName: "Unknown",
+				Input:    json.RawMessage(`not json`),
+			},
+			expected: "",
+		},
+		{
+			name: "non-string value skipped",
+			payload: ToolUsePayload{
+				ToolName: "Custom",
+				Input:    json.RawMessage(`{"url":123,"query":"fallback"}`),
+			},
+			expected: "fallback",
+		},
+		{
+			name: "empty string skipped",
+			payload: ToolUsePayload{
+				ToolName: "Custom",
+				Input:    json.RawMessage(`{"url":"","query":"actual value"}`),
+			},
+			expected: "actual value",
+		},
+		{
+			name: "first priority wins",
+			payload: ToolUsePayload{
+				ToolName: "Multi",
+				Input:    json.RawMessage(`{"query":"q","url":"u"}`),
+			},
+			expected: "u",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.payload.DisplayTarget())
+		})
+	}
+}
+
+func TestEvent_GetToolUsePayload(t *testing.T) {
+	event := NewEvent(uuid.New(), "claude-code", ActionToolUse)
+	payload := ToolUsePayload{
+		ToolName: "WebFetch",
+		Input:    json.RawMessage(`{"url":"https://example.com"}`),
+	}
+	err := event.SetPayload(payload)
+	require.NoError(t, err)
+
+	retrieved, err := event.GetToolUsePayload()
+	require.NoError(t, err)
+	require.NotNil(t, retrieved)
+	assert.Equal(t, "WebFetch", retrieved.ToolName)
+	assert.Equal(t, "https://example.com", retrieved.DisplayTarget())
+}
+
+func TestEvent_GetToolUsePayload_WrongActionType(t *testing.T) {
+	event := NewEvent(uuid.New(), "claude-code", ActionFileRead)
+	event.Payload = []byte(`{"tool_name":"WebFetch"}`)
+
+	retrieved, err := event.GetToolUsePayload()
+	require.NoError(t, err)
+	assert.Nil(t, retrieved, "Should return nil for wrong action type")
+}
+
 func TestEvent_MarshalJSON_SchemaIsFirstField(t *testing.T) {
 	event := NewEvent(uuid.New(), "claude-code", ActionFileRead)
 
