@@ -122,19 +122,14 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) windowSize() time.Duration {
-	if m.customSince != nil && m.customUntil != nil {
-		return m.customUntil.Sub(*m.customSince)
-	}
-	switch m.timeRange {
-	case RangeToday:
-		return 24 * time.Hour
-	case Range7Days:
-		return 7 * 24 * time.Hour
-	case Range30Days:
-		return 30 * 24 * time.Hour
-	default:
+	since := m.sinceTime()
+	if since == nil {
 		return 24 * time.Hour
 	}
+	if until := m.untilTime(); until != nil {
+		return until.Sub(*since)
+	}
+	return time.Since(*since)
 }
 
 func (m *Model) shiftWindow(forward bool) (tea.Model, tea.Cmd) {
@@ -159,6 +154,9 @@ func (m *Model) shiftWindow(forward bool) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		until := time.Now().UTC()
+		if u := m.untilTime(); u != nil {
+			until = *u
+		}
 		if forward {
 			newSince = since.Add(ws)
 			newUntil = until.Add(ws)
