@@ -31,6 +31,8 @@ func (h headerModel) view(width int) string {
 			h.customUntil.Local().Format("Jan 2 15:04"))
 	} else if h.customSince != nil {
 		rangeTxt = fmt.Sprintf("Since %s", h.customSince.Local().Format("2006-01-02 15:04"))
+	} else if h.customUntil != nil {
+		rangeTxt = fmt.Sprintf("%s until %s", h.timeRange.String(), h.customUntil.Local().Format("Jan 2 15:04"))
 	} else {
 		rangeTxt = h.timeRange.String()
 	}
