@@ -2,6 +2,7 @@ package stats
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -33,6 +34,11 @@ type CommandStat struct {
 	FailCount int
 }
 
+type TimelineBucket struct {
+	Label string
+	Count int
+}
+
 type StatsData struct {
 	TotalEvents    int
 	TotalSessions  int
@@ -48,7 +54,7 @@ type StatsData struct {
 
 	Agents []AgentStat
 
-	HourlyBuckets [24]int
+	TimelineBuckets []TimelineBucket
 
 	LinesAdded        int
 	LinesRemoved      int
@@ -69,17 +75,21 @@ type StatsData struct {
 	AvgActionsPerSess float64
 	LongestSession    time.Duration
 	ShortestSession   time.Duration
+	PeakConcurrent    int
 
 	TimeSpanStart time.Time
 	TimeSpanEnd   time.Time
 }
 
-func computeStats(ctx context.Context, store storage.Store, since *time.Time, agentFilter string) (*StatsData, error) {
+func computeStats(ctx context.Context, store storage.Store, since, until *time.Time, agentFilter string) (*StatsData, error) {
 	data := &StatsData{}
 
 	sessionFilter := session.NewSessionFilter().WithLimit(10000)
 	if since != nil {
 		sessionFilter = sessionFilter.WithSince(*since)
+	}
+	if until != nil {
+		sessionFilter = sessionFilter.WithUntil(*until)
 	}
 	if agentFilter != "" {
 		sessionFilter = sessionFilter.WithAgent(agentFilter)
@@ -135,6 +145,8 @@ func computeStats(ctx context.Context, store storage.Store, since *time.Time, ag
 		data.AvgDuration = totalDuration / time.Duration(sessionCount)
 	}
 
+	data.PeakConcurrent = computePeakConcurrent(sessions)
+
 	data.UniqueAgents = len(agentMap)
 	for _, as := range agentMap {
 		data.Agents = append(data.Agents, *as)
@@ -146,6 +158,9 @@ func computeStats(ctx context.Context, store storage.Store, since *time.Time, ag
 	eventFilter := events.NewEventFilter().WithLimit(50000)
 	if since != nil {
 		eventFilter = eventFilter.WithSince(*since)
+	}
+	if until != nil {
+		eventFilter = eventFilter.WithUntil(*until)
 	}
 	if agentFilter != "" {
 		eventFilter = eventFilter.WithAgents(agentFilter)
@@ -176,9 +191,6 @@ func computeStats(ctx context.Context, store storage.Store, since *time.Time, ag
 		if e.Timestamp.After(data.TimeSpanEnd) {
 			data.TimeSpanEnd = e.Timestamp
 		}
-
-		hour := e.Timestamp.Local().Hour()
-		data.HourlyBuckets[hour]++
 
 		switch e.ResultStatus {
 		case events.ResultError:
@@ -269,5 +281,114 @@ func computeStats(ctx context.Context, store storage.Store, since *time.Time, ag
 		data.TopCommands = data.TopCommands[:10]
 	}
 
+	data.TimelineBuckets = computeTimelineBuckets(evts, since, until)
+
 	return data, nil
+}
+
+func computeTimelineBuckets(evts []*events.Event, since, until *time.Time) []TimelineBucket {
+	now := time.Now()
+	effectiveSince := now.Add(-24 * time.Hour)
+	effectiveUntil := now
+	if since != nil {
+		effectiveSince = *since
+	}
+	if until != nil {
+		effectiveUntil = *until
+	}
+
+	span := effectiveUntil.Sub(effectiveSince)
+
+	if span <= 24*time.Hour {
+		return computeHourlyBuckets(evts)
+	}
+	return computeDailyBuckets(evts, effectiveSince, effectiveUntil)
+}
+
+func computeHourlyBuckets(evts []*events.Event) []TimelineBucket {
+	counts := [24]int{}
+	for _, e := range evts {
+		h := e.Timestamp.Local().Hour()
+		counts[h]++
+	}
+	buckets := make([]TimelineBucket, 24)
+	for h := 0; h < 24; h++ {
+		buckets[h] = TimelineBucket{
+			Label: fmt.Sprintf("%02d", h),
+			Count: counts[h],
+		}
+	}
+	return buckets
+}
+
+func computeDailyBuckets(evts []*events.Event, since, until time.Time) []TimelineBucket {
+	sinceLocal := since.Local()
+	untilLocal := until.Local()
+	startDay := time.Date(sinceLocal.Year(), sinceLocal.Month(), sinceLocal.Day(), 0, 0, 0, 0, sinceLocal.Location())
+	endDay := time.Date(untilLocal.Year(), untilLocal.Month(), untilLocal.Day(), 0, 0, 0, 0, untilLocal.Location())
+
+	days := int(endDay.Sub(startDay).Hours()/24) + 1
+	if days < 1 {
+		days = 1
+	}
+
+	buckets := make([]TimelineBucket, days)
+	for i := 0; i < days; i++ {
+		day := startDay.AddDate(0, 0, i)
+		if days <= 14 {
+			buckets[i].Label = day.Format("Mon")
+		} else {
+			buckets[i].Label = day.Format("Jan 2")
+		}
+	}
+
+	for _, e := range evts {
+		local := e.Timestamp.Local()
+		idx := int(time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location()).Sub(startDay).Hours() / 24)
+		if idx >= 0 && idx < days {
+			buckets[idx].Count++
+		}
+	}
+
+	return buckets
+}
+
+func computePeakConcurrent(sessions []*session.Session) int {
+	if len(sessions) == 0 {
+		return 0
+	}
+
+	type endpoint struct {
+		t     time.Time
+		delta int
+	}
+
+	var points []endpoint
+	for _, s := range sessions {
+		end := s.EndedAt
+		if end.IsZero() {
+			end = time.Now().UTC()
+		}
+		points = append(points,
+			endpoint{t: s.StartedAt, delta: 1},
+			endpoint{t: end, delta: -1},
+		)
+	}
+
+	sort.Slice(points, func(i, j int) bool {
+		if points[i].t.Equal(points[j].t) {
+			return points[i].delta > points[j].delta
+		}
+		return points[i].t.Before(points[j].t)
+	})
+
+	peak := 0
+	current := 0
+	for _, p := range points {
+		current += p.delta
+		if current > peak {
+			peak = current
+		}
+	}
+	return peak
 }

@@ -12,6 +12,7 @@ import (
 
 type statsParams struct {
 	since string
+	until string
 	agent string
 }
 
@@ -27,6 +28,7 @@ Displays overview metrics, activity breakdown, agent stats, timeline,
 code changes, command results, error rates, and session info.`,
 		Example: `  gryph stats
   gryph stats --since 7d
+  gryph stats --since 2w --until 1w
   gryph stats --since 30d --agent claude-code`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
@@ -68,6 +70,14 @@ code changes, command results, error rates, and session info.`,
 				opts.Since = &t
 			}
 
+			if p.until != "" {
+				t, err := parseDuration(p.until)
+				if err != nil {
+					return fmt.Errorf("invalid --until value %q: %w", p.until, err)
+				}
+				opts.Until = &t
+			}
+
 			prog := tea.NewProgram(stats.New(opts), tea.WithAltScreen())
 			_, err = prog.Run()
 
@@ -76,6 +86,7 @@ code changes, command results, error rates, and session info.`,
 	}
 
 	cmd.Flags().StringVar(&p.since, "since", "today", "time range: today, 7d, 30d, all, or duration (30m, 1h, 2w)")
+	cmd.Flags().StringVar(&p.until, "until", "", "end of time window (same syntax as --since)")
 	cmd.Flags().StringVar(&p.agent, "agent", "", "filter by agent name")
 
 	return cmd

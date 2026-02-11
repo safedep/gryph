@@ -28,6 +28,8 @@ var helpBindings = []struct {
 	{"w", "Time range: 7 days"},
 	{"m", "Time range: 30 days"},
 	{"a", "Time range: All"},
+	{"[", "Shift window back"},
+	{"]", "Shift window forward"},
 	{"r", "Force refresh"},
 }
 

@@ -111,6 +111,12 @@ func (f *SessionFilter) WithSince(t time.Time) *SessionFilter {
 	return f
 }
 
+// WithUntil sets the Until filter.
+func (f *SessionFilter) WithUntil(t time.Time) *SessionFilter {
+	f.Until = &t
+	return f
+}
+
 // WithLimit sets the Limit.
 func (f *SessionFilter) WithLimit(limit int) *SessionFilter {
 	f.Limit = limit

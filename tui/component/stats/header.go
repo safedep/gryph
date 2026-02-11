@@ -10,20 +10,26 @@ type headerModel struct {
 	agentFilter string
 	lastRefresh time.Time
 	customSince *time.Time
+	customUntil *time.Time
 }
 
-func newHeaderModel(timeRange TimeRange, agentFilter string, customSince *time.Time) headerModel {
+func newHeaderModel(timeRange TimeRange, agentFilter string, customSince, customUntil *time.Time) headerModel {
 	return headerModel{
 		timeRange:   timeRange,
 		agentFilter: agentFilter,
 		customSince: customSince,
+		customUntil: customUntil,
 	}
 }
 
 func (h headerModel) view(width int) string {
 	title := "gryph stats"
 	var rangeTxt string
-	if h.customSince != nil {
+	if h.customSince != nil && h.customUntil != nil {
+		rangeTxt = fmt.Sprintf("%s – %s",
+			h.customSince.Local().Format("Jan 2 15:04"),
+			h.customUntil.Local().Format("Jan 2 15:04"))
+	} else if h.customSince != nil {
 		rangeTxt = fmt.Sprintf("Since %s", h.customSince.Local().Format("2006-01-02 15:04"))
 	} else {
 		rangeTxt = h.timeRange.String()
