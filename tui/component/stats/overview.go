@@ -18,6 +18,7 @@ func renderOverview(data *StatsData, width, height int) string {
 		{"Sessions", tui.FormatNumber(data.TotalSessions)},
 		{"Active", tui.FormatNumber(data.ActiveSessions)},
 		{"Agents", tui.FormatNumber(data.UniqueAgents)},
+		{"Projects", tui.FormatNumber(len(data.WorkingDirs))},
 	}
 
 	for _, p := range pairs {

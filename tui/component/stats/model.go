@@ -23,17 +23,19 @@ type Model struct {
 	data        *StatsData
 	timeRange   TimeRange
 	customSince *time.Time
+	customUntil *time.Time
 	ready       bool
 }
 
 func New(opts Options) Model {
 	return Model{
 		opts:        opts,
-		header:      newHeaderModel(opts.TimeRange, opts.AgentFilter, opts.Since),
+		header:      newHeaderModel(opts.TimeRange, opts.AgentFilter, opts.Since, opts.Until),
 		footer:      newFooterModel(),
 		help:        newHelpModel(),
 		timeRange:   opts.TimeRange,
 		customSince: opts.Since,
+		customUntil: opts.Until,
 	}
 }
 
@@ -44,9 +46,16 @@ func (m Model) sinceTime() *time.Time {
 	return m.timeRange.Since()
 }
 
+func (m Model) untilTime() *time.Time {
+	if m.customUntil != nil {
+		return m.customUntil
+	}
+	return m.timeRange.Until()
+}
+
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
-		loadStats(m.opts.Store, m.sinceTime(), m.opts.AgentFilter),
+		loadStats(m.opts.Store, m.sinceTime(), m.untilTime(), m.opts.AgentFilter),
 		scheduleRefresh(),
 	)
 }
@@ -74,7 +83,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		return m, tea.Batch(
-			loadStats(m.opts.Store, m.sinceTime(), m.opts.AgentFilter),
+			loadStats(m.opts.Store, m.sinceTime(), m.untilTime(), m.opts.AgentFilter),
 			scheduleRefresh(),
 		)
 	}
@@ -101,18 +110,83 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.setTimeRange(RangeAll)
 
 	case "r":
-		return m, loadStats(m.opts.Store, m.sinceTime(), m.opts.AgentFilter)
+		return m, loadStats(m.opts.Store, m.sinceTime(), m.untilTime(), m.opts.AgentFilter)
+
+	case "[":
+		return m.shiftWindow(false)
+	case "]":
+		return m.shiftWindow(true)
 	}
 
 	return m, nil
 }
 
+func (m *Model) windowSize() time.Duration {
+	since := m.sinceTime()
+	if since == nil {
+		return 24 * time.Hour
+	}
+	if until := m.untilTime(); until != nil {
+		return until.Sub(*since)
+	}
+	return time.Since(*since)
+}
+
+func (m *Model) shiftWindow(forward bool) (tea.Model, tea.Cmd) {
+	if m.timeRange == RangeAll && m.customSince == nil {
+		return m, nil
+	}
+
+	ws := m.windowSize()
+
+	var newSince, newUntil time.Time
+	if m.customSince != nil && m.customUntil != nil {
+		if forward {
+			newSince = m.customSince.Add(ws)
+			newUntil = m.customUntil.Add(ws)
+		} else {
+			newSince = m.customSince.Add(-ws)
+			newUntil = m.customUntil.Add(-ws)
+		}
+	} else {
+		since := m.sinceTime()
+		if since == nil {
+			return m, nil
+		}
+		until := time.Now().UTC()
+		if u := m.untilTime(); u != nil {
+			until = *u
+		}
+		if forward {
+			newSince = since.Add(ws)
+			newUntil = until.Add(ws)
+		} else {
+			newSince = since.Add(-ws)
+			newUntil = until.Add(-ws)
+		}
+	}
+
+	now := time.Now().UTC()
+	if newUntil.After(now) {
+		newUntil = now
+		newSince = now.Add(-ws)
+	}
+
+	m.customSince = &newSince
+	m.customUntil = &newUntil
+	m.header.customSince = &newSince
+	m.header.customUntil = &newUntil
+	return m, loadStats(m.opts.Store, m.sinceTime(), m.untilTime(), m.opts.AgentFilter)
+}
+
 func (m *Model) setTimeRange(r TimeRange) (tea.Model, tea.Cmd) {
 	m.timeRange = r
 	m.customSince = nil
+	m.customUntil = nil
 	m.header.timeRange = r
 	m.header.customSince = nil
-	return m, loadStats(m.opts.Store, m.sinceTime(), m.opts.AgentFilter)
+	m.header.customUntil = nil
+	return m, loadStats(m.opts.Store, m.sinceTime(), m.untilTime(), m.opts.AgentFilter)
 }
 
 func (m Model) View() string {
@@ -193,10 +267,10 @@ func (m Model) singleColumnLayout(height int) string {
 	)
 }
 
-func loadStats(store storage.Store, since *time.Time, agentFilter string) tea.Cmd {
+func loadStats(store storage.Store, since, until *time.Time, agentFilter string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
-		data, err := computeStats(ctx, store, since, agentFilter)
+		data, err := computeStats(ctx, store, since, until, agentFilter)
 		if err != nil {
 			return statsErrorMsg{err: err}
 		}

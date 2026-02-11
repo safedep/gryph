@@ -48,9 +48,14 @@ func (r TimeRange) Since() *time.Time {
 	return &t
 }
 
+func (r TimeRange) Until() *time.Time {
+	return nil
+}
+
 type Options struct {
 	Store       storage.Store
 	TimeRange   TimeRange
 	AgentFilter string
 	Since       *time.Time
+	Until       *time.Time
 }

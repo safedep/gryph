@@ -14,11 +14,13 @@ func renderAgents(data *StatsData, width, height int) string {
 	}
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  %s %s %s %s\n",
-		labelStyle.Width(14).Render("Agent"),
-		labelStyle.Width(6).Align(lipgloss.Right).Render("Sess"),
-		labelStyle.Width(8).Align(lipgloss.Right).Render("Events"),
-		labelStyle.Width(6).Align(lipgloss.Right).Render("Errs"),
+	b.WriteString(fmt.Sprintf("  %s %s %s %s %s %s\n",
+		labelStyle.Width(12).Render("Agent"),
+		labelStyle.Width(5).Align(lipgloss.Right).Render("Sess"),
+		labelStyle.Width(6).Align(lipgloss.Right).Render("Evts"),
+		labelStyle.Width(5).Align(lipgloss.Right).Render("Wrts"),
+		labelStyle.Width(5).Align(lipgloss.Right).Render("Cmds"),
+		labelStyle.Width(5).Align(lipgloss.Right).Render("Errs"),
 	))
 
 	maxAgents := height - 3
@@ -31,13 +33,15 @@ func renderAgents(data *StatsData, width, height int) string {
 
 	for _, a := range data.Agents[:maxAgents] {
 		name := lipgloss.NewStyle().Foreground(agentColor(a.Name)).Render(
-			tui.TruncateString(a.Name, 14),
+			tui.TruncateString(a.Name, 12),
 		)
-		b.WriteString(fmt.Sprintf("  %s %s %s %s\n",
-			tui.PadRightVisible(name, 14),
-			valueStyle.Width(6).Align(lipgloss.Right).Render(fmt.Sprintf("%d", a.Sessions)),
-			valueStyle.Width(8).Align(lipgloss.Right).Render(tui.FormatNumber(a.Events)),
-			redValueStyle.Width(6).Align(lipgloss.Right).Render(fmt.Sprintf("%d", a.Errors)),
+		b.WriteString(fmt.Sprintf("  %s %s %s %s %s %s\n",
+			tui.PadRightVisible(name, 12),
+			valueStyle.Width(5).Align(lipgloss.Right).Render(fmt.Sprintf("%d", a.Sessions)),
+			valueStyle.Width(6).Align(lipgloss.Right).Render(tui.FormatNumber(a.Events)),
+			valueStyle.Width(5).Align(lipgloss.Right).Render(fmt.Sprintf("%d", a.FilesWritten)),
+			valueStyle.Width(5).Align(lipgloss.Right).Render(fmt.Sprintf("%d", a.Commands)),
+			redValueStyle.Width(5).Align(lipgloss.Right).Render(fmt.Sprintf("%d", a.Errors)),
 		))
 	}
 
