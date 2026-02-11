@@ -27,7 +27,7 @@ func renderSessions(data *StatsData, width, height int) string {
 		valueStyle.Render(tui.FormatDuration(data.ShortestSession)),
 	))
 	b.WriteString(fmt.Sprintf("  %s  %s\n",
-		labelStyle.Width(12).Render("Peak parallel"),
+		labelStyle.Width(12).Render("Concurrent"),
 		valueStyle.Render(fmt.Sprintf("%d", data.PeakConcurrent)),
 	))
 

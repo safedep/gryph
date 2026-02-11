@@ -365,13 +365,12 @@ func computePeakConcurrent(sessions []*session.Session) int {
 
 	var points []endpoint
 	for _, s := range sessions {
-		end := s.EndedAt
-		if end.IsZero() {
-			end = time.Now().UTC()
+		if s.EndedAt.IsZero() {
+			continue
 		}
 		points = append(points,
 			endpoint{t: s.StartedAt, delta: 1},
-			endpoint{t: end, delta: -1},
+			endpoint{t: s.EndedAt, delta: -1},
 		)
 	}
 
