@@ -92,6 +92,15 @@ func extractTargetDetail(e *events.Event, maxTarget int) (string, string) {
 			return tui.TruncateString(p.Command, maxTarget), detail
 		}
 	case events.ActionToolUse:
+		if p, err := e.GetToolUsePayload(); err == nil && p != nil {
+			if target := p.DisplayTarget(); target != "" {
+				if detailWidth := maxTarget - len(e.ToolName) - 1; detailWidth > 0 {
+					detail := lipgloss.NewStyle().Foreground(colorDim).Render(
+						tui.TruncateString(target, detailWidth))
+					return tui.TruncateString(e.ToolName, maxTarget), detail
+				}
+			}
+		}
 		return tui.TruncateString(e.ToolName, maxTarget), ""
 	case events.ActionNotification:
 		var payload events.NotificationPayload

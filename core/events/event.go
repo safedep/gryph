@@ -135,6 +135,54 @@ type NotificationPayload struct {
 	Type    string `json:"type,omitempty"`
 }
 
+// toolUseDisplayFields lists Input keys checked in priority order by DisplayTarget.
+var toolUseDisplayFields = []string{
+	"url", "query", "command", "file_path", "path",
+	"subject", "description", "subagent_type",
+	"prompt", "text", "message",
+}
+
+// DisplayTarget returns the most relevant identifier from Input for display.
+// It checks a prioritised list of well-known fields (url, query, command, …)
+// and returns the first non-empty string value found.
+func (p *ToolUsePayload) DisplayTarget() string {
+	if len(p.Input) == 0 {
+		return ""
+	}
+
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(p.Input, &m); err != nil {
+		return ""
+	}
+
+	for _, key := range toolUseDisplayFields {
+		raw, ok := m[key]
+		if !ok {
+			continue
+		}
+		var s string
+		if err := json.Unmarshal(raw, &s); err != nil {
+			continue
+		}
+		if s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+// GetToolUsePayload unmarshals the payload as a ToolUsePayload.
+func (e *Event) GetToolUsePayload() (*ToolUsePayload, error) {
+	if e.ActionType != ActionToolUse {
+		return nil, nil
+	}
+	var payload ToolUsePayload
+	if err := json.Unmarshal(e.Payload, &payload); err != nil {
+		return nil, err
+	}
+	return &payload, nil
+}
+
 // MarshalJSON implements json.Marshaler to include $schema in the JSON output.
 func (e Event) MarshalJSON() ([]byte, error) {
 	// Alias avoids infinite recursion by stripping MarshalJSON from the type.
