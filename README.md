@@ -33,7 +33,7 @@
 
 <div align="center">
   <picture>
-    <img src="docs/assets/gryph-demo-livelogs.png" alt="Gryph - AI Coding Agent Audit Trail - Live Logs" width="90%">
+    <img src="docs/assets/gryph-demo-stats.png" alt="Gryph - AI Coding Agent Audit Trail - Stats" width="90%">
   </picture>
 </div>
 
