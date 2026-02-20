@@ -85,6 +85,7 @@ func SupportedAgents() []string {
 		"opencode",
 		"openclaw",
 		"windsurf",
+		"pi-agent",
 	}
 }
 

@@ -19,6 +19,7 @@ const (
 	agentNameOpenCode   = "opencode"
 	agentNameOpenClaw   = "openclaw"
 	agentNameWindsurf   = "windsurf"
+	agentNamePiAgent    = "pi-agent"
 
 	streamTargetTypeStdout = "stdout"
 	streamTargetTypeNop    = "nop"
@@ -122,6 +123,7 @@ type AgentsConfig struct {
 	OpenCode   AgentConfig `mapstructure:"opencode"`
 	OpenClaw   AgentConfig `mapstructure:"openclaw"`
 	Windsurf   AgentConfig `mapstructure:"windsurf"`
+	PiAgent    AgentConfig `mapstructure:"pi-agent"`
 }
 
 // DisplayConfig holds display-related settings.
@@ -278,6 +280,10 @@ func (c *Config) GetAgentLoggingLevel(agentName string) LoggingLevel {
 		if c.Agents.Windsurf.LoggingLevel != "" {
 			return c.Agents.Windsurf.LoggingLevel
 		}
+	case agentNamePiAgent:
+		if c.Agents.PiAgent.LoggingLevel != "" {
+			return c.Agents.PiAgent.LoggingLevel
+		}
 	}
 
 	return c.Logging.Level
@@ -298,6 +304,8 @@ func (c *Config) IsAgentEnabled(agentName string) bool {
 		return c.Agents.OpenClaw.Enabled
 	case agentNameWindsurf:
 		return c.Agents.Windsurf.Enabled
+	case agentNamePiAgent:
+		return c.Agents.PiAgent.Enabled
 	default:
 		return true
 	}

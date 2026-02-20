@@ -14,6 +14,7 @@ import (
 	"github.com/safedep/gryph/agent/gemini"
 	"github.com/safedep/gryph/agent/openclaw"
 	"github.com/safedep/gryph/agent/opencode"
+	"github.com/safedep/gryph/agent/piagent"
 	"github.com/safedep/gryph/agent/windsurf"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
@@ -210,6 +211,15 @@ func sendHookResponse(agentName, hookType string) error {
 		// Pre-hooks can block via exit code 2; post-hooks just exit 0
 		return handleWindsurfResponse(windsurf.NewAllowResponse())
 
+	case agent.AgentPiAgent:
+		// Pi Agent: exit code semantics (0=allow, 2=block, 1=error)
+		// tool_call hooks can block via exit code 2
+		if hookType == "tool_call" {
+			resp := piagent.NewAllowResponse()
+			return handlePiAgentResponse(resp)
+		}
+		return nil
+
 	default:
 		// Unknown agent, just succeed
 		return nil
@@ -247,6 +257,10 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 	case agent.AgentWindsurf:
 		response := windsurf.NewBlockResponse(result.BlockReason)
 		return handleWindsurfResponse(response)
+
+	case agent.AgentPiAgent:
+		response := piagent.NewBlockResponse(result.BlockReason)
+		return handlePiAgentResponse(response)
 
 	default:
 		return nil
@@ -347,6 +361,18 @@ func handleGeminiResponse(response *gemini.HookResponse) error {
 	case gemini.HookBlock:
 		return &exitError{code: 2, message: response.Message}
 	case gemini.HookError:
+		return &exitError{code: 1, message: response.Message}
+	default:
+		return nil
+	}
+}
+
+// handlePiAgentResponse processes a Pi Agent hook response.
+func handlePiAgentResponse(response *piagent.HookResponse) error {
+	switch response.Decision {
+	case piagent.HookBlock:
+		return &exitError{code: 2, message: response.Message}
+	case piagent.HookError:
 		return &exitError{code: 1, message: response.Message}
 	default:
 		return nil

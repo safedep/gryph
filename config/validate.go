@@ -69,6 +69,9 @@ func validate(cfg *Config) error {
 	if cfg.Agents.Windsurf.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.Windsurf.LoggingLevel) {
 		return fmt.Errorf("invalid agents.windsurf.logging_level: %s", cfg.Agents.Windsurf.LoggingLevel)
 	}
+	if cfg.Agents.PiAgent.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.PiAgent.LoggingLevel) {
+		return fmt.Errorf("invalid agents.pi-agent.logging_level: %s", cfg.Agents.PiAgent.LoggingLevel)
+	}
 
 	return nil
 }

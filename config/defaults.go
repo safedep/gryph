@@ -31,6 +31,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("agents.opencode.enabled", true)
 	v.SetDefault("agents.openclaw.enabled", true)
 	v.SetDefault("agents.windsurf.enabled", true)
+	v.SetDefault("agents.pi-agent.enabled", true)
 
 	// Display defaults
 	v.SetDefault("display.colors", "auto")
