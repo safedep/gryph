@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -86,6 +87,30 @@ type EventView struct {
 	DurationMs       int64
 	IsSensitive      bool
 	HasDiff          bool
+}
+
+// EventDetailView represents the full details of a single event.
+type EventDetailView struct {
+	ID               string          `json:"id"`
+	SessionID        string          `json:"session_id"`
+	AgentSessionID   string          `json:"agent_session_id,omitempty"`
+	Sequence         int             `json:"sequence"`
+	Timestamp        time.Time       `json:"timestamp"`
+	DurationMs       int64           `json:"duration_ms,omitempty"`
+	AgentName        string          `json:"agent_name"`
+	AgentDisplayName string          `json:"agent_display_name"`
+	AgentVersion     string          `json:"agent_version,omitempty"`
+	WorkingDirectory string          `json:"working_directory,omitempty"`
+	ActionType       string          `json:"action_type"`
+	ActionDisplay    string          `json:"action_display"`
+	ToolName         string          `json:"tool_name,omitempty"`
+	ResultStatus     string          `json:"result_status"`
+	ErrorMessage     string          `json:"error_message,omitempty"`
+	IsSensitive      bool            `json:"is_sensitive"`
+	Payload          any             `json:"payload,omitempty"`
+	DiffContent      string          `json:"diff_content,omitempty"`
+	RawEvent         json.RawMessage `json:"raw_event,omitempty"`
+	ConvContext      string          `json:"conversation_context,omitempty"`
 }
 
 // InstallView represents installation results.

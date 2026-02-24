@@ -108,5 +108,10 @@ func (p *JSONPresenter) RenderUpdateNotice(notice *UpdateNoticeView) error {
 	return p.encoder.Encode(notice)
 }
 
+// RenderEventDetails renders full details of one or more events as JSON.
+func (p *JSONPresenter) RenderEventDetails(events []*EventDetailView) error {
+	return p.encoder.Encode(events)
+}
+
 // Ensure JSONPresenter implements Presenter
 var _ Presenter = (*JSONPresenter)(nil)

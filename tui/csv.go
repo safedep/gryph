@@ -2,6 +2,7 @@ package tui
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 )
@@ -289,6 +290,59 @@ func (p *CSVPresenter) RenderStreamSync(result *StreamSyncView) error {
 func (p *CSVPresenter) RenderUpdateNotice(notice *UpdateNoticeView) error {
 	_ = p.writer.Write([]string{"current_version", "latest_version", "release_url"})
 	_ = p.writer.Write([]string{notice.CurrentVersion, notice.LatestVersion, notice.ReleaseURL})
+	p.writer.Flush()
+	return p.writer.Error()
+}
+
+// RenderEventDetails renders full details of one or more events as CSV.
+func (p *CSVPresenter) RenderEventDetails(events []*EventDetailView) error {
+	_ = p.writer.Write([]string{
+		"id", "session_id", "agent_session_id", "sequence", "timestamp",
+		"duration_ms", "agent_name", "agent_version", "working_directory",
+		"action_type", "tool_name", "result_status", "error_message",
+		"sensitive", "payload", "diff_content", "raw_event", "conversation_context",
+	})
+
+	for _, e := range events {
+		sensitive := "false"
+		if e.IsSensitive {
+			sensitive = "true"
+		}
+
+		payloadStr := ""
+		if e.Payload != nil {
+			if data, err := json.Marshal(e.Payload); err == nil {
+				payloadStr = string(data)
+			}
+		}
+
+		rawEventStr := ""
+		if len(e.RawEvent) > 0 {
+			rawEventStr = string(e.RawEvent)
+		}
+
+		_ = p.writer.Write([]string{
+			e.ID,
+			e.SessionID,
+			e.AgentSessionID,
+			fmt.Sprintf("%d", e.Sequence),
+			FormatTime(e.Timestamp),
+			fmt.Sprintf("%d", e.DurationMs),
+			e.AgentName,
+			e.AgentVersion,
+			e.WorkingDirectory,
+			e.ActionType,
+			e.ToolName,
+			e.ResultStatus,
+			e.ErrorMessage,
+			sensitive,
+			payloadStr,
+			e.DiffContent,
+			rawEventStr,
+			e.ConvContext,
+		})
+	}
+
 	p.writer.Flush()
 	return p.writer.Error()
 }
