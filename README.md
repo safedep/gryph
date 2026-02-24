@@ -51,6 +51,9 @@
 ## Installation
 
 ```bash
+# Install with the install script
+curl -fsSL https://raw.githubusercontent.com/safedep/gryph/main/install.sh | sh
+
 # Install with Homebrew on MacOS and Linux
 brew install safedep/tap/gryph
 
