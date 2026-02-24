@@ -136,5 +136,15 @@ func (p *JSONLPresenter) RenderUpdateNotice(notice *UpdateNoticeView) error {
 	return p.encoder.Encode(notice)
 }
 
+// RenderEventDetails renders full details of one or more events as JSONL.
+func (p *JSONLPresenter) RenderEventDetails(events []*EventDetailView) error {
+	for _, e := range events {
+		if err := p.encoder.Encode(e); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Ensure JSONLPresenter implements Presenter
 var _ Presenter = (*JSONLPresenter)(nil)

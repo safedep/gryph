@@ -34,6 +34,9 @@ type Presenter interface {
 	// RenderEvents renders a list of events.
 	RenderEvents(events []*EventView) error
 
+	// RenderEventDetails renders full details of one or more events.
+	RenderEventDetails(events []*EventDetailView) error
+
 	// RenderInstall renders the installation result.
 	RenderInstall(result *InstallView) error
 

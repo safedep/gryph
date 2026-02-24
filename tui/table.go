@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
+	"time"
 )
 
 // TablePresenter renders output in table format.
@@ -581,6 +583,124 @@ func (p *TablePresenter) RenderUpdateNotice(notice *UpdateNoticeView) error {
 		p.color.Success(notice.LatestVersion))
 	tw.printf("  %s\n", p.color.Dim(notice.ReleaseURL))
 	return tw.Err()
+}
+
+// RenderEventDetails renders full details of one or more events.
+func (p *TablePresenter) RenderEventDetails(events []*EventDetailView) error {
+	tw := &tableWriter{w: p.w}
+
+	for i, e := range events {
+		if i > 0 {
+			tw.println()
+			tw.println("---")
+			tw.println()
+		}
+
+		tw.printf("%-16s %s\n", "Event", e.ID)
+		tw.printf("%-16s %s\n", "Session", e.SessionID)
+		if e.AgentSessionID != "" {
+			tw.printf("%-16s %s\n", "Agent Session", p.color.Dim(e.AgentSessionID))
+		}
+		tw.printf("%-16s %d\n", "Sequence", e.Sequence)
+		tw.printf("%-16s %s\n", "Timestamp", FormatTime(e.Timestamp))
+		if e.DurationMs > 0 {
+			tw.printf("%-16s %s\n", "Duration", FormatDuration(time.Duration(e.DurationMs)*time.Millisecond))
+		}
+		tw.println()
+
+		agentStr := p.color.Agent(e.AgentDisplayName)
+		if e.AgentVersion != "" {
+			agentStr += " " + e.AgentVersion
+		}
+		tw.printf("%-16s %s\n", "Agent", agentStr)
+		if e.WorkingDirectory != "" {
+			tw.printf("%-16s %s\n", "Directory", p.color.Path(e.WorkingDirectory))
+		}
+		tw.println()
+
+		tw.printf("%-16s %s (%s)\n", "Action", e.ActionDisplay, e.ActionType)
+		if e.ToolName != "" {
+			tw.printf("%-16s %s\n", "Tool", e.ToolName)
+		}
+		tw.printf("%-16s %s\n", "Status", p.formatResultStatus(e.ResultStatus))
+		if e.ErrorMessage != "" {
+			tw.printf("%-16s %s\n", "Error", p.color.Error(e.ErrorMessage))
+		}
+		if e.IsSensitive {
+			tw.printf("%-16s %s\n", "Sensitive", p.color.Warning("yes"))
+		}
+
+		if e.Payload != nil {
+			tw.println()
+			tw.printf("%s\n", p.color.Header("Payload"))
+			p.renderPayloadDetail(tw, e.Payload)
+		}
+
+		if e.DiffContent != "" {
+			tw.println()
+			tw.printf("%s\n", p.color.Header("Diff"))
+			for _, line := range strings.Split(e.DiffContent, "\n") {
+				if strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---") {
+					tw.println(p.color.DiffHeader(line))
+				} else if strings.HasPrefix(line, "+") {
+					tw.println(p.color.DiffAdd(line))
+				} else if strings.HasPrefix(line, "-") {
+					tw.println(p.color.DiffRemove(line))
+				} else if strings.HasPrefix(line, "@@") {
+					tw.println(p.color.Cyan(line))
+				} else {
+					tw.println(line)
+				}
+			}
+		}
+
+		if len(e.RawEvent) > 0 {
+			tw.println()
+			tw.printf("%s\n", p.color.Header("Raw Event"))
+			var pretty json.RawMessage
+			if json.Unmarshal(e.RawEvent, &pretty) == nil {
+				formatted, err := json.MarshalIndent(pretty, "  ", "  ")
+				if err == nil {
+					tw.printf("  %s\n", string(formatted))
+				}
+			}
+		}
+
+		if e.ConvContext != "" {
+			tw.println()
+			tw.printf("%s\n", p.color.Header("Conversation Context"))
+			tw.printf("  %s\n", e.ConvContext)
+		}
+	}
+
+	return tw.Err()
+}
+
+func (p *TablePresenter) formatResultStatus(status string) string {
+	switch status {
+	case "success":
+		return p.color.Success(status)
+	case "error":
+		return p.color.Error(status)
+	case "blocked", "rejected":
+		return p.color.Warning(status)
+	default:
+		return status
+	}
+}
+
+func (p *TablePresenter) renderPayloadDetail(tw *tableWriter, payload any) {
+	switch v := payload.(type) {
+	case map[string]any:
+		for key, val := range v {
+			tw.printf("  %-16s %v\n", key, val)
+		}
+	default:
+		data, err := json.MarshalIndent(v, "  ", "  ")
+		if err == nil {
+			tw.printf("  %s\n", string(data))
+		}
+	}
 }
 
 // Ensure TablePresenter implements Presenter
