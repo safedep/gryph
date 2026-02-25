@@ -88,7 +88,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	if !detection.Installed {
-		result.Error = fmt.Errorf("failed to detect pi agent: %w", err)
+		result.Error = fmt.Errorf("pi agent not detected (~/.pi/agent not found)")
 		return result, result.Error
 	}
 
