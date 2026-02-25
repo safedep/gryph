@@ -1,0 +1,53 @@
+{
+  "index_patterns": ["gryph-events-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.refresh_interval": "5s",
+      "index.codec": "best_compression"
+    },
+    "mappings": {
+      "properties": {
+        "id":                  { "type": "keyword" },
+        "session_id":          { "type": "keyword" },
+        "sequence":            { "type": "integer" },
+        "timestamp":           { "type": "date" },
+        "agent_name":          { "type": "keyword" },
+        "working_directory":   { "type": "keyword" },
+        "action_type":         { "type": "keyword" },
+        "tool_name":           { "type": "keyword" },
+        "result_status":       { "type": "keyword" },
+        "is_sensitive":        { "type": "boolean" },
+
+        "agent_session_id":    { "type": "keyword" },
+        "agent_version":       { "type": "keyword" },
+        "conversation_context": { "type": "text" },
+        "diff_content":        { "type": "text" },
+        "duration_ms":         { "type": "integer" },
+        "error_message":       { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+
+        "endpoint_hostname":   { "type": "keyword" },
+        "endpoint_username":   { "type": "keyword" },
+
+        "payload": {
+          "type": "object",
+          "properties": {
+            "command":       { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 512 } } },
+            "description":   { "type": "text" },
+            "exit_code":     { "type": "integer" },
+            "path":          { "type": "keyword" },
+            "lines_added":   { "type": "integer" },
+            "lines_removed": { "type": "integer" }
+          }
+        },
+
+        "raw_event": {
+          "type": "object",
+          "enabled": false
+        }
+      }
+    }
+  },
+  "priority": 100
+}

@@ -1,0 +1,58 @@
+{
+  "name": "High Error Rate per Endpoint",
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 15,
+      "unit": "MINUTES"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": ["gryph-events-*"],
+        "query": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "must": [
+                { "range": { "timestamp": { "gte": "now-15m" } } }
+              ]
+            }
+          },
+          "aggs": {
+            "by_endpoint": {
+              "terms": { "field": "endpoint_hostname", "size": 100 },
+              "aggs": {
+                "errors": {
+                  "filter": { "term": { "result_status": "error" } }
+                },
+                "error_rate": {
+                  "bucket_script": {
+                    "buckets_path": { "errors": "errors._count", "total": "_count" },
+                    "script": "params.errors / params.total * 100"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "high_error_rate",
+      "severity": "3",
+      "condition": {
+        "script": {
+          "source": "for (def bucket : ctx.results[0].aggregations.by_endpoint.buckets) { if (bucket.error_rate.value > 20) return true; } return false;",
+          "lang": "painless"
+        }
+      },
+      "actions": []
+    }
+  ]
+}
