@@ -235,7 +235,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 		status.Hooks = HookTypes
 	} else {
 		status.Installed = true
-		status.Valid = true
+		status.Valid = false
 		status.Hooks = HookTypes
 		status.Issues = append(status.Issues, "extension content differs from expected (may have been modified)")
 	}
