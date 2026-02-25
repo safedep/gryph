@@ -19,16 +19,16 @@ func TestRetention(t *testing.T) {
 		assert func(t *testing.T, env *testEnv, stdout string, err error)
 	}{
 		{
-			name: "cleanup_dry_run_no_error",
-			args: []string{"retention", "cleanup", "--dry-run"},
+			name:  "cleanup_dry_run_no_error",
+			args:  []string{"retention", "cleanup", "--dry-run"},
 			setup: seedOldEvents,
 			assert: func(t *testing.T, _ *testEnv, _ string, err error) {
 				assert.NoError(t, err)
 			},
 		},
 		{
-			name: "cleanup_deletes_old",
-			args: []string{"retention", "cleanup"},
+			name:  "cleanup_deletes_old",
+			args:  []string{"retention", "cleanup"},
 			setup: seedOldAndRecentEvents,
 			assert: func(t *testing.T, env *testEnv, _ string, err error) {
 				assert.NoError(t, err)
@@ -49,8 +49,8 @@ func TestRetention(t *testing.T) {
 			},
 		},
 		{
-			name: "cleanup_nothing_to_delete",
-			args: []string{"retention", "cleanup"},
+			name:  "cleanup_nothing_to_delete",
+			args:  []string{"retention", "cleanup"},
 			setup: seedNRecentEvents(3),
 			assert: func(t *testing.T, env *testEnv, _ string, err error) {
 				assert.NoError(t, err)
@@ -63,8 +63,8 @@ func TestRetention(t *testing.T) {
 			},
 		},
 		{
-			name: "dry_run_preserves_data",
-			args: []string{"retention", "cleanup", "--dry-run"},
+			name:  "dry_run_preserves_data",
+			args:  []string{"retention", "cleanup", "--dry-run"},
 			setup: seedOldEvents,
 			assert: func(t *testing.T, env *testEnv, _ string, err error) {
 				assert.NoError(t, err)

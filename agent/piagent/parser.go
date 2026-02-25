@@ -389,5 +389,3 @@ func NewErrorResponse(message string) *HookResponse {
 		Message:  message,
 	}
 }
-
-

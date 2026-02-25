@@ -56,20 +56,20 @@ type StatsData struct {
 
 	TimelineBuckets []TimelineBucket
 
-	LinesAdded        int
-	LinesRemoved      int
+	LinesAdded          int
+	LinesRemoved        int
 	UniqueFilesModified int
-	TopFiles          []FileStat
-	WorkingDirs       []string
+	TopFiles            []FileStat
+	WorkingDirs         []string
 
 	TotalCommands  int
 	PassedCommands int
 	FailedCommands int
 	TopCommands    []CommandStat
 
-	TotalErrors    int
-	TotalBlocked   int
-	TotalRejected  int
+	TotalErrors   int
+	TotalBlocked  int
+	TotalRejected int
 
 	AvgDuration       time.Duration
 	AvgActionsPerSess float64
