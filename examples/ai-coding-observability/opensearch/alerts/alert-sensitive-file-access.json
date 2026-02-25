@@ -1,0 +1,53 @@
+{
+  "name": "Sensitive File Access",
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 5,
+      "unit": "MINUTES"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": ["gryph-events-*"],
+        "query": {
+          "size": 5,
+          "query": {
+            "bool": {
+              "must": [
+                { "term": { "action_type": "file_read" } },
+                { "range": { "timestamp": { "gte": "now-5m" } } }
+              ],
+              "should": [
+                { "wildcard": { "payload.path": "*.env*" } },
+                { "wildcard": { "payload.path": "*.pem" } },
+                { "wildcard": { "payload.path": "*.key" } },
+                { "wildcard": { "payload.path": "*credential*" } },
+                { "wildcard": { "payload.path": "*/.ssh/*" } },
+                { "wildcard": { "payload.path": "*/.aws/*" } },
+                { "wildcard": { "payload.path": "*secret*" } }
+              ],
+              "minimum_should_match": 1
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "sensitive_file_accessed",
+      "severity": "2",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": []
+    }
+  ]
+}

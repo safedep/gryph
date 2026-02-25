@@ -16,7 +16,8 @@
   <a href="#installation">Installation</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#commands">Commands</a> •
-  <a href="#supported-agents">Supported Agents</a>
+  <a href="#supported-agents">Supported Agents</a> •
+  <a href="#use-cases">Use Cases</a>
 </p>
 
 <div align="center">
@@ -289,6 +290,7 @@ gryph config reset
 ```
 
 **Logging levels:**
+
 - `minimal` - Action type, file path, timestamp (default)
 - `standard` - + diff stats, exit codes, truncated output
 - `full` - + file diffs, raw events, conversation context
@@ -316,6 +318,12 @@ Sensitive path patterns and redaction rules are fully configurable via `gryph co
 </picture>
 
 Gryph installs lightweight hooks into your AI agents. When the agent performs an action (read file, write file, execute command), the hook sends a JSON event to Gryph, which stores it locally. You can then query this audit trail anytime.
+
+## Use Cases
+
+| Use Case | Description |
+| --- | --- |
+| [AI Coding Observability](examples/ai-coding-observability/) | Centralized observability for AI coding agents across developer endpoints using Gryph + OpenSearch. Includes SOC dashboards, threat detection alerts, and synthetic data generation. |
 
 ## Community
 

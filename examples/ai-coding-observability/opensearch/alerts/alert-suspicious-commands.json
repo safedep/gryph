@@ -1,0 +1,56 @@
+{
+  "name": "Suspicious Command Execution",
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 5,
+      "unit": "MINUTES"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": ["gryph-events-*"],
+        "query": {
+          "size": 5,
+          "query": {
+            "bool": {
+              "must": [
+                { "term": { "action_type": "command_exec" } },
+                { "range": { "timestamp": { "gte": "now-5m" } } }
+              ],
+              "should": [
+                { "wildcard": { "payload.command.keyword": "*curl*POST*" } },
+                { "wildcard": { "payload.command.keyword": "*curl --data*" } },
+                { "wildcard": { "payload.command.keyword": "*wget --post*" } },
+                { "wildcard": { "payload.command.keyword": "*base64 -d*" } },
+                { "wildcard": { "payload.command.keyword": "*base64 -D*" } },
+                { "wildcard": { "payload.command.keyword": "*eval *" } },
+                { "wildcard": { "payload.command.keyword": "*nc -e*" } },
+                { "wildcard": { "payload.command.keyword": "*ncat *" } },
+                { "wildcard": { "payload.command.keyword": "*python3 -c*import socket*" } },
+                { "wildcard": { "payload.command.keyword": "*curl -X POST*" } }
+              ],
+              "minimum_should_match": 1
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "suspicious_command_detected",
+      "severity": "1",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": []
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "name": "Endpoint Gone Silent",
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 1,
+      "unit": "HOURS"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": ["gryph-events-*"],
+        "query": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "must": [
+                { "range": { "timestamp": { "gte": "now-7d", "lte": "now-4h" } } }
+              ]
+            }
+          },
+          "aggs": {
+            "endpoints_seen_7d": {
+              "terms": { "field": "endpoint_hostname", "size": 200 },
+              "aggs": {
+                "last_seen": {
+                  "max": { "field": "timestamp" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "endpoint_silent",
+      "severity": "3",
+      "condition": {
+        "script": {
+          "source": "for (def bucket : ctx.results[0].aggregations.endpoints_seen_7d.buckets) { if (bucket.last_seen.value_as_string != null) { long lastSeen = bucket.last_seen.value; long fourHoursAgo = System.currentTimeMillis() - 4 * 60 * 60 * 1000; if (lastSeen < fourHoursAgo) return true; } } return false;",
+          "lang": "painless"
+        }
+      },
+      "actions": []
+    }
+  ]
+}
