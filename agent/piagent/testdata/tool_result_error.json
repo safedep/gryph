@@ -1,0 +1,17 @@
+{
+  "session_id": "pi-session-abc",
+  "cwd": "/home/user/project",
+  "hook_event_name": "tool_result",
+  "tool_name": "bash",
+  "tool_call_id": "call-789",
+  "input": {
+    "command": "npm install"
+  },
+  "content": [
+    {
+      "type": "text",
+      "text": "Error: command not found: npm"
+    }
+  ],
+  "is_error": true
+}

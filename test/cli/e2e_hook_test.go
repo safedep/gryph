@@ -642,3 +642,158 @@ display:
 		})
 	}
 }
+
+func TestHook_PiAgent(t *testing.T) {
+	tests := []struct {
+		name     string
+		hookType string
+		fixture  string
+		assert   func(t *testing.T, env *testEnv, stdout, stderr string, err error)
+	}{
+		{
+			name:     "session_start",
+			hookType: "session_start",
+			fixture:  "../../agent/piagent/testdata/session_start.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionSessionStart, evts[0].ActionType)
+			},
+		},
+		{
+			name:     "session_shutdown",
+			hookType: "session_shutdown",
+			fixture:  "../../agent/piagent/testdata/session_shutdown.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				sessions, sErr := store.QuerySessions(ctx, session.NewSessionFilter())
+				require.NoError(t, sErr)
+				require.Len(t, sessions, 1)
+				assert.False(t, sessions[0].EndedAt.IsZero(), "EndedAt should be set")
+			},
+		},
+		{
+			name:     "tool_call_read",
+			hookType: "tool_call",
+			fixture:  "../../agent/piagent/testdata/tool_call_read.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionFileRead, evts[0].ActionType)
+			},
+		},
+		{
+			name:     "tool_call_write",
+			hookType: "tool_call",
+			fixture:  "../../agent/piagent/testdata/tool_call_write.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionFileWrite, evts[0].ActionType)
+			},
+		},
+		{
+			name:     "tool_call_bash",
+			hookType: "tool_call",
+			fixture:  "../../agent/piagent/testdata/tool_call_bash.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionCommandExec, evts[0].ActionType)
+				p, pErr := evts[0].GetCommandExecPayload()
+				require.NoError(t, pErr)
+				assert.Contains(t, p.Command, "npm install")
+			},
+		},
+		{
+			name:     "tool_result_success",
+			hookType: "tool_result",
+			fixture:  "../../agent/piagent/testdata/tool_result_success.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionFileRead, evts[0].ActionType)
+				assert.Equal(t, events.ResultSuccess, evts[0].ResultStatus)
+			},
+		},
+		{
+			name:     "tool_result_error",
+			hookType: "tool_result",
+			fixture:  "../../agent/piagent/testdata/tool_result_error.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ResultError, evts[0].ResultStatus)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newTestEnv(t)
+			payload, err := os.ReadFile(tt.fixture)
+			require.NoError(t, err)
+			stdout, stderr, runErr := env.runHook("pi-agent", tt.hookType, payload)
+			tt.assert(t, env, stdout, stderr, runErr)
+		})
+	}
+}
+
+func TestHook_PiAgent_DeterministicSessionID(t *testing.T) {
+	env := newTestEnv(t)
+
+	sessionStartPayload, err := os.ReadFile("../../agent/piagent/testdata/session_start.json")
+	require.NoError(t, err)
+
+	toolCallPayload, err := os.ReadFile("../../agent/piagent/testdata/tool_call_read.json")
+	require.NoError(t, err)
+
+	_, _, err = env.runHook("pi-agent", "session_start", sessionStartPayload)
+	require.NoError(t, err)
+
+	_, _, err = env.runHook("pi-agent", "tool_call", toolCallPayload)
+	require.NoError(t, err)
+
+	store, cleanup := env.openStore()
+	defer cleanup()
+	ctx := context.Background()
+	evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+	require.NoError(t, qErr)
+	require.Len(t, evts, 2)
+
+	assert.Equal(t, evts[0].SessionID, evts[1].SessionID,
+		"events with same session_id should have same UUID")
+}

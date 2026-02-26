@@ -31,8 +31,8 @@ func TestSessions(t *testing.T) {
 			assert: assertAllSessionsFromAgent("cursor"),
 		},
 		{
-			name: "json_format",
-			args: []string{"sessions", "--format", "json"},
+			name:  "json_format",
+			args:  []string{"sessions", "--format", "json"},
 			setup: seed3Sessions,
 			assert: func(t *testing.T, stdout string, err error) {
 				t.Helper()

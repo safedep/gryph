@@ -320,8 +320,8 @@ func parseSetupWorktree(sessionID uuid.UUID, agentSessionID string, input HookIn
 		ToolName: "post_setup_worktree",
 	}
 	inputMap := map[string]interface{}{
-		"worktree_path":        info.WorktreePath,
-		"root_workspace_path":  info.RootWorkspacePath,
+		"worktree_path":       info.WorktreePath,
+		"root_workspace_path": info.RootWorkspacePath,
 	}
 	if inputBytes, err := json.Marshal(inputMap); err == nil {
 		payload.Input = inputBytes

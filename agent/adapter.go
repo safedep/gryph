@@ -15,6 +15,7 @@ const (
 	AgentOpenCode   = "opencode"
 	AgentOpenClaw   = "openclaw"
 	AgentWindsurf   = "windsurf"
+	AgentPiAgent    = "pi-agent"
 )
 
 // Standard agent display names.
@@ -25,6 +26,7 @@ const (
 	DisplayOpenCode   = "OpenCode"
 	DisplayOpenClaw   = "OpenClaw"
 	DisplayWindsurf   = "Windsurf"
+	DisplayPiAgent    = "Pi Agent"
 )
 
 // AgentDisplayName returns the display name for an agent identifier.
@@ -42,6 +44,8 @@ func AgentDisplayName(name string) string {
 		return DisplayOpenClaw
 	case AgentWindsurf:
 		return DisplayWindsurf
+	case AgentPiAgent:
+		return DisplayPiAgent
 	default:
 		return name
 	}

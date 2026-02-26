@@ -32,8 +32,8 @@ func TestQuery(t *testing.T) {
 			assert: assertActionsIn("file_read", "file_write"),
 		},
 		{
-			name: "by_file_pattern",
-			args: []string{"query", "--file", "*.go", "--format", "json"},
+			name:  "by_file_pattern",
+			args:  []string{"query", "--file", "*.go", "--format", "json"},
 			setup: seedWithPaths,
 			assert: func(t *testing.T, stdout string, err error) {
 				t.Helper()
@@ -47,8 +47,8 @@ func TestQuery(t *testing.T) {
 			},
 		},
 		{
-			name: "by_command_pattern",
-			args: []string{"query", "--command", "npm *", "--format", "json"},
+			name:  "by_command_pattern",
+			args:  []string{"query", "--command", "npm *", "--format", "json"},
 			setup: seedWithCommands,
 			assert: func(t *testing.T, stdout string, err error) {
 				t.Helper()
@@ -62,8 +62,8 @@ func TestQuery(t *testing.T) {
 			},
 		},
 		{
-			name: "by_status_error",
-			args: []string{"query", "--status", "error", "--format", "json"},
+			name:  "by_status_error",
+			args:  []string{"query", "--status", "error", "--format", "json"},
 			setup: seedWithErrors,
 			assert: func(t *testing.T, stdout string, err error) {
 				t.Helper()

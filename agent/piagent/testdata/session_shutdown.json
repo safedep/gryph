@@ -1,0 +1,5 @@
+{
+  "session_id": "pi-session-abc",
+  "cwd": "/home/user/project",
+  "hook_event_name": "session_shutdown"
+}

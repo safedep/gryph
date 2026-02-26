@@ -1,0 +1,17 @@
+{
+  "session_id": "pi-session-abc",
+  "cwd": "/home/user/project",
+  "hook_event_name": "tool_result",
+  "tool_name": "read",
+  "tool_call_id": "call-123",
+  "input": {
+    "path": "/home/user/project/README.md"
+  },
+  "content": [
+    {
+      "type": "text",
+      "text": "# My Project\n\nThis is a sample project."
+    }
+  ],
+  "is_error": false
+}

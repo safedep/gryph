@@ -127,6 +127,8 @@ func agentBadge(agentName string) string {
 		return lipgloss.NewStyle().Foreground(colorPink).Bold(true).Render("openclaw")
 	case "windsurf":
 		return lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("windsurf")
+	case "pi-agent":
+		return lipgloss.NewStyle().Foreground(colorIndigo).Bold(true).Render("pi-agent")
 	default:
 		return lipgloss.NewStyle().Foreground(colorDim).Render(agentName)
 	}
