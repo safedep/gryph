@@ -1,14 +1,24 @@
 package piagent
 
 import (
+	"bytes"
 	"context"
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/agent/utils"
 )
+
+//go:embed plugin.ts
+var pluginTS []byte
+
+func processedPlugin() []byte {
+	return bytes.ReplaceAll(pluginTS, []byte(utils.GryphCommandPlaceholder), []byte(utils.GryphCommand()))
+}
 
 var HookTypes = []string{
 	"tool_call",
@@ -17,64 +27,7 @@ var HookTypes = []string{
 	"session_shutdown",
 }
 
-const gryphExtensionContent = `import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { spawn } from "node:child_process";
-
-export default function (pi: ExtensionAPI) {
-  pi.on("session_start", async (event, ctx) => {
-    sendToGryph("session_start", {
-      session_id: ctx.sessionManager.getSessionFile() ?? "ephemeral",
-      cwd: ctx.cwd,
-    });
-  });
-
-  pi.on("session_shutdown", async (event, ctx) => {
-    sendToGryph("session_shutdown", {
-      session_id: ctx.sessionManager.getSessionFile() ?? "ephemeral",
-      cwd: ctx.cwd,
-    });
-  });
-
-  pi.on("tool_call", async (event, ctx) => {
-    sendToGryph("tool_call", {
-      session_id: ctx.sessionManager.getSessionFile() ?? "ephemeral",
-      cwd: ctx.cwd,
-      tool_name: event.toolName,
-      tool_call_id: event.toolCallId,
-      input: event.input,
-    });
-  });
-
-  pi.on("tool_result", async (event, ctx) => {
-    sendToGryph("tool_result", {
-      session_id: ctx.sessionManager.getSessionFile() ?? "ephemeral",
-      cwd: ctx.cwd,
-      tool_name: event.toolName,
-      tool_call_id: event.toolCallId,
-      input: event.input,
-      content: event.content,
-      is_error: event.isError,
-    });
-  });
-}
-
-function sendToGryph(hookType: string, data: Record<string, unknown>) {
-  const payload = JSON.stringify({
-    hook_event_name: hookType,
-    ...data,
-    timestamp: new Date().toISOString(),
-  });
-
-  const child = spawn("gryph", ["_hook", "pi-agent", hookType], {
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-
-  child.stdin.write(payload);
-  child.stdin.end();
-
-  // Fire-and-forget: silently ignore errors
-}
-`
+const hookFileName = "gryph-hooks.ts"
 
 func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.InstallResult, error) {
 	result := &agent.InstallResult{
@@ -98,7 +51,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		return result, result.Error
 	}
 
-	extensionPath := filepath.Join(extensionsDir, "gryph-hooks.ts")
+	extensionPath := filepath.Join(extensionsDir, hookFileName)
 
 	if _, err := os.Stat(extensionPath); err == nil && !opts.Force && !opts.DryRun {
 		result.Warnings = append(result.Warnings, "gryph hooks already installed (use --force to overwrite)")
@@ -114,7 +67,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 				if err := os.MkdirAll(backupDir, 0700); err != nil {
 					result.Warnings = append(result.Warnings, fmt.Sprintf("failed to create backup directory: %v", err))
 				} else {
-					backupPath = filepath.Join(backupDir, fmt.Sprintf("gryph-hooks.ts.backup.%s", time.Now().Format("20060102150405")))
+					backupPath = filepath.Join(backupDir, fmt.Sprintf("%s.backup.%s", hookFileName, time.Now().Format("20060102150405")))
 				}
 			} else {
 				backupPath = fmt.Sprintf("%s.backup.%s", extensionPath, time.Now().Format("20060102150405"))
@@ -123,7 +76,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 			if backupPath != "" {
 				if data, err := os.ReadFile(extensionPath); err == nil {
 					if err := os.WriteFile(backupPath, data, 0600); err == nil {
-						result.BackupPaths["gryph-hooks.ts"] = backupPath
+						result.BackupPaths[hookFileName] = backupPath
 					}
 				}
 			}
@@ -136,7 +89,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		return result, nil
 	}
 
-	if err := os.WriteFile(extensionPath, []byte(gryphExtensionContent), 0644); err != nil {
+	if err := os.WriteFile(extensionPath, processedPlugin(), 0644); err != nil {
 		result.Error = fmt.Errorf("failed to write extension: %w", err)
 		return result, result.Error
 	}
@@ -160,10 +113,10 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		return result, nil
 	}
 
-	extensionPath := filepath.Join(detection.ConfigPath, "extensions", "gryph-hooks.ts")
+	extensionPath := filepath.Join(detection.ConfigPath, "extensions", hookFileName)
 
 	if opts.RestoreBackup && opts.BackupDir != "" {
-		pattern := filepath.Join(opts.BackupDir, "pi-agent", "gryph-hooks.ts.backup.*")
+		pattern := filepath.Join(opts.BackupDir, "pi-agent", fmt.Sprintf("%s.backup.*", hookFileName))
 		matches, _ := filepath.Glob(pattern)
 		if len(matches) > 0 {
 			backupPath := matches[len(matches)-1]
@@ -217,7 +170,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 		return status, nil
 	}
 
-	extensionPath := filepath.Join(detection.ConfigPath, "extensions", "gryph-hooks.ts")
+	extensionPath := filepath.Join(detection.ConfigPath, "extensions", hookFileName)
 
 	data, err := os.ReadFile(extensionPath)
 	if os.IsNotExist(err) {
@@ -228,7 +181,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 		return status, nil
 	}
 
-	expectedContent := gryphExtensionContent
+	expectedContent := string(processedPlugin())
 	if string(data) == expectedContent {
 		status.Installed = true
 		status.Valid = true

@@ -7,30 +7,34 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGryphExtensionContent_HasAllHooks(t *testing.T) {
+func TestPluginTS_HasAllHooks(t *testing.T) {
+	pluginContent := string(pluginTS)
 	for _, hookType := range HookTypes {
-		assert.Contains(t, gryphExtensionContent, hookType,
+		assert.Contains(t, pluginContent, hookType,
 			"extension should handle %s hook", hookType)
 	}
 }
 
-func TestGryphExtensionContent_SpawnsGryph(t *testing.T) {
-	assert.Contains(t, gryphExtensionContent, "gryph")
-	assert.Contains(t, gryphExtensionContent, "_hook")
-	assert.Contains(t, gryphExtensionContent, "pi-agent")
+func TestPluginTS_SpawnsGryph(t *testing.T) {
+	pluginContent := string(pluginTS)
+	assert.Contains(t, pluginContent, "__GRYPH_COMMAND__")
+	assert.Contains(t, pluginContent, "_hook")
+	assert.Contains(t, pluginContent, "pi-agent")
 }
 
-func TestGryphExtensionContent_UsesPiEvents(t *testing.T) {
-	assert.Contains(t, gryphExtensionContent, "pi.on")
-	assert.Contains(t, gryphExtensionContent, "session_start")
-	assert.Contains(t, gryphExtensionContent, "session_shutdown")
-	assert.Contains(t, gryphExtensionContent, "tool_call")
-	assert.Contains(t, gryphExtensionContent, "tool_result")
+func TestPluginTS_UsesPiEvents(t *testing.T) {
+	pluginContent := string(pluginTS)
+	assert.Contains(t, pluginContent, "pi.on")
+	assert.Contains(t, pluginContent, "session_start")
+	assert.Contains(t, pluginContent, "session_shutdown")
+	assert.Contains(t, pluginContent, "tool_call")
+	assert.Contains(t, pluginContent, "tool_result")
 }
 
-func TestGryphExtensionContent_GryphCommand(t *testing.T) {
-	assert.True(t, strings.Contains(gryphExtensionContent, `spawn("gryph"`),
-		"extension should spawn gryph command")
-	assert.True(t, strings.Contains(gryphExtensionContent, `["_hook", "pi-agent"`),
-		"extension should pass correct args to gryph")
+func TestProcessedPlugin_ReplacesPlaceholder(t *testing.T) {
+	processed := string(processedPlugin())
+	assert.True(t, strings.Contains(processed, `"gryph"`),
+		"processed plugin should have gryph command replaced")
+	assert.True(t, strings.Contains(processed, `["_hook", "pi-agent"`),
+		"processed plugin should pass correct args to gryph")
 }
