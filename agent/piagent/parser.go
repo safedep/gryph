@@ -130,17 +130,22 @@ func (a *Adapter) parseToolResult(sessionID uuid.UUID, agentSessionID string, ba
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = rawData
 
+	// Set result status first
+	event.ResultStatus = events.ResultSuccess
+	if input.IsError {
+		event.ResultStatus = events.ResultError
+	}
+
+	// Build minimal payload based on action type
+	// For file_write: tool_call already captured the write details, just mark success
+	// For file_read: capture the content that was read
+	// For command exec: capture the output
 	toolResponse := make(map[string]interface{})
 	toolResponse["content"] = input.Content
 	toolResponse["is_error"] = input.IsError
 
-	if err := a.buildPayload(event, actionType, input.ToolName, input.Input, toolResponse); err != nil {
-		return nil, fmt.Errorf("failed to build payload: %w", err)
-	}
-
-	event.ResultStatus = events.ResultSuccess
-	if input.IsError {
-		event.ResultStatus = events.ResultError
+	if err := a.buildPayloadForResult(event, actionType, input.ToolName, input.Input, toolResponse); err != nil {
+		return nil, fmt.Errorf("failed to build result payload: %w", err)
 	}
 
 	a.markSensitivePaths(event, actionType, input.Input)
@@ -222,8 +227,16 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		}
 
 		fullContent, _ := toolInput["content"].(string)
-		fullOldStr, _ := toolInput["old_string"].(string)
-		fullNewStr, _ := toolInput["new_string"].(string)
+		// Handle both oldText (Pi Agent) and old_string (legacy) field names
+		fullOldStr, _ := toolInput["oldText"].(string)
+		if fullOldStr == "" {
+			fullOldStr, _ = toolInput["old_string"].(string)
+		}
+		// Handle both newText (Pi Agent) and new_string (legacy) field names
+		fullNewStr, _ := toolInput["newText"].(string)
+		if fullNewStr == "" {
+			fullNewStr, _ = toolInput["new_string"].(string)
+		}
 
 		if a.contentHash {
 			if fullContent != "" {
@@ -236,7 +249,18 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		if fullOldStr != "" || fullNewStr != "" {
 			payload.LinesAdded, payload.LinesRemoved = utils.CountDiffLines(fullOldStr, fullNewStr)
 		} else if fullContent != "" {
-			payload.LinesAdded = utils.CountNewFileLines(fullContent)
+			// Check if file exists to calculate diff (for overwrites)
+			oldContent := ""
+			if filePath != "" {
+				if data, err := os.ReadFile(filePath); err == nil {
+					oldContent = string(data)
+				}
+			}
+			if oldContent != "" {
+				payload.LinesAdded, payload.LinesRemoved = utils.CountDiffLines(oldContent, fullContent)
+			} else {
+				payload.LinesAdded = utils.CountNewFileLines(fullContent)
+			}
 		}
 
 		if fullContent != "" {
@@ -257,7 +281,14 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 			if fullOldStr != "" || fullNewStr != "" {
 				event.DiffContent = utils.GenerateDiff(filePath, fullOldStr, fullNewStr)
 			} else if fullContent != "" {
-				event.DiffContent = utils.GenerateDiff(filePath, "", fullContent)
+				// Check if file exists to show proper diff (for overwrites)
+				oldContent := ""
+				if filePath != "" {
+					if data, err := os.ReadFile(filePath); err == nil {
+						oldContent = string(data)
+					}
+				}
+				event.DiffContent = utils.GenerateDiff(filePath, oldContent, fullContent)
 			}
 		}
 
@@ -283,6 +314,81 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		}
 
 	default:
+		payload := events.ToolUsePayload{
+			ToolName: toolName,
+		}
+		if input, err := json.Marshal(toolInput); err == nil {
+			payload.Input = input
+		}
+		if toolResponse != nil {
+			if resp, err := json.Marshal(toolResponse); err == nil {
+				payload.Output = resp
+			}
+		}
+		if err := event.SetPayload(payload); err != nil {
+			return fmt.Errorf("failed to set payload: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// buildPayloadForResult builds minimal payload for tool_result events.
+// Unlike tool_call, tool_result should not duplicate the write details
+// (lines_added/lines_removed) - those were already captured in tool_call.
+// It only captures result-specific data like content read or command output.
+func (a *Adapter) buildPayloadForResult(event *events.Event, actionType events.ActionType, toolName string, toolInput, toolResponse map[string]interface{}) error {
+	switch actionType {
+	case events.ActionFileRead:
+		// For reads, tool_call already captured path and pattern
+		// tool_result just marks success - no additional payload needed
+		payload := events.FileReadPayload{}
+		if path, ok := toolInput["path"].(string); ok {
+			payload.Path = path
+		}
+		if pattern, ok := toolInput["pattern"].(string); ok {
+			payload.Pattern = pattern
+		}
+		if err := event.SetPayload(payload); err != nil {
+			return fmt.Errorf("failed to set payload: %w", err)
+		}
+
+	case events.ActionFileWrite:
+		// For writes, tool_call already captured the write details
+		// Only set minimal path info to link with the tool_call event
+		payload := events.FileWritePayload{}
+		if path, ok := toolInput["path"].(string); ok {
+			payload.Path = path
+		}
+		// Don't set lines_added/lines_removed - those are in tool_call
+		if err := event.SetPayload(payload); err != nil {
+			return fmt.Errorf("failed to set payload: %w", err)
+		}
+
+	case events.ActionCommandExec:
+		// Capture output from result
+		payload := events.CommandExecPayload{}
+		if cmd, ok := toolInput["command"].(string); ok {
+			payload.Command = cmd
+		}
+		if desc, ok := toolInput["description"].(string); ok {
+			payload.Description = desc
+		}
+		if toolResponse != nil {
+			if content, ok := toolResponse["content"].([]interface{}); ok && len(content) > 0 {
+				if textContent, ok := content[0].(map[string]interface{}); ok {
+					if text, ok := textContent["text"].(string); ok {
+						payload.Output = truncateString(text, 500)
+					}
+				}
+			}
+		}
+		if err := event.SetPayload(payload); err != nil {
+			return fmt.Errorf("failed to set payload: %w", err)
+		}
+
+	default:
+		// For unknown tools, use generic tool use payload
 		payload := events.ToolUsePayload{
 			ToolName: toolName,
 		}
