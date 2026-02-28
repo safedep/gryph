@@ -75,6 +75,29 @@ func TestParseHookEvent_ToolCall_Write(t *testing.T) {
 	assert.Contains(t, payload.ContentPreview, "package main")
 }
 
+func TestParseHookEvent_ToolCall_Edit_WithOldTextNewText(t *testing.T) {
+	// Test that edit tool with oldText/newText fields (Pi Agent format) is parsed correctly
+	ctx := context.Background()
+	data := loadFixture(t, "tool_call_edit_oldtext.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "tool_call", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionFileWrite, event.ActionType)
+	assert.Equal(t, "edit", event.ToolName)
+	assert.Equal(t, "/home/user/project", event.WorkingDirectory)
+
+	payload, err := event.GetFileWritePayload()
+	require.NoError(t, err)
+	assert.Equal(t, "/home/user/project/src/main.go", payload.Path)
+	assert.Equal(t, "func main() {\n    fmt.Println(\"hello\")\n}", payload.OldString)
+	assert.Equal(t, "func main() {\n    fmt.Println(\"hello world\")\n}", payload.NewString)
+	// Lines: old has 2 lines, new has 2 lines but different content
+	assert.Equal(t, 1, payload.LinesRemoved)
+	assert.Equal(t, 1, payload.LinesAdded)
+}
+
 func TestParseHookEvent_ToolCall_Bash(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "tool_call_bash.json")
