@@ -137,8 +137,7 @@ func (a *Adapter) parseToolResult(sessionID uuid.UUID, agentSessionID string, ba
 	}
 
 	// Build minimal payload based on action type
-	// For file_write: tool_call already captured the write details, just mark success
-	// For file_read: capture the content that was read
+	// For file_write and file_read: tool_call already captured the details, just mark success
 	// For command exec: capture the output
 	toolResponse := make(map[string]interface{})
 	toolResponse["content"] = input.Content
@@ -241,18 +240,15 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 
 		if fullOldStr != "" || fullNewStr != "" {
 			payload.LinesAdded, payload.LinesRemoved = utils.CountDiffLines(fullOldStr, fullNewStr)
-		} else if fullContent != "" {
-			// Check if file exists to calculate diff (for overwrites)
+		} else {
 			oldContent := ""
 			if filePath != "" {
 				if data, err := os.ReadFile(filePath); err == nil {
 					oldContent = string(data)
 				}
 			}
-			if oldContent != "" {
+			if oldContent != "" || fullContent != "" {
 				payload.LinesAdded, payload.LinesRemoved = utils.CountDiffLines(oldContent, fullContent)
-			} else {
-				payload.LinesAdded = utils.CountNewFileLines(fullContent)
 			}
 		}
 

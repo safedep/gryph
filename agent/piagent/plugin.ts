@@ -28,7 +28,7 @@ export default function (pi: ExtensionAPI) {
     if (result.exitCode === 2) {
       return {
         block: true,
-        reason: result.stderr || "Blocked by security policy",
+        reason: (result.stderr && result.stderr.trim()) || "Blocked by security policy",
       };
     }
 
@@ -72,7 +72,7 @@ function sendToGryph(hookType: string, data: Record<string, unknown>) {
   child.stdin.write(payload);
   child.stdin.end();
 
-  // Fire-and-forget: silently ignore errors
+  child.on("error", () => {});
 }
 
 // sendToGryphWithExitCode waits for the gryph hook to complete and returns the exit code.

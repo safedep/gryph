@@ -93,7 +93,7 @@ func TestParseHookEvent_ToolCall_Edit_WithOldTextNewText(t *testing.T) {
 	assert.Equal(t, "/home/user/project/src/main.go", payload.Path)
 	assert.Equal(t, "func main() {\n    fmt.Println(\"hello\")\n}", payload.OldString)
 	assert.Equal(t, "func main() {\n    fmt.Println(\"hello world\")\n}", payload.NewString)
-	// Lines: old has 2 lines, new has 2 lines but different content
+	// Lines: old has 3 lines, new has 3 lines but only the middle line differs
 	assert.Equal(t, 1, payload.LinesRemoved)
 	assert.Equal(t, 1, payload.LinesAdded)
 }
