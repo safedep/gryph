@@ -32,8 +32,9 @@ export default function (pi: ExtensionAPI) {
       };
     }
 
-    // Exit code 1 means error - allow but could log (for now, just allow)
-    // Exit code 0 means allow
+    if (result.exitCode === 1) {
+      console.error(`[gryph] hook error: ${(result.stderr && result.stderr.trim()) || "unknown error"}`);
+    }
   });
 
   pi.on("tool_result", async (event, ctx) => {
@@ -77,7 +78,9 @@ function sendToGryph(hookType: string, data: Record<string, unknown>) {
 
 // sendToGryphWithExitCode waits for the gryph hook to complete and returns the exit code.
 // This is required for tool_call hooks where blocking decisions (exit code 2) must be enforced.
-// Timeout is set to prevent agent from freezing if _hook hangs.
+// Fail-open design: if the hook binary is missing, unexecutable, or times out, the tool
+// is allowed to proceed. This ensures a broken gryph installation doesn't freeze the agent.
+// Exit codes: 0 = allow, 1 = error (allow + log), 2 = block.
 function sendToGryphWithExitCode(hookType: string, data: Record<string, unknown>): {
   exitCode: number;
   stderr: string;
@@ -99,10 +102,16 @@ function sendToGryphWithExitCode(hookType: string, data: Record<string, unknown>
     timeout: timeoutMs,
   });
 
-  // Handle timeout (spawnSync returns error on timeout)
-  if (result.error && result.error.code === "ETIMEDOUT") {
-    return { exitCode: 0, stderr: "Hook execution timed out, allowing tool" };
+  // Fail-open: if spawnSync fails (ENOENT, EACCES, ETIMEDOUT), allow the tool
+  // but log the error so misconfiguration is visible to the user.
+  if (result.error) {
+    const msg = result.error.code === "ETIMEDOUT"
+      ? "hook timed out, defaulting to allow"
+      : `hook execution failed (${result.error.code || result.error.message}), defaulting to allow`;
+    console.error(`[gryph] ${msg}`);
+    return { exitCode: 0, stderr: "" };
   }
 
+  // result.status is guaranteed non-null when result.error is null
   return { exitCode: result.status ?? 0, stderr: result.stderr?.toString() ?? "" };
 }
