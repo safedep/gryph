@@ -73,6 +73,67 @@ func TestParseHookEvent_ToolCall_Write(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "/home/user/project/src/main.go", payload.Path)
 	assert.Contains(t, payload.ContentPreview, "package main")
+	// New file (path doesn't exist) — should use CountNewFileLines, no phantom removed
+	assert.Equal(t, 5, payload.LinesAdded)
+	assert.Equal(t, 0, payload.LinesRemoved)
+}
+
+func TestParseHookEvent_ToolCall_Write_Overwrite(t *testing.T) {
+	// Write to a file that already exists — should diff old vs new content
+	tmpFile := filepath.Join(t.TempDir(), "existing.txt")
+	require.NoError(t, os.WriteFile(tmpFile, []byte("old line one\nold line two\nold line three\n"), 0644))
+
+	input := map[string]interface{}{
+		"session_id":      "pi-session-overwrite",
+		"cwd":             "/tmp",
+		"hook_event_name": "tool_call",
+		"tool_name":       "write",
+		"tool_call_id":    "call-overwrite",
+		"input": map[string]interface{}{
+			"path":    tmpFile,
+			"content": "new line one\nnew line two\nnew line three\nnew line four\nnew line five\n",
+		},
+	}
+	data, err := json.Marshal(input)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	event, err := testAdapter(t).ParseEvent(ctx, "tool_call", data)
+	require.NoError(t, err)
+
+	payload, err := event.GetFileWritePayload()
+	require.NoError(t, err)
+	assert.Equal(t, 5, payload.LinesAdded)
+	assert.Equal(t, 3, payload.LinesRemoved)
+}
+
+func TestParseHookEvent_ToolCall_Write_OverwriteToEmpty(t *testing.T) {
+	// Overwrite existing file with empty content
+	tmpFile := filepath.Join(t.TempDir(), "to-empty.txt")
+	require.NoError(t, os.WriteFile(tmpFile, []byte("line one\nline two\n"), 0644))
+
+	input := map[string]interface{}{
+		"session_id":      "pi-session-empty",
+		"cwd":             "/tmp",
+		"hook_event_name": "tool_call",
+		"tool_name":       "write",
+		"tool_call_id":    "call-empty",
+		"input": map[string]interface{}{
+			"path":    tmpFile,
+			"content": "",
+		},
+	}
+	data, err := json.Marshal(input)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	event, err := testAdapter(t).ParseEvent(ctx, "tool_call", data)
+	require.NoError(t, err)
+
+	payload, err := event.GetFileWritePayload()
+	require.NoError(t, err)
+	assert.Equal(t, 0, payload.LinesAdded)
+	assert.Equal(t, 2, payload.LinesRemoved)
 }
 
 func TestParseHookEvent_ToolCall_Edit_WithOldTextNewText(t *testing.T) {

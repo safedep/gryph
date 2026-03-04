@@ -242,15 +242,15 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		if fullOldStr != "" || fullNewStr != "" {
 			payload.LinesAdded, payload.LinesRemoved = utils.CountDiffLines(fullOldStr, fullNewStr)
 		} else if filePath != "" {
-			oldContent := ""
 			if data, err := os.ReadFile(filePath); err == nil {
-				oldContent = string(data)
-			}
-			if oldContent != "" || fullContent != "" {
-				payload.LinesAdded, payload.LinesRemoved = utils.CountDiffLines(oldContent, fullContent)
+				// File exists — diff old content against new for overwrite tracking
+				payload.LinesAdded, payload.LinesRemoved = utils.CountDiffLines(string(data), fullContent)
+			} else if fullContent != "" {
+				// New file — no old content to diff against
+				payload.LinesAdded = utils.CountNewFileLines(fullContent)
 			}
 		} else if fullContent != "" {
-			payload.LinesAdded, _ = utils.CountDiffLines("", fullContent)
+			payload.LinesAdded = utils.CountNewFileLines(fullContent)
 		}
 
 		if fullContent != "" {
@@ -270,15 +270,16 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		if a.loggingLevel.IsAtLeast(config.LoggingFull) {
 			if fullOldStr != "" || fullNewStr != "" {
 				event.DiffContent = utils.GenerateDiff(filePath, fullOldStr, fullNewStr)
-			} else if fullContent != "" {
-				// Check if file exists to show proper diff (for overwrites)
+			} else if filePath != "" {
 				oldContent := ""
-				if filePath != "" {
-					if data, err := os.ReadFile(filePath); err == nil {
-						oldContent = string(data)
-					}
+				if data, err := os.ReadFile(filePath); err == nil {
+					oldContent = string(data)
 				}
-				event.DiffContent = utils.GenerateDiff(filePath, oldContent, fullContent)
+				if oldContent != "" || fullContent != "" {
+					event.DiffContent = utils.GenerateDiff(filePath, oldContent, fullContent)
+				}
+			} else if fullContent != "" {
+				event.DiffContent = utils.GenerateDiff(filePath, "", fullContent)
 			}
 		}
 
