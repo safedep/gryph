@@ -29,6 +29,7 @@ func NewQueryCmd() *cobra.Command {
 		limit       int
 		offset      int
 		count       bool
+		sensitive   bool
 	)
 
 	cmd := &cobra.Command{
@@ -136,6 +137,10 @@ through the audit history.`,
 				filter = filter.WithCommandPattern(cmdPattern)
 			}
 
+			if sensitive {
+				filter = filter.WithSensitive(true)
+			}
+
 			// Handle count-only mode
 			if count {
 				n, err := app.Store.CountEvents(ctx, filter)
@@ -181,6 +186,7 @@ through the audit history.`,
 	cmd.Flags().IntVar(&limit, "limit", 100, "maximum results")
 	cmd.Flags().IntVar(&offset, "offset", 0, "skip first n results")
 	cmd.Flags().BoolVar(&count, "count", false, "show count only")
+	cmd.Flags().BoolVar(&sensitive, "sensitive", false, "filter to events involving sensitive file access")
 
 	return cmd
 }

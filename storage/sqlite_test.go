@@ -948,6 +948,70 @@ func TestSQLiteStore_QueryEventsWithStatusFilter(t *testing.T) {
 	}
 }
 
+func TestSQLiteStore_QueryEventsWithSensitiveFilter(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	sessionID := uuid.New()
+	now := time.Now().UTC()
+
+	createTestSession(t, store, sessionID, "claude-code")
+
+	for i, sensitive := range []bool{false, true, false, true, true} {
+		payload, _ := json.Marshal(events.FileReadPayload{Path: "/some/file"})
+		event := &events.Event{
+			ID:           uuid.New(),
+			SessionID:    sessionID,
+			Sequence:     i + 1,
+			Timestamp:    now.Add(time.Duration(i) * time.Minute),
+			AgentName:    "claude-code",
+			ActionType:   events.ActionFileRead,
+			ResultStatus: events.ResultSuccess,
+			Payload:      payload,
+			IsSensitive:  sensitive,
+		}
+		err := store.SaveEvent(ctx, event)
+		require.NoError(t, err)
+	}
+
+	boolPtr := func(b bool) *bool { return &b }
+
+	tests := []struct {
+		name      string
+		sensitive *bool
+		want      int
+	}{
+		{
+			name:      "no filter returns all",
+			sensitive: nil,
+			want:      5,
+		},
+		{
+			name:      "filter sensitive only",
+			sensitive: boolPtr(true),
+			want:      3,
+		},
+		{
+			name:      "filter non-sensitive only",
+			sensitive: boolPtr(false),
+			want:      2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter := events.NewEventFilter()
+			if tt.sensitive != nil {
+				filter = filter.WithSensitive(*tt.sensitive)
+			}
+			results, err := store.QueryEvents(ctx, filter)
+			require.NoError(t, err)
+			assert.Len(t, results, tt.want)
+		})
+	}
+}
+
 func TestQueryEventsAfterCompoundCursor(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()

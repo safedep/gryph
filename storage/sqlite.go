@@ -854,6 +854,9 @@ func buildEventPredicates(filter *events.EventFilter) []predicate.AuditEvent {
 			}))
 		}))
 	}
+	if filter.Sensitive != nil {
+		predicates = append(predicates, auditevent.IsSensitiveEQ(*filter.Sensitive))
+	}
 	if filter.CommandPattern != "" {
 		pattern := filter.CommandPattern
 		predicates = append(predicates, predicate.AuditEvent(func(s *entsql.Selector) {

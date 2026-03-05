@@ -24,6 +24,8 @@ type EventFilter struct {
 	FilePattern string
 	// CommandPattern is a glob pattern to filter by command.
 	CommandPattern string
+	// Sensitive filters to events involving sensitive file access when non-nil.
+	Sensitive *bool
 	// Limit is the maximum number of results.
 	Limit int
 	// Offset is the number of results to skip.
@@ -82,6 +84,12 @@ func (f *EventFilter) WithFilePattern(pattern string) *EventFilter {
 // WithCommandPattern sets the CommandPattern filter.
 func (f *EventFilter) WithCommandPattern(pattern string) *EventFilter {
 	f.CommandPattern = pattern
+	return f
+}
+
+// WithSensitive sets the Sensitive filter.
+func (f *EventFilter) WithSensitive(sensitive bool) *EventFilter {
+	f.Sensitive = &sensitive
 	return f
 }
 
