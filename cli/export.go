@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/events"
 	"github.com/spf13/cobra"
@@ -18,6 +19,7 @@ func NewExportCmd() *cobra.Command {
 		until     string
 		agent     string
 		output    string
+		session   string
 		sensitive bool
 	)
 
@@ -71,6 +73,24 @@ for validation. Sensitive events are excluded by default.`,
 
 			if agent != "" {
 				filter = filter.WithAgents(agent)
+			}
+
+			if session != "" {
+				sessionID, err := uuid.Parse(session)
+				if err != nil {
+					s, err := app.Store.GetSessionByPrefix(ctx, session)
+					if err != nil {
+						return fmt.Errorf("session not found: %s", session)
+					}
+
+					if s == nil {
+						return fmt.Errorf("session not found: %s", session)
+					}
+
+					sessionID = s.ID
+				}
+
+				filter = filter.WithSession(sessionID)
 			}
 
 			// Query events
@@ -130,6 +150,7 @@ for validation. Sensitive events are excluded by default.`,
 	cmd.Flags().StringVar(&until, "until", "", "export events until")
 	cmd.Flags().StringVar(&agent, "agent", "", "filter by agent")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "write to file (default: stdout)")
+	cmd.Flags().StringVar(&session, "session", "", "filter by session ID (prefix match)")
 	cmd.Flags().BoolVar(&sensitive, "sensitive", false, "include sensitive events")
 
 	return cmd
