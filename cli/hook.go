@@ -101,7 +101,13 @@ func NewHookCmd() *cobra.Command {
 				}
 
 				if err := app.Store.SaveSession(ctx, sess); err != nil {
-					return fmt.Errorf("failed to save session: %w", err)
+					// Handle duplicate session (race condition or repeated SessionStart)
+					existing, getErr := app.Store.GetSession(ctx, event.SessionID)
+					if getErr != nil || existing == nil {
+						return fmt.Errorf("failed to save session: %w", err)
+					}
+
+					sess = existing
 				}
 			}
 
