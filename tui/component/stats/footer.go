@@ -9,7 +9,7 @@ func newFooterModel() footerModel {
 }
 
 func (f footerModel) view(width int) string {
-	hints := " q quit  ? help  t today  w week  m month  a all  r refresh"
+	hints := " q quit  ? help  Tab switch  1 overview  2 cost  t today  w week  m month  a all  r refresh"
 	if f.lastError != "" {
 		hints += "  err: " + f.lastError
 	}

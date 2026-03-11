@@ -28,6 +28,13 @@ func renderOverview(data *StatsData, width, height int) string {
 		))
 	}
 
+	if data.TotalCost > 0 {
+		b.WriteString(fmt.Sprintf("  %s  %s\n",
+			labelStyle.Width(10).Render("Cost"),
+			greenValueStyle.Render(tui.FormatCost(data.TotalCost)),
+		))
+	}
+
 	if !data.TimeSpanStart.IsZero() {
 		span := fmt.Sprintf("%s – %s",
 			tui.FormatTimeShort(data.TimeSpanStart),

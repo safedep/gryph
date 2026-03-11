@@ -19,6 +19,21 @@ type AgentStat struct {
 	FilesWritten int
 	Commands     int
 	Errors       int
+	Cost         float64
+}
+
+type CostBucket struct {
+	Label string
+	Cost  float64
+}
+
+type ModelStat struct {
+	Name         string
+	Sessions     int
+	InputTokens  int64
+	OutputTokens int64
+	TotalTokens  int64
+	Cost         float64
 }
 
 type FileStat struct {
@@ -70,6 +85,16 @@ type StatsData struct {
 	TotalErrors   int
 	TotalBlocked  int
 	TotalRejected int
+
+	TotalCost         float64
+	SessionsWithCost  int
+	AvgCostPerSession float64
+	CostBuckets       []CostBucket
+	ModelStats        []ModelStat
+	TotalInputTokens  int64
+	TotalOutputTokens int64
+	TotalCacheRead    int64
+	TotalCacheWrite   int64
 
 	AvgDuration       time.Duration
 	AvgActionsPerSess float64
@@ -127,6 +152,16 @@ func computeStats(ctx context.Context, store storage.Store, since, until *time.T
 		as.FilesWritten += s.FilesWritten
 		as.Commands += s.CommandsExecuted
 		as.Errors += s.Errors
+		as.Cost += s.EstimatedCostUSD
+
+		if s.EstimatedCostUSD > 0 {
+			data.TotalCost += s.EstimatedCostUSD
+			data.SessionsWithCost++
+		}
+		data.TotalInputTokens += s.InputTokens
+		data.TotalOutputTokens += s.OutputTokens
+		data.TotalCacheRead += s.CacheReadTokens
+		data.TotalCacheWrite += s.CacheWriteTokens
 
 		dur := s.Duration()
 		if dur > 0 {
@@ -154,6 +189,12 @@ func computeStats(ctx context.Context, store storage.Store, since, until *time.T
 	sort.Slice(data.Agents, func(i, j int) bool {
 		return data.Agents[i].Events > data.Agents[j].Events
 	})
+
+	if data.SessionsWithCost > 0 {
+		data.AvgCostPerSession = data.TotalCost / float64(data.SessionsWithCost)
+	}
+	data.CostBuckets = computeCostBuckets(sessions, since, until)
+	data.ModelStats = computeModelStats(sessions)
 
 	eventFilter := events.NewEventFilter().WithLimit(50000)
 	if since != nil {
@@ -390,4 +431,98 @@ func computePeakConcurrent(sessions []*session.Session) int {
 		}
 	}
 	return peak
+}
+
+func computeCostBuckets(sessions []*session.Session, since, until *time.Time) []CostBucket {
+	now := time.Now()
+	effectiveSince := now.Add(-24 * time.Hour)
+	effectiveUntil := now
+	if since != nil {
+		effectiveSince = *since
+	}
+	if until != nil {
+		effectiveUntil = *until
+	}
+
+	span := effectiveUntil.Sub(effectiveSince)
+
+	if span <= 24*time.Hour {
+		return computeHourlyCostBuckets(sessions)
+	}
+	return computeDailyCostBuckets(sessions, effectiveSince, effectiveUntil)
+}
+
+func computeHourlyCostBuckets(sessions []*session.Session) []CostBucket {
+	costs := [24]float64{}
+	for _, s := range sessions {
+		h := s.StartedAt.Local().Hour()
+		costs[h] += s.EstimatedCostUSD
+	}
+	buckets := make([]CostBucket, 24)
+	for h := 0; h < 24; h++ {
+		buckets[h] = CostBucket{
+			Label: fmt.Sprintf("%02d", h),
+			Cost:  costs[h],
+		}
+	}
+	return buckets
+}
+
+func computeDailyCostBuckets(sessions []*session.Session, since, until time.Time) []CostBucket {
+	sinceLocal := since.Local()
+	untilLocal := until.Local()
+	startDay := time.Date(sinceLocal.Year(), sinceLocal.Month(), sinceLocal.Day(), 0, 0, 0, 0, sinceLocal.Location())
+	endDay := time.Date(untilLocal.Year(), untilLocal.Month(), untilLocal.Day(), 0, 0, 0, 0, untilLocal.Location())
+
+	days := int(endDay.Sub(startDay).Hours()/24) + 1
+	if days < 1 {
+		days = 1
+	}
+
+	buckets := make([]CostBucket, days)
+	for i := 0; i < days; i++ {
+		day := startDay.AddDate(0, 0, i)
+		if days <= 14 {
+			buckets[i].Label = day.Format("Mon")
+		} else {
+			buckets[i].Label = day.Format("Jan 2")
+		}
+	}
+
+	for _, s := range sessions {
+		local := s.StartedAt.Local()
+		idx := int(time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location()).Sub(startDay).Hours() / 24)
+		if idx >= 0 && idx < days {
+			buckets[idx].Cost += s.EstimatedCostUSD
+		}
+	}
+
+	return buckets
+}
+
+func computeModelStats(sessions []*session.Session) []ModelStat {
+	modelMap := map[string]*ModelStat{}
+
+	for _, s := range sessions {
+		for _, mu := range s.ModelUsage {
+			ms, ok := modelMap[mu.Model]
+			if !ok {
+				ms = &ModelStat{Name: mu.Model}
+				modelMap[mu.Model] = ms
+			}
+			ms.Sessions++
+			ms.InputTokens += mu.InputTokens
+			ms.OutputTokens += mu.OutputTokens
+			ms.TotalTokens += mu.TotalTokens()
+		}
+	}
+
+	var stats []ModelStat
+	for _, ms := range modelMap {
+		stats = append(stats, *ms)
+	}
+	sort.Slice(stats, func(i, j int) bool {
+		return stats[i].TotalTokens > stats[j].TotalTokens
+	})
+	return stats
 }

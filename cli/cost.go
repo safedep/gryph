@@ -10,6 +10,7 @@ import (
 	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
+	"github.com/safedep/gryph/pricing"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -116,7 +117,12 @@ Use --sync to collect cost data from agent transcripts before displaying.`,
 				return app.Presenter.RenderMessage("No sessions found.")
 			}
 
-			summary := buildCostSummary(sessions, by, model)
+			provider, err := pricing.NewBundledProvider()
+			if err != nil {
+				return fmt.Errorf("failed to load pricing data: %w", err)
+			}
+
+			summary := buildCostSummary(provider, sessions, by, model)
 			return app.Presenter.RenderCostSummary(summary)
 		},
 	}
@@ -188,7 +194,7 @@ func syncSessionCosts(ctx context.Context, app *App, sessions []*session.Session
 	}
 }
 
-func buildCostSummary(sessions []*session.Session, groupBy, modelFilter string) *tui.CostSummaryView {
+func buildCostSummary(provider cost.PricingProvider, sessions []*session.Session, groupBy, modelFilter string) *tui.CostSummaryView {
 	summary := &tui.CostSummaryView{
 		TotalSessions: len(sessions),
 		GroupBy:       groupBy,
@@ -206,28 +212,24 @@ func buildCostSummary(sessions []*session.Session, groupBy, modelFilter string) 
 		for _, m := range models {
 			tokens := m.TotalTokens()
 			sessionTokens += tokens
+			modelCost := computeModelCost(provider, m)
+			sessionCost += modelCost
 			modelViews = append(modelViews, tui.ModelUsageView{
 				Model:            m.Model,
 				InputTokens:      m.InputTokens,
 				OutputTokens:     m.OutputTokens,
 				CacheReadTokens:  m.CacheReadTokens,
 				CacheWriteTokens: m.CacheWriteTokens,
+				Cost:             modelCost,
 			})
+			summary.TotalInputTokens += m.InputTokens
+			summary.TotalOutputTokens += m.OutputTokens
+			summary.TotalCacheRead += m.CacheReadTokens
+			summary.TotalCacheWrite += m.CacheWriteTokens
 		}
 
 		if modelFilter == "" {
 			sessionCost = s.EstimatedCostUSD
-			summary.TotalInputTokens += s.InputTokens
-			summary.TotalOutputTokens += s.OutputTokens
-			summary.TotalCacheRead += s.CacheReadTokens
-			summary.TotalCacheWrite += s.CacheWriteTokens
-		} else {
-			for _, m := range models {
-				summary.TotalInputTokens += m.InputTokens
-				summary.TotalOutputTokens += m.OutputTokens
-				summary.TotalCacheRead += m.CacheReadTokens
-				summary.TotalCacheWrite += m.CacheWriteTokens
-			}
 		}
 
 		summary.TotalTokens += sessionTokens
@@ -248,11 +250,11 @@ func buildCostSummary(sessions []*session.Session, groupBy, modelFilter string) 
 
 	switch groupBy {
 	case "model":
-		summary.Groups = buildModelGroups(sessions, modelFilter)
+		summary.Groups = buildModelGroups(provider, sessions, modelFilter)
 	case "agent":
-		summary.Groups = buildAgentGroups(sessions, modelFilter)
+		summary.Groups = buildAgentGroups(provider, sessions, modelFilter)
 	case "day":
-		summary.Groups = buildDayGroups(sessions, modelFilter)
+		summary.Groups = buildDayGroups(provider, sessions, modelFilter)
 	}
 
 	return summary
@@ -268,7 +270,7 @@ func filterModelUsage(models []cost.ModelUsage, filter string) []cost.ModelUsage
 	return result
 }
 
-func buildModelGroups(sessions []*session.Session, modelFilter string) []tui.CostGroupView {
+func buildModelGroups(provider cost.PricingProvider, sessions []*session.Session, modelFilter string) []tui.CostGroupView {
 	groups := make(map[string]*tui.CostGroupView)
 	sessionSeen := make(map[string]map[string]bool)
 
@@ -293,13 +295,14 @@ func buildModelGroups(sessions []*session.Session, modelFilter string) []tui.Cos
 			g.CacheRead += m.CacheReadTokens
 			g.CacheWrite += m.CacheWriteTokens
 			g.TotalTokens += m.TotalTokens()
+			g.TotalCost += computeModelCost(provider, m)
 		}
 	}
 
 	return sortedGroups(groups)
 }
 
-func buildAgentGroups(sessions []*session.Session, modelFilter string) []tui.CostGroupView {
+func buildAgentGroups(provider cost.PricingProvider, sessions []*session.Session, modelFilter string) []tui.CostGroupView {
 	groups := make(map[string]*tui.CostGroupView)
 
 	for _, s := range sessions {
@@ -315,28 +318,20 @@ func buildAgentGroups(sessions []*session.Session, modelFilter string) []tui.Cos
 		}
 		g.SessionCount++
 
-		if modelFilter == "" {
-			g.InputTokens += s.InputTokens
-			g.OutputTokens += s.OutputTokens
-			g.CacheRead += s.CacheReadTokens
-			g.CacheWrite += s.CacheWriteTokens
-			g.TotalTokens += s.InputTokens + s.OutputTokens + s.CacheReadTokens + s.CacheWriteTokens
-			g.TotalCost += s.EstimatedCostUSD
-		} else {
-			for _, m := range models {
-				g.InputTokens += m.InputTokens
-				g.OutputTokens += m.OutputTokens
-				g.CacheRead += m.CacheReadTokens
-				g.CacheWrite += m.CacheWriteTokens
-				g.TotalTokens += m.TotalTokens()
-			}
+		for _, m := range models {
+			g.InputTokens += m.InputTokens
+			g.OutputTokens += m.OutputTokens
+			g.CacheRead += m.CacheReadTokens
+			g.CacheWrite += m.CacheWriteTokens
+			g.TotalTokens += m.TotalTokens()
+			g.TotalCost += computeModelCost(provider, m)
 		}
 	}
 
 	return sortedGroups(groups)
 }
 
-func buildDayGroups(sessions []*session.Session, modelFilter string) []tui.CostGroupView {
+func buildDayGroups(provider cost.PricingProvider, sessions []*session.Session, modelFilter string) []tui.CostGroupView {
 	groups := make(map[string]*tui.CostGroupView)
 
 	for _, s := range sessions {
@@ -353,25 +348,31 @@ func buildDayGroups(sessions []*session.Session, modelFilter string) []tui.CostG
 		}
 		g.SessionCount++
 
-		if modelFilter == "" {
-			g.InputTokens += s.InputTokens
-			g.OutputTokens += s.OutputTokens
-			g.CacheRead += s.CacheReadTokens
-			g.CacheWrite += s.CacheWriteTokens
-			g.TotalTokens += s.InputTokens + s.OutputTokens + s.CacheReadTokens + s.CacheWriteTokens
-			g.TotalCost += s.EstimatedCostUSD
-		} else {
-			for _, m := range models {
-				g.InputTokens += m.InputTokens
-				g.OutputTokens += m.OutputTokens
-				g.CacheRead += m.CacheReadTokens
-				g.CacheWrite += m.CacheWriteTokens
-				g.TotalTokens += m.TotalTokens()
-			}
+		for _, m := range models {
+			g.InputTokens += m.InputTokens
+			g.OutputTokens += m.OutputTokens
+			g.CacheRead += m.CacheReadTokens
+			g.CacheWrite += m.CacheWriteTokens
+			g.TotalTokens += m.TotalTokens()
+			g.TotalCost += computeModelCost(provider, m)
 		}
 	}
 
 	return sortedGroups(groups)
+}
+
+func computeModelCost(provider cost.PricingProvider, m cost.ModelUsage) float64 {
+	if provider == nil {
+		return 0
+	}
+	p, err := provider.GetPricing(m.Model)
+	if err != nil || p == nil {
+		return 0
+	}
+	return float64(m.InputTokens)*p.InputPer1M/1_000_000 +
+		float64(m.OutputTokens)*p.OutputPer1M/1_000_000 +
+		float64(m.CacheReadTokens)*p.CacheRead/1_000_000 +
+		float64(m.CacheWriteTokens)*p.CacheWrite/1_000_000
 }
 
 func sortedGroups(groups map[string]*tui.CostGroupView) []tui.CostGroupView {
