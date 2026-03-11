@@ -2,15 +2,20 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/pricing"
+	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -228,7 +233,7 @@ func buildCostSummary(provider cost.PricingProvider, sessions []*session.Session
 			summary.TotalCacheWrite += m.CacheWriteTokens
 		}
 
-		if modelFilter == "" {
+		if sessionCost == 0 && modelFilter == "" {
 			sessionCost = s.EstimatedCostUSD
 		}
 
@@ -299,7 +304,7 @@ func buildModelGroups(provider cost.PricingProvider, sessions []*session.Session
 		}
 	}
 
-	return sortedGroups(groups)
+	return sortedGroupsByCost(groups)
 }
 
 func buildAgentGroups(provider cost.PricingProvider, sessions []*session.Session, modelFilter string) []tui.CostGroupView {
@@ -328,7 +333,7 @@ func buildAgentGroups(provider cost.PricingProvider, sessions []*session.Session
 		}
 	}
 
-	return sortedGroups(groups)
+	return sortedGroupsByCost(groups)
 }
 
 func buildDayGroups(provider cost.PricingProvider, sessions []*session.Session, modelFilter string) []tui.CostGroupView {
@@ -358,7 +363,7 @@ func buildDayGroups(provider cost.PricingProvider, sessions []*session.Session, 
 		}
 	}
 
-	return sortedGroups(groups)
+	return sortedGroupsByLabel(groups)
 }
 
 func computeModelCost(provider cost.PricingProvider, m cost.ModelUsage) float64 {
@@ -375,10 +380,107 @@ func computeModelCost(provider cost.PricingProvider, m cost.ModelUsage) float64 
 		float64(m.CacheWriteTokens)*p.CacheWrite/1_000_000
 }
 
-func sortedGroups(groups map[string]*tui.CostGroupView) []tui.CostGroupView {
+func sortedGroupsByLabel(groups map[string]*tui.CostGroupView) []tui.CostGroupView {
 	result := make([]tui.CostGroupView, 0, len(groups))
 	for _, g := range groups {
 		result = append(result, *g)
 	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Label < result[j].Label
+	})
 	return result
+}
+
+func sortedGroupsByCost(groups map[string]*tui.CostGroupView) []tui.CostGroupView {
+	result := make([]tui.CostGroupView, 0, len(groups))
+	for _, g := range groups {
+		result = append(result, *g)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].TotalCost > result[j].TotalCost
+	})
+	return result
+}
+
+func recoverTranscriptPath(ctx context.Context, store storage.Store, sess *session.Session) {
+	if sess.TranscriptPath != "" {
+		return
+	}
+
+	evts, err := store.GetEventsBySession(ctx, sess.ID)
+	if err != nil {
+		log.Errorf("failed to get events for session %s: %v", sess.ID, err)
+		return
+	}
+	if len(evts) == 0 {
+		return
+	}
+
+	for _, evt := range evts {
+		if len(evt.RawEvent) == 0 {
+			continue
+		}
+		var raw struct {
+			TranscriptPath string `json:"transcript_path"`
+		}
+		if err := json.Unmarshal(evt.RawEvent, &raw); err != nil {
+			continue
+		}
+		if raw.TranscriptPath != "" {
+			sess.TranscriptPath = raw.TranscriptPath
+			if err := store.UpdateSession(ctx, sess); err != nil {
+				log.Errorf("failed to update session transcript path: %v", err)
+			}
+			return
+		}
+	}
+}
+
+func collectSessionCost(sess *session.Session) {
+	if sess.TranscriptPath == "" {
+		return
+	}
+
+	var collector cost.TokenCollector
+	switch sess.AgentName {
+	case agent.AgentClaudeCode:
+		collector = claudecode.NewTranscriptCollector()
+	default:
+		return
+	}
+
+	usage, err := collector.Collect(context.Background(), sess.TranscriptPath)
+	if err != nil {
+		log.Debugf("failed to collect cost data: %v", err)
+		return
+	}
+	if usage == nil {
+		return
+	}
+
+	provider, err := pricing.NewBundledProvider()
+	if err != nil {
+		log.Debugf("failed to create pricing provider: %v", err)
+		return
+	}
+
+	calc := cost.NewDefaultCalculator(provider, sess.ID, collector.Source())
+	sc, err := calc.Calculate(usage)
+	if err != nil {
+		log.Debugf("failed to calculate cost: %v", err)
+		return
+	}
+	if sc == nil {
+		return
+	}
+
+	sess.InputTokens = sc.Usage.InputTokens
+	sess.OutputTokens = sc.Usage.OutputTokens
+	sess.CacheReadTokens = sc.Usage.CacheReadTokens
+	sess.CacheWriteTokens = sc.Usage.CacheWriteTokens
+	sess.EstimatedCostUSD = sc.TotalCost
+	sess.ModelUsage = sc.Usage.Models
+	sess.CostSource = string(sc.Source)
+	now := sc.ComputedAt
+	sess.CostComputedAt = &now
 }
