@@ -47,12 +47,12 @@ func FormatTime(t time.Time) string {
 	return t.Local().Format("2006-01-02 15:04:05")
 }
 
-// FormatTimeShort formats a time with just hour:minute:second.
+// FormatTimeShort formats a time as "Jan 2 15:04:05".
 func FormatTimeShort(t time.Time) string {
 	if t.IsZero() {
 		return "-"
 	}
-	return t.Local().Format("15:04:05")
+	return t.Local().Format("Jan 2 15:04:05")
 }
 
 // FormatDate formats a date for display.

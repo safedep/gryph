@@ -81,6 +81,16 @@ func renderCostSummary(data *StatsData, width, height int) string {
 		))
 	}
 
+	if !data.TimeSpanStart.IsZero() {
+		span := fmt.Sprintf("%s – %s",
+			tui.FormatTimeShort(data.TimeSpanStart),
+			tui.FormatTimeShort(data.TimeSpanEnd))
+		b.WriteString(fmt.Sprintf("  %s  %s\n",
+			labelStyle.Width(12).Render("Span"),
+			labelStyle.Render(span),
+		))
+	}
+
 	return renderPanel("SUMMARY", b.String(), width, height)
 }
 
