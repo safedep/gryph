@@ -62,6 +62,63 @@ type SessionView struct {
 	Errors           int
 	LinesAdded       int
 	LinesRemoved     int
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	EstimatedCostUSD float64
+	ModelUsage       []ModelUsageView
+	CostSource       string
+	CostComputedAt   *time.Time
+}
+
+// ModelUsageView represents per-model token usage for display.
+type ModelUsageView struct {
+	Model            string
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	Cost             float64
+}
+
+// CostSummaryView represents the cost summary for display.
+type CostSummaryView struct {
+	Sessions          []*CostSessionView
+	TotalSessions     int
+	TotalTokens       int64
+	TotalInputTokens  int64
+	TotalOutputTokens int64
+	TotalCacheRead    int64
+	TotalCacheWrite   int64
+	TotalCost         float64
+	GroupBy           string
+	Groups            []CostGroupView
+}
+
+// CostSessionView represents a session in the cost summary.
+type CostSessionView struct {
+	ID          string
+	ShortID     string
+	AgentName   string
+	ProjectName string
+	StartedAt   time.Time
+	ModelCount  int
+	TotalTokens int64
+	TotalCost   float64
+	Models      []ModelUsageView
+}
+
+// CostGroupView represents an aggregated group in the cost summary.
+type CostGroupView struct {
+	Label        string
+	SessionCount int
+	TotalTokens  int64
+	InputTokens  int64
+	OutputTokens int64
+	CacheRead    int64
+	CacheWrite   int64
+	TotalCost    float64
 }
 
 // EventView represents an event for display.

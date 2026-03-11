@@ -91,6 +91,7 @@ func NewHookCmd() *cobra.Command {
 				sess = session.NewSessionWithID(event.SessionID, agentName)
 				sess.AgentSessionID = event.AgentSessionID
 				sess.WorkingDirectory = event.WorkingDirectory
+				sess.TranscriptPath = event.TranscriptPath
 
 				if event.WorkingDirectory != "" {
 					if info, err := projectdetection.DetectProject(event.WorkingDirectory); err == nil && info != nil && info.Name != "" {
@@ -109,6 +110,10 @@ func NewHookCmd() *cobra.Command {
 
 					sess = existing
 				}
+			}
+
+			if sess.TranscriptPath == "" && event.TranscriptPath != "" {
+				sess.TranscriptPath = event.TranscriptPath
 			}
 
 			// Set sequence number
@@ -141,6 +146,7 @@ func NewHookCmd() *cobra.Command {
 			// Handle session end events
 			if event.ActionType == events.ActionSessionEnd {
 				sess.End()
+				collectSessionCost(sess)
 				if err := app.Store.UpdateSession(ctx, sess); err != nil {
 					return fmt.Errorf("failed to end session: %w", err)
 				}

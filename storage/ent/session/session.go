@@ -39,6 +39,24 @@ const (
 	FieldCommandsExecuted = "commands_executed"
 	// FieldErrors holds the string denoting the errors field in the database.
 	FieldErrors = "errors"
+	// FieldTranscriptPath holds the string denoting the transcript_path field in the database.
+	FieldTranscriptPath = "transcript_path"
+	// FieldInputTokens holds the string denoting the input_tokens field in the database.
+	FieldInputTokens = "input_tokens"
+	// FieldOutputTokens holds the string denoting the output_tokens field in the database.
+	FieldOutputTokens = "output_tokens"
+	// FieldCacheReadTokens holds the string denoting the cache_read_tokens field in the database.
+	FieldCacheReadTokens = "cache_read_tokens"
+	// FieldCacheWriteTokens holds the string denoting the cache_write_tokens field in the database.
+	FieldCacheWriteTokens = "cache_write_tokens"
+	// FieldEstimatedCostUsd holds the string denoting the estimated_cost_usd field in the database.
+	FieldEstimatedCostUsd = "estimated_cost_usd"
+	// FieldModelUsage holds the string denoting the model_usage field in the database.
+	FieldModelUsage = "model_usage"
+	// FieldCostSource holds the string denoting the cost_source field in the database.
+	FieldCostSource = "cost_source"
+	// FieldCostComputedAt holds the string denoting the cost_computed_at field in the database.
+	FieldCostComputedAt = "cost_computed_at"
 	// EdgeEvents holds the string denoting the events edge name in mutations.
 	EdgeEvents = "events"
 	// Table holds the table name of the session in the database.
@@ -67,6 +85,15 @@ var Columns = []string{
 	FieldFilesWritten,
 	FieldCommandsExecuted,
 	FieldErrors,
+	FieldTranscriptPath,
+	FieldInputTokens,
+	FieldOutputTokens,
+	FieldCacheReadTokens,
+	FieldCacheWriteTokens,
+	FieldEstimatedCostUsd,
+	FieldModelUsage,
+	FieldCostSource,
+	FieldCostComputedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -94,6 +121,16 @@ var (
 	DefaultCommandsExecuted int
 	// DefaultErrors holds the default value on creation for the "errors" field.
 	DefaultErrors int
+	// DefaultInputTokens holds the default value on creation for the "input_tokens" field.
+	DefaultInputTokens int64
+	// DefaultOutputTokens holds the default value on creation for the "output_tokens" field.
+	DefaultOutputTokens int64
+	// DefaultCacheReadTokens holds the default value on creation for the "cache_read_tokens" field.
+	DefaultCacheReadTokens int64
+	// DefaultCacheWriteTokens holds the default value on creation for the "cache_write_tokens" field.
+	DefaultCacheWriteTokens int64
+	// DefaultEstimatedCostUsd holds the default value on creation for the "estimated_cost_usd" field.
+	DefaultEstimatedCostUsd float64
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -164,6 +201,46 @@ func ByCommandsExecuted(opts ...sql.OrderTermOption) OrderOption {
 // ByErrors orders the results by the errors field.
 func ByErrors(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldErrors, opts...).ToFunc()
+}
+
+// ByTranscriptPath orders the results by the transcript_path field.
+func ByTranscriptPath(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTranscriptPath, opts...).ToFunc()
+}
+
+// ByInputTokens orders the results by the input_tokens field.
+func ByInputTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInputTokens, opts...).ToFunc()
+}
+
+// ByOutputTokens orders the results by the output_tokens field.
+func ByOutputTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOutputTokens, opts...).ToFunc()
+}
+
+// ByCacheReadTokens orders the results by the cache_read_tokens field.
+func ByCacheReadTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCacheReadTokens, opts...).ToFunc()
+}
+
+// ByCacheWriteTokens orders the results by the cache_write_tokens field.
+func ByCacheWriteTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCacheWriteTokens, opts...).ToFunc()
+}
+
+// ByEstimatedCostUsd orders the results by the estimated_cost_usd field.
+func ByEstimatedCostUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEstimatedCostUsd, opts...).ToFunc()
+}
+
+// ByCostSource orders the results by the cost_source field.
+func ByCostSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCostSource, opts...).ToFunc()
+}
+
+// ByCostComputedAt orders the results by the cost_computed_at field.
+func ByCostComputedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCostComputedAt, opts...).ToFunc()
 }
 
 // ByEventsCount orders the results by events count.

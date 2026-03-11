@@ -48,6 +48,25 @@ func (Session) Fields() []ent.Field {
 			Default(0),
 		field.Int("errors").
 			Default(0),
+		field.String("transcript_path").
+			Optional(),
+		field.Int64("input_tokens").
+			Default(0),
+		field.Int64("output_tokens").
+			Default(0),
+		field.Int64("cache_read_tokens").
+			Default(0),
+		field.Int64("cache_write_tokens").
+			Default(0),
+		field.Float("estimated_cost_usd").
+			Default(0),
+		field.JSON("model_usage", []map[string]interface{}{}).
+			Optional(),
+		field.String("cost_source").
+			Optional(),
+		field.Time("cost_computed_at").
+			Optional().
+			Nillable(),
 	}
 }
 

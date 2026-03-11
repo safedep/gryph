@@ -146,5 +146,10 @@ func (p *JSONLPresenter) RenderEventDetails(events []*EventDetailView) error {
 	return nil
 }
 
+// RenderCostSummary renders the cost summary as JSONL.
+func (p *JSONLPresenter) RenderCostSummary(summary *CostSummaryView) error {
+	return p.encoder.Encode(summary)
+}
+
 // Ensure JSONLPresenter implements Presenter
 var _ Presenter = (*JSONLPresenter)(nil)

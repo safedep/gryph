@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage/ent"
@@ -290,6 +291,9 @@ func (s *SQLiteStore) SaveSession(ctx context.Context, sess *session.Session) er
 	if !sess.EndedAt.IsZero() {
 		create.SetEndedAt(sess.EndedAt)
 	}
+	if sess.TranscriptPath != "" {
+		create.SetTranscriptPath(sess.TranscriptPath)
+	}
 
 	_, err := create.Save(ctx)
 	if err != nil {
@@ -320,6 +324,34 @@ func (s *SQLiteStore) UpdateSession(ctx context.Context, sess *session.Session) 
 	}
 	if !sess.EndedAt.IsZero() {
 		update.SetEndedAt(sess.EndedAt)
+	}
+
+	if sess.TranscriptPath != "" {
+		update.SetTranscriptPath(sess.TranscriptPath)
+	}
+	if sess.CostComputedAt != nil {
+		update.SetInputTokens(sess.InputTokens).
+			SetOutputTokens(sess.OutputTokens).
+			SetCacheReadTokens(sess.CacheReadTokens).
+			SetCacheWriteTokens(sess.CacheWriteTokens).
+			SetEstimatedCostUsd(sess.EstimatedCostUSD).
+			SetCostSource(sess.CostSource).
+			SetCostComputedAt(*sess.CostComputedAt)
+
+		// Convert ModelUsage to map format for ent JSON field
+		if sess.ModelUsage != nil {
+			modelUsageMaps := make([]map[string]interface{}, len(sess.ModelUsage))
+			for i, mu := range sess.ModelUsage {
+				modelUsageMaps[i] = map[string]interface{}{
+					"model":              mu.Model,
+					"input_tokens":       mu.InputTokens,
+					"output_tokens":      mu.OutputTokens,
+					"cache_read_tokens":  mu.CacheReadTokens,
+					"cache_write_tokens": mu.CacheWriteTokens,
+				}
+			}
+			update.SetModelUsage(modelUsageMaps)
+		}
 	}
 
 	_, err := update.Save(ctx)
@@ -796,6 +828,37 @@ func entToSession(e *ent.Session) *session.Session {
 
 	if e.EndedAt != nil {
 		sess.EndedAt = *e.EndedAt
+	}
+
+	sess.TranscriptPath = e.TranscriptPath
+	sess.InputTokens = e.InputTokens
+	sess.OutputTokens = e.OutputTokens
+	sess.CacheReadTokens = e.CacheReadTokens
+	sess.CacheWriteTokens = e.CacheWriteTokens
+	sess.EstimatedCostUSD = e.EstimatedCostUsd
+	sess.CostSource = e.CostSource
+	sess.CostComputedAt = e.CostComputedAt
+
+	if e.ModelUsage != nil {
+		for _, m := range e.ModelUsage {
+			mu := cost.ModelUsage{}
+			if v, ok := m["model"].(string); ok {
+				mu.Model = v
+			}
+			if v, ok := m["input_tokens"].(float64); ok {
+				mu.InputTokens = int64(v)
+			}
+			if v, ok := m["output_tokens"].(float64); ok {
+				mu.OutputTokens = int64(v)
+			}
+			if v, ok := m["cache_read_tokens"].(float64); ok {
+				mu.CacheReadTokens = int64(v)
+			}
+			if v, ok := m["cache_write_tokens"].(float64); ok {
+				mu.CacheWriteTokens = int64(v)
+			}
+			sess.ModelUsage = append(sess.ModelUsage, mu)
+		}
 	}
 
 	return sess

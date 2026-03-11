@@ -97,7 +97,7 @@ Shows all recorded agent sessions with summary statistics.`,
 
 // sessionToView converts a session to a view model.
 func sessionToView(s *session.Session) *tui.SessionView {
-	return &tui.SessionView{
+	view := &tui.SessionView{
 		ID:               s.ID.String(),
 		ShortID:          tui.FormatShortID(s.ID.String()),
 		AgentName:        s.AgentName,
@@ -113,7 +113,28 @@ func sessionToView(s *session.Session) *tui.SessionView {
 		FilesWritten:     s.FilesWritten,
 		CommandsExecuted: s.CommandsExecuted,
 		Errors:           s.Errors,
+		InputTokens:      s.InputTokens,
+		OutputTokens:     s.OutputTokens,
+		CacheReadTokens:  s.CacheReadTokens,
+		CacheWriteTokens: s.CacheWriteTokens,
+		EstimatedCostUSD: s.EstimatedCostUSD,
+		CostSource:       s.CostSource,
+		CostComputedAt:   s.CostComputedAt,
 	}
+
+	if s.ModelUsage != nil {
+		for _, mu := range s.ModelUsage {
+			view.ModelUsage = append(view.ModelUsage, tui.ModelUsageView{
+				Model:            mu.Model,
+				InputTokens:      mu.InputTokens,
+				OutputTokens:     mu.OutputTokens,
+				CacheReadTokens:  mu.CacheReadTokens,
+				CacheWriteTokens: mu.CacheWriteTokens,
+			})
+		}
+	}
+
+	return view
 }
 
 // getAgentDisplayName returns the display name for an agent.

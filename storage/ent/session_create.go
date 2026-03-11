@@ -182,6 +182,124 @@ func (_c *SessionCreate) SetNillableErrors(v *int) *SessionCreate {
 	return _c
 }
 
+// SetTranscriptPath sets the "transcript_path" field.
+func (_c *SessionCreate) SetTranscriptPath(v string) *SessionCreate {
+	_c.mutation.SetTranscriptPath(v)
+	return _c
+}
+
+// SetNillableTranscriptPath sets the "transcript_path" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableTranscriptPath(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetTranscriptPath(*v)
+	}
+	return _c
+}
+
+// SetInputTokens sets the "input_tokens" field.
+func (_c *SessionCreate) SetInputTokens(v int64) *SessionCreate {
+	_c.mutation.SetInputTokens(v)
+	return _c
+}
+
+// SetNillableInputTokens sets the "input_tokens" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableInputTokens(v *int64) *SessionCreate {
+	if v != nil {
+		_c.SetInputTokens(*v)
+	}
+	return _c
+}
+
+// SetOutputTokens sets the "output_tokens" field.
+func (_c *SessionCreate) SetOutputTokens(v int64) *SessionCreate {
+	_c.mutation.SetOutputTokens(v)
+	return _c
+}
+
+// SetNillableOutputTokens sets the "output_tokens" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableOutputTokens(v *int64) *SessionCreate {
+	if v != nil {
+		_c.SetOutputTokens(*v)
+	}
+	return _c
+}
+
+// SetCacheReadTokens sets the "cache_read_tokens" field.
+func (_c *SessionCreate) SetCacheReadTokens(v int64) *SessionCreate {
+	_c.mutation.SetCacheReadTokens(v)
+	return _c
+}
+
+// SetNillableCacheReadTokens sets the "cache_read_tokens" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableCacheReadTokens(v *int64) *SessionCreate {
+	if v != nil {
+		_c.SetCacheReadTokens(*v)
+	}
+	return _c
+}
+
+// SetCacheWriteTokens sets the "cache_write_tokens" field.
+func (_c *SessionCreate) SetCacheWriteTokens(v int64) *SessionCreate {
+	_c.mutation.SetCacheWriteTokens(v)
+	return _c
+}
+
+// SetNillableCacheWriteTokens sets the "cache_write_tokens" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableCacheWriteTokens(v *int64) *SessionCreate {
+	if v != nil {
+		_c.SetCacheWriteTokens(*v)
+	}
+	return _c
+}
+
+// SetEstimatedCostUsd sets the "estimated_cost_usd" field.
+func (_c *SessionCreate) SetEstimatedCostUsd(v float64) *SessionCreate {
+	_c.mutation.SetEstimatedCostUsd(v)
+	return _c
+}
+
+// SetNillableEstimatedCostUsd sets the "estimated_cost_usd" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableEstimatedCostUsd(v *float64) *SessionCreate {
+	if v != nil {
+		_c.SetEstimatedCostUsd(*v)
+	}
+	return _c
+}
+
+// SetModelUsage sets the "model_usage" field.
+func (_c *SessionCreate) SetModelUsage(v []map[string]interface{}) *SessionCreate {
+	_c.mutation.SetModelUsage(v)
+	return _c
+}
+
+// SetCostSource sets the "cost_source" field.
+func (_c *SessionCreate) SetCostSource(v string) *SessionCreate {
+	_c.mutation.SetCostSource(v)
+	return _c
+}
+
+// SetNillableCostSource sets the "cost_source" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableCostSource(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetCostSource(*v)
+	}
+	return _c
+}
+
+// SetCostComputedAt sets the "cost_computed_at" field.
+func (_c *SessionCreate) SetCostComputedAt(v time.Time) *SessionCreate {
+	_c.mutation.SetCostComputedAt(v)
+	return _c
+}
+
+// SetNillableCostComputedAt sets the "cost_computed_at" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableCostComputedAt(v *time.Time) *SessionCreate {
+	if v != nil {
+		_c.SetCostComputedAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *SessionCreate) SetID(v uuid.UUID) *SessionCreate {
 	_c.mutation.SetID(v)
@@ -270,6 +388,26 @@ func (_c *SessionCreate) defaults() {
 		v := session.DefaultErrors
 		_c.mutation.SetErrors(v)
 	}
+	if _, ok := _c.mutation.InputTokens(); !ok {
+		v := session.DefaultInputTokens
+		_c.mutation.SetInputTokens(v)
+	}
+	if _, ok := _c.mutation.OutputTokens(); !ok {
+		v := session.DefaultOutputTokens
+		_c.mutation.SetOutputTokens(v)
+	}
+	if _, ok := _c.mutation.CacheReadTokens(); !ok {
+		v := session.DefaultCacheReadTokens
+		_c.mutation.SetCacheReadTokens(v)
+	}
+	if _, ok := _c.mutation.CacheWriteTokens(); !ok {
+		v := session.DefaultCacheWriteTokens
+		_c.mutation.SetCacheWriteTokens(v)
+	}
+	if _, ok := _c.mutation.EstimatedCostUsd(); !ok {
+		v := session.DefaultEstimatedCostUsd
+		_c.mutation.SetEstimatedCostUsd(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := session.DefaultID()
 		_c.mutation.SetID(v)
@@ -303,6 +441,21 @@ func (_c *SessionCreate) check() error {
 	}
 	if _, ok := _c.mutation.Errors(); !ok {
 		return &ValidationError{Name: "errors", err: errors.New(`ent: missing required field "Session.errors"`)}
+	}
+	if _, ok := _c.mutation.InputTokens(); !ok {
+		return &ValidationError{Name: "input_tokens", err: errors.New(`ent: missing required field "Session.input_tokens"`)}
+	}
+	if _, ok := _c.mutation.OutputTokens(); !ok {
+		return &ValidationError{Name: "output_tokens", err: errors.New(`ent: missing required field "Session.output_tokens"`)}
+	}
+	if _, ok := _c.mutation.CacheReadTokens(); !ok {
+		return &ValidationError{Name: "cache_read_tokens", err: errors.New(`ent: missing required field "Session.cache_read_tokens"`)}
+	}
+	if _, ok := _c.mutation.CacheWriteTokens(); !ok {
+		return &ValidationError{Name: "cache_write_tokens", err: errors.New(`ent: missing required field "Session.cache_write_tokens"`)}
+	}
+	if _, ok := _c.mutation.EstimatedCostUsd(); !ok {
+		return &ValidationError{Name: "estimated_cost_usd", err: errors.New(`ent: missing required field "Session.estimated_cost_usd"`)}
 	}
 	return nil
 }
@@ -386,6 +539,42 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Errors(); ok {
 		_spec.SetField(session.FieldErrors, field.TypeInt, value)
 		_node.Errors = value
+	}
+	if value, ok := _c.mutation.TranscriptPath(); ok {
+		_spec.SetField(session.FieldTranscriptPath, field.TypeString, value)
+		_node.TranscriptPath = value
+	}
+	if value, ok := _c.mutation.InputTokens(); ok {
+		_spec.SetField(session.FieldInputTokens, field.TypeInt64, value)
+		_node.InputTokens = value
+	}
+	if value, ok := _c.mutation.OutputTokens(); ok {
+		_spec.SetField(session.FieldOutputTokens, field.TypeInt64, value)
+		_node.OutputTokens = value
+	}
+	if value, ok := _c.mutation.CacheReadTokens(); ok {
+		_spec.SetField(session.FieldCacheReadTokens, field.TypeInt64, value)
+		_node.CacheReadTokens = value
+	}
+	if value, ok := _c.mutation.CacheWriteTokens(); ok {
+		_spec.SetField(session.FieldCacheWriteTokens, field.TypeInt64, value)
+		_node.CacheWriteTokens = value
+	}
+	if value, ok := _c.mutation.EstimatedCostUsd(); ok {
+		_spec.SetField(session.FieldEstimatedCostUsd, field.TypeFloat64, value)
+		_node.EstimatedCostUsd = value
+	}
+	if value, ok := _c.mutation.ModelUsage(); ok {
+		_spec.SetField(session.FieldModelUsage, field.TypeJSON, value)
+		_node.ModelUsage = value
+	}
+	if value, ok := _c.mutation.CostSource(); ok {
+		_spec.SetField(session.FieldCostSource, field.TypeString, value)
+		_node.CostSource = value
+	}
+	if value, ok := _c.mutation.CostComputedAt(); ok {
+		_spec.SetField(session.FieldCostComputedAt, field.TypeTime, value)
+		_node.CostComputedAt = &value
 	}
 	if nodes := _c.mutation.EventsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

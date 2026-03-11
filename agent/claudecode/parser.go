@@ -102,26 +102,36 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 
 	agentSessionID := baseInput.SessionID
 
+	var event *events.Event
+	var parseErr error
+
 	switch eventName {
 	case "PreToolUse":
-		return a.parsePreToolUse(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = a.parsePreToolUse(sessionID, agentSessionID, baseInput, rawData)
 	case "PostToolUse":
-		return a.parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, false)
+		event, parseErr = a.parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, false)
 	case "PostToolUseFailure":
-		return a.parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, true)
+		event, parseErr = a.parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, true)
 	case "SessionStart":
-		return parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
 	case "SessionEnd":
-		return parseSessionEnd(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseSessionEnd(sessionID, agentSessionID, baseInput, rawData)
 	case "Notification":
-		return parseNotification(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseNotification(sessionID, agentSessionID, baseInput, rawData)
 	default:
-		event := events.NewEvent(sessionID, AgentName, events.ActionUnknown)
+		event = events.NewEvent(sessionID, AgentName, events.ActionUnknown)
 		event.AgentSessionID = agentSessionID
 		event.WorkingDirectory = baseInput.Cwd
 		event.RawEvent = rawData
-		return event, nil
 	}
+
+	if parseErr != nil {
+		return nil, parseErr
+	}
+	if event != nil {
+		event.TranscriptPath = baseInput.TranscriptPath
+	}
+	return event, nil
 }
 
 func (a *Adapter) parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {

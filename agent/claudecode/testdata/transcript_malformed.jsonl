@@ -1,0 +1,3 @@
+{"type":"assistant","message":{"model":"claude-sonnet-4","usage":{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":10,"cache_creation_input_tokens":5}}}
+this is not valid json
+{"type":"assistant","message":{"model":"claude-sonnet-4","usage":{"input_tokens":200,"output_tokens":100,"cache_read_input_tokens":20,"cache_creation_input_tokens":10}}}
