@@ -75,20 +75,20 @@ func renderCostSummary(data *StatsData, width, height int) string {
 		totalTokens += ms.TotalTokens
 	}
 	if totalTokens > 0 {
-		b.WriteString(fmt.Sprintf("  %s  %s\n",
+		fmt.Fprintf(&b, "  %s  %s\n",
 			labelStyle.Width(12).Render("Tokens"),
 			valueStyle.Render(tui.FormatTokens(totalTokens)),
-		))
+		)
 	}
 
 	if !data.TimeSpanStart.IsZero() {
 		span := fmt.Sprintf("%s – %s",
 			tui.FormatTimeShort(data.TimeSpanStart),
 			tui.FormatTimeShort(data.TimeSpanEnd))
-		b.WriteString(fmt.Sprintf("  %s  %s\n",
+		fmt.Fprintf(&b, "  %s  %s\n",
 			labelStyle.Width(12).Render("Span"),
 			labelStyle.Render(span),
-		))
+		)
 	}
 
 	return renderPanel("SUMMARY", b.String(), width, height)
@@ -107,11 +107,11 @@ func renderCostByAgent(data *StatsData, width, height int) string {
 	}
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  %s %s %s\n",
+	fmt.Fprintf(&b, "  %s %s %s\n",
 		labelStyle.Width(14).Render("Agent"),
 		labelStyle.Width(5).Align(lipgloss.Right).Render("Sess"),
 		labelStyle.Width(9).Align(lipgloss.Right).Render("Cost"),
-	))
+	)
 
 	maxAgents := height - 3
 	if maxAgents < 1 {
