@@ -10,14 +10,14 @@ import (
 func renderCommands(data *StatsData, width, height int) string {
 	var b strings.Builder
 
-	b.WriteString(fmt.Sprintf("  %s %s  %s %s  %s %s\n",
+	fmt.Fprintf(&b, "  %s %s  %s %s  %s %s\n",
 		labelStyle.Render("Total"),
 		valueStyle.Render(tui.FormatNumber(data.TotalCommands)),
 		labelStyle.Render("Pass"),
 		greenValueStyle.Render(fmt.Sprintf("%d (%s)", data.PassedCommands, percentage(data.PassedCommands, data.TotalCommands))),
 		labelStyle.Render("Fail"),
 		redValueStyle.Render(fmt.Sprintf("%d (%s)", data.FailedCommands, percentage(data.FailedCommands, data.TotalCommands))),
-	))
+	)
 
 	if len(data.TopCommands) > 0 {
 		b.WriteString("\n")
@@ -35,10 +35,10 @@ func renderCommands(data *StatsData, width, height int) string {
 		for i := 0; i < maxCmds; i++ {
 			c := data.TopCommands[i]
 			cmd := tui.TruncateString(c.Command, cmdWidth)
-			b.WriteString(fmt.Sprintf("  %s  %s\n",
+			fmt.Fprintf(&b, "  %s  %s\n",
 				labelStyle.Render(cmd),
 				valueStyle.Render(fmt.Sprintf("%d", c.Count)),
-			))
+			)
 		}
 	}
 
