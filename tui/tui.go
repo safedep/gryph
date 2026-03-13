@@ -66,6 +66,9 @@ type Presenter interface {
 
 	// RenderUpdateNotice renders an update availability notice.
 	RenderUpdateNotice(notice *UpdateNoticeView) error
+
+	// RenderCostSummary renders the cost summary.
+	RenderCostSummary(summary *CostSummaryView) error
 }
 
 // PresenterOptions configures presenter behavior.

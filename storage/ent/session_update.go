@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/storage/ent/auditevent"
@@ -249,6 +250,189 @@ func (_u *SessionUpdate) AddErrors(v int) *SessionUpdate {
 	return _u
 }
 
+// SetTranscriptPath sets the "transcript_path" field.
+func (_u *SessionUpdate) SetTranscriptPath(v string) *SessionUpdate {
+	_u.mutation.SetTranscriptPath(v)
+	return _u
+}
+
+// SetNillableTranscriptPath sets the "transcript_path" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableTranscriptPath(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetTranscriptPath(*v)
+	}
+	return _u
+}
+
+// ClearTranscriptPath clears the value of the "transcript_path" field.
+func (_u *SessionUpdate) ClearTranscriptPath() *SessionUpdate {
+	_u.mutation.ClearTranscriptPath()
+	return _u
+}
+
+// SetInputTokens sets the "input_tokens" field.
+func (_u *SessionUpdate) SetInputTokens(v int64) *SessionUpdate {
+	_u.mutation.ResetInputTokens()
+	_u.mutation.SetInputTokens(v)
+	return _u
+}
+
+// SetNillableInputTokens sets the "input_tokens" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableInputTokens(v *int64) *SessionUpdate {
+	if v != nil {
+		_u.SetInputTokens(*v)
+	}
+	return _u
+}
+
+// AddInputTokens adds value to the "input_tokens" field.
+func (_u *SessionUpdate) AddInputTokens(v int64) *SessionUpdate {
+	_u.mutation.AddInputTokens(v)
+	return _u
+}
+
+// SetOutputTokens sets the "output_tokens" field.
+func (_u *SessionUpdate) SetOutputTokens(v int64) *SessionUpdate {
+	_u.mutation.ResetOutputTokens()
+	_u.mutation.SetOutputTokens(v)
+	return _u
+}
+
+// SetNillableOutputTokens sets the "output_tokens" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableOutputTokens(v *int64) *SessionUpdate {
+	if v != nil {
+		_u.SetOutputTokens(*v)
+	}
+	return _u
+}
+
+// AddOutputTokens adds value to the "output_tokens" field.
+func (_u *SessionUpdate) AddOutputTokens(v int64) *SessionUpdate {
+	_u.mutation.AddOutputTokens(v)
+	return _u
+}
+
+// SetCacheReadTokens sets the "cache_read_tokens" field.
+func (_u *SessionUpdate) SetCacheReadTokens(v int64) *SessionUpdate {
+	_u.mutation.ResetCacheReadTokens()
+	_u.mutation.SetCacheReadTokens(v)
+	return _u
+}
+
+// SetNillableCacheReadTokens sets the "cache_read_tokens" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableCacheReadTokens(v *int64) *SessionUpdate {
+	if v != nil {
+		_u.SetCacheReadTokens(*v)
+	}
+	return _u
+}
+
+// AddCacheReadTokens adds value to the "cache_read_tokens" field.
+func (_u *SessionUpdate) AddCacheReadTokens(v int64) *SessionUpdate {
+	_u.mutation.AddCacheReadTokens(v)
+	return _u
+}
+
+// SetCacheWriteTokens sets the "cache_write_tokens" field.
+func (_u *SessionUpdate) SetCacheWriteTokens(v int64) *SessionUpdate {
+	_u.mutation.ResetCacheWriteTokens()
+	_u.mutation.SetCacheWriteTokens(v)
+	return _u
+}
+
+// SetNillableCacheWriteTokens sets the "cache_write_tokens" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableCacheWriteTokens(v *int64) *SessionUpdate {
+	if v != nil {
+		_u.SetCacheWriteTokens(*v)
+	}
+	return _u
+}
+
+// AddCacheWriteTokens adds value to the "cache_write_tokens" field.
+func (_u *SessionUpdate) AddCacheWriteTokens(v int64) *SessionUpdate {
+	_u.mutation.AddCacheWriteTokens(v)
+	return _u
+}
+
+// SetEstimatedCostUsd sets the "estimated_cost_usd" field.
+func (_u *SessionUpdate) SetEstimatedCostUsd(v float64) *SessionUpdate {
+	_u.mutation.ResetEstimatedCostUsd()
+	_u.mutation.SetEstimatedCostUsd(v)
+	return _u
+}
+
+// SetNillableEstimatedCostUsd sets the "estimated_cost_usd" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableEstimatedCostUsd(v *float64) *SessionUpdate {
+	if v != nil {
+		_u.SetEstimatedCostUsd(*v)
+	}
+	return _u
+}
+
+// AddEstimatedCostUsd adds value to the "estimated_cost_usd" field.
+func (_u *SessionUpdate) AddEstimatedCostUsd(v float64) *SessionUpdate {
+	_u.mutation.AddEstimatedCostUsd(v)
+	return _u
+}
+
+// SetModelUsage sets the "model_usage" field.
+func (_u *SessionUpdate) SetModelUsage(v []map[string]interface{}) *SessionUpdate {
+	_u.mutation.SetModelUsage(v)
+	return _u
+}
+
+// AppendModelUsage appends value to the "model_usage" field.
+func (_u *SessionUpdate) AppendModelUsage(v []map[string]interface{}) *SessionUpdate {
+	_u.mutation.AppendModelUsage(v)
+	return _u
+}
+
+// ClearModelUsage clears the value of the "model_usage" field.
+func (_u *SessionUpdate) ClearModelUsage() *SessionUpdate {
+	_u.mutation.ClearModelUsage()
+	return _u
+}
+
+// SetCostSource sets the "cost_source" field.
+func (_u *SessionUpdate) SetCostSource(v string) *SessionUpdate {
+	_u.mutation.SetCostSource(v)
+	return _u
+}
+
+// SetNillableCostSource sets the "cost_source" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableCostSource(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetCostSource(*v)
+	}
+	return _u
+}
+
+// ClearCostSource clears the value of the "cost_source" field.
+func (_u *SessionUpdate) ClearCostSource() *SessionUpdate {
+	_u.mutation.ClearCostSource()
+	return _u
+}
+
+// SetCostComputedAt sets the "cost_computed_at" field.
+func (_u *SessionUpdate) SetCostComputedAt(v time.Time) *SessionUpdate {
+	_u.mutation.SetCostComputedAt(v)
+	return _u
+}
+
+// SetNillableCostComputedAt sets the "cost_computed_at" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableCostComputedAt(v *time.Time) *SessionUpdate {
+	if v != nil {
+		_u.SetCostComputedAt(*v)
+	}
+	return _u
+}
+
+// ClearCostComputedAt clears the value of the "cost_computed_at" field.
+func (_u *SessionUpdate) ClearCostComputedAt() *SessionUpdate {
+	_u.mutation.ClearCostComputedAt()
+	return _u
+}
+
 // AddEventIDs adds the "events" edge to the AuditEvent entity by IDs.
 func (_u *SessionUpdate) AddEventIDs(ids ...uuid.UUID) *SessionUpdate {
 	_u.mutation.AddEventIDs(ids...)
@@ -401,6 +585,65 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedErrors(); ok {
 		_spec.AddField(session.FieldErrors, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.TranscriptPath(); ok {
+		_spec.SetField(session.FieldTranscriptPath, field.TypeString, value)
+	}
+	if _u.mutation.TranscriptPathCleared() {
+		_spec.ClearField(session.FieldTranscriptPath, field.TypeString)
+	}
+	if value, ok := _u.mutation.InputTokens(); ok {
+		_spec.SetField(session.FieldInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInputTokens(); ok {
+		_spec.AddField(session.FieldInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.OutputTokens(); ok {
+		_spec.SetField(session.FieldOutputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedOutputTokens(); ok {
+		_spec.AddField(session.FieldOutputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.CacheReadTokens(); ok {
+		_spec.SetField(session.FieldCacheReadTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCacheReadTokens(); ok {
+		_spec.AddField(session.FieldCacheReadTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.CacheWriteTokens(); ok {
+		_spec.SetField(session.FieldCacheWriteTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCacheWriteTokens(); ok {
+		_spec.AddField(session.FieldCacheWriteTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.EstimatedCostUsd(); ok {
+		_spec.SetField(session.FieldEstimatedCostUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedEstimatedCostUsd(); ok {
+		_spec.AddField(session.FieldEstimatedCostUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.ModelUsage(); ok {
+		_spec.SetField(session.FieldModelUsage, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedModelUsage(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, session.FieldModelUsage, value)
+		})
+	}
+	if _u.mutation.ModelUsageCleared() {
+		_spec.ClearField(session.FieldModelUsage, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.CostSource(); ok {
+		_spec.SetField(session.FieldCostSource, field.TypeString, value)
+	}
+	if _u.mutation.CostSourceCleared() {
+		_spec.ClearField(session.FieldCostSource, field.TypeString)
+	}
+	if value, ok := _u.mutation.CostComputedAt(); ok {
+		_spec.SetField(session.FieldCostComputedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CostComputedAtCleared() {
+		_spec.ClearField(session.FieldCostComputedAt, field.TypeTime)
 	}
 	if _u.mutation.EventsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -686,6 +929,189 @@ func (_u *SessionUpdateOne) AddErrors(v int) *SessionUpdateOne {
 	return _u
 }
 
+// SetTranscriptPath sets the "transcript_path" field.
+func (_u *SessionUpdateOne) SetTranscriptPath(v string) *SessionUpdateOne {
+	_u.mutation.SetTranscriptPath(v)
+	return _u
+}
+
+// SetNillableTranscriptPath sets the "transcript_path" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableTranscriptPath(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetTranscriptPath(*v)
+	}
+	return _u
+}
+
+// ClearTranscriptPath clears the value of the "transcript_path" field.
+func (_u *SessionUpdateOne) ClearTranscriptPath() *SessionUpdateOne {
+	_u.mutation.ClearTranscriptPath()
+	return _u
+}
+
+// SetInputTokens sets the "input_tokens" field.
+func (_u *SessionUpdateOne) SetInputTokens(v int64) *SessionUpdateOne {
+	_u.mutation.ResetInputTokens()
+	_u.mutation.SetInputTokens(v)
+	return _u
+}
+
+// SetNillableInputTokens sets the "input_tokens" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableInputTokens(v *int64) *SessionUpdateOne {
+	if v != nil {
+		_u.SetInputTokens(*v)
+	}
+	return _u
+}
+
+// AddInputTokens adds value to the "input_tokens" field.
+func (_u *SessionUpdateOne) AddInputTokens(v int64) *SessionUpdateOne {
+	_u.mutation.AddInputTokens(v)
+	return _u
+}
+
+// SetOutputTokens sets the "output_tokens" field.
+func (_u *SessionUpdateOne) SetOutputTokens(v int64) *SessionUpdateOne {
+	_u.mutation.ResetOutputTokens()
+	_u.mutation.SetOutputTokens(v)
+	return _u
+}
+
+// SetNillableOutputTokens sets the "output_tokens" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableOutputTokens(v *int64) *SessionUpdateOne {
+	if v != nil {
+		_u.SetOutputTokens(*v)
+	}
+	return _u
+}
+
+// AddOutputTokens adds value to the "output_tokens" field.
+func (_u *SessionUpdateOne) AddOutputTokens(v int64) *SessionUpdateOne {
+	_u.mutation.AddOutputTokens(v)
+	return _u
+}
+
+// SetCacheReadTokens sets the "cache_read_tokens" field.
+func (_u *SessionUpdateOne) SetCacheReadTokens(v int64) *SessionUpdateOne {
+	_u.mutation.ResetCacheReadTokens()
+	_u.mutation.SetCacheReadTokens(v)
+	return _u
+}
+
+// SetNillableCacheReadTokens sets the "cache_read_tokens" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableCacheReadTokens(v *int64) *SessionUpdateOne {
+	if v != nil {
+		_u.SetCacheReadTokens(*v)
+	}
+	return _u
+}
+
+// AddCacheReadTokens adds value to the "cache_read_tokens" field.
+func (_u *SessionUpdateOne) AddCacheReadTokens(v int64) *SessionUpdateOne {
+	_u.mutation.AddCacheReadTokens(v)
+	return _u
+}
+
+// SetCacheWriteTokens sets the "cache_write_tokens" field.
+func (_u *SessionUpdateOne) SetCacheWriteTokens(v int64) *SessionUpdateOne {
+	_u.mutation.ResetCacheWriteTokens()
+	_u.mutation.SetCacheWriteTokens(v)
+	return _u
+}
+
+// SetNillableCacheWriteTokens sets the "cache_write_tokens" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableCacheWriteTokens(v *int64) *SessionUpdateOne {
+	if v != nil {
+		_u.SetCacheWriteTokens(*v)
+	}
+	return _u
+}
+
+// AddCacheWriteTokens adds value to the "cache_write_tokens" field.
+func (_u *SessionUpdateOne) AddCacheWriteTokens(v int64) *SessionUpdateOne {
+	_u.mutation.AddCacheWriteTokens(v)
+	return _u
+}
+
+// SetEstimatedCostUsd sets the "estimated_cost_usd" field.
+func (_u *SessionUpdateOne) SetEstimatedCostUsd(v float64) *SessionUpdateOne {
+	_u.mutation.ResetEstimatedCostUsd()
+	_u.mutation.SetEstimatedCostUsd(v)
+	return _u
+}
+
+// SetNillableEstimatedCostUsd sets the "estimated_cost_usd" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableEstimatedCostUsd(v *float64) *SessionUpdateOne {
+	if v != nil {
+		_u.SetEstimatedCostUsd(*v)
+	}
+	return _u
+}
+
+// AddEstimatedCostUsd adds value to the "estimated_cost_usd" field.
+func (_u *SessionUpdateOne) AddEstimatedCostUsd(v float64) *SessionUpdateOne {
+	_u.mutation.AddEstimatedCostUsd(v)
+	return _u
+}
+
+// SetModelUsage sets the "model_usage" field.
+func (_u *SessionUpdateOne) SetModelUsage(v []map[string]interface{}) *SessionUpdateOne {
+	_u.mutation.SetModelUsage(v)
+	return _u
+}
+
+// AppendModelUsage appends value to the "model_usage" field.
+func (_u *SessionUpdateOne) AppendModelUsage(v []map[string]interface{}) *SessionUpdateOne {
+	_u.mutation.AppendModelUsage(v)
+	return _u
+}
+
+// ClearModelUsage clears the value of the "model_usage" field.
+func (_u *SessionUpdateOne) ClearModelUsage() *SessionUpdateOne {
+	_u.mutation.ClearModelUsage()
+	return _u
+}
+
+// SetCostSource sets the "cost_source" field.
+func (_u *SessionUpdateOne) SetCostSource(v string) *SessionUpdateOne {
+	_u.mutation.SetCostSource(v)
+	return _u
+}
+
+// SetNillableCostSource sets the "cost_source" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableCostSource(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetCostSource(*v)
+	}
+	return _u
+}
+
+// ClearCostSource clears the value of the "cost_source" field.
+func (_u *SessionUpdateOne) ClearCostSource() *SessionUpdateOne {
+	_u.mutation.ClearCostSource()
+	return _u
+}
+
+// SetCostComputedAt sets the "cost_computed_at" field.
+func (_u *SessionUpdateOne) SetCostComputedAt(v time.Time) *SessionUpdateOne {
+	_u.mutation.SetCostComputedAt(v)
+	return _u
+}
+
+// SetNillableCostComputedAt sets the "cost_computed_at" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableCostComputedAt(v *time.Time) *SessionUpdateOne {
+	if v != nil {
+		_u.SetCostComputedAt(*v)
+	}
+	return _u
+}
+
+// ClearCostComputedAt clears the value of the "cost_computed_at" field.
+func (_u *SessionUpdateOne) ClearCostComputedAt() *SessionUpdateOne {
+	_u.mutation.ClearCostComputedAt()
+	return _u
+}
+
 // AddEventIDs adds the "events" edge to the AuditEvent entity by IDs.
 func (_u *SessionUpdateOne) AddEventIDs(ids ...uuid.UUID) *SessionUpdateOne {
 	_u.mutation.AddEventIDs(ids...)
@@ -868,6 +1294,65 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 	}
 	if value, ok := _u.mutation.AddedErrors(); ok {
 		_spec.AddField(session.FieldErrors, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.TranscriptPath(); ok {
+		_spec.SetField(session.FieldTranscriptPath, field.TypeString, value)
+	}
+	if _u.mutation.TranscriptPathCleared() {
+		_spec.ClearField(session.FieldTranscriptPath, field.TypeString)
+	}
+	if value, ok := _u.mutation.InputTokens(); ok {
+		_spec.SetField(session.FieldInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInputTokens(); ok {
+		_spec.AddField(session.FieldInputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.OutputTokens(); ok {
+		_spec.SetField(session.FieldOutputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedOutputTokens(); ok {
+		_spec.AddField(session.FieldOutputTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.CacheReadTokens(); ok {
+		_spec.SetField(session.FieldCacheReadTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCacheReadTokens(); ok {
+		_spec.AddField(session.FieldCacheReadTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.CacheWriteTokens(); ok {
+		_spec.SetField(session.FieldCacheWriteTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCacheWriteTokens(); ok {
+		_spec.AddField(session.FieldCacheWriteTokens, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.EstimatedCostUsd(); ok {
+		_spec.SetField(session.FieldEstimatedCostUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedEstimatedCostUsd(); ok {
+		_spec.AddField(session.FieldEstimatedCostUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.ModelUsage(); ok {
+		_spec.SetField(session.FieldModelUsage, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedModelUsage(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, session.FieldModelUsage, value)
+		})
+	}
+	if _u.mutation.ModelUsageCleared() {
+		_spec.ClearField(session.FieldModelUsage, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.CostSource(); ok {
+		_spec.SetField(session.FieldCostSource, field.TypeString, value)
+	}
+	if _u.mutation.CostSourceCleared() {
+		_spec.ClearField(session.FieldCostSource, field.TypeString)
+	}
+	if value, ok := _u.mutation.CostComputedAt(); ok {
+		_spec.SetField(session.FieldCostComputedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CostComputedAtCleared() {
+		_spec.ClearField(session.FieldCostComputedAt, field.TypeTime)
 	}
 	if _u.mutation.EventsCleared() {
 		edge := &sqlgraph.EdgeSpec{

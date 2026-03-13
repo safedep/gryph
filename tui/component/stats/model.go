@@ -11,6 +11,13 @@ import (
 
 const refreshInterval = 30 * time.Second
 
+type tab int
+
+const (
+	tabOverview tab = iota
+	tabCost
+)
+
 type Model struct {
 	opts   Options
 	width  int
@@ -20,6 +27,7 @@ type Model struct {
 	footer footerModel
 	help   helpModel
 
+	activeTab   tab
 	data        *StatsData
 	timeRange   TimeRange
 	customSince *time.Time
@@ -112,6 +120,20 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		return m, loadStats(m.opts.Store, m.sinceTime(), m.untilTime(), m.opts.AgentFilter)
 
+	case "tab":
+		if m.activeTab == tabOverview {
+			m.activeTab = tabCost
+		} else {
+			m.activeTab = tabOverview
+		}
+		return m, nil
+	case "1":
+		m.activeTab = tabOverview
+		return m, nil
+	case "2":
+		m.activeTab = tabCost
+		return m, nil
+
 	case "[":
 		return m.shiftWindow(false)
 	case "]":
@@ -194,7 +216,7 @@ func (m Model) View() string {
 		return "loading..."
 	}
 
-	header := m.header.view(m.width)
+	header := m.header.view(m.width, m.activeTab)
 	footer := m.footer.view(m.width)
 	contentHeight := m.height - 2
 
@@ -209,10 +231,15 @@ func (m Model) View() string {
 	}
 
 	var content string
-	if m.width >= 80 {
-		content = m.twoColumnLayout(contentHeight)
-	} else {
-		content = m.singleColumnLayout(contentHeight)
+	switch m.activeTab {
+	case tabCost:
+		content = m.costTabLayout(contentHeight)
+	default:
+		if m.width >= 80 {
+			content = m.twoColumnLayout(contentHeight)
+		} else {
+			content = m.singleColumnLayout(contentHeight)
+		}
 	}
 
 	content = lipgloss.NewStyle().Width(m.width).Height(contentHeight).MaxHeight(contentHeight).Render(content)

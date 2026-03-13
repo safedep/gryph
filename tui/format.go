@@ -47,12 +47,12 @@ func FormatTime(t time.Time) string {
 	return t.Local().Format("2006-01-02 15:04:05")
 }
 
-// FormatTimeShort formats a time with just hour:minute:second.
+// FormatTimeShort formats a time as "Jan 2 15:04:05".
 func FormatTimeShort(t time.Time) string {
 	if t.IsZero() {
 		return "-"
 	}
-	return t.Local().Format("15:04:05")
+	return t.Local().Format("Jan 2 15:04:05")
 }
 
 // FormatDate formats a date for display.
@@ -171,4 +171,43 @@ func TreeContinue(hasMore bool) string {
 		return "│  "
 	}
 	return "   "
+}
+
+// FormatTokens formats a token count as a human-readable string (e.g., "125.4K", "2.1M").
+func FormatTokens(n int64) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d", n)
+	}
+	if n < 1_000_000 {
+		return fmt.Sprintf("%.1fK", float64(n)/1000)
+	}
+	return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+}
+
+// FormatCost formats a USD cost value (e.g., "$0.42", "$18.45").
+func FormatCost(cost float64) string {
+	if cost == 0 {
+		return "-"
+	}
+	if cost < 0.01 {
+		return fmt.Sprintf("$%.4f", cost)
+	}
+	return fmt.Sprintf("$%.2f", cost)
+}
+
+// FormatNumber64 formats an int64 with thousand separators.
+func FormatNumber64(n int64) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d", n)
+	}
+	s := fmt.Sprintf("%d", n)
+	var result strings.Builder
+	l := len(s)
+	for i, c := range s {
+		if i > 0 && (l-i)%3 == 0 {
+			result.WriteByte(',')
+		}
+		result.WriteRune(c)
+	}
+	return result.String()
 }

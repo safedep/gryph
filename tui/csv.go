@@ -347,5 +347,10 @@ func (p *CSVPresenter) RenderEventDetails(events []*EventDetailView) error {
 	return p.writer.Error()
 }
 
+// RenderCostSummary renders the cost summary as CSV.
+func (p *CSVPresenter) RenderCostSummary(summary *CostSummaryView) error {
+	return p.RenderMessage("CSV output not supported for cost summary")
+}
+
 // Ensure CSVPresenter implements Presenter
 var _ Presenter = (*CSVPresenter)(nil)

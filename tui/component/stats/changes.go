@@ -12,12 +12,12 @@ func renderChanges(data *StatsData, width, height int) string {
 	var b strings.Builder
 
 	net := data.LinesAdded - data.LinesRemoved
-	b.WriteString(fmt.Sprintf("  %s  %s  %s  %s\n",
+	fmt.Fprintf(&b, "  %s  %s  %s  %s\n",
 		greenValueStyle.Render(fmt.Sprintf("+%s", tui.FormatNumber(data.LinesAdded))),
 		redValueStyle.Render(fmt.Sprintf("-%s", tui.FormatNumber(data.LinesRemoved))),
 		valueStyle.Render(fmt.Sprintf("net %+d", net)),
 		labelStyle.Render(fmt.Sprintf("(%d files)", data.UniqueFilesModified)),
-	))
+	)
 
 	if len(data.TopFiles) == 0 {
 		return renderPanel("CODE CHANGES", b.String(), width, height)
@@ -79,12 +79,12 @@ func renderChanges(data *StatsData, width, height int) string {
 			edits = labelStyle.Render(fmt.Sprintf(" %dx", f.WriteCount))
 		}
 
-		b.WriteString(fmt.Sprintf("  %s %s %s%s\n",
+		fmt.Fprintf(&b, "  %s %s %s%s\n",
 			labelStyle.Width(pathWidth).Render(path),
 			bar,
 			changes,
 			edits,
-		))
+		)
 	}
 
 	return renderPanel("CODE CHANGES", b.String(), width, height)

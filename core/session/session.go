@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/core/cost"
 )
 
 // Session represents a single agent working session.
@@ -37,6 +38,24 @@ type Session struct {
 	CommandsExecuted int `json:"commands_executed"`
 	// Errors is the count of events with error status.
 	Errors int `json:"errors"`
+	// TranscriptPath is the path to the agent's transcript file.
+	TranscriptPath string `json:"transcript_path,omitempty"`
+	// InputTokens is the total input tokens across all models (denormalized).
+	InputTokens int64 `json:"input_tokens,omitempty"`
+	// OutputTokens is the total output tokens across all models (denormalized).
+	OutputTokens int64 `json:"output_tokens,omitempty"`
+	// CacheReadTokens is the total cache read tokens (denormalized).
+	CacheReadTokens int64 `json:"cache_read_tokens,omitempty"`
+	// CacheWriteTokens is the total cache write tokens (denormalized).
+	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
+	// EstimatedCostUSD is the estimated total cost in USD (denormalized).
+	EstimatedCostUSD float64 `json:"estimated_cost_usd,omitempty"`
+	// ModelUsage stores the per-model token breakdown (source of truth).
+	ModelUsage []cost.ModelUsage `json:"model_usage,omitempty"`
+	// CostSource indicates where cost data came from.
+	CostSource string `json:"cost_source,omitempty"`
+	// CostComputedAt is when cost was last computed.
+	CostComputedAt *time.Time `json:"cost_computed_at,omitempty"`
 }
 
 // NewSession creates a new Session with a generated UUID and current timestamp.
@@ -74,6 +93,11 @@ func (s *Session) Duration() time.Duration {
 // End marks the session as ended with the current timestamp.
 func (s *Session) End() {
 	s.EndedAt = time.Now().UTC()
+}
+
+// HasCostData returns true if cost data has been computed for this session.
+func (s *Session) HasCostData() bool {
+	return s.CostComputedAt != nil
 }
 
 // SessionFilter provides filtering criteria for querying sessions.

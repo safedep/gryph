@@ -3011,33 +3011,48 @@ func (m *SelfAuditMutation) ResetEdge(name string) error {
 // SessionMutation represents an operation that mutates the Session nodes in the graph.
 type SessionMutation struct {
 	config
-	op                   Op
-	typ                  string
-	id                   *uuid.UUID
-	agent_session_id     *string
-	agent_name           *string
-	agent_version        *string
-	started_at           *time.Time
-	ended_at             *time.Time
-	working_directory    *string
-	project_name         *string
-	total_actions        *int
-	addtotal_actions     *int
-	files_read           *int
-	addfiles_read        *int
-	files_written        *int
-	addfiles_written     *int
-	commands_executed    *int
-	addcommands_executed *int
-	errors               *int
-	adderrors            *int
-	clearedFields        map[string]struct{}
-	events               map[uuid.UUID]struct{}
-	removedevents        map[uuid.UUID]struct{}
-	clearedevents        bool
-	done                 bool
-	oldValue             func(context.Context) (*Session, error)
-	predicates           []predicate.Session
+	op                    Op
+	typ                   string
+	id                    *uuid.UUID
+	agent_session_id      *string
+	agent_name            *string
+	agent_version         *string
+	started_at            *time.Time
+	ended_at              *time.Time
+	working_directory     *string
+	project_name          *string
+	total_actions         *int
+	addtotal_actions      *int
+	files_read            *int
+	addfiles_read         *int
+	files_written         *int
+	addfiles_written      *int
+	commands_executed     *int
+	addcommands_executed  *int
+	errors                *int
+	adderrors             *int
+	transcript_path       *string
+	input_tokens          *int64
+	addinput_tokens       *int64
+	output_tokens         *int64
+	addoutput_tokens      *int64
+	cache_read_tokens     *int64
+	addcache_read_tokens  *int64
+	cache_write_tokens    *int64
+	addcache_write_tokens *int64
+	estimated_cost_usd    *float64
+	addestimated_cost_usd *float64
+	model_usage           *[]map[string]interface{}
+	appendmodel_usage     []map[string]interface{}
+	cost_source           *string
+	cost_computed_at      *time.Time
+	clearedFields         map[string]struct{}
+	events                map[uuid.UUID]struct{}
+	removedevents         map[uuid.UUID]struct{}
+	clearedevents         bool
+	done                  bool
+	oldValue              func(context.Context) (*Session, error)
+	predicates            []predicate.Session
 }
 
 var _ ent.Mutation = (*SessionMutation)(nil)
@@ -3741,6 +3756,498 @@ func (m *SessionMutation) ResetErrors() {
 	m.adderrors = nil
 }
 
+// SetTranscriptPath sets the "transcript_path" field.
+func (m *SessionMutation) SetTranscriptPath(s string) {
+	m.transcript_path = &s
+}
+
+// TranscriptPath returns the value of the "transcript_path" field in the mutation.
+func (m *SessionMutation) TranscriptPath() (r string, exists bool) {
+	v := m.transcript_path
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTranscriptPath returns the old "transcript_path" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldTranscriptPath(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTranscriptPath is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTranscriptPath requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTranscriptPath: %w", err)
+	}
+	return oldValue.TranscriptPath, nil
+}
+
+// ClearTranscriptPath clears the value of the "transcript_path" field.
+func (m *SessionMutation) ClearTranscriptPath() {
+	m.transcript_path = nil
+	m.clearedFields[session.FieldTranscriptPath] = struct{}{}
+}
+
+// TranscriptPathCleared returns if the "transcript_path" field was cleared in this mutation.
+func (m *SessionMutation) TranscriptPathCleared() bool {
+	_, ok := m.clearedFields[session.FieldTranscriptPath]
+	return ok
+}
+
+// ResetTranscriptPath resets all changes to the "transcript_path" field.
+func (m *SessionMutation) ResetTranscriptPath() {
+	m.transcript_path = nil
+	delete(m.clearedFields, session.FieldTranscriptPath)
+}
+
+// SetInputTokens sets the "input_tokens" field.
+func (m *SessionMutation) SetInputTokens(i int64) {
+	m.input_tokens = &i
+	m.addinput_tokens = nil
+}
+
+// InputTokens returns the value of the "input_tokens" field in the mutation.
+func (m *SessionMutation) InputTokens() (r int64, exists bool) {
+	v := m.input_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInputTokens returns the old "input_tokens" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldInputTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInputTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInputTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInputTokens: %w", err)
+	}
+	return oldValue.InputTokens, nil
+}
+
+// AddInputTokens adds i to the "input_tokens" field.
+func (m *SessionMutation) AddInputTokens(i int64) {
+	if m.addinput_tokens != nil {
+		*m.addinput_tokens += i
+	} else {
+		m.addinput_tokens = &i
+	}
+}
+
+// AddedInputTokens returns the value that was added to the "input_tokens" field in this mutation.
+func (m *SessionMutation) AddedInputTokens() (r int64, exists bool) {
+	v := m.addinput_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetInputTokens resets all changes to the "input_tokens" field.
+func (m *SessionMutation) ResetInputTokens() {
+	m.input_tokens = nil
+	m.addinput_tokens = nil
+}
+
+// SetOutputTokens sets the "output_tokens" field.
+func (m *SessionMutation) SetOutputTokens(i int64) {
+	m.output_tokens = &i
+	m.addoutput_tokens = nil
+}
+
+// OutputTokens returns the value of the "output_tokens" field in the mutation.
+func (m *SessionMutation) OutputTokens() (r int64, exists bool) {
+	v := m.output_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutputTokens returns the old "output_tokens" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldOutputTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutputTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutputTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutputTokens: %w", err)
+	}
+	return oldValue.OutputTokens, nil
+}
+
+// AddOutputTokens adds i to the "output_tokens" field.
+func (m *SessionMutation) AddOutputTokens(i int64) {
+	if m.addoutput_tokens != nil {
+		*m.addoutput_tokens += i
+	} else {
+		m.addoutput_tokens = &i
+	}
+}
+
+// AddedOutputTokens returns the value that was added to the "output_tokens" field in this mutation.
+func (m *SessionMutation) AddedOutputTokens() (r int64, exists bool) {
+	v := m.addoutput_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOutputTokens resets all changes to the "output_tokens" field.
+func (m *SessionMutation) ResetOutputTokens() {
+	m.output_tokens = nil
+	m.addoutput_tokens = nil
+}
+
+// SetCacheReadTokens sets the "cache_read_tokens" field.
+func (m *SessionMutation) SetCacheReadTokens(i int64) {
+	m.cache_read_tokens = &i
+	m.addcache_read_tokens = nil
+}
+
+// CacheReadTokens returns the value of the "cache_read_tokens" field in the mutation.
+func (m *SessionMutation) CacheReadTokens() (r int64, exists bool) {
+	v := m.cache_read_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCacheReadTokens returns the old "cache_read_tokens" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldCacheReadTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCacheReadTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCacheReadTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCacheReadTokens: %w", err)
+	}
+	return oldValue.CacheReadTokens, nil
+}
+
+// AddCacheReadTokens adds i to the "cache_read_tokens" field.
+func (m *SessionMutation) AddCacheReadTokens(i int64) {
+	if m.addcache_read_tokens != nil {
+		*m.addcache_read_tokens += i
+	} else {
+		m.addcache_read_tokens = &i
+	}
+}
+
+// AddedCacheReadTokens returns the value that was added to the "cache_read_tokens" field in this mutation.
+func (m *SessionMutation) AddedCacheReadTokens() (r int64, exists bool) {
+	v := m.addcache_read_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCacheReadTokens resets all changes to the "cache_read_tokens" field.
+func (m *SessionMutation) ResetCacheReadTokens() {
+	m.cache_read_tokens = nil
+	m.addcache_read_tokens = nil
+}
+
+// SetCacheWriteTokens sets the "cache_write_tokens" field.
+func (m *SessionMutation) SetCacheWriteTokens(i int64) {
+	m.cache_write_tokens = &i
+	m.addcache_write_tokens = nil
+}
+
+// CacheWriteTokens returns the value of the "cache_write_tokens" field in the mutation.
+func (m *SessionMutation) CacheWriteTokens() (r int64, exists bool) {
+	v := m.cache_write_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCacheWriteTokens returns the old "cache_write_tokens" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldCacheWriteTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCacheWriteTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCacheWriteTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCacheWriteTokens: %w", err)
+	}
+	return oldValue.CacheWriteTokens, nil
+}
+
+// AddCacheWriteTokens adds i to the "cache_write_tokens" field.
+func (m *SessionMutation) AddCacheWriteTokens(i int64) {
+	if m.addcache_write_tokens != nil {
+		*m.addcache_write_tokens += i
+	} else {
+		m.addcache_write_tokens = &i
+	}
+}
+
+// AddedCacheWriteTokens returns the value that was added to the "cache_write_tokens" field in this mutation.
+func (m *SessionMutation) AddedCacheWriteTokens() (r int64, exists bool) {
+	v := m.addcache_write_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCacheWriteTokens resets all changes to the "cache_write_tokens" field.
+func (m *SessionMutation) ResetCacheWriteTokens() {
+	m.cache_write_tokens = nil
+	m.addcache_write_tokens = nil
+}
+
+// SetEstimatedCostUsd sets the "estimated_cost_usd" field.
+func (m *SessionMutation) SetEstimatedCostUsd(f float64) {
+	m.estimated_cost_usd = &f
+	m.addestimated_cost_usd = nil
+}
+
+// EstimatedCostUsd returns the value of the "estimated_cost_usd" field in the mutation.
+func (m *SessionMutation) EstimatedCostUsd() (r float64, exists bool) {
+	v := m.estimated_cost_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEstimatedCostUsd returns the old "estimated_cost_usd" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldEstimatedCostUsd(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEstimatedCostUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEstimatedCostUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEstimatedCostUsd: %w", err)
+	}
+	return oldValue.EstimatedCostUsd, nil
+}
+
+// AddEstimatedCostUsd adds f to the "estimated_cost_usd" field.
+func (m *SessionMutation) AddEstimatedCostUsd(f float64) {
+	if m.addestimated_cost_usd != nil {
+		*m.addestimated_cost_usd += f
+	} else {
+		m.addestimated_cost_usd = &f
+	}
+}
+
+// AddedEstimatedCostUsd returns the value that was added to the "estimated_cost_usd" field in this mutation.
+func (m *SessionMutation) AddedEstimatedCostUsd() (r float64, exists bool) {
+	v := m.addestimated_cost_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetEstimatedCostUsd resets all changes to the "estimated_cost_usd" field.
+func (m *SessionMutation) ResetEstimatedCostUsd() {
+	m.estimated_cost_usd = nil
+	m.addestimated_cost_usd = nil
+}
+
+// SetModelUsage sets the "model_usage" field.
+func (m *SessionMutation) SetModelUsage(value []map[string]interface{}) {
+	m.model_usage = &value
+	m.appendmodel_usage = nil
+}
+
+// ModelUsage returns the value of the "model_usage" field in the mutation.
+func (m *SessionMutation) ModelUsage() (r []map[string]interface{}, exists bool) {
+	v := m.model_usage
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelUsage returns the old "model_usage" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldModelUsage(ctx context.Context) (v []map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelUsage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelUsage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelUsage: %w", err)
+	}
+	return oldValue.ModelUsage, nil
+}
+
+// AppendModelUsage adds value to the "model_usage" field.
+func (m *SessionMutation) AppendModelUsage(value []map[string]interface{}) {
+	m.appendmodel_usage = append(m.appendmodel_usage, value...)
+}
+
+// AppendedModelUsage returns the list of values that were appended to the "model_usage" field in this mutation.
+func (m *SessionMutation) AppendedModelUsage() ([]map[string]interface{}, bool) {
+	if len(m.appendmodel_usage) == 0 {
+		return nil, false
+	}
+	return m.appendmodel_usage, true
+}
+
+// ClearModelUsage clears the value of the "model_usage" field.
+func (m *SessionMutation) ClearModelUsage() {
+	m.model_usage = nil
+	m.appendmodel_usage = nil
+	m.clearedFields[session.FieldModelUsage] = struct{}{}
+}
+
+// ModelUsageCleared returns if the "model_usage" field was cleared in this mutation.
+func (m *SessionMutation) ModelUsageCleared() bool {
+	_, ok := m.clearedFields[session.FieldModelUsage]
+	return ok
+}
+
+// ResetModelUsage resets all changes to the "model_usage" field.
+func (m *SessionMutation) ResetModelUsage() {
+	m.model_usage = nil
+	m.appendmodel_usage = nil
+	delete(m.clearedFields, session.FieldModelUsage)
+}
+
+// SetCostSource sets the "cost_source" field.
+func (m *SessionMutation) SetCostSource(s string) {
+	m.cost_source = &s
+}
+
+// CostSource returns the value of the "cost_source" field in the mutation.
+func (m *SessionMutation) CostSource() (r string, exists bool) {
+	v := m.cost_source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCostSource returns the old "cost_source" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldCostSource(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCostSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCostSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCostSource: %w", err)
+	}
+	return oldValue.CostSource, nil
+}
+
+// ClearCostSource clears the value of the "cost_source" field.
+func (m *SessionMutation) ClearCostSource() {
+	m.cost_source = nil
+	m.clearedFields[session.FieldCostSource] = struct{}{}
+}
+
+// CostSourceCleared returns if the "cost_source" field was cleared in this mutation.
+func (m *SessionMutation) CostSourceCleared() bool {
+	_, ok := m.clearedFields[session.FieldCostSource]
+	return ok
+}
+
+// ResetCostSource resets all changes to the "cost_source" field.
+func (m *SessionMutation) ResetCostSource() {
+	m.cost_source = nil
+	delete(m.clearedFields, session.FieldCostSource)
+}
+
+// SetCostComputedAt sets the "cost_computed_at" field.
+func (m *SessionMutation) SetCostComputedAt(t time.Time) {
+	m.cost_computed_at = &t
+}
+
+// CostComputedAt returns the value of the "cost_computed_at" field in the mutation.
+func (m *SessionMutation) CostComputedAt() (r time.Time, exists bool) {
+	v := m.cost_computed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCostComputedAt returns the old "cost_computed_at" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldCostComputedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCostComputedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCostComputedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCostComputedAt: %w", err)
+	}
+	return oldValue.CostComputedAt, nil
+}
+
+// ClearCostComputedAt clears the value of the "cost_computed_at" field.
+func (m *SessionMutation) ClearCostComputedAt() {
+	m.cost_computed_at = nil
+	m.clearedFields[session.FieldCostComputedAt] = struct{}{}
+}
+
+// CostComputedAtCleared returns if the "cost_computed_at" field was cleared in this mutation.
+func (m *SessionMutation) CostComputedAtCleared() bool {
+	_, ok := m.clearedFields[session.FieldCostComputedAt]
+	return ok
+}
+
+// ResetCostComputedAt resets all changes to the "cost_computed_at" field.
+func (m *SessionMutation) ResetCostComputedAt() {
+	m.cost_computed_at = nil
+	delete(m.clearedFields, session.FieldCostComputedAt)
+}
+
 // AddEventIDs adds the "events" edge to the AuditEvent entity by ids.
 func (m *SessionMutation) AddEventIDs(ids ...uuid.UUID) {
 	if m.events == nil {
@@ -3829,7 +4336,7 @@ func (m *SessionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SessionMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 21)
 	if m.agent_session_id != nil {
 		fields = append(fields, session.FieldAgentSessionID)
 	}
@@ -3866,6 +4373,33 @@ func (m *SessionMutation) Fields() []string {
 	if m.errors != nil {
 		fields = append(fields, session.FieldErrors)
 	}
+	if m.transcript_path != nil {
+		fields = append(fields, session.FieldTranscriptPath)
+	}
+	if m.input_tokens != nil {
+		fields = append(fields, session.FieldInputTokens)
+	}
+	if m.output_tokens != nil {
+		fields = append(fields, session.FieldOutputTokens)
+	}
+	if m.cache_read_tokens != nil {
+		fields = append(fields, session.FieldCacheReadTokens)
+	}
+	if m.cache_write_tokens != nil {
+		fields = append(fields, session.FieldCacheWriteTokens)
+	}
+	if m.estimated_cost_usd != nil {
+		fields = append(fields, session.FieldEstimatedCostUsd)
+	}
+	if m.model_usage != nil {
+		fields = append(fields, session.FieldModelUsage)
+	}
+	if m.cost_source != nil {
+		fields = append(fields, session.FieldCostSource)
+	}
+	if m.cost_computed_at != nil {
+		fields = append(fields, session.FieldCostComputedAt)
+	}
 	return fields
 }
 
@@ -3898,6 +4432,24 @@ func (m *SessionMutation) Field(name string) (ent.Value, bool) {
 		return m.CommandsExecuted()
 	case session.FieldErrors:
 		return m.Errors()
+	case session.FieldTranscriptPath:
+		return m.TranscriptPath()
+	case session.FieldInputTokens:
+		return m.InputTokens()
+	case session.FieldOutputTokens:
+		return m.OutputTokens()
+	case session.FieldCacheReadTokens:
+		return m.CacheReadTokens()
+	case session.FieldCacheWriteTokens:
+		return m.CacheWriteTokens()
+	case session.FieldEstimatedCostUsd:
+		return m.EstimatedCostUsd()
+	case session.FieldModelUsage:
+		return m.ModelUsage()
+	case session.FieldCostSource:
+		return m.CostSource()
+	case session.FieldCostComputedAt:
+		return m.CostComputedAt()
 	}
 	return nil, false
 }
@@ -3931,6 +4483,24 @@ func (m *SessionMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldCommandsExecuted(ctx)
 	case session.FieldErrors:
 		return m.OldErrors(ctx)
+	case session.FieldTranscriptPath:
+		return m.OldTranscriptPath(ctx)
+	case session.FieldInputTokens:
+		return m.OldInputTokens(ctx)
+	case session.FieldOutputTokens:
+		return m.OldOutputTokens(ctx)
+	case session.FieldCacheReadTokens:
+		return m.OldCacheReadTokens(ctx)
+	case session.FieldCacheWriteTokens:
+		return m.OldCacheWriteTokens(ctx)
+	case session.FieldEstimatedCostUsd:
+		return m.OldEstimatedCostUsd(ctx)
+	case session.FieldModelUsage:
+		return m.OldModelUsage(ctx)
+	case session.FieldCostSource:
+		return m.OldCostSource(ctx)
+	case session.FieldCostComputedAt:
+		return m.OldCostComputedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown Session field %s", name)
 }
@@ -4024,6 +4594,69 @@ func (m *SessionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetErrors(v)
 		return nil
+	case session.FieldTranscriptPath:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTranscriptPath(v)
+		return nil
+	case session.FieldInputTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInputTokens(v)
+		return nil
+	case session.FieldOutputTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutputTokens(v)
+		return nil
+	case session.FieldCacheReadTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCacheReadTokens(v)
+		return nil
+	case session.FieldCacheWriteTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCacheWriteTokens(v)
+		return nil
+	case session.FieldEstimatedCostUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEstimatedCostUsd(v)
+		return nil
+	case session.FieldModelUsage:
+		v, ok := value.([]map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelUsage(v)
+		return nil
+	case session.FieldCostSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCostSource(v)
+		return nil
+	case session.FieldCostComputedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCostComputedAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Session field %s", name)
 }
@@ -4047,6 +4680,21 @@ func (m *SessionMutation) AddedFields() []string {
 	if m.adderrors != nil {
 		fields = append(fields, session.FieldErrors)
 	}
+	if m.addinput_tokens != nil {
+		fields = append(fields, session.FieldInputTokens)
+	}
+	if m.addoutput_tokens != nil {
+		fields = append(fields, session.FieldOutputTokens)
+	}
+	if m.addcache_read_tokens != nil {
+		fields = append(fields, session.FieldCacheReadTokens)
+	}
+	if m.addcache_write_tokens != nil {
+		fields = append(fields, session.FieldCacheWriteTokens)
+	}
+	if m.addestimated_cost_usd != nil {
+		fields = append(fields, session.FieldEstimatedCostUsd)
+	}
 	return fields
 }
 
@@ -4065,6 +4713,16 @@ func (m *SessionMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedCommandsExecuted()
 	case session.FieldErrors:
 		return m.AddedErrors()
+	case session.FieldInputTokens:
+		return m.AddedInputTokens()
+	case session.FieldOutputTokens:
+		return m.AddedOutputTokens()
+	case session.FieldCacheReadTokens:
+		return m.AddedCacheReadTokens()
+	case session.FieldCacheWriteTokens:
+		return m.AddedCacheWriteTokens()
+	case session.FieldEstimatedCostUsd:
+		return m.AddedEstimatedCostUsd()
 	}
 	return nil, false
 }
@@ -4109,6 +4767,41 @@ func (m *SessionMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddErrors(v)
 		return nil
+	case session.FieldInputTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInputTokens(v)
+		return nil
+	case session.FieldOutputTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOutputTokens(v)
+		return nil
+	case session.FieldCacheReadTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCacheReadTokens(v)
+		return nil
+	case session.FieldCacheWriteTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCacheWriteTokens(v)
+		return nil
+	case session.FieldEstimatedCostUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddEstimatedCostUsd(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Session numeric field %s", name)
 }
@@ -4131,6 +4824,18 @@ func (m *SessionMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(session.FieldProjectName) {
 		fields = append(fields, session.FieldProjectName)
+	}
+	if m.FieldCleared(session.FieldTranscriptPath) {
+		fields = append(fields, session.FieldTranscriptPath)
+	}
+	if m.FieldCleared(session.FieldModelUsage) {
+		fields = append(fields, session.FieldModelUsage)
+	}
+	if m.FieldCleared(session.FieldCostSource) {
+		fields = append(fields, session.FieldCostSource)
+	}
+	if m.FieldCleared(session.FieldCostComputedAt) {
+		fields = append(fields, session.FieldCostComputedAt)
 	}
 	return fields
 }
@@ -4160,6 +4865,18 @@ func (m *SessionMutation) ClearField(name string) error {
 		return nil
 	case session.FieldProjectName:
 		m.ClearProjectName()
+		return nil
+	case session.FieldTranscriptPath:
+		m.ClearTranscriptPath()
+		return nil
+	case session.FieldModelUsage:
+		m.ClearModelUsage()
+		return nil
+	case session.FieldCostSource:
+		m.ClearCostSource()
+		return nil
+	case session.FieldCostComputedAt:
+		m.ClearCostComputedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Session nullable field %s", name)
@@ -4204,6 +4921,33 @@ func (m *SessionMutation) ResetField(name string) error {
 		return nil
 	case session.FieldErrors:
 		m.ResetErrors()
+		return nil
+	case session.FieldTranscriptPath:
+		m.ResetTranscriptPath()
+		return nil
+	case session.FieldInputTokens:
+		m.ResetInputTokens()
+		return nil
+	case session.FieldOutputTokens:
+		m.ResetOutputTokens()
+		return nil
+	case session.FieldCacheReadTokens:
+		m.ResetCacheReadTokens()
+		return nil
+	case session.FieldCacheWriteTokens:
+		m.ResetCacheWriteTokens()
+		return nil
+	case session.FieldEstimatedCostUsd:
+		m.ResetEstimatedCostUsd()
+		return nil
+	case session.FieldModelUsage:
+		m.ResetModelUsage()
+		return nil
+	case session.FieldCostSource:
+		m.ResetCostSource()
+		return nil
+	case session.FieldCostComputedAt:
+		m.ResetCostComputedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Session field %s", name)

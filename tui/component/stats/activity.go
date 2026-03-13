@@ -38,12 +38,12 @@ func renderActivity(data *StatsData, width, height int) string {
 		bar := lipgloss.NewStyle().Foreground(r.color).Render(
 			renderBar(r.count, total, barWidth),
 		)
-		b.WriteString(fmt.Sprintf("  %s %s %s (%s)\n",
+		fmt.Fprintf(&b, "  %s %s %s (%s)\n",
 			labelStyle.Width(8).Render(r.label),
 			bar,
 			valueStyle.Render(tui.FormatNumber(r.count)),
 			percentage(r.count, total),
-		))
+		)
 	}
 
 	return renderPanel("ACTIVITY", b.String(), width, height)

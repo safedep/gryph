@@ -113,5 +113,10 @@ func (p *JSONPresenter) RenderEventDetails(events []*EventDetailView) error {
 	return p.encoder.Encode(events)
 }
 
+// RenderCostSummary renders the cost summary as JSON.
+func (p *JSONPresenter) RenderCostSummary(summary *CostSummaryView) error {
+	return p.encoder.Encode(summary)
+}
+
 // Ensure JSONPresenter implements Presenter
 var _ Presenter = (*JSONPresenter)(nil)

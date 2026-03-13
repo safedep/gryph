@@ -115,6 +115,12 @@ func (p *TablePresenter) RenderSessions(sessions []*SessionView) error {
 			summary += fmt.Sprintf("  *  %d commands", s.CommandsExecuted)
 		}
 
+		if s.EstimatedCostUSD > 0 {
+			summary += fmt.Sprintf("  *  %s tokens  *  %s",
+				FormatTokens(s.InputTokens+s.OutputTokens),
+				FormatCost(s.EstimatedCostUSD))
+		}
+
 		tw.println(p.color.Dim(summary))
 		tw.println()
 	}
@@ -182,6 +188,40 @@ func (p *TablePresenter) RenderSession(session *SessionView, events []*EventView
 		summary += fmt.Sprintf(" (%d errors)", session.Errors)
 	}
 	tw.println(summary)
+
+	// Cost section
+	if session.CostComputedAt != nil && len(session.ModelUsage) > 0 {
+		tw.println()
+		tw.printf("%s\n", p.color.Header("Token Usage"))
+		tw.println(HorizontalLine(p.termWidth))
+		tw.println()
+
+		tw.printf("  %-30s %10s %10s %10s %10s %10s\n",
+			"MODEL", "INPUT", "OUTPUT", "CACHE_R", "CACHE_W", "COST")
+		tw.println("  " + HorizontalLine(82))
+
+		for _, mu := range session.ModelUsage {
+			tw.printf("  %-30s %10s %10s %10s %10s %10s\n",
+				TruncateString(mu.Model, 30),
+				FormatNumber64(mu.InputTokens),
+				FormatNumber64(mu.OutputTokens),
+				FormatNumber64(mu.CacheReadTokens),
+				FormatNumber64(mu.CacheWriteTokens),
+				FormatCost(mu.Cost))
+		}
+
+		tw.println("  " + HorizontalLine(82))
+		tw.printf("  %-30s %10s %10s %10s %10s %10s\n",
+			"Total",
+			FormatNumber64(session.InputTokens),
+			FormatNumber64(session.OutputTokens),
+			FormatNumber64(session.CacheReadTokens),
+			FormatNumber64(session.CacheWriteTokens),
+			FormatCost(session.EstimatedCostUSD))
+		tw.println()
+		tw.printf("  Source: %s\n", session.CostSource)
+		tw.printf("  Computed: %s\n", FormatTime(*session.CostComputedAt))
+	}
 
 	return tw.Err()
 }
@@ -701,6 +741,101 @@ func (p *TablePresenter) renderPayloadDetail(tw *tableWriter, payload any) {
 			tw.printf("  %s\n", string(data))
 		}
 	}
+}
+
+// RenderCostSummary renders the cost summary.
+func (p *TablePresenter) RenderCostSummary(summary *CostSummaryView) error {
+	tw := &tableWriter{w: p.w}
+
+	if summary.GroupBy == "" || summary.GroupBy == "session" {
+		if len(summary.Sessions) == 0 {
+			tw.println("No cost data found.")
+			return tw.Err()
+		}
+
+		tw.printf("%-10s %-14s %-10s %-21s %7s %8s %10s\n",
+			"SESSION", "AGENT", "PROJECT", "STARTED", "MODELS", "TOKENS", "COST")
+		tw.println(HorizontalLine(p.termWidth))
+
+		for _, s := range summary.Sessions {
+			tw.printf("%-10s %-14s %-10s %-21s %7d %8s %10s\n",
+				s.ShortID,
+				p.color.Agent(s.AgentName),
+				TruncateString(s.ProjectName, 10),
+				FormatTime(s.StartedAt),
+				s.ModelCount,
+				FormatTokens(s.TotalTokens),
+				FormatCost(s.TotalCost))
+		}
+
+		tw.println(HorizontalLine(p.termWidth))
+		tw.printf("Total (%d sessions) %43s %10s\n",
+			summary.TotalSessions,
+			FormatTokens(summary.TotalTokens),
+			FormatCost(summary.TotalCost))
+	} else if len(summary.Groups) > 0 {
+		switch summary.GroupBy {
+		case "model":
+			tw.printf("%-30s %10s %10s %10s %10s %10s %10s\n",
+				"MODEL", "SESSIONS", "INPUT", "OUTPUT", "CACHE_R", "CACHE_W", "COST")
+			tw.println(HorizontalLine(p.termWidth))
+			for _, g := range summary.Groups {
+				tw.printf("%-30s %10d %10s %10s %10s %10s %10s\n",
+					TruncateString(g.Label, 30),
+					g.SessionCount,
+					FormatNumber64(g.InputTokens),
+					FormatNumber64(g.OutputTokens),
+					FormatNumber64(g.CacheRead),
+					FormatNumber64(g.CacheWrite),
+					FormatCost(g.TotalCost))
+			}
+			tw.println(HorizontalLine(p.termWidth))
+			tw.printf("%-30s %10d %10s %10s %10s %10s %10s\n",
+				"Total",
+				summary.TotalSessions,
+				FormatNumber64(summary.TotalInputTokens),
+				FormatNumber64(summary.TotalOutputTokens),
+				FormatNumber64(summary.TotalCacheRead),
+				FormatNumber64(summary.TotalCacheWrite),
+				FormatCost(summary.TotalCost))
+
+		case "agent":
+			tw.printf("%-14s %10s %10s %10s\n", "AGENT", "SESSIONS", "TOKENS", "COST")
+			tw.println(HorizontalLine(p.termWidth))
+			for _, g := range summary.Groups {
+				tw.printf("%-14s %10d %10s %10s\n",
+					p.color.Agent(g.Label),
+					g.SessionCount,
+					FormatTokens(g.TotalTokens),
+					FormatCost(g.TotalCost))
+			}
+			tw.println(HorizontalLine(p.termWidth))
+			tw.printf("%-14s %10d %10s %10s\n",
+				"Total",
+				summary.TotalSessions,
+				FormatTokens(summary.TotalTokens),
+				FormatCost(summary.TotalCost))
+
+		case "day":
+			tw.printf("%-14s %10s %10s %10s\n", "DATE", "SESSIONS", "TOKENS", "COST")
+			tw.println(HorizontalLine(p.termWidth))
+			for _, g := range summary.Groups {
+				tw.printf("%-14s %10d %10s %10s\n",
+					g.Label,
+					g.SessionCount,
+					FormatTokens(g.TotalTokens),
+					FormatCost(g.TotalCost))
+			}
+			tw.println(HorizontalLine(p.termWidth))
+			tw.printf("%-14s %10d %10s %10s\n",
+				"Total",
+				summary.TotalSessions,
+				FormatTokens(summary.TotalTokens),
+				FormatCost(summary.TotalCost))
+		}
+	}
+
+	return tw.Err()
 }
 
 // Ensure TablePresenter implements Presenter

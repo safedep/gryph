@@ -22,8 +22,7 @@ func newHeaderModel(timeRange TimeRange, agentFilter string, customSince, custom
 	}
 }
 
-func (h headerModel) view(width int) string {
-	title := "gryph stats"
+func (h headerModel) view(width int, activeTab tab) string {
 	var rangeTxt string
 	if h.customSince != nil && h.customUntil != nil {
 		rangeTxt = fmt.Sprintf("%s – %s",
@@ -47,6 +46,27 @@ func (h headerModel) view(width int) string {
 		refresh = fmt.Sprintf("Refreshed %s", h.lastRefresh.Local().Format("15:04"))
 	}
 
-	content := fmt.Sprintf(" %s │ %s │ %s │ %s", title, rangeTxt, agent, refresh)
+	tabs := renderTabs(activeTab)
+	content := fmt.Sprintf(" %s │ %s │ %s │ %s", tabs, rangeTxt, agent, refresh)
 	return titleStyle.Width(width).Render(content)
+}
+
+func renderTabs(active tab) string {
+	tabs := []struct {
+		label string
+		t     tab
+	}{
+		{"Overview", tabOverview},
+		{"Cost", tabCost},
+	}
+
+	var parts []string
+	for _, t := range tabs {
+		if t.t == active {
+			parts = append(parts, fmt.Sprintf("[%s]", t.label))
+		} else {
+			parts = append(parts, fmt.Sprintf(" %s ", t.label))
+		}
+	}
+	return fmt.Sprintf("%s %s", parts[0], parts[1])
 }

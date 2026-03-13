@@ -55,8 +55,8 @@ func (s statsModel) view(height int) string {
 
 	b.WriteString(sidebarHeaderStyle.Render("Stats"))
 	b.WriteByte('\n')
-	b.WriteString(fmt.Sprintf(" Events: %s\n", sidebarValueStyle.Render(fmt.Sprintf("%d", s.totalEvents))))
-	b.WriteString(fmt.Sprintf(" Rate:   %s\n", sidebarValueStyle.Render(fmt.Sprintf("%d/min", s.eventsPerMinute()))))
+	fmt.Fprintf(&b, " Events: %s\n", sidebarValueStyle.Render(fmt.Sprintf("%d", s.totalEvents)))
+	fmt.Fprintf(&b, " Rate:   %s\n", sidebarValueStyle.Render(fmt.Sprintf("%d/min", s.eventsPerMinute())))
 	b.WriteByte('\n')
 
 	b.WriteString(sidebarHeaderStyle.Render("By Type"))
@@ -69,9 +69,9 @@ func (s statsModel) view(height int) string {
 		if count, ok := s.byAction[a]; ok && count > 0 {
 			as := actionStyleFor(a)
 			label := fmt.Sprintf(" %s %-8s", as.symbol, a.DisplayName())
-			b.WriteString(fmt.Sprintf("%s %s\n",
+			fmt.Fprintf(&b, "%s %s\n",
 				sidebarLabelStyle.Render(label),
-				sidebarValueStyle.Render(fmt.Sprintf("%d", count))))
+				sidebarValueStyle.Render(fmt.Sprintf("%d", count)))
 		}
 	}
 	b.WriteByte('\n')
@@ -81,7 +81,7 @@ func (s statsModel) view(height int) string {
 	for _, st := range []events.ResultStatus{events.ResultSuccess, events.ResultError, events.ResultBlocked} {
 		if count, ok := s.byStatus[st]; ok && count > 0 {
 			styled := statusStyleFor(st).Render(fmt.Sprintf("%-8s", string(st)))
-			b.WriteString(fmt.Sprintf(" %s %s\n", styled, sidebarValueStyle.Render(fmt.Sprintf("%d", count))))
+			fmt.Fprintf(&b, " %s %s\n", styled, sidebarValueStyle.Render(fmt.Sprintf("%d", count)))
 		}
 	}
 	b.WriteByte('\n')
@@ -89,7 +89,7 @@ func (s statsModel) view(height int) string {
 	b.WriteString(sidebarHeaderStyle.Render("Sessions"))
 	b.WriteByte('\n')
 	for name := range s.agents {
-		b.WriteString(fmt.Sprintf(" %s\n", agentBadge(name)))
+		fmt.Fprintf(&b, " %s\n", agentBadge(name))
 	}
 
 	return sidebarStyle.Width(sidebarWidth).Height(height).Render(b.String())

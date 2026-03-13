@@ -24,6 +24,9 @@ var helpBindings = []struct {
 }{
 	{"q / Ctrl+C", "Quit"},
 	{"?", "Toggle help"},
+	{"Tab", "Switch tab"},
+	{"1", "Overview tab"},
+	{"2", "Cost tab"},
 	{"t", "Time range: Today"},
 	{"w", "Time range: 7 days"},
 	{"m", "Time range: 30 days"},

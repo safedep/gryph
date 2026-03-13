@@ -46,6 +46,9 @@ type Event struct {
 	RawEvent json.RawMessage `json:"raw_event,omitempty"`
 	// ConversationContext is the prompt/conversation (full logging only).
 	ConversationContext string `json:"conversation_context,omitempty"`
+	// TranscriptPath is the path to the agent's transcript file (if provided by the agent).
+	// Excluded from JSON export as it is internal to the local machine.
+	TranscriptPath string `json:"-"`
 	// IsSensitive is true if path matched sensitive_paths pattern.
 	IsSensitive bool `json:"is_sensitive"`
 }

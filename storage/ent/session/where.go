@@ -116,6 +116,46 @@ func Errors(v int) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldErrors, v))
 }
 
+// TranscriptPath applies equality check predicate on the "transcript_path" field. It's identical to TranscriptPathEQ.
+func TranscriptPath(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldTranscriptPath, v))
+}
+
+// InputTokens applies equality check predicate on the "input_tokens" field. It's identical to InputTokensEQ.
+func InputTokens(v int64) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldInputTokens, v))
+}
+
+// OutputTokens applies equality check predicate on the "output_tokens" field. It's identical to OutputTokensEQ.
+func OutputTokens(v int64) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldOutputTokens, v))
+}
+
+// CacheReadTokens applies equality check predicate on the "cache_read_tokens" field. It's identical to CacheReadTokensEQ.
+func CacheReadTokens(v int64) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldCacheReadTokens, v))
+}
+
+// CacheWriteTokens applies equality check predicate on the "cache_write_tokens" field. It's identical to CacheWriteTokensEQ.
+func CacheWriteTokens(v int64) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldCacheWriteTokens, v))
+}
+
+// EstimatedCostUsd applies equality check predicate on the "estimated_cost_usd" field. It's identical to EstimatedCostUsdEQ.
+func EstimatedCostUsd(v float64) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldEstimatedCostUsd, v))
+}
+
+// CostSource applies equality check predicate on the "cost_source" field. It's identical to CostSourceEQ.
+func CostSource(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldCostSource, v))
+}
+
+// CostComputedAt applies equality check predicate on the "cost_computed_at" field. It's identical to CostComputedAtEQ.
+func CostComputedAt(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldCostComputedAt, v))
+}
+
 // AgentSessionIDEQ applies the EQ predicate on the "agent_session_id" field.
 func AgentSessionIDEQ(v string) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldAgentSessionID, v))
@@ -769,6 +809,416 @@ func ErrorsLT(v int) predicate.Session {
 // ErrorsLTE applies the LTE predicate on the "errors" field.
 func ErrorsLTE(v int) predicate.Session {
 	return predicate.Session(sql.FieldLTE(FieldErrors, v))
+}
+
+// TranscriptPathEQ applies the EQ predicate on the "transcript_path" field.
+func TranscriptPathEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldTranscriptPath, v))
+}
+
+// TranscriptPathNEQ applies the NEQ predicate on the "transcript_path" field.
+func TranscriptPathNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldTranscriptPath, v))
+}
+
+// TranscriptPathIn applies the In predicate on the "transcript_path" field.
+func TranscriptPathIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldTranscriptPath, vs...))
+}
+
+// TranscriptPathNotIn applies the NotIn predicate on the "transcript_path" field.
+func TranscriptPathNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldTranscriptPath, vs...))
+}
+
+// TranscriptPathGT applies the GT predicate on the "transcript_path" field.
+func TranscriptPathGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldTranscriptPath, v))
+}
+
+// TranscriptPathGTE applies the GTE predicate on the "transcript_path" field.
+func TranscriptPathGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldTranscriptPath, v))
+}
+
+// TranscriptPathLT applies the LT predicate on the "transcript_path" field.
+func TranscriptPathLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldTranscriptPath, v))
+}
+
+// TranscriptPathLTE applies the LTE predicate on the "transcript_path" field.
+func TranscriptPathLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldTranscriptPath, v))
+}
+
+// TranscriptPathContains applies the Contains predicate on the "transcript_path" field.
+func TranscriptPathContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldTranscriptPath, v))
+}
+
+// TranscriptPathHasPrefix applies the HasPrefix predicate on the "transcript_path" field.
+func TranscriptPathHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldTranscriptPath, v))
+}
+
+// TranscriptPathHasSuffix applies the HasSuffix predicate on the "transcript_path" field.
+func TranscriptPathHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldTranscriptPath, v))
+}
+
+// TranscriptPathIsNil applies the IsNil predicate on the "transcript_path" field.
+func TranscriptPathIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldTranscriptPath))
+}
+
+// TranscriptPathNotNil applies the NotNil predicate on the "transcript_path" field.
+func TranscriptPathNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldTranscriptPath))
+}
+
+// TranscriptPathEqualFold applies the EqualFold predicate on the "transcript_path" field.
+func TranscriptPathEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldTranscriptPath, v))
+}
+
+// TranscriptPathContainsFold applies the ContainsFold predicate on the "transcript_path" field.
+func TranscriptPathContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldTranscriptPath, v))
+}
+
+// InputTokensEQ applies the EQ predicate on the "input_tokens" field.
+func InputTokensEQ(v int64) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldInputTokens, v))
+}
+
+// InputTokensNEQ applies the NEQ predicate on the "input_tokens" field.
+func InputTokensNEQ(v int64) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldInputTokens, v))
+}
+
+// InputTokensIn applies the In predicate on the "input_tokens" field.
+func InputTokensIn(vs ...int64) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldInputTokens, vs...))
+}
+
+// InputTokensNotIn applies the NotIn predicate on the "input_tokens" field.
+func InputTokensNotIn(vs ...int64) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldInputTokens, vs...))
+}
+
+// InputTokensGT applies the GT predicate on the "input_tokens" field.
+func InputTokensGT(v int64) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldInputTokens, v))
+}
+
+// InputTokensGTE applies the GTE predicate on the "input_tokens" field.
+func InputTokensGTE(v int64) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldInputTokens, v))
+}
+
+// InputTokensLT applies the LT predicate on the "input_tokens" field.
+func InputTokensLT(v int64) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldInputTokens, v))
+}
+
+// InputTokensLTE applies the LTE predicate on the "input_tokens" field.
+func InputTokensLTE(v int64) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldInputTokens, v))
+}
+
+// OutputTokensEQ applies the EQ predicate on the "output_tokens" field.
+func OutputTokensEQ(v int64) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldOutputTokens, v))
+}
+
+// OutputTokensNEQ applies the NEQ predicate on the "output_tokens" field.
+func OutputTokensNEQ(v int64) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldOutputTokens, v))
+}
+
+// OutputTokensIn applies the In predicate on the "output_tokens" field.
+func OutputTokensIn(vs ...int64) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldOutputTokens, vs...))
+}
+
+// OutputTokensNotIn applies the NotIn predicate on the "output_tokens" field.
+func OutputTokensNotIn(vs ...int64) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldOutputTokens, vs...))
+}
+
+// OutputTokensGT applies the GT predicate on the "output_tokens" field.
+func OutputTokensGT(v int64) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldOutputTokens, v))
+}
+
+// OutputTokensGTE applies the GTE predicate on the "output_tokens" field.
+func OutputTokensGTE(v int64) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldOutputTokens, v))
+}
+
+// OutputTokensLT applies the LT predicate on the "output_tokens" field.
+func OutputTokensLT(v int64) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldOutputTokens, v))
+}
+
+// OutputTokensLTE applies the LTE predicate on the "output_tokens" field.
+func OutputTokensLTE(v int64) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldOutputTokens, v))
+}
+
+// CacheReadTokensEQ applies the EQ predicate on the "cache_read_tokens" field.
+func CacheReadTokensEQ(v int64) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldCacheReadTokens, v))
+}
+
+// CacheReadTokensNEQ applies the NEQ predicate on the "cache_read_tokens" field.
+func CacheReadTokensNEQ(v int64) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldCacheReadTokens, v))
+}
+
+// CacheReadTokensIn applies the In predicate on the "cache_read_tokens" field.
+func CacheReadTokensIn(vs ...int64) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldCacheReadTokens, vs...))
+}
+
+// CacheReadTokensNotIn applies the NotIn predicate on the "cache_read_tokens" field.
+func CacheReadTokensNotIn(vs ...int64) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldCacheReadTokens, vs...))
+}
+
+// CacheReadTokensGT applies the GT predicate on the "cache_read_tokens" field.
+func CacheReadTokensGT(v int64) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldCacheReadTokens, v))
+}
+
+// CacheReadTokensGTE applies the GTE predicate on the "cache_read_tokens" field.
+func CacheReadTokensGTE(v int64) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldCacheReadTokens, v))
+}
+
+// CacheReadTokensLT applies the LT predicate on the "cache_read_tokens" field.
+func CacheReadTokensLT(v int64) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldCacheReadTokens, v))
+}
+
+// CacheReadTokensLTE applies the LTE predicate on the "cache_read_tokens" field.
+func CacheReadTokensLTE(v int64) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldCacheReadTokens, v))
+}
+
+// CacheWriteTokensEQ applies the EQ predicate on the "cache_write_tokens" field.
+func CacheWriteTokensEQ(v int64) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldCacheWriteTokens, v))
+}
+
+// CacheWriteTokensNEQ applies the NEQ predicate on the "cache_write_tokens" field.
+func CacheWriteTokensNEQ(v int64) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldCacheWriteTokens, v))
+}
+
+// CacheWriteTokensIn applies the In predicate on the "cache_write_tokens" field.
+func CacheWriteTokensIn(vs ...int64) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldCacheWriteTokens, vs...))
+}
+
+// CacheWriteTokensNotIn applies the NotIn predicate on the "cache_write_tokens" field.
+func CacheWriteTokensNotIn(vs ...int64) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldCacheWriteTokens, vs...))
+}
+
+// CacheWriteTokensGT applies the GT predicate on the "cache_write_tokens" field.
+func CacheWriteTokensGT(v int64) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldCacheWriteTokens, v))
+}
+
+// CacheWriteTokensGTE applies the GTE predicate on the "cache_write_tokens" field.
+func CacheWriteTokensGTE(v int64) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldCacheWriteTokens, v))
+}
+
+// CacheWriteTokensLT applies the LT predicate on the "cache_write_tokens" field.
+func CacheWriteTokensLT(v int64) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldCacheWriteTokens, v))
+}
+
+// CacheWriteTokensLTE applies the LTE predicate on the "cache_write_tokens" field.
+func CacheWriteTokensLTE(v int64) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldCacheWriteTokens, v))
+}
+
+// EstimatedCostUsdEQ applies the EQ predicate on the "estimated_cost_usd" field.
+func EstimatedCostUsdEQ(v float64) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldEstimatedCostUsd, v))
+}
+
+// EstimatedCostUsdNEQ applies the NEQ predicate on the "estimated_cost_usd" field.
+func EstimatedCostUsdNEQ(v float64) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldEstimatedCostUsd, v))
+}
+
+// EstimatedCostUsdIn applies the In predicate on the "estimated_cost_usd" field.
+func EstimatedCostUsdIn(vs ...float64) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldEstimatedCostUsd, vs...))
+}
+
+// EstimatedCostUsdNotIn applies the NotIn predicate on the "estimated_cost_usd" field.
+func EstimatedCostUsdNotIn(vs ...float64) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldEstimatedCostUsd, vs...))
+}
+
+// EstimatedCostUsdGT applies the GT predicate on the "estimated_cost_usd" field.
+func EstimatedCostUsdGT(v float64) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldEstimatedCostUsd, v))
+}
+
+// EstimatedCostUsdGTE applies the GTE predicate on the "estimated_cost_usd" field.
+func EstimatedCostUsdGTE(v float64) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldEstimatedCostUsd, v))
+}
+
+// EstimatedCostUsdLT applies the LT predicate on the "estimated_cost_usd" field.
+func EstimatedCostUsdLT(v float64) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldEstimatedCostUsd, v))
+}
+
+// EstimatedCostUsdLTE applies the LTE predicate on the "estimated_cost_usd" field.
+func EstimatedCostUsdLTE(v float64) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldEstimatedCostUsd, v))
+}
+
+// ModelUsageIsNil applies the IsNil predicate on the "model_usage" field.
+func ModelUsageIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldModelUsage))
+}
+
+// ModelUsageNotNil applies the NotNil predicate on the "model_usage" field.
+func ModelUsageNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldModelUsage))
+}
+
+// CostSourceEQ applies the EQ predicate on the "cost_source" field.
+func CostSourceEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldCostSource, v))
+}
+
+// CostSourceNEQ applies the NEQ predicate on the "cost_source" field.
+func CostSourceNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldCostSource, v))
+}
+
+// CostSourceIn applies the In predicate on the "cost_source" field.
+func CostSourceIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldCostSource, vs...))
+}
+
+// CostSourceNotIn applies the NotIn predicate on the "cost_source" field.
+func CostSourceNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldCostSource, vs...))
+}
+
+// CostSourceGT applies the GT predicate on the "cost_source" field.
+func CostSourceGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldCostSource, v))
+}
+
+// CostSourceGTE applies the GTE predicate on the "cost_source" field.
+func CostSourceGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldCostSource, v))
+}
+
+// CostSourceLT applies the LT predicate on the "cost_source" field.
+func CostSourceLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldCostSource, v))
+}
+
+// CostSourceLTE applies the LTE predicate on the "cost_source" field.
+func CostSourceLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldCostSource, v))
+}
+
+// CostSourceContains applies the Contains predicate on the "cost_source" field.
+func CostSourceContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldCostSource, v))
+}
+
+// CostSourceHasPrefix applies the HasPrefix predicate on the "cost_source" field.
+func CostSourceHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldCostSource, v))
+}
+
+// CostSourceHasSuffix applies the HasSuffix predicate on the "cost_source" field.
+func CostSourceHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldCostSource, v))
+}
+
+// CostSourceIsNil applies the IsNil predicate on the "cost_source" field.
+func CostSourceIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldCostSource))
+}
+
+// CostSourceNotNil applies the NotNil predicate on the "cost_source" field.
+func CostSourceNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldCostSource))
+}
+
+// CostSourceEqualFold applies the EqualFold predicate on the "cost_source" field.
+func CostSourceEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldCostSource, v))
+}
+
+// CostSourceContainsFold applies the ContainsFold predicate on the "cost_source" field.
+func CostSourceContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldCostSource, v))
+}
+
+// CostComputedAtEQ applies the EQ predicate on the "cost_computed_at" field.
+func CostComputedAtEQ(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldCostComputedAt, v))
+}
+
+// CostComputedAtNEQ applies the NEQ predicate on the "cost_computed_at" field.
+func CostComputedAtNEQ(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldCostComputedAt, v))
+}
+
+// CostComputedAtIn applies the In predicate on the "cost_computed_at" field.
+func CostComputedAtIn(vs ...time.Time) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldCostComputedAt, vs...))
+}
+
+// CostComputedAtNotIn applies the NotIn predicate on the "cost_computed_at" field.
+func CostComputedAtNotIn(vs ...time.Time) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldCostComputedAt, vs...))
+}
+
+// CostComputedAtGT applies the GT predicate on the "cost_computed_at" field.
+func CostComputedAtGT(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldCostComputedAt, v))
+}
+
+// CostComputedAtGTE applies the GTE predicate on the "cost_computed_at" field.
+func CostComputedAtGTE(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldCostComputedAt, v))
+}
+
+// CostComputedAtLT applies the LT predicate on the "cost_computed_at" field.
+func CostComputedAtLT(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldCostComputedAt, v))
+}
+
+// CostComputedAtLTE applies the LTE predicate on the "cost_computed_at" field.
+func CostComputedAtLTE(v time.Time) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldCostComputedAt, v))
+}
+
+// CostComputedAtIsNil applies the IsNil predicate on the "cost_computed_at" field.
+func CostComputedAtIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldCostComputedAt))
+}
+
+// CostComputedAtNotNil applies the NotNil predicate on the "cost_computed_at" field.
+func CostComputedAtNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldCostComputedAt))
 }
 
 // HasEvents applies the HasEdge predicate on the "events" edge.

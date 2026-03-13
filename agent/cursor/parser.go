@@ -220,57 +220,67 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 
 	agentSessionID := baseInput.ConversationID
 
+	var event *events.Event
+	var parseErr error
+
 	switch hookType {
 	case "preToolUse":
-		return a.parsePreToolUse(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = a.parsePreToolUse(sessionID, agentSessionID, baseInput, rawData)
 	case "postToolUse":
-		return a.parsePostToolUse(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = a.parsePostToolUse(sessionID, agentSessionID, baseInput, rawData)
 	case "postToolUseFailure":
-		return a.parsePostToolUseFailure(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = a.parsePostToolUseFailure(sessionID, agentSessionID, baseInput, rawData)
 	case "beforeShellExecution":
-		return parseBeforeShellExecution(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseBeforeShellExecution(sessionID, agentSessionID, baseInput, rawData)
 	case "beforeReadFile":
-		return a.parseBeforeReadFile(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = a.parseBeforeReadFile(sessionID, agentSessionID, baseInput, rawData)
 	case "afterFileEdit":
-		return a.parseAfterFileEdit(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = a.parseAfterFileEdit(sessionID, agentSessionID, baseInput, rawData)
 	case "beforeSubmitPrompt":
-		return parseBeforeSubmitPrompt(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseBeforeSubmitPrompt(sessionID, agentSessionID, baseInput, rawData)
 	case "sessionStart":
-		return parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
 	case "sessionEnd":
-		return parseSessionEnd(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseSessionEnd(sessionID, agentSessionID, baseInput, rawData)
 	case "stop":
-		return parseStop(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseStop(sessionID, agentSessionID, baseInput, rawData)
 	case "beforeTabFileRead":
-		return a.parseBeforeReadFile(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = a.parseBeforeReadFile(sessionID, agentSessionID, baseInput, rawData)
 	case "afterTabFileEdit":
-		return a.parseAfterFileEdit(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = a.parseAfterFileEdit(sessionID, agentSessionID, baseInput, rawData)
 	case "beforeMCPExecution":
-		return parseBeforeMCPExecution(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseBeforeMCPExecution(sessionID, agentSessionID, baseInput, rawData)
 	case "afterShellExecution":
-		return parseAfterShellExecution(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseAfterShellExecution(sessionID, agentSessionID, baseInput, rawData)
 	case "afterMCPExecution":
-		return parseAfterMCPExecution(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseAfterMCPExecution(sessionID, agentSessionID, baseInput, rawData)
 	case "subagentStart":
-		return parseSubagentStart(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseSubagentStart(sessionID, agentSessionID, baseInput, rawData)
 	case "subagentStop":
-		return parseSubagentStop(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseSubagentStop(sessionID, agentSessionID, baseInput, rawData)
 	case "afterAgentThought":
-		return parseAfterAgentThought(sessionID, agentSessionID, baseInput, rawData)
+		event, parseErr = parseAfterAgentThought(sessionID, agentSessionID, baseInput, rawData)
 	default:
 		actionType := events.ActionUnknown
 		if at, ok := HookTypeMapping[hookType]; ok {
 			actionType = at
 		}
-		event := events.NewEvent(sessionID, AgentName, actionType)
+		event = events.NewEvent(sessionID, AgentName, actionType)
 		event.AgentSessionID = agentSessionID
 		event.ToolName = hookType
 		event.RawEvent = rawData
 		if len(baseInput.WorkspaceRoots) > 0 {
 			event.WorkingDirectory = baseInput.WorkspaceRoots[0]
 		}
-		return event, nil
 	}
+
+	if parseErr != nil {
+		return nil, parseErr
+	}
+	if event != nil {
+		event.TranscriptPath = baseInput.TranscriptPath
+	}
+	return event, nil
 }
 
 func (a *Adapter) parsePreToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {

@@ -25,6 +25,10 @@ generate:
 generate-schema:
 	$(GO) run ./cmd/jsonschema-gen
 
+# Update bundled pricing data from models.dev
+update-pricing:
+	$(GO) run pricing/scripts/update-pricing.go
+
 # Verify Event JSON Schema is up-to-date
 verify-schema: generate-schema
 	@git diff --exit-code schema/event.schema.json || (echo "ERROR: schema/event.schema.json is out of date. Run 'make generate-schema' and commit the result." && exit 1)

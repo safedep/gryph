@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -42,6 +43,24 @@ type Session struct {
 	CommandsExecuted int `json:"commands_executed,omitempty"`
 	// Errors holds the value of the "errors" field.
 	Errors int `json:"errors,omitempty"`
+	// TranscriptPath holds the value of the "transcript_path" field.
+	TranscriptPath string `json:"transcript_path,omitempty"`
+	// InputTokens holds the value of the "input_tokens" field.
+	InputTokens int64 `json:"input_tokens,omitempty"`
+	// OutputTokens holds the value of the "output_tokens" field.
+	OutputTokens int64 `json:"output_tokens,omitempty"`
+	// CacheReadTokens holds the value of the "cache_read_tokens" field.
+	CacheReadTokens int64 `json:"cache_read_tokens,omitempty"`
+	// CacheWriteTokens holds the value of the "cache_write_tokens" field.
+	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
+	// EstimatedCostUsd holds the value of the "estimated_cost_usd" field.
+	EstimatedCostUsd float64 `json:"estimated_cost_usd,omitempty"`
+	// ModelUsage holds the value of the "model_usage" field.
+	ModelUsage []map[string]interface{} `json:"model_usage,omitempty"`
+	// CostSource holds the value of the "cost_source" field.
+	CostSource string `json:"cost_source,omitempty"`
+	// CostComputedAt holds the value of the "cost_computed_at" field.
+	CostComputedAt *time.Time `json:"cost_computed_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SessionQuery when eager-loading is set.
 	Edges        SessionEdges `json:"edges"`
@@ -71,11 +90,15 @@ func (*Session) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case session.FieldTotalActions, session.FieldFilesRead, session.FieldFilesWritten, session.FieldCommandsExecuted, session.FieldErrors:
+		case session.FieldModelUsage:
+			values[i] = new([]byte)
+		case session.FieldEstimatedCostUsd:
+			values[i] = new(sql.NullFloat64)
+		case session.FieldTotalActions, session.FieldFilesRead, session.FieldFilesWritten, session.FieldCommandsExecuted, session.FieldErrors, session.FieldInputTokens, session.FieldOutputTokens, session.FieldCacheReadTokens, session.FieldCacheWriteTokens:
 			values[i] = new(sql.NullInt64)
-		case session.FieldAgentSessionID, session.FieldAgentName, session.FieldAgentVersion, session.FieldWorkingDirectory, session.FieldProjectName:
+		case session.FieldAgentSessionID, session.FieldAgentName, session.FieldAgentVersion, session.FieldWorkingDirectory, session.FieldProjectName, session.FieldTranscriptPath, session.FieldCostSource:
 			values[i] = new(sql.NullString)
-		case session.FieldStartedAt, session.FieldEndedAt:
+		case session.FieldStartedAt, session.FieldEndedAt, session.FieldCostComputedAt:
 			values[i] = new(sql.NullTime)
 		case session.FieldID:
 			values[i] = new(uuid.UUID)
@@ -173,6 +196,63 @@ func (_m *Session) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Errors = int(value.Int64)
 			}
+		case session.FieldTranscriptPath:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field transcript_path", values[i])
+			} else if value.Valid {
+				_m.TranscriptPath = value.String
+			}
+		case session.FieldInputTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field input_tokens", values[i])
+			} else if value.Valid {
+				_m.InputTokens = value.Int64
+			}
+		case session.FieldOutputTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field output_tokens", values[i])
+			} else if value.Valid {
+				_m.OutputTokens = value.Int64
+			}
+		case session.FieldCacheReadTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field cache_read_tokens", values[i])
+			} else if value.Valid {
+				_m.CacheReadTokens = value.Int64
+			}
+		case session.FieldCacheWriteTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field cache_write_tokens", values[i])
+			} else if value.Valid {
+				_m.CacheWriteTokens = value.Int64
+			}
+		case session.FieldEstimatedCostUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field estimated_cost_usd", values[i])
+			} else if value.Valid {
+				_m.EstimatedCostUsd = value.Float64
+			}
+		case session.FieldModelUsage:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field model_usage", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ModelUsage); err != nil {
+					return fmt.Errorf("unmarshal field model_usage: %w", err)
+				}
+			}
+		case session.FieldCostSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field cost_source", values[i])
+			} else if value.Valid {
+				_m.CostSource = value.String
+			}
+		case session.FieldCostComputedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field cost_computed_at", values[i])
+			} else if value.Valid {
+				_m.CostComputedAt = new(time.Time)
+				*_m.CostComputedAt = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -251,6 +331,35 @@ func (_m *Session) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("errors=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Errors))
+	builder.WriteString(", ")
+	builder.WriteString("transcript_path=")
+	builder.WriteString(_m.TranscriptPath)
+	builder.WriteString(", ")
+	builder.WriteString("input_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.InputTokens))
+	builder.WriteString(", ")
+	builder.WriteString("output_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.OutputTokens))
+	builder.WriteString(", ")
+	builder.WriteString("cache_read_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CacheReadTokens))
+	builder.WriteString(", ")
+	builder.WriteString("cache_write_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CacheWriteTokens))
+	builder.WriteString(", ")
+	builder.WriteString("estimated_cost_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.EstimatedCostUsd))
+	builder.WriteString(", ")
+	builder.WriteString("model_usage=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ModelUsage))
+	builder.WriteString(", ")
+	builder.WriteString("cost_source=")
+	builder.WriteString(_m.CostSource)
+	builder.WriteString(", ")
+	if v := _m.CostComputedAt; v != nil {
+		builder.WriteString("cost_computed_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

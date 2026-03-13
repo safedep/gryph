@@ -137,6 +137,15 @@ var (
 		{Name: "files_written", Type: field.TypeInt, Default: 0},
 		{Name: "commands_executed", Type: field.TypeInt, Default: 0},
 		{Name: "errors", Type: field.TypeInt, Default: 0},
+		{Name: "transcript_path", Type: field.TypeString, Nullable: true},
+		{Name: "input_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "output_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "cache_read_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "cache_write_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "estimated_cost_usd", Type: field.TypeFloat64, Default: 0},
+		{Name: "model_usage", Type: field.TypeJSON, Nullable: true},
+		{Name: "cost_source", Type: field.TypeString, Nullable: true},
+		{Name: "cost_computed_at", Type: field.TypeTime, Nullable: true},
 	}
 	// SessionsTable holds the schema information for the "sessions" table.
 	SessionsTable = &schema.Table{

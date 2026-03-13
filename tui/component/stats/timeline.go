@@ -61,10 +61,10 @@ func renderTimeline(data *StatsData, width, height int) string {
 		}
 	}
 	if peak > 0 {
-		b.WriteString(fmt.Sprintf("  %s %s",
+		fmt.Fprintf(&b, "  %s %s",
 			labelStyle.Render("Peak:"),
 			valueStyle.Render(fmt.Sprintf("%d events at %s", peak, peakLabel)),
-		))
+		)
 	}
 
 	return renderPanel("TIMELINE", b.String(), width, height)
