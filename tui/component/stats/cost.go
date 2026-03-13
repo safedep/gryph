@@ -128,11 +128,11 @@ func renderCostByAgent(data *StatsData, width, height int) string {
 		name := lipgloss.NewStyle().Foreground(agentColor(a.Name)).Render(
 			tui.TruncateString(a.Name, 14),
 		)
-		b.WriteString(fmt.Sprintf("  %s %s %s\n",
+		fmt.Fprintf(&b, "  %s %s %s\n",
 			tui.PadRightVisible(name, 14),
 			valueStyle.Width(5).Align(lipgloss.Right).Render(fmt.Sprintf("%d", a.Sessions)),
 			greenValueStyle.Width(9).Align(lipgloss.Right).Render(tui.FormatCost(a.Cost)),
-		))
+		)
 	}
 
 	return renderPanel("BY AGENT", b.String(), width, height)
@@ -144,11 +144,11 @@ func renderCostByModel(data *StatsData, width, height int) string {
 	}
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  %s %s %s\n",
+	fmt.Fprintf(&b, "  %s %s %s\n",
 		labelStyle.Width(18).Render("Model"),
 		labelStyle.Width(8).Align(lipgloss.Right).Render("Tokens"),
 		labelStyle.Width(5).Align(lipgloss.Right).Render("Sess"),
-	))
+	)
 
 	maxModels := height - 3
 	if maxModels < 1 {
@@ -159,11 +159,11 @@ func renderCostByModel(data *StatsData, width, height int) string {
 	}
 
 	for _, ms := range data.ModelStats[:maxModels] {
-		b.WriteString(fmt.Sprintf("  %s %s %s\n",
+		fmt.Fprintf(&b, "  %s %s %s\n",
 			valueStyle.Width(18).Render(tui.TruncateString(ms.Name, 18)),
 			valueStyle.Width(8).Align(lipgloss.Right).Render(tui.FormatTokens(ms.TotalTokens)),
 			labelStyle.Width(5).Align(lipgloss.Right).Render(fmt.Sprintf("%d", ms.Sessions)),
-		))
+		)
 	}
 
 	return renderPanel("BY MODEL", b.String(), width, height)
@@ -198,17 +198,17 @@ func renderCostTokens(data *StatsData, width, height int) string {
 		if total > 0 {
 			pct = fmt.Sprintf(" %d%%", r.value*100/total)
 		}
-		b.WriteString(fmt.Sprintf("  %s  %s%s\n",
+		fmt.Fprintf(&b, "  %s  %s%s\n",
 			labelStyle.Width(12).Render(r.label),
 			r.style.Render(tui.FormatTokens(r.value)),
 			labelStyle.Render(pct),
-		))
+		)
 	}
 
-	b.WriteString(fmt.Sprintf("  %s  %s\n",
+	fmt.Fprintf(&b, "  %s  %s\n",
 		labelStyle.Width(12).Render("Total"),
 		valueStyle.Bold(true).Render(tui.FormatTokens(total)),
-	))
+	)
 
 	return renderPanel("TOKENS", b.String(), width, height)
 }
@@ -263,10 +263,10 @@ func renderCostTrend(data *StatsData, width, height int) string {
 		}
 	}
 	if peak > 0 {
-		b.WriteString(fmt.Sprintf("  %s %s",
+		fmt.Fprintf(&b, "  %s %s",
 			labelStyle.Render("Peak:"),
 			valueStyle.Render(fmt.Sprintf("%s at %s", tui.FormatCost(peak), peakLabel)),
-		))
+		)
 	}
 
 	return renderPanel("COST TREND", b.String(), width, height)
