@@ -39,23 +39,6 @@ gryph cost --sync
 gryph cost --sync --force
 ```
 
-### Flags
-
-| Flag          | Type   | Default   | Description                                    |
-| ------------- | ------ | --------- | ---------------------------------------------- |
-| `--since`     | string |           | Show costs since (e.g., `1h`, `2d`, `1w`)      |
-| `--until`     | string |           | Show costs until                               |
-| `--today`     | bool   | false     | Shorthand for since midnight                   |
-| `--yesterday` | bool   | false     | Filter to yesterday                            |
-| `--agent`     | string |           | Filter by agent name                           |
-| `--model`     | string |           | Filter by model name (substring match)         |
-| `--session`   | string |           | Filter by session ID (prefix match)            |
-| `--by`        | string | `session` | Group by: `session`, `model`, `agent`, `day`   |
-| `--sync`      | bool   | false     | Collect/refresh cost data before displaying    |
-| `--force`     | bool   | false     | With `--sync`: recompute even if already exists |
-| `--format`    | string | `table`   | Output format: `table`, `json`                 |
-| `--limit`     | int    | 100       | Maximum sessions to query                      |
-
 ## Automatic Collection
 
 Cost data is collected automatically at session end — no configuration required. The `--sync` flag is only needed to backfill older sessions or recompute after a pricing update.

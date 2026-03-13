@@ -57,18 +57,18 @@ func renderCostSummary(data *StatsData, width, height int) string {
 	}
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  %s  %s\n",
+	fmt.Fprintf(&b, "  %s  %s\n",
 		labelStyle.Width(12).Render("Total Cost"),
 		greenValueStyle.Render(tui.FormatCost(data.TotalCost)),
-	))
-	b.WriteString(fmt.Sprintf("  %s  %s\n",
+	)
+	fmt.Fprintf(&b, "  %s  %s\n",
 		labelStyle.Width(12).Render("Avg/Session"),
 		valueStyle.Render(tui.FormatCost(data.AvgCostPerSession)),
-	))
-	b.WriteString(fmt.Sprintf("  %s  %s\n",
+	)
+	fmt.Fprintf(&b, "  %s  %s\n",
 		labelStyle.Width(12).Render("Sessions"),
 		valueStyle.Render(fmt.Sprintf("%d of %d", data.SessionsWithCost, data.TotalSessions)),
-	))
+	)
 
 	totalTokens := int64(0)
 	for _, ms := range data.ModelStats {
