@@ -1,5 +1,58 @@
 package query
 
+import (
+	"fmt"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+var helpBindings = []struct {
+	key  string
+	desc string
+}{
+	{"q / Ctrl+C", "Quit"},
+	{"?", "Toggle help"},
+	{"tab", "Switch pane focus"},
+	{"/", "Search (FTS)"},
+	{"f", "Open filter bar"},
+	{"", ""},
+	{"j / ↓", "Next / scroll down"},
+	{"k / ↑", "Previous / scroll up"},
+	{"g / G", "Jump to first / last"},
+	{"pgup/pgdn", "Page up / down"},
+	{"enter", "Select / expand"},
+	{"esc", "Back / collapse"},
+	{"", ""},
+	{"o", "Toggle sort order"},
+	{"1-5", "Toggle action filter"},
+	{"0", "Clear action filters"},
+}
+
 func (m Model) renderHelp() string {
-	return "Help overlay (not yet implemented)"
+	var sb strings.Builder
+
+	keyStyle := lipgloss.NewStyle().Foreground(colorAmber).Bold(true)
+
+	for _, b := range helpBindings {
+		if b.key == "" {
+			sb.WriteString("\n")
+			continue
+		}
+		sb.WriteString(fmt.Sprintf("  %s  %s\n",
+			keyStyle.Width(14).Render(b.key),
+			b.desc))
+	}
+
+	content := sb.String()
+	overlay := overlayStyle.Render(content)
+
+	height := m.height - 2
+	padTop := (height - strings.Count(overlay, "\n") - 1) / 3
+	if padTop < 1 {
+		padTop = 1
+	}
+
+	return strings.Repeat("\n", padTop) +
+		lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(overlay)
 }
