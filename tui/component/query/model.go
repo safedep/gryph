@@ -246,6 +246,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleNavPageUp()
 
 	case "enter":
+		if m.focus == paneSearch {
+			return m.openSearchResult()
+		}
 		if m.focus == paneSessionList && len(m.sessions) > 0 {
 			m.focus = paneDetail
 			return m, loadEvents(m.store, m.sessions[m.sessionIdx])
@@ -391,6 +394,8 @@ func (m Model) handleSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(m.searchInput) > 0 {
 			m.searchInput = m.searchInput[:len(m.searchInput)-1]
 		}
+	case "enter", "esc":
+		return m, nil
 	default:
 		if len(msg.Runes) > 0 {
 			m.searchInput += string(msg.Runes)
