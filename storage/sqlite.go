@@ -142,6 +142,9 @@ func (s *SQLiteStore) SaveEvent(ctx context.Context, event *events.Event) error 
 		return fmt.Errorf("failed to save event: %w", err)
 	}
 
+	// Index in FTS (best-effort)
+	_ = s.indexEvent(ctx, event)
+
 	return nil
 }
 
