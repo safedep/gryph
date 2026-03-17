@@ -39,7 +39,3 @@ type backfillDoneMsg struct {
 type backfillErrorMsg struct {
 	err error
 }
-
-type debounceTickMsg struct {
-	query string
-}

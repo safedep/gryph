@@ -3,7 +3,6 @@ package query
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/safedep/gryph/core/session"
@@ -117,18 +116,4 @@ func attentionDot(sess *session.Session) string {
 		return lipgloss.NewStyle().Foreground(colorGreen).Render("●")
 	}
 	return dimStyle.Render("·")
-}
-
-func formatAge(t time.Time) string {
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd", int(d.Hours()/24))
-	}
 }

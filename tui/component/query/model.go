@@ -404,13 +404,14 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleNavDown() (tea.Model, tea.Cmd) {
-	if m.focus == paneSessionList {
+	switch m.focus {
+	case paneSessionList:
 		if m.sessionIdx < len(m.sessions)-1 {
 			m.sessionIdx++
 			m.adjustSessionScroll()
 			return m, loadEvents(m.store, m.sessions[m.sessionIdx])
 		}
-	} else if m.focus == paneDetail {
+	case paneDetail:
 		if m.expanded {
 			m.eventScroll++
 		} else if m.eventIdx < len(m.filteredEvents())-1 {
@@ -421,13 +422,14 @@ func (m Model) handleNavDown() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleNavUp() (tea.Model, tea.Cmd) {
-	if m.focus == paneSessionList {
+	switch m.focus {
+	case paneSessionList:
 		if m.sessionIdx > 0 {
 			m.sessionIdx--
 			m.adjustSessionScroll()
 			return m, loadEvents(m.store, m.sessions[m.sessionIdx])
 		}
-	} else if m.focus == paneDetail {
+	case paneDetail:
 		if m.expanded {
 			if m.eventScroll > 0 {
 				m.eventScroll--
@@ -440,13 +442,14 @@ func (m Model) handleNavUp() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleNavTop() (tea.Model, tea.Cmd) {
-	if m.focus == paneSessionList {
+	switch m.focus {
+	case paneSessionList:
 		m.sessionIdx = 0
 		m.sessionScroll = 0
 		if len(m.sessions) > 0 {
 			return m, loadEvents(m.store, m.sessions[0])
 		}
-	} else if m.focus == paneDetail {
+	case paneDetail:
 		m.eventIdx = 0
 		m.eventScroll = 0
 	}
@@ -469,7 +472,8 @@ func (m Model) handleNavBottom() (tea.Model, tea.Cmd) {
 
 func (m Model) handleNavPage(dir int) (tea.Model, tea.Cmd) {
 	pageSize := m.visibleSessionRows()
-	if m.focus == paneSessionList {
+	switch m.focus {
+	case paneSessionList:
 		m.sessionIdx += dir * pageSize
 		if m.sessionIdx < 0 {
 			m.sessionIdx = 0
@@ -484,7 +488,7 @@ func (m Model) handleNavPage(dir int) (tea.Model, tea.Cmd) {
 		if len(m.sessions) > 0 {
 			return m, loadEvents(m.store, m.sessions[m.sessionIdx])
 		}
-	} else if m.focus == paneDetail {
+	case paneDetail:
 		m.eventIdx += dir * pageSize
 		evts := m.filteredEvents()
 		if m.eventIdx < 0 {
