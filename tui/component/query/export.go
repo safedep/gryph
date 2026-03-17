@@ -36,10 +36,10 @@ func (m Model) renderExportOverlay() string {
 	sb.WriteString(activeStyle.Render("█") + "\n\n")
 
 	if ex.err != "" {
-		sb.WriteString("  " + lipgloss.NewStyle().Foreground(colorRed).Render(ex.err) + "\n\n")
+		sb.WriteString("  " + redTextStyle.Render(ex.err) + "\n\n")
 	}
 	if ex.success != "" {
-		sb.WriteString("  " + lipgloss.NewStyle().Foreground(colorGreen).Render(ex.success) + "\n\n")
+		sb.WriteString("  " + greenDotStyle.Render(ex.success) + "\n\n")
 	}
 
 	sep := dimStyle.Render(" · ")
@@ -67,11 +67,11 @@ func (m Model) handleExportKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if err := exportEventToFile(m.export.event, filename); err != nil {
 			m.export.err = err.Error()
-		} else {
-			m.export.success = "exported to " + filename
-			m.export.err = ""
+			return m, nil
 		}
-		return m, nil
+		m.export.success = "exported to " + filename
+		m.export.err = ""
+		return m, scheduleExportClose()
 
 	case "backspace":
 		if len(m.export.filename) > 0 {
@@ -121,9 +121,7 @@ func openExportModal(event *events.Event) exportModel {
 	}
 }
 
-type exportDoneMsg struct {
-	filename string
-}
+type exportDoneMsg struct{}
 
 func scheduleExportClose() tea.Cmd {
 	return tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {

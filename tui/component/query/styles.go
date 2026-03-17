@@ -69,6 +69,16 @@ var (
 	greenDotStyle = lipgloss.NewStyle().
 			Foreground(colorGreen)
 
+	amberTextStyle = lipgloss.NewStyle().
+			Foreground(colorAmber)
+
+	redTextStyle = lipgloss.NewStyle().
+			Foreground(colorRed)
+
+	eventsTitleStyle = lipgloss.NewStyle().
+				Foreground(colorWhite).
+				Bold(true)
+
 	searchHighlightStyle = lipgloss.NewStyle().
 				Foreground(colorAmber).
 				Bold(true)

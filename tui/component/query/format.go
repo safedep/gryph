@@ -62,9 +62,9 @@ func formatEventRow(e *events.Event, width int, highlighted bool) string {
 		line += "  " + dimStyle.Render(detail)
 	}
 	if e.ResultStatus != events.ResultSuccess {
-		statusStyle := lipgloss.NewStyle().Foreground(colorRed)
+		statusStyle := redTextStyle
 		if e.ResultStatus == events.ResultBlocked {
-			statusStyle = lipgloss.NewStyle().Foreground(colorAmber)
+			statusStyle = amberTextStyle
 		}
 		line += "  " + statusStyle.Render(string(e.ResultStatus))
 	}
@@ -150,7 +150,7 @@ func formatExpandedEvent(e *events.Event, width int) string {
 
 	if e.ErrorMessage != "" {
 		sb.WriteString(fmt.Sprintf(" Error:  %s\n",
-			lipgloss.NewStyle().Foreground(colorRed).Render(e.ErrorMessage)))
+			redTextStyle.Render(e.ErrorMessage)))
 	}
 
 	if e.DiffContent != "" {
@@ -203,7 +203,7 @@ func formatExpandedEvent(e *events.Event, width int) string {
 }
 
 func formatJSON(raw json.RawMessage, width int) string {
-	pretty, err := json.MarshalIndent(json.RawMessage(raw), "  ", "  ")
+	pretty, err := json.MarshalIndent(raw, "  ", "  ")
 	if err != nil {
 		s := string(raw)
 		if len(s) > 500 {

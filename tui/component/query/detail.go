@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/tui"
 )
@@ -120,7 +119,7 @@ func (m Model) renderSummaryAndEvents(title string, width, height int) string {
 		c := s.commands[i]
 		exitStyle := dimStyle
 		if c.exitCode != 0 {
-			exitStyle = lipgloss.NewStyle().Foreground(colorRed)
+			exitStyle = redTextStyle
 		}
 		cmd := c.command
 		maxCmd := width - 22
@@ -128,7 +127,7 @@ func (m Model) renderSummaryAndEvents(title string, width, height int) string {
 			cmd = cmd[:maxCmd-3] + "..."
 		}
 		out = append(out, fmt.Sprintf("     %s %s  %s",
-			lipgloss.NewStyle().Foreground(colorAmber).Render("$"),
+			amberTextStyle.Render("$"),
 			cmd, exitStyle.Render(tui.FormatExitCode(c.exitCode))))
 	}
 	if len(s.commands) > 5 {
@@ -139,9 +138,9 @@ func (m Model) renderSummaryAndEvents(title string, width, height int) string {
 	flagLine := fmt.Sprintf("   %s  %d sensitive  %d blocked  %d errors",
 		summaryLabelStyle.Render("Flags"), s.sensitive, s.blocked, s.errors)
 	if s.errors > 0 {
-		flagLine = lipgloss.NewStyle().Foreground(colorRed).Render(flagLine)
+		flagLine = redTextStyle.Render(flagLine)
 	} else if s.sensitive > 0 || s.blocked > 0 {
-		flagLine = lipgloss.NewStyle().Foreground(colorAmber).Render(flagLine)
+		flagLine = amberTextStyle.Render(flagLine)
 	} else {
 		flagLine = dimStyle.Render(flagLine)
 	}
@@ -157,8 +156,7 @@ func (m Model) renderSummaryAndEvents(title string, width, height int) string {
 	}
 	filtered := m.filteredEvents()
 	out = append(out, fmt.Sprintf("  %s  %s",
-		lipgloss.NewStyle().Foreground(colorWhite).Bold(true).Render(
-			fmt.Sprintf("Events (%d)", len(filtered))),
+		eventsTitleStyle.Render(fmt.Sprintf("Events (%d)", len(filtered))),
 		dimStyle.Render(sortLabel)))
 
 	// How many lines the summary took

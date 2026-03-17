@@ -373,8 +373,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "x":
-		if m.focus == paneDetail && len(m.filteredEvents()) > 0 && m.eventIdx < len(m.filteredEvents()) {
-			m.export = openExportModal(m.filteredEvents()[m.eventIdx])
+		if evts := m.filteredEvents(); m.focus == paneDetail && m.eventIdx < len(evts) {
+			m.export = openExportModal(evts[m.eventIdx])
 		}
 		return m, nil
 	}
@@ -573,6 +573,16 @@ func (m Model) View() string {
 		return lipgloss.JoinVertical(lipgloss.Left, header, helpOverlay, footer)
 	}
 
+	if m.focus == paneFilter {
+		overlay := m.filterBar.view(m.width, contentHeight)
+		return lipgloss.JoinVertical(lipgloss.Left, header, overlay, footer)
+	}
+
+	if m.export.active {
+		overlay := m.renderExportOverlay()
+		return lipgloss.JoinVertical(lipgloss.Left, header, overlay, footer)
+	}
+
 	var content string
 	if m.width >= 80 {
 		content = m.splitPaneLayout(contentHeight)
@@ -585,20 +595,7 @@ func (m Model) View() string {
 	}
 
 	content = lipgloss.NewStyle().Width(m.width).Height(contentHeight).MaxHeight(contentHeight).Render(content)
-
-	base := lipgloss.JoinVertical(lipgloss.Left, header, content, footer)
-
-	if m.focus == paneFilter {
-		overlay := m.filterBar.view(m.width, contentHeight)
-		return lipgloss.JoinVertical(lipgloss.Left, header, overlay, footer)
-	}
-
-	if m.export.active {
-		overlay := m.renderExportOverlay()
-		return lipgloss.JoinVertical(lipgloss.Left, header, overlay, footer)
-	}
-
-	return base
+	return lipgloss.JoinVertical(lipgloss.Left, header, content, footer)
 }
 
 func (m Model) splitPaneLayout(height int) string {

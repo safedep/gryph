@@ -148,19 +148,7 @@ func (fb filterBarModel) view(width, height int) string {
 	sb.WriteString(sectionLabel("Since", fb.activeField == fieldSince) + "\n")
 	for i, p := range sincePresets {
 		isCursor := fb.activeField == fieldSince && fb.subIdx == i
-		selected := fb.since == p
-		marker := "○"
-		if selected {
-			marker = "●"
-		}
-		text := marker + " " + p
-		if isCursor {
-			sb.WriteString("  " + activeStyle.Render("▸ "+text) + "\n")
-		} else if selected {
-			sb.WriteString("  " + greenStyle.Render("  "+text) + "\n")
-		} else {
-			sb.WriteString("  " + dimStyle.Render("  "+text) + "\n")
-		}
+		sb.WriteString("  " + renderItem(fb.since == p, p, isCursor) + "\n")
 	}
 
 	sb.WriteString("\n")
