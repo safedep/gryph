@@ -129,6 +129,23 @@ type Store interface {
 	Close() error
 }
 
+// SearchResult holds a single FTS match.
+type SearchResult struct {
+	EventID   uuid.UUID
+	SessionID uuid.UUID
+	Snippet   string
+	Rank      float64
+}
+
+// Searcher provides full-text search and discovery capabilities.
+// SQLite-specific; the TUI accepts this as optional via Options.
+type Searcher interface {
+	SearchEvents(ctx context.Context, query string, limit int) ([]SearchResult, error)
+	HasSearch() bool
+	BackfillFTS(ctx context.Context, store EventStore) (int, error)
+	DistinctAgents(ctx context.Context) ([]string, error)
+}
+
 // DatabaseInfo contains information about the database.
 type DatabaseInfo struct {
 	Path         string

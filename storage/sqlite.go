@@ -60,7 +60,15 @@ func (s *SQLiteStore) Init(ctx context.Context) error {
 	if err := s.client.Schema.Create(ctx); err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
+	if err := s.InitFTS(ctx); err != nil {
+		return fmt.Errorf("failed to initialize FTS: %w", err)
+	}
 	return nil
+}
+
+// DB returns the underlying database connection.
+func (s *SQLiteStore) DB() *sql.DB {
+	return s.db
 }
 
 // Close closes the database connection.
