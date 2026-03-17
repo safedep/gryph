@@ -116,6 +116,16 @@ type SessionFilter struct {
 	Limit int
 	// Offset is the number of results to skip.
 	Offset int
+	AgentNames     []string
+	HasErrors      *bool
+	HasSensitive   *bool
+	HasBlocked     *bool
+	EventSince     *time.Time
+	EventUntil     *time.Time
+	EventActions   []string
+	EventStatuses  []string
+	FilePattern    string
+	CommandPattern string
 }
 
 // NewSessionFilter creates a new SessionFilter with default values.
@@ -146,5 +156,55 @@ func (f *SessionFilter) WithUntil(t time.Time) *SessionFilter {
 // WithLimit sets the Limit.
 func (f *SessionFilter) WithLimit(limit int) *SessionFilter {
 	f.Limit = limit
+	return f
+}
+
+func (f *SessionFilter) WithAgents(agents []string) *SessionFilter {
+	f.AgentNames = agents
+	return f
+}
+
+func (f *SessionFilter) WithHasErrors(v bool) *SessionFilter {
+	f.HasErrors = &v
+	return f
+}
+
+func (f *SessionFilter) WithHasSensitive(v bool) *SessionFilter {
+	f.HasSensitive = &v
+	return f
+}
+
+func (f *SessionFilter) WithHasBlocked(v bool) *SessionFilter {
+	f.HasBlocked = &v
+	return f
+}
+
+func (f *SessionFilter) WithEventSince(t time.Time) *SessionFilter {
+	f.EventSince = &t
+	return f
+}
+
+func (f *SessionFilter) WithEventUntil(t time.Time) *SessionFilter {
+	f.EventUntil = &t
+	return f
+}
+
+func (f *SessionFilter) WithEventActions(actions []string) *SessionFilter {
+	f.EventActions = actions
+	return f
+}
+
+func (f *SessionFilter) WithEventStatuses(statuses []string) *SessionFilter {
+	f.EventStatuses = statuses
+	return f
+}
+
+func (f *SessionFilter) WithFilePattern(p string) *SessionFilter {
+	f.FilePattern = p
+	return f
+}
+
+func (f *SessionFilter) WithCommandPattern(p string) *SessionFilter {
+	f.CommandPattern = p
 	return f
 }
