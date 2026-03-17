@@ -118,7 +118,7 @@ func NewHookCmd() *cobra.Command {
 				event.Sequence = sess.TotalActions + 1
 
 				if err := app.Store.SaveEvent(ctx, event); err != nil {
-					log.Errorf("failed to save blocked event: %w", err)
+					log.Errorf("failed to save blocked event: %v", err)
 				}
 
 				sess.TotalActions++
@@ -128,7 +128,7 @@ func NewHookCmd() *cobra.Command {
 				}
 
 				if err := app.Store.UpdateSession(ctx, sess); err != nil {
-					log.Errorf("failed to update session for blocked event: %w", err)
+					log.Errorf("failed to update session for blocked event: %v", err)
 				}
 
 				return sendSecurityBlockedResponse(agentName, hookType, securityResult)
