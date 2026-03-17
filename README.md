@@ -324,7 +324,7 @@ Gryph installs lightweight hooks into your AI agents. When the agent performs an
 | Use Case | Description |
 | --- | --- |
 | [AI Coding Observability](examples/ai-coding-observability/) | Centralized observability for AI coding agents across developer endpoints using Gryph + OpenSearch. Includes SOC dashboards, threat detection alerts, and synthetic data generation. |
-| Cost & Token Tracking | Track per-session token usage and estimated costs across models and agents. Group by model, agent, or day. See [docs/cost.md](docs/cost.md). |
+| [Cost and Token Tracking](docs/cost.md) | Track per-session token usage and estimated costs across models and agents. Group by model, agent, or day. |
 
 ## Community
 

@@ -26,8 +26,8 @@ var allActionTypes = []string{
 	"file_write",
 	"file_delete",
 	"command_exec",
-	"network_request",
 	"tool_use",
+	"network_request",
 }
 
 var allStatusTypes = []string{
@@ -67,88 +67,140 @@ func newFilterBar(f FilterState) filterBarModel {
 	}
 }
 
+const maxVisibleItems = 4
+
 func (fb filterBarModel) view(width, height int) string {
+	activeStyle := lipgloss.NewStyle().Foreground(colorViolet).Bold(true)
+	greenStyle := lipgloss.NewStyle().Foreground(colorGreen)
+
+	sectionLabel := func(name string, isActive bool) string {
+		s := dimStyle
+		if isActive {
+			s = activeStyle
+		}
+		return s.Render(fmt.Sprintf("  %-10s", name))
+	}
+
+	renderItem := func(selected bool, item string, isCursor bool) string {
+		marker := "○"
+		if selected {
+			marker = "●"
+		}
+		text := marker + " " + item
+		if isCursor {
+			return activeStyle.Render("▸ " + text)
+		}
+		if selected {
+			return greenStyle.Render("  " + text)
+		}
+		return dimStyle.Render("  " + text)
+	}
+
+	renderList := func(items []string, selectedItems []string, isActive bool, cursorIdx int) string {
+		if len(items) == 0 {
+			return dimStyle.Render("    (none)") + "\n"
+		}
+
+		// Compute visible window around cursor
+		start := 0
+		if isActive && cursorIdx >= maxVisibleItems {
+			start = cursorIdx - maxVisibleItems + 1
+		}
+		end := start + maxVisibleItems
+		if end > len(items) {
+			end = len(items)
+			start = end - maxVisibleItems
+			if start < 0 {
+				start = 0
+			}
+		}
+
+		var out string
+		if start > 0 {
+			out += dimStyle.Render(fmt.Sprintf("    ↑ %d more", start)) + "\n"
+		}
+		for i := start; i < end; i++ {
+			isCursor := isActive && i == cursorIdx
+			out += "  " + renderItem(contains(selectedItems, items[i]), items[i], isCursor) + "\n"
+		}
+		if end < len(items) {
+			out += dimStyle.Render(fmt.Sprintf("    ↓ %d more", len(items)-end)) + "\n"
+		}
+		return out
+	}
+
 	var sb strings.Builder
 
-	fieldLabel := func(name string, active bool) string {
-		if active {
-			return lipgloss.NewStyle().Foreground(colorViolet).Bold(true).Render(name + ":")
-		}
-		return dimStyle.Render(name + ":")
-	}
+	sb.WriteString("  " + activeStyle.Render("━━ Filters ━━") + "\n\n")
 
-	renderMulti := func(label string, all []string, selected []string, active bool, subIdx int) string {
-		var parts []string
-		for i, item := range all {
-			cursor := "[ ]"
-			if contains(selected, item) {
-				cursor = "[x]"
-			}
-			text := cursor + " " + item
-			if active && i == subIdx {
-				parts = append(parts, lipgloss.NewStyle().Foreground(colorViolet).Render(text))
-			} else if contains(selected, item) {
-				parts = append(parts, lipgloss.NewStyle().Foreground(colorGreen).Render(text))
-			} else {
-				parts = append(parts, dimStyle.Render(text))
-			}
-		}
-		if len(parts) == 0 {
-			parts = []string{dimStyle.Render("(none)")}
-		}
-		return fmt.Sprintf("  %s %s", fieldLabel(label, active), strings.Join(parts, "  "))
-	}
-
-	renderText := func(label string, value string, active bool) string {
-		display := value
-		if display == "" {
-			display = dimStyle.Render("(empty)")
-		}
-		cursor := ""
-		if active {
-			cursor = lipgloss.NewStyle().Foreground(colorViolet).Render("_")
-		}
-		return fmt.Sprintf("  %s %s%s", fieldLabel(label, active), display, cursor)
-	}
-
-	renderSince := func(active bool) string {
-		var parts []string
-		for _, p := range sincePresets {
-			if fb.since == p {
-				parts = append(parts, lipgloss.NewStyle().Foreground(colorGreen).Render("["+p+"]"))
-			} else {
-				parts = append(parts, dimStyle.Render(p))
-			}
-		}
-		return fmt.Sprintf("  %s %s", fieldLabel("Since", active), strings.Join(parts, "  "))
-	}
-
-	title := lipgloss.NewStyle().Foreground(colorViolet).Bold(true).Render("Filters")
-	sb.WriteString(title)
-	sb.WriteString("\n\n")
-
+	// Agent
 	agents := fb.allAgents
 	if len(agents) == 0 {
 		agents = fb.agents
 	}
-	sb.WriteString(renderMulti("Agent", agents, fb.agents, fb.activeField == fieldAgent, fb.subIdx))
-	sb.WriteString("\n")
-	sb.WriteString(renderMulti("Action", allActionTypes, fb.actions, fb.activeField == fieldAction, fb.subIdx))
-	sb.WriteString("\n")
-	sb.WriteString(renderMulti("Status", allStatusTypes, fb.statuses, fb.activeField == fieldStatus, fb.subIdx))
-	sb.WriteString("\n")
-	sb.WriteString(renderSince(fb.activeField == fieldSince))
-	sb.WriteString("\n")
-	sb.WriteString(renderText("File glob", fb.file, fb.activeField == fieldFile))
-	sb.WriteString("\n")
-	sb.WriteString(renderText("Cmd glob", fb.command, fb.activeField == fieldCommand))
-	sb.WriteString("\n\n")
+	sb.WriteString(sectionLabel("Agent", fb.activeField == fieldAgent) + "\n")
+	sb.WriteString(renderList(agents, fb.agents, fb.activeField == fieldAgent, fb.subIdx))
 
-	hints := dimStyle.Render("tab/shift+tab switch field  j/k navigate  space toggle  enter apply  esc cancel")
-	if fb.activeField == fieldSince {
-		hints = dimStyle.Render("j/k or t/w/m/a select range  enter apply  esc cancel")
+	// Action
+	sb.WriteString(sectionLabel("Action", fb.activeField == fieldAction) + "\n")
+	sb.WriteString(renderList(allActionTypes, fb.actions, fb.activeField == fieldAction, fb.subIdx))
+
+	// Status
+	sb.WriteString(sectionLabel("Status", fb.activeField == fieldStatus) + "\n")
+	sb.WriteString(renderList(allStatusTypes, fb.statuses, fb.activeField == fieldStatus, fb.subIdx))
+
+	// Since
+	sb.WriteString(sectionLabel("Since", fb.activeField == fieldSince) + "\n")
+	for i, p := range sincePresets {
+		isCursor := fb.activeField == fieldSince && fb.subIdx == i
+		selected := fb.since == p
+		marker := "○"
+		if selected {
+			marker = "●"
+		}
+		text := marker + " " + p
+		if isCursor {
+			sb.WriteString("  " + activeStyle.Render("▸ "+text) + "\n")
+		} else if selected {
+			sb.WriteString("  " + greenStyle.Render("  "+text) + "\n")
+		} else {
+			sb.WriteString("  " + dimStyle.Render("  "+text) + "\n")
+		}
 	}
-	sb.WriteString("  " + hints)
+
+	// File glob
+	fileActive := fb.activeField == fieldFile
+	sb.WriteString(sectionLabel("File glob", fileActive) + "\n")
+	fileVal := fb.file
+	if fileVal == "" {
+		fileVal = dimStyle.Render("(any)")
+	}
+	cursor := ""
+	if fileActive {
+		cursor = activeStyle.Render("█")
+	}
+	sb.WriteString("    " + fileVal + cursor + "\n")
+
+	// Command glob
+	cmdActive := fb.activeField == fieldCommand
+	sb.WriteString(sectionLabel("Cmd glob", cmdActive) + "\n")
+	cmdVal := fb.command
+	if cmdVal == "" {
+		cmdVal = dimStyle.Render("(any)")
+	}
+	cursor = ""
+	if cmdActive {
+		cursor = activeStyle.Render("█")
+	}
+	sb.WriteString("    " + cmdVal + cursor + "\n\n")
+
+	// Hints
+	sep := dimStyle.Render(" · ")
+	sb.WriteString("  " + dimStyle.Render("tab") + " switch" + sep +
+		dimStyle.Render("j/k") + " move" + sep +
+		dimStyle.Render("space") + " toggle" + sep +
+		dimStyle.Render("enter") + " apply" + sep +
+		dimStyle.Render("esc") + " cancel")
 
 	overlay := overlayStyle.Render(sb.String())
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, overlay)
