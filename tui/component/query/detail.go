@@ -189,7 +189,7 @@ func (m Model) renderSummaryAndEvents(title string, width, height int) string {
 }
 
 // padLines joins lines and pads/truncates to exactly `height` lines.
-func padLines(lines []string, width, height int) string {
+func padLines(lines []string, _, height int) string {
 	// Truncate if too many
 	if len(lines) > height {
 		lines = lines[:height]

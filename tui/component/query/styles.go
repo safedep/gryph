@@ -66,6 +66,9 @@ var (
 			BorderForeground(colorViolet).
 			Padding(1, 2)
 
+	greenDotStyle = lipgloss.NewStyle().
+			Foreground(colorGreen)
+
 	searchHighlightStyle = lipgloss.NewStyle().
 				Foreground(colorAmber).
 				Bold(true)

@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -75,16 +76,16 @@ func (fb filterBarModel) view(width, height int) string {
 		return s.Render(fmt.Sprintf("  %-10s", name))
 	}
 
-	renderItem := func(selected bool, item string, isCursor bool) string {
+	renderItem := func(isSelected bool, item string, isCursor bool) string {
 		marker := "○"
-		if selected {
+		if isSelected {
 			marker = "●"
 		}
 		text := marker + " " + item
 		if isCursor {
 			return activeStyle.Render("▸ " + text)
 		}
-		if selected {
+		if isSelected {
 			return greenStyle.Render("  " + text)
 		}
 		return dimStyle.Render("  " + text)
@@ -115,7 +116,7 @@ func (fb filterBarModel) view(width, height int) string {
 		}
 		for i := start; i < end; i++ {
 			isCursor := isActive && i == cursorIdx
-			out += "  " + renderItem(contains(selectedItems, items[i]), items[i], isCursor) + "\n"
+			out += "  " + renderItem(slices.Contains(selectedItems, items[i]), items[i], isCursor) + "\n"
 		}
 		if end < len(items) {
 			out += dimStyle.Render(fmt.Sprintf("    ↓ %d more", len(items)-end)) + "\n"
@@ -177,10 +178,6 @@ func (fb filterBarModel) view(width, height int) string {
 }
 
 func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	return m.handleFilterKeyFull(msg)
-}
-
-func (m Model) handleFilterKeyFull(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	fb := m.filterBar
 
 	switch msg.String() {
@@ -316,15 +313,6 @@ func (m *Model) applyTimeRange() {
 		m.filters.since = time.Time{}
 		m.filters.until = time.Time{}
 	}
-}
-
-func contains(slice []string, s string) bool {
-	for _, v := range slice {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 func toggle(slice []string, s string) []string {

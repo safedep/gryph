@@ -47,8 +47,6 @@ func (m Model) actionFilterHints() string {
 	for _, f := range filters {
 		if m.detailActionFilters[f.action] {
 			parts += "[" + f.key + ":" + f.label + "] "
-		} else if hasActive {
-			parts += f.key + ":" + f.label + " "
 		} else {
 			parts += f.key + ":" + f.label + " "
 		}

@@ -416,7 +416,7 @@ func (m Model) handleNavDown() (tea.Model, tea.Cmd) {
 		}
 	case paneDetail:
 		if m.expanded {
-			m.eventScroll++
+			m.eventScroll++ // clamped during render
 		} else if m.eventIdx < len(m.filteredEvents())-1 {
 			m.eventIdx++
 		}

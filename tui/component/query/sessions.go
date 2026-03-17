@@ -113,7 +113,7 @@ func attentionDot(sess *session.Session) string {
 		return amberDotStyle.Render("●")
 	}
 	if sess.IsActive() {
-		return lipgloss.NewStyle().Foreground(colorGreen).Render("●")
+		return greenDotStyle.Render("●")
 	}
 	return dimStyle.Render("·")
 }
