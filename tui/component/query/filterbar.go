@@ -282,20 +282,22 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) applyTimeRange() {
-	now := time.Now().UTC()
+	now := time.Now()
 	switch m.filters.timeRange {
 	case "today":
-		m.filters.since = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		m.filters.since = midnight.UTC()
 		m.filters.until = time.Time{}
 	case "yesterday":
-		y := now.AddDate(0, 0, -1)
-		m.filters.since = time.Date(y.Year(), y.Month(), y.Day(), 0, 0, 0, 0, time.UTC)
-		m.filters.until = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		yesterdayStart := time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, now.Location())
+		todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		m.filters.since = yesterdayStart.UTC()
+		m.filters.until = todayStart.UTC()
 	case "7d":
-		m.filters.since = now.AddDate(0, 0, -7)
+		m.filters.since = now.UTC().AddDate(0, 0, -7)
 		m.filters.until = time.Time{}
 	case "30d":
-		m.filters.since = now.AddDate(0, 0, -30)
+		m.filters.since = now.UTC().AddDate(0, 0, -30)
 		m.filters.until = time.Time{}
 	case "all", "":
 		m.filters.since = time.Time{}

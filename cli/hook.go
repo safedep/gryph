@@ -48,7 +48,7 @@ func NewHookCmd() *cobra.Command {
 			defer func() {
 				err := app.Close()
 				if err != nil {
-					log.Errorf("failed to close app: %w", err)
+					log.Errorf("failed to close app: %v", err)
 				}
 			}()
 
@@ -201,7 +201,7 @@ func sendHookResponse(agentName, hookType string) error {
 		// Different hooks have different response schemas
 		response := generateCursorResponse(hookType)
 		if _, err := os.Stdout.Write(response); err != nil {
-			log.Errorf("failed to write to stdout: %w", err)
+			log.Errorf("failed to write to stdout: %v", err)
 		}
 
 		return nil
@@ -213,11 +213,11 @@ func sendHookResponse(agentName, hookType string) error {
 		if hookType == "BeforeTool" {
 			resp := gemini.NewAllowResponse()
 			if _, err := os.Stdout.Write(resp.JSON()); err != nil {
-				log.Errorf("failed to write to stdout: %w", err)
+				log.Errorf("failed to write to stdout: %v", err)
 			}
 		} else {
 			if _, err := os.Stdout.Write([]byte("{}")); err != nil {
-				log.Errorf("failed to write to stdout: %w", err)
+				log.Errorf("failed to write to stdout: %v", err)
 			}
 		}
 		return nil
@@ -271,7 +271,7 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 		denyResponse := cursor.NewDenyResponse(result.BlockReason)
 		output := generateCursorBlockedResponse(hookType, denyResponse)
 		if _, err := os.Stdout.Write(output); err != nil {
-			log.Errorf("failed to write to stdout: %w", err)
+			log.Errorf("failed to write to stdout: %v", err)
 		}
 
 		return nil
