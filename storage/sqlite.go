@@ -252,6 +252,8 @@ func (s *SQLiteStore) GetEventsBySession(ctx context.Context, sessionID uuid.UUI
 
 // DeleteEventsBefore deletes events older than the given time.
 func (s *SQLiteStore) DeleteEventsBefore(ctx context.Context, before time.Time) (int, error) {
+	s.cleanFTSBefore(ctx, before)
+
 	deleted, err := s.client.AuditEvent.Delete().
 		Where(auditevent.TimestampLT(before)).
 		Exec(ctx)
@@ -966,9 +968,76 @@ func buildSessionPredicates(filter *session.SessionFilter) []predicate.Session {
 	if filter.ActiveOnly {
 		predicates = append(predicates, entsession.EndedAtIsNil())
 	}
+	if len(filter.AgentNames) > 0 {
+		predicates = append(predicates, entsession.AgentNameIn(filter.AgentNames...))
+	}
+	if filter.HasErrors != nil && *filter.HasErrors {
+		predicates = append(predicates, entsession.ErrorsGT(0))
+	}
+	if filter.HasSensitive != nil && *filter.HasSensitive {
+		predicates = append(predicates, entsession.SensitiveActionsGT(0))
+	}
+	if filter.HasBlocked != nil && *filter.HasBlocked {
+		predicates = append(predicates, entsession.BlockedActionsGT(0))
+	}
+	if needsEventSubQuery(filter) {
+		predicates = append(predicates, buildEventSubQueryPredicate(filter))
+	}
 
 	return predicates
 }
+
+func needsEventSubQuery(filter *session.SessionFilter) bool {
+	return filter.EventSince != nil || filter.EventUntil != nil ||
+		len(filter.EventActions) > 0 || len(filter.EventStatuses) > 0 ||
+		filter.FilePattern != "" || filter.CommandPattern != ""
+}
+
+func buildEventSubQueryPredicate(filter *session.SessionFilter) predicate.Session {
+	return predicate.Session(func(s *entsql.Selector) {
+		s.Where(entsql.P(func(b *entsql.Builder) {
+			b.WriteString("id IN (SELECT DISTINCT session_id FROM audit_events WHERE 1=1")
+			if filter.EventSince != nil {
+				b.WriteString(" AND timestamp >= ")
+				b.Arg(*filter.EventSince)
+			}
+			if filter.EventUntil != nil {
+				b.WriteString(" AND timestamp <= ")
+				b.Arg(*filter.EventUntil)
+			}
+			if len(filter.EventActions) > 0 {
+				b.WriteString(" AND action_type IN (")
+				for i, a := range filter.EventActions {
+					if i > 0 {
+						b.Comma()
+					}
+					b.Arg(a)
+				}
+				b.WriteString(")")
+			}
+			if len(filter.EventStatuses) > 0 {
+				b.WriteString(" AND result_status IN (")
+				for i, st := range filter.EventStatuses {
+					if i > 0 {
+						b.Comma()
+					}
+					b.Arg(st)
+				}
+				b.WriteString(")")
+			}
+			if filter.FilePattern != "" {
+				b.WriteString(" AND json_extract(payload, '$.path') GLOB ")
+				b.Arg(filter.FilePattern)
+			}
+			if filter.CommandPattern != "" {
+				b.WriteString(" AND json_extract(payload, '$.command') GLOB ")
+				b.Arg(filter.CommandPattern)
+			}
+			b.WriteString(")")
+		}))
+	})
+}
+
 
 // Ensure SQLiteStore implements Store
 var _ Store = (*SQLiteStore)(nil)

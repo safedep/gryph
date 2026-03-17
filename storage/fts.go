@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/storage/ent/auditevent"
 )
 
 const createFTSTable = `
@@ -130,3 +133,130 @@ func (s *SQLiteStore) indexEvent(ctx context.Context, event *events.Event) error
 	}
 	return nil
 }
+
+func (s *SQLiteStore) cleanFTSBefore(ctx context.Context, before time.Time) {
+	evts, err := s.client.AuditEvent.Query().
+		Where(auditevent.TimestampLT(before)).
+		Select(auditevent.FieldID).
+		All(ctx)
+	if err != nil || len(evts) == 0 {
+		return
+	}
+
+	for _, e := range evts {
+		_, _ = s.db.ExecContext(ctx,
+			`DELETE FROM events_fts WHERE event_id = ?`, e.ID.String(),
+		)
+	}
+}
+
+const backfillBatchSize = 500
+
+func (s *SQLiteStore) BackfillFTS(ctx context.Context, store EventStore) (int, error) {
+	var ftsCount int
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM events_fts").Scan(&ftsCount)
+	if err != nil {
+		return 0, fmt.Errorf("failed to check FTS count: %w", err)
+	}
+
+	total, err := store.CountEvents(ctx, events.NewEventFilter())
+	if err != nil {
+		return 0, fmt.Errorf("failed to count events: %w", err)
+	}
+	if total == 0 || ftsCount >= total {
+		return 0, nil
+	}
+
+	indexed := 0
+	offset := 0
+	for {
+		filter := events.NewEventFilter().WithLimit(backfillBatchSize).WithOffset(offset)
+		batch, err := store.QueryEvents(ctx, filter)
+		if err != nil {
+			return indexed, fmt.Errorf("failed to fetch events for backfill: %w", err)
+		}
+		if len(batch) == 0 {
+			break
+		}
+
+		for _, evt := range batch {
+			if err := s.indexEvent(ctx, evt); err != nil {
+				continue
+			}
+			indexed++
+		}
+
+		offset += len(batch)
+		if len(batch) < backfillBatchSize {
+			break
+		}
+	}
+
+	return indexed, nil
+}
+
+func (s *SQLiteStore) SearchEvents(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+        SELECT f.event_id, f.session_id,
+            snippet(events_fts, 2, '>>>', '<<<', '...', 32) as snippet,
+            rank
+        FROM events_fts f
+        WHERE events_fts MATCH ?
+        ORDER BY rank
+        LIMIT ?
+    `, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search events: %w", err)
+	}
+	defer rows.Close()
+
+	var results []SearchResult
+	for rows.Next() {
+		var r SearchResult
+		var eventIDStr, sessionIDStr string
+		if err := rows.Scan(&eventIDStr, &sessionIDStr, &r.Snippet, &r.Rank); err != nil {
+			return nil, fmt.Errorf("failed to scan search result: %w", err)
+		}
+		r.EventID, _ = uuid.Parse(eventIDStr)
+		r.SessionID, _ = uuid.Parse(sessionIDStr)
+		results = append(results, r)
+	}
+
+	return results, rows.Err()
+}
+
+func (s *SQLiteStore) HasSearch() bool {
+	var name string
+	err := s.db.QueryRow(
+		"SELECT name FROM sqlite_master WHERE type='table' AND name='events_fts'",
+	).Scan(&name)
+	return err == nil && name == "events_fts"
+}
+
+func (s *SQLiteStore) DistinctAgents(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT DISTINCT agent_name FROM sessions ORDER BY agent_name")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query distinct agents: %w", err)
+	}
+	defer rows.Close()
+
+	var agents []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("failed to scan agent name: %w", err)
+		}
+		agents = append(agents, name)
+	}
+
+	return agents, rows.Err()
+}
+
+var _ Searcher = (*SQLiteStore)(nil)
