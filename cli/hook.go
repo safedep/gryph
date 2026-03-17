@@ -74,12 +74,6 @@ func NewHookCmd() *cobra.Command {
 			loggingLevel := app.Config.GetAgentLoggingLevel(agentName)
 			agent.ApplyLoggingLevel(event, loggingLevel)
 
-			// Evaluate security checks
-			securityResult := app.Security.Evaluate(ctx, event)
-			if !securityResult.IsAllowed() {
-				return sendSecurityBlockedResponse(agentName, hookType, securityResult)
-			}
-
 			// Get or create session using the session ID from the parsed event
 			sess, err := app.Store.GetSession(ctx, event.SessionID)
 			if err != nil {
@@ -116,6 +110,30 @@ func NewHookCmd() *cobra.Command {
 				sess.TranscriptPath = event.TranscriptPath
 			}
 
+			// Evaluate security checks
+			securityResult := app.Security.Evaluate(ctx, event)
+			if !securityResult.IsAllowed() {
+				event.ResultStatus = events.ResultBlocked
+				event.ErrorMessage = securityResult.BlockReason
+				event.Sequence = sess.TotalActions + 1
+
+				if err := app.Store.SaveEvent(ctx, event); err != nil {
+					log.Errorf("failed to save blocked event: %w", err)
+				}
+
+				sess.TotalActions++
+				sess.BlockedActions++
+				if event.IsSensitive {
+					sess.SensitiveActions++
+				}
+
+				if err := app.Store.UpdateSession(ctx, sess); err != nil {
+					log.Errorf("failed to update session for blocked event: %w", err)
+				}
+
+				return sendSecurityBlockedResponse(agentName, hookType, securityResult)
+			}
+
 			// Set sequence number
 			event.Sequence = sess.TotalActions + 1
 
@@ -137,6 +155,10 @@ func NewHookCmd() *cobra.Command {
 
 			if event.ResultStatus == events.ResultError {
 				sess.Errors++
+			}
+
+			if event.IsSensitive {
+				sess.SensitiveActions++
 			}
 
 			if err := app.Store.UpdateSession(ctx, sess); err != nil {
