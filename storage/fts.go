@@ -21,11 +21,21 @@ CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
     tokenize='porter unicode61'
 );`
 
+const createFTSMetaTable = `
+CREATE TABLE IF NOT EXISTS events_fts_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);`
+
 // InitFTS creates the FTS5 virtual table if it doesn't exist.
 func (s *SQLiteStore) InitFTS(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, createFTSTable)
 	if err != nil {
 		return fmt.Errorf("failed to create FTS table: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx, createFTSMetaTable)
+	if err != nil {
+		return fmt.Errorf("failed to create FTS meta table: %w", err)
 	}
 	return nil
 }
@@ -164,17 +174,12 @@ func (s *SQLiteStore) cleanFTSBefore(ctx context.Context, before time.Time) {
 const backfillBatchSize = 500
 
 func (s *SQLiteStore) BackfillFTS(ctx context.Context, store EventStore) (int, error) {
-	var ftsCount int
-	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM events_fts").Scan(&ftsCount)
-	if err != nil {
-		return 0, fmt.Errorf("failed to check FTS count: %w", err)
-	}
-
-	total, err := store.CountEvents(ctx, events.NewEventFilter())
-	if err != nil {
-		return 0, fmt.Errorf("failed to count events: %w", err)
-	}
-	if total == 0 || ftsCount >= total {
+	// Check if backfill already completed
+	var done string
+	err := s.db.QueryRowContext(ctx,
+		"SELECT value FROM events_fts_meta WHERE key = 'backfill_done'",
+	).Scan(&done)
+	if err == nil && done == "1" {
 		return 0, nil
 	}
 
@@ -191,7 +196,6 @@ func (s *SQLiteStore) BackfillFTS(ctx context.Context, store EventStore) (int, e
 		}
 
 		for _, evt := range batch {
-			// indexEvent skips already-indexed events
 			if err := s.indexEvent(ctx, evt); err != nil {
 				continue
 			}
@@ -203,6 +207,10 @@ func (s *SQLiteStore) BackfillFTS(ctx context.Context, store EventStore) (int, e
 			break
 		}
 	}
+
+	// Mark backfill complete
+	_, _ = s.db.ExecContext(ctx,
+		"INSERT OR REPLACE INTO events_fts_meta (key, value) VALUES ('backfill_done', '1')")
 
 	return indexed, nil
 }

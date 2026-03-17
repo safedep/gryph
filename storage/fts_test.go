@@ -128,8 +128,10 @@ func TestSQLiteStore_BackfillFTS(t *testing.T) {
 
 	createTestSession(t, store, sessionID, "claude-code")
 
-	// Drop the FTS table so indexEvent won't be called during the direct insert below.
+	// Drop the FTS tables so indexEvent won't be called during the direct insert below.
 	_, err := store.db.ExecContext(ctx, "DROP TABLE IF EXISTS events_fts")
+	require.NoError(t, err)
+	_, err = store.db.ExecContext(ctx, "DROP TABLE IF EXISTS events_fts_meta")
 	require.NoError(t, err)
 
 	// Insert an event directly via ent client, bypassing SaveEvent (and its FTS indexing).
@@ -147,7 +149,7 @@ func TestSQLiteStore_BackfillFTS(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	// Recreate the FTS table (empty).
+	// Recreate the FTS tables (empty).
 	err = store.InitFTS(ctx)
 	require.NoError(t, err)
 
@@ -156,10 +158,38 @@ func TestSQLiteStore_BackfillFTS(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, indexed)
 
-	// Running backfill again should be a no-op (FTS count >= event count).
+	// Second backfill should be instant no-op via meta flag.
 	indexed, err = store.BackfillFTS(ctx, store)
 	require.NoError(t, err)
 	assert.Equal(t, 0, indexed)
+
+	// Verify the meta flag is set.
+	var done string
+	err = store.db.QueryRowContext(ctx,
+		"SELECT value FROM events_fts_meta WHERE key = 'backfill_done'",
+	).Scan(&done)
+	require.NoError(t, err)
+	assert.Equal(t, "1", done)
+
+	// Insert another event directly (simulating pre-FTS data added after backfill).
+	// Backfill should still be a no-op because the flag is set.
+	cmdPayload2 := map[string]interface{}{"command": "go test ./..."}
+	_, err = store.client.AuditEvent.Create().
+		SetID(uuid.New()).
+		SetSessionID(sessionID).
+		SetSequence(2).
+		SetTimestamp(now.Add(time.Second)).
+		SetAgentName("claude-code").
+		SetActionType(auditevent.ActionTypeCommandExec).
+		SetResultStatus(auditevent.ResultStatusSuccess).
+		SetIsSensitive(false).
+		SetPayload(cmdPayload2).
+		Save(ctx)
+	require.NoError(t, err)
+
+	indexed, err = store.BackfillFTS(ctx, store)
+	require.NoError(t, err)
+	assert.Equal(t, 0, indexed, "should skip backfill because meta flag is set")
 }
 
 func TestSQLiteStore_FTSCleanupOnDelete(t *testing.T) {
