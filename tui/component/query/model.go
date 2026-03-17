@@ -208,6 +208,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.focus = paneSessionList
 		} else {
 			m.focus = paneFilter
+			m.filterBar = newFilterBar(m.filters)
 		}
 		return m, nil
 
@@ -280,6 +281,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	if m.focus == paneSearch {
 		return m.handleSearchInput(msg)
+	}
+
+	if m.focus == paneFilter {
+		return m.handleFilterKey(msg)
 	}
 
 	return m, nil
@@ -450,7 +455,23 @@ func (m Model) View() string {
 		}
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, content, footer)
+	base := lipgloss.JoinVertical(lipgloss.Left, header, content, footer)
+
+	if m.focus == paneFilter {
+		overlay := m.filterBar.view(m.width, contentH)
+		lines := strings.Split(base, "\n")
+		overlayLines := strings.Split(overlay, "\n")
+		// Offset by 1 row to account for header.
+		for i, ol := range overlayLines {
+			row := i + 1
+			if row < len(lines) {
+				lines[row] = ol
+			}
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	return base
 }
 
 func (m Model) listWidth() int {
