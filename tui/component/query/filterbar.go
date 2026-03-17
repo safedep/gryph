@@ -16,8 +16,6 @@ const (
 	fieldAction
 	fieldStatus
 	fieldSince
-	fieldFile
-	fieldCommand
 	fieldCount
 )
 
@@ -46,8 +44,6 @@ type filterBarModel struct {
 	actions     []string
 	statuses    []string
 	since       string
-	file        string
-	command     string
 	allAgents   []string
 }
 
@@ -61,8 +57,6 @@ func newFilterBar(f FilterState) filterBarModel {
 		actions:   append([]string(nil), f.actions...),
 		statuses:  append([]string(nil), f.statuses...),
 		since:     since,
-		file:      f.filePattern,
-		command:   f.cmdPattern,
 		allAgents: append([]string(nil), f.allAgents...),
 	}
 }
@@ -168,31 +162,7 @@ func (fb filterBarModel) view(width, height int) string {
 		}
 	}
 
-	// File glob
-	fileActive := fb.activeField == fieldFile
-	sb.WriteString(sectionLabel("File glob", fileActive) + "\n")
-	fileVal := fb.file
-	if fileVal == "" {
-		fileVal = dimStyle.Render("(any)")
-	}
-	cursor := ""
-	if fileActive {
-		cursor = activeStyle.Render("█")
-	}
-	sb.WriteString("    " + fileVal + cursor + "\n")
-
-	// Command glob
-	cmdActive := fb.activeField == fieldCommand
-	sb.WriteString(sectionLabel("Cmd glob", cmdActive) + "\n")
-	cmdVal := fb.command
-	if cmdVal == "" {
-		cmdVal = dimStyle.Render("(any)")
-	}
-	cursor = ""
-	if cmdActive {
-		cursor = activeStyle.Render("█")
-	}
-	sb.WriteString("    " + cmdVal + cursor + "\n\n")
+	sb.WriteString("\n")
 
 	// Hints
 	sep := dimStyle.Render(" · ")
@@ -224,8 +194,6 @@ func (m Model) handleFilterKeyFull(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filters.actions = fb.actions
 		m.filters.statuses = fb.statuses
 		m.filters.timeRange = fb.since
-		m.filters.filePattern = fb.file
-		m.filters.cmdPattern = fb.command
 		m.applyTimeRange()
 		m.focus = paneSessionList
 		m.loading = true
@@ -323,32 +291,6 @@ func (m Model) handleFilterKeyFull(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-	case "backspace":
-		switch fb.activeField {
-		case fieldFile:
-			if len(fb.file) > 0 {
-				fb.file = fb.file[:len(fb.file)-1]
-			}
-		case fieldCommand:
-			if len(fb.command) > 0 {
-				fb.command = fb.command[:len(fb.command)-1]
-			}
-		}
-		m.filterBar = fb
-		return m, nil
-	}
-
-	if len(msg.Runes) > 0 {
-		switch fb.activeField {
-		case fieldFile:
-			fb.file += string(msg.Runes)
-			m.filterBar = fb
-			return m, nil
-		case fieldCommand:
-			fb.command += string(msg.Runes)
-			m.filterBar = fb
-			return m, nil
-		}
 	}
 
 	return m, nil

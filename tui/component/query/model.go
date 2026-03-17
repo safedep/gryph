@@ -152,6 +152,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applySearchFilter()
 		m.loading = false
 		m.err = nil
+		m.sessionIdx = 0
+		m.sessionScroll = 0
 		if m.initialSession != "" {
 			for i, s := range m.sessions {
 				if strings.HasPrefix(s.ID.String(), m.initialSession) ||
@@ -160,6 +162,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					break
 				}
 			}
+			m.initialSession = "" // only use once
 		}
 		if len(m.sessions) > 0 {
 			return m, loadEvents(m.store, m.sessions[m.sessionIdx])
