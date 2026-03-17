@@ -47,10 +47,6 @@ var (
 	removedStyle = lipgloss.NewStyle().
 			Foreground(colorRed)
 
-	borderStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder(), false, true, false, false).
-			BorderForeground(colorDim)
-
 	overlayStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(colorViolet).
