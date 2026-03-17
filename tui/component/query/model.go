@@ -69,6 +69,8 @@ type Model struct {
 	initialSession      string
 	detailActionFilters map[events.ActionType]bool
 
+	export exportModel
+
 	loading bool
 	err     error
 }
@@ -199,6 +201,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case backfillDoneMsg, backfillErrorMsg:
 		return m, nil
 
+	case exportDoneMsg:
+		m.export.active = false
+		return m, nil
+
 	case loadErrorMsg:
 		m.loading = false
 		m.err = msg.err
@@ -250,6 +256,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.showHelp = false
 		}
 		return m, nil
+	}
+
+	// Export modal
+	if m.export.active {
+		return m.handleExportKey(msg)
 	}
 
 	// Search input mode
@@ -359,6 +370,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "0":
 		m.detailActionFilters = make(map[events.ActionType]bool)
+		return m, nil
+
+	case "x":
+		if m.focus == paneDetail && len(m.filteredEvents()) > 0 && m.eventIdx < len(m.filteredEvents()) {
+			m.export = openExportModal(m.filteredEvents()[m.eventIdx])
+		}
 		return m, nil
 	}
 
@@ -573,6 +590,11 @@ func (m Model) View() string {
 
 	if m.focus == paneFilter {
 		overlay := m.filterBar.view(m.width, contentHeight)
+		return lipgloss.JoinVertical(lipgloss.Left, header, overlay, footer)
+	}
+
+	if m.export.active {
+		overlay := m.renderExportOverlay()
 		return lipgloss.JoinVertical(lipgloss.Left, header, overlay, footer)
 	}
 

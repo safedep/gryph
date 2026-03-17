@@ -27,6 +27,7 @@ var helpBindings = []struct {
 	{"o", "Toggle sort order"},
 	{"1-5", "Toggle action filter"},
 	{"0", "Clear action filters"},
+	{"x", "Export event to file"},
 }
 
 func (m Model) renderHelp() string {

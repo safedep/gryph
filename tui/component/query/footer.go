@@ -1,6 +1,9 @@
 package query
 
-import "github.com/safedep/gryph/core/events"
+import (
+	"github.com/charmbracelet/lipgloss"
+	"github.com/safedep/gryph/core/events"
+)
 
 func (m Model) renderFooter() string {
 	sep := " · "
@@ -12,7 +15,7 @@ func (m Model) renderFooter() string {
 			hints = " j/k nav" + sep + "enter select" + sep + "/ search" + sep + "esc clear search" + sep + "? help" + sep + "q quit"
 		}
 	case paneDetail:
-		hints = " j/k nav" + sep + "enter expand" + sep + "esc back" + sep + "tab pane" + sep + "/ search" + sep + "f filter" + sep + m.actionFilterHints() + sep + "q quit"
+		hints = " j/k nav" + sep + "enter expand" + sep + "x export" + sep + "esc back" + sep + "tab pane" + sep + "/ search" + sep + "f filter" + sep + m.actionFilterHints() + sep + "q quit"
 	case paneSearch:
 		hints = " type to search" + sep + "enter apply" + sep + "esc cancel"
 	case paneFilter:
@@ -42,18 +45,23 @@ func (m Model) actionFilterHints() string {
 		{"5", "net", events.ActionNetworkRequest},
 	}
 
+	activeStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#1E1E2E")).
+		Background(colorGreen).
+		Bold(true)
+
 	hasActive := len(m.detailActionFilters) > 0
 	var parts string
 	for _, f := range filters {
 		if m.detailActionFilters[f.action] {
-			parts += "[" + f.key + ":" + f.label + "] "
+			parts += activeStyle.Render(" "+f.key+":"+f.label+" ") + " "
 		} else {
 			parts += f.key + ":" + f.label + " "
 		}
 	}
 
 	if hasActive {
-		parts += "0:clear"
+		parts += activeStyle.Render(" 0:clear ")
 	}
 
 	return parts

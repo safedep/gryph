@@ -1,6 +1,7 @@
 package query
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -179,5 +180,40 @@ func formatExpandedEvent(e *events.Event, width int) string {
 		}
 	}
 
+	if e.ActionType == events.ActionToolUse {
+		if p, err := e.GetToolUsePayload(); err == nil && p != nil {
+			if len(p.Input) > 0 {
+				sb.WriteString("\n" + dimStyle.Render(" Input:") + "\n")
+				sb.WriteString(dimStyle.Render(strings.Repeat("─", width)) + "\n")
+				sb.WriteString(formatJSON(p.Input, width) + "\n")
+			}
+			if len(p.Output) > 0 {
+				sb.WriteString("\n" + dimStyle.Render(" Output:") + "\n")
+				sb.WriteString(dimStyle.Render(strings.Repeat("─", width)) + "\n")
+				sb.WriteString(formatJSON(p.Output, width) + "\n")
+			}
+			if p.OutputPreview != "" && len(p.Output) == 0 {
+				sb.WriteString("\n" + dimStyle.Render(" Output preview:") + "\n")
+				sb.WriteString(" " + p.OutputPreview + "\n")
+			}
+		}
+	}
+
 	return sb.String()
+}
+
+func formatJSON(raw json.RawMessage, width int) string {
+	pretty, err := json.MarshalIndent(json.RawMessage(raw), "  ", "  ")
+	if err != nil {
+		s := string(raw)
+		if len(s) > 500 {
+			s = s[:500] + "..."
+		}
+		return "  " + s
+	}
+	s := string(pretty)
+	if len(s) > 2000 {
+		s = s[:2000] + "\n  ..."
+	}
+	return "  " + s
 }
