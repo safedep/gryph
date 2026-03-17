@@ -37,7 +37,7 @@ func (m Model) renderDetail(width, height int) string {
 	title := titleStyle.Render(fmt.Sprintf("%s · %s · %s",
 		sess.AgentName, project, tui.FormatDuration(sess.Duration())))
 
-	if m.expanded && m.eventIdx < len(m.filteredEvents()) {
+	if m.expanded && m.eventIdx < len(m.sortedFilteredEvents()) {
 		return m.renderExpandedDetail(title, width, height)
 	}
 
@@ -49,7 +49,7 @@ func (m Model) renderExpandedDetail(title string, width, height int) string {
 	out = append(out, title)
 	out = append(out, dimStyle.Render(strings.Repeat("─", width)))
 
-	expanded := formatExpandedEvent(m.filteredEvents()[m.eventIdx], width)
+	expanded := formatExpandedEvent(m.sortedFilteredEvents()[m.eventIdx], width)
 	expandedLines := strings.Split(expanded, "\n")
 
 	available := height - 2
@@ -197,6 +197,16 @@ func padLines(lines []string, _, height int) string {
 		lines = append(lines, "")
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m Model) sortedFilteredEvents() []*events.Event {
+	filtered := m.filteredEvents()
+	sorted := make([]*events.Event, len(filtered))
+	copy(sorted, filtered)
+	if m.sortOrder == sortNewestFirst {
+		slices.Reverse(sorted)
+	}
+	return sorted
 }
 
 func (m Model) filteredEvents() []*events.Event {

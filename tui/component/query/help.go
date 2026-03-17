@@ -40,7 +40,7 @@ func (m Model) renderHelp() string {
 			sb.WriteString("\n")
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("  %s  %s\n", keyStyle.Render(b.key), b.desc))
+		fmt.Fprintf(&sb, "  %s  %s\n", keyStyle.Render(b.key), b.desc)
 	}
 
 	overlay := overlayStyle.Render(sb.String())

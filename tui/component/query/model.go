@@ -221,7 +221,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // applySearchFilter updates m.sessions from m.allSessions based on active search.
 func (m *Model) applySearchFilter() {
-	if len(m.activeSearchSessionIDs) == 0 {
+	if m.activeSearchQuery == "" {
 		m.sessions = m.allSessions
 		return
 	}
@@ -236,7 +236,7 @@ func (m *Model) applySearchFilter() {
 
 // applyEventSearchFilter updates m.events from m.allEvents based on active search.
 func (m *Model) applyEventSearchFilter() {
-	if len(m.activeSearchEventIDs) == 0 {
+	if m.activeSearchQuery == "" {
 		m.events = m.allEvents
 	} else {
 		var filtered []*events.Event
@@ -373,7 +373,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "x":
-		if evts := m.filteredEvents(); m.focus == paneDetail && m.eventIdx < len(evts) {
+		if evts := m.sortedFilteredEvents(); m.focus == paneDetail && m.eventIdx < len(evts) {
 			m.export = openExportModal(evts[m.eventIdx])
 		}
 		return m, nil
@@ -639,10 +639,10 @@ func loadSessions(store storage.Store, f FilterState) tea.Cmd {
 			filter.WithAgents(f.agents)
 		}
 		if !f.since.IsZero() {
-			filter.WithSince(f.since)
+			filter.WithEventSince(f.since)
 		}
 		if !f.until.IsZero() {
-			filter.WithUntil(f.until)
+			filter.WithEventUntil(f.until)
 		}
 		if len(f.actions) > 0 {
 			filter.WithEventActions(f.actions)

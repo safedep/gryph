@@ -126,31 +126,31 @@ func eventDetail(e *events.Event) string {
 func formatExpandedEvent(e *events.Event, width int) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf(" Event #%d · %s · %s\n",
-		e.Sequence, e.ActionType, e.ResultStatus))
+	fmt.Fprintf(&sb, " Event #%d · %s · %s\n",
+		e.Sequence, e.ActionType, e.ResultStatus)
 	sb.WriteString(dimStyle.Render(strings.Repeat("─", width)) + "\n")
 
-	sb.WriteString(fmt.Sprintf(" Time:   %s\n", e.Timestamp.Local().Format("01/02 15:04:05")))
+	fmt.Fprintf(&sb, " Time:   %s\n", e.Timestamp.Local().Format("01/02 15:04:05"))
 	if e.DurationMs > 0 {
-		sb.WriteString(fmt.Sprintf(" Dur:    %s\n", tui.FormatDuration(time.Duration(e.DurationMs)*time.Millisecond)))
+		fmt.Fprintf(&sb, " Dur:    %s\n", tui.FormatDuration(time.Duration(e.DurationMs)*time.Millisecond))
 	}
 	if e.ToolName != "" {
-		sb.WriteString(fmt.Sprintf(" Tool:   %s\n", e.ToolName))
+		fmt.Fprintf(&sb, " Tool:   %s\n", e.ToolName)
 	}
 
 	target := eventTarget(e)
 	if target != "" {
-		sb.WriteString(fmt.Sprintf(" Target: %s\n", target))
+		fmt.Fprintf(&sb, " Target: %s\n", target)
 	}
 
 	detail := eventDetail(e)
 	if detail != "" {
-		sb.WriteString(fmt.Sprintf(" Detail: %s\n", detail))
+		fmt.Fprintf(&sb, " Detail: %s\n", detail)
 	}
 
 	if e.ErrorMessage != "" {
-		sb.WriteString(fmt.Sprintf(" Error:  %s\n",
-			redTextStyle.Render(e.ErrorMessage)))
+		fmt.Fprintf(&sb, " Error:  %s\n",
+			redTextStyle.Render(e.ErrorMessage))
 	}
 
 	if e.DiffContent != "" {

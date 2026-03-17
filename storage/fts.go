@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 )
@@ -124,6 +125,16 @@ func (s *SQLiteStore) indexEvent(ctx context.Context, event *events.Event) error
 		return nil
 	}
 
+	// Check if already indexed (FTS5 has no unique constraint)
+	var exists int
+	_ = s.db.QueryRowContext(ctx,
+		"SELECT 1 FROM events_fts WHERE event_id = ? LIMIT 1",
+		event.ID.String(),
+	).Scan(&exists)
+	if exists == 1 {
+		return nil
+	}
+
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO events_fts(event_id, session_id, searchable_text) VALUES (?, ?, ?)`,
 		event.ID.String(), event.SessionID.String(), searchableText,
@@ -180,6 +191,7 @@ func (s *SQLiteStore) BackfillFTS(ctx context.Context, store EventStore) (int, e
 		}
 
 		for _, evt := range batch {
+			// indexEvent skips already-indexed events
 			if err := s.indexEvent(ctx, evt); err != nil {
 				continue
 			}
@@ -220,7 +232,11 @@ func (s *SQLiteStore) SearchEvents(ctx context.Context, query string, limit int)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search events: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Warnf("failed to close rows: %v", err)
+		}
+	}()
 
 	var results []SearchResult
 	for rows.Next() {
@@ -267,7 +283,11 @@ func (s *SQLiteStore) DistinctAgents(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query distinct agents: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Warnf("failed to close rows: %v", err)
+		}
+	}()
 
 	var agents []string
 	for rows.Next() {
