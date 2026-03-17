@@ -1260,3 +1260,83 @@ func TestQuerySelfAuditsAfterCompoundCursor(t *testing.T) {
 		})
 	}
 }
+
+func TestSQLiteStore_QuerySessionsEventSubQuery(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	sess1 := session.NewSession("claude-code")
+	require.NoError(t, store.SaveSession(ctx, sess1))
+
+	sess2 := session.NewSession("cursor")
+	require.NoError(t, store.SaveSession(ctx, sess2))
+
+	now := time.Now().UTC()
+
+	payload1, _ := json.Marshal(events.FileWritePayload{Path: "/src/main.go"})
+	require.NoError(t, store.SaveEvent(ctx, &events.Event{
+		ID:           uuid.New(),
+		SessionID:    sess1.ID,
+		Sequence:     1,
+		Timestamp:    now,
+		AgentName:    "claude-code",
+		ActionType:   events.ActionFileWrite,
+		ResultStatus: events.ResultSuccess,
+		Payload:      payload1,
+	}))
+
+	payload2, _ := json.Marshal(events.CommandExecPayload{Command: "npm test"})
+	require.NoError(t, store.SaveEvent(ctx, &events.Event{
+		ID:           uuid.New(),
+		SessionID:    sess2.ID,
+		Sequence:     1,
+		Timestamp:    now,
+		AgentName:    "cursor",
+		ActionType:   events.ActionCommandExec,
+		ResultStatus: events.ResultSuccess,
+		Payload:      payload2,
+	}))
+
+	tests := []struct {
+		name      string
+		filter    *session.SessionFilter
+		wantCount int
+		wantID    uuid.UUID
+	}{
+		{
+			name:      "filter by action type file_write",
+			filter:    session.NewSessionFilter().WithEventActions([]string{"file_write"}).WithLimit(100),
+			wantCount: 1,
+			wantID:    sess1.ID,
+		},
+		{
+			name:      "filter by file pattern",
+			filter:    session.NewSessionFilter().WithFilePattern("*/main.go").WithLimit(100),
+			wantCount: 1,
+			wantID:    sess1.ID,
+		},
+		{
+			name:      "filter by command pattern",
+			filter:    session.NewSessionFilter().WithCommandPattern("npm*").WithLimit(100),
+			wantCount: 1,
+			wantID:    sess2.ID,
+		},
+		{
+			name:      "no match for unknown action",
+			filter:    session.NewSessionFilter().WithEventActions([]string{"network_request"}).WithLimit(100),
+			wantCount: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results, err := store.QuerySessions(ctx, tt.filter)
+			require.NoError(t, err)
+			assert.Len(t, results, tt.wantCount)
+			if tt.wantCount > 0 {
+				assert.Equal(t, tt.wantID, results[0].ID)
+			}
+		})
+	}
+}

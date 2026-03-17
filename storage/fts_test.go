@@ -161,6 +161,41 @@ func TestSQLiteStore_BackfillFTS(t *testing.T) {
 	assert.Equal(t, 0, indexed)
 }
 
+func TestSQLiteStore_FTSCleanupOnDelete(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	sessionID := uuid.New()
+	createTestSession(t, store, sessionID, "claude-code")
+
+	now := time.Now().UTC()
+	payload, _ := json.Marshal(events.FileWritePayload{Path: "/src/cleanup.go"})
+	err := store.SaveEvent(ctx, &events.Event{
+		ID:           uuid.New(),
+		SessionID:    sessionID,
+		Sequence:     1,
+		Timestamp:    now.Add(-48 * time.Hour),
+		AgentName:    "claude-code",
+		ActionType:   events.ActionFileWrite,
+		ResultStatus: events.ResultSuccess,
+		Payload:      payload,
+	})
+	require.NoError(t, err)
+
+	results, err := store.SearchEvents(ctx, "cleanup", 10)
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+
+	deleted, err := store.DeleteEventsBefore(ctx, now.Add(-24*time.Hour))
+	require.NoError(t, err)
+	assert.Equal(t, 1, deleted)
+
+	results, err = store.SearchEvents(ctx, "cleanup", 10)
+	require.NoError(t, err)
+	assert.Len(t, results, 0)
+}
+
 func mustMarshalFTS(v interface{}) json.RawMessage {
 	data, err := json.Marshal(v)
 	if err != nil {
