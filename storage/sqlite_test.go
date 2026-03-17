@@ -1117,6 +1117,58 @@ func TestQueryEventsAfterCompoundCursor(t *testing.T) {
 	}
 }
 
+func TestSQLiteStore_QuerySessionsExtendedFilters(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	sess1 := session.NewSession("claude-code")
+	sess1.Errors = 2
+	sess1.SensitiveActions = 1
+	require.NoError(t, store.SaveSession(ctx, sess1))
+
+	sess2 := session.NewSession("cursor")
+	sess2.BlockedActions = 3
+	require.NoError(t, store.SaveSession(ctx, sess2))
+
+	sess3 := session.NewSession("claude-code")
+	require.NoError(t, store.SaveSession(ctx, sess3))
+
+	tests := []struct {
+		name     string
+		filter   *session.SessionFilter
+		expected int
+	}{
+		{"multi-agent filter", session.NewSessionFilter().WithAgents([]string{"claude-code"}), 2},
+		{"has errors", session.NewSessionFilter().WithHasErrors(true), 1},
+		{"has sensitive", session.NewSessionFilter().WithHasSensitive(true), 1},
+		{"has blocked", session.NewSessionFilter().WithHasBlocked(true), 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.filter.Limit = 100
+			results, err := store.QuerySessions(ctx, tt.filter)
+			require.NoError(t, err)
+			assert.Len(t, results, tt.expected)
+		})
+	}
+}
+
+func TestSQLiteStore_DistinctAgents(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	require.NoError(t, store.SaveSession(ctx, session.NewSession("claude-code")))
+	require.NoError(t, store.SaveSession(ctx, session.NewSession("cursor")))
+	require.NoError(t, store.SaveSession(ctx, session.NewSession("claude-code")))
+
+	agents, err := store.DistinctAgents(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"claude-code", "cursor"}, agents)
+}
+
 func TestQuerySelfAuditsAfterCompoundCursor(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
