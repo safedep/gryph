@@ -17,4 +17,5 @@ type Options struct {
 	Session     string
 	FilePattern string
 	CmdPattern  string
+	Sensitive   bool
 }

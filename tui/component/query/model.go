@@ -85,6 +85,7 @@ type FilterState struct {
 	statuses    []string
 	filePattern string
 	cmdPattern  string
+	sensitive   bool
 }
 
 func New(opts Options) Model {
@@ -115,6 +116,7 @@ func New(opts Options) Model {
 		timeRange:   timeRange,
 		filePattern: opts.FilePattern,
 		cmdPattern:  opts.CmdPattern,
+		sensitive:   opts.Sensitive,
 	}
 	return Model{
 		store:               opts.Store,
@@ -655,6 +657,9 @@ func loadSessions(store storage.Store, f FilterState) tea.Cmd {
 		}
 		if f.cmdPattern != "" {
 			filter.WithCommandPattern(f.cmdPattern)
+		}
+		if f.sensitive {
+			filter.WithHasSensitive(true)
 		}
 		sessions, err := store.QuerySessions(context.Background(), filter)
 		if err != nil {

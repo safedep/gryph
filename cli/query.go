@@ -76,7 +76,7 @@ through the audit history.`,
 
 			if interactive {
 				return runInteractiveQuery(app, since, until, today, yesterday, agents, actions,
-					filePattern, cmdPattern, status, session)
+					filePattern, cmdPattern, status, session, sensitive)
 			}
 
 			// Build filter
@@ -203,7 +203,7 @@ through the audit history.`,
 }
 
 func runInteractiveQuery(app *App, since, until string, today, yesterday bool,
-	agents, actions []string, filePattern, cmdPattern, status, sessionID string) error {
+	agents, actions []string, filePattern, cmdPattern, status, sessionID string, sensitive bool) error {
 
 	opts := query.Options{
 		Store:       app.Store,
@@ -212,6 +212,7 @@ func runInteractiveQuery(app *App, since, until string, today, yesterday bool,
 		FilePattern: filePattern,
 		CmdPattern:  cmdPattern,
 		Session:     sessionID,
+		Sensitive:   sensitive,
 	}
 
 	if searcher, ok := app.Store.(storage.Searcher); ok {
