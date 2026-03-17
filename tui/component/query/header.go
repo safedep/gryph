@@ -11,23 +11,24 @@ import (
 func (m Model) renderHeader() string {
 	left := " gryph query"
 
-	// Agent filter indicator.
 	if len(m.filters.agents) > 0 {
 		left += " | agent:" + strings.Join(m.filters.agents, ",")
+	} else {
+		left += " | agent:all"
 	}
 
-	// Session count.
 	left += fmt.Sprintf(" | %d sessions", len(m.sessions))
 
-	// Since range.
-	if !m.filters.since.IsZero() {
-		since := time.Since(m.filters.since)
-		left += fmt.Sprintf(" | since:%s", compactDuration(since))
+	if m.filters.timeRange != "" {
+		left += " | since:" + m.filters.timeRange
 	}
 
-	// Error indicator.
+	if m.activeSearchQuery != "" {
+		left += " | " + searchHighlightStyle.Render("search:"+m.activeSearchQuery)
+	}
+
 	if m.err != nil {
-		left += " | " + errorDotStyle.Render("error: "+m.err.Error())
+		left += " | " + errorDotStyle.Render("err: "+m.err.Error())
 	}
 
 	right := time.Now().Format("15:04:05")
@@ -39,16 +40,4 @@ func (m Model) renderHeader() string {
 
 	line := left + strings.Repeat(" ", gap) + right
 	return headerStyle.Width(m.width).Render(line)
-}
-
-// compactDuration returns e.g. "7d", "2h", "30m" for a given duration.
-func compactDuration(d time.Duration) string {
-	switch {
-	case d >= 24*time.Hour:
-		return fmt.Sprintf("%dd", int(d.Hours()/24))
-	case d >= time.Hour:
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	}
 }

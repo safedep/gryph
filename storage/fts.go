@@ -203,6 +203,11 @@ func (s *SQLiteStore) SearchEvents(ctx context.Context, query string, limit int)
 		limit = 500
 	}
 
+	ftsQuery := escapeFTSQuery(query)
+	if ftsQuery == "" {
+		return nil, nil
+	}
+
 	rows, err := s.db.QueryContext(ctx, `
         SELECT f.event_id, f.session_id,
             snippet(events_fts, 2, '>>>', '<<<', '...', 32) as snippet,
@@ -211,7 +216,7 @@ func (s *SQLiteStore) SearchEvents(ctx context.Context, query string, limit int)
         WHERE events_fts MATCH ?
         ORDER BY rank
         LIMIT ?
-    `, query, limit)
+    `, ftsQuery, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search events: %w", err)
 	}
@@ -230,6 +235,23 @@ func (s *SQLiteStore) SearchEvents(ctx context.Context, query string, limit int)
 	}
 
 	return results, rows.Err()
+}
+
+// escapeFTSQuery wraps each token in double quotes so FTS5 operators
+// like - * OR AND are treated as literals.
+func escapeFTSQuery(query string) string {
+	// Strip null bytes which cause SQLite string termination issues
+	query = strings.ReplaceAll(query, "\x00", "")
+	tokens := strings.Fields(query)
+	if len(tokens) == 0 {
+		return ""
+	}
+	var quoted []string
+	for _, t := range tokens {
+		t = strings.ReplaceAll(t, `"`, `""`)
+		quoted = append(quoted, `"`+t+`"`)
+	}
+	return strings.Join(quoted, " ")
 }
 
 func (s *SQLiteStore) HasSearch() bool {

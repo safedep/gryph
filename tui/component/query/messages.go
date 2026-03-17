@@ -1,9 +1,9 @@
 package query
 
 import (
+	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
-	"github.com/safedep/gryph/storage"
 )
 
 type sessionsLoadedMsg struct {
@@ -18,9 +18,10 @@ type agentsLoadedMsg struct {
 	agents []string
 }
 
-type searchResultsMsg struct {
-	query  string
-	groups []sessionSearchGroup
+type searchAppliedMsg struct {
+	query      string
+	sessionIDs map[uuid.UUID]bool
+	eventIDs   map[uuid.UUID]bool
 }
 
 type loadErrorMsg struct {
@@ -39,7 +40,6 @@ type backfillErrorMsg struct {
 	err error
 }
 
-type sessionSearchGroup struct {
-	session *session.Session
-	matches []storage.SearchResult
+type debounceTickMsg struct {
+	query string
 }

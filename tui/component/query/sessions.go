@@ -12,94 +12,113 @@ import (
 
 func (m Model) renderSessionList(width, height int) string {
 	if len(m.sessions) == 0 {
-		placeholder := dimStyle.Width(width).Height(height).
-			Align(lipgloss.Center, lipgloss.Center).
-			Render("No sessions found")
-		return placeholder
+		var lines []string
+		msg := "No sessions found"
+		if m.activeSearchQuery != "" {
+			msg = "No sessions match: " + m.activeSearchQuery
+		}
+		mid := height / 2
+		for i := 0; i < mid; i++ {
+			lines = append(lines, "")
+		}
+		lines = append(lines, dimStyle.Render("  "+msg))
+		return padLines(lines, width, height)
 	}
 
-	visible := height
-	if visible <= 0 {
-		visible = 1
+	var title string
+	if m.focus == paneSearch {
+		// Show search input as the title line
+		prompt := lipgloss.NewStyle().Foreground(colorAmber).Bold(true).Render("/")
+		cursor := lipgloss.NewStyle().Background(colorWhite).Foreground(colorDim).Render(" ")
+		title = " " + prompt + " " + m.searchInput + cursor
+	} else {
+		titleStyle := paneTitleStyle
+		if m.focus != paneSessionList {
+			titleStyle = paneTitleDimStyle
+		}
+		label := fmt.Sprintf("Sessions (%d)", len(m.sessions))
+		if m.activeSearchQuery != "" {
+			label += "  " + dimStyle.Render("search:"+m.activeSearchQuery)
+		}
+		title = titleStyle.Render(label)
 	}
 
-	// Adjust scroll so selected item is always visible.
-	if m.sessionIdx < m.sessionScroll {
-		m.sessionScroll = m.sessionIdx
-	}
-	if m.sessionIdx >= m.sessionScroll+visible {
-		m.sessionScroll = m.sessionIdx - visible + 1
+	var out []string
+	out = append(out, title)
+
+	// Each session = 2 visible lines + 1 blank
+	rowHeight := 3
+	visibleRows := (height - 1) / rowHeight
+	if visibleRows < 1 {
+		visibleRows = 1
 	}
 
-	var rows []string
-	end := m.sessionScroll + visible
+	scroll := m.sessionScroll
+	end := scroll + visibleRows
 	if end > len(m.sessions) {
 		end = len(m.sessions)
 	}
-	for i := m.sessionScroll; i < end; i++ {
+
+	for i := scroll; i < end; i++ {
 		selected := i == m.sessionIdx && m.focus == paneSessionList
-		rows = append(rows, formatSessionRow(m.sessions[i], width, selected))
+		out = append(out, formatSessionRow(m.sessions[i], width, selected))
 	}
 
-	// Pad to fill height.
-	for len(rows) < visible {
-		rows = append(rows, strings.Repeat(" ", width))
-	}
-
-	content := strings.Join(rows, "\n")
-	return lipgloss.NewStyle().Width(width).Height(height).Render(content)
+	return padLines(out, width, height)
 }
 
 func formatSessionRow(sess *session.Session, width int, selected bool) string {
 	dot := attentionDot(sess)
-
-	agent := tui.TruncateString(sess.AgentName, 12)
+	date := sess.StartedAt.Local().Format("01/02")
+	agent := tui.TruncateString(sess.AgentName, 14)
 	project := sess.ProjectName
 	if project == "" {
-		project = tui.TruncateString(sess.WorkingDirectory, 20)
+		if sess.WorkingDirectory != "" {
+			parts := strings.Split(sess.WorkingDirectory, "/")
+			project = parts[len(parts)-1]
+		} else {
+			project = "-"
+		}
 	}
-	project = tui.TruncateString(project, 20)
+	project = tui.TruncateString(project, 18)
 
-	dur := tui.FormatDuration(sess.Duration())
+	// Line 1: cursor + date + agent + project + dot
+	cursor := "  "
+	if selected {
+		cursor = "> "
+	}
+	line1 := fmt.Sprintf("%s%s %s %-18s %s", cursor, date, agent, project, dot)
+
+	// Line 2: indented stats
 	tokens := tui.FormatTokens(sess.InputTokens + sess.OutputTokens)
 	cost := tui.FormatCost(sess.EstimatedCostUSD)
-	age := formatAge(sess.StartedAt)
-
-	// Compose the left part: dot + agent + project
-	left := fmt.Sprintf("%s %-12s %-20s", dot, agent, project)
-	// Right part: age + dur + tokens + cost
-	right := fmt.Sprintf("%6s %6s %6s %7s", age, dur, tokens, cost)
-
-	// Pad middle to fill width
-	leftVis := tui.VisibleLen(left)
-	rightVis := tui.VisibleLen(right)
-	gap := width - leftVis - rightVis - 2
-	if gap < 1 {
-		gap = 1
-	}
-	row := left + strings.Repeat(" ", gap) + right
+	line2 := fmt.Sprintf("     %d actions · %s tok · %s",
+		sess.TotalActions, tokens, cost)
 
 	if selected {
-		return selectedStyle.Width(width).Render(row)
+		line1 = selectedStyle.Width(width).Render(line1)
+		line2 = selectedStyle.Width(width).Render(line2)
+	} else {
+		line1 = lipgloss.NewStyle().Width(width).Render(line1)
+		line2 = dimStyle.Width(width).Render(line2)
 	}
-	return lipgloss.NewStyle().Width(width).Render(row)
+
+	return line1 + "\n" + line2 + "\n"
 }
 
-// attentionDot returns a coloured indicator based on session health.
 func attentionDot(sess *session.Session) string {
-	if sess.BlockedActions > 0 {
+	if sess.Errors > 0 {
 		return errorDotStyle.Render("●")
 	}
-	if sess.Errors > 0 || sess.SensitiveActions > 0 {
+	if sess.BlockedActions > 0 || sess.SensitiveActions > 0 {
 		return amberDotStyle.Render("●")
 	}
 	if sess.IsActive() {
 		return lipgloss.NewStyle().Foreground(colorGreen).Render("●")
 	}
-	return dimStyle.Render("○")
+	return dimStyle.Render("·")
 }
 
-// formatAge returns a compact relative age string (e.g. "2h", "3d").
 func formatAge(t time.Time) string {
 	d := time.Since(t)
 	switch {

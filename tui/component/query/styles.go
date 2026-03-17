@@ -36,7 +36,8 @@ var (
 			Foreground(colorAmber)
 
 	summaryLabelStyle = lipgloss.NewStyle().
-				Foreground(colorDim)
+				Foreground(colorDim).
+				Bold(true)
 
 	summaryValueStyle = lipgloss.NewStyle().
 				Foreground(colorWhite)
@@ -46,6 +47,19 @@ var (
 
 	removedStyle = lipgloss.NewStyle().
 			Foreground(colorRed)
+
+	paneTitleStyle = lipgloss.NewStyle().
+			Foreground(colorWhite).
+			Bold(true).
+			Padding(0, 1)
+
+	paneTitleDimStyle = lipgloss.NewStyle().
+				Foreground(colorDim).
+				Bold(true).
+				Padding(0, 1)
+
+	verticalBorderStyle = lipgloss.NewStyle().
+				Foreground(colorDim)
 
 	overlayStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).

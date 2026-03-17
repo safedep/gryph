@@ -33,7 +33,6 @@ func formatEventRow(e *events.Event, width int, highlighted bool) string {
 	if !ok {
 		as = actionSymbols[events.ActionUnknown]
 	}
-	symbol := lipgloss.NewStyle().Foreground(as.color).Render(as.symbol)
 
 	target := eventTarget(e)
 	detail := eventDetail(e)
@@ -43,21 +42,30 @@ func formatEventRow(e *events.Event, width int, highlighted bool) string {
 		target = "..." + target[len(target)-maxTarget+3:]
 	}
 
+	if highlighted {
+		// Build as plain text, apply single background style across entire row
+		// to avoid ANSI reset breaks in the highlight bar
+		line := fmt.Sprintf("  %s %s %s", ts, as.symbol, target)
+		if detail != "" {
+			line += "  " + detail
+		}
+		if e.ResultStatus != events.ResultSuccess {
+			line += "  " + string(e.ResultStatus)
+		}
+		return selectedStyle.Width(width).Render(line)
+	}
+
+	symbol := lipgloss.NewStyle().Foreground(as.color).Render(as.symbol)
 	line := fmt.Sprintf("  %s %s %s", ts, symbol, target)
 	if detail != "" {
 		line += "  " + dimStyle.Render(detail)
 	}
-
 	if e.ResultStatus != events.ResultSuccess {
 		statusStyle := lipgloss.NewStyle().Foreground(colorRed)
 		if e.ResultStatus == events.ResultBlocked {
 			statusStyle = lipgloss.NewStyle().Foreground(colorAmber)
 		}
 		line += "  " + statusStyle.Render(string(e.ResultStatus))
-	}
-
-	if highlighted {
-		line = selectedStyle.Width(width).Render(line)
 	}
 
 	return line

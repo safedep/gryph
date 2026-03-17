@@ -12,69 +12,193 @@ import (
 
 func (m Model) renderDetail(width, height int) string {
 	if len(m.sessions) == 0 || m.sessionIdx >= len(m.sessions) {
-		return lipgloss.NewStyle().Width(width).Height(height).
-			Foreground(colorDim).
-			Align(lipgloss.Center, lipgloss.Center).
-			Render("No session selected")
+		return padLines([]string{
+			"",
+			dimStyle.Render("  No session selected"),
+		}, width, height)
+	}
+
+	if m.events == nil && m.loading {
+		return padLines([]string{
+			"",
+			dimStyle.Render("  Loading events..."),
+		}, width, height)
 	}
 
 	sess := m.sessions[m.sessionIdx]
 
-	header := fmt.Sprintf(" %s · %s · %s",
-		sess.AgentName, sess.ProjectName, tui.FormatDuration(sess.Duration()))
-	lines := []string{header, ""}
+	titleStyle := paneTitleStyle
+	if m.focus != paneDetail {
+		titleStyle = paneTitleDimStyle
+	}
+	project := sess.ProjectName
+	if project == "" {
+		project = "-"
+	}
+	title := titleStyle.Render(fmt.Sprintf("%s · %s · %s",
+		sess.AgentName, project, tui.FormatDuration(sess.Duration())))
 
 	if m.expanded && m.eventIdx < len(m.filteredEvents()) {
-		expanded := formatExpandedEvent(m.filteredEvents()[m.eventIdx], width)
-		expandedLines := strings.Split(expanded, "\n")
+		return m.renderExpandedDetail(title, width, height)
+	}
 
-		start := m.eventScroll
-		if start >= len(expandedLines) {
-			start = len(expandedLines) - 1
-		}
-		if start < 0 {
-			start = 0
-		}
-		end := start + height - 3
-		if end > len(expandedLines) {
-			end = len(expandedLines)
-		}
+	return m.renderSummaryAndEvents(title, width, height)
+}
 
-		lines = append(lines, expandedLines[start:end]...)
+func (m Model) renderExpandedDetail(title string, width, height int) string {
+	var out []string
+	out = append(out, title)
+	out = append(out, dimStyle.Render(strings.Repeat("─", width)))
+
+	expanded := formatExpandedEvent(m.filteredEvents()[m.eventIdx], width)
+	expandedLines := strings.Split(expanded, "\n")
+
+	available := height - 2
+	start := m.eventScroll
+	if start > len(expandedLines)-available {
+		start = len(expandedLines) - available
+	}
+	if start < 0 {
+		start = 0
+	}
+	end := start + available
+	if end > len(expandedLines) {
+		end = len(expandedLines)
+	}
+
+	out = append(out, expandedLines[start:end]...)
+	return padLines(out, width, height)
+}
+
+func (m Model) renderSummaryAndEvents(title string, width, height int) string {
+	var out []string
+	out = append(out, title)
+	out = append(out, "")
+
+	// Summary — capped to avoid pushing events off screen
+	s := m.summary
+	out = append(out, summaryLabelStyle.Render("  Summary"))
+	out = append(out, dimStyle.Render("  "+strings.Repeat("─", width-4)))
+	out = append(out, fmt.Sprintf("   %s  %s written  %s read  %s deleted",
+		summaryLabelStyle.Render("Files"),
+		summaryValueStyle.Render(fmt.Sprintf("%d", len(s.filesWritten))),
+		summaryValueStyle.Render(fmt.Sprintf("%d", s.filesRead)),
+		summaryValueStyle.Render(fmt.Sprintf("%d", s.filesDeleted))))
+
+	// Show at most 5 written files in summary
+	shown := len(s.filesWritten)
+	if shown > 5 {
+		shown = 5
+	}
+	for i := 0; i < shown; i++ {
+		f := s.filesWritten[i]
+		changes := tui.FormatLineChanges(f.linesAdded, f.linesRemoved)
+		path := f.path
+		maxPath := width - len(changes) - 12
+		if maxPath > 0 && len(path) > maxPath {
+			path = "..." + path[len(path)-maxPath+3:]
+		}
+		out = append(out, fmt.Sprintf("     %s %s  %s",
+			addedStyle.Render("+"), path, dimStyle.Render(changes)))
+	}
+	if len(s.filesWritten) > 5 {
+		out = append(out, dimStyle.Render(fmt.Sprintf("     ... and %d more", len(s.filesWritten)-5)))
+	}
+
+	out = append(out, "")
+	out = append(out, fmt.Sprintf("   %s  %s executed  %s failed",
+		summaryLabelStyle.Render("Cmds"),
+		summaryValueStyle.Render(fmt.Sprintf("%d", len(s.commands))),
+		summaryValueStyle.Render(fmt.Sprintf("%d", s.commandsFailed))))
+
+	// Show at most 5 commands
+	shownCmds := len(s.commands)
+	if shownCmds > 5 {
+		shownCmds = 5
+	}
+	for i := 0; i < shownCmds; i++ {
+		c := s.commands[i]
+		exitStyle := dimStyle
+		if c.exitCode != 0 {
+			exitStyle = lipgloss.NewStyle().Foreground(colorRed)
+		}
+		cmd := c.command
+		maxCmd := width - 22
+		if maxCmd > 0 && len(cmd) > maxCmd {
+			cmd = cmd[:maxCmd-3] + "..."
+		}
+		out = append(out, fmt.Sprintf("     %s %s  %s",
+			lipgloss.NewStyle().Foreground(colorAmber).Render("$"),
+			cmd, exitStyle.Render(tui.FormatExitCode(c.exitCode))))
+	}
+	if len(s.commands) > 5 {
+		out = append(out, dimStyle.Render(fmt.Sprintf("     ... and %d more", len(s.commands)-5)))
+	}
+
+	out = append(out, "")
+	flagLine := fmt.Sprintf("   %s  %d sensitive  %d blocked  %d errors",
+		summaryLabelStyle.Render("Flags"), s.sensitive, s.blocked, s.errors)
+	if s.errors > 0 {
+		flagLine = lipgloss.NewStyle().Foreground(colorRed).Render(flagLine)
+	} else if s.sensitive > 0 || s.blocked > 0 {
+		flagLine = lipgloss.NewStyle().Foreground(colorAmber).Render(flagLine)
 	} else {
-		summary := m.renderSummary(width)
-		lines = append(lines, strings.Split(summary, "\n")...)
+		flagLine = dimStyle.Render(flagLine)
+	}
+	out = append(out, flagLine)
 
-		sortLabel := "oldest first"
-		if m.sortOrder == sortNewestFirst {
-			sortLabel = "newest first"
-		}
-		evtHeader := fmt.Sprintf("\n %s  %s",
-			dimStyle.Render(fmt.Sprintf("Events (%d)", len(m.filteredEvents()))),
-			dimStyle.Render(sortLabel))
-		lines = append(lines, evtHeader)
+	// Event list separator
+	out = append(out, "")
+	out = append(out, dimStyle.Render("  "+strings.Repeat("─", width-4)))
 
-		sortedEvents := make([]*events.Event, len(m.filteredEvents()))
-		copy(sortedEvents, m.filteredEvents())
-		if m.sortOrder == sortNewestFirst {
-			slices.Reverse(sortedEvents)
-		}
+	sortLabel := "oldest first"
+	if m.sortOrder == sortNewestFirst {
+		sortLabel = "newest first"
+	}
+	filtered := m.filteredEvents()
+	out = append(out, fmt.Sprintf("  %s  %s",
+		lipgloss.NewStyle().Foreground(colorWhite).Bold(true).Render(
+			fmt.Sprintf("Events (%d)", len(filtered))),
+		dimStyle.Render(sortLabel)))
 
-		for i, e := range sortedEvents {
-			highlighted := i == m.eventIdx
-			lines = append(lines, formatEventRow(e, width, highlighted))
-		}
+	// How many lines the summary took
+	summaryUsed := len(out)
+	eventAreaHeight := height - summaryUsed
+	if eventAreaHeight < 3 {
+		eventAreaHeight = 3
 	}
 
-	content := strings.Join(lines, "\n")
-
-	contentLines := strings.Count(content, "\n") + 1
-	for contentLines < height {
-		content += "\n"
-		contentLines++
+	// Sort and window events
+	sortedEvents := make([]*events.Event, len(filtered))
+	copy(sortedEvents, filtered)
+	if m.sortOrder == sortNewestFirst {
+		slices.Reverse(sortedEvents)
 	}
 
-	return lipgloss.NewStyle().Width(width).Height(height).Render(content)
+	scrollOffset := 0
+	if m.eventIdx >= eventAreaHeight {
+		scrollOffset = m.eventIdx - eventAreaHeight + 1
+	}
+
+	for i := scrollOffset; i < len(sortedEvents) && i < scrollOffset+eventAreaHeight; i++ {
+		highlighted := i == m.eventIdx && m.focus == paneDetail
+		out = append(out, formatEventRow(sortedEvents[i], width, highlighted))
+	}
+
+	return padLines(out, width, height)
+}
+
+// padLines joins lines and pads/truncates to exactly `height` lines.
+func padLines(lines []string, width, height int) string {
+	// Truncate if too many
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	// Pad if too few
+	for len(lines) < height {
+		lines = append(lines, "")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) filteredEvents() []*events.Event {

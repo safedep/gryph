@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage"
@@ -28,7 +29,6 @@ const (
 	sortNewestFirst
 )
 
-// Model is the root Bubble Tea model for the query TUI.
 type Model struct {
 	store    storage.Store
 	searcher storage.Searcher
@@ -38,12 +38,19 @@ type Model struct {
 	focus    pane
 	showHelp bool
 
+	// All sessions from DB (before search filter)
+	allSessions []*session.Session
+	// Visible sessions (filtered by active search)
 	sessions      []*session.Session
 	sessionIdx    int
 	sessionScroll int
 
-	events      []*events.Event
-	summary     sessionSummary
+	// All events for selected session
+	allEvents []*events.Event
+	// Visible events (filtered by active search)
+	events  []*events.Event
+	summary sessionSummary
+
 	eventIdx    int
 	eventScroll int
 	expanded    bool
@@ -51,9 +58,11 @@ type Model struct {
 	sortOrder sortOrder
 	filters   FilterState
 
-	searchInput   string
-	searchResults []sessionSearchGroup
-	searchIdx     int
+	// Search-as-filter state
+	searchInput          string
+	activeSearchQuery    string
+	activeSearchSessionIDs map[uuid.UUID]bool
+	activeSearchEventIDs   map[uuid.UUID]bool
 
 	filterBar filterBarModel
 
@@ -64,7 +73,6 @@ type Model struct {
 	err     error
 }
 
-// FilterState holds the current filter configuration.
 type FilterState struct {
 	agents      []string
 	allAgents   []string
@@ -77,14 +85,32 @@ type FilterState struct {
 	cmdPattern  string
 }
 
-// New creates a new query Model from the provided Options.
 func New(opts Options) Model {
+	since := opts.Since
+	timeRange := "7d"
+	if since.IsZero() {
+		since = time.Now().UTC().Add(-7 * 24 * time.Hour)
+	} else {
+		d := time.Since(since)
+		switch {
+		case d < 25*time.Hour:
+			timeRange = "today"
+		case d < 49*time.Hour:
+			timeRange = "yesterday"
+		case d < 8*24*time.Hour:
+			timeRange = "7d"
+		default:
+			timeRange = "30d"
+		}
+	}
+
 	f := FilterState{
 		agents:      opts.Agents,
 		actions:     opts.Actions,
 		statuses:    opts.Statuses,
-		since:       opts.Since,
+		since:       since,
 		until:       opts.Until,
+		timeRange:   timeRange,
 		filePattern: opts.FilePattern,
 		cmdPattern:  opts.CmdPattern,
 	}
@@ -94,11 +120,11 @@ func New(opts Options) Model {
 		filters:             f,
 		filterBar:           newFilterBar(f),
 		initialSession:      opts.Session,
+		loading:             true,
 		detailActionFilters: make(map[events.ActionType]bool),
 	}
 }
 
-// Init starts the initial data load commands.
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		loadSessions(m.store, m.filters),
@@ -110,7 +136,6 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// Update handles all incoming messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -123,7 +148,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case sessionsLoadedMsg:
-		m.sessions = msg.sessions
+		m.allSessions = msg.sessions
+		m.applySearchFilter()
 		m.loading = false
 		m.err = nil
 		if m.initialSession != "" {
@@ -141,8 +167,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case eventsLoadedMsg:
-		m.events = msg.events
-		m.summary = computeSummary(m.events)
+		m.allEvents = msg.events
+		m.applyEventSearchFilter()
 		m.eventIdx = 0
 		m.eventScroll = 0
 		return m, nil
@@ -151,12 +177,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.filters.allAgents = msg.agents
 		return m, nil
 
-	case searchResultsMsg:
-		m.searchResults = msg.groups
-		m.searchIdx = 0
+	case searchAppliedMsg:
+		m.activeSearchQuery = msg.query
+		m.activeSearchSessionIDs = msg.sessionIDs
+		m.activeSearchEventIDs = msg.eventIDs
+		m.applySearchFilter()
+		m.sessionIdx = 0
+		m.sessionScroll = 0
+		m.focus = paneSessionList
+		if len(m.sessions) > 0 {
+			return m, loadEvents(m.store, m.sessions[0])
+		}
+		m.allEvents = nil
+		m.events = nil
+		m.summary = sessionSummary{}
 		return m, nil
 
-	case backfillDoneMsg:
+	case backfillDoneMsg, backfillErrorMsg:
 		return m, nil
 
 	case loadErrorMsg:
@@ -165,28 +202,69 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case searchErrorMsg:
-		return m, nil
-
-	case backfillErrorMsg:
-		return m, nil
-
-	case debounceTickMsg:
-		if msg.query == m.searchInput && m.searchInput != "" {
-			return m, runSearch(m.searcher, m.store, msg.query)
-		}
+		m.err = msg.err
+		m.focus = paneSessionList
 		return m, nil
 	}
 
 	return m, nil
 }
 
+// applySearchFilter updates m.sessions from m.allSessions based on active search.
+func (m *Model) applySearchFilter() {
+	if len(m.activeSearchSessionIDs) == 0 {
+		m.sessions = m.allSessions
+		return
+	}
+	var filtered []*session.Session
+	for _, s := range m.allSessions {
+		if m.activeSearchSessionIDs[s.ID] {
+			filtered = append(filtered, s)
+		}
+	}
+	m.sessions = filtered
+}
+
+// applyEventSearchFilter updates m.events from m.allEvents based on active search.
+func (m *Model) applyEventSearchFilter() {
+	if len(m.activeSearchEventIDs) == 0 {
+		m.events = m.allEvents
+	} else {
+		var filtered []*events.Event
+		for _, e := range m.allEvents {
+			if m.activeSearchEventIDs[e.ID] {
+				filtered = append(filtered, e)
+			}
+		}
+		m.events = filtered
+	}
+	m.summary = computeSummary(m.events)
+}
+
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.showHelp {
+		if msg.String() == "?" || msg.String() == "esc" || msg.String() == "q" {
+			m.showHelp = false
+		}
+		return m, nil
+	}
+
+	// Search input mode
+	if m.focus == paneSearch {
+		return m.handleSearchKey(msg)
+	}
+
+	// Filter bar mode
+	if m.focus == paneFilter {
+		return m.handleFilterKey(msg)
+	}
+
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 
 	case "?":
-		m.showHelp = !m.showHelp
+		m.showHelp = true
 		return m, nil
 
 	case "tab":
@@ -198,25 +276,34 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "/":
-		m.focus = paneSearch
-		m.searchInput = ""
-		m.searchResults = nil
-		return m, nil
-
-	case "f":
-		if m.focus == paneFilter {
-			m.focus = paneSessionList
-		} else {
-			m.focus = paneFilter
-			m.filterBar = newFilterBar(m.filters)
+		if m.searcher != nil && m.searcher.HasSearch() {
+			m.focus = paneSearch
+			m.searchInput = m.activeSearchQuery // pre-fill with current search
 		}
 		return m, nil
 
+	case "f":
+		m.focus = paneFilter
+		m.filterBar = newFilterBar(m.filters)
+		return m, nil
+
 	case "esc":
-		if m.focus == paneSearch || m.focus == paneFilter {
+		if m.expanded {
+			m.expanded = false
+			m.eventScroll = 0
+		} else if m.activeSearchQuery != "" && m.focus == paneSessionList {
+			// Clear active search
+			m.activeSearchQuery = ""
+			m.activeSearchSessionIDs = nil
+			m.activeSearchEventIDs = nil
+			m.applySearchFilter()
+			m.sessionIdx = 0
+			m.sessionScroll = 0
+			if len(m.sessions) > 0 {
+				return m, loadEvents(m.store, m.sessions[0])
+			}
+		} else if m.focus == paneDetail {
 			m.focus = paneSessionList
-		} else if m.showHelp {
-			m.showHelp = false
 		}
 		return m, nil
 
@@ -230,32 +317,25 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "j", "down":
 		return m.handleNavDown()
-
 	case "k", "up":
 		return m.handleNavUp()
-
 	case "g", "home":
 		return m.handleNavTop()
-
 	case "G", "end":
 		return m.handleNavBottom()
-
 	case "pgdown":
-		return m.handleNavPageDown()
-
+		return m.handleNavPage(1)
 	case "pgup":
-		return m.handleNavPageUp()
+		return m.handleNavPage(-1)
 
 	case "enter":
-		if m.focus == paneSearch {
-			return m.openSearchResult()
-		}
 		if m.focus == paneSessionList && len(m.sessions) > 0 {
 			m.focus = paneDetail
 			return m, loadEvents(m.store, m.sessions[m.sessionIdx])
 		}
-		if m.focus == paneDetail {
+		if m.focus == paneDetail && len(m.filteredEvents()) > 0 {
 			m.expanded = !m.expanded
+			m.eventScroll = 0
 		}
 		return m, nil
 
@@ -279,30 +359,62 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.focus == paneSearch {
-		return m.handleSearchInput(msg)
-	}
-
-	if m.focus == paneFilter {
-		return m.handleFilterKey(msg)
-	}
-
 	return m, nil
+}
+
+func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Cancel search input, go back without changing filter
+		m.focus = paneSessionList
+		return m, nil
+
+	case "enter":
+		// Apply search
+		query := strings.TrimSpace(m.searchInput)
+		if query == "" {
+			// Empty search = clear filter
+			m.activeSearchQuery = ""
+			m.activeSearchSessionIDs = nil
+			m.activeSearchEventIDs = nil
+			m.applySearchFilter()
+			m.sessionIdx = 0
+			m.sessionScroll = 0
+			m.focus = paneSessionList
+			if len(m.sessions) > 0 {
+				return m, loadEvents(m.store, m.sessions[0])
+			}
+			return m, nil
+		}
+		// Execute FTS and apply as filter
+		return m, executeSearchFilter(m.searcher, query)
+
+	case "backspace":
+		if len(m.searchInput) > 0 {
+			m.searchInput = m.searchInput[:len(m.searchInput)-1]
+		}
+		return m, nil
+
+	default:
+		if len(msg.Runes) > 0 {
+			m.searchInput += string(msg.Runes)
+		}
+		return m, nil
+	}
 }
 
 func (m Model) handleNavDown() (tea.Model, tea.Cmd) {
 	if m.focus == paneSessionList {
 		if m.sessionIdx < len(m.sessions)-1 {
 			m.sessionIdx++
+			m.adjustSessionScroll()
 			return m, loadEvents(m.store, m.sessions[m.sessionIdx])
 		}
 	} else if m.focus == paneDetail {
-		if m.eventIdx < len(m.events)-1 {
+		if m.expanded {
+			m.eventScroll++
+		} else if m.eventIdx < len(m.filteredEvents())-1 {
 			m.eventIdx++
-		}
-	} else if m.focus == paneSearch {
-		if m.searchIdx < len(m.searchResults)-1 {
-			m.searchIdx++
 		}
 	}
 	return m, nil
@@ -312,15 +424,16 @@ func (m Model) handleNavUp() (tea.Model, tea.Cmd) {
 	if m.focus == paneSessionList {
 		if m.sessionIdx > 0 {
 			m.sessionIdx--
+			m.adjustSessionScroll()
 			return m, loadEvents(m.store, m.sessions[m.sessionIdx])
 		}
 	} else if m.focus == paneDetail {
-		if m.eventIdx > 0 {
+		if m.expanded {
+			if m.eventScroll > 0 {
+				m.eventScroll--
+			}
+		} else if m.eventIdx > 0 {
 			m.eventIdx--
-		}
-	} else if m.focus == paneSearch {
-		if m.searchIdx > 0 {
-			m.searchIdx--
 		}
 	}
 	return m, nil
@@ -329,8 +442,9 @@ func (m Model) handleNavUp() (tea.Model, tea.Cmd) {
 func (m Model) handleNavTop() (tea.Model, tea.Cmd) {
 	if m.focus == paneSessionList {
 		m.sessionIdx = 0
+		m.sessionScroll = 0
 		if len(m.sessions) > 0 {
-			return m, loadEvents(m.store, m.sessions[m.sessionIdx])
+			return m, loadEvents(m.store, m.sessions[0])
 		}
 	} else if m.focus == paneDetail {
 		m.eventIdx = 0
@@ -342,30 +456,42 @@ func (m Model) handleNavTop() (tea.Model, tea.Cmd) {
 func (m Model) handleNavBottom() (tea.Model, tea.Cmd) {
 	if m.focus == paneSessionList && len(m.sessions) > 0 {
 		m.sessionIdx = len(m.sessions) - 1
+		m.adjustSessionScroll()
 		return m, loadEvents(m.store, m.sessions[m.sessionIdx])
-	} else if m.focus == paneDetail && len(m.events) > 0 {
-		m.eventIdx = len(m.events) - 1
+	} else if m.focus == paneDetail {
+		evts := m.filteredEvents()
+		if len(evts) > 0 {
+			m.eventIdx = len(evts) - 1
+		}
 	}
 	return m, nil
 }
 
-func (m Model) handleNavPageDown() (tea.Model, tea.Cmd) {
-	pageSize := m.listHeight()
+func (m Model) handleNavPage(dir int) (tea.Model, tea.Cmd) {
+	pageSize := m.visibleSessionRows()
 	if m.focus == paneSessionList {
-		m.sessionIdx += pageSize
+		m.sessionIdx += dir * pageSize
+		if m.sessionIdx < 0 {
+			m.sessionIdx = 0
+		}
 		if m.sessionIdx >= len(m.sessions) {
 			m.sessionIdx = len(m.sessions) - 1
 		}
 		if m.sessionIdx < 0 {
 			m.sessionIdx = 0
 		}
+		m.adjustSessionScroll()
 		if len(m.sessions) > 0 {
 			return m, loadEvents(m.store, m.sessions[m.sessionIdx])
 		}
 	} else if m.focus == paneDetail {
-		m.eventIdx += pageSize
-		if m.eventIdx >= len(m.events) {
-			m.eventIdx = len(m.events) - 1
+		m.eventIdx += dir * pageSize
+		evts := m.filteredEvents()
+		if m.eventIdx < 0 {
+			m.eventIdx = 0
+		}
+		if m.eventIdx >= len(evts) {
+			m.eventIdx = len(evts) - 1
 		}
 		if m.eventIdx < 0 {
 			m.eventIdx = 0
@@ -374,42 +500,26 @@ func (m Model) handleNavPageDown() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleNavPageUp() (tea.Model, tea.Cmd) {
-	pageSize := m.listHeight()
-	if m.focus == paneSessionList {
-		m.sessionIdx -= pageSize
-		if m.sessionIdx < 0 {
-			m.sessionIdx = 0
-		}
-		if len(m.sessions) > 0 {
-			return m, loadEvents(m.store, m.sessions[m.sessionIdx])
-		}
-	} else if m.focus == paneDetail {
-		m.eventIdx -= pageSize
-		if m.eventIdx < 0 {
-			m.eventIdx = 0
-		}
+func (m *Model) adjustSessionScroll() {
+	visible := m.visibleSessionRows()
+	if visible < 1 {
+		visible = 1
 	}
-	return m, nil
+	if m.sessionIdx < m.sessionScroll {
+		m.sessionScroll = m.sessionIdx
+	}
+	if m.sessionIdx >= m.sessionScroll+visible {
+		m.sessionScroll = m.sessionIdx - visible + 1
+	}
 }
 
-func (m Model) handleSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "backspace":
-		if len(m.searchInput) > 0 {
-			m.searchInput = m.searchInput[:len(m.searchInput)-1]
-		}
-	case "enter", "esc":
-		return m, nil
-	default:
-		if len(msg.Runes) > 0 {
-			m.searchInput += string(msg.Runes)
-		}
+func (m Model) visibleSessionRows() int {
+	h := m.height - 2
+	rows := (h - 1) / 3
+	if rows < 1 {
+		return 1
 	}
-	query := m.searchInput
-	return m, tea.Tick(300*time.Millisecond, func(_ time.Time) tea.Msg {
-		return debounceTickMsg{query: query}
-	})
+	return rows
 }
 
 func (m Model) toggleActionFilter(at events.ActionType) {
@@ -420,7 +530,8 @@ func (m Model) toggleActionFilter(at events.ActionType) {
 	}
 }
 
-// View renders the full TUI.
+// --- View ---
+
 func (m Model) View() string {
 	if !m.ready {
 		return "loading..."
@@ -428,50 +539,62 @@ func (m Model) View() string {
 
 	header := m.renderHeader()
 	footer := m.renderFooter()
-	contentH := m.height - 2
-
-	if m.showHelp {
-		help := m.renderHelp()
-		return lipgloss.JoinVertical(lipgloss.Left, header, help, footer)
+	contentHeight := m.height - 2
+	if contentHeight < 1 {
+		contentHeight = 1
 	}
 
-	if m.focus == paneSearch {
-		search := m.renderSearch(m.width, contentH)
-		return lipgloss.JoinVertical(lipgloss.Left, header, search, footer)
+	if m.showHelp {
+		helpOverlay := m.renderHelp()
+		return lipgloss.JoinVertical(lipgloss.Left, header, helpOverlay, footer)
 	}
 
 	var content string
 	if m.width >= 80 {
-		listW := m.listWidth()
-		detailW := m.width - listW
-		list := m.renderSessionList(listW, contentH)
-		detail := m.renderDetail(detailW, contentH)
-		content = lipgloss.JoinHorizontal(lipgloss.Top, list, detail)
+		content = m.splitPaneLayout(contentHeight)
 	} else {
 		if m.focus == paneDetail {
-			content = m.renderDetail(m.width, contentH)
+			content = m.renderDetail(m.width, contentHeight)
 		} else {
-			content = m.renderSessionList(m.width, contentH)
+			content = m.renderSessionList(m.width, contentHeight)
 		}
 	}
+
+	content = lipgloss.NewStyle().Width(m.width).Height(contentHeight).MaxHeight(contentHeight).Render(content)
 
 	base := lipgloss.JoinVertical(lipgloss.Left, header, content, footer)
 
 	if m.focus == paneFilter {
-		overlay := m.filterBar.view(m.width, contentH)
-		lines := strings.Split(base, "\n")
-		overlayLines := strings.Split(overlay, "\n")
-		// Offset by 1 row to account for header.
-		for i, ol := range overlayLines {
-			row := i + 1
-			if row < len(lines) {
-				lines[row] = ol
-			}
-		}
-		return strings.Join(lines, "\n")
+		overlay := m.filterBar.view(m.width, contentHeight)
+		return lipgloss.JoinVertical(lipgloss.Left, header, overlay, footer)
 	}
 
 	return base
+}
+
+func (m Model) splitPaneLayout(height int) string {
+	listW := m.listWidth()
+	detailW := m.width - listW - 1
+
+	left := m.renderSessionList(listW, height)
+	detail := m.renderDetail(detailW, height)
+
+	listStyled := lipgloss.NewStyle().Width(listW).Height(height).Render(left)
+	border := renderVerticalBorder(height)
+	detailStyled := lipgloss.NewStyle().Width(detailW).Height(height).Render(detail)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, listStyled, border, detailStyled)
+}
+
+func renderVerticalBorder(height int) string {
+	var sb strings.Builder
+	for i := 0; i < height; i++ {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		sb.WriteString(verticalBorderStyle.Render("│"))
+	}
+	return sb.String()
 }
 
 func (m Model) listWidth() int {
@@ -481,11 +604,8 @@ func (m Model) listWidth() int {
 	return 36
 }
 
-func (m Model) listHeight() int {
-	return m.height - 2
-}
+// --- Data loading commands ---
 
-// loadSessions returns a Cmd that queries sessions from the store.
 func loadSessions(store storage.Store, f FilterState) tea.Cmd {
 	return func() tea.Msg {
 		filter := session.NewSessionFilter().WithLimit(500)
@@ -518,7 +638,6 @@ func loadSessions(store storage.Store, f FilterState) tea.Cmd {
 	}
 }
 
-// loadEvents returns a Cmd that loads events for the given session.
 func loadEvents(store storage.Store, sess *session.Session) tea.Cmd {
 	return func() tea.Msg {
 		evts, err := store.GetEventsBySession(context.Background(), sess.ID)
@@ -529,7 +648,6 @@ func loadEvents(store storage.Store, sess *session.Session) tea.Cmd {
 	}
 }
 
-// loadAgents returns a Cmd that fetches distinct agent names.
 func loadAgents(searcher storage.Searcher) tea.Cmd {
 	return func() tea.Msg {
 		if searcher == nil {
@@ -543,7 +661,6 @@ func loadAgents(searcher storage.Searcher) tea.Cmd {
 	}
 }
 
-// backfillFTS returns a Cmd that populates the FTS index.
 func backfillFTS(store storage.Store, searcher storage.Searcher) tea.Cmd {
 	return func() tea.Msg {
 		n, err := searcher.BackfillFTS(context.Background(), store)
@@ -554,35 +671,27 @@ func backfillFTS(store storage.Store, searcher storage.Searcher) tea.Cmd {
 	}
 }
 
-// runSearch executes a full-text search and groups results by session.
-func runSearch(searcher storage.Searcher, store storage.Store, query string) tea.Cmd {
+func executeSearchFilter(searcher storage.Searcher, query string) tea.Cmd {
 	return func() tea.Msg {
 		if searcher == nil || !searcher.HasSearch() {
-			return searchResultsMsg{query: query}
+			return searchErrorMsg{err: nil}
 		}
-		results, err := searcher.SearchEvents(context.Background(), query, 200)
+		results, err := searcher.SearchEvents(context.Background(), query, 500)
 		if err != nil {
 			return searchErrorMsg{err: err}
 		}
 
-		seen := make(map[string]int)
-		var groups []sessionSearchGroup
+		sessionIDs := make(map[uuid.UUID]bool)
+		eventIDs := make(map[uuid.UUID]bool)
 		for _, r := range results {
-			key := r.SessionID.String()
-			if idx, ok := seen[key]; ok {
-				groups[idx].matches = append(groups[idx].matches, r)
-			} else {
-				sess, _ := store.GetSession(context.Background(), r.SessionID)
-				if sess == nil {
-					continue
-				}
-				seen[key] = len(groups)
-				groups = append(groups, sessionSearchGroup{
-					session: sess,
-					matches: []storage.SearchResult{r},
-				})
-			}
+			sessionIDs[r.SessionID] = true
+			eventIDs[r.EventID] = true
 		}
-		return searchResultsMsg{query: query, groups: groups}
+
+		return searchAppliedMsg{
+			query:      query,
+			sessionIDs: sessionIDs,
+			eventIDs:   eventIDs,
+		}
 	}
 }

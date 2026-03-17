@@ -32,27 +32,21 @@ var helpBindings = []struct {
 func (m Model) renderHelp() string {
 	var sb strings.Builder
 
-	keyStyle := lipgloss.NewStyle().Foreground(colorAmber).Bold(true)
+	keyStyle := lipgloss.NewStyle().Foreground(colorAmber).Bold(true).Width(14)
 
 	for _, b := range helpBindings {
 		if b.key == "" {
 			sb.WriteString("\n")
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("  %s  %s\n",
-			keyStyle.Width(14).Render(b.key),
-			b.desc))
+		sb.WriteString(fmt.Sprintf("  %s  %s\n", keyStyle.Render(b.key), b.desc))
 	}
 
-	content := sb.String()
-	overlay := overlayStyle.Render(content)
+	overlay := overlayStyle.Render(sb.String())
 
-	height := m.height - 2
-	padTop := (height - strings.Count(overlay, "\n") - 1) / 3
-	if padTop < 1 {
-		padTop = 1
+	contentHeight := m.height - 2
+	if contentHeight < 1 {
+		contentHeight = 1
 	}
-
-	return strings.Repeat("\n", padTop) +
-		lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(overlay)
+	return lipgloss.Place(m.width, contentHeight, lipgloss.Center, lipgloss.Center, overlay)
 }

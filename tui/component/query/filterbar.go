@@ -150,29 +150,8 @@ func (fb filterBarModel) view(width, height int) string {
 	}
 	sb.WriteString("  " + hints)
 
-	body := overlayStyle.Render(sb.String())
-
-	bw := lipgloss.Width(body)
-	bh := lipgloss.Height(body)
-
-	padLeft := (width - bw) / 2
-	if padLeft < 0 {
-		padLeft = 0
-	}
-	padTop := (height - bh) / 2
-	if padTop < 0 {
-		padTop = 0
-	}
-
-	lines := strings.Split(body, "\n")
-	prefix := strings.Repeat(" ", padLeft)
-	for i, l := range lines {
-		lines[i] = prefix + l
-	}
-	centered := strings.Join(lines, "\n")
-
-	topPad := strings.Repeat("\n", padTop)
-	return topPad + centered
+	overlay := overlayStyle.Render(sb.String())
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, overlay)
 }
 
 func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

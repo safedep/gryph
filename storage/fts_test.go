@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -194,6 +195,92 @@ func TestSQLiteStore_FTSCleanupOnDelete(t *testing.T) {
 	results, err = store.SearchEvents(ctx, "cleanup", 10)
 	require.NoError(t, err)
 	assert.Len(t, results, 0)
+}
+
+func TestEscapeFTSQuery(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"simple word", "migration", `"migration"`},
+		{"two words", "go test", `"go" "test"`},
+		{"FTS operator minus", "rm -rf", `"rm" "-rf"`},
+		{"FTS operator NOT", "NOT secret", `"NOT" "secret"`},
+		{"FTS operator OR", "foo OR bar", `"foo" "OR" "bar"`},
+		{"FTS operator AND", "foo AND bar", `"foo" "AND" "bar"`},
+		{"FTS wildcard star", "test*", `"test*"`},
+		{"parentheses", "(drop table)", `"(drop" "table)"`},
+		{"embedded quotes", `say "hello"`, `"say" """hello"""`},
+		{"empty string", "", ""},
+		{"only spaces", "   ", ""},
+		{"special chars", ".env* OR password", `".env*" "OR" "password"`},
+		{"SQL injection attempt", `"; DROP TABLE events_fts; --`, `""";" "DROP" "TABLE" "events_fts;" "--"`},
+		{"column reference attempt", "searchable_text:secret", `"searchable_text:secret"`},
+		{"caret prefix", "^start", `"^start"`},
+		{"curly braces NEAR", "NEAR(a b)", `"NEAR(a" "b)"`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := escapeFTSQuery(tt.input)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestSQLiteStore_SearchEventsSecurityInputs(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	sessionID := uuid.New()
+	createTestSession(t, store, sessionID, "claude-code")
+
+	// Index an event so the FTS table is not empty
+	payload, _ := json.Marshal(events.CommandExecPayload{Command: "rm -rf /tmp/test"})
+	require.NoError(t, store.SaveEvent(ctx, &events.Event{
+		ID: uuid.New(), SessionID: sessionID, Sequence: 1,
+		Timestamp: time.Now().UTC(), AgentName: "claude-code",
+		ActionType: events.ActionCommandExec, ResultStatus: events.ResultSuccess,
+		Payload: payload,
+	}))
+
+	// All these inputs must not cause SQL errors or panics
+	dangerousInputs := []struct {
+		name  string
+		query string
+	}{
+		{"FTS operator minus", "rm -rf"},
+		{"FTS operator NOT", "NOT secret"},
+		{"FTS operator OR", "foo OR bar"},
+		{"SQL injection semicolon", `"; DROP TABLE events_fts; --`},
+		{"SQL injection union", `" UNION SELECT * FROM sessions --`},
+		{"FTS column prefix", "searchable_text:password"},
+		{"empty after trim", "   "},
+		{"embedded quotes", `he said "hello"`},
+		{"wildcard star", "test*"},
+		{"NEAR operator", "NEAR(secret password)"},
+		{"parentheses", "(admin) OR (root)"},
+		{"backslash", `C:\Users\secret`},
+		{"null byte", "test\x00injection"},
+		{"very long input", strings.Repeat("a", 1000)},
+	}
+
+	for _, tt := range dangerousInputs {
+		t.Run(tt.name, func(t *testing.T) {
+			results, err := store.SearchEvents(ctx, tt.query, 10)
+			// Must not error — safe handling required
+			assert.NoError(t, err, "query %q should not cause an error", tt.query)
+			// Results may be empty, that's fine — just no crashes
+			_ = results
+		})
+	}
+
+	// Verify the legitimate search still works through escaping
+	results, err := store.SearchEvents(ctx, "rm -rf", 10)
+	require.NoError(t, err)
+	assert.Len(t, results, 1, "should find the event containing 'rm -rf'")
 }
 
 func mustMarshalFTS(v interface{}) json.RawMessage {
