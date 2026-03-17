@@ -250,6 +250,48 @@ func (_u *SessionUpdate) AddErrors(v int) *SessionUpdate {
 	return _u
 }
 
+// SetSensitiveActions sets the "sensitive_actions" field.
+func (_u *SessionUpdate) SetSensitiveActions(v int) *SessionUpdate {
+	_u.mutation.ResetSensitiveActions()
+	_u.mutation.SetSensitiveActions(v)
+	return _u
+}
+
+// SetNillableSensitiveActions sets the "sensitive_actions" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableSensitiveActions(v *int) *SessionUpdate {
+	if v != nil {
+		_u.SetSensitiveActions(*v)
+	}
+	return _u
+}
+
+// AddSensitiveActions adds value to the "sensitive_actions" field.
+func (_u *SessionUpdate) AddSensitiveActions(v int) *SessionUpdate {
+	_u.mutation.AddSensitiveActions(v)
+	return _u
+}
+
+// SetBlockedActions sets the "blocked_actions" field.
+func (_u *SessionUpdate) SetBlockedActions(v int) *SessionUpdate {
+	_u.mutation.ResetBlockedActions()
+	_u.mutation.SetBlockedActions(v)
+	return _u
+}
+
+// SetNillableBlockedActions sets the "blocked_actions" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableBlockedActions(v *int) *SessionUpdate {
+	if v != nil {
+		_u.SetBlockedActions(*v)
+	}
+	return _u
+}
+
+// AddBlockedActions adds value to the "blocked_actions" field.
+func (_u *SessionUpdate) AddBlockedActions(v int) *SessionUpdate {
+	_u.mutation.AddBlockedActions(v)
+	return _u
+}
+
 // SetTranscriptPath sets the "transcript_path" field.
 func (_u *SessionUpdate) SetTranscriptPath(v string) *SessionUpdate {
 	_u.mutation.SetTranscriptPath(v)
@@ -585,6 +627,18 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedErrors(); ok {
 		_spec.AddField(session.FieldErrors, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.SensitiveActions(); ok {
+		_spec.SetField(session.FieldSensitiveActions, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSensitiveActions(); ok {
+		_spec.AddField(session.FieldSensitiveActions, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.BlockedActions(); ok {
+		_spec.SetField(session.FieldBlockedActions, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedBlockedActions(); ok {
+		_spec.AddField(session.FieldBlockedActions, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.TranscriptPath(); ok {
 		_spec.SetField(session.FieldTranscriptPath, field.TypeString, value)
@@ -926,6 +980,48 @@ func (_u *SessionUpdateOne) SetNillableErrors(v *int) *SessionUpdateOne {
 // AddErrors adds value to the "errors" field.
 func (_u *SessionUpdateOne) AddErrors(v int) *SessionUpdateOne {
 	_u.mutation.AddErrors(v)
+	return _u
+}
+
+// SetSensitiveActions sets the "sensitive_actions" field.
+func (_u *SessionUpdateOne) SetSensitiveActions(v int) *SessionUpdateOne {
+	_u.mutation.ResetSensitiveActions()
+	_u.mutation.SetSensitiveActions(v)
+	return _u
+}
+
+// SetNillableSensitiveActions sets the "sensitive_actions" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableSensitiveActions(v *int) *SessionUpdateOne {
+	if v != nil {
+		_u.SetSensitiveActions(*v)
+	}
+	return _u
+}
+
+// AddSensitiveActions adds value to the "sensitive_actions" field.
+func (_u *SessionUpdateOne) AddSensitiveActions(v int) *SessionUpdateOne {
+	_u.mutation.AddSensitiveActions(v)
+	return _u
+}
+
+// SetBlockedActions sets the "blocked_actions" field.
+func (_u *SessionUpdateOne) SetBlockedActions(v int) *SessionUpdateOne {
+	_u.mutation.ResetBlockedActions()
+	_u.mutation.SetBlockedActions(v)
+	return _u
+}
+
+// SetNillableBlockedActions sets the "blocked_actions" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableBlockedActions(v *int) *SessionUpdateOne {
+	if v != nil {
+		_u.SetBlockedActions(*v)
+	}
+	return _u
+}
+
+// AddBlockedActions adds value to the "blocked_actions" field.
+func (_u *SessionUpdateOne) AddBlockedActions(v int) *SessionUpdateOne {
+	_u.mutation.AddBlockedActions(v)
 	return _u
 }
 
@@ -1294,6 +1390,18 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 	}
 	if value, ok := _u.mutation.AddedErrors(); ok {
 		_spec.AddField(session.FieldErrors, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.SensitiveActions(); ok {
+		_spec.SetField(session.FieldSensitiveActions, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSensitiveActions(); ok {
+		_spec.AddField(session.FieldSensitiveActions, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.BlockedActions(); ok {
+		_spec.SetField(session.FieldBlockedActions, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedBlockedActions(); ok {
+		_spec.AddField(session.FieldBlockedActions, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.TranscriptPath(); ok {
 		_spec.SetField(session.FieldTranscriptPath, field.TypeString, value)

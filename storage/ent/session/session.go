@@ -39,6 +39,10 @@ const (
 	FieldCommandsExecuted = "commands_executed"
 	// FieldErrors holds the string denoting the errors field in the database.
 	FieldErrors = "errors"
+	// FieldSensitiveActions holds the string denoting the sensitive_actions field in the database.
+	FieldSensitiveActions = "sensitive_actions"
+	// FieldBlockedActions holds the string denoting the blocked_actions field in the database.
+	FieldBlockedActions = "blocked_actions"
 	// FieldTranscriptPath holds the string denoting the transcript_path field in the database.
 	FieldTranscriptPath = "transcript_path"
 	// FieldInputTokens holds the string denoting the input_tokens field in the database.
@@ -85,6 +89,8 @@ var Columns = []string{
 	FieldFilesWritten,
 	FieldCommandsExecuted,
 	FieldErrors,
+	FieldSensitiveActions,
+	FieldBlockedActions,
 	FieldTranscriptPath,
 	FieldInputTokens,
 	FieldOutputTokens,
@@ -121,6 +127,10 @@ var (
 	DefaultCommandsExecuted int
 	// DefaultErrors holds the default value on creation for the "errors" field.
 	DefaultErrors int
+	// DefaultSensitiveActions holds the default value on creation for the "sensitive_actions" field.
+	DefaultSensitiveActions int
+	// DefaultBlockedActions holds the default value on creation for the "blocked_actions" field.
+	DefaultBlockedActions int
 	// DefaultInputTokens holds the default value on creation for the "input_tokens" field.
 	DefaultInputTokens int64
 	// DefaultOutputTokens holds the default value on creation for the "output_tokens" field.
@@ -201,6 +211,16 @@ func ByCommandsExecuted(opts ...sql.OrderTermOption) OrderOption {
 // ByErrors orders the results by the errors field.
 func ByErrors(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldErrors, opts...).ToFunc()
+}
+
+// BySensitiveActions orders the results by the sensitive_actions field.
+func BySensitiveActions(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSensitiveActions, opts...).ToFunc()
+}
+
+// ByBlockedActions orders the results by the blocked_actions field.
+func ByBlockedActions(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBlockedActions, opts...).ToFunc()
 }
 
 // ByTranscriptPath orders the results by the transcript_path field.

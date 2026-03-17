@@ -3031,6 +3031,10 @@ type SessionMutation struct {
 	addcommands_executed  *int
 	errors                *int
 	adderrors             *int
+	sensitive_actions     *int
+	addsensitive_actions  *int
+	blocked_actions       *int
+	addblocked_actions    *int
 	transcript_path       *string
 	input_tokens          *int64
 	addinput_tokens       *int64
@@ -3756,6 +3760,118 @@ func (m *SessionMutation) ResetErrors() {
 	m.adderrors = nil
 }
 
+// SetSensitiveActions sets the "sensitive_actions" field.
+func (m *SessionMutation) SetSensitiveActions(i int) {
+	m.sensitive_actions = &i
+	m.addsensitive_actions = nil
+}
+
+// SensitiveActions returns the value of the "sensitive_actions" field in the mutation.
+func (m *SessionMutation) SensitiveActions() (r int, exists bool) {
+	v := m.sensitive_actions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSensitiveActions returns the old "sensitive_actions" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldSensitiveActions(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSensitiveActions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSensitiveActions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSensitiveActions: %w", err)
+	}
+	return oldValue.SensitiveActions, nil
+}
+
+// AddSensitiveActions adds i to the "sensitive_actions" field.
+func (m *SessionMutation) AddSensitiveActions(i int) {
+	if m.addsensitive_actions != nil {
+		*m.addsensitive_actions += i
+	} else {
+		m.addsensitive_actions = &i
+	}
+}
+
+// AddedSensitiveActions returns the value that was added to the "sensitive_actions" field in this mutation.
+func (m *SessionMutation) AddedSensitiveActions() (r int, exists bool) {
+	v := m.addsensitive_actions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSensitiveActions resets all changes to the "sensitive_actions" field.
+func (m *SessionMutation) ResetSensitiveActions() {
+	m.sensitive_actions = nil
+	m.addsensitive_actions = nil
+}
+
+// SetBlockedActions sets the "blocked_actions" field.
+func (m *SessionMutation) SetBlockedActions(i int) {
+	m.blocked_actions = &i
+	m.addblocked_actions = nil
+}
+
+// BlockedActions returns the value of the "blocked_actions" field in the mutation.
+func (m *SessionMutation) BlockedActions() (r int, exists bool) {
+	v := m.blocked_actions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBlockedActions returns the old "blocked_actions" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldBlockedActions(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBlockedActions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBlockedActions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBlockedActions: %w", err)
+	}
+	return oldValue.BlockedActions, nil
+}
+
+// AddBlockedActions adds i to the "blocked_actions" field.
+func (m *SessionMutation) AddBlockedActions(i int) {
+	if m.addblocked_actions != nil {
+		*m.addblocked_actions += i
+	} else {
+		m.addblocked_actions = &i
+	}
+}
+
+// AddedBlockedActions returns the value that was added to the "blocked_actions" field in this mutation.
+func (m *SessionMutation) AddedBlockedActions() (r int, exists bool) {
+	v := m.addblocked_actions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBlockedActions resets all changes to the "blocked_actions" field.
+func (m *SessionMutation) ResetBlockedActions() {
+	m.blocked_actions = nil
+	m.addblocked_actions = nil
+}
+
 // SetTranscriptPath sets the "transcript_path" field.
 func (m *SessionMutation) SetTranscriptPath(s string) {
 	m.transcript_path = &s
@@ -4336,7 +4452,7 @@ func (m *SessionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SessionMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 23)
 	if m.agent_session_id != nil {
 		fields = append(fields, session.FieldAgentSessionID)
 	}
@@ -4372,6 +4488,12 @@ func (m *SessionMutation) Fields() []string {
 	}
 	if m.errors != nil {
 		fields = append(fields, session.FieldErrors)
+	}
+	if m.sensitive_actions != nil {
+		fields = append(fields, session.FieldSensitiveActions)
+	}
+	if m.blocked_actions != nil {
+		fields = append(fields, session.FieldBlockedActions)
 	}
 	if m.transcript_path != nil {
 		fields = append(fields, session.FieldTranscriptPath)
@@ -4432,6 +4554,10 @@ func (m *SessionMutation) Field(name string) (ent.Value, bool) {
 		return m.CommandsExecuted()
 	case session.FieldErrors:
 		return m.Errors()
+	case session.FieldSensitiveActions:
+		return m.SensitiveActions()
+	case session.FieldBlockedActions:
+		return m.BlockedActions()
 	case session.FieldTranscriptPath:
 		return m.TranscriptPath()
 	case session.FieldInputTokens:
@@ -4483,6 +4609,10 @@ func (m *SessionMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldCommandsExecuted(ctx)
 	case session.FieldErrors:
 		return m.OldErrors(ctx)
+	case session.FieldSensitiveActions:
+		return m.OldSensitiveActions(ctx)
+	case session.FieldBlockedActions:
+		return m.OldBlockedActions(ctx)
 	case session.FieldTranscriptPath:
 		return m.OldTranscriptPath(ctx)
 	case session.FieldInputTokens:
@@ -4594,6 +4724,20 @@ func (m *SessionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetErrors(v)
 		return nil
+	case session.FieldSensitiveActions:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSensitiveActions(v)
+		return nil
+	case session.FieldBlockedActions:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBlockedActions(v)
+		return nil
 	case session.FieldTranscriptPath:
 		v, ok := value.(string)
 		if !ok {
@@ -4680,6 +4824,12 @@ func (m *SessionMutation) AddedFields() []string {
 	if m.adderrors != nil {
 		fields = append(fields, session.FieldErrors)
 	}
+	if m.addsensitive_actions != nil {
+		fields = append(fields, session.FieldSensitiveActions)
+	}
+	if m.addblocked_actions != nil {
+		fields = append(fields, session.FieldBlockedActions)
+	}
 	if m.addinput_tokens != nil {
 		fields = append(fields, session.FieldInputTokens)
 	}
@@ -4713,6 +4863,10 @@ func (m *SessionMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedCommandsExecuted()
 	case session.FieldErrors:
 		return m.AddedErrors()
+	case session.FieldSensitiveActions:
+		return m.AddedSensitiveActions()
+	case session.FieldBlockedActions:
+		return m.AddedBlockedActions()
 	case session.FieldInputTokens:
 		return m.AddedInputTokens()
 	case session.FieldOutputTokens:
@@ -4766,6 +4920,20 @@ func (m *SessionMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddErrors(v)
+		return nil
+	case session.FieldSensitiveActions:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSensitiveActions(v)
+		return nil
+	case session.FieldBlockedActions:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBlockedActions(v)
 		return nil
 	case session.FieldInputTokens:
 		v, ok := value.(int64)
@@ -4921,6 +5089,12 @@ func (m *SessionMutation) ResetField(name string) error {
 		return nil
 	case session.FieldErrors:
 		m.ResetErrors()
+		return nil
+	case session.FieldSensitiveActions:
+		m.ResetSensitiveActions()
+		return nil
+	case session.FieldBlockedActions:
+		m.ResetBlockedActions()
 		return nil
 	case session.FieldTranscriptPath:
 		m.ResetTranscriptPath()

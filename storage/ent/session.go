@@ -43,6 +43,10 @@ type Session struct {
 	CommandsExecuted int `json:"commands_executed,omitempty"`
 	// Errors holds the value of the "errors" field.
 	Errors int `json:"errors,omitempty"`
+	// SensitiveActions holds the value of the "sensitive_actions" field.
+	SensitiveActions int `json:"sensitive_actions,omitempty"`
+	// BlockedActions holds the value of the "blocked_actions" field.
+	BlockedActions int `json:"blocked_actions,omitempty"`
 	// TranscriptPath holds the value of the "transcript_path" field.
 	TranscriptPath string `json:"transcript_path,omitempty"`
 	// InputTokens holds the value of the "input_tokens" field.
@@ -94,7 +98,7 @@ func (*Session) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case session.FieldEstimatedCostUsd:
 			values[i] = new(sql.NullFloat64)
-		case session.FieldTotalActions, session.FieldFilesRead, session.FieldFilesWritten, session.FieldCommandsExecuted, session.FieldErrors, session.FieldInputTokens, session.FieldOutputTokens, session.FieldCacheReadTokens, session.FieldCacheWriteTokens:
+		case session.FieldTotalActions, session.FieldFilesRead, session.FieldFilesWritten, session.FieldCommandsExecuted, session.FieldErrors, session.FieldSensitiveActions, session.FieldBlockedActions, session.FieldInputTokens, session.FieldOutputTokens, session.FieldCacheReadTokens, session.FieldCacheWriteTokens:
 			values[i] = new(sql.NullInt64)
 		case session.FieldAgentSessionID, session.FieldAgentName, session.FieldAgentVersion, session.FieldWorkingDirectory, session.FieldProjectName, session.FieldTranscriptPath, session.FieldCostSource:
 			values[i] = new(sql.NullString)
@@ -195,6 +199,18 @@ func (_m *Session) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field errors", values[i])
 			} else if value.Valid {
 				_m.Errors = int(value.Int64)
+			}
+		case session.FieldSensitiveActions:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sensitive_actions", values[i])
+			} else if value.Valid {
+				_m.SensitiveActions = int(value.Int64)
+			}
+		case session.FieldBlockedActions:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field blocked_actions", values[i])
+			} else if value.Valid {
+				_m.BlockedActions = int(value.Int64)
 			}
 		case session.FieldTranscriptPath:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -331,6 +347,12 @@ func (_m *Session) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("errors=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Errors))
+	builder.WriteString(", ")
+	builder.WriteString("sensitive_actions=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SensitiveActions))
+	builder.WriteString(", ")
+	builder.WriteString("blocked_actions=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BlockedActions))
 	builder.WriteString(", ")
 	builder.WriteString("transcript_path=")
 	builder.WriteString(_m.TranscriptPath)

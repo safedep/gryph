@@ -96,24 +96,32 @@ func init() {
 	sessionDescErrors := sessionFields[12].Descriptor()
 	// session.DefaultErrors holds the default value on creation for the errors field.
 	session.DefaultErrors = sessionDescErrors.Default.(int)
+	// sessionDescSensitiveActions is the schema descriptor for sensitive_actions field.
+	sessionDescSensitiveActions := sessionFields[13].Descriptor()
+	// session.DefaultSensitiveActions holds the default value on creation for the sensitive_actions field.
+	session.DefaultSensitiveActions = sessionDescSensitiveActions.Default.(int)
+	// sessionDescBlockedActions is the schema descriptor for blocked_actions field.
+	sessionDescBlockedActions := sessionFields[14].Descriptor()
+	// session.DefaultBlockedActions holds the default value on creation for the blocked_actions field.
+	session.DefaultBlockedActions = sessionDescBlockedActions.Default.(int)
 	// sessionDescInputTokens is the schema descriptor for input_tokens field.
-	sessionDescInputTokens := sessionFields[14].Descriptor()
+	sessionDescInputTokens := sessionFields[16].Descriptor()
 	// session.DefaultInputTokens holds the default value on creation for the input_tokens field.
 	session.DefaultInputTokens = sessionDescInputTokens.Default.(int64)
 	// sessionDescOutputTokens is the schema descriptor for output_tokens field.
-	sessionDescOutputTokens := sessionFields[15].Descriptor()
+	sessionDescOutputTokens := sessionFields[17].Descriptor()
 	// session.DefaultOutputTokens holds the default value on creation for the output_tokens field.
 	session.DefaultOutputTokens = sessionDescOutputTokens.Default.(int64)
 	// sessionDescCacheReadTokens is the schema descriptor for cache_read_tokens field.
-	sessionDescCacheReadTokens := sessionFields[16].Descriptor()
+	sessionDescCacheReadTokens := sessionFields[18].Descriptor()
 	// session.DefaultCacheReadTokens holds the default value on creation for the cache_read_tokens field.
 	session.DefaultCacheReadTokens = sessionDescCacheReadTokens.Default.(int64)
 	// sessionDescCacheWriteTokens is the schema descriptor for cache_write_tokens field.
-	sessionDescCacheWriteTokens := sessionFields[17].Descriptor()
+	sessionDescCacheWriteTokens := sessionFields[19].Descriptor()
 	// session.DefaultCacheWriteTokens holds the default value on creation for the cache_write_tokens field.
 	session.DefaultCacheWriteTokens = sessionDescCacheWriteTokens.Default.(int64)
 	// sessionDescEstimatedCostUsd is the schema descriptor for estimated_cost_usd field.
-	sessionDescEstimatedCostUsd := sessionFields[18].Descriptor()
+	sessionDescEstimatedCostUsd := sessionFields[20].Descriptor()
 	// session.DefaultEstimatedCostUsd holds the default value on creation for the estimated_cost_usd field.
 	session.DefaultEstimatedCostUsd = sessionDescEstimatedCostUsd.Default.(float64)
 	// sessionDescID is the schema descriptor for id field.

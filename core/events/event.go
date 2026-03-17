@@ -244,3 +244,27 @@ func (e *Event) GetCommandExecPayload() (*CommandExecPayload, error) {
 	}
 	return &payload, nil
 }
+
+// GetFileDeletePayload unmarshals the payload as a FileDeletePayload.
+func (e *Event) GetFileDeletePayload() (*FileDeletePayload, error) {
+	if e.ActionType != ActionFileDelete {
+		return nil, nil
+	}
+	var payload FileDeletePayload
+	if err := json.Unmarshal(e.Payload, &payload); err != nil {
+		return nil, err
+	}
+	return &payload, nil
+}
+
+// GetNotificationPayload unmarshals the payload as a NotificationPayload.
+func (e *Event) GetNotificationPayload() (*NotificationPayload, error) {
+	if e.ActionType != ActionNotification {
+		return nil, nil
+	}
+	var payload NotificationPayload
+	if err := json.Unmarshal(e.Payload, &payload); err != nil {
+		return nil, err
+	}
+	return &payload, nil
+}

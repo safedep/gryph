@@ -182,6 +182,34 @@ func (_c *SessionCreate) SetNillableErrors(v *int) *SessionCreate {
 	return _c
 }
 
+// SetSensitiveActions sets the "sensitive_actions" field.
+func (_c *SessionCreate) SetSensitiveActions(v int) *SessionCreate {
+	_c.mutation.SetSensitiveActions(v)
+	return _c
+}
+
+// SetNillableSensitiveActions sets the "sensitive_actions" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableSensitiveActions(v *int) *SessionCreate {
+	if v != nil {
+		_c.SetSensitiveActions(*v)
+	}
+	return _c
+}
+
+// SetBlockedActions sets the "blocked_actions" field.
+func (_c *SessionCreate) SetBlockedActions(v int) *SessionCreate {
+	_c.mutation.SetBlockedActions(v)
+	return _c
+}
+
+// SetNillableBlockedActions sets the "blocked_actions" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableBlockedActions(v *int) *SessionCreate {
+	if v != nil {
+		_c.SetBlockedActions(*v)
+	}
+	return _c
+}
+
 // SetTranscriptPath sets the "transcript_path" field.
 func (_c *SessionCreate) SetTranscriptPath(v string) *SessionCreate {
 	_c.mutation.SetTranscriptPath(v)
@@ -388,6 +416,14 @@ func (_c *SessionCreate) defaults() {
 		v := session.DefaultErrors
 		_c.mutation.SetErrors(v)
 	}
+	if _, ok := _c.mutation.SensitiveActions(); !ok {
+		v := session.DefaultSensitiveActions
+		_c.mutation.SetSensitiveActions(v)
+	}
+	if _, ok := _c.mutation.BlockedActions(); !ok {
+		v := session.DefaultBlockedActions
+		_c.mutation.SetBlockedActions(v)
+	}
 	if _, ok := _c.mutation.InputTokens(); !ok {
 		v := session.DefaultInputTokens
 		_c.mutation.SetInputTokens(v)
@@ -441,6 +477,12 @@ func (_c *SessionCreate) check() error {
 	}
 	if _, ok := _c.mutation.Errors(); !ok {
 		return &ValidationError{Name: "errors", err: errors.New(`ent: missing required field "Session.errors"`)}
+	}
+	if _, ok := _c.mutation.SensitiveActions(); !ok {
+		return &ValidationError{Name: "sensitive_actions", err: errors.New(`ent: missing required field "Session.sensitive_actions"`)}
+	}
+	if _, ok := _c.mutation.BlockedActions(); !ok {
+		return &ValidationError{Name: "blocked_actions", err: errors.New(`ent: missing required field "Session.blocked_actions"`)}
 	}
 	if _, ok := _c.mutation.InputTokens(); !ok {
 		return &ValidationError{Name: "input_tokens", err: errors.New(`ent: missing required field "Session.input_tokens"`)}
@@ -539,6 +581,14 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Errors(); ok {
 		_spec.SetField(session.FieldErrors, field.TypeInt, value)
 		_node.Errors = value
+	}
+	if value, ok := _c.mutation.SensitiveActions(); ok {
+		_spec.SetField(session.FieldSensitiveActions, field.TypeInt, value)
+		_node.SensitiveActions = value
+	}
+	if value, ok := _c.mutation.BlockedActions(); ok {
+		_spec.SetField(session.FieldBlockedActions, field.TypeInt, value)
+		_node.BlockedActions = value
 	}
 	if value, ok := _c.mutation.TranscriptPath(); ok {
 		_spec.SetField(session.FieldTranscriptPath, field.TypeString, value)

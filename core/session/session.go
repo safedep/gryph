@@ -38,6 +38,8 @@ type Session struct {
 	CommandsExecuted int `json:"commands_executed"`
 	// Errors is the count of events with error status.
 	Errors int `json:"errors"`
+	SensitiveActions int `json:"sensitive_actions"`
+	BlockedActions int `json:"blocked_actions"`
 	// TranscriptPath is the path to the agent's transcript file.
 	TranscriptPath string `json:"transcript_path,omitempty"`
 	// InputTokens is the total input tokens across all models (denormalized).

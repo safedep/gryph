@@ -48,6 +48,8 @@ func (Session) Fields() []ent.Field {
 			Default(0),
 		field.Int("errors").
 			Default(0),
+		field.Int("sensitive_actions").Default(0),
+		field.Int("blocked_actions").Default(0),
 		field.String("transcript_path").
 			Optional(),
 		field.Int64("input_tokens").

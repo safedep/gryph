@@ -116,6 +116,16 @@ func Errors(v int) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldErrors, v))
 }
 
+// SensitiveActions applies equality check predicate on the "sensitive_actions" field. It's identical to SensitiveActionsEQ.
+func SensitiveActions(v int) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldSensitiveActions, v))
+}
+
+// BlockedActions applies equality check predicate on the "blocked_actions" field. It's identical to BlockedActionsEQ.
+func BlockedActions(v int) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldBlockedActions, v))
+}
+
 // TranscriptPath applies equality check predicate on the "transcript_path" field. It's identical to TranscriptPathEQ.
 func TranscriptPath(v string) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldTranscriptPath, v))
@@ -809,6 +819,86 @@ func ErrorsLT(v int) predicate.Session {
 // ErrorsLTE applies the LTE predicate on the "errors" field.
 func ErrorsLTE(v int) predicate.Session {
 	return predicate.Session(sql.FieldLTE(FieldErrors, v))
+}
+
+// SensitiveActionsEQ applies the EQ predicate on the "sensitive_actions" field.
+func SensitiveActionsEQ(v int) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldSensitiveActions, v))
+}
+
+// SensitiveActionsNEQ applies the NEQ predicate on the "sensitive_actions" field.
+func SensitiveActionsNEQ(v int) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldSensitiveActions, v))
+}
+
+// SensitiveActionsIn applies the In predicate on the "sensitive_actions" field.
+func SensitiveActionsIn(vs ...int) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldSensitiveActions, vs...))
+}
+
+// SensitiveActionsNotIn applies the NotIn predicate on the "sensitive_actions" field.
+func SensitiveActionsNotIn(vs ...int) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldSensitiveActions, vs...))
+}
+
+// SensitiveActionsGT applies the GT predicate on the "sensitive_actions" field.
+func SensitiveActionsGT(v int) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldSensitiveActions, v))
+}
+
+// SensitiveActionsGTE applies the GTE predicate on the "sensitive_actions" field.
+func SensitiveActionsGTE(v int) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldSensitiveActions, v))
+}
+
+// SensitiveActionsLT applies the LT predicate on the "sensitive_actions" field.
+func SensitiveActionsLT(v int) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldSensitiveActions, v))
+}
+
+// SensitiveActionsLTE applies the LTE predicate on the "sensitive_actions" field.
+func SensitiveActionsLTE(v int) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldSensitiveActions, v))
+}
+
+// BlockedActionsEQ applies the EQ predicate on the "blocked_actions" field.
+func BlockedActionsEQ(v int) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldBlockedActions, v))
+}
+
+// BlockedActionsNEQ applies the NEQ predicate on the "blocked_actions" field.
+func BlockedActionsNEQ(v int) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldBlockedActions, v))
+}
+
+// BlockedActionsIn applies the In predicate on the "blocked_actions" field.
+func BlockedActionsIn(vs ...int) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldBlockedActions, vs...))
+}
+
+// BlockedActionsNotIn applies the NotIn predicate on the "blocked_actions" field.
+func BlockedActionsNotIn(vs ...int) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldBlockedActions, vs...))
+}
+
+// BlockedActionsGT applies the GT predicate on the "blocked_actions" field.
+func BlockedActionsGT(v int) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldBlockedActions, v))
+}
+
+// BlockedActionsGTE applies the GTE predicate on the "blocked_actions" field.
+func BlockedActionsGTE(v int) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldBlockedActions, v))
+}
+
+// BlockedActionsLT applies the LT predicate on the "blocked_actions" field.
+func BlockedActionsLT(v int) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldBlockedActions, v))
+}
+
+// BlockedActionsLTE applies the LTE predicate on the "blocked_actions" field.
+func BlockedActionsLTE(v int) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldBlockedActions, v))
 }
 
 // TranscriptPathEQ applies the EQ predicate on the "transcript_path" field.

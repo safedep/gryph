@@ -273,7 +273,9 @@ func (s *SQLiteStore) SaveSession(ctx context.Context, sess *session.Session) er
 		SetFilesRead(sess.FilesRead).
 		SetFilesWritten(sess.FilesWritten).
 		SetCommandsExecuted(sess.CommandsExecuted).
-		SetErrors(sess.Errors)
+		SetErrors(sess.Errors).
+		SetSensitiveActions(sess.SensitiveActions).
+		SetBlockedActions(sess.BlockedActions)
 
 	// Set optional fields
 	if sess.AgentSessionID != "" {
@@ -310,7 +312,9 @@ func (s *SQLiteStore) UpdateSession(ctx context.Context, sess *session.Session) 
 		SetFilesRead(sess.FilesRead).
 		SetFilesWritten(sess.FilesWritten).
 		SetCommandsExecuted(sess.CommandsExecuted).
-		SetErrors(sess.Errors)
+		SetErrors(sess.Errors).
+		SetSensitiveActions(sess.SensitiveActions).
+		SetBlockedActions(sess.BlockedActions)
 
 	// Update optional fields
 	if sess.AgentVersion != "" {
@@ -824,6 +828,8 @@ func entToSession(e *ent.Session) *session.Session {
 		FilesWritten:     e.FilesWritten,
 		CommandsExecuted: e.CommandsExecuted,
 		Errors:           e.Errors,
+		SensitiveActions: e.SensitiveActions,
+		BlockedActions:   e.BlockedActions,
 	}
 
 	if e.EndedAt != nil {
