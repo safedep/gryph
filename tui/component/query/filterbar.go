@@ -39,13 +39,14 @@ var allStatusTypes = []string{
 var sincePresets = []string{"today", "yesterday", "7d", "30d", "all"}
 
 type filterBarModel struct {
-	activeField filterField
-	subIdx      int
-	agents      []string
-	actions     []string
-	statuses    []string
-	since       string
-	allAgents   []string
+	activeField   filterField
+	subIdx        int
+	agents        []string
+	actions       []string
+	statuses      []string
+	since         string
+	originalSince string
+	allAgents     []string
 }
 
 func newFilterBar(f FilterState) filterBarModel {
@@ -54,11 +55,12 @@ func newFilterBar(f FilterState) filterBarModel {
 		since = "all"
 	}
 	return filterBarModel{
-		agents:    append([]string(nil), f.agents...),
-		actions:   append([]string(nil), f.actions...),
-		statuses:  append([]string(nil), f.statuses...),
-		since:     since,
-		allAgents: append([]string(nil), f.allAgents...),
+		agents:        append([]string(nil), f.agents...),
+		actions:       append([]string(nil), f.actions...),
+		statuses:      append([]string(nil), f.statuses...),
+		since:         since,
+		originalSince: since,
+		allAgents:     append([]string(nil), f.allAgents...),
 	}
 }
 
@@ -178,8 +180,10 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filters.agents = fb.agents
 		m.filters.actions = fb.actions
 		m.filters.statuses = fb.statuses
-		m.filters.timeRange = fb.since
-		m.applyTimeRange()
+		if fb.since != fb.originalSince {
+			m.filters.timeRange = fb.since
+			m.applyTimeRange()
+		}
 		m.focus = paneSessionList
 		m.loading = true
 		return m, loadSessions(m.store, m.filters)

@@ -102,8 +102,10 @@ func New(opts Options) Model {
 			timeRange = "yesterday"
 		case d < 8*24*time.Hour:
 			timeRange = "7d"
-		default:
+		case d < 31*24*time.Hour:
 			timeRange = "30d"
+		default:
+			timeRange = "all"
 		}
 	}
 
