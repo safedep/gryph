@@ -253,8 +253,15 @@ func (s *SQLiteStore) SearchEvents(ctx context.Context, query string, limit int)
 		if err := rows.Scan(&eventIDStr, &sessionIDStr, &r.Snippet, &r.Rank); err != nil {
 			return nil, fmt.Errorf("failed to scan search result: %w", err)
 		}
-		r.EventID, _ = uuid.Parse(eventIDStr)
-		r.SessionID, _ = uuid.Parse(sessionIDStr)
+		var parseErr error
+		r.EventID, parseErr = uuid.Parse(eventIDStr)
+		if parseErr != nil {
+			continue
+		}
+		r.SessionID, parseErr = uuid.Parse(sessionIDStr)
+		if parseErr != nil {
+			continue
+		}
 		results = append(results, r)
 	}
 

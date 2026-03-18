@@ -128,7 +128,7 @@ func formatExpandedEvent(e *events.Event, width int) string {
 
 	fmt.Fprintf(&sb, " Event #%d · %s · %s\n",
 		e.Sequence, e.ActionType, e.ResultStatus)
-	sb.WriteString(dimStyle.Render(strings.Repeat("─", width)) + "\n")
+	sb.WriteString(dimStyle.Render(strings.Repeat("─", max(0, width))) + "\n")
 
 	fmt.Fprintf(&sb, " Time:   %s\n", e.Timestamp.Local().Format("01/02 15:04:05"))
 	if e.DurationMs > 0 {
@@ -155,7 +155,7 @@ func formatExpandedEvent(e *events.Event, width int) string {
 
 	if e.DiffContent != "" {
 		sb.WriteString("\n" + dimStyle.Render(" Diff:") + "\n")
-		sb.WriteString(dimStyle.Render(strings.Repeat("─", width)) + "\n")
+		sb.WriteString(dimStyle.Render(strings.Repeat("─", max(0, width))) + "\n")
 		for _, line := range strings.Split(e.DiffContent, "\n") {
 			if strings.HasPrefix(line, "+") {
 				sb.WriteString(addedStyle.Render(" "+line) + "\n")
@@ -184,12 +184,12 @@ func formatExpandedEvent(e *events.Event, width int) string {
 		if p, err := e.GetToolUsePayload(); err == nil && p != nil {
 			if len(p.Input) > 0 {
 				sb.WriteString("\n" + dimStyle.Render(" Input:") + "\n")
-				sb.WriteString(dimStyle.Render(strings.Repeat("─", width)) + "\n")
+				sb.WriteString(dimStyle.Render(strings.Repeat("─", max(0, width))) + "\n")
 				sb.WriteString(formatJSON(p.Input, width) + "\n")
 			}
 			if len(p.Output) > 0 {
 				sb.WriteString("\n" + dimStyle.Render(" Output:") + "\n")
-				sb.WriteString(dimStyle.Render(strings.Repeat("─", width)) + "\n")
+				sb.WriteString(dimStyle.Render(strings.Repeat("─", max(0, width))) + "\n")
 				sb.WriteString(formatJSON(p.Output, width) + "\n")
 			}
 			if p.OutputPreview != "" && len(p.Output) == 0 {

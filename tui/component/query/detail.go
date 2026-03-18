@@ -47,7 +47,7 @@ func (m Model) renderDetail(width, height int) string {
 func (m Model) renderExpandedDetail(title string, width, height int) string {
 	var out []string
 	out = append(out, title)
-	out = append(out, dimStyle.Render(strings.Repeat("─", width)))
+	out = append(out, dimStyle.Render(strings.Repeat("─", max(0, width))))
 
 	expanded := formatExpandedEvent(m.sortedFilteredEvents()[m.eventIdx], width)
 	expandedLines := strings.Split(expanded, "\n")
@@ -77,7 +77,7 @@ func (m Model) renderSummaryAndEvents(title string, width, height int) string {
 	// Summary — capped to avoid pushing events off screen
 	s := m.summary
 	out = append(out, summaryLabelStyle.Render("  Summary"))
-	out = append(out, dimStyle.Render("  "+strings.Repeat("─", width-4)))
+	out = append(out, dimStyle.Render("  "+strings.Repeat("─", max(0, width-4))))
 	out = append(out, fmt.Sprintf("   %s  %s written  %s read  %s deleted",
 		summaryLabelStyle.Render("Files"),
 		summaryValueStyle.Render(fmt.Sprintf("%d", len(s.filesWritten))),
@@ -148,7 +148,7 @@ func (m Model) renderSummaryAndEvents(title string, width, height int) string {
 
 	// Event list separator
 	out = append(out, "")
-	out = append(out, dimStyle.Render("  "+strings.Repeat("─", width-4)))
+	out = append(out, dimStyle.Render("  "+strings.Repeat("─", max(0, width-4))))
 
 	sortLabel := "oldest first"
 	if m.sortOrder == sortNewestFirst {
