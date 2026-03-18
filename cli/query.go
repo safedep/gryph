@@ -215,9 +215,11 @@ func runInteractiveQuery(app *App, since, until string, today, yesterday bool,
 		Sensitive:   sensitive,
 	}
 
-	if searcher, ok := app.Store.(storage.Searcher); ok {
-		opts.Searcher = searcher
+	searcher, ok := app.Store.(storage.Searcher)
+	if !ok {
+		return fmt.Errorf("store does not support search, interactive mode requires FTS")
 	}
+	opts.Searcher = searcher
 
 	if today {
 		now := time.Now()

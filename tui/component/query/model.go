@@ -570,6 +570,12 @@ func (m Model) View() string {
 		contentHeight = 1
 	}
 
+	if m.loading {
+		loading := lipgloss.Place(m.width, contentHeight, lipgloss.Center, lipgloss.Center,
+			dimStyle.Render("Loading sessions..."))
+		return lipgloss.JoinVertical(lipgloss.Left, header, loading, footer)
+	}
+
 	if m.showHelp {
 		helpOverlay := m.renderHelp()
 		return lipgloss.JoinVertical(lipgloss.Left, header, helpOverlay, footer)
