@@ -518,6 +518,15 @@ func (p *TablePresenter) RenderSelfAudits(entries []*SelfAuditView) error {
 		if e.ErrorMessage != "" {
 			tw.printf("    Error: %s\n", p.color.Error(e.ErrorMessage))
 		}
+		if e.Action == "hook_error" {
+			if hookType, ok := e.Details["hook_type"].(string); ok {
+				detail := fmt.Sprintf("Hook: %s", hookType)
+				if size, ok := e.Details["raw_data_size"].(float64); ok {
+					detail += fmt.Sprintf(" (payload: %d bytes)", int(size))
+				}
+				tw.printf("    %s\n", p.color.Dim(detail))
+			}
+		}
 	}
 
 	return tw.Err()
