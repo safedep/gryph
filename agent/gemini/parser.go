@@ -45,9 +45,9 @@ type SessionEndInput struct {
 
 type NotificationInput struct {
 	HookInput
-	NotificationType string `json:"notification_type"`
-	Message          string `json:"message"`
-	Details          string `json:"details"`
+	NotificationType string          `json:"notification_type"`
+	Message          string          `json:"message"`
+	Details          json.RawMessage `json:"details"`
 }
 
 var ToolNameMapping = map[string]events.ActionType{
@@ -117,6 +117,7 @@ func (a *Adapter) parseBeforeTool(sessionID uuid.UUID, agentSessionID string, ba
 	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
 	event.WorkingDirectory = input.Cwd
+	event.TranscriptPath = input.TranscriptPath
 	event.RawEvent = rawData
 
 	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, nil); err != nil {
@@ -139,6 +140,7 @@ func (a *Adapter) parseAfterTool(sessionID uuid.UUID, agentSessionID string, bas
 	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
 	event.WorkingDirectory = input.Cwd
+	event.TranscriptPath = input.TranscriptPath
 	event.RawEvent = rawData
 
 	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, input.ToolResponse); err != nil {
@@ -162,6 +164,7 @@ func parseSessionStart(sessionID uuid.UUID, agentSessionID string, base HookInpu
 	event := events.NewEvent(sessionID, AgentName, events.ActionSessionStart)
 	event.AgentSessionID = agentSessionID
 	event.WorkingDirectory = input.Cwd
+	event.TranscriptPath = input.TranscriptPath
 	event.RawEvent = rawData
 
 	payload := events.SessionPayload{
@@ -184,6 +187,7 @@ func parseSessionEnd(sessionID uuid.UUID, agentSessionID string, base HookInput,
 	event := events.NewEvent(sessionID, AgentName, events.ActionSessionEnd)
 	event.AgentSessionID = agentSessionID
 	event.WorkingDirectory = input.Cwd
+	event.TranscriptPath = input.TranscriptPath
 	event.RawEvent = rawData
 
 	payload := events.SessionEndPayload{
@@ -206,11 +210,13 @@ func parseNotification(sessionID uuid.UUID, agentSessionID string, base HookInpu
 	event := events.NewEvent(sessionID, AgentName, events.ActionNotification)
 	event.AgentSessionID = agentSessionID
 	event.WorkingDirectory = input.Cwd
+	event.TranscriptPath = input.TranscriptPath
 	event.RawEvent = rawData
 
 	payload := events.NotificationPayload{
 		Message: input.Message,
 		Type:    input.NotificationType,
+		Details: input.Details,
 	}
 
 	if err := event.SetPayload(payload); err != nil {

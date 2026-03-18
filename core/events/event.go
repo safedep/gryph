@@ -134,8 +134,9 @@ type SessionEndPayload struct {
 
 // NotificationPayload represents the payload for notification actions.
 type NotificationPayload struct {
-	Message string `json:"message,omitempty"`
-	Type    string `json:"type,omitempty"`
+	Message string          `json:"message,omitempty"`
+	Type    string          `json:"type,omitempty"`
+	Details json.RawMessage `json:"details,omitempty"`
 }
 
 // toolUseDisplayFields lists Input keys checked in priority order by DisplayTarget.
