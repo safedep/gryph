@@ -24,7 +24,7 @@ func (SelfAudit) Fields() []ent.Field {
 			Default(time.Now).
 			Immutable(),
 		field.Enum("action").
-			Values("install", "uninstall", "config_change", "export", "purge", "upgrade", "database_init", "retention_cleanup"),
+			Values("install", "uninstall", "config_change", "export", "purge", "upgrade", "database_init", "retention_cleanup", "hook_error"),
 		field.String("agent_name").
 			Optional(),
 		field.JSON("details", map[string]interface{}{}).

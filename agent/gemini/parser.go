@@ -86,6 +86,7 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 		event := events.NewEvent(sessionID, AgentName, events.ActionUnknown)
 		event.AgentSessionID = agentSessionID
 		event.WorkingDirectory = baseInput.Cwd
+		event.TranscriptPath = baseInput.TranscriptPath
 		event.RawEvent = rawData
 		return event, nil
 	}
