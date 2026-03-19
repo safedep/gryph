@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -57,7 +58,7 @@ func NewHookCmd() *cobra.Command {
 			}
 
 			hookErr := runHook(ctx, app, agentName, hookType, rawData)
-			if hookErr != nil {
+			if hookErr != nil && !isExitError(hookErr) {
 				logHookError(ctx, app, agentName, hookType, len(rawData), hookErr)
 			}
 
@@ -441,6 +442,13 @@ func handleClaudeCodeResponse(response *claudecode.HookResponse) error {
 		// Exit code 0: allow
 		return nil
 	}
+}
+
+// isExitError returns true if the error is an intentional exit code signal
+// (e.g. security blocks), not a hook processing failure.
+func isExitError(err error) bool {
+	var e *exitError
+	return errors.As(err, &e)
 }
 
 // exitError is an error that carries a specific exit code.
