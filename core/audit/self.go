@@ -29,6 +29,8 @@ const (
 	ActionDatabaseInit SelfAuditAction = "database_init"
 	// ActionRetentionCleanup indicates old events were deleted.
 	ActionRetentionCleanup SelfAuditAction = "retention_cleanup"
+	// ActionHookError indicates a hook invocation failed.
+	ActionHookError SelfAuditAction = "hook_error"
 )
 
 // String returns the string representation of a SelfAuditAction.
@@ -151,4 +153,10 @@ type RetentionCleanupDetails struct {
 type DatabaseInitDetails struct {
 	Path          string `json:"path"`
 	SchemaVersion string `json:"schema_version"`
+}
+
+// HookErrorDetails contains details for hook error actions.
+type HookErrorDetails struct {
+	HookType    string `json:"hook_type"`
+	RawDataSize int    `json:"raw_data_size"`
 }

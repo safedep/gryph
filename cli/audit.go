@@ -17,6 +17,7 @@ const (
 	SelfAuditActionPurge            = "purge"
 	SelfAuditActionDatabaseInit     = "database_init"
 	SelfAuditActionRetentionCleanup = "retention_cleanup"
+	SelfAuditActionHookError        = "hook_error"
 	SelfAuditResultSuccess          = "success"
 	SelfAuditResultError            = "error"
 	SelfAuditResultSkipped          = "skipped"

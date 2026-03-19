@@ -97,7 +97,7 @@ var (
 	SelfAuditsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "timestamp", Type: field.TypeTime},
-		{Name: "action", Type: field.TypeEnum, Enums: []string{"install", "uninstall", "config_change", "export", "purge", "upgrade", "database_init", "retention_cleanup"}},
+		{Name: "action", Type: field.TypeEnum, Enums: []string{"install", "uninstall", "config_change", "export", "purge", "upgrade", "database_init", "retention_cleanup", "hook_error"}},
 		{Name: "agent_name", Type: field.TypeString, Nullable: true},
 		{Name: "details", Type: field.TypeJSON, Nullable: true},
 		{Name: "result", Type: field.TypeEnum, Enums: []string{"success", "error", "skipped"}, Default: "success"},

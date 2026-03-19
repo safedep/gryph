@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -40,7 +41,6 @@ func NewHookCmd() *cobra.Command {
 				return err
 			}
 
-			// Initialize store
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
@@ -52,135 +52,148 @@ func NewHookCmd() *cobra.Command {
 				}
 			}()
 
-			// Read event data from stdin
 			rawData, err := io.ReadAll(os.Stdin)
 			if err != nil {
 				return fmt.Errorf("failed to read stdin: %w", err)
 			}
 
-			// Get adapter
-			adapter, ok := app.Registry.Get(agentName)
-			if !ok {
-				return fmt.Errorf("unknown agent: %s", agentName)
+			hookErr := runHook(ctx, app, agentName, hookType, rawData)
+			if hookErr != nil && !isExitError(hookErr) {
+				logHookError(ctx, app, agentName, hookType, len(rawData), hookErr)
 			}
 
-			// Parse event - parser extracts session_id and converts to deterministic UUID
-			event, err := adapter.ParseEvent(ctx, hookType, rawData)
-			if err != nil {
-				return fmt.Errorf("failed to parse event: %w", err)
-			}
-
-			// Apply logging level filtering before saving
-			loggingLevel := app.Config.GetAgentLoggingLevel(agentName)
-			agent.ApplyLoggingLevel(event, loggingLevel)
-
-			// Get or create session using the session ID from the parsed event
-			sess, err := app.Store.GetSession(ctx, event.SessionID)
-			if err != nil {
-				return fmt.Errorf("failed to get session: %w", err)
-			}
-
-			if sess == nil {
-				// Create new session with the ID from the event
-				sess = session.NewSessionWithID(event.SessionID, agentName)
-				sess.AgentSessionID = event.AgentSessionID
-				sess.WorkingDirectory = event.WorkingDirectory
-				sess.TranscriptPath = event.TranscriptPath
-
-				if event.WorkingDirectory != "" {
-					if info, err := projectdetection.DetectProject(event.WorkingDirectory); err == nil && info != nil && info.Name != "" {
-						sess.ProjectName = info.Name
-					} else {
-						sess.ProjectName = filepath.Base(event.WorkingDirectory)
-					}
-				}
-
-				if err := app.Store.SaveSession(ctx, sess); err != nil {
-					// Handle duplicate session (race condition or repeated SessionStart)
-					existing, getErr := app.Store.GetSession(ctx, event.SessionID)
-					if getErr != nil || existing == nil {
-						return fmt.Errorf("failed to save session: %w", err)
-					}
-
-					sess = existing
-				}
-			}
-
-			if sess.TranscriptPath == "" && event.TranscriptPath != "" {
-				sess.TranscriptPath = event.TranscriptPath
-			}
-
-			// Evaluate security checks
-			securityResult := app.Security.Evaluate(ctx, event)
-			if !securityResult.IsAllowed() {
-				event.ResultStatus = events.ResultBlocked
-				event.ErrorMessage = securityResult.BlockReason
-				event.Sequence = sess.TotalActions + 1
-
-				if err := app.Store.SaveEvent(ctx, event); err != nil {
-					log.Errorf("failed to save blocked event: %v", err)
-				}
-
-				sess.TotalActions++
-				sess.BlockedActions++
-				if event.IsSensitive {
-					sess.SensitiveActions++
-				}
-
-				if err := app.Store.UpdateSession(ctx, sess); err != nil {
-					log.Errorf("failed to update session for blocked event: %v", err)
-				}
-
-				return sendSecurityBlockedResponse(agentName, hookType, securityResult)
-			}
-
-			// Set sequence number
-			event.Sequence = sess.TotalActions + 1
-
-			// Save event
-			if err := app.Store.SaveEvent(ctx, event); err != nil {
-				return fmt.Errorf("failed to save event: %w", err)
-			}
-
-			// Update session counts
-			sess.TotalActions++
-			switch event.ActionType {
-			case events.ActionFileRead:
-				sess.FilesRead++
-			case events.ActionFileWrite:
-				sess.FilesWritten++
-			case events.ActionCommandExec:
-				sess.CommandsExecuted++
-			}
-
-			if event.ResultStatus == events.ResultError {
-				sess.Errors++
-			}
-
-			if event.IsSensitive {
-				sess.SensitiveActions++
-			}
-
-			if err := app.Store.UpdateSession(ctx, sess); err != nil {
-				return fmt.Errorf("failed to update session: %w", err)
-			}
-
-			// Handle session end events
-			if event.ActionType == events.ActionSessionEnd {
-				sess.End()
-				collectSessionCost(sess)
-				if err := app.Store.UpdateSession(ctx, sess); err != nil {
-					return fmt.Errorf("failed to end session: %w", err)
-				}
-			}
-
-			// Send response to agent
-			// For now, always allow. Future: add policy-based blocking here.
-			return sendHookResponse(agentName, hookType)
+			return hookErr
 		},
 	}
 
 	return cmd
+}
+
+// runHook executes the core hook logic.
+func runHook(ctx context.Context, app *App, agentName, hookType string, rawData []byte) error {
+	adapter, ok := app.Registry.Get(agentName)
+	if !ok {
+		return fmt.Errorf("unknown agent: %s", agentName)
+	}
+
+	event, err := adapter.ParseEvent(ctx, hookType, rawData)
+	if err != nil {
+		return fmt.Errorf("failed to parse event: %w", err)
+	}
+
+	loggingLevel := app.Config.GetAgentLoggingLevel(agentName)
+	agent.ApplyLoggingLevel(event, loggingLevel)
+
+	sess, err := app.Store.GetSession(ctx, event.SessionID)
+	if err != nil {
+		return fmt.Errorf("failed to get session: %w", err)
+	}
+
+	if sess == nil {
+		sess = session.NewSessionWithID(event.SessionID, agentName)
+		sess.AgentSessionID = event.AgentSessionID
+		sess.WorkingDirectory = event.WorkingDirectory
+		sess.TranscriptPath = event.TranscriptPath
+
+		if event.WorkingDirectory != "" {
+			if info, err := projectdetection.DetectProject(event.WorkingDirectory); err == nil && info != nil && info.Name != "" {
+				sess.ProjectName = info.Name
+			} else {
+				sess.ProjectName = filepath.Base(event.WorkingDirectory)
+			}
+		}
+
+		if err := app.Store.SaveSession(ctx, sess); err != nil {
+			existing, getErr := app.Store.GetSession(ctx, event.SessionID)
+			if getErr != nil || existing == nil {
+				return fmt.Errorf("failed to save session: %w", err)
+			}
+
+			sess = existing
+		}
+	}
+
+	if sess.TranscriptPath == "" && event.TranscriptPath != "" {
+		sess.TranscriptPath = event.TranscriptPath
+	}
+
+	securityResult := app.Security.Evaluate(ctx, event)
+	if !securityResult.IsAllowed() {
+		event.ResultStatus = events.ResultBlocked
+		event.ErrorMessage = securityResult.BlockReason
+		event.Sequence = sess.TotalActions + 1
+
+		if err := app.Store.SaveEvent(ctx, event); err != nil {
+			log.Errorf("failed to save blocked event: %v", err)
+		}
+
+		sess.TotalActions++
+		sess.BlockedActions++
+		if event.IsSensitive {
+			sess.SensitiveActions++
+		}
+
+		if err := app.Store.UpdateSession(ctx, sess); err != nil {
+			log.Errorf("failed to update session for blocked event: %v", err)
+		}
+
+		return sendSecurityBlockedResponse(agentName, hookType, securityResult)
+	}
+
+	event.Sequence = sess.TotalActions + 1
+
+	if err := app.Store.SaveEvent(ctx, event); err != nil {
+		return fmt.Errorf("failed to save event: %w", err)
+	}
+
+	sess.TotalActions++
+	switch event.ActionType {
+	case events.ActionFileRead:
+		sess.FilesRead++
+	case events.ActionFileWrite:
+		sess.FilesWritten++
+	case events.ActionCommandExec:
+		sess.CommandsExecuted++
+	}
+
+	if event.ResultStatus == events.ResultError {
+		sess.Errors++
+	}
+
+	if event.IsSensitive {
+		sess.SensitiveActions++
+	}
+
+	if err := app.Store.UpdateSession(ctx, sess); err != nil {
+		return fmt.Errorf("failed to update session: %w", err)
+	}
+
+	if event.ActionType == events.ActionSessionEnd {
+		sess.End()
+		collectSessionCost(sess)
+		if err := app.Store.UpdateSession(ctx, sess); err != nil {
+			return fmt.Errorf("failed to end session: %w", err)
+		}
+	}
+
+	return sendHookResponse(agentName, hookType)
+}
+
+// logHookError logs a self-audit entry when hook processing fails.
+func logHookError(ctx context.Context, app *App, agentName, hookType string, rawDataSize int, hookErr error) {
+	if app.Store == nil {
+		return
+	}
+
+	details := map[string]interface{}{
+		"hook_type":     hookType,
+		"raw_data_size": rawDataSize,
+	}
+
+	if err := logSelfAudit(ctx, app.Store, SelfAuditActionHookError,
+		agentName, details, SelfAuditResultError, hookErr.Error()); err != nil {
+		log.Errorf("failed to log hook error: %v", err)
+	}
 }
 
 // sendHookResponse sends the appropriate response to the agent.
@@ -429,6 +442,13 @@ func handleClaudeCodeResponse(response *claudecode.HookResponse) error {
 		// Exit code 0: allow
 		return nil
 	}
+}
+
+// isExitError returns true if the error is an intentional exit code signal
+// (e.g. security blocks), not a hook processing failure.
+func isExitError(err error) bool {
+	var e *exitError
+	return errors.As(err, &e)
 }
 
 // exitError is an error that carries a specific exit code.
