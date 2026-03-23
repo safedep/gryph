@@ -13,22 +13,24 @@ import (
 )
 
 type ToolEventInput struct {
-	HookType   string                 `json:"hook_type"`
-	Tool       string                 `json:"tool"`
-	Args       map[string]interface{} `json:"args"`
-	Result     interface{}            `json:"result,omitempty"`
-	Error      string                 `json:"error,omitempty"`
-	DurationMs int64                  `json:"duration_ms,omitempty"`
-	SessionID  string                 `json:"session_id"`
-	AgentID    string                 `json:"agent_id,omitempty"`
+	HookType       string                 `json:"hook_type"`
+	Tool           string                 `json:"tool"`
+	Args           map[string]interface{} `json:"args"`
+	Result         interface{}            `json:"result,omitempty"`
+	Error          string                 `json:"error,omitempty"`
+	DurationMs     int64                  `json:"duration_ms,omitempty"`
+	SessionID      string                 `json:"session_id"`
+	AgentID        string                 `json:"agent_id,omitempty"`
+	TranscriptPath string                 `json:"transcript_path,omitempty"`
 }
 
 type SessionEventInput struct {
-	HookType     string `json:"hook_type"`
-	SessionID    string `json:"session_id"`
-	AgentID      string `json:"agent_id,omitempty"`
-	MessageCount int    `json:"message_count,omitempty"`
-	DurationMs   int64  `json:"duration_ms,omitempty"`
+	HookType       string `json:"hook_type"`
+	SessionID      string `json:"session_id"`
+	AgentID        string `json:"agent_id,omitempty"`
+	MessageCount   int    `json:"message_count,omitempty"`
+	DurationMs     int64  `json:"duration_ms,omitempty"`
+	TranscriptPath string `json:"transcript_path,omitempty"`
 }
 
 var ToolNameMapping = map[string]events.ActionType{
@@ -88,6 +90,7 @@ func (a *Adapter) parseToolEvent(hookType string, rawData []byte, isAfter bool) 
 	event := events.NewEvent(sessionID, AgentName, actionType)
 	event.ToolName = toolName
 	event.AgentSessionID = input.SessionID
+	event.TranscriptPath = input.TranscriptPath
 	event.RawEvent = rawData
 
 	if err := a.buildPayload(event, actionType, toolName, input.Args, input.Result); err != nil {
@@ -117,6 +120,7 @@ func (a *Adapter) parseSessionEvent(rawData []byte, actionType events.ActionType
 
 	event := events.NewEvent(sessionID, AgentName, actionType)
 	event.AgentSessionID = input.SessionID
+	event.TranscriptPath = input.TranscriptPath
 	event.RawEvent = rawData
 
 	switch actionType {

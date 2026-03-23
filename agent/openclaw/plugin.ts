@@ -1,6 +1,14 @@
 import { execFileSync } from "child_process";
+import { join } from "path";
+import { homedir } from "os";
 
 export default function gryphPlugin(api) {
+  const transcriptPath = join(homedir(), ".openclaw", "logs", "commands.log");
+
+  function resolveSessionId(event, ctx) {
+    return event.sessionId || ctx.sessionKey || "";
+  }
+
   function invokeGryph(hookType, payload) {
     try {
       execFileSync("__GRYPH_COMMAND__", ["_hook", "openclaw", hookType], {
@@ -20,8 +28,9 @@ export default function gryphPlugin(api) {
       hook_type: "before_tool_call",
       tool: event.toolName,
       args: event.params,
-      session_id: ctx.sessionKey,
+      session_id: resolveSessionId(event, ctx),
       agent_id: ctx.agentId,
+      transcript_path: transcriptPath,
     });
   });
 
@@ -34,8 +43,9 @@ export default function gryphPlugin(api) {
         result: event.result,
         error: event.error,
         duration_ms: event.durationMs,
-        session_id: ctx.sessionKey,
+        session_id: resolveSessionId(event, ctx),
         agent_id: ctx.agentId,
+        transcript_path: transcriptPath,
       });
     } catch (_) {}
   });
@@ -44,8 +54,9 @@ export default function gryphPlugin(api) {
     try {
       invokeGryph("session_start", {
         hook_type: "session_start",
-        session_id: event.sessionId,
+        session_id: resolveSessionId(event, ctx),
         agent_id: ctx.agentId,
+        transcript_path: transcriptPath,
       });
     } catch (_) {}
   });
@@ -54,10 +65,11 @@ export default function gryphPlugin(api) {
     try {
       invokeGryph("session_end", {
         hook_type: "session_end",
-        session_id: event.sessionId,
+        session_id: resolveSessionId(event, ctx),
         message_count: event.messageCount,
         duration_ms: event.durationMs,
         agent_id: ctx.agentId,
+        transcript_path: transcriptPath,
       });
     } catch (_) {}
   });

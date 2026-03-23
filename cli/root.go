@@ -10,6 +10,7 @@ import (
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/cursor"
 	"github.com/safedep/gryph/agent/gemini"
+	"github.com/safedep/gryph/agent/openclaw"
 	"github.com/safedep/gryph/agent/opencode"
 	"github.com/safedep/gryph/agent/piagent"
 	"github.com/safedep/gryph/agent/windsurf"
@@ -56,9 +57,7 @@ func NewApp(cfg *config.Config) (*App, error) {
 	opencode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentOpenCode), cfg.Logging.ContentHash)
 	windsurf.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentWindsurf), cfg.Logging.ContentHash)
 	piagent.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentPiAgent), cfg.Logging.ContentHash)
-
-	// For now, let us keep openclaw agent disabled because it is non-functional
-	// openclaw.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentOpenClaw), cfg.Logging.ContentHash)
+	openclaw.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentOpenClaw), cfg.Logging.ContentHash)
 
 	// Create presenter based on config
 	presenter := tui.NewPresenter(tui.FormatTable, tui.PresenterOptions{
