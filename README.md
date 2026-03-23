@@ -299,9 +299,7 @@ If Gryph is useful, consider [giving it a star](https://github.com/safedep/gryph
 
 ## Star History
 
-<!-- TODO: Uncomment once star count grows enough for a meaningful chart
 [![Star History Chart](https://api.star-history.com/svg?repos=safedep/gryph&type=Date)](https://star-history.com/#safedep/gryph&Date)
--->
 
 ## License
 
