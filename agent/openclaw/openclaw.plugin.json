@@ -1,12 +1,8 @@
 {
-  "name": "gryph",
-  "version": "1.0.0",
-  "description": "Gryph audit trail plugin for OpenClaw",
-  "main": "index.ts",
-  "hooks": [
-    "before_tool_call",
-    "after_tool_call",
-    "session_start",
-    "session_end"
-  ]
+  "id": "gryph",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
 }
