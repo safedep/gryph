@@ -93,8 +93,8 @@
   <!-- Watcher Eye ◉ + Tagline (centered as a group) -->
   <g transform="translate(400, 156)">
     <!-- Eye positioned left of center -->
-    <circle cx="-155" cy="0" r="8" fill="none" stroke="#22D3EE" stroke-width="2"/>
-    <circle cx="-155" cy="0" r="3.5" fill="#22D3EE"/>
+    <circle cx="-185" cy="0" r="8" fill="none" stroke="#22D3EE" stroke-width="2"/>
+    <circle cx="-185" cy="0" r="3.5" fill="#22D3EE"/>
     
     <!-- Tagline centered -->
     <text x="12" y="5" 
@@ -102,6 +102,6 @@
           font-family="'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace" 
           font-size="14" 
           fill="#9CA3AF" 
-          letter-spacing="0.05em">AI CODING AGENT AUDIT TRAIL</text>
+          letter-spacing="0.05em">SECURITY LAYER FOR AI CODING AGENTS</text>
   </g>
 </svg>

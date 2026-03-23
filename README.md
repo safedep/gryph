@@ -3,311 +3,127 @@
     <picture>
       <source srcset="docs/assets/gryph-banner-dark.svg" media="(prefers-color-scheme: dark)">
       <source srcset="docs/assets/gryph-banner-light.svg" media="(prefers-color-scheme: light)">
-      <img src="docs/assets/gryph-banner-light.svg" alt="Gryph - AI Coding Agent Audit Trail" width="100%">
+      <img src="docs/assets/gryph-banner-light.svg" alt="Gryph - Security Layer for AI Coding Agents" width="100%">
     </picture>
   </a>
 </p>
 
+<h3 align="center">AI coding agents have no security boundaries. Gryph is building one.</h3>
+
 <p align="center">
-  <strong>Know what your AI coding agent did. Query, filter, and review every action.</strong>
+  Everyone runs YOLO mode. Nobody checks what happened. Gryph does.
 </p>
 
 <p align="center">
-  <a href="#installation">Installation</a> •
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#commands">Commands</a> •
-  <a href="#supported-agents">Supported Agents</a> •
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#see-it-in-action">Demo</a> ·
+  <a href="#supported-agents">Supported Agents</a> ·
   <a href="#use-cases">Use Cases</a>
 </p>
 
 <div align="center">
 
-[![Website](https://img.shields.io/badge/Website-safedep.io-3b82f6?style=flat-square)](https://safedep.io)
-[![Discord](https://img.shields.io/discord/1090352019379851304?style=flat-square)](https://discord.gg/kAGEj25dCn)
+![GitHub stars](https://img.shields.io/github/stars/safedep/gryph?style=flat)
+![Downloads](https://img.shields.io/github/downloads/safedep/gryph/total?style=flat)
+[![Go Report Card](https://img.shields.io/badge/go%20report-A+-brightgreen?style=flat)](https://goreportcard.com/report/github.com/safedep/gryph)
+![License](https://img.shields.io/github/license/safedep/gryph?style=flat)
+![Release](https://img.shields.io/github/v/release/safedep/gryph?style=flat)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/safedep/gryph/codeql.yml?branch=main&label=CodeQL&style=flat)](https://github.com/safedep/gryph/actions/workflows/codeql.yml)
+[![Website](https://img.shields.io/badge/Website-safedep.io-3b82f6?style=flat)](https://safedep.io)
+[![Discord](https://img.shields.io/discord/1090352019379851304?style=flat&label=Discord)](https://discord.gg/kAGEj25dCn)
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/safedep/gryph)](https://goreportcard.com/report/github.com/safedep/gryph)
-![License](https://img.shields.io/github/license/safedep/gryph)
-![Release](https://img.shields.io/github/v/release/safedep/gryph)
-[![CodeQL](https://github.com/safedep/gryph/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/safedep/gryph/actions/workflows/codeql.yml)
-
-</div>
-
-<div align="center">
-  <picture>
-    <img src="docs/assets/gryph-demo-stats.png" alt="Gryph - AI Coding Agent Audit Trail - Stats" width="90%">
-  </picture>
 </div>
 
 ---
 
-**Gryph** is a local-first audit trail for AI coding agents. It hooks into your agents, logs every action to a local SQLite database, and gives you powerful querying capabilities to understand, review, and debug agent activity.
+AI coding agents (Claude Code, Cursor, Windsurf, Gemini CLI, OpenCode) can read any file, write anywhere, and execute arbitrary commands on a developer's machine. They run dozens of tool calls per session. When something goes wrong, there is no audit trail.
 
-## Why Gryph?
+**Gryph fixes that.** It hooks into agents, logs every action to a local SQLite database, and provides powerful querying to understand, review, and debug agent activity. All data stays local. No cloud, no telemetry.
 
-- **Transparency** - See exactly what files were read, written, and what commands were run
-- **Audit Trail** - See exactly what your AI coding agent did
-- **Debugging** - Replay sessions to understand what went wrong
-- **Privacy** - All data stays local. No cloud, no telemetry
+<div align="center">
+  <img src="docs/assets/gryph-interactive-query.gif" alt="Gryph Interactive Query Demo" width="90%">
+</div>
 
-## Installation
+## The Problem
 
-```bash
-# Install with the install script
-curl -fsSL https://raw.githubusercontent.com/safedep/gryph/main/install.sh | sh
+A developer asks Claude Code to refactor a module. It runs 47 tool calls in 90 seconds. Then the tests fail.
 
-# Install with Homebrew on MacOS and Linux
-brew install safedep/tap/gryph
+- Which files did the agent read before making changes?
+- Did it run shell commands that were not expected?
+- Did it touch config files, secrets, or CI pipelines?
+- What did the file look like before and after?
 
-# Install using npm
-npm install -g @safedep/gryph
-
-# Install using Go
-go install github.com/safedep/gryph/cmd/gryph@latest
-```
+Without Gryph, developers are left guessing. With Gryph, `gryph logs` shows everything.
 
 ## Quick Start
 
 ```bash
-# Install hooks for all detected agents
-gryph install
+# Install Gryph with one command
+curl -fsSL https://raw.githubusercontent.com/safedep/gryph/main/install.sh | sh
 
-# Verify installation
-gryph status
+# Setup gryph for available agents
+gryph install                    # hooks into all detected agents
+gryph status                     # verify setup
 
-# Start using your AI coding agent
-# ...
-
-# Review what happened
-gryph logs
+# ... use your AI agent normally ...
+gryph logs                       # see what happened
 ```
 
-> [!TIP]
-> Set `logging.level` to `full` in your `gryph config` to see file diffs and raw events.
-> You can do this by running `gryph config set logging.level full`. See [Configuration](#configuration) for more details.
-
 <details>
-  <summary>Files Modified During Installation</summary>
-  
-### Files Modified During Installation
+<summary>Other install methods</summary>
 
-For transparency, here are the files Gryph modifies when you run `gryph install`:
+```bash
+# Homebrew (macOS/Linux)
+brew install safedep/tap/gryph
 
-| Agent       | File Modified                          | Description                              |
-| ----------- | -------------------------------------- | ---------------------------------------- |
-| Claude Code | `~/.claude/settings.json`              | Adds hook entries to the `hooks` section |
-| Cursor      | `~/.cursor/hooks.json`                 | Creates or updates hooks configuration   |
-| Gemini CLI  | `~/.gemini/settings.json`              | Adds hook entries to the `hooks` section |
-| OpenCode    | `~/.config/opencode/plugins/gryph.mjs` | Installs JS plugin that bridges to gryph |
-| Windsurf    | `~/.codeium/windsurf/hooks.json`       | Creates or updates hooks configuration   |
+# npm
+npm install -g @safedep/gryph
 
-### Backups
+# Go
+go install github.com/safedep/gryph/cmd/gryph@latest
+```
 
-Existing files are automatically backed up before modification. Backups are stored in the Gryph data directory:
-
-| Platform | Backup Location                                |
-| -------- | ---------------------------------------------- |
-| macOS    | `~/Library/Application Support/gryph/backups/` |
-| Linux    | `~/.local/share/gryph/backups/`                |
-| Windows  | `%LOCALAPPDATA%\gryph\backups\`                |
-
-Backup files are named with timestamps (e.g., `settings.json.backup.20250131120000`).
+Pre-built binaries for macOS, Linux, and Windows are available on the [GitHub Releases](https://github.com/safedep/gryph/releases) page.
 
 </details>
 
-## Commands
-
-> For a complete reference of all commands and flags, see [CLI Reference](docs/cli-reference.md).
-
-### Install & Uninstall Hooks
-
-```bash
-# Install hooks for all detected agents
-gryph install
-
-# Preview what would be installed
-gryph install --dry-run
-
-# Install for a specific agent
-gryph install --agent claude-code
-
-# Remove hooks from all agents
-gryph uninstall
-
-# Remove hooks and purge all data
-gryph uninstall --purge
-
-# Restore original hook config from backup
-gryph uninstall --restore-backup
-```
-
-### View Recent Activity
-
-```bash
-# Show last 24 hours
-gryph logs
-
-# Today's activity
-gryph logs --today
-
-# Filter by agent
-gryph logs --agent claude-code
-
-# Stream events in real-time
-gryph logs --follow
-
-# Output as JSON
-gryph logs --format json
-```
-
-### Query Historical Data
-
-```bash
-# Find all writes to specific files
-gryph query --file "src/auth/**" --action file_write
-
-# Commands run in the last week
-gryph query --action command_exec --since "1w"
-
-# Activity from a specific session
-gryph query --session abc123
-
-# Count matching events
-gryph query --action file_write --today --count
-
-# Filter by command pattern
-gryph query --command "npm *" --since "1w"
-
-# Include file diffs in output
-gryph query --action file_write --show-diff
-```
-
-### Session Details
-
-```bash
-# List all sessions
-gryph sessions
-
-# View detailed session history
-gryph session <session-id>
-
-# View session with file diffs
-gryph session <session-id> --show-diff
-```
-
-### View File Diffs
-
-```bash
-# See what changed in a specific write event
-gryph diff <event-id>
-```
-
-### Export for Analysis
-
-```bash
-# Export last hour (default) as JSONL to stdout
-gryph export
-
-# Export last week to file
-gryph export --since "1w" -o audit.jsonl
-
-# Export a specific agent, including sensitive events
-gryph export --agent claude-code --sensitive
-
-# Pipe to jq for ad-hoc analysis
-gryph export --since 1d | jq -r '.action_type' | sort | uniq -c | sort -rn
-```
-
-**Note:** The `export` sub-command outputs raw events as schema-verifiable JSONL.
-Each line includes a `$schema` field pointing to [event.schema.json](./schema/event.schema.json).
-Sensitive events are excluded by default; use `--sensitive` to include them.
-See [CLI Automation](./docs/cli-automation.md) for more `jq` recipes.
-
-### Manage Data
-
-```bash
-# View retention policy and stats
-gryph retention status
-
-# Clean up events older than retention period
-gryph retention cleanup
-
-# Preview what would be deleted
-gryph retention cleanup --dry-run
-
-# View gryph's own audit trail (installs, config changes)
-gryph self-log
-```
-
-### Statistics Dashboard
-
-```bash
-# Launch interactive stats TUI
-gryph stats
-
-# Stats for the last 7 days
-gryph stats --since 7d
-
-# Filter by agent
-gryph stats --since 30d --agent claude-code
-```
-
-### Health Check
-
-```bash
-# Check installation status
-gryph status
-
-# Diagnose issues
-gryph doctor
-```
+> **Tip:** Set `logging.level` to `full` to see file diffs and raw events:
+> `gryph config set logging.level full`. See [Configuration](#configuration) for details.
 
 ## Supported Agents
 
-| Agent           | Status    | Hook Support                                       |
-| --------------- | --------- | -------------------------------------------------- |
-| **Claude Code** | Supported | Full (PreToolUse, PostToolUse, Notification)       |
-| **Cursor**      | Supported | Full (file read/write, shell execution, MCP tools) |
-| **Gemini CLI**  | Supported | Full (BeforeTool, AfterTool, Notification)         |
-| **OpenCode**    | Supported | Full (tool.execute, session events)                |
-| **Windsurf**    | Supported | Full (file read/write, commands, MCP tools)        |
+| Agent | Hook Support |
+| --- | --- |
+| **Claude Code** | Full (PreToolUse, PostToolUse, Notification) |
+| **Cursor** | Full (file read/write, shell execution, MCP tools) |
+| **Gemini CLI** | Full (BeforeTool, AfterTool, Notification) |
+| **OpenCode** | Full (tool.execute, session events) |
+| **Pi Agent** | Full (tool_call, tool_result, session events) |
+| **Windsurf** | Full (file read/write, commands, MCP tools) |
 
-## Configuration
+One command installs hooks for all detected agents. No per-agent setup required.
 
-Gryph works out of the box with sensible defaults. Configuration is optional.
+## See It in Action
 
-```bash
-# View current config
-gryph config show
+<!-- TODO: Add an animated terminal recording here (asciinema or VHS GIF).
+     This is the single highest-impact change for visitor conversion.
+     Show the install → agent session → gryph logs → gryph stats flow. -->
 
-# Get a specific value
-gryph config get logging.level
+Example `gryph logs` output after a Claude Code session:
 
-# Set logging level (minimal, standard, full)
-gryph config set logging.level full
+<!-- TODO: Add a screenshot of `gryph logs` output showing a real session
+     with file reads, writes, and command executions listed chronologically. -->
 
-# Reset to defaults
-gryph config reset
-```
+## Use Cases
 
-**Logging levels:**
-
-- `minimal` - Action type, file path, timestamp (default)
-- `standard` - + diff stats, exit codes, truncated output
-- `full` - + file diffs, raw events, conversation context
-
-Sensitive files (`.env`, `*.pem`, `*secret*`, etc.) are detected automatically - actions are logged but content is never stored.
-
-## Privacy
-
-Gryph is designed with privacy as a core principle. All data stays on your machine. There is no cloud component or telemetry.
-
-- **Sensitive file detection** — Files matching patterns like `.env`, `*.pem`, `*.key`, `*secret*`, `.ssh/**`, `.aws/**`, and others are automatically detected. Actions on these files are logged but their content is never stored.
-- **Content redaction** — Passwords, API keys, tokens, bearer credentials, and AWS keys are automatically redacted from any logged output using pattern matching.
-- **Content hashing** — File contents are stored as SHA-256 hashes by default (`logging.content_hash: true`), allowing you to verify file identity without storing the actual content.
-- **Configurable logging levels** — Control how much detail is captured with `minimal`, `standard`, or `full` logging levels.
-- **Local-only storage** — All audit data is stored in a local SQLite database with configurable retention (default 90 days).
-
-Sensitive path patterns and redaction rules are fully configurable via `gryph config`.
+| Scenario | How Gryph Helps |
+| --- | --- |
+| **Replay the full session** | `git diff` shows final changes. Gryph shows the full sequence: what the agent read, what it ran, what it wrote and reverted, and in what order. |
+| **Catch invisible side effects** | Agents run shell commands that leave no trace in git (`npm install`, `curl`, `rm`). `gryph query --action exec` surfaces them all. |
+| **Sensitive file access** | Gryph flags access to `.env`, `*.pem`, `*.key`, and similar files automatically. Actions are logged but content is never stored. |
+| **Security review** | Export events to your SIEM, or use the [OpenSearch observability example](examples/ai-coding-observability/) for centralized dashboards and threat detection alerts. |
+| **Cost and token tracking** | Track per-session token usage and estimated costs across models and agents. [See docs](docs/cost.md) |
+| **Compare agents** | Filter by `--agent` to see how different agents approach the same task: which reads more, which runs more commands, which costs more. |
 
 ## How It Works
 
@@ -317,29 +133,185 @@ Sensitive path patterns and redaction rules are fully configurable via `gryph co
   <img src="docs/assets/gryph-architecture-light.svg" alt="Gryph Architecture" width="100%">
 </picture>
 
-Gryph installs lightweight hooks into your AI agents. When the agent performs an action (read file, write file, execute command), the hook sends a JSON event to Gryph, which stores it locally. You can then query this audit trail anytime.
+Gryph installs lightweight hooks into AI coding agents. When an agent reads a file, writes a file, or executes a command, the hook sends a JSON event to Gryph. Events are stored in a local SQLite database and can be queried anytime. Because Gryph hooks into both **pre-tool** and **post-tool** events, it captures the full lifecycle of every agent action.
 
-## Use Cases
+## Commands
 
-| Use Case | Description |
+> For a complete reference of all commands and flags, see [CLI Reference](docs/cli-reference.md).
+
+### Install and Uninstall Hooks
+
+```bash
+gryph install                      # Install hooks for all detected agents
+gryph install --dry-run            # Preview what would be installed
+gryph install --agent claude-code  # Install for a specific agent
+gryph uninstall                    # Remove hooks from all agents
+gryph uninstall --purge            # Remove hooks and purge all data
+gryph uninstall --restore-backup   # Restore original hook config from backup
+```
+
+### View Recent Activity
+
+```bash
+gryph logs                     # Last 24 hours
+gryph logs --today             # Today's activity
+gryph logs --agent claude-code # Filter by agent
+gryph logs --follow            # Stream events in real time
+gryph logs --format json       # Output as JSON
+```
+
+### Query Historical Data
+
+```bash
+gryph query --file "src/auth/**" --action file_write    # Find writes to specific files
+gryph query --action exec --since "1w"           # Commands run in the last week
+gryph query --session abc123                             # Activity from a specific session
+gryph query --action file_write --today --count          # Count matching events
+gryph query --command "npm *" --since "1w"               # Filter by command pattern
+gryph query --action file_write --show-diff              # Include file diffs
+```
+
+### Sessions
+
+```bash
+gryph sessions                        # List all sessions
+gryph session <session-id>            # View detailed session history
+gryph session <session-id> --show-diff # View session with file diffs
+```
+
+### Diffs and Export
+
+```bash
+gryph diff <event-id>                                  # See what changed in a write event
+
+gryph export                                           # Export last hour as JSONL to stdout
+gryph export --since "1w" -o audit.jsonl               # Export last week to file
+gryph export --agent claude-code --sensitive            # Include sensitive events
+gryph export --since 1d | jq -r '.action_type' | sort | uniq -c | sort -rn
+```
+
+Each exported line includes a `$schema` field pointing to [event.schema.json](./schema/event.schema.json).
+Sensitive events are excluded by default; use `--sensitive` to include them.
+See [CLI Automation](./docs/cli-automation.md) for more `jq` recipes.
+
+### Statistics Dashboard
+
+<div align="center">
+  <picture>
+    <img src="docs/assets/gryph-demo-stats.png" alt="Gryph Stats Dashboard" width="90%">
+  </picture>
+</div>
+
+```bash
+gryph stats                               # Interactive stats TUI
+gryph stats --since 7d                    # Stats for the last 7 days
+gryph stats --since 30d --agent claude-code # Filter by agent
+```
+
+### Data Management
+
+```bash
+gryph retention status         # View retention policy and stats
+gryph retention cleanup        # Clean up old events
+gryph retention cleanup --dry-run # Preview what would be deleted
+gryph self-log                 # View gryph's own audit trail
+```
+
+### Health Check
+
+```bash
+gryph status  # Check installation status
+gryph doctor  # Diagnose issues
+```
+
+## Configuration
+
+Gryph works out of the box. Configuration is optional.
+
+```bash
+gryph config show                       # View current config
+gryph config get logging.level          # Get a specific value
+gryph config set logging.level full     # Set logging level
+gryph config reset                      # Reset to defaults
+```
+
+**Logging levels:**
+
+- `minimal` : Action type, file path, timestamp (default)
+- `standard` : Adds diff stats, exit codes, truncated output
+- `full` : Adds file diffs, raw events, conversation context
+
+Sensitive files (`.env`, `*.pem`, `*secret*`, etc.) are detected automatically. Actions on these files are logged but content is never stored.
+
+## Privacy
+
+All data stays on the local machine. There is no cloud component, no telemetry, no tracking.
+
+- **Sensitive file detection** : Files matching `.env`, `*.pem`, `*.key`, `*secret*`, `.ssh/**`, `.aws/**` and more are automatically flagged. Actions are logged but content is never stored.
+- **Content redaction** : Passwords, API keys, tokens, and credentials are automatically redacted from logged output.
+- **Content hashing** : File contents are stored as SHA-256 hashes by default, allowing identity verification without storing actual content.
+- **Local-only storage** : SQLite database with configurable retention (default 90 days).
+
+<details>
+  <summary>Files Modified During Installation</summary>
+
+### Files Modified During Installation
+
+For transparency, these are the files Gryph modifies during `gryph install`:
+
+| Agent | File Modified | Description |
+| --- | --- | --- |
+| Claude Code | `~/.claude/settings.json` | Adds hook entries to the `hooks` section |
+| Cursor | `~/.cursor/hooks.json` | Creates or updates hooks configuration |
+| Gemini CLI | `~/.gemini/settings.json` | Adds hook entries to the `hooks` section |
+| OpenCode | `~/.config/opencode/plugins/gryph.mjs` | Installs JS plugin that bridges to gryph |
+| Windsurf | `~/.codeium/windsurf/hooks.json` | Creates or updates hooks configuration |
+
+### Backups
+
+Existing files are automatically backed up before modification. Backups are stored in the Gryph data directory:
+
+| Platform | Backup Location |
 | --- | --- |
-| [AI Coding Observability](examples/ai-coding-observability/) | Centralized observability for AI coding agents across developer endpoints using Gryph + OpenSearch. Includes SOC dashboards, threat detection alerts, and synthetic data generation. |
-| [Cost and Token Tracking](docs/cost.md) | Track per-session token usage and estimated costs across models and agents. Group by model, agent, or day. |
+| macOS | `~/Library/Application Support/gryph/backups/` |
+| Linux | `~/.local/share/gryph/backups/` |
+| Windows | `%LOCALAPPDATA%\gryph\backups\` |
+
+Backup files are named with timestamps (e.g., `settings.json.backup.20250131120000`).
+
+</details>
+
+<!-- ## Featured In -->
+<!-- TODO: Add mentions/features as they happen. Examples: -->
+<!-- - [tldrsec](link) -->
+<!-- - [Hacker News discussion](link) -->
+<!-- - [Reddit r/programming](link) -->
+<!-- - Blog posts, YouTube reviews, etc. -->
 
 ## Community
 
-Questions, feedback, or want to discuss AI agent security? Join us on Discord.
+Questions, feedback, or contributions are welcome.
 
-<p align="center">
-  <a href="https://discord.gg/kAGEj25dCn"><strong>Join the SafeDep Discord</strong></a>
-</p>
+- **Discord** : [Join the SafeDep community](https://discord.gg/kAGEj25dCn)
+- **Issues** : [Report bugs or request features](https://github.com/safedep/gryph/issues)
+- **Contributing** : See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
+<!-- TODO: Add Twitter/X link if available -->
+<!-- TODO: Add blog link if available -->
+
+If Gryph is useful, consider [giving it a star](https://github.com/safedep/gryph/stargazers). It helps others discover the project.
+
+## Star History
+
+<!-- TODO: Uncomment once star count grows enough for a meaningful chart
+[![Star History Chart](https://api.star-history.com/svg?repos=safedep/gryph&type=Date)](https://star-history.com/#safedep/gryph&Date)
+-->
 
 ## License
 
-Apache 2.0 - See [LICENSE](LICENSE) for details.
+Apache 2.0. See [LICENSE](LICENSE) for details.
 
 ---
 
 <p align="center">
-  Built by <a href="https://safedep.io">SafeDep</a> · <a href="https://discord.gg/kAGEj25dCn">Discord</a>
+  Built by <a href="https://safedep.io">SafeDep</a> · <a href="https://discord.gg/kAGEj25dCn">Discord</a> · <a href="https://github.com/safedep/gryph/stargazers">Star on GitHub</a>
 </p>
