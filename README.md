@@ -105,14 +105,11 @@ One command installs hooks for all detected agents. No per-agent setup required.
 
 ## See It in Action
 
-<!-- TODO: Add an animated terminal recording here (asciinema or VHS GIF).
-     This is the single highest-impact change for visitor conversion.
-     Show the install → agent session → gryph logs → gryph stats flow. -->
+Live streaming of agent actions as they happen with `gryph logs --follow`:
 
-Example `gryph logs` output after a Claude Code session:
-
-<!-- TODO: Add a screenshot of `gryph logs` output showing a real session
-     with file reads, writes, and command executions listed chronologically. -->
+<div align="center">
+  <img src="docs/assets/gryph-live-logs-demo.gif" alt="Gryph Live Logs Demo" width="90%">
+</div>
 
 ## Use Cases
 
