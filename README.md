@@ -105,7 +105,7 @@ One command installs hooks for all detected agents. No per-agent setup required.
 
 ## See It in Action
 
-Live streaming of agent actions as they happen with `gryph logs --follow`:
+Live streaming of agent actions as they happen with `gryph logs --live`:
 
 <div align="center">
   <img src="docs/assets/gryph-live-logs-demo.gif" alt="Gryph Live Logs Demo" width="90%">
