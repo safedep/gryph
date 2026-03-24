@@ -22,7 +22,7 @@ func (h headerModel) view(width int) string {
 		agent = h.agentFilter
 	}
 
-	clock := time.Now().Format("15:04:05")
+	clock := time.Now().Format("15:04:05 MST")
 	sessions := fmt.Sprintf("%d sessions", h.sessionCount)
 
 	content := fmt.Sprintf(" %s | %s | %s | %s", title, agent, sessions, clock)
