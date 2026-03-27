@@ -72,6 +72,9 @@ func validate(cfg *Config) error {
 	if cfg.Agents.PiAgent.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.PiAgent.LoggingLevel) {
 		return fmt.Errorf("invalid agents.pi-agent.logging_level: %s", cfg.Agents.PiAgent.LoggingLevel)
 	}
+	if cfg.Agents.Codex.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.Codex.LoggingLevel) {
+		return fmt.Errorf("invalid agents.codex.logging_level: %s", cfg.Agents.Codex.LoggingLevel)
+	}
 
 	return nil
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/safedep/gryph/core/events"
 )
 
-var agentCycle = []string{"", "claude-code", "cursor", "gemini", "opencode", "openclaw", "windsurf", "pi-agent"}
+var agentCycle = []string{"", "claude-code", "codex", "cursor", "gemini", "opencode", "openclaw", "windsurf", "pi-agent"}
 
 type Model struct {
 	opts   Options

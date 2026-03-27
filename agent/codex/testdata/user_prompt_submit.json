@@ -1,0 +1,9 @@
+{
+  "session_id": "codex-session-abc",
+  "transcript_path": "/home/user/.codex/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "UserPromptSubmit",
+  "model": "o4-mini",
+  "turn_id": "turn-002",
+  "prompt": "Fix the failing test in main_test.go"
+}

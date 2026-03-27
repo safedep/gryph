@@ -11,6 +11,7 @@ import (
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/claudecode"
+	"github.com/safedep/gryph/agent/codex"
 	"github.com/safedep/gryph/agent/cursor"
 	"github.com/safedep/gryph/agent/gemini"
 	"github.com/safedep/gryph/agent/openclaw"
@@ -267,6 +268,17 @@ func sendHookResponse(agentName, hookType string) error {
 		}
 		return nil
 
+	case agent.AgentCodex:
+		// Codex: PreToolUse uses JSON response on stdout with permissionDecision.
+		// Other hooks: exit 0 with no output.
+		if hookType == "PreToolUse" {
+			resp := codex.NewAllowResponse()
+			if _, err := os.Stdout.Write(resp.JSON()); err != nil {
+				log.Errorf("failed to write to stdout: %v", err)
+			}
+		}
+		return nil
+
 	default:
 		// Unknown agent, just succeed
 		return nil
@@ -308,6 +320,17 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 	case agent.AgentPiAgent:
 		response := piagent.NewBlockResponse(result.BlockReason)
 		return handlePiAgentResponse(response)
+
+	case agent.AgentCodex:
+		if hookType == "PreToolUse" {
+			response := codex.NewBlockResponse(result.BlockReason)
+			if _, err := os.Stdout.Write(response.JSON()); err != nil {
+				log.Errorf("failed to write to stdout: %v", err)
+			}
+			return nil
+		}
+		response := codex.NewErrorResponse(result.BlockReason)
+		return handleCodexResponse(response)
 
 	default:
 		return nil
@@ -421,6 +444,16 @@ func handlePiAgentResponse(response *piagent.HookResponse) error {
 		return &exitError{code: 2, message: response.Message}
 	case piagent.HookError:
 		return &exitError{code: 1, message: response.Message}
+	default:
+		return nil
+	}
+}
+
+// handleCodexResponse processes a Codex hook response.
+func handleCodexResponse(response *codex.HookResponse) error {
+	switch response.Decision {
+	case codex.HookError:
+		return &exitError{code: 2, message: response.Message}
 	default:
 		return nil
 	}

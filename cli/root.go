@@ -8,6 +8,7 @@ import (
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/claudecode"
+	"github.com/safedep/gryph/agent/codex"
 	"github.com/safedep/gryph/agent/cursor"
 	"github.com/safedep/gryph/agent/gemini"
 	"github.com/safedep/gryph/agent/opencode"
@@ -56,6 +57,7 @@ func NewApp(cfg *config.Config) (*App, error) {
 	opencode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentOpenCode), cfg.Logging.ContentHash)
 	windsurf.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentWindsurf), cfg.Logging.ContentHash)
 	piagent.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentPiAgent), cfg.Logging.ContentHash)
+	codex.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCodex), cfg.Logging.ContentHash)
 
 	// For now, let us keep openclaw agent disabled because it is non-functional
 	// openclaw.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentOpenClaw), cfg.Logging.ContentHash)

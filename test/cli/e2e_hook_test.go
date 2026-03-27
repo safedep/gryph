@@ -797,3 +797,92 @@ func TestHook_PiAgent_DeterministicSessionID(t *testing.T) {
 	assert.Equal(t, evts[0].SessionID, evts[1].SessionID,
 		"events with same session_id should have same UUID")
 }
+
+func TestHook_Codex(t *testing.T) {
+	tests := []struct {
+		name       string
+		hookType   string
+		fixture    string
+		actionType events.ActionType
+	}{
+		{
+			name:       "PreToolUse_Bash",
+			hookType:   "PreToolUse",
+			fixture:    "pre_tool_use_bash.json",
+			actionType: events.ActionCommandExec,
+		},
+		{
+			name:       "PostToolUse_Bash",
+			hookType:   "PostToolUse",
+			fixture:    "post_tool_use_bash.json",
+			actionType: events.ActionCommandExec,
+		},
+		{
+			name:       "SessionStart",
+			hookType:   "SessionStart",
+			fixture:    "session_start.json",
+			actionType: events.ActionSessionStart,
+		},
+		{
+			name:       "UserPromptSubmit",
+			hookType:   "UserPromptSubmit",
+			fixture:    "user_prompt_submit.json",
+			actionType: events.ActionToolUse,
+		},
+		{
+			name:       "Stop",
+			hookType:   "Stop",
+			fixture:    "stop.json",
+			actionType: events.ActionSessionEnd,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newTestEnv(t)
+			ctx := context.Background()
+
+			payload, err := os.ReadFile("../../agent/codex/testdata/" + tt.fixture)
+			require.NoError(t, err)
+
+			_, _, runErr := env.runHook("codex", tt.hookType, payload)
+			require.NoError(t, runErr)
+
+			store, cleanup := env.openStore()
+			defer cleanup()
+
+			evts, err := store.QueryEvents(ctx, events.NewEventFilter())
+			require.NoError(t, err)
+			require.Len(t, evts, 1)
+
+			assert.Equal(t, tt.actionType, evts[0].ActionType)
+			assert.Equal(t, "codex", evts[0].AgentName)
+		})
+	}
+}
+
+func TestHook_Codex_DeterministicSessionID(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	payload1, err := os.ReadFile("../../agent/codex/testdata/pre_tool_use_bash.json")
+	require.NoError(t, err)
+
+	payload2, err := os.ReadFile("../../agent/codex/testdata/post_tool_use_bash.json")
+	require.NoError(t, err)
+
+	_, _, err = env.runHook("codex", "PreToolUse", payload1)
+	require.NoError(t, err)
+
+	_, _, err = env.runHook("codex", "PostToolUse", payload2)
+	require.NoError(t, err)
+
+	store, cleanup := env.openStore()
+	defer cleanup()
+
+	evts, err := store.QueryEvents(ctx, events.NewEventFilter())
+	require.NoError(t, err)
+	require.Len(t, evts, 2)
+
+	assert.Equal(t, evts[0].SessionID, evts[1].SessionID, "same session_id should produce same UUID")
+}

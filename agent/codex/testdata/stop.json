@@ -1,0 +1,10 @@
+{
+  "session_id": "codex-session-abc",
+  "transcript_path": "/home/user/.codex/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "Stop",
+  "model": "o4-mini",
+  "turn_id": "turn-003",
+  "stop_hook_active": true,
+  "last_assistant_message": "All tests are now passing."
+}
