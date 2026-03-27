@@ -157,6 +157,8 @@ func (a *Adapter) parsePreToolUse(sessionID uuid.UUID, agentSessionID string, ba
 }
 
 func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, isFailure bool) (*events.Event, error) {
+	origRawData := rawData
+
 	var input PostToolUseInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		rawData, err = wrapToolResponse(rawData)
@@ -173,7 +175,7 @@ func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, b
 	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
 	event.WorkingDirectory = input.Cwd
-	event.RawEvent = rawData
+	event.RawEvent = origRawData
 
 	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, input.ToolResponse); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
