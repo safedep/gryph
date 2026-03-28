@@ -30,6 +30,7 @@ func loadInitialEvents(store storage.Store, since time.Time, agentFilter string,
 	return func() tea.Msg {
 		ctx := context.Background()
 		filter := events.NewEventFilter().
+			WithSort(events.SortAsc).
 			WithSince(since).
 			WithLimit(limit)
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"slices"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -51,6 +50,10 @@ the results.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if p.live && p.follow {
 				return fmt.Errorf("--live and --follow are mutually exclusive")
+			}
+
+			if (p.follow || p.live) && cmd.Flags().Changed("sort") {
+				return fmt.Errorf("--sort is not supported with --follow or --live")
 			}
 
 			ctx := context.Background()
@@ -111,6 +114,13 @@ func runLiveLogs(app *App, p logParams) error {
 	sinceTime, err := parseSinceTime(p)
 	if err != nil {
 		return err
+	}
+
+	// Live monitor is a real-time TUI that auto-scrolls through events.
+	// Default to 1h lookback so the view starts near the present instead
+	// of slowly replaying an entire day of activity.
+	if p.since == "" && !p.today {
+		sinceTime = time.Now().UTC().Add(-1 * time.Hour)
 	}
 
 	opts := livelog.Options{
@@ -220,6 +230,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 	if err != nil {
 		return err
 	}
+	filter = filter.WithSort(events.SortAsc)
 
 	evts, err := app.Store.QueryEvents(ctx, filter)
 	if err != nil {
@@ -228,7 +239,6 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 
 	var lastTimestamp time.Time
 	if len(evts) > 0 {
-		slices.Reverse(evts)
 		eventViews := make([]*tui.EventView, len(evts))
 		for i, e := range evts {
 			eventViews[i] = eventToView(e)
@@ -253,6 +263,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 			return nil
 		case <-ticker.C:
 			pollFilter := events.NewEventFilter().
+				WithSort(events.SortAsc).
 				WithSince(lastTimestamp.Add(time.Millisecond))
 
 			if p.agent != "" {
@@ -265,7 +276,6 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 			}
 
 			if len(newEvts) > 0 {
-				slices.Reverse(newEvts)
 				eventViews := make([]*tui.EventView, len(newEvts))
 				for i, e := range newEvts {
 					eventViews[i] = eventToView(e)
