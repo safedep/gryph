@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"slices"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -230,7 +231,10 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 	if err != nil {
 		return err
 	}
-	filter = filter.WithSort(events.SortAsc)
+
+	// Fetch DESC to get the N most recent events, then reverse
+	// to chronological order for streaming display.
+	filter = filter.WithSort(events.SortDesc)
 
 	evts, err := app.Store.QueryEvents(ctx, filter)
 	if err != nil {
@@ -239,6 +243,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 
 	var lastTimestamp time.Time
 	if len(evts) > 0 {
+		slices.Reverse(evts)
 		eventViews := make([]*tui.EventView, len(evts))
 		for i, e := range evts {
 			eventViews[i] = eventToView(e)
