@@ -157,9 +157,17 @@ func (a *Adapter) parsePreToolUse(sessionID uuid.UUID, agentSessionID string, ba
 }
 
 func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte, isFailure bool) (*events.Event, error) {
+	origRawData := rawData
+
 	var input PostToolUseInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
-		return nil, fmt.Errorf("failed to parse PostToolUse input: %w", err)
+		rawData, err = wrapToolResponse(rawData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse PostToolUse input: %w", err)
+		}
+		if err := json.Unmarshal(rawData, &input); err != nil {
+			return nil, fmt.Errorf("failed to parse PostToolUse input after wrapping tool_response: %w", err)
+		}
 	}
 
 	actionType := getActionType(input.ToolName)
@@ -167,7 +175,7 @@ func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, b
 	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
 	event.WorkingDirectory = input.Cwd
-	event.RawEvent = rawData
+	event.RawEvent = origRawData
 
 	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, input.ToolResponse); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
@@ -186,6 +194,25 @@ func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, b
 	a.markSensitivePaths(event, actionType, input.ToolInput)
 
 	return event, nil
+}
+
+// wrapToolResponse rewrites a non-object tool_response value (array or string
+// from MCP tools) into {"content": <original_value>} so it can be unmarshalled
+// into PostToolUseInput.ToolResponse as map[string]interface{}.
+// Note: This involves an extra unmarshal-marshal cycle which is not ideal for
+// performance, but only executes on the fallback path when tool_response is not
+// a JSON object (i.e. MCP tool responses).
+func wrapToolResponse(rawData []byte) ([]byte, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(rawData, &raw); err != nil {
+		return nil, err
+	}
+	wrapped, err := json.Marshal(map[string]json.RawMessage{"content": raw["tool_response"]})
+	if err != nil {
+		return nil, err
+	}
+	raw["tool_response"] = wrapped
+	return json.Marshal(raw)
 }
 
 func parseSessionStart(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {

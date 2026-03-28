@@ -1,0 +1,22 @@
+{
+  "session_id": "test-session-123",
+  "transcript_path": "/home/user/.claude/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "mcp__docs__search",
+  "tool_input": {
+    "query": "authentication"
+  },
+  "tool_response": [
+    {
+      "type": "text",
+      "text": "Found 2 results for authentication"
+    },
+    {
+      "type": "text",
+      "text": "Result 1: OAuth2 setup guide\nResult 2: API key management"
+    }
+  ],
+  "tool_use_id": "tool-use-013"
+}

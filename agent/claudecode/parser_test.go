@@ -2,6 +2,7 @@ package claudecode
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -174,6 +175,164 @@ func TestParseHookEvent_PostToolUseFailure(t *testing.T) {
 	assert.Equal(t, "Bash", event.ToolName)
 	assert.Equal(t, events.ResultError, event.ResultStatus)
 	assert.Contains(t, event.ErrorMessage, "Command failed")
+}
+
+func TestParseHookEvent_PostToolUseResponseTypes(t *testing.T) {
+	ctx := context.Background()
+	adapter := testAdapter(t)
+
+	tests := []struct {
+		name           string
+		fixture        string
+		hookType       string
+		expectedAction events.ActionType
+		expectedTool   string
+		expectedStatus events.ResultStatus
+		hasOutput      bool
+		checkOutput    func(t *testing.T, output json.RawMessage)
+	}{
+		{
+			name:           "native tool: Read (object response)",
+			fixture:        "post_tool_use_read.json",
+			hookType:       "PostToolUse",
+			expectedAction: events.ActionFileRead,
+			expectedTool:   "Read",
+			expectedStatus: events.ResultSuccess,
+		},
+		{
+			name:           "native tool: Glob (object response)",
+			fixture:        "post_tool_use_glob.json",
+			hookType:       "PostToolUse",
+			expectedAction: events.ActionFileRead,
+			expectedTool:   "Glob",
+			expectedStatus: events.ResultSuccess,
+		},
+		{
+			name:           "native tool: Bash failure (object response)",
+			fixture:        "post_tool_use_failure.json",
+			hookType:       "PostToolUseFailure",
+			expectedAction: events.ActionCommandExec,
+			expectedTool:   "Bash",
+			expectedStatus: events.ResultError,
+		},
+		{
+			name:           "MCP tool: array response (single content block)",
+			fixture:        "post_tool_use_mcp.json",
+			hookType:       "PostToolUse",
+			expectedAction: events.ActionToolUse,
+			expectedTool:   "mcp__Jira__atlassianUserInfo",
+			expectedStatus: events.ResultSuccess,
+			hasOutput:      true,
+			checkOutput: func(t *testing.T, output json.RawMessage) {
+				var obj map[string]interface{}
+				require.NoError(t, json.Unmarshal(output, &obj))
+				assert.Contains(t, obj, "content")
+			},
+		},
+		{
+			name:           "MCP tool: array response (multiple content blocks)",
+			fixture:        "post_tool_use_mcp_multi_content.json",
+			hookType:       "PostToolUse",
+			expectedAction: events.ActionToolUse,
+			expectedTool:   "mcp__docs__search",
+			expectedStatus: events.ResultSuccess,
+			hasOutput:      true,
+			checkOutput: func(t *testing.T, output json.RawMessage) {
+				var obj map[string]interface{}
+				require.NoError(t, json.Unmarshal(output, &obj))
+				content, ok := obj["content"].([]interface{})
+				require.True(t, ok)
+				assert.Len(t, content, 2)
+			},
+		},
+		{
+			name:           "MCP tool: string response (embedded JSON)",
+			fixture:        "post_tool_use_mcp_string.json",
+			hookType:       "PostToolUse",
+			expectedAction: events.ActionToolUse,
+			expectedTool:   "mcp__semaphore__organizations_list",
+			expectedStatus: events.ResultSuccess,
+			hasOutput:      true,
+			checkOutput: func(t *testing.T, output json.RawMessage) {
+				var obj map[string]interface{}
+				require.NoError(t, json.Unmarshal(output, &obj))
+				assert.Contains(t, obj, "content")
+			},
+		},
+		{
+			name:           "MCP tool: string response (plain text)",
+			fixture:        "post_tool_use_mcp_plain_string.json",
+			hookType:       "PostToolUse",
+			expectedAction: events.ActionToolUse,
+			expectedTool:   "mcp__slack__post_message",
+			expectedStatus: events.ResultSuccess,
+			hasOutput:      true,
+			checkOutput: func(t *testing.T, output json.RawMessage) {
+				var obj map[string]interface{}
+				require.NoError(t, json.Unmarshal(output, &obj))
+				assert.Equal(t, "Message posted successfully", obj["content"])
+			},
+		},
+		{
+			name:           "MCP tool: string response (truncated to file path)",
+			fixture:        "post_tool_use_mcp_truncated.json",
+			hookType:       "PostToolUse",
+			expectedAction: events.ActionToolUse,
+			expectedTool:   "mcp__Jira__searchJiraIssuesUsingJql",
+			expectedStatus: events.ResultSuccess,
+			hasOutput:      true,
+			checkOutput: func(t *testing.T, output json.RawMessage) {
+				var obj map[string]interface{}
+				require.NoError(t, json.Unmarshal(output, &obj))
+				assert.Contains(t, obj["content"], "exceeds maximum allowed tokens")
+			},
+		},
+		{
+			name:           "MCP tool: object response (passes through normally)",
+			fixture:        "post_tool_use_mcp_object.json",
+			hookType:       "PostToolUse",
+			expectedAction: events.ActionToolUse,
+			expectedTool:   "mcp__custom__get_status",
+			expectedStatus: events.ResultSuccess,
+			hasOutput:      true,
+			checkOutput: func(t *testing.T, output json.RawMessage) {
+				var obj map[string]interface{}
+				require.NoError(t, json.Unmarshal(output, &obj))
+				assert.Equal(t, "healthy", obj["status"])
+			},
+		},
+		{
+			name:           "MCP tool: null response",
+			fixture:        "post_tool_use_mcp_null_response.json",
+			hookType:       "PostToolUse",
+			expectedAction: events.ActionToolUse,
+			expectedTool:   "mcp__service__ping",
+			expectedStatus: events.ResultSuccess,
+			hasOutput:      false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			data := loadFixture(t, tc.fixture)
+			event, err := adapter.ParseEvent(ctx, tc.hookType, data)
+			require.NoError(t, err)
+			require.NotNil(t, event)
+
+			assert.Equal(t, tc.expectedAction, event.ActionType)
+			assert.Equal(t, tc.expectedTool, event.ToolName)
+			assert.Equal(t, tc.expectedStatus, event.ResultStatus)
+
+			if tc.hasOutput {
+				payload, err := event.GetToolUsePayload()
+				require.NoError(t, err)
+				assert.NotEmpty(t, payload.Output)
+				if tc.checkOutput != nil {
+					tc.checkOutput(t, payload.Output)
+				}
+			}
+		})
+	}
 }
 
 func TestParseHookEvent_SessionStart(t *testing.T) {
