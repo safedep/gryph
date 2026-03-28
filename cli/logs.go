@@ -28,6 +28,7 @@ type logParams struct {
 	session  string
 	agent    string
 	format   string
+	sort     string
 }
 
 // NewLogsCmd creates the logs command.
@@ -101,6 +102,7 @@ the results.`,
 	cmd.Flags().StringVar(&p.session, "session", "", "filter by session ID")
 	cmd.Flags().StringVar(&p.agent, "agent", "", "filter by agent")
 	cmd.Flags().StringVar(&p.format, "format", "table", "output format: table, json, jsonl")
+	cmd.Flags().StringVar(&p.sort, "sort", "desc", "sort order: asc, desc")
 
 	return cmd
 }
@@ -141,8 +143,25 @@ func parseSinceTime(p logParams) (time.Time, error) {
 	return time.Now().UTC().Add(-24 * time.Hour), nil
 }
 
+func parseSortOrder(s string) (events.SortOrder, error) {
+	switch s {
+	case "asc":
+		return events.SortAsc, nil
+	case "desc":
+		return events.SortDesc, nil
+	default:
+		return "", fmt.Errorf("invalid --sort value %q: must be asc or desc", s)
+	}
+}
+
 func buildEventFilter(p logParams) (*events.EventFilter, error) {
 	filter := events.NewEventFilter().WithLimit(p.limit)
+
+	sortOrder, err := parseSortOrder(p.sort)
+	if err != nil {
+		return nil, err
+	}
+	filter = filter.WithSort(sortOrder)
 
 	sinceTime, err := parseSinceTime(p)
 	if err != nil {
@@ -187,8 +206,6 @@ func runListLogs(ctx context.Context, app *App, p logParams) error {
 	if len(evts) == 0 {
 		return app.Presenter.RenderMessage("No events found. Run 'gryph install' to start logging agent activity.")
 	}
-
-	slices.Reverse(evts)
 
 	eventViews := make([]*tui.EventView, len(evts))
 	for i, e := range evts {
