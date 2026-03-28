@@ -168,15 +168,15 @@ func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, r
 	event.RawEvent = rawData
 	event.ResultStatus = events.ResultSuccess
 
+	var toolResponse interface{}
 	var responseStr string
 	if err := json.Unmarshal(input.ToolResponse, &responseStr); err == nil {
-		if err := buildToolPayload(event, actionType, input.ToolInput, responseStr); err != nil {
-			return nil, fmt.Errorf("failed to build payload: %w", err)
-		}
-	} else {
-		if err := buildToolPayload(event, actionType, input.ToolInput, nil); err != nil {
-			return nil, fmt.Errorf("failed to build payload: %w", err)
-		}
+		toolResponse = responseStr
+	} else if len(input.ToolResponse) > 0 {
+		toolResponse = string(input.ToolResponse)
+	}
+	if err := buildToolPayload(event, actionType, input.ToolInput, toolResponse); err != nil {
+		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
 
 	a.markSensitivePaths(event, actionType, input.ToolInput)
@@ -332,7 +332,7 @@ func (r *HookResponse) JSON() []byte {
 		output.HookSpecificOutput.PermissionDecision = "deny"
 		output.HookSpecificOutput.PermissionDecisionReason = r.Message
 	default:
-		output.HookSpecificOutput.PermissionDecision = "approve"
+		output.HookSpecificOutput.PermissionDecision = "allow"
 	}
 
 	data, _ := json.Marshal(output)

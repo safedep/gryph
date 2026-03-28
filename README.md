@@ -95,11 +95,18 @@ Pre-built binaries for macOS, Linux, and Windows are available on the [GitHub Re
 | Agent | Hook Support |
 | --- | --- |
 | **Claude Code** | Full (PreToolUse, PostToolUse, Notification) |
+| **Codex** | Full (PreToolUse, PostToolUse, SessionStart, UserPromptSubmit, Stop) |
 | **Cursor** | Full (file read/write, shell execution, MCP tools) |
 | **Gemini CLI** | Full (BeforeTool, AfterTool, Notification) |
 | **OpenCode** | Full (tool.execute, session events) |
 | **Pi Agent** | Full (tool_call, tool_result, session events) |
 | **Windsurf** | Full (file read/write, commands, MCP tools) |
+
+> **Note:** Codex hooks require enabling the `codex_hooks` feature flag in your Codex configuration (`~/.codex/config.toml`):
+> ```toml
+> [features]
+> codex_hooks = true
+> ```
 
 One command installs hooks for all detected agents. No per-agent setup required.
 
@@ -259,6 +266,7 @@ For transparency, these are the files Gryph modifies during `gryph install`:
 | Agent | File Modified | Description |
 | --- | --- | --- |
 | Claude Code | `~/.claude/settings.json` | Adds hook entries to the `hooks` section |
+| Codex | `~/.codex/hooks.json` | Creates or updates hooks configuration |
 | Cursor | `~/.cursor/hooks.json` | Creates or updates hooks configuration |
 | Gemini CLI | `~/.gemini/settings.json` | Adds hook entries to the `hooks` section |
 | OpenCode | `~/.config/opencode/plugins/gryph.mjs` | Installs JS plugin that bridges to gryph |
@@ -278,13 +286,6 @@ Backup files are named with timestamps (e.g., `settings.json.backup.202501311200
 
 </details>
 
-<!-- ## Featured In -->
-<!-- TODO: Add mentions/features as they happen. Examples: -->
-<!-- - [tldrsec](link) -->
-<!-- - [Hacker News discussion](link) -->
-<!-- - [Reddit r/programming](link) -->
-<!-- - Blog posts, YouTube reviews, etc. -->
-
 ## Community
 
 Questions, feedback, or contributions are welcome.
@@ -292,8 +293,6 @@ Questions, feedback, or contributions are welcome.
 - **Discord** : [Join the SafeDep community](https://discord.gg/kAGEj25dCn)
 - **Issues** : [Report bugs or request features](https://github.com/safedep/gryph/issues)
 - **Contributing** : See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
-<!-- TODO: Add Twitter/X link if available -->
-<!-- TODO: Add blog link if available -->
 
 If Gryph is useful, consider [giving it a star](https://github.com/safedep/gryph/stargazers). It helps others discover the project.
 

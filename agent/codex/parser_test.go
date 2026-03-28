@@ -156,7 +156,7 @@ func TestHookResponse_Allow(t *testing.T) {
 
 	hookOutput, ok := parsed["hookSpecificOutput"].(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, "approve", hookOutput["permissionDecision"])
+	assert.Equal(t, "allow", hookOutput["permissionDecision"])
 }
 
 func TestHookResponse_Block(t *testing.T) {

@@ -79,7 +79,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	if !detection.Installed {
-		result.Error = fmt.Errorf("failed to detect Codex: %w", err)
+		result.Error = fmt.Errorf("codex not detected: %s", detection.Message)
 		return result, result.Error
 	}
 
