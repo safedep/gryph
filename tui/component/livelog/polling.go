@@ -2,6 +2,7 @@ package livelog
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -29,8 +30,10 @@ func pollEvents(store storage.Store, after time.Time, agentFilter string, limit 
 func loadInitialEvents(store storage.Store, since time.Time, agentFilter string, limit int) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
+		// Fetch DESC to get the N most recent events, then reverse
+		// to chronological order for the live TUI display.
 		filter := events.NewEventFilter().
-			WithSort(events.SortAsc).
+			WithSort(events.SortDesc).
 			WithSince(since).
 			WithLimit(limit)
 
@@ -43,6 +46,7 @@ func loadInitialEvents(store storage.Store, since time.Time, agentFilter string,
 			return pollErrorMsg{err: err}
 		}
 
+		slices.Reverse(evts)
 		return newEventsMsg{events: evts}
 	}
 }

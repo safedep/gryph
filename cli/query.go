@@ -75,6 +75,9 @@ through the audit history.`,
 			}()
 
 			if interactive {
+				if cmd.Flags().Changed("sort") {
+					return fmt.Errorf("--sort is not supported with --interactive")
+				}
 				return runInteractiveQuery(app, since, until, today, yesterday, agents, actions,
 					filePattern, cmdPattern, status, session, sensitive)
 			}
@@ -201,7 +204,7 @@ through the audit history.`,
 	cmd.Flags().BoolVar(&count, "count", false, "show count only")
 	cmd.Flags().BoolVar(&sensitive, "sensitive", false, "filter to events involving sensitive file access")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "launch interactive TUI browser")
-	cmd.Flags().StringVar(&sort, "sort", "desc", "sort order: asc, desc")
+	cmd.Flags().StringVar(&sort, "sort", "asc", "sort order: asc, desc")
 
 	return cmd
 }

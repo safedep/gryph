@@ -136,7 +136,7 @@ func TestQuery_SortOrder(t *testing.T) {
 		extraArgs []string
 		ascending bool
 	}{
-		{"default_without_flag", nil, false},
+		{"default_without_flag", nil, true},
 		{"explicit_desc", []string{"--sort", "desc"}, false},
 		{"explicit_asc", []string{"--sort", "asc"}, true},
 	}
