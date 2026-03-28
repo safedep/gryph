@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"slices"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -35,6 +34,7 @@ func NewQueryCmd() *cobra.Command {
 		count       bool
 		sensitive   bool
 		interactive bool
+		sort        string
 	)
 
 	cmd := &cobra.Command{
@@ -75,12 +75,20 @@ through the audit history.`,
 			}()
 
 			if interactive {
+				if cmd.Flags().Changed("sort") {
+					return fmt.Errorf("--sort is not supported with --interactive")
+				}
 				return runInteractiveQuery(app, since, until, today, yesterday, agents, actions,
 					filePattern, cmdPattern, status, session, sensitive)
 			}
 
+			sortOrder, err := parseSortOrder(sort)
+			if err != nil {
+				return err
+			}
+
 			// Build filter
-			filter := events.NewEventFilter().WithLimit(limit).WithOffset(offset)
+			filter := events.NewEventFilter().WithLimit(limit).WithOffset(offset).WithSort(sortOrder)
 
 			if today {
 				tf := events.Today()
@@ -170,8 +178,6 @@ through the audit history.`,
 				return app.Presenter.RenderMessage("No events found matching the query.")
 			}
 
-			slices.Reverse(evts)
-
 			// Convert to view models
 			eventViews := make([]*tui.EventView, len(evts))
 			for i, e := range evts {
@@ -198,6 +204,7 @@ through the audit history.`,
 	cmd.Flags().BoolVar(&count, "count", false, "show count only")
 	cmd.Flags().BoolVar(&sensitive, "sensitive", false, "filter to events involving sensitive file access")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "launch interactive TUI browser")
+	cmd.Flags().StringVar(&sort, "sort", "asc", "sort order: asc, desc")
 
 	return cmd
 }

@@ -6,6 +6,14 @@ import (
 	"github.com/google/uuid"
 )
 
+// SortOrder defines the sort direction for query results.
+type SortOrder string
+
+const (
+	SortDesc SortOrder = "desc"
+	SortAsc  SortOrder = "asc"
+)
+
 // EventFilter provides filtering criteria for querying events.
 type EventFilter struct {
 	// Since filters events after this time.
@@ -30,13 +38,27 @@ type EventFilter struct {
 	Limit int
 	// Offset is the number of results to skip.
 	Offset int
+	// Sort controls the sort direction (desc by default).
+	Sort SortOrder
 }
 
 // NewEventFilter creates a new EventFilter with default values.
 func NewEventFilter() *EventFilter {
 	return &EventFilter{
 		Limit: 100,
+		Sort:  SortDesc,
 	}
+}
+
+// WithSort sets the sort order.
+func (f *EventFilter) WithSort(order SortOrder) *EventFilter {
+	f.Sort = order
+	return f
+}
+
+// IsAscending returns true if the sort order is ascending.
+func (f *EventFilter) IsAscending() bool {
+	return f.Sort == SortAsc
 }
 
 // WithSince sets the Since filter.

@@ -63,20 +63,40 @@ func TestLogs(t *testing.T) {
 }
 
 func TestLogs_SortOrder(t *testing.T) {
-	env := newTestEnv(t)
-	seedNRecentEvents(5)(env)
+	tests := []struct {
+		name      string
+		extraArgs []string
+		ascending bool
+	}{
+		{"default_without_flag", nil, false},
+		{"explicit_desc", []string{"--sort", "desc"}, false},
+		{"explicit_asc", []string{"--sort", "asc"}, true},
+	}
 
-	stdout, _, err := env.run("logs", "--format", "json", "--limit", "50")
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newTestEnv(t)
+			seedNRecentEvents(5)(env)
 
-	var evts []tui.EventView
-	require.NoError(t, json.Unmarshal([]byte(stdout), &evts))
-	require.Len(t, evts, 5)
+			args := []string{"logs", "--format", "json", "--limit", "50"}
+			args = append(args, tt.extraArgs...)
+			stdout, _, err := env.run(args...)
+			require.NoError(t, err)
 
-	// Verify chronological order (oldest first after slices.Reverse)
-	for i := 1; i < len(evts); i++ {
-		assert.True(t, evts[i].Timestamp.After(evts[i-1].Timestamp) || evts[i].Timestamp.Equal(evts[i-1].Timestamp),
-			"events should be in chronological order: %v >= %v", evts[i-1].Timestamp, evts[i].Timestamp)
+			var evts []tui.EventView
+			require.NoError(t, json.Unmarshal([]byte(stdout), &evts))
+			require.Len(t, evts, 5)
+
+			for i := 1; i < len(evts); i++ {
+				if tt.ascending {
+					assert.True(t, evts[i].Timestamp.After(evts[i-1].Timestamp) || evts[i].Timestamp.Equal(evts[i-1].Timestamp),
+						"events should be in oldest-first order: %v >= %v", evts[i].Timestamp, evts[i-1].Timestamp)
+				} else {
+					assert.True(t, evts[i].Timestamp.Before(evts[i-1].Timestamp) || evts[i].Timestamp.Equal(evts[i-1].Timestamp),
+						"events should be in newest-first order: %v <= %v", evts[i].Timestamp, evts[i-1].Timestamp)
+				}
+			}
+		})
 	}
 }
 

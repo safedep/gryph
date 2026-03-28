@@ -28,6 +28,7 @@ type logParams struct {
 	session  string
 	agent    string
 	format   string
+	sort     string
 }
 
 // NewLogsCmd creates the logs command.
@@ -50,6 +51,10 @@ the results.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if p.live && p.follow {
 				return fmt.Errorf("--live and --follow are mutually exclusive")
+			}
+
+			if (p.follow || p.live) && cmd.Flags().Changed("sort") {
+				return fmt.Errorf("--sort is not supported with --follow or --live")
 			}
 
 			ctx := context.Background()
@@ -101,6 +106,7 @@ the results.`,
 	cmd.Flags().StringVar(&p.session, "session", "", "filter by session ID")
 	cmd.Flags().StringVar(&p.agent, "agent", "", "filter by agent")
 	cmd.Flags().StringVar(&p.format, "format", "table", "output format: table, json, jsonl")
+	cmd.Flags().StringVar(&p.sort, "sort", "desc", "sort order: asc, desc")
 
 	return cmd
 }
@@ -109,6 +115,13 @@ func runLiveLogs(app *App, p logParams) error {
 	sinceTime, err := parseSinceTime(p)
 	if err != nil {
 		return err
+	}
+
+	// Live monitor is a real-time TUI that auto-scrolls through events.
+	// Default to 1h lookback so the view starts near the present instead
+	// of slowly replaying an entire day of activity.
+	if p.since == "" && !p.today {
+		sinceTime = time.Now().UTC().Add(-1 * time.Hour)
 	}
 
 	opts := livelog.Options{
@@ -141,8 +154,25 @@ func parseSinceTime(p logParams) (time.Time, error) {
 	return time.Now().UTC().Add(-24 * time.Hour), nil
 }
 
+func parseSortOrder(s string) (events.SortOrder, error) {
+	switch s {
+	case "asc":
+		return events.SortAsc, nil
+	case "desc":
+		return events.SortDesc, nil
+	default:
+		return "", fmt.Errorf("invalid --sort value %q: must be asc or desc", s)
+	}
+}
+
 func buildEventFilter(p logParams) (*events.EventFilter, error) {
 	filter := events.NewEventFilter().WithLimit(p.limit)
+
+	sortOrder, err := parseSortOrder(p.sort)
+	if err != nil {
+		return nil, err
+	}
+	filter = filter.WithSort(sortOrder)
 
 	sinceTime, err := parseSinceTime(p)
 	if err != nil {
@@ -188,8 +218,6 @@ func runListLogs(ctx context.Context, app *App, p logParams) error {
 		return app.Presenter.RenderMessage("No events found. Run 'gryph install' to start logging agent activity.")
 	}
 
-	slices.Reverse(evts)
-
 	eventViews := make([]*tui.EventView, len(evts))
 	for i, e := range evts {
 		eventViews[i] = eventToView(e)
@@ -203,6 +231,10 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 	if err != nil {
 		return err
 	}
+
+	// Fetch DESC to get the N most recent events, then reverse
+	// to chronological order for streaming display.
+	filter = filter.WithSort(events.SortDesc)
 
 	evts, err := app.Store.QueryEvents(ctx, filter)
 	if err != nil {
@@ -236,6 +268,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 			return nil
 		case <-ticker.C:
 			pollFilter := events.NewEventFilter().
+				WithSort(events.SortAsc).
 				WithSince(lastTimestamp.Add(time.Millisecond))
 
 			if p.agent != "" {
@@ -248,7 +281,6 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 			}
 
 			if len(newEvts) > 0 {
-				slices.Reverse(newEvts)
 				eventViews := make([]*tui.EventView, len(newEvts))
 				for i, e := range newEvts {
 					eventViews[i] = eventToView(e)
