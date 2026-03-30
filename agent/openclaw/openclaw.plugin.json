@@ -1,0 +1,8 @@
+{
+  "id": "gryph",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

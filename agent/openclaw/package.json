@@ -1,0 +1,12 @@
+{
+  "name": "@gryph/openclaw-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gryph audit trail plugin for OpenClaw",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

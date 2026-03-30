@@ -15,6 +15,12 @@ import (
 //go:embed plugin.ts
 var pluginTS []byte
 
+//go:embed openclaw.plugin.json
+var pluginManifest []byte
+
+//go:embed package.json
+var packageJSON []byte
+
 func processedPlugin() []byte {
 	return bytes.ReplaceAll(pluginTS, []byte(utils.GryphCommandPlaceholder), []byte(utils.GryphCommand()))
 }
@@ -26,7 +32,11 @@ var HookTypes = []string{
 	"session_end",
 }
 
-const pluginFileName = "index.ts"
+const (
+	pluginFileName   = "index.ts"
+	manifestFileName = "openclaw.plugin.json"
+	packageFileName  = "package.json"
+)
 
 func pluginDir(extensionsPath string) string {
 	return filepath.Join(extensionsPath, "gryph")
@@ -34,6 +44,14 @@ func pluginDir(extensionsPath string) string {
 
 func pluginPath(extensionsPath string) string {
 	return filepath.Join(pluginDir(extensionsPath), pluginFileName)
+}
+
+func manifestPath(extensionsPath string) string {
+	return filepath.Join(pluginDir(extensionsPath), manifestFileName)
+}
+
+func packagePath(extensionsPath string) string {
+	return filepath.Join(pluginDir(extensionsPath), packageFileName)
 }
 
 func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.InstallResult, error) {
@@ -103,6 +121,18 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 
 	if err := os.WriteFile(pluginFile, processedPlugin(), 0644); err != nil {
 		result.Error = fmt.Errorf("failed to write plugin file: %w", err)
+		return result, result.Error
+	}
+
+	manifest := manifestPath(detection.HooksPath)
+	if err := os.WriteFile(manifest, pluginManifest, 0644); err != nil {
+		result.Error = fmt.Errorf("failed to write plugin manifest: %w", err)
+		return result, result.Error
+	}
+
+	pkgFile := packagePath(detection.HooksPath)
+	if err := os.WriteFile(pkgFile, packageJSON, 0644); err != nil {
+		result.Error = fmt.Errorf("failed to write package.json: %w", err)
 		return result, result.Error
 	}
 
@@ -199,6 +229,18 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 	status.Valid = bytes.Equal(data, processedPlugin())
 	if !status.Valid {
 		status.Issues = append(status.Issues, "plugin file differs from expected content (may need update)")
+	}
+
+	manifest := manifestPath(detection.HooksPath)
+	if _, err := os.Stat(manifest); os.IsNotExist(err) {
+		status.Valid = false
+		status.Issues = append(status.Issues, "plugin manifest (openclaw.plugin.json) is missing")
+	}
+
+	pkgFile := packagePath(detection.HooksPath)
+	if _, err := os.Stat(pkgFile); os.IsNotExist(err) {
+		status.Valid = false
+		status.Issues = append(status.Issues, "package.json is missing")
 	}
 
 	return status, nil

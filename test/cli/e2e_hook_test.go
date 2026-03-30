@@ -797,3 +797,163 @@ func TestHook_PiAgent_DeterministicSessionID(t *testing.T) {
 	assert.Equal(t, evts[0].SessionID, evts[1].SessionID,
 		"events with same session_id should have same UUID")
 }
+
+func TestHook_OpenClaw(t *testing.T) {
+	tests := []struct {
+		name     string
+		hookType string
+		fixture  string
+		assert   func(t *testing.T, env *testEnv, stdout, stderr string, err error)
+	}{
+		{
+			name:     "before_tool_call_read",
+			hookType: "before_tool_call",
+			fixture:  "../../agent/openclaw/testdata/before_tool_call_read.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionFileRead, evts[0].ActionType)
+				p, pErr := evts[0].GetFileReadPayload()
+				require.NoError(t, pErr)
+				assert.Equal(t, "/home/user/project/README.md", p.Path)
+			},
+		},
+		{
+			name:     "before_tool_call_write",
+			hookType: "before_tool_call",
+			fixture:  "../../agent/openclaw/testdata/before_tool_call_write.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionFileWrite, evts[0].ActionType)
+			},
+		},
+		{
+			name:     "before_tool_call_exec",
+			hookType: "before_tool_call",
+			fixture:  "../../agent/openclaw/testdata/before_tool_call_exec.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionCommandExec, evts[0].ActionType)
+				p, pErr := evts[0].GetCommandExecPayload()
+				require.NoError(t, pErr)
+				assert.Equal(t, "npm install", p.Command)
+			},
+		},
+		{
+			name:     "after_tool_call_success",
+			hookType: "after_tool_call",
+			fixture:  "../../agent/openclaw/testdata/after_tool_call_read.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionFileRead, evts[0].ActionType)
+				assert.Equal(t, events.ResultSuccess, evts[0].ResultStatus)
+			},
+		},
+		{
+			name:     "after_tool_call_error",
+			hookType: "after_tool_call",
+			fixture:  "../../agent/openclaw/testdata/after_tool_call_error.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ResultError, evts[0].ResultStatus)
+			},
+		},
+		{
+			name:     "session_start",
+			hookType: "session_start",
+			fixture:  "../../agent/openclaw/testdata/session_start.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				evts, qErr := store.QueryEvents(ctx, events.NewEventFilter())
+				require.NoError(t, qErr)
+				assert.Len(t, evts, 1)
+				assert.Equal(t, events.ActionSessionStart, evts[0].ActionType)
+			},
+		},
+		{
+			name:     "session_end",
+			hookType: "session_end",
+			fixture:  "../../agent/openclaw/testdata/session_end.json",
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assert.NoError(t, err)
+				store, cleanup := env.openStore()
+				defer cleanup()
+				ctx := context.Background()
+				sessions, sErr := store.QuerySessions(ctx, session.NewSessionFilter())
+				require.NoError(t, sErr)
+				require.Len(t, sessions, 1)
+				assert.False(t, sessions[0].EndedAt.IsZero(), "EndedAt should be set")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newTestEnv(t)
+			payload, err := os.ReadFile(tt.fixture)
+			require.NoError(t, err)
+			stdout, stderr, runErr := env.runHook("openclaw", tt.hookType, payload)
+			tt.assert(t, env, stdout, stderr, runErr)
+		})
+	}
+}
+
+func TestHook_OpenClaw_DeterministicSessionID(t *testing.T) {
+	env := newTestEnv(t)
+
+	payload1, err := os.ReadFile("../../agent/openclaw/testdata/before_tool_call_read.json")
+	require.NoError(t, err)
+	_, _, err = env.runHook("openclaw", "before_tool_call", payload1)
+	require.NoError(t, err)
+
+	payload2, err := os.ReadFile("../../agent/openclaw/testdata/before_tool_call_exec.json")
+	require.NoError(t, err)
+	_, _, err = env.runHook("openclaw", "before_tool_call", payload2)
+	require.NoError(t, err)
+
+	store, cleanup := env.openStore()
+	defer cleanup()
+	ctx := context.Background()
+
+	evts, err := store.QueryEvents(ctx, events.NewEventFilter())
+	require.NoError(t, err)
+	require.Len(t, evts, 2)
+
+	assert.Equal(t, evts[0].SessionID, evts[1].SessionID,
+		"events with same session_id should have same UUID")
+
+	expected := uuid.NewSHA1(uuid.NameSpaceOID, []byte("openclaw-session-abc123"))
+	assert.Equal(t, expected, evts[0].SessionID)
+}
