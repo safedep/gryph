@@ -10,6 +10,7 @@ import (
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/codex"
 	"github.com/safedep/gryph/agent/cursor"
@@ -186,16 +187,22 @@ func logHookError(ctx context.Context, app *App, agentName, hookType string, raw
 		return
 	}
 
-	const maxRawEventSize = 64 * 1024
-	rawEvent := string(rawData)
-	if len(rawEvent) > maxRawEventSize {
-		rawEvent = rawEvent[:maxRawEventSize]
-	}
-
 	details := map[string]interface{}{
 		"hook_type":     hookType,
 		"raw_data_size": rawDataSize,
-		"raw_event":     rawEvent,
+	}
+
+	loggingLevel := app.Config.GetAgentLoggingLevel(agentName)
+	if loggingLevel.IsAtLeast(config.LoggingFull) {
+		const maxRawEventSize = 64 * 1024
+		rawEvent := string(rawData)
+		if len(rawEvent) > maxRawEventSize {
+			rawEvent = rawEvent[:maxRawEventSize]
+		}
+		if app.PrivacyChecker != nil {
+			rawEvent = app.PrivacyChecker.Redact(rawEvent)
+		}
+		details["raw_event"] = rawEvent
 	}
 
 	if err := logSelfAudit(ctx, app.Store, SelfAuditActionHookError,

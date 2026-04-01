@@ -26,12 +26,13 @@ import (
 
 // App holds the application dependencies.
 type App struct {
-	Config    *config.Config
-	Store     storage.Store
-	Registry  *agent.Registry
-	Presenter tui.Presenter
-	Paths     *config.Paths
-	Security  *security.Evaluator
+	Config         *config.Config
+	Store          storage.Store
+	Registry       *agent.Registry
+	Presenter      tui.Presenter
+	Paths          *config.Paths
+	Security       *security.Evaluator
+	PrivacyChecker *events.PrivacyChecker
 }
 
 // NewApp creates a new App with the given configuration.
@@ -73,11 +74,12 @@ func NewApp(cfg *config.Config) (*App, error) {
 	sec.RegisterCheck(securitychecks.NewPlaceholderCheck())
 
 	return &App{
-		Config:    cfg,
-		Registry:  registry,
-		Presenter: presenter,
-		Paths:     paths,
-		Security:  sec,
+		Config:         cfg,
+		Registry:       registry,
+		Presenter:      presenter,
+		Paths:          paths,
+		Security:       sec,
+		PrivacyChecker: privacyChecker,
 	}, nil
 }
 
