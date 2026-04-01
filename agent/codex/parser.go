@@ -363,6 +363,8 @@ func (a *Adapter) markSensitivePaths(event *events.Event, actionType events.Acti
 	case events.ActionFileRead, events.ActionFileWrite:
 		if path, ok := toolInput["file_path"].(string); ok {
 			event.IsSensitive = a.privacyChecker.IsSensitivePath(path)
+		} else if path, ok := toolInput["path"].(string); ok {
+			event.IsSensitive = a.privacyChecker.IsSensitivePath(path)
 		}
 	case events.ActionCommandExec:
 		if cmd, ok := toolInput["command"].(string); ok {
