@@ -10,7 +10,9 @@ import (
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/agent/claudecode"
+	"github.com/safedep/gryph/agent/codex"
 	"github.com/safedep/gryph/agent/cursor"
 	"github.com/safedep/gryph/agent/gemini"
 	"github.com/safedep/gryph/agent/openclaw"
@@ -59,7 +61,7 @@ func NewHookCmd() *cobra.Command {
 
 			hookErr := runHook(ctx, app, agentName, hookType, rawData)
 			if hookErr != nil && !isExitError(hookErr) {
-				logHookError(ctx, app, agentName, hookType, len(rawData), hookErr)
+				logHookError(ctx, app, agentName, hookType, len(rawData), rawData, hookErr)
 			}
 
 			return hookErr
@@ -180,7 +182,7 @@ func runHook(ctx context.Context, app *App, agentName, hookType string, rawData 
 }
 
 // logHookError logs a self-audit entry when hook processing fails.
-func logHookError(ctx context.Context, app *App, agentName, hookType string, rawDataSize int, hookErr error) {
+func logHookError(ctx context.Context, app *App, agentName, hookType string, rawDataSize int, rawData []byte, hookErr error) {
 	if app.Store == nil {
 		return
 	}
@@ -188,6 +190,19 @@ func logHookError(ctx context.Context, app *App, agentName, hookType string, raw
 	details := map[string]interface{}{
 		"hook_type":     hookType,
 		"raw_data_size": rawDataSize,
+	}
+
+	loggingLevel := app.Config.GetAgentLoggingLevel(agentName)
+	if loggingLevel.IsAtLeast(config.LoggingFull) {
+		const maxRawEventSize = 64 * 1024
+		rawEvent := string(rawData)
+		if len(rawEvent) > maxRawEventSize {
+			rawEvent = rawEvent[:maxRawEventSize]
+		}
+		if app.PrivacyChecker != nil {
+			rawEvent = app.PrivacyChecker.Redact(rawEvent)
+		}
+		details["raw_event"] = rawEvent
 	}
 
 	if err := logSelfAudit(ctx, app.Store, SelfAuditActionHookError,
@@ -267,6 +282,12 @@ func sendHookResponse(agentName, hookType string) error {
 		}
 		return nil
 
+	case agent.AgentCodex:
+		// Codex: PreToolUse supports deny via JSON on stdout or exit code 2.
+		// Allow is signaled by exit 0 with no output (Codex does not yet
+		// support the "allow" permissionDecision value).
+		return nil
+
 	default:
 		// Unknown agent, just succeed
 		return nil
@@ -308,6 +329,15 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 	case agent.AgentPiAgent:
 		response := piagent.NewBlockResponse(result.BlockReason)
 		return handlePiAgentResponse(response)
+
+	case agent.AgentCodex:
+		response := codex.NewBlockResponse(result.BlockReason)
+		if hookType == "PreToolUse" {
+			if _, err := os.Stdout.Write(response.JSON()); err != nil {
+				log.Errorf("failed to write to stdout: %v", err)
+			}
+		}
+		return handleCodexResponse(response)
 
 	default:
 		return nil
@@ -420,6 +450,18 @@ func handlePiAgentResponse(response *piagent.HookResponse) error {
 	case piagent.HookBlock:
 		return &exitError{code: 2, message: response.Message}
 	case piagent.HookError:
+		return &exitError{code: 1, message: response.Message}
+	default:
+		return nil
+	}
+}
+
+// handleCodexResponse processes a Codex hook response.
+func handleCodexResponse(response *codex.HookResponse) error {
+	switch response.Decision {
+	case codex.HookBlock:
+		return &exitError{code: 2, message: response.Message}
+	case codex.HookError:
 		return &exitError{code: 1, message: response.Message}
 	default:
 		return nil

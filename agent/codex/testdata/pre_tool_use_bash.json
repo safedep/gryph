@@ -1,0 +1,13 @@
+{
+  "session_id": "codex-session-abc",
+  "transcript_path": "/home/user/.codex/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "model": "o4-mini",
+  "turn_id": "turn-001",
+  "tool_name": "Bash",
+  "tool_use_id": "tool-001",
+  "tool_input": {
+    "command": "npm install"
+  }
+}

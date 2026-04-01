@@ -80,6 +80,7 @@ func (r *Registry) DetectAll(ctx context.Context) map[string]*DetectionResult {
 func SupportedAgents() []string {
 	return []string{
 		"claude-code",
+		"codex",
 		"cursor",
 		"gemini",
 		"opencode",

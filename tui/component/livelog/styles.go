@@ -16,6 +16,7 @@ var (
 	colorOrange = lipgloss.Color("#E67E22")
 	colorPink   = lipgloss.Color("#E91E63")
 	colorWhite  = lipgloss.Color("#ECF0F1")
+	colorYellow = lipgloss.Color("#F1C40F")
 	colorDim    = lipgloss.Color("#7F8C8D")
 	colorBg     = lipgloss.Color("#1E1E2E")
 
@@ -117,6 +118,8 @@ func agentBadge(agentName string) string {
 	switch agentName {
 	case "claude-code":
 		return lipgloss.NewStyle().Foreground(colorOrange).Bold(true).Render("claude-code")
+	case "codex":
+		return lipgloss.NewStyle().Foreground(colorYellow).Bold(true).Render("codex")
 	case "cursor":
 		return lipgloss.NewStyle().Foreground(colorViolet).Bold(true).Render("cursor")
 	case "gemini":
