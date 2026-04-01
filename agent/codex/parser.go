@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 )
 
@@ -159,7 +161,7 @@ func (a *Adapter) parsePreToolUse(sessionID uuid.UUID, agentSessionID string, ra
 	event.TranscriptPath = input.TranscriptPath
 	event.RawEvent = rawData
 
-	if err := buildToolPayload(event, actionType, input.ToolInput, nil); err != nil {
+	if err := a.buildToolPayload(event, actionType, input.ToolInput, nil); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
 
@@ -195,7 +197,7 @@ func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, r
 			}
 		}
 	}
-	if err := buildToolPayload(event, actionType, input.ToolInput, toolResponse); err != nil {
+	if err := a.buildToolPayload(event, actionType, input.ToolInput, toolResponse); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
 
@@ -263,8 +265,69 @@ func getActionType(toolName string) events.ActionType {
 	return events.ActionToolUse
 }
 
-func buildToolPayload(event *events.Event, actionType events.ActionType, toolInput map[string]interface{}, toolResponse interface{}) error {
+func (a *Adapter) buildToolPayload(event *events.Event, actionType events.ActionType, toolInput map[string]interface{}, toolResponse interface{}) error {
 	switch actionType {
+	case events.ActionFileRead:
+		payload := events.FileReadPayload{}
+		if path, ok := toolInput["file_path"].(string); ok {
+			payload.Path = path
+		} else if path, ok := toolInput["path"].(string); ok {
+			payload.Path = path
+		}
+		if pattern, ok := toolInput["pattern"].(string); ok {
+			payload.Pattern = pattern
+		}
+		return event.SetPayload(payload)
+
+	case events.ActionFileWrite:
+		payload := events.FileWritePayload{}
+		filePath := ""
+		if path, ok := toolInput["file_path"].(string); ok {
+			payload.Path = path
+			filePath = path
+		}
+
+		fullOldStr, _ := toolInput["old_string"].(string)
+		fullNewStr, _ := toolInput["new_string"].(string)
+		fullContent, _ := toolInput["content"].(string)
+
+		if a.contentHash {
+			if fullContent != "" {
+				payload.ContentHash = utils.HashContent(fullContent)
+			} else if fullOldStr != "" || fullNewStr != "" {
+				payload.ContentHash = utils.HashContent(fullOldStr + fullNewStr)
+			}
+		}
+
+		if fullOldStr != "" || fullNewStr != "" {
+			payload.LinesAdded, payload.LinesRemoved = utils.CountDiffLines(fullOldStr, fullNewStr)
+		} else if fullContent != "" {
+			payload.LinesAdded = utils.CountNewFileLines(fullContent)
+		}
+
+		if fullContent != "" {
+			payload.ContentPreview = truncateString(fullContent, 200)
+		}
+		if fullOldStr != "" {
+			payload.OldString = truncateString(fullOldStr, 200)
+		}
+		if fullNewStr != "" {
+			payload.NewString = truncateString(fullNewStr, 200)
+		}
+
+		if err := event.SetPayload(payload); err != nil {
+			return err
+		}
+
+		if a.loggingLevel.IsAtLeast(config.LoggingFull) {
+			if fullOldStr != "" || fullNewStr != "" {
+				event.DiffContent = utils.GenerateDiff(filePath, fullOldStr, fullNewStr)
+			} else if fullContent != "" {
+				event.DiffContent = utils.GenerateDiff(filePath, "", fullContent)
+			}
+		}
+		return nil
+
 	case events.ActionCommandExec:
 		payload := events.CommandExecPayload{}
 		if cmd, ok := toolInput["command"].(string); ok {
@@ -296,7 +359,12 @@ func (a *Adapter) markSensitivePaths(event *events.Event, actionType events.Acti
 		return
 	}
 
-	if actionType == events.ActionCommandExec {
+	switch actionType {
+	case events.ActionFileRead, events.ActionFileWrite:
+		if path, ok := toolInput["file_path"].(string); ok {
+			event.IsSensitive = a.privacyChecker.IsSensitivePath(path)
+		}
+	case events.ActionCommandExec:
 		if cmd, ok := toolInput["command"].(string); ok {
 			event.IsSensitive = a.privacyChecker.IsSensitivePath(cmd)
 		}
