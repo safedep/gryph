@@ -60,7 +60,7 @@ func NewHookCmd() *cobra.Command {
 
 			hookErr := runHook(ctx, app, agentName, hookType, rawData)
 			if hookErr != nil && !isExitError(hookErr) {
-				logHookError(ctx, app, agentName, hookType, len(rawData), hookErr)
+				logHookError(ctx, app, agentName, hookType, len(rawData), rawData, hookErr)
 			}
 
 			return hookErr
@@ -181,14 +181,21 @@ func runHook(ctx context.Context, app *App, agentName, hookType string, rawData 
 }
 
 // logHookError logs a self-audit entry when hook processing fails.
-func logHookError(ctx context.Context, app *App, agentName, hookType string, rawDataSize int, hookErr error) {
+func logHookError(ctx context.Context, app *App, agentName, hookType string, rawDataSize int, rawData []byte, hookErr error) {
 	if app.Store == nil {
 		return
+	}
+
+	const maxRawEventSize = 64 * 1024
+	rawEvent := string(rawData)
+	if len(rawEvent) > maxRawEventSize {
+		rawEvent = rawEvent[:maxRawEventSize]
 	}
 
 	details := map[string]interface{}{
 		"hook_type":     hookType,
 		"raw_data_size": rawDataSize,
+		"raw_event":     rawEvent,
 	}
 
 	if err := logSelfAudit(ctx, app.Store, SelfAuditActionHookError,
@@ -269,14 +276,9 @@ func sendHookResponse(agentName, hookType string) error {
 		return nil
 
 	case agent.AgentCodex:
-		// Codex: PreToolUse uses JSON response on stdout with permissionDecision.
-		// Other hooks: exit 0 with no output.
-		if hookType == "PreToolUse" {
-			resp := codex.NewAllowResponse()
-			if _, err := os.Stdout.Write(resp.JSON()); err != nil {
-				log.Errorf("failed to write to stdout: %v", err)
-			}
-		}
+		// Codex: PreToolUse supports deny via JSON on stdout or exit code 2.
+		// Allow is signaled by exit 0 with no output (Codex does not yet
+		// support the "allow" permissionDecision value).
 		return nil
 
 	default:
@@ -322,14 +324,12 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 		return handlePiAgentResponse(response)
 
 	case agent.AgentCodex:
+		response := codex.NewBlockResponse(result.BlockReason)
 		if hookType == "PreToolUse" {
-			response := codex.NewBlockResponse(result.BlockReason)
 			if _, err := os.Stdout.Write(response.JSON()); err != nil {
 				log.Errorf("failed to write to stdout: %v", err)
 			}
-			return nil
 		}
-		response := codex.NewErrorResponse(result.BlockReason)
 		return handleCodexResponse(response)
 
 	default:
@@ -452,8 +452,10 @@ func handlePiAgentResponse(response *piagent.HookResponse) error {
 // handleCodexResponse processes a Codex hook response.
 func handleCodexResponse(response *codex.HookResponse) error {
 	switch response.Decision {
-	case codex.HookError:
+	case codex.HookBlock:
 		return &exitError{code: 2, message: response.Message}
+	case codex.HookError:
+		return &exitError{code: 1, message: response.Message}
 	default:
 		return nil
 	}

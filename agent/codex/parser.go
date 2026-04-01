@@ -53,7 +53,22 @@ type StopInput struct {
 }
 
 var ToolNameMapping = map[string]events.ActionType{
-	"Bash": events.ActionCommandExec,
+	"Read":         events.ActionFileRead,
+	"View":         events.ActionFileRead,
+	"Write":        events.ActionFileWrite,
+	"Edit":         events.ActionFileWrite,
+	"NotebookEdit": events.ActionFileWrite,
+	"Bash":         events.ActionCommandExec,
+	"Execute":      events.ActionCommandExec,
+	"WebSearch":    events.ActionToolUse,
+	"WebFetch":     events.ActionToolUse,
+	"Grep":         events.ActionFileRead,
+	"Glob":         events.ActionFileRead,
+	"LS":           events.ActionFileRead,
+	"Task":         events.ActionToolUse,
+	"TodoRead":     events.ActionToolUse,
+	"TodoWrite":    events.ActionToolUse,
+	"AskUser":      events.ActionToolUse,
 }
 
 func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event, error) {
@@ -169,11 +184,16 @@ func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, r
 	event.ResultStatus = events.ResultSuccess
 
 	var toolResponse interface{}
-	var responseStr string
-	if err := json.Unmarshal(input.ToolResponse, &responseStr); err == nil {
-		toolResponse = responseStr
-	} else if len(input.ToolResponse) > 0 {
-		toolResponse = string(input.ToolResponse)
+	if len(input.ToolResponse) > 0 {
+		var responseStr string
+		if err := json.Unmarshal(input.ToolResponse, &responseStr); err == nil {
+			toolResponse = responseStr
+		} else {
+			var structured interface{}
+			if err := json.Unmarshal(input.ToolResponse, &structured); err == nil {
+				toolResponse = structured
+			}
+		}
 	}
 	if err := buildToolPayload(event, actionType, input.ToolInput, toolResponse); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
@@ -304,10 +324,14 @@ const (
 )
 
 func (r *HookResponse) ExitCode() int {
-	if r.Decision == HookError {
+	switch r.Decision {
+	case HookBlock:
 		return 2
+	case HookError:
+		return 1
+	default:
+		return 0
 	}
-	return 0
 }
 
 type preToolUseOutput struct {

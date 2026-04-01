@@ -25,7 +25,7 @@ type HooksConfig struct {
 }
 
 type HookMatcher struct {
-	Matcher string        `json:"matcher"`
+	Matcher string        `json:"matcher,omitempty"`
 	Hooks   []HookCommand `json:"hooks"`
 }
 
@@ -38,7 +38,7 @@ type HookCommand struct {
 func hookMatcher(hookType string) string {
 	switch hookType {
 	case "PreToolUse", "PostToolUse":
-		return "Bash"
+		return "*"
 	default:
 		return ""
 	}

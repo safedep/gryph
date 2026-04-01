@@ -174,6 +174,6 @@ func TestHookResponse_Block(t *testing.T) {
 
 func TestHookResponse_ExitCodes(t *testing.T) {
 	assert.Equal(t, 0, NewAllowResponse().ExitCode())
-	assert.Equal(t, 0, NewBlockResponse("reason").ExitCode())
-	assert.Equal(t, 2, NewErrorResponse("error").ExitCode())
+	assert.Equal(t, 2, NewBlockResponse("reason").ExitCode())
+	assert.Equal(t, 1, NewErrorResponse("error").ExitCode())
 }
