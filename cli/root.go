@@ -73,6 +73,15 @@ func NewApp(cfg *config.Config) (*App, error) {
 	sec := security.New(&security.Config{FailOpen: true})
 	sec.RegisterCheck(securitychecks.NewPlaceholderCheck())
 
+	// Invoke any check factories that external binaries registered during
+	// init() via RegisterCheckFactory. Factories that return nil are
+	// skipped so callers can conditionally opt out based on config.
+	for _, f := range checkFactories {
+		if c := f(cfg); c != nil {
+			sec.RegisterCheck(c)
+		}
+	}
+
 	return &App{
 		Config:         cfg,
 		Registry:       registry,
@@ -103,6 +112,31 @@ func (a *App) Close() error {
 		return a.Store.Close()
 	}
 	return nil
+}
+
+// checkFactories is the registry of external security-check factories.
+// External binaries composing gryph as a library call RegisterCheckFactory
+// during init() to add Checks that NewApp will register on the security
+// evaluator alongside the built-in placeholder check.
+var checkFactories []func(cfg *config.Config) security.Check
+
+// RegisterCheckFactory registers a factory that produces a security.Check.
+// Intended for external binaries that import gryph as a library and want to
+// contribute additional security checks without modifying this package.
+//
+// Call order: typically from init() in a package blank-imported by the
+// external binary's main. Each registered factory is invoked once per
+// NewApp() call, and the returned Check (if non-nil) is added to the
+// evaluator. Factories that return nil are ignored — this lets callers
+// conditionally enable/disable checks based on the provided *config.Config.
+//
+// This function is not safe for concurrent use. Register factories before
+// any goroutine calls NewApp.
+func RegisterCheckFactory(f func(cfg *config.Config) security.Check) {
+	if f == nil {
+		return
+	}
+	checkFactories = append(checkFactories, f)
 }
 
 // GlobalFlags holds the global command flags.
