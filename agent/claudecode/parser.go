@@ -465,6 +465,9 @@ const (
 	HookBlock
 	// HookError is a non-blocking error (exit code 1, message to stderr, shown to user in verbose mode).
 	HookError
+	// HookGuidance allows the action but emits advisory text to stderr (exit code 0, stderr shown to user in verbose mode).
+	// Used when a security check returns DecisionGuidance — advisory, not blocking.
+	HookGuidance
 )
 
 // HookResponse represents a response to Claude Code hooks.
@@ -476,7 +479,7 @@ type HookResponse struct {
 }
 
 // ExitCode returns the exit code for this response.
-// Exit code 0 = allow, exit code 2 = block, exit code 1 = non-blocking error.
+// Exit code 0 = allow (or guidance), exit code 2 = block, exit code 1 = non-blocking error.
 func (r *HookResponse) ExitCode() int {
 	switch r.Decision {
 	case HookBlock:
@@ -484,16 +487,20 @@ func (r *HookResponse) ExitCode() int {
 	case HookError:
 		return 1
 	default:
+		// HookAllow and HookGuidance both exit 0 (guidance is non-blocking).
 		return 0
 	}
 }
 
-// Stderr returns the message to write to stderr (for blocking and error).
+// Stderr returns the message to write to stderr.
+// Written for HookBlock (shown to Claude), HookError (verbose mode), and HookGuidance (advisory, verbose mode).
 func (r *HookResponse) Stderr() string {
-	if r.Decision == HookBlock || r.Decision == HookError {
+	switch r.Decision {
+	case HookBlock, HookError, HookGuidance:
 		return r.Message
+	default:
+		return ""
 	}
-	return ""
 }
 
 // NewAllowResponse creates a response that allows the action.
@@ -515,6 +522,16 @@ func NewBlockResponse(message string) *HookResponse {
 func NewErrorResponse(message string) *HookResponse {
 	return &HookResponse{
 		Decision: HookError,
+		Message:  message,
+	}
+}
+
+// NewGuidanceResponse creates a non-blocking advisory response.
+// Exit code 0 (allow); message shown to user in verbose mode. Used when
+// a security check returns DecisionGuidance — advisory, not blocking.
+func NewGuidanceResponse(message string) *HookResponse {
+	return &HookResponse{
+		Decision: HookGuidance,
 		Message:  message,
 	}
 }
