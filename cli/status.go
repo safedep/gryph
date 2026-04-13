@@ -65,10 +65,10 @@ Displays the current status of the tool including:
 
 				// Database info
 				v.Database = tui.DatabaseView{
-					Location: app.Paths.DatabaseFile,
+					Location: app.Config.GetDatabasePath(),
 				}
 
-				if stat, err := os.Stat(app.Paths.DatabaseFile); err == nil {
+				if stat, err := os.Stat(app.Config.GetDatabasePath()); err == nil {
 					v.Database.SizeBytes = stat.Size()
 					v.Database.SizeHuman = tui.FormatBytes(stat.Size())
 

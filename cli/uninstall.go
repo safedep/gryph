@@ -121,14 +121,14 @@ removes the database and configuration files as well.`,
 				// Log purge before removing files
 				if err := logSelfAudit(ctx, app.Store, SelfAuditActionPurge, "",
 					map[string]interface{}{
-						"database_removed": app.Paths.DatabaseFile,
+						"database_removed": app.Config.GetDatabasePath(),
 						"config_removed":   app.Paths.ConfigFile,
 					},
 					SelfAuditResultSuccess, ""); err != nil {
 					return fmt.Errorf("failed to log self-audit: %w", err)
 				}
 
-				if err := os.Remove(app.Paths.DatabaseFile); err != nil {
+				if err := os.Remove(app.Config.GetDatabasePath()); err != nil {
 					log.Errorf("failed to remove database file: %w", err)
 				}
 
