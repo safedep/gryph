@@ -198,6 +198,34 @@ func (_c *AuditEventCreate) SetNillableIsSensitive(v *bool) *AuditEventCreate {
 	return _c
 }
 
+// SetSubagentID sets the "subagent_id" field.
+func (_c *AuditEventCreate) SetSubagentID(v string) *AuditEventCreate {
+	_c.mutation.SetSubagentID(v)
+	return _c
+}
+
+// SetNillableSubagentID sets the "subagent_id" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableSubagentID(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetSubagentID(*v)
+	}
+	return _c
+}
+
+// SetSubagentType sets the "subagent_type" field.
+func (_c *AuditEventCreate) SetSubagentType(v string) *AuditEventCreate {
+	_c.mutation.SetSubagentType(v)
+	return _c
+}
+
+// SetNillableSubagentType sets the "subagent_type" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableSubagentType(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetSubagentType(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AuditEventCreate) SetID(v uuid.UUID) *AuditEventCreate {
 	_c.mutation.SetID(v)
@@ -410,6 +438,14 @@ func (_c *AuditEventCreate) createSpec() (*AuditEvent, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.IsSensitive(); ok {
 		_spec.SetField(auditevent.FieldIsSensitive, field.TypeBool, value)
 		_node.IsSensitive = value
+	}
+	if value, ok := _c.mutation.SubagentID(); ok {
+		_spec.SetField(auditevent.FieldSubagentID, field.TypeString, value)
+		_node.SubagentID = value
+	}
+	if value, ok := _c.mutation.SubagentType(); ok {
+		_spec.SetField(auditevent.FieldSubagentType, field.TypeString, value)
+		_node.SubagentType = value
 	}
 	if nodes := _c.mutation.SessionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

@@ -116,6 +116,16 @@ func IsSensitive(v bool) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldIsSensitive, v))
 }
 
+// SubagentID applies equality check predicate on the "subagent_id" field. It's identical to SubagentIDEQ.
+func SubagentID(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldSubagentID, v))
+}
+
+// SubagentType applies equality check predicate on the "subagent_type" field. It's identical to SubagentTypeEQ.
+func SubagentType(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldSubagentType, v))
+}
+
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
 func SessionIDEQ(v uuid.UUID) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldSessionID, v))
@@ -849,6 +859,156 @@ func IsSensitiveEQ(v bool) predicate.AuditEvent {
 // IsSensitiveNEQ applies the NEQ predicate on the "is_sensitive" field.
 func IsSensitiveNEQ(v bool) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldNEQ(FieldIsSensitive, v))
+}
+
+// SubagentIDEQ applies the EQ predicate on the "subagent_id" field.
+func SubagentIDEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldSubagentID, v))
+}
+
+// SubagentIDNEQ applies the NEQ predicate on the "subagent_id" field.
+func SubagentIDNEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldSubagentID, v))
+}
+
+// SubagentIDIn applies the In predicate on the "subagent_id" field.
+func SubagentIDIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldSubagentID, vs...))
+}
+
+// SubagentIDNotIn applies the NotIn predicate on the "subagent_id" field.
+func SubagentIDNotIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldSubagentID, vs...))
+}
+
+// SubagentIDGT applies the GT predicate on the "subagent_id" field.
+func SubagentIDGT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldSubagentID, v))
+}
+
+// SubagentIDGTE applies the GTE predicate on the "subagent_id" field.
+func SubagentIDGTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldSubagentID, v))
+}
+
+// SubagentIDLT applies the LT predicate on the "subagent_id" field.
+func SubagentIDLT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldSubagentID, v))
+}
+
+// SubagentIDLTE applies the LTE predicate on the "subagent_id" field.
+func SubagentIDLTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldSubagentID, v))
+}
+
+// SubagentIDContains applies the Contains predicate on the "subagent_id" field.
+func SubagentIDContains(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContains(FieldSubagentID, v))
+}
+
+// SubagentIDHasPrefix applies the HasPrefix predicate on the "subagent_id" field.
+func SubagentIDHasPrefix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasPrefix(FieldSubagentID, v))
+}
+
+// SubagentIDHasSuffix applies the HasSuffix predicate on the "subagent_id" field.
+func SubagentIDHasSuffix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasSuffix(FieldSubagentID, v))
+}
+
+// SubagentIDIsNil applies the IsNil predicate on the "subagent_id" field.
+func SubagentIDIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldSubagentID))
+}
+
+// SubagentIDNotNil applies the NotNil predicate on the "subagent_id" field.
+func SubagentIDNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldSubagentID))
+}
+
+// SubagentIDEqualFold applies the EqualFold predicate on the "subagent_id" field.
+func SubagentIDEqualFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEqualFold(FieldSubagentID, v))
+}
+
+// SubagentIDContainsFold applies the ContainsFold predicate on the "subagent_id" field.
+func SubagentIDContainsFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContainsFold(FieldSubagentID, v))
+}
+
+// SubagentTypeEQ applies the EQ predicate on the "subagent_type" field.
+func SubagentTypeEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldSubagentType, v))
+}
+
+// SubagentTypeNEQ applies the NEQ predicate on the "subagent_type" field.
+func SubagentTypeNEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldSubagentType, v))
+}
+
+// SubagentTypeIn applies the In predicate on the "subagent_type" field.
+func SubagentTypeIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldSubagentType, vs...))
+}
+
+// SubagentTypeNotIn applies the NotIn predicate on the "subagent_type" field.
+func SubagentTypeNotIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldSubagentType, vs...))
+}
+
+// SubagentTypeGT applies the GT predicate on the "subagent_type" field.
+func SubagentTypeGT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldSubagentType, v))
+}
+
+// SubagentTypeGTE applies the GTE predicate on the "subagent_type" field.
+func SubagentTypeGTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldSubagentType, v))
+}
+
+// SubagentTypeLT applies the LT predicate on the "subagent_type" field.
+func SubagentTypeLT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldSubagentType, v))
+}
+
+// SubagentTypeLTE applies the LTE predicate on the "subagent_type" field.
+func SubagentTypeLTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldSubagentType, v))
+}
+
+// SubagentTypeContains applies the Contains predicate on the "subagent_type" field.
+func SubagentTypeContains(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContains(FieldSubagentType, v))
+}
+
+// SubagentTypeHasPrefix applies the HasPrefix predicate on the "subagent_type" field.
+func SubagentTypeHasPrefix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasPrefix(FieldSubagentType, v))
+}
+
+// SubagentTypeHasSuffix applies the HasSuffix predicate on the "subagent_type" field.
+func SubagentTypeHasSuffix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasSuffix(FieldSubagentType, v))
+}
+
+// SubagentTypeIsNil applies the IsNil predicate on the "subagent_type" field.
+func SubagentTypeIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldSubagentType))
+}
+
+// SubagentTypeNotNil applies the NotNil predicate on the "subagent_type" field.
+func SubagentTypeNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldSubagentType))
+}
+
+// SubagentTypeEqualFold applies the EqualFold predicate on the "subagent_type" field.
+func SubagentTypeEqualFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEqualFold(FieldSubagentType, v))
+}
+
+// SubagentTypeContainsFold applies the ContainsFold predicate on the "subagent_type" field.
+func SubagentTypeContainsFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContainsFold(FieldSubagentType, v))
 }
 
 // HasSession applies the HasEdge predicate on the "session" edge.

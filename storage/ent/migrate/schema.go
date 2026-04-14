@@ -17,7 +17,7 @@ var (
 		{Name: "agent_name", Type: field.TypeString},
 		{Name: "agent_version", Type: field.TypeString, Nullable: true},
 		{Name: "working_directory", Type: field.TypeString, Nullable: true},
-		{Name: "action_type", Type: field.TypeEnum, Enums: []string{"file_read", "file_write", "file_delete", "command_exec", "network_request", "tool_use", "session_start", "session_end", "notification", "unknown"}},
+		{Name: "action_type", Type: field.TypeEnum, Enums: []string{"file_read", "file_write", "file_delete", "command_exec", "network_request", "tool_use", "session_start", "session_end", "notification", "subagent_start", "subagent_stop", "unknown"}},
 		{Name: "tool_name", Type: field.TypeString, Nullable: true},
 		{Name: "result_status", Type: field.TypeEnum, Enums: []string{"success", "error", "blocked", "rejected"}, Default: "success"},
 		{Name: "error_message", Type: field.TypeString, Nullable: true},
@@ -26,6 +26,8 @@ var (
 		{Name: "raw_event", Type: field.TypeJSON, Nullable: true},
 		{Name: "conversation_context", Type: field.TypeString, Nullable: true, Size: 2147483647, SchemaType: map[string]string{"sqlite3": "text"}},
 		{Name: "is_sensitive", Type: field.TypeBool, Default: false},
+		{Name: "subagent_id", Type: field.TypeString, Nullable: true},
+		{Name: "subagent_type", Type: field.TypeString, Nullable: true},
 		{Name: "session_id", Type: field.TypeUUID},
 	}
 	// AuditEventsTable holds the schema information for the "audit_events" table.
@@ -36,7 +38,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "audit_events_sessions_events",
-				Columns:    []*schema.Column{AuditEventsColumns[16]},
+				Columns:    []*schema.Column{AuditEventsColumns[18]},
 				RefColumns: []*schema.Column{SessionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -50,7 +52,7 @@ var (
 			{
 				Name:    "auditevent_session_id",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[16]},
+				Columns: []*schema.Column{AuditEventsColumns[18]},
 			},
 			{
 				Name:    "auditevent_agent_name",
