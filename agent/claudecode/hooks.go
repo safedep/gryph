@@ -20,6 +20,8 @@ var HookTypes = []string{
 	"SessionStart",
 	"SessionEnd",
 	"Notification",
+	"SubagentStart",
+	"SubagentStop",
 }
 
 // SettingsHooks represents the hooks section in settings.json.

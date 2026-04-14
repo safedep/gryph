@@ -335,6 +335,85 @@ func TestParseHookEvent_PostToolUseResponseTypes(t *testing.T) {
 	}
 }
 
+func TestParseHookEvent_SubagentStart(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "subagent_start.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "SubagentStart", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionSubagentStart, event.ActionType)
+	assert.Equal(t, AgentName, event.AgentName)
+	assert.Equal(t, "/home/user/project", event.WorkingDirectory)
+	assert.Equal(t, "aeaa22c674a7c3c34", event.SubagentID)
+	assert.Equal(t, "Explore", event.SubagentType)
+
+	// Verify payload
+	assert.NotEmpty(t, event.Payload)
+	var payload events.SubagentStartPayload
+	require.NoError(t, json.Unmarshal(event.Payload, &payload))
+	assert.Equal(t, "aeaa22c674a7c3c34", payload.AgentID)
+	assert.Equal(t, "Explore", payload.AgentType)
+}
+
+func TestParseHookEvent_SubagentStop(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "subagent_stop.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "SubagentStop", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionSubagentStop, event.ActionType)
+	assert.Equal(t, AgentName, event.AgentName)
+	assert.Equal(t, "aeaa22c674a7c3c34", event.SubagentID)
+	assert.Equal(t, "Explore", event.SubagentType)
+
+	// Verify payload
+	assert.NotEmpty(t, event.Payload)
+	var payload events.SubagentStopPayload
+	require.NoError(t, json.Unmarshal(event.Payload, &payload))
+	assert.Equal(t, "aeaa22c674a7c3c34", payload.AgentID)
+	assert.Equal(t, "Explore", payload.AgentType)
+	assert.Contains(t, payload.AgentTranscriptPath, "subagents/agent-aeaa22c674a7c3c34.jsonl")
+	assert.Equal(t, "Done. Found 3 matching files in src/.", payload.LastAssistantMessage)
+}
+
+func TestParseHookEvent_PreToolUseBash_SubagentAttribution(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "pre_tool_use_bash_subagent.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionCommandExec, event.ActionType)
+	assert.Equal(t, "Bash", event.ToolName)
+
+	// Key assertion: subagent attribution is present
+	assert.Equal(t, "ae2409b562560f364", event.SubagentID)
+	assert.Equal(t, "Explore", event.SubagentType)
+
+	payload, err := event.GetCommandExecPayload()
+	require.NoError(t, err)
+	assert.Equal(t, "grep -r 'TODO' src/", payload.Command)
+}
+
+func TestParseHookEvent_PreToolUseBash_MainAgentNoSubagentID(t *testing.T) {
+	ctx := context.Background()
+	// Use the existing fixture which has NO agent_id field (main agent)
+	data := loadFixture(t, "pre_tool_use_bash.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	// Key assertion: main agent has empty SubagentID
+	assert.Empty(t, event.SubagentID, "Main agent should have empty SubagentID")
+	assert.Empty(t, event.SubagentType, "Main agent should have empty SubagentType")
+}
+
 func TestParseHookEvent_SessionStart(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "session_start.json")

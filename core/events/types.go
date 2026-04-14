@@ -25,6 +25,10 @@ const (
 	ActionSessionEnd ActionType = "session_end"
 	// ActionNotification indicates a notification was sent.
 	ActionNotification ActionType = "notification"
+	// ActionSubagentStart indicates a subagent was spawned.
+	ActionSubagentStart ActionType = "subagent_start"
+	// ActionSubagentStop indicates a subagent completed.
+	ActionSubagentStop ActionType = "subagent_stop"
 	// ActionUnknown indicates an unrecognized action type.
 	ActionUnknown ActionType = "unknown"
 )
@@ -42,6 +46,8 @@ var actionDisplayNames = map[ActionType]string{
 	ActionSessionStart:   "session_start",
 	ActionSessionEnd:     "session_end",
 	ActionNotification:   "notification",
+	ActionSubagentStart:  "subagent_start",
+	ActionSubagentStop:   "subagent_stop",
 	ActionUnknown:        "unknown",
 }
 

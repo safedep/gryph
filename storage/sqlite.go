@@ -136,6 +136,12 @@ func (s *SQLiteStore) SaveEvent(ctx context.Context, event *events.Event) error 
 	if event.ConversationContext != "" {
 		create.SetConversationContext(event.ConversationContext)
 	}
+	if event.SubagentID != "" {
+		create.SetSubagentID(event.SubagentID)
+	}
+	if event.SubagentType != "" {
+		create.SetSubagentType(event.SubagentType)
+	}
 
 	_, err := create.Save(ctx)
 	if err != nil {
@@ -806,6 +812,8 @@ func entToEvent(e *ent.AuditEvent) *events.Event {
 		DiffContent:         e.DiffContent,
 		ConversationContext: e.ConversationContext,
 		IsSensitive:         e.IsSensitive,
+		SubagentID:          e.SubagentID,
+		SubagentType:        e.SubagentType,
 	}
 
 	if e.DurationMs != nil {

@@ -26,6 +26,8 @@ type PreToolUseInput struct {
 	ToolName  string                 `json:"tool_name"`
 	ToolInput map[string]interface{} `json:"tool_input"`
 	ToolUseID string                 `json:"tool_use_id"`
+	AgentID   string                 `json:"agent_id,omitempty"`
+	AgentType string                 `json:"agent_type,omitempty"`
 }
 
 // PostToolUseInput represents the input for PostToolUse and PostToolUseFailure hooks.
@@ -35,6 +37,8 @@ type PostToolUseInput struct {
 	ToolInput    map[string]interface{} `json:"tool_input"`
 	ToolResponse map[string]interface{} `json:"tool_response"`
 	ToolUseID    string                 `json:"tool_use_id"`
+	AgentID      string                 `json:"agent_id,omitempty"`
+	AgentType    string                 `json:"agent_type,omitempty"`
 }
 
 // SessionStartInput represents the input for SessionStart hooks.
@@ -56,6 +60,23 @@ type NotificationInput struct {
 	HookInput
 	Message          string `json:"message"`
 	NotificationType string `json:"notification_type"`
+}
+
+// SubagentStartInput represents the input for SubagentStart hooks.
+type SubagentStartInput struct {
+	HookInput
+	AgentID   string `json:"agent_id"`
+	AgentType string `json:"agent_type"`
+}
+
+// SubagentStopInput represents the input for SubagentStop hooks.
+type SubagentStopInput struct {
+	HookInput
+	AgentID              string `json:"agent_id"`
+	AgentType            string `json:"agent_type"`
+	StopHookActive       bool   `json:"stop_hook_active"`
+	AgentTranscriptPath  string `json:"agent_transcript_path"`
+	LastAssistantMessage string `json:"last_assistant_message"`
 }
 
 // ToolNameMapping maps Claude Code tool names to action types.
@@ -118,6 +139,10 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 		event, parseErr = parseSessionEnd(sessionID, agentSessionID, baseInput, rawData)
 	case "Notification":
 		event, parseErr = parseNotification(sessionID, agentSessionID, baseInput, rawData)
+	case "SubagentStart":
+		event, parseErr = parseSubagentStart(sessionID, agentSessionID, baseInput, rawData)
+	case "SubagentStop":
+		event, parseErr = parseSubagentStop(sessionID, agentSessionID, baseInput, rawData)
 	default:
 		event = events.NewEvent(sessionID, AgentName, events.ActionUnknown)
 		event.AgentSessionID = agentSessionID
@@ -146,6 +171,8 @@ func (a *Adapter) parsePreToolUse(sessionID uuid.UUID, agentSessionID string, ba
 	event.ToolName = input.ToolName
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = rawData
+	event.SubagentID = input.AgentID
+	event.SubagentType = input.AgentType
 
 	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, nil); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
@@ -176,6 +203,8 @@ func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, b
 	event.ToolName = input.ToolName
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = origRawData
+	event.SubagentID = input.AgentID
+	event.SubagentType = input.AgentType
 
 	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, input.ToolResponse); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
@@ -277,6 +306,58 @@ func parseNotification(sessionID uuid.UUID, agentSessionID string, base HookInpu
 	payload := events.NotificationPayload{
 		Message: input.Message,
 		Type:    input.NotificationType,
+	}
+
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+
+	return event, nil
+}
+
+func parseSubagentStart(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+	var input SubagentStartInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse SubagentStart input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionSubagentStart)
+	event.AgentSessionID = agentSessionID
+	event.WorkingDirectory = input.Cwd
+	event.RawEvent = rawData
+	event.SubagentID = input.AgentID
+	event.SubagentType = input.AgentType
+
+	payload := events.SubagentStartPayload{
+		AgentID:   input.AgentID,
+		AgentType: input.AgentType,
+	}
+
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+
+	return event, nil
+}
+
+func parseSubagentStop(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {
+	var input SubagentStopInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse SubagentStop input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionSubagentStop)
+	event.AgentSessionID = agentSessionID
+	event.WorkingDirectory = input.Cwd
+	event.RawEvent = rawData
+	event.SubagentID = input.AgentID
+	event.SubagentType = input.AgentType
+
+	payload := events.SubagentStopPayload{
+		AgentID:              input.AgentID,
+		AgentType:            input.AgentType,
+		AgentTranscriptPath:  input.AgentTranscriptPath,
+		LastAssistantMessage: truncateString(input.LastAssistantMessage, 500),
 	}
 
 	if err := event.SetPayload(payload); err != nil {

@@ -1,0 +1,12 @@
+{
+  "session_id": "dfcbddda-c9e3-4ac1-821d-5a6f0b1c1db3",
+  "transcript_path": "/Users/test/.claude/projects/test-project/dfcbddda.jsonl",
+  "cwd": "/home/user/project",
+  "permission_mode": "acceptEdits",
+  "agent_id": "aeaa22c674a7c3c34",
+  "agent_type": "Explore",
+  "hook_event_name": "SubagentStop",
+  "stop_hook_active": false,
+  "agent_transcript_path": "/Users/test/.claude/projects/test-project/dfcbddda/subagents/agent-aeaa22c674a7c3c34.jsonl",
+  "last_assistant_message": "Done. Found 3 matching files in src/."
+}
