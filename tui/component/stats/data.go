@@ -163,15 +163,17 @@ func computeStats(ctx context.Context, store storage.Store, since, until *time.T
 		data.TotalCacheRead += s.CacheReadTokens
 		data.TotalCacheWrite += s.CacheWriteTokens
 
-		dur := s.Duration()
-		if dur > 0 {
-			totalDuration += dur
-			sessionCount++
-			if dur > data.LongestSession {
-				data.LongestSession = dur
-			}
-			if data.ShortestSession == 0 || dur < data.ShortestSession {
-				data.ShortestSession = dur
+		if !s.IsActive() {
+			dur := s.Duration()
+			if dur > 0 {
+				totalDuration += dur
+				sessionCount++
+				if dur > data.LongestSession {
+					data.LongestSession = dur
+				}
+				if data.ShortestSession == 0 || dur < data.ShortestSession {
+					data.ShortestSession = dur
+				}
 			}
 		}
 	}
