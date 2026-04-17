@@ -471,6 +471,7 @@ func TestHookResponse_ExitCodes(t *testing.T) {
 		{"Allow", NewAllowResponse(), 0},
 		{"Block", NewBlockResponse("blocked"), 2},
 		{"Error", NewErrorResponse("error"), 1},
+		{"Guidance", NewGuidanceResponse("advisory"), 0},
 	}
 
 	for _, tc := range testCases {
@@ -489,4 +490,7 @@ func TestHookResponse_Stderr(t *testing.T) {
 
 	errResp := NewErrorResponse("error message")
 	assert.Equal(t, "error message", errResp.Stderr())
+
+	guidance := NewGuidanceResponse("advisory note")
+	assert.Equal(t, "advisory note", guidance.Stderr())
 }

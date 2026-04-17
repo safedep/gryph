@@ -178,6 +178,9 @@ func runHook(ctx context.Context, app *App, agentName, hookType string, rawData 
 		}
 	}
 
+	if securityResult.FinalDecision == security.DecisionGuidance {
+		return sendSecurityGuidanceResponse(agentName, hookType, securityResult)
+	}
 	return sendHookResponse(agentName, hookType)
 }
 
@@ -291,6 +294,25 @@ func sendHookResponse(agentName, hookType string) error {
 	default:
 		// Unknown agent, just succeed
 		return nil
+	}
+}
+
+// sendSecurityGuidanceResponse emits advisory guidance from security checks.
+// The event itself is allowed (exit 0), but aggregated guidance text is
+// written to the agent's stderr. Modelled on sendSecurityBlockedResponse;
+// only agents whose hook packages implement a Guidance response are wired
+// up here. Other agents fall through to the normal allow path.
+func sendSecurityGuidanceResponse(agentName, hookType string, result *security.Result) error {
+	switch agentName {
+	case agent.AgentClaudeCode:
+		response := claudecode.NewGuidanceResponse(result.AggregatedGuidance())
+		return handleClaudeCodeResponse(response)
+
+	default:
+		// Other agents don't yet have a guidance wiring — fall through to
+		// the allow response (the evaluator already marked the event
+		// allowed; we simply don't surface the guidance text).
+		return sendHookResponse(agentName, hookType)
 	}
 }
 
@@ -479,6 +501,14 @@ func handleClaudeCodeResponse(response *claudecode.HookResponse) error {
 	case claudecode.HookError:
 		// Exit code 1: non-blocking error, message shown to user in verbose mode
 		return &exitError{code: 1, message: response.Message}
+
+	case claudecode.HookGuidance:
+		// Exit code 0 (allow), but aggregated guidance is written to stderr
+		// for the user. Matches the evaluator's three-valued decision model.
+		if response.Message != "" {
+			fmt.Fprintln(os.Stderr, response.Message)
+		}
+		return nil
 
 	default:
 		// Exit code 0: allow
