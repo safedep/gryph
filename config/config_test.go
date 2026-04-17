@@ -332,6 +332,58 @@ func TestResolvePaths(t *testing.T) {
 	assert.Contains(t, paths.BackupsDir, "backups")
 }
 
+func TestGetConfigDir_XDGConfigHomeHonored(t *testing.T) {
+	// XDG_CONFIG_HOME must be respected on every platform, not just Linux.
+	// Go's os.UserConfigDir honors it on Linux but returns
+	// ~/Library/Application Support on macOS and %AppData% on Windows,
+	// so this behaviour has to be explicit in gryph.
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	got := getConfigDir()
+	assert.Equal(t, filepath.Join(tmpDir, "gryph"), got)
+}
+
+func TestGetConfigDir_PrefersExistingXDGConfigDir(t *testing.T) {
+	// When XDG_CONFIG_HOME is unset but the user has opted into the XDG
+	// layout by creating ~/.config/gryph, prefer that over the platform
+	// default (macOS: ~/Library/Application Support, Windows: %AppData%).
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	xdgConfig := filepath.Join(tmpHome, ".config", "gryph")
+	require.NoError(t, os.MkdirAll(xdgConfig, 0o700))
+
+	got := getConfigDir()
+	assert.Equal(t, xdgConfig, got)
+}
+
+func TestGetDataDir_XDGDataHomeHonored(t *testing.T) {
+	// Same rationale as XDG_CONFIG_HOME: the previous implementation only
+	// consulted XDG_DATA_HOME on Linux. Respect it on macOS and Windows too.
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+
+	got := getDataDir()
+	assert.Equal(t, filepath.Join(tmpDir, "gryph"), got)
+}
+
+func TestGetDataDir_PrefersExistingXDGDataDir(t *testing.T) {
+	// Without XDG_DATA_HOME, if ~/.local/share/gryph already exists the
+	// user has opted into the XDG layout and we return that path on every
+	// platform. Without the directory, platform defaults still apply.
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("XDG_DATA_HOME", "")
+
+	xdgData := filepath.Join(tmpHome, ".local", "share", "gryph")
+	require.NoError(t, os.MkdirAll(xdgData, 0o700))
+
+	got := getDataDir()
+	assert.Equal(t, xdgData, got)
+}
+
 func TestEnsureDirectories(t *testing.T) {
 	tmpDir := t.TempDir()
 

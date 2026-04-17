@@ -73,7 +73,7 @@ to enable audit logging. Existing hooks are backed up by default.`,
 
 			view, err := tui.RunWithSpinner(spinnerMsg, func() (*tui.InstallView, error) {
 				v := &tui.InstallView{
-					Database: app.Paths.DatabaseFile,
+					Database: app.Config.GetDatabasePath(),
 					Config:   app.Paths.ConfigFile,
 				}
 

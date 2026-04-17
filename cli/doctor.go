@@ -44,7 +44,7 @@ Performs various health checks:
 					Name:        "Database file",
 					Description: "Check if database file exists and is accessible",
 				}
-				if _, err := os.Stat(app.Paths.DatabaseFile); os.IsNotExist(err) {
+				if _, err := os.Stat(app.Config.GetDatabasePath()); os.IsNotExist(err) {
 					dbCheck.Status = tui.CheckFail
 					dbCheck.Message = "Database file not found"
 					dbCheck.Suggestion = "Run 'gryph install' to initialize"
@@ -55,7 +55,7 @@ Performs various health checks:
 					v.AllOK = false
 				} else {
 					dbCheck.Status = tui.CheckOK
-					dbCheck.Message = app.Paths.DatabaseFile
+					dbCheck.Message = app.Config.GetDatabasePath()
 				}
 				v.Checks = append(v.Checks, dbCheck)
 
