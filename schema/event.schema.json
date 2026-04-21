@@ -23,6 +23,8 @@
         "session_start",
         "session_end",
         "notification",
+        "subagent_start",
+        "subagent_stop",
         "unknown"
       ]
     },
@@ -96,6 +98,12 @@
     "session_id": {
       "type": "string",
       "format": "uuid"
+    },
+    "subagent_id": {
+      "type": "string"
+    },
+    "subagent_type": {
+      "type": "string"
     },
     "timestamp": {
       "type": "string",
@@ -271,6 +279,44 @@
           "type": "string"
         }
       }
+    },
+    "subagent_start_payload": {
+      "type": "object",
+      "description": "Payload for subagent start actions.",
+      "properties": {
+        "agent_id": {
+          "type": "string"
+        },
+        "agent_type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_id",
+        "agent_type"
+      ]
+    },
+    "subagent_stop_payload": {
+      "type": "object",
+      "description": "Payload for subagent stop actions.",
+      "properties": {
+        "agent_id": {
+          "type": "string"
+        },
+        "agent_transcript_path": {
+          "type": "string"
+        },
+        "agent_type": {
+          "type": "string"
+        },
+        "last_assistant_message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_id",
+        "agent_type"
+      ]
     },
     "tool_use_payload": {
       "type": "object",

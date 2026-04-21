@@ -175,6 +175,8 @@ func actionTypeValues() []string {
 		string(events.ActionSessionStart),
 		string(events.ActionSessionEnd),
 		string(events.ActionNotification),
+		string(events.ActionSubagentStart),
+		string(events.ActionSubagentStop),
 		string(events.ActionUnknown),
 	}
 }
@@ -220,6 +222,14 @@ func addPayloadDefinitions(defs map[string]definition) {
 	defs["notification_payload"] = structToDefinition(
 		reflect.TypeOf(events.NotificationPayload{}),
 		"Payload for notification actions.",
+	)
+	defs["subagent_start_payload"] = structToDefinition(
+		reflect.TypeOf(events.SubagentStartPayload{}),
+		"Payload for subagent start actions.",
+	)
+	defs["subagent_stop_payload"] = structToDefinition(
+		reflect.TypeOf(events.SubagentStopPayload{}),
+		"Payload for subagent stop actions.",
 	)
 }
 

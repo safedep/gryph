@@ -291,6 +291,46 @@ func (_u *AuditEventUpdate) SetNillableIsSensitive(v *bool) *AuditEventUpdate {
 	return _u
 }
 
+// SetSubagentID sets the "subagent_id" field.
+func (_u *AuditEventUpdate) SetSubagentID(v string) *AuditEventUpdate {
+	_u.mutation.SetSubagentID(v)
+	return _u
+}
+
+// SetNillableSubagentID sets the "subagent_id" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillableSubagentID(v *string) *AuditEventUpdate {
+	if v != nil {
+		_u.SetSubagentID(*v)
+	}
+	return _u
+}
+
+// ClearSubagentID clears the value of the "subagent_id" field.
+func (_u *AuditEventUpdate) ClearSubagentID() *AuditEventUpdate {
+	_u.mutation.ClearSubagentID()
+	return _u
+}
+
+// SetSubagentType sets the "subagent_type" field.
+func (_u *AuditEventUpdate) SetSubagentType(v string) *AuditEventUpdate {
+	_u.mutation.SetSubagentType(v)
+	return _u
+}
+
+// SetNillableSubagentType sets the "subagent_type" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillableSubagentType(v *string) *AuditEventUpdate {
+	if v != nil {
+		_u.SetSubagentType(*v)
+	}
+	return _u
+}
+
+// ClearSubagentType clears the value of the "subagent_type" field.
+func (_u *AuditEventUpdate) ClearSubagentType() *AuditEventUpdate {
+	_u.mutation.ClearSubagentType()
+	return _u
+}
+
 // SetSession sets the "session" edge to the Session entity.
 func (_u *AuditEventUpdate) SetSession(v *Session) *AuditEventUpdate {
 	return _u.SetSessionID(v.ID)
@@ -448,6 +488,18 @@ func (_u *AuditEventUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if value, ok := _u.mutation.IsSensitive(); ok {
 		_spec.SetField(auditevent.FieldIsSensitive, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.SubagentID(); ok {
+		_spec.SetField(auditevent.FieldSubagentID, field.TypeString, value)
+	}
+	if _u.mutation.SubagentIDCleared() {
+		_spec.ClearField(auditevent.FieldSubagentID, field.TypeString)
+	}
+	if value, ok := _u.mutation.SubagentType(); ok {
+		_spec.SetField(auditevent.FieldSubagentType, field.TypeString, value)
+	}
+	if _u.mutation.SubagentTypeCleared() {
+		_spec.ClearField(auditevent.FieldSubagentType, field.TypeString)
 	}
 	if _u.mutation.SessionCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -760,6 +812,46 @@ func (_u *AuditEventUpdateOne) SetNillableIsSensitive(v *bool) *AuditEventUpdate
 	return _u
 }
 
+// SetSubagentID sets the "subagent_id" field.
+func (_u *AuditEventUpdateOne) SetSubagentID(v string) *AuditEventUpdateOne {
+	_u.mutation.SetSubagentID(v)
+	return _u
+}
+
+// SetNillableSubagentID sets the "subagent_id" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillableSubagentID(v *string) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetSubagentID(*v)
+	}
+	return _u
+}
+
+// ClearSubagentID clears the value of the "subagent_id" field.
+func (_u *AuditEventUpdateOne) ClearSubagentID() *AuditEventUpdateOne {
+	_u.mutation.ClearSubagentID()
+	return _u
+}
+
+// SetSubagentType sets the "subagent_type" field.
+func (_u *AuditEventUpdateOne) SetSubagentType(v string) *AuditEventUpdateOne {
+	_u.mutation.SetSubagentType(v)
+	return _u
+}
+
+// SetNillableSubagentType sets the "subagent_type" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillableSubagentType(v *string) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetSubagentType(*v)
+	}
+	return _u
+}
+
+// ClearSubagentType clears the value of the "subagent_type" field.
+func (_u *AuditEventUpdateOne) ClearSubagentType() *AuditEventUpdateOne {
+	_u.mutation.ClearSubagentType()
+	return _u
+}
+
 // SetSession sets the "session" edge to the Session entity.
 func (_u *AuditEventUpdateOne) SetSession(v *Session) *AuditEventUpdateOne {
 	return _u.SetSessionID(v.ID)
@@ -947,6 +1039,18 @@ func (_u *AuditEventUpdateOne) sqlSave(ctx context.Context) (_node *AuditEvent, 
 	}
 	if value, ok := _u.mutation.IsSensitive(); ok {
 		_spec.SetField(auditevent.FieldIsSensitive, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.SubagentID(); ok {
+		_spec.SetField(auditevent.FieldSubagentID, field.TypeString, value)
+	}
+	if _u.mutation.SubagentIDCleared() {
+		_spec.ClearField(auditevent.FieldSubagentID, field.TypeString)
+	}
+	if value, ok := _u.mutation.SubagentType(); ok {
+		_spec.SetField(auditevent.FieldSubagentType, field.TypeString, value)
+	}
+	if _u.mutation.SubagentTypeCleared() {
+		_spec.ClearField(auditevent.FieldSubagentType, field.TypeString)
 	}
 	if _u.mutation.SessionCleared() {
 		edge := &sqlgraph.EdgeSpec{

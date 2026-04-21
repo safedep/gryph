@@ -59,6 +59,8 @@ type AuditEventMutation struct {
 	raw_event            *map[string]interface{}
 	conversation_context *string
 	is_sensitive         *bool
+	subagent_id          *string
+	subagent_type        *string
 	clearedFields        map[string]struct{}
 	session              *uuid.UUID
 	clearedsession       bool
@@ -905,6 +907,104 @@ func (m *AuditEventMutation) ResetIsSensitive() {
 	m.is_sensitive = nil
 }
 
+// SetSubagentID sets the "subagent_id" field.
+func (m *AuditEventMutation) SetSubagentID(s string) {
+	m.subagent_id = &s
+}
+
+// SubagentID returns the value of the "subagent_id" field in the mutation.
+func (m *AuditEventMutation) SubagentID() (r string, exists bool) {
+	v := m.subagent_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubagentID returns the old "subagent_id" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldSubagentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubagentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubagentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubagentID: %w", err)
+	}
+	return oldValue.SubagentID, nil
+}
+
+// ClearSubagentID clears the value of the "subagent_id" field.
+func (m *AuditEventMutation) ClearSubagentID() {
+	m.subagent_id = nil
+	m.clearedFields[auditevent.FieldSubagentID] = struct{}{}
+}
+
+// SubagentIDCleared returns if the "subagent_id" field was cleared in this mutation.
+func (m *AuditEventMutation) SubagentIDCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldSubagentID]
+	return ok
+}
+
+// ResetSubagentID resets all changes to the "subagent_id" field.
+func (m *AuditEventMutation) ResetSubagentID() {
+	m.subagent_id = nil
+	delete(m.clearedFields, auditevent.FieldSubagentID)
+}
+
+// SetSubagentType sets the "subagent_type" field.
+func (m *AuditEventMutation) SetSubagentType(s string) {
+	m.subagent_type = &s
+}
+
+// SubagentType returns the value of the "subagent_type" field in the mutation.
+func (m *AuditEventMutation) SubagentType() (r string, exists bool) {
+	v := m.subagent_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubagentType returns the old "subagent_type" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldSubagentType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubagentType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubagentType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubagentType: %w", err)
+	}
+	return oldValue.SubagentType, nil
+}
+
+// ClearSubagentType clears the value of the "subagent_type" field.
+func (m *AuditEventMutation) ClearSubagentType() {
+	m.subagent_type = nil
+	m.clearedFields[auditevent.FieldSubagentType] = struct{}{}
+}
+
+// SubagentTypeCleared returns if the "subagent_type" field was cleared in this mutation.
+func (m *AuditEventMutation) SubagentTypeCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldSubagentType]
+	return ok
+}
+
+// ResetSubagentType resets all changes to the "subagent_type" field.
+func (m *AuditEventMutation) ResetSubagentType() {
+	m.subagent_type = nil
+	delete(m.clearedFields, auditevent.FieldSubagentType)
+}
+
 // ClearSession clears the "session" edge to the Session entity.
 func (m *AuditEventMutation) ClearSession() {
 	m.clearedsession = true
@@ -966,7 +1066,7 @@ func (m *AuditEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuditEventMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 18)
 	if m.session != nil {
 		fields = append(fields, auditevent.FieldSessionID)
 	}
@@ -1015,6 +1115,12 @@ func (m *AuditEventMutation) Fields() []string {
 	if m.is_sensitive != nil {
 		fields = append(fields, auditevent.FieldIsSensitive)
 	}
+	if m.subagent_id != nil {
+		fields = append(fields, auditevent.FieldSubagentID)
+	}
+	if m.subagent_type != nil {
+		fields = append(fields, auditevent.FieldSubagentType)
+	}
 	return fields
 }
 
@@ -1055,6 +1161,10 @@ func (m *AuditEventMutation) Field(name string) (ent.Value, bool) {
 		return m.ConversationContext()
 	case auditevent.FieldIsSensitive:
 		return m.IsSensitive()
+	case auditevent.FieldSubagentID:
+		return m.SubagentID()
+	case auditevent.FieldSubagentType:
+		return m.SubagentType()
 	}
 	return nil, false
 }
@@ -1096,6 +1206,10 @@ func (m *AuditEventMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldConversationContext(ctx)
 	case auditevent.FieldIsSensitive:
 		return m.OldIsSensitive(ctx)
+	case auditevent.FieldSubagentID:
+		return m.OldSubagentID(ctx)
+	case auditevent.FieldSubagentType:
+		return m.OldSubagentType(ctx)
 	}
 	return nil, fmt.Errorf("unknown AuditEvent field %s", name)
 }
@@ -1217,6 +1331,20 @@ func (m *AuditEventMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetIsSensitive(v)
 		return nil
+	case auditevent.FieldSubagentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubagentID(v)
+		return nil
+	case auditevent.FieldSubagentType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubagentType(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent field %s", name)
 }
@@ -1301,6 +1429,12 @@ func (m *AuditEventMutation) ClearedFields() []string {
 	if m.FieldCleared(auditevent.FieldConversationContext) {
 		fields = append(fields, auditevent.FieldConversationContext)
 	}
+	if m.FieldCleared(auditevent.FieldSubagentID) {
+		fields = append(fields, auditevent.FieldSubagentID)
+	}
+	if m.FieldCleared(auditevent.FieldSubagentType) {
+		fields = append(fields, auditevent.FieldSubagentType)
+	}
 	return fields
 }
 
@@ -1341,6 +1475,12 @@ func (m *AuditEventMutation) ClearField(name string) error {
 		return nil
 	case auditevent.FieldConversationContext:
 		m.ClearConversationContext()
+		return nil
+	case auditevent.FieldSubagentID:
+		m.ClearSubagentID()
+		return nil
+	case auditevent.FieldSubagentType:
+		m.ClearSubagentType()
 		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent nullable field %s", name)
@@ -1397,6 +1537,12 @@ func (m *AuditEventMutation) ResetField(name string) error {
 		return nil
 	case auditevent.FieldIsSensitive:
 		m.ResetIsSensitive()
+		return nil
+	case auditevent.FieldSubagentID:
+		m.ResetSubagentID()
+		return nil
+	case auditevent.FieldSubagentType:
+		m.ResetSubagentType()
 		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent field %s", name)

@@ -51,6 +51,10 @@ type Event struct {
 	TranscriptPath string `json:"-"`
 	// IsSensitive is true if path matched sensitive_paths pattern.
 	IsSensitive bool `json:"is_sensitive"`
+	// SubagentID is set when this event was performed by a subagent (empty for main agent).
+	SubagentID string `json:"subagent_id,omitempty"`
+	// SubagentType is the type of subagent (e.g., "Explore", "Plan", "general-purpose").
+	SubagentType string `json:"subagent_type,omitempty"`
 }
 
 // NewEvent creates a new Event with a generated UUID and current timestamp.
@@ -137,6 +141,20 @@ type NotificationPayload struct {
 	Message string          `json:"message,omitempty"`
 	Type    string          `json:"type,omitempty"`
 	Details json.RawMessage `json:"details,omitempty"`
+}
+
+// SubagentStartPayload represents the payload for subagent_start actions.
+type SubagentStartPayload struct {
+	AgentID   string `json:"agent_id"`
+	AgentType string `json:"agent_type"`
+}
+
+// SubagentStopPayload represents the payload for subagent_stop actions.
+type SubagentStopPayload struct {
+	AgentID              string `json:"agent_id"`
+	AgentType            string `json:"agent_type"`
+	AgentTranscriptPath  string `json:"agent_transcript_path,omitempty"`
+	LastAssistantMessage string `json:"last_assistant_message,omitempty"`
 }
 
 // toolUseDisplayFields lists Input keys checked in priority order by DisplayTarget.

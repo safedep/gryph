@@ -361,7 +361,9 @@ func TestActionType_IsValid(t *testing.T) {
 	validTypes := []ActionType{
 		ActionFileRead, ActionFileWrite, ActionFileDelete,
 		ActionCommandExec, ActionNetworkRequest, ActionToolUse,
-		ActionSessionStart, ActionSessionEnd, ActionNotification, ActionUnknown,
+		ActionSessionStart, ActionSessionEnd, ActionNotification,
+		ActionSubagentStart, ActionSubagentStop,
+		ActionUnknown,
 	}
 
 	for _, at := range validTypes {
@@ -389,6 +391,8 @@ func TestActionType_DisplayName(t *testing.T) {
 		{ActionSessionStart, "session_start"},
 		{ActionSessionEnd, "session_end"},
 		{ActionNotification, "notification"},
+		{ActionSubagentStart, "subagent_start"},
+		{ActionSubagentStop, "subagent_stop"},
 		{ActionUnknown, "unknown"},
 	}
 
@@ -405,7 +409,9 @@ func TestActionType_DisplayName_AllActionsCovered(t *testing.T) {
 	allActions := []ActionType{
 		ActionFileRead, ActionFileWrite, ActionFileDelete,
 		ActionCommandExec, ActionNetworkRequest, ActionToolUse,
-		ActionSessionStart, ActionSessionEnd, ActionNotification, ActionUnknown,
+		ActionSessionStart, ActionSessionEnd, ActionNotification,
+		ActionSubagentStart, ActionSubagentStop,
+		ActionUnknown,
 	}
 
 	for _, at := range allActions {
@@ -436,6 +442,8 @@ func TestParseActionType(t *testing.T) {
 		{"full name session_start", "session_start", ActionSessionStart, false},
 		{"full name session_end", "session_end", ActionSessionEnd, false},
 		{"full name notification", "notification", ActionNotification, false},
+		{"full name subagent_start", "subagent_start", ActionSubagentStart, false},
+		{"full name subagent_stop", "subagent_stop", ActionSubagentStop, false},
 		{"full name unknown", "unknown", ActionUnknown, false},
 		{"display name read", "read", ActionFileRead, false},
 		{"display name write", "write", ActionFileWrite, false},

@@ -52,6 +52,10 @@ type AuditEvent struct {
 	ConversationContext string `json:"conversation_context,omitempty"`
 	// IsSensitive holds the value of the "is_sensitive" field.
 	IsSensitive bool `json:"is_sensitive,omitempty"`
+	// ID of the subagent that performed this action (empty for main agent)
+	SubagentID string `json:"subagent_id,omitempty"`
+	// Type of the subagent (e.g., Explore, Plan, general-purpose)
+	SubagentType string `json:"subagent_type,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the AuditEventQuery when eager-loading is set.
 	Edges        AuditEventEdges `json:"edges"`
@@ -89,7 +93,7 @@ func (*AuditEvent) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case auditevent.FieldSequence, auditevent.FieldDurationMs:
 			values[i] = new(sql.NullInt64)
-		case auditevent.FieldAgentName, auditevent.FieldAgentVersion, auditevent.FieldWorkingDirectory, auditevent.FieldActionType, auditevent.FieldToolName, auditevent.FieldResultStatus, auditevent.FieldErrorMessage, auditevent.FieldDiffContent, auditevent.FieldConversationContext:
+		case auditevent.FieldAgentName, auditevent.FieldAgentVersion, auditevent.FieldWorkingDirectory, auditevent.FieldActionType, auditevent.FieldToolName, auditevent.FieldResultStatus, auditevent.FieldErrorMessage, auditevent.FieldDiffContent, auditevent.FieldConversationContext, auditevent.FieldSubagentID, auditevent.FieldSubagentType:
 			values[i] = new(sql.NullString)
 		case auditevent.FieldTimestamp:
 			values[i] = new(sql.NullTime)
@@ -217,6 +221,18 @@ func (_m *AuditEvent) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.IsSensitive = value.Bool
 			}
+		case auditevent.FieldSubagentID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field subagent_id", values[i])
+			} else if value.Valid {
+				_m.SubagentID = value.String
+			}
+		case auditevent.FieldSubagentType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field subagent_type", values[i])
+			} else if value.Valid {
+				_m.SubagentType = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -307,6 +323,12 @@ func (_m *AuditEvent) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("is_sensitive=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsSensitive))
+	builder.WriteString(", ")
+	builder.WriteString("subagent_id=")
+	builder.WriteString(_m.SubagentID)
+	builder.WriteString(", ")
+	builder.WriteString("subagent_type=")
+	builder.WriteString(_m.SubagentType)
 	builder.WriteByte(')')
 	return builder.String()
 }

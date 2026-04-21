@@ -48,6 +48,10 @@ const (
 	FieldConversationContext = "conversation_context"
 	// FieldIsSensitive holds the string denoting the is_sensitive field in the database.
 	FieldIsSensitive = "is_sensitive"
+	// FieldSubagentID holds the string denoting the subagent_id field in the database.
+	FieldSubagentID = "subagent_id"
+	// FieldSubagentType holds the string denoting the subagent_type field in the database.
+	FieldSubagentType = "subagent_type"
 	// EdgeSession holds the string denoting the session edge name in mutations.
 	EdgeSession = "session"
 	// Table holds the table name of the auditevent in the database.
@@ -80,6 +84,8 @@ var Columns = []string{
 	FieldRawEvent,
 	FieldConversationContext,
 	FieldIsSensitive,
+	FieldSubagentID,
+	FieldSubagentType,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -119,6 +125,8 @@ const (
 	ActionTypeSessionStart   ActionType = "session_start"
 	ActionTypeSessionEnd     ActionType = "session_end"
 	ActionTypeNotification   ActionType = "notification"
+	ActionTypeSubagentStart  ActionType = "subagent_start"
+	ActionTypeSubagentStop   ActionType = "subagent_stop"
 	ActionTypeUnknown        ActionType = "unknown"
 )
 
@@ -129,7 +137,7 @@ func (at ActionType) String() string {
 // ActionTypeValidator is a validator for the "action_type" field enum values. It is called by the builders before save.
 func ActionTypeValidator(at ActionType) error {
 	switch at {
-	case ActionTypeFileRead, ActionTypeFileWrite, ActionTypeFileDelete, ActionTypeCommandExec, ActionTypeNetworkRequest, ActionTypeToolUse, ActionTypeSessionStart, ActionTypeSessionEnd, ActionTypeNotification, ActionTypeUnknown:
+	case ActionTypeFileRead, ActionTypeFileWrite, ActionTypeFileDelete, ActionTypeCommandExec, ActionTypeNetworkRequest, ActionTypeToolUse, ActionTypeSessionStart, ActionTypeSessionEnd, ActionTypeNotification, ActionTypeSubagentStart, ActionTypeSubagentStop, ActionTypeUnknown:
 		return nil
 	default:
 		return fmt.Errorf("auditevent: invalid enum value for action_type field: %q", at)
@@ -240,6 +248,16 @@ func ByConversationContext(opts ...sql.OrderTermOption) OrderOption {
 // ByIsSensitive orders the results by the is_sensitive field.
 func ByIsSensitive(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsSensitive, opts...).ToFunc()
+}
+
+// BySubagentID orders the results by the subagent_id field.
+func BySubagentID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubagentID, opts...).ToFunc()
+}
+
+// BySubagentType orders the results by the subagent_type field.
+func BySubagentType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubagentType, opts...).ToFunc()
 }
 
 // BySessionField orders the results by session field.

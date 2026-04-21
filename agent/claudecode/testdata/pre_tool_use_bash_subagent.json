@@ -1,0 +1,14 @@
+{
+  "session_id": "dfcbddda-c9e3-4ac1-821d-5a6f0b1c1db3",
+  "transcript_path": "/Users/test/.claude/projects/test-project/dfcbddda.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_use_id": "toolu_01JuMhbMZFZvQyMBos3QozHF",
+  "tool_input": {
+    "command": "grep -r 'TODO' src/",
+    "description": "Search for TODO comments"
+  },
+  "agent_id": "ae2409b562560f364",
+  "agent_type": "Explore"
+}
