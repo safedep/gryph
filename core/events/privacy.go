@@ -88,6 +88,7 @@ func (p *PrivacyChecker) Redact(content string) string {
 	return result
 }
 
+
 // matchGlob performs a simple glob pattern match.
 // Supports ** for any path segment and * for any characters within a segment.
 func matchGlob(pattern, path string) bool {
