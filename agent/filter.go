@@ -1,31 +1,37 @@
 package agent
 
 import (
-	"encoding/json"
-
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 )
 
-// ApplyLoggingLevel strips fields from the event based on the configured logging level.
-// Must be called after parsing and before saving.
+// ApplyLoggingLevel strips fields from the event based on the configured
+// logging level. Must be called after parsing and before saving. Sensitive
+// events have their content stripped unconditionally regardless of level.
 func ApplyLoggingLevel(event *events.Event, level config.LoggingLevel) {
+	if event.IsSensitive {
+		event.RawEvent = nil
+		event.DiffContent = ""
+		event.ConversationContext = ""
+
+		stripPayloadContent(event)
+		return
+	}
+
 	switch {
-	case level.IsAtLeast(config.LoggingFull) && !event.IsSensitive:
-		// Keep everything
+	case level.IsAtLeast(config.LoggingFull):
 		return
 
 	case level.IsAtLeast(config.LoggingStandard):
-		// Standard: keep payload content previews, strip raw/diff/context
 		event.RawEvent = nil
 		event.DiffContent = ""
 		event.ConversationContext = ""
 
 	default:
-		// Minimal: strip raw/diff/context and content fields from payloads
 		event.RawEvent = nil
 		event.DiffContent = ""
 		event.ConversationContext = ""
+
 		stripPayloadContent(event)
 	}
 }
@@ -38,41 +44,26 @@ func stripPayloadContent(event *events.Event) {
 
 	switch event.ActionType {
 	case events.ActionFileWrite:
-		var payload events.FileWritePayload
-		if err := json.Unmarshal(event.Payload, &payload); err != nil {
-			return
-		}
-		payload.ContentPreview = ""
-		payload.OldString = ""
-		payload.NewString = ""
-		payload.LinesAdded = 0
-		payload.LinesRemoved = 0
-		if data, err := json.Marshal(payload); err == nil {
-			event.Payload = data
-		}
+		mutatePayload(event, func(p *events.FileWritePayload) {
+			p.ContentPreview = ""
+			p.OldString = ""
+			p.NewString = ""
+			p.LinesAdded = 0
+			p.LinesRemoved = 0
+		})
 
 	case events.ActionCommandExec:
-		var payload events.CommandExecPayload
-		if err := json.Unmarshal(event.Payload, &payload); err != nil {
-			return
-		}
-		payload.Output = ""
-		payload.StdoutPreview = ""
-		payload.StderrPreview = ""
-		if data, err := json.Marshal(payload); err == nil {
-			event.Payload = data
-		}
+		mutatePayload(event, func(p *events.CommandExecPayload) {
+			p.Output = ""
+			p.StdoutPreview = ""
+			p.StderrPreview = ""
+		})
 
 	case events.ActionToolUse:
-		var payload events.ToolUsePayload
-		if err := json.Unmarshal(event.Payload, &payload); err != nil {
-			return
-		}
-		payload.Input = nil
-		payload.Output = nil
-		payload.OutputPreview = ""
-		if data, err := json.Marshal(payload); err == nil {
-			event.Payload = data
-		}
+		mutatePayload(event, func(p *events.ToolUsePayload) {
+			p.Input = nil
+			p.Output = nil
+			p.OutputPreview = ""
+		})
 	}
 }
