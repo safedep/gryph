@@ -28,6 +28,7 @@ func TestRedactEvent_FileWrite(t *testing.T) {
 
 	RedactEvent(event, checker)
 
+	assert.True(t, json.Valid(event.RawEvent), "RawEvent must remain valid JSON after redaction")
 	assert.Contains(t, string(event.RawEvent), "[REDACTED]")
 	assert.NotContains(t, string(event.RawEvent), "hunter2")
 	assert.Contains(t, event.DiffContent, "[REDACTED]")
@@ -81,8 +82,10 @@ func TestRedactEvent_ToolUse(t *testing.T) {
 
 	var result events.ToolUsePayload
 	require.NoError(t, json.Unmarshal(event.Payload, &result))
-	assert.JSONEq(t, `{"q":"password=hunter2"}`, string(result.Input))
-	assert.JSONEq(t, `{"got":"token=xyz"}`, string(result.Output))
+	assert.True(t, json.Valid(result.Input), "Input must remain valid JSON")
+	assert.True(t, json.Valid(result.Output), "Output must remain valid JSON")
+	assert.JSONEq(t, `{"q":"[REDACTED]"}`, string(result.Input))
+	assert.JSONEq(t, `{"got":"[REDACTED]"}`, string(result.Output))
 	assert.Equal(t, "[REDACTED]", result.OutputPreview)
 }
 

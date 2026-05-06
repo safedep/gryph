@@ -1,8 +1,6 @@
 package agent
 
 import (
-	"encoding/json"
-
 	"github.com/safedep/gryph/core/events"
 )
 
@@ -16,7 +14,7 @@ func RedactEvent(event *events.Event, checker *events.PrivacyChecker) {
 	}
 
 	if len(event.RawEvent) > 0 {
-		event.RawEvent = json.RawMessage(checker.Redact(string(event.RawEvent)))
+		event.RawEvent = checker.RedactJSON(event.RawEvent)
 	}
 
 	event.DiffContent = checker.Redact(event.DiffContent)
@@ -43,10 +41,9 @@ func RedactEvent(event *events.Event, checker *events.PrivacyChecker) {
 		})
 
 	case events.ActionToolUse:
-		// Input/Output are arbitrary JSON; redacting their bytes as a flat
-		// string can break structure. The level filter strips them at minimal;
-		// a deeper walker can be added later if needed.
 		mutatePayload(event, func(p *events.ToolUsePayload) {
+			p.Input = checker.RedactJSON(p.Input)
+			p.Output = checker.RedactJSON(p.Output)
 			p.OutputPreview = checker.Redact(p.OutputPreview)
 		})
 	}
