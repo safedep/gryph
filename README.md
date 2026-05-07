@@ -241,8 +241,8 @@ gryph config reset                      # Reset to defaults
 
 **Logging levels:**
 
-- `minimal` : Action type, file path, timestamp (default)
-- `standard` : Adds diff stats, exit codes, truncated output
+- `minimal` : Action type, file path, timestamp
+- `standard` : Adds diff stats, exit codes, truncated output (default)
 - `full` : Adds file diffs, raw events, conversation context
 
 Sensitive files (`.env`, `*.pem`, `*secret*`, etc.) are detected automatically. Actions on these files are logged but content is never stored.

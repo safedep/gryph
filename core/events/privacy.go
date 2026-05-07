@@ -1,6 +1,7 @@
 package events
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -87,6 +88,50 @@ func (p *PrivacyChecker) Redact(content string) string {
 
 	return result
 }
+
+// RedactJSON applies redaction to string values inside a JSON document while
+// preserving its structure. Greedy patterns like \S+ would otherwise consume
+// JSON delimiters and produce invalid JSON if Redact were applied to the raw
+// bytes. If the input is not valid JSON, falls back to byte-level string
+// redaction.
+func (p *PrivacyChecker) RedactJSON(content []byte) []byte {
+	if len(content) == 0 {
+		return content
+	}
+
+	var v any
+	if err := json.Unmarshal(content, &v); err != nil {
+		return []byte(p.Redact(string(content)))
+	}
+
+	v = p.redactValue(v)
+	out, err := json.Marshal(v)
+	if err != nil {
+		return []byte(p.Redact(string(content)))
+	}
+
+	return out
+}
+
+func (p *PrivacyChecker) redactValue(v any) any {
+	switch t := v.(type) {
+	case string:
+		return p.Redact(t)
+	case map[string]any:
+		for k, val := range t {
+			t[k] = p.redactValue(val)
+		}
+		return t
+	case []any:
+		for i, val := range t {
+			t[i] = p.redactValue(val)
+		}
+		return t
+	default:
+		return v
+	}
+}
+
 
 // matchGlob performs a simple glob pattern match.
 // Supports ** for any path segment and * for any characters within a segment.

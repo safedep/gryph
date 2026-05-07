@@ -64,7 +64,36 @@ func TestApplyLoggingLevel_Full_Sensitive(t *testing.T) {
 
 	var result events.FileWritePayload
 	require.NoError(t, json.Unmarshal(event.Payload, &result))
-	assert.Equal(t, "SECRET=xxx", result.ContentPreview)
+	assert.Equal(t, "/tmp/.env", result.Path)
+	assert.Empty(t, result.ContentPreview)
+	assert.Empty(t, result.OldString)
+	assert.Empty(t, result.NewString)
+}
+
+func TestApplyLoggingLevel_Standard_Sensitive(t *testing.T) {
+	event := newTestEvent(events.ActionFileWrite)
+	event.IsSensitive = true
+
+	payload := events.FileWritePayload{
+		Path:           "/tmp/.env",
+		ContentPreview: "SECRET=xxx",
+		OldString:      "old",
+		NewString:      "new",
+	}
+	require.NoError(t, event.SetPayload(payload))
+
+	ApplyLoggingLevel(event, config.LoggingStandard)
+
+	assert.Nil(t, event.RawEvent)
+	assert.Empty(t, event.DiffContent)
+	assert.Empty(t, event.ConversationContext)
+
+	var result events.FileWritePayload
+	require.NoError(t, json.Unmarshal(event.Payload, &result))
+	assert.Equal(t, "/tmp/.env", result.Path)
+	assert.Empty(t, result.ContentPreview)
+	assert.Empty(t, result.OldString)
+	assert.Empty(t, result.NewString)
 }
 
 func TestApplyLoggingLevel_Standard(t *testing.T) {

@@ -10,7 +10,6 @@ import (
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
-	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/codex"
 	"github.com/safedep/gryph/agent/cursor"
@@ -19,6 +18,7 @@ import (
 	"github.com/safedep/gryph/agent/opencode"
 	"github.com/safedep/gryph/agent/piagent"
 	"github.com/safedep/gryph/agent/windsurf"
+	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
@@ -83,8 +83,10 @@ func runHook(ctx context.Context, app *App, agentName, hookType string, rawData 
 		return fmt.Errorf("failed to parse event: %w", err)
 	}
 
-	loggingLevel := app.Config.GetAgentLoggingLevel(agentName)
-	agent.ApplyLoggingLevel(event, loggingLevel)
+	// Order matters: redact configured patterns before the level filter strips
+	// fields, so we never persist or log unredacted user content.
+	agent.RedactEvent(event, app.PrivacyChecker)
+	agent.ApplyLoggingLevel(event, app.Config.GetAgentLoggingLevel(agentName))
 
 	sess, err := app.Store.GetSession(ctx, event.SessionID)
 	if err != nil {
@@ -202,9 +204,11 @@ func logHookError(ctx context.Context, app *App, agentName, hookType string, raw
 		if len(rawEvent) > maxRawEventSize {
 			rawEvent = rawEvent[:maxRawEventSize]
 		}
+
 		if app.PrivacyChecker != nil {
 			rawEvent = app.PrivacyChecker.Redact(rawEvent)
 		}
+
 		details["raw_event"] = rawEvent
 	}
 
