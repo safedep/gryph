@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	aarmsec "github.com/safedep/gryph/aarm"
 	"github.com/safedep/gryph/aarm/loader"
@@ -13,6 +15,7 @@ import (
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/schema"
+	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -22,13 +25,14 @@ func NewPolicyCmd() *cobra.Command {
 		Short: "Manage Gryph security policies",
 		Long: "Author, inspect, and operate Gryph's security policy layer. " +
 			"Subcommands cover scaffolding (init), validation, dry-run testing, " +
-			"and — as the AARM implementation grows — receipts, context, and " +
+			"and as the AARM implementation grows, receipts, context, and " +
 			"approval workflows.",
 	}
 
 	cmd.AddCommand(
 		newPolicyInitCmd(),
 		newPolicySchemaCmd(),
+		newPolicySourcesCmd(),
 		newPolicyValidateCmd(),
 		newPolicyTestCmd(),
 	)
@@ -36,13 +40,20 @@ func NewPolicyCmd() *cobra.Command {
 	return cmd
 }
 
+func policyColorizer(app *App) *tui.Colorizer {
+	if app == nil || app.Config == nil {
+		return tui.NewColorizer(false)
+	}
+	return tui.NewColorizer(app.Config.ShouldUseColors())
+}
+
 func newPolicyInitCmd() *cobra.Command {
 	var force bool
 
 	cmd := &cobra.Command{
 		Use:   "init <path>",
-		Short: "Write a fully-documented example policy to the given path",
-		Long: "Writes the embedded, fully-commented example policy to <path>. " +
+		Short: "Write a fully documented example policy to the given path",
+		Long: "Writes the embedded, fully commented example policy to <path>. " +
 			"Use this as the starting point for authoring your own rules: every " +
 			"feature of the policy language is demonstrated with inline " +
 			"documentation.",
@@ -67,8 +78,11 @@ func newPolicyInitCmd() *cobra.Command {
 				return ErrConfig("write policy file", err)
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Wrote example policy to %s\n", target)
-			fmt.Fprintf(cmd.OutOrStdout(), "Next: edit the file, then `gryph policy validate --file %s`\n", target)
+			app, _ := loadApp()
+			c := policyColorizer(app)
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "%s Wrote example policy to %s\n", c.StatusOK(), c.Path(target))
+			fmt.Fprintf(out, "  %s\n", c.Dim(fmt.Sprintf("Next: edit, then `gryph policy validate --file %s`", target)))
 			return nil
 		},
 	}
@@ -88,6 +102,106 @@ func newPolicySchemaCmd() *cobra.Command {
 			_, err := fmt.Fprint(cmd.OutOrStdout(), schema.PolicyJSON())
 			return err
 		},
+	}
+}
+
+func newPolicySourcesCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "sources",
+		Short: "List the policy sources Gryph will load, in order",
+		Long: "Resolves the configured policy sources without loading them. Useful for " +
+			"answering \"where is Gryph looking for policy?\" before any files exist.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			app, err := loadApp()
+			if err != nil {
+				return err
+			}
+			ldr, err := buildPolicyLoader(app.Config, app.Paths, "")
+			if err != nil {
+				return ErrConfig("failed to assemble policy loader", err)
+			}
+
+			renderSources(cmd.OutOrStdout(), policyColorizer(app), ldr.Sources(), true)
+			return nil
+		},
+	}
+}
+
+type sourceRow struct {
+	Kind     string
+	Path     string
+	Optional bool
+	Hints    []string
+}
+
+func sourceRows(sources []loader.Source) []sourceRow {
+	rows := make([]sourceRow, 0, len(sources))
+	for _, src := range sources {
+		rows = append(rows, sourceToRow(src))
+	}
+	return rows
+}
+
+func sourceToRow(src loader.Source) sourceRow {
+	switch s := src.(type) {
+	case *loader.FileSource:
+		return sourceRow{Kind: "file", Path: s.Path, Optional: s.Optional}
+	case *loader.DirSource:
+		return sourceRow{
+			Kind:     "dir",
+			Path:     s.Path,
+			Optional: s.Optional,
+			Hints:    []string{"Loads every *.yaml or *.yml file sorted by filename"},
+		}
+	case *loader.ConventionalSource:
+		filenames := s.Filenames
+		if len(filenames) == 0 {
+			filenames = loader.DefaultConventionalFilenames
+		}
+		hints := []string{
+			"Walks up from this directory until a policy file is found",
+			"Looks for " + strings.Join(filenames, " or "),
+		}
+		if s.StopAt != "" {
+			hints = append(hints, "Stops at "+s.StopAt)
+		}
+		return sourceRow{Kind: "conventional", Path: s.StartDir, Optional: true, Hints: hints}
+	default:
+		return sourceRow{Kind: "source", Path: src.Name()}
+	}
+}
+
+func renderSources(w io.Writer, c *tui.Colorizer, sources []loader.Source, verbose bool) {
+	if len(sources) == 0 {
+		fmt.Fprintln(w, c.Warning("No policy sources configured."))
+		return
+	}
+
+	rows := sourceRows(sources)
+	kindWidth := 0
+	for _, r := range rows {
+		if len(r.Kind) > kindWidth {
+			kindWidth = len(r.Kind)
+		}
+	}
+
+	fmt.Fprintln(w, c.Header(fmt.Sprintf("Sources (%d, evaluated in order)", len(rows))))
+	if verbose {
+		fmt.Fprintln(w, tui.HorizontalLine(80))
+	}
+	for i, r := range rows {
+		idx := c.Number(fmt.Sprintf("[%d]", i+1))
+		kind := c.Cyan(fmt.Sprintf("%-*s", kindWidth, r.Kind))
+		line := fmt.Sprintf("  %s  %s  %s", idx, kind, c.Path(r.Path))
+		if r.Optional {
+			line += "  " + c.Dim("(optional)")
+		}
+		fmt.Fprintln(w, line)
+		if verbose {
+			for _, h := range r.Hints {
+				fmt.Fprintf(w, "      %s\n", c.Dim(h))
+			}
+		}
 	}
 }
 
@@ -113,10 +227,15 @@ func newPolicyValidateCmd() *cobra.Command {
 				return ErrConfig("failed to validate policy", err)
 			}
 
+			c := policyColorizer(app)
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "Policy valid: %d rules from %d source(s)\n", len(policy.Rules), len(ldr.Sources()))
-			for _, src := range ldr.Sources() {
-				fmt.Fprintf(out, "  - %s\n", src.Name())
+			fmt.Fprintf(out, "%s %s\n",
+				c.StatusOK(),
+				c.Success(fmt.Sprintf("Policy valid: %d rules from %d source(s)", len(policy.Rules), len(ldr.Sources()))))
+			fmt.Fprintln(out)
+			renderSources(out, c, ldr.Sources(), false)
+			if len(policy.Disabled) > 0 {
+				fmt.Fprintf(out, "\n%s %s\n", c.Header("Disabled rule IDs:"), c.Dim(strings.Join(policy.Disabled, ", ")))
 			}
 			return nil
 		},
@@ -198,12 +317,9 @@ func newPolicyTestCmd() *cobra.Command {
 				return ErrConfig("failed to evaluate policy", err)
 			}
 
-			sources := make([]string, 0, len(ldr.Sources()))
-			for _, s := range ldr.Sources() {
-				sources = append(sources, s.Name())
-			}
 			view := policyTestView{
-				Sources:        sources,
+				Sources:        sourceNames(ldr.Sources()),
+				Action:         actionSummary(action),
 				Decision:       string(result.Decision),
 				MatchedRuleIDs: result.MatchedRuleIDs,
 				Message:        result.Message,
@@ -217,8 +333,8 @@ func newPolicyTestCmd() *cobra.Command {
 				return enc.Encode(view)
 			}
 
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Decision: %s\nMatched rules: %v\nMessage: %s\n", view.Decision, view.MatchedRuleIDs, view.Message)
-			return err
+			renderPolicyTest(cmd.OutOrStdout(), policyColorizer(app), view, ldr.Sources())
+			return nil
 		},
 	}
 
@@ -242,12 +358,124 @@ func newPolicyTestCmd() *cobra.Command {
 }
 
 type policyTestView struct {
-	Sources        []string `json:"sources"`
-	Decision       string   `json:"decision"`
-	MatchedRuleIDs []string `json:"matched_rule_ids"`
-	Message        string   `json:"message,omitempty"`
-	Severity       string   `json:"severity,omitempty"`
-	Tags           []string `json:"tags,omitempty"`
+	Sources        []string          `json:"sources"`
+	Action         map[string]string `json:"action,omitempty"`
+	Decision       string            `json:"decision"`
+	MatchedRuleIDs []string          `json:"matched_rule_ids"`
+	Message        string            `json:"message,omitempty"`
+	Severity       string            `json:"severity,omitempty"`
+	Tags           []string          `json:"tags,omitempty"`
+}
+
+func actionSummary(a *aarmsec.Action) map[string]string {
+	out := map[string]string{"type": string(a.Type)}
+	if a.Tool != "" {
+		out["tool"] = a.Tool
+	}
+	if a.Agent != "" {
+		out["agent"] = a.Agent
+	}
+	if a.Project != "" {
+		out["project"] = a.Project
+	}
+	if a.WorkingDir != "" {
+		out["working_dir"] = a.WorkingDir
+	}
+	if a.Parameters.Path != "" {
+		out["path"] = a.Parameters.Path
+	}
+	if a.Parameters.Command != "" {
+		out["command"] = a.Parameters.Command
+	}
+	if a.Parameters.URL != "" {
+		out["url"] = a.Parameters.URL
+	}
+	return out
+}
+
+func sourceNames(sources []loader.Source) []string {
+	out := make([]string, 0, len(sources))
+	for _, s := range sources {
+		out = append(out, s.Name())
+	}
+	return out
+}
+
+func renderPolicyTest(w io.Writer, c *tui.Colorizer, v policyTestView, sources []loader.Source) {
+	fmt.Fprintf(w, "%s\n", c.Header("Policy evaluation"))
+	fmt.Fprintln(w, tui.HorizontalLine(80))
+
+	fmt.Fprintf(w, "  %-12s %s %s\n",
+		c.Dim("decision"),
+		decorateDecision(c, v.Decision),
+		decorateSeverity(c, v.Severity))
+
+	if len(v.MatchedRuleIDs) == 0 {
+		fmt.Fprintf(w, "  %-12s %s\n", c.Dim("matched"), c.Dim("(no rules matched)"))
+	} else {
+		fmt.Fprintf(w, "  %-12s %s\n", c.Dim("matched"), c.Cyan(strings.Join(v.MatchedRuleIDs, ", ")))
+	}
+	if len(v.Tags) > 0 {
+		fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tags"), c.Dim(strings.Join(v.Tags, ", ")))
+	}
+
+	if len(v.Action) > 0 {
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, c.Header("Action"))
+		for _, key := range orderedActionKeys(v.Action) {
+			fmt.Fprintf(w, "  %-12s %s\n", c.Dim(key), v.Action[key])
+		}
+	}
+
+	if v.Message != "" {
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, c.Header("Message"))
+		for _, line := range strings.Split(strings.TrimRight(v.Message, "\n"), "\n") {
+			fmt.Fprintf(w, "  %s\n", line)
+		}
+	}
+
+	fmt.Fprintln(w)
+	renderSources(w, c, sources, false)
+}
+
+func decorateDecision(c *tui.Colorizer, d string) string {
+	switch d {
+	case "block":
+		return c.Error(strings.ToUpper(d))
+	case "guidance", "warn":
+		return c.Warning(strings.ToUpper(d))
+	case "allow":
+		return c.Success(strings.ToUpper(d))
+	default:
+		return d
+	}
+}
+
+func decorateSeverity(c *tui.Colorizer, sev string) string {
+	if sev == "" {
+		return ""
+	}
+	tag := fmt.Sprintf("(severity: %s)", sev)
+	switch sev {
+	case "critical", "high":
+		return c.Error(tag)
+	case "medium":
+		return c.Warning(tag)
+	default:
+		return c.Dim(tag)
+	}
+}
+
+func orderedActionKeys(m map[string]string) []string {
+	order := []string{"type", "tool", "agent", "project", "working_dir", "path", "command", "url"}
+	out := make([]string, 0, len(m))
+	for _, k := range order {
+		if _, ok := m[k]; ok {
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 func loadPolicyMediator(cfg *config.Config, paths *config.Paths) (*aarmsec.Mediator, error) {
@@ -262,9 +490,6 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths) (*aarmsec.Media
 	return aarmsec.NewMediator(policy)
 }
 
-// buildPolicyLoader assembles the policy loader from config. When override is
-// non-empty it replaces all configured sources with a single required file
-// source (used by `gryph policy {validate,test} --file`).
 func buildPolicyLoader(cfg *config.Config, paths *config.Paths, override string) (*loader.Loader, error) {
 	if override != "" {
 		return loader.New(loader.NewFileSource(override)), nil
