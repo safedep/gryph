@@ -152,7 +152,6 @@ func TestHookAdapter_Normalize(t *testing.T) {
 				Timestamp:  now,
 				AgentName:  "claude-code",
 				ActionType: events.ActionFileRead,
-				// AgentSessionID and WorkingDirectory deliberately empty
 				Payload: mustMarshal(t, events.FileReadPayload{Path: "/a"}),
 			},
 			sess: sess,

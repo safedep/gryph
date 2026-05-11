@@ -11,12 +11,10 @@ import (
 	"github.com/safedep/gryph/core/session"
 )
 
-// HookAdapter is the AML adapter for Gryph's existing agent-hook
-// transport. It maps an events.Event (already parsed by an agent
-// adapter) plus the current Session into a canonical aarm.Action.
+// HookAdapter normalizes hook events into canonical actions.
 type HookAdapter struct{}
 
-// NewHookAdapter returns a stateless HookAdapter.
+// NewHookAdapter creates a HookAdapter.
 func NewHookAdapter() *HookAdapter {
 	return &HookAdapter{}
 }
@@ -58,10 +56,6 @@ func (h *HookAdapter) Normalize(_ context.Context, event *events.Event, sess *se
 	return action, nil
 }
 
-// extractParameters pulls the canonical Parameters from an event's
-// type-specific payload. Unknown or payload-less event types return an
-// empty Parameters without error — the engine should still see the
-// action, even if no parameter fields apply.
 func extractParameters(event *events.Event) (aarm.Parameters, error) {
 	if len(event.Payload) == 0 {
 		return aarm.Parameters{}, nil
@@ -133,9 +127,6 @@ func extractParameters(event *events.Event) (aarm.Parameters, error) {
 		return params, nil
 
 	default:
-		// Session start/end, notifications, subagent events, network
-		// requests — no canonical parameters today. Future adapters
-		// may populate Raw for these.
 		return aarm.Parameters{}, nil
 	}
 }

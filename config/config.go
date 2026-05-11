@@ -85,10 +85,7 @@ type Config struct {
 	AARM    AARMConfig    `mapstructure:"aarm"`
 }
 
-// AARMConfig holds settings for the AARM-aligned security layer. The
-// component itself is opt-in via Enabled; when disabled, the existing
-// security.PlaceholderCheck remains in place and no AARM tables are
-// populated. See docs/security-spec.md.
+// AARMConfig holds AARM security-layer settings.
 type AARMConfig struct {
 	Enabled              bool   `mapstructure:"enabled"`
 	FailMode             string `mapstructure:"fail_mode"`

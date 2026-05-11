@@ -50,7 +50,6 @@ func validate(cfg *Config) error {
 		return err
 	}
 
-	// Validate AARM settings
 	if err := validateAARM(&cfg.AARM); err != nil {
 		return err
 	}
