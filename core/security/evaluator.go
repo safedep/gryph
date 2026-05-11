@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/events"
 )
 
 // Config holds configuration options for the security evaluator.
 type Config struct {
 	// FailOpen determines behavior when a check returns an error.
-	// If true, check errors don't block (fail open).
-	// If false, check errors cause blocking (fail closed).
 	FailOpen bool
 }
 
@@ -50,14 +49,15 @@ func (e *Evaluator) Evaluate(ctx context.Context, event *events.Event) *Result {
 		checkResult, err := check.Check(ctx, event)
 		if err != nil {
 			if e.config.FailOpen {
-				// Log and continue on error when fail-open is enabled
+				log.Warnf("check %s failed with error: %v, but failing open", check.Name(), err)
 				continue
 			}
-			// Fail closed - treat error as block
+
 			result.FinalDecision = DecisionBlock
 			result.BlockReason = fmt.Sprintf("check %s failed: %v", check.Name(), err)
 			result.BlockedBy = check.Name()
 			result.Error = err
+
 			return result
 		}
 
@@ -65,7 +65,6 @@ func (e *Evaluator) Evaluate(ctx context.Context, event *events.Event) *Result {
 
 		switch checkResult.Decision {
 		case DecisionBlock:
-			// Fail-fast on block
 			result.FinalDecision = DecisionBlock
 			result.BlockReason = checkResult.Reason
 			result.BlockedBy = checkResult.CheckName
@@ -77,7 +76,6 @@ func (e *Evaluator) Evaluate(ctx context.Context, event *events.Event) *Result {
 		}
 	}
 
-	// If any guidance was collected, set the final decision to Guidance
 	if len(result.Guidance) > 0 {
 		result.FinalDecision = DecisionGuidance
 	}

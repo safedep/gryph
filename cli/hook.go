@@ -121,7 +121,7 @@ func runHook(ctx context.Context, app *App, agentName, hookType string, rawData 
 		sess.TranscriptPath = event.TranscriptPath
 	}
 
-	securityResult := app.Security.Evaluate(ctx, event)
+	securityResult := app.Security.Evaluate(session.WithSession(ctx, sess), event)
 	if !securityResult.IsAllowed() {
 		event.ResultStatus = events.ResultBlocked
 		event.ErrorMessage = securityResult.BlockReason
