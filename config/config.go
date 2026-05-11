@@ -82,11 +82,11 @@ type Config struct {
 	Agents  AgentsConfig  `mapstructure:"agents"`
 	Display DisplayConfig `mapstructure:"display"`
 	Streams StreamsConfig `mapstructure:"streams"`
-	AARM    AARMConfig    `mapstructure:"aarm"`
+	Policy  PolicyConfig  `mapstructure:"policy"`
 }
 
-// AARMConfig holds AARM security-layer settings.
-type AARMConfig struct {
+// PolicyConfig holds Gryph policy-layer settings.
+type PolicyConfig struct {
 	Enabled              bool   `mapstructure:"enabled"`
 	FailMode             string `mapstructure:"fail_mode"`
 	PolicyPath           string `mapstructure:"policy_path"`
@@ -249,6 +249,14 @@ func (c *Config) GetDatabasePath() string {
 
 	paths := ResolvePaths()
 	return paths.DatabaseFile
+}
+
+// EffectivePolicy returns the active policy-layer settings.
+func (c *Config) EffectivePolicy() PolicyConfig {
+	if c == nil {
+		return PolicyConfig{}
+	}
+	return c.Policy
 }
 
 // ShouldUseColors returns true if colors should be used based on config and terminal.

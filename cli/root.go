@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/safedep/dry/log"
+	aarmsec "github.com/safedep/gryph/aarm"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/codex"
@@ -18,7 +19,6 @@ import (
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/internal/version"
-	securitychecks "github.com/safedep/gryph/security"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -69,9 +69,16 @@ func NewApp(cfg *config.Config) (*App, error) {
 		UseColors: cfg.ShouldUseColors(),
 	})
 
-	// Create security evaluator with placeholder check
-	sec := security.New(&security.Config{FailOpen: true})
-	sec.RegisterCheck(securitychecks.NewPlaceholderCheck())
+	policyCfg := cfg.EffectivePolicy()
+	failOpen := policyCfg.FailMode == string(aarmsec.FailOpen)
+	sec := security.New(&security.Config{FailOpen: failOpen})
+	if policyCfg.Enabled {
+		check, err := loadPolicyMediator(cfg, paths)
+		if err != nil {
+			return nil, err
+		}
+		sec.RegisterCheck(check)
+	}
 
 	// Invoke any check factories that external binaries registered during
 	// init() via RegisterCheckFactory. Factories that return nil are
@@ -196,6 +203,7 @@ native hook systems to create a comprehensive audit trail of all agent actions.`
 		NewSessionCmd(),
 		NewExportCmd(),
 		NewConfigCmd(),
+		NewPolicyCmd(),
 		NewSelfLogCmd(),
 		NewDiffCmd(),
 		NewCatCmd(),

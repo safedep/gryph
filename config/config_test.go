@@ -43,6 +43,13 @@ func TestDefault(t *testing.T) {
 	assert.Equal(t, ColorAuto, cfg.Display.Colors)
 	assert.Equal(t, TimezoneLocal, cfg.Display.Timezone)
 
+	// Verify policy defaults
+	assert.False(t, cfg.Policy.Enabled)
+	assert.Equal(t, "closed", cfg.Policy.FailMode)
+	assert.Equal(t, 90, cfg.Policy.ContextRetentionDays)
+	assert.Equal(t, 365, cfg.Policy.ReceiptRetentionDays)
+	assert.False(t, cfg.Policy.LogAllEvaluations)
+
 	// Verify streams defaults
 	require.Len(t, cfg.Streams.Targets, 1)
 	assert.Equal(t, "nop", cfg.Streams.Targets[0].Name)
@@ -74,6 +81,10 @@ agents:
 display:
   colors: always
   timezone: utc
+policy:
+  enabled: true
+  fail_mode: open
+  policy_path: /tmp/policy.yaml
 `
 
 	tmpDir := t.TempDir()
@@ -97,6 +108,10 @@ display:
 	assert.True(t, cfg.Agents.Cursor.Enabled)
 	assert.Equal(t, ColorAlways, cfg.Display.Colors)
 	assert.Equal(t, TimezoneUTC, cfg.Display.Timezone)
+	assert.True(t, cfg.Policy.Enabled)
+	assert.Equal(t, "open", cfg.Policy.FailMode)
+	assert.Equal(t, "/tmp/policy.yaml", cfg.Policy.PolicyPath)
+	assert.Equal(t, cfg.Policy, cfg.EffectivePolicy())
 }
 
 func TestLoad_InvalidLoggingLevel(t *testing.T) {

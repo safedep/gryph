@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/safedep/gryph/aarm"
+	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
 	"github.com/stretchr/testify/assert"
@@ -31,14 +31,14 @@ func TestHookAdapter_Normalize(t *testing.T) {
 		name      string
 		event     *events.Event
 		sess      *session.Session
-		assertion func(t *testing.T, a *aarm.Action)
+		assertion func(t *testing.T, a *model.Action)
 	}{
 		{
 			name: "file_read with path",
 			event: mustEvent(t, evtID, sessID, events.ActionFileRead, "Read", now,
 				events.FileReadPayload{Path: "/work/proj/main.go", SizeBytes: 1024}),
 			sess: sess,
-			assertion: func(t *testing.T, a *aarm.Action) {
+			assertion: func(t *testing.T, a *model.Action) {
 				assert.Equal(t, "/work/proj/main.go", a.Parameters.Path)
 				assert.Equal(t, int64(1024), a.Parameters.SizeBytes)
 			},
@@ -48,7 +48,7 @@ func TestHookAdapter_Normalize(t *testing.T) {
 			event: mustEvent(t, evtID, sessID, events.ActionFileRead, "Glob", now,
 				events.FileReadPayload{Pattern: "**/*.go"}),
 			sess: sess,
-			assertion: func(t *testing.T, a *aarm.Action) {
+			assertion: func(t *testing.T, a *model.Action) {
 				assert.Equal(t, "**/*.go", a.Parameters.Path)
 			},
 		},
@@ -63,7 +63,7 @@ func TestHookAdapter_Normalize(t *testing.T) {
 					ContentPreview: "package main",
 				}),
 			sess: sess,
-			assertion: func(t *testing.T, a *aarm.Action) {
+			assertion: func(t *testing.T, a *model.Action) {
 				assert.Equal(t, "/work/proj/x.go", a.Parameters.Path)
 				assert.Equal(t, 10, a.Parameters.LinesAdded)
 				assert.Equal(t, 2, a.Parameters.LinesRemoved)
@@ -75,7 +75,7 @@ func TestHookAdapter_Normalize(t *testing.T) {
 			event: mustEvent(t, evtID, sessID, events.ActionFileDelete, "Bash", now,
 				events.FileDeletePayload{Path: "/tmp/foo"}),
 			sess: sess,
-			assertion: func(t *testing.T, a *aarm.Action) {
+			assertion: func(t *testing.T, a *model.Action) {
 				assert.Equal(t, "/tmp/foo", a.Parameters.Path)
 			},
 		},
@@ -88,7 +88,7 @@ func TestHookAdapter_Normalize(t *testing.T) {
 					StdoutPreview: "NAME READY",
 				}),
 			sess: sess,
-			assertion: func(t *testing.T, a *aarm.Action) {
+			assertion: func(t *testing.T, a *model.Action) {
 				assert.Equal(t, "kubectl get pods", a.Parameters.Command)
 				assert.Equal(t, []string{"get", "pods"}, a.Parameters.Args)
 				assert.Equal(t, "NAME READY", a.Parameters.Content)
@@ -102,7 +102,7 @@ func TestHookAdapter_Normalize(t *testing.T) {
 					Input:    json.RawMessage(`{"url":"https://example.com","prompt":"hi"}`),
 				}),
 			sess: sess,
-			assertion: func(t *testing.T, a *aarm.Action) {
+			assertion: func(t *testing.T, a *model.Action) {
 				assert.Equal(t, "https://example.com", a.Parameters.URL)
 				require.NotNil(t, a.Parameters.Raw)
 				assert.Equal(t, "hi", a.Parameters.Raw["prompt"])
@@ -116,7 +116,7 @@ func TestHookAdapter_Normalize(t *testing.T) {
 					Input:    json.RawMessage(`{"file_path":"/etc/hosts"}`),
 				}),
 			sess: sess,
-			assertion: func(t *testing.T, a *aarm.Action) {
+			assertion: func(t *testing.T, a *model.Action) {
 				assert.Equal(t, "/etc/hosts", a.Parameters.Path)
 			},
 		},
@@ -125,7 +125,7 @@ func TestHookAdapter_Normalize(t *testing.T) {
 			event: mustEvent(t, evtID, sessID, events.ActionSessionStart, "", now,
 				events.SessionPayload{Source: "startup"}),
 			sess: sess,
-			assertion: func(t *testing.T, a *aarm.Action) {
+			assertion: func(t *testing.T, a *model.Action) {
 				assert.Empty(t, a.Parameters.Path)
 				assert.Empty(t, a.Parameters.Command)
 			},
@@ -140,8 +140,8 @@ func TestHookAdapter_Normalize(t *testing.T) {
 				ActionType: events.ActionNotification,
 			},
 			sess: sess,
-			assertion: func(t *testing.T, a *aarm.Action) {
-				assert.Equal(t, aarm.Parameters{}, a.Parameters)
+			assertion: func(t *testing.T, a *model.Action) {
+				assert.Equal(t, model.Parameters{}, a.Parameters)
 			},
 		},
 		{
@@ -152,10 +152,10 @@ func TestHookAdapter_Normalize(t *testing.T) {
 				Timestamp:  now,
 				AgentName:  "claude-code",
 				ActionType: events.ActionFileRead,
-				Payload: mustMarshal(t, events.FileReadPayload{Path: "/a"}),
+				Payload:    mustMarshal(t, events.FileReadPayload{Path: "/a"}),
 			},
 			sess: sess,
-			assertion: func(t *testing.T, a *aarm.Action) {
+			assertion: func(t *testing.T, a *model.Action) {
 				assert.Equal(t, "agent-sess-123", a.AgentSessionID)
 				assert.Equal(t, "/work/proj", a.WorkingDir)
 				assert.Equal(t, "proj", a.Project)
@@ -166,7 +166,7 @@ func TestHookAdapter_Normalize(t *testing.T) {
 			event: mustEvent(t, evtID, sessID, events.ActionFileRead, "Read", now,
 				events.FileReadPayload{Path: "/x"}),
 			sess: nil,
-			assertion: func(t *testing.T, a *aarm.Action) {
+			assertion: func(t *testing.T, a *model.Action) {
 				assert.Equal(t, "/x", a.Parameters.Path)
 				assert.Empty(t, a.Project)
 			},
@@ -185,7 +185,7 @@ func TestHookAdapter_Normalize(t *testing.T) {
 			assert.Equal(t, tc.event.ID, action.EventID)
 			assert.Equal(t, tc.event.SessionID, action.SessionID)
 			assert.Equal(t, tc.event.Timestamp, action.Timestamp)
-			assert.Equal(t, tc.event.ActionType, action.Type)
+			assert.Equal(t, normalizeActionType(tc.event.ActionType), action.Type)
 			assert.Equal(t, tc.event.AgentName, action.Agent)
 			assert.Equal(t, tc.event.ToolName, action.Tool)
 

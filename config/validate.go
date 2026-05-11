@@ -50,7 +50,7 @@ func validate(cfg *Config) error {
 		return err
 	}
 
-	if err := validateAARM(&cfg.AARM); err != nil {
+	if err := validatePolicyConfig(cfg.Policy); err != nil {
 		return err
 	}
 
@@ -119,20 +119,20 @@ var knownStreamTargetTypes = map[string]bool{
 	streamTargetTypeNop:    true,
 }
 
-func validateAARM(cfg *AARMConfig) error {
+func validatePolicyConfig(cfg PolicyConfig) error {
 	if !cfg.Enabled {
 		return nil
 	}
 	switch cfg.FailMode {
 	case "open", "closed":
 	default:
-		return fmt.Errorf("invalid aarm.fail_mode: %q (must be open or closed)", cfg.FailMode)
+		return fmt.Errorf("invalid policy.fail_mode: %q (must be open or closed)", cfg.FailMode)
 	}
 	if cfg.ContextRetentionDays < 0 {
-		return fmt.Errorf("aarm.context_retention_days must be non-negative")
+		return fmt.Errorf("policy.context_retention_days must be non-negative")
 	}
 	if cfg.ReceiptRetentionDays < 0 {
-		return fmt.Errorf("aarm.receipt_retention_days must be non-negative")
+		return fmt.Errorf("policy.receipt_retention_days must be non-negative")
 	}
 	return nil
 }

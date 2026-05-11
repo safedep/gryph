@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/safedep/gryph/aarm"
+	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
 )
@@ -20,17 +20,17 @@ func NewHookAdapter() *HookAdapter {
 }
 
 // Normalize implements Adapter.
-func (h *HookAdapter) Normalize(_ context.Context, event *events.Event, sess *session.Session) (*aarm.Action, error) {
+func (h *HookAdapter) Normalize(_ context.Context, event *events.Event, sess *session.Session) (*model.Action, error) {
 	if event == nil {
 		return nil, fmt.Errorf("mediation: event must not be nil")
 	}
 
-	action := &aarm.Action{
+	action := &model.Action{
 		ID:             uuid.New(),
 		Timestamp:      event.Timestamp,
 		SessionID:      event.SessionID,
 		EventID:        event.ID,
-		Type:           event.ActionType,
+		Type:           normalizeActionType(event.ActionType),
 		Tool:           event.ToolName,
 		Agent:          event.AgentName,
 		AgentSessionID: event.AgentSessionID,
@@ -56,22 +56,22 @@ func (h *HookAdapter) Normalize(_ context.Context, event *events.Event, sess *se
 	return action, nil
 }
 
-func extractParameters(event *events.Event) (aarm.Parameters, error) {
+func extractParameters(event *events.Event) (model.Parameters, error) {
 	if len(event.Payload) == 0 {
-		return aarm.Parameters{}, nil
+		return model.Parameters{}, nil
 	}
 
 	switch event.ActionType {
 	case events.ActionFileRead:
 		p, err := event.GetFileReadPayload()
 		if err != nil || p == nil {
-			return aarm.Parameters{}, err
+			return model.Parameters{}, err
 		}
 		path := p.Path
 		if path == "" {
 			path = p.Pattern
 		}
-		return aarm.Parameters{
+		return model.Parameters{
 			Path:      path,
 			SizeBytes: p.SizeBytes,
 		}, nil
@@ -79,9 +79,9 @@ func extractParameters(event *events.Event) (aarm.Parameters, error) {
 	case events.ActionFileWrite:
 		p, err := event.GetFileWritePayload()
 		if err != nil || p == nil {
-			return aarm.Parameters{}, err
+			return model.Parameters{}, err
 		}
-		return aarm.Parameters{
+		return model.Parameters{
 			Path:         p.Path,
 			SizeBytes:    p.SizeBytes,
 			LinesAdded:   p.LinesAdded,
@@ -92,16 +92,16 @@ func extractParameters(event *events.Event) (aarm.Parameters, error) {
 	case events.ActionFileDelete:
 		p, err := event.GetFileDeletePayload()
 		if err != nil || p == nil {
-			return aarm.Parameters{}, err
+			return model.Parameters{}, err
 		}
-		return aarm.Parameters{Path: p.Path}, nil
+		return model.Parameters{Path: p.Path}, nil
 
 	case events.ActionCommandExec:
 		p, err := event.GetCommandExecPayload()
 		if err != nil || p == nil {
-			return aarm.Parameters{}, err
+			return model.Parameters{}, err
 		}
-		return aarm.Parameters{
+		return model.Parameters{
 			Command: p.Command,
 			Args:    p.Args,
 			Content: p.StdoutPreview,
@@ -110,9 +110,9 @@ func extractParameters(event *events.Event) (aarm.Parameters, error) {
 	case events.ActionToolUse:
 		p, err := event.GetToolUsePayload()
 		if err != nil || p == nil {
-			return aarm.Parameters{}, err
+			return model.Parameters{}, err
 		}
-		params := aarm.Parameters{Raw: rawToolInput(p.Input)}
+		params := model.Parameters{Raw: rawToolInput(p.Input)}
 		if v, ok := params.Raw["url"].(string); ok {
 			params.URL = v
 		}
@@ -127,7 +127,7 @@ func extractParameters(event *events.Event) (aarm.Parameters, error) {
 		return params, nil
 
 	default:
-		return aarm.Parameters{}, nil
+		return model.Parameters{}, nil
 	}
 }
 
@@ -140,4 +140,33 @@ func rawToolInput(in json.RawMessage) map[string]any {
 		return nil
 	}
 	return m
+}
+
+func normalizeActionType(actionType events.ActionType) model.ActionType {
+	switch actionType {
+	case events.ActionFileRead:
+		return model.ActionFileRead
+	case events.ActionFileWrite:
+		return model.ActionFileWrite
+	case events.ActionFileDelete:
+		return model.ActionFileDelete
+	case events.ActionCommandExec:
+		return model.ActionCommandExec
+	case events.ActionNetworkRequest:
+		return model.ActionNetworkRequest
+	case events.ActionToolUse:
+		return model.ActionToolUse
+	case events.ActionSessionStart:
+		return model.ActionSessionStart
+	case events.ActionSessionEnd:
+		return model.ActionSessionEnd
+	case events.ActionNotification:
+		return model.ActionNotification
+	case events.ActionSubagentStart:
+		return model.ActionSubagentStart
+	case events.ActionSubagentStop:
+		return model.ActionSubagentStop
+	default:
+		return model.ActionUnknown
+	}
 }
