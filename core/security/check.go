@@ -16,6 +16,13 @@ type CheckResult struct {
 	Guidance string
 	// CheckName identifies which check produced this result.
 	CheckName string
+	// MatchedRuleIDs lists policy rule identifiers that produced this decision.
+	// Empty for checks that don't have a rule-based model.
+	MatchedRuleIDs []string
+	// Severity classifies the seriousness of the decision. Optional.
+	Severity Severity
+	// Tags carries free-form labels attached by the rule (e.g. "compliance", "pii").
+	Tags []string
 }
 
 // Check defines the interface for security checks.

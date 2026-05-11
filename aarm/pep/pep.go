@@ -8,38 +8,54 @@ import (
 
 const checkName = "aarm-pdp"
 
-// Apply converts a PDP decision into the existing security evaluator result.
+// Apply converts a PDP decision into a security.CheckResult. MatchedRuleIDs,
+// Severity, and Tags from the PDP are propagated so audit, receipts, and UX
+// can reference rule identity directly instead of parsing it out of the
+// rendered message.
 func Apply(result *model.EvaluationResult) *coresecurity.CheckResult {
 	if result == nil {
 		return allow()
 	}
 
+	out := &coresecurity.CheckResult{
+		CheckName:      checkName,
+		MatchedRuleIDs: append([]string(nil), result.MatchedRuleIDs...),
+		Severity:       mapSeverity(result.Severity),
+		Tags:           append([]string(nil), result.Tags...),
+	}
+
 	message := result.Message
-	if message == "" {
+	if message == "" && result.Decision == model.DecisionBlock {
 		message = "Blocked by policy"
 	}
 
 	switch result.Decision {
 	case model.DecisionBlock:
-		return &coresecurity.CheckResult{
-			Decision:  coresecurity.DecisionBlock,
-			Reason:    message,
-			CheckName: checkName,
-		}
-	case model.DecisionGuidance:
-		return &coresecurity.CheckResult{
-			Decision:  coresecurity.DecisionGuidance,
-			Guidance:  message,
-			CheckName: checkName,
-		}
-	case model.DecisionWarn:
-		return &coresecurity.CheckResult{
-			Decision:  coresecurity.DecisionGuidance,
-			Guidance:  message,
-			CheckName: checkName,
-		}
+		out.Decision = coresecurity.DecisionBlock
+		out.Reason = message
+	case model.DecisionGuidance, model.DecisionWarn:
+		out.Decision = coresecurity.DecisionGuidance
+		out.Guidance = message
 	default:
-		return allow()
+		out.Decision = coresecurity.DecisionAllow
+	}
+	return out
+}
+
+func mapSeverity(s model.Severity) coresecurity.Severity {
+	switch s {
+	case model.SeverityCritical:
+		return coresecurity.SeverityCritical
+	case model.SeverityHigh:
+		return coresecurity.SeverityHigh
+	case model.SeverityMedium:
+		return coresecurity.SeverityMedium
+	case model.SeverityLow:
+		return coresecurity.SeverityLow
+	case model.SeverityInfo:
+		return coresecurity.SeverityInfo
+	default:
+		return coresecurity.SeverityUnspecified
 	}
 }
 

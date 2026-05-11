@@ -245,7 +245,7 @@ func (r compiledRule) renderMessage(action *model.Action, snapshot *model.Contex
 			ID:          r.rule.ID,
 			Description: r.rule.Description,
 			Action:      string(r.rule.Action),
-			Severity:    r.rule.Severity,
+			Severity:    string(r.rule.Severity),
 			Tags:        r.rule.Tags,
 		},
 	}); err != nil {

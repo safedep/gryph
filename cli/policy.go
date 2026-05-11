@@ -3,30 +3,75 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	aarmsec "github.com/safedep/gryph/aarm"
+	"github.com/safedep/gryph/aarm/loader"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/config"
 	"github.com/spf13/cobra"
 )
 
-// NewPolicyCmd creates the policy command group.
 func NewPolicyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "policy",
-		Short: "Validate and test security policies",
+		Short: "Manage Gryph security policies",
+		Long: "Author, inspect, and operate Gryph's security policy layer. " +
+			"Subcommands cover scaffolding (init), validation, dry-run testing, " +
+			"and — as the AARM implementation grows — receipts, context, and " +
+			"approval workflows.",
 	}
 
 	cmd.AddCommand(
+		newPolicyInitCmd(),
 		newPolicyValidateCmd(),
 		newPolicyTestCmd(),
 	)
 
+	return cmd
+}
+
+func newPolicyInitCmd() *cobra.Command {
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   "init <path>",
+		Short: "Write a fully-documented example policy to the given path",
+		Long: "Writes the embedded, fully-commented example policy to <path>. " +
+			"Use this as the starting point for authoring your own rules: every " +
+			"feature of the policy language is demonstrated with inline " +
+			"documentation.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			target := args[0]
+			if !force {
+				if _, err := os.Stat(target); err == nil {
+					return ErrConfig("refusing to overwrite existing file (use --force to replace)", fmt.Errorf("%s exists", target))
+				} else if !os.IsNotExist(err) {
+					return ErrConfig("stat target path", err)
+				}
+			}
+
+			if dir := filepath.Dir(target); dir != "" && dir != "." {
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					return ErrConfig("create parent directory", err)
+				}
+			}
+
+			if err := os.WriteFile(target, []byte(pdp.ExampleYAML()), 0o644); err != nil {
+				return ErrConfig("write policy file", err)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Wrote example policy to %s\n", target)
+			fmt.Fprintf(cmd.OutOrStdout(), "Next: edit the file, then `gryph policy validate --file %s`\n", target)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite the target path if it already exists")
 	return cmd
 }
 
@@ -35,29 +80,33 @@ func newPolicyValidateCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "validate",
-		Short: "Validate a policy file",
+		Short: "Validate configured policy sources",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app, err := loadApp()
 			if err != nil {
 				return err
 			}
 
-			path := file
-			if path == "" {
-				path = defaultPolicyPath(app.Config, app.Paths)
+			ldr, err := buildPolicyLoader(app.Config, app.Paths, file)
+			if err != nil {
+				return ErrConfig("failed to assemble policy loader", err)
 			}
 
-			policy, err := pdp.LoadPolicyFile(path)
+			policy, err := ldr.Load(cmd.Context())
 			if err != nil {
 				return ErrConfig("failed to validate policy", err)
 			}
 
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Policy valid: %s (%d rules)\n", path, len(policy.Rules))
-			return err
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "Policy valid: %d rules from %d source(s)\n", len(policy.Rules), len(ldr.Sources()))
+			for _, src := range ldr.Sources() {
+				fmt.Fprintf(out, "  - %s\n", src.Name())
+			}
+			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&file, "file", "", "policy file to validate")
+	cmd.Flags().StringVar(&file, "file", "", "explicit policy file (overrides config sources)")
 	return cmd
 }
 
@@ -82,19 +131,19 @@ func newPolicyTestCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "test",
-		Short: "Dry-run a synthetic action through a policy",
+		Short: "Dry-run a synthetic action through the merged policy",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app, err := loadApp()
 			if err != nil {
 				return err
 			}
 
-			policyPath := file
-			if policyPath == "" {
-				policyPath = defaultPolicyPath(app.Config, app.Paths)
+			ldr, err := buildPolicyLoader(app.Config, app.Paths, file)
+			if err != nil {
+				return ErrConfig("failed to assemble policy loader", err)
 			}
 
-			policy, err := pdp.LoadPolicyFile(policyPath)
+			policy, err := ldr.Load(cmd.Context())
 			if err != nil {
 				return ErrConfig("failed to load policy", err)
 			}
@@ -133,12 +182,16 @@ func newPolicyTestCmd() *cobra.Command {
 				return ErrConfig("failed to evaluate policy", err)
 			}
 
+			sources := make([]string, 0, len(ldr.Sources()))
+			for _, s := range ldr.Sources() {
+				sources = append(sources, s.Name())
+			}
 			view := policyTestView{
-				Policy:         policyPath,
+				Sources:        sources,
 				Decision:       string(result.Decision),
 				MatchedRuleIDs: result.MatchedRuleIDs,
 				Message:        result.Message,
-				Severity:       result.Severity,
+				Severity:       string(result.Severity),
 				Tags:           result.Tags,
 			}
 
@@ -153,7 +206,7 @@ func newPolicyTestCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&file, "file", "", "policy file to test")
+	cmd.Flags().StringVar(&file, "file", "", "explicit policy file (overrides config sources)")
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json")
 	cmd.Flags().StringVar(&actionType, "action", string(model.ActionToolUse), "action type")
 	cmd.Flags().StringVar(&tool, "tool", "", "tool name")
@@ -173,7 +226,7 @@ func newPolicyTestCmd() *cobra.Command {
 }
 
 type policyTestView struct {
-	Policy         string   `json:"policy"`
+	Sources        []string `json:"sources"`
 	Decision       string   `json:"decision"`
 	MatchedRuleIDs []string `json:"matched_rule_ids"`
 	Message        string   `json:"message,omitempty"`
@@ -182,27 +235,71 @@ type policyTestView struct {
 }
 
 func loadPolicyMediator(cfg *config.Config, paths *config.Paths) (*aarmsec.Mediator, error) {
-	policyPath := defaultPolicyPath(cfg, paths)
-	policy, err := pdp.LoadPolicyFile(policyPath)
+	ldr, err := buildPolicyLoader(cfg, paths, "")
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			policy = &pdp.Policy{Rules: []pdp.Rule{}}
-		} else {
-			return nil, err
-		}
+		return nil, err
+	}
+	policy, err := ldr.Load(context.Background())
+	if err != nil {
+		return nil, err
 	}
 	return aarmsec.NewMediator(policy)
 }
 
-func defaultPolicyPath(cfg *config.Config, paths *config.Paths) string {
+// buildPolicyLoader assembles the policy loader from config. When override is
+// non-empty it replaces all configured sources with a single required file
+// source (used by `gryph policy {validate,test} --file`).
+func buildPolicyLoader(cfg *config.Config, paths *config.Paths, override string) (*loader.Loader, error) {
+	if override != "" {
+		return loader.New(loader.NewFileSource(override)), nil
+	}
+
+	var (
+		policyCfg config.PolicyConfig
+		hasCfg    bool
+	)
 	if cfg != nil {
-		policyCfg := cfg.EffectivePolicy()
-		if policyCfg.PolicyPath != "" {
-			return policyCfg.PolicyPath
+		policyCfg = cfg.EffectivePolicy()
+		hasCfg = true
+	}
+
+	var sources []loader.Source
+
+	if policyCfg.ConventionalPaths {
+		if cwd, err := os.Getwd(); err == nil {
+			sources = append(sources, loader.NewConventionalSource(cwd))
 		}
 	}
-	if paths == nil {
-		paths = config.ResolvePaths()
+
+	for _, p := range policyCfg.PolicyPaths {
+		src, err := sourceForPath(p)
+		if err != nil {
+			return nil, err
+		}
+		sources = append(sources, src)
 	}
-	return filepath.Join(paths.ConfigDir, "policy.yaml")
+
+	if !hasCfg || len(policyCfg.PolicyPaths) == 0 {
+		if paths == nil {
+			paths = config.ResolvePaths()
+		}
+		fallback := filepath.Join(paths.ConfigDir, "policy.yaml")
+		sources = append(sources, loader.NewOptionalFileSource(fallback))
+	}
+
+	return loader.New(sources...), nil
+}
+
+func sourceForPath(p string) (loader.Source, error) {
+	info, err := os.Stat(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return loader.NewFileSource(p), nil
+		}
+		return nil, fmt.Errorf("stat policy source %q: %w", p, err)
+	}
+	if info.IsDir() {
+		return loader.NewDirSource(p), nil
+	}
+	return loader.NewFileSource(p), nil
 }

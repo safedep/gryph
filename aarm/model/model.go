@@ -110,12 +110,36 @@ const (
 	ResultRejected ResultStatus = "rejected"
 )
 
+// Severity classifies how serious a rule's decision is. The zero value
+// (SeverityUnspecified) means the rule did not assign a severity. The PEP
+// boundary maps this onto core/security.Severity; the two types intentionally
+// stay independent so AARM internals do not depend on core/security.
+type Severity string
+
+const (
+	SeverityUnspecified Severity = ""
+	SeverityInfo        Severity = "info"
+	SeverityLow         Severity = "low"
+	SeverityMedium      Severity = "medium"
+	SeverityHigh        Severity = "high"
+	SeverityCritical    Severity = "critical"
+)
+
+// AllSeverities lists every defined severity in ascending order.
+var AllSeverities = []Severity{
+	SeverityInfo,
+	SeverityLow,
+	SeverityMedium,
+	SeverityHigh,
+	SeverityCritical,
+}
+
 // EvaluationResult is the aggregated PDP decision for an action.
 type EvaluationResult struct {
 	Decision       Decision
 	MatchedRuleIDs []string
 	Message        string
-	Severity       string
+	Severity       Severity
 	Tags           []string
 }
 

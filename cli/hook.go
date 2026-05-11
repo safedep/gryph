@@ -227,7 +227,8 @@ func sendHookResponse(agentName, hookType string) error {
 		//   0 = allow (success)
 		//   2 = block (blocking error, stderr shown to Claude)
 		//   1 = non-blocking error (stderr shown to user in verbose mode)
-		// For now, always allow. Future: add policy-based blocking here.
+		// Block/guidance paths are handled upstream by the security evaluator
+		// (see runHook); this is the allow path.
 		response := claudecode.NewAllowResponse()
 		return handleClaudeCodeResponse(response)
 
@@ -390,7 +391,8 @@ func generateCursorBlockedResponse(hookType string, response *cursor.HookRespons
 
 // generateCursorResponse generates the appropriate response for a Cursor hook type.
 func generateCursorResponse(hookType string) []byte {
-	// Create an allow response for all hooks (policy enforcement can be added later)
+	// Allow path only. Block/guidance routing happens upstream in runHook via
+	// the security evaluator and generateCursorBlockedResponse.
 	allowResponse := cursor.NewAllowResponse()
 
 	switch hookType {

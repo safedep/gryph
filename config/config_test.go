@@ -46,6 +46,8 @@ func TestDefault(t *testing.T) {
 	// Verify policy defaults
 	assert.False(t, cfg.Policy.Enabled)
 	assert.Equal(t, "closed", cfg.Policy.FailMode)
+	assert.Empty(t, cfg.Policy.PolicyPaths)
+	assert.True(t, cfg.Policy.ConventionalPaths)
 	assert.Equal(t, 90, cfg.Policy.ContextRetentionDays)
 	assert.Equal(t, 365, cfg.Policy.ReceiptRetentionDays)
 	assert.False(t, cfg.Policy.LogAllEvaluations)
@@ -84,7 +86,8 @@ display:
 policy:
   enabled: true
   fail_mode: open
-  policy_path: /tmp/policy.yaml
+  policy_paths:
+    - /tmp/policy.yaml
 `
 
 	tmpDir := t.TempDir()
@@ -110,7 +113,7 @@ policy:
 	assert.Equal(t, TimezoneUTC, cfg.Display.Timezone)
 	assert.True(t, cfg.Policy.Enabled)
 	assert.Equal(t, "open", cfg.Policy.FailMode)
-	assert.Equal(t, "/tmp/policy.yaml", cfg.Policy.PolicyPath)
+	assert.Equal(t, []string{"/tmp/policy.yaml"}, cfg.Policy.PolicyPaths)
 	assert.Equal(t, cfg.Policy, cfg.EffectivePolicy())
 }
 

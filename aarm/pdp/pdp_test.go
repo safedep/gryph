@@ -53,7 +53,7 @@ rules:
 		decision model.Decision
 		matched  []string
 		message  string
-		severity string
+		severity model.Severity
 		tags     []string
 	}{
 		{
@@ -75,7 +75,7 @@ rules:
 			decision: model.DecisionWarn,
 			matched:  []string{"warn-secret-read"},
 			message:  "Read /work/app/.env with Read",
-			severity: "medium",
+			severity: model.SeverityMedium,
 			tags:     []string{"secret"},
 		},
 		{
