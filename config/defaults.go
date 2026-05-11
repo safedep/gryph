@@ -38,6 +38,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("display.colors", "auto")
 	v.SetDefault("display.timezone", "local")
 
+	// AARM defaults — security layer is opt-in.
+	v.SetDefault("aarm.enabled", false)
+	v.SetDefault("aarm.fail_mode", "closed")
+	v.SetDefault("aarm.policy_path", "")
+	v.SetDefault("aarm.context_retention_days", 90)
+	v.SetDefault("aarm.receipt_retention_days", 365)
+	v.SetDefault("aarm.log_all_evaluations", false)
+
 	// Streams defaults
 	v.SetDefault("streams.targets", []StreamTargetConfig{
 		{

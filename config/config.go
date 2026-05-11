@@ -82,6 +82,20 @@ type Config struct {
 	Agents  AgentsConfig  `mapstructure:"agents"`
 	Display DisplayConfig `mapstructure:"display"`
 	Streams StreamsConfig `mapstructure:"streams"`
+	AARM    AARMConfig    `mapstructure:"aarm"`
+}
+
+// AARMConfig holds settings for the AARM-aligned security layer. The
+// component itself is opt-in via Enabled; when disabled, the existing
+// security.PlaceholderCheck remains in place and no AARM tables are
+// populated. See docs/security-spec.md.
+type AARMConfig struct {
+	Enabled              bool   `mapstructure:"enabled"`
+	FailMode             string `mapstructure:"fail_mode"`
+	PolicyPath           string `mapstructure:"policy_path"`
+	ContextRetentionDays int    `mapstructure:"context_retention_days"`
+	ReceiptRetentionDays int    `mapstructure:"receipt_retention_days"`
+	LogAllEvaluations    bool   `mapstructure:"log_all_evaluations"`
 }
 
 // LoggingConfig holds logging-related settings.

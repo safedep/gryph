@@ -50,6 +50,11 @@ func validate(cfg *Config) error {
 		return err
 	}
 
+	// Validate AARM settings
+	if err := validateAARM(&cfg.AARM); err != nil {
+		return err
+	}
+
 	// Validate agent logging levels if set
 	if cfg.Agents.ClaudeCode.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.ClaudeCode.LoggingLevel) {
 		return fmt.Errorf("invalid agents.claude-code.logging_level: %s", cfg.Agents.ClaudeCode.LoggingLevel)
@@ -113,6 +118,24 @@ func isValidTimezoneMode(mode TimezoneMode) bool {
 var knownStreamTargetTypes = map[string]bool{
 	streamTargetTypeStdout: true,
 	streamTargetTypeNop:    true,
+}
+
+func validateAARM(cfg *AARMConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+	switch cfg.FailMode {
+	case "open", "closed":
+	default:
+		return fmt.Errorf("invalid aarm.fail_mode: %q (must be open or closed)", cfg.FailMode)
+	}
+	if cfg.ContextRetentionDays < 0 {
+		return fmt.Errorf("aarm.context_retention_days must be non-negative")
+	}
+	if cfg.ReceiptRetentionDays < 0 {
+		return fmt.Errorf("aarm.receipt_retention_days must be non-negative")
+	}
+	return nil
 }
 
 func validateStreamTargets(targets []StreamTargetConfig) error {
