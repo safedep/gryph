@@ -12,6 +12,7 @@ import (
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/schema"
 	"github.com/spf13/cobra"
 )
 
@@ -27,6 +28,7 @@ func NewPolicyCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		newPolicyInitCmd(),
+		newPolicySchemaCmd(),
 		newPolicyValidateCmd(),
 		newPolicyTestCmd(),
 	)
@@ -73,6 +75,20 @@ func newPolicyInitCmd() *cobra.Command {
 
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite the target path if it already exists")
 	return cmd
+}
+
+func newPolicySchemaCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "schema",
+		Short: "Print the JSON Schema for Gryph policy documents",
+		Long: "Prints the JSON Schema (draft 2020-12) that describes Gryph policy YAML/JSON. " +
+			"Pipe into editor tooling, validators, or pass to an AI agent so it can author " +
+			"valid policies without guessing the field set.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, err := fmt.Fprint(cmd.OutOrStdout(), schema.PolicyJSON())
+			return err
+		},
+	}
 }
 
 func newPolicyValidateCmd() *cobra.Command {

@@ -21,7 +21,7 @@ deps:
 generate:
 	$(GO) generate ./storage/ent/...
 
-# Generate Event JSON Schema
+# Generate Event and Policy JSON Schemas
 generate-schema:
 	$(GO) run ./cmd/jsonschema-gen
 
@@ -29,9 +29,9 @@ generate-schema:
 update-pricing:
 	$(GO) run pricing/scripts/update-pricing.go
 
-# Verify Event JSON Schema is up-to-date
+# Verify Event and Policy JSON Schemas are up-to-date
 verify-schema: generate-schema
-	@git diff --exit-code schema/event.schema.json || (echo "ERROR: schema/event.schema.json is out of date. Run 'make generate-schema' and commit the result." && exit 1)
+	@git diff --exit-code schema/event.schema.json schema/policy.schema.json || (echo "ERROR: one or more JSON schemas are out of date. Run 'make generate-schema' and commit the result." && exit 1)
 
 # Build gryph binary
 gryph: create_bin
