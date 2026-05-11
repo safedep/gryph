@@ -10,6 +10,12 @@ import (
 )
 
 // SelfAuditAction constants for self-audit logging.
+//
+// IMPORTANT: these values MUST stay in sync with the `action` field enum on
+// storage/ent/schema/selfaudit.go. Ent validates writes against that enum and
+// rejects unknown values at runtime, so adding a constant here without also
+// adding it to the schema (and running `make generate`) will fail saves
+// silently in production and only surface under careful testing.
 const (
 	SelfAuditActionInstall          = "install"
 	SelfAuditActionUninstall        = "uninstall"
@@ -18,6 +24,7 @@ const (
 	SelfAuditActionDatabaseInit     = "database_init"
 	SelfAuditActionRetentionCleanup = "retention_cleanup"
 	SelfAuditActionHookError        = "hook_error"
+	SelfAuditActionPolicyLoadError  = "policy_load_error"
 	SelfAuditResultSuccess          = "success"
 	SelfAuditResultError            = "error"
 	SelfAuditResultSkipped          = "skipped"

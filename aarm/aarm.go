@@ -1,10 +1,6 @@
 package aarm
 
-import (
-	"fmt"
-
-	"github.com/safedep/gryph/aarm/model"
-)
+import "github.com/safedep/gryph/aarm/model"
 
 type ActionType = model.ActionType
 type Action = model.Action
@@ -24,16 +20,3 @@ const (
 	FailClosed = model.FailClosed
 	FailOpen   = model.FailOpen
 )
-
-func parseFailMode(s string) (FailMode, error) {
-	switch FailMode(s) {
-	case "":
-		return FailClosed, nil
-	case FailClosed:
-		return FailClosed, nil
-	case FailOpen:
-		return FailOpen, nil
-	default:
-		return "", fmt.Errorf("invalid fail mode: %q", s)
-	}
-}

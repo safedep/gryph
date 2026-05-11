@@ -8,13 +8,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	aarmsec "github.com/safedep/gryph/aarm"
 	"github.com/safedep/gryph/aarm/loader"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/core/events"
+	coresecurity "github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/schema"
+	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -81,8 +86,8 @@ func newPolicyInitCmd() *cobra.Command {
 			app, _ := loadApp()
 			c := policyColorizer(app)
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "%s Wrote example policy to %s\n", c.StatusOK(), c.Path(target))
-			fmt.Fprintf(out, "  %s\n", c.Dim(fmt.Sprintf("Next: edit, then `gryph policy validate --file %s`", target)))
+			_, _ = fmt.Fprintf(out, "%s Wrote example policy to %s\n", c.StatusOK(), c.Path(target))
+			_, _ = fmt.Fprintf(out, "  %s\n", c.Dim(fmt.Sprintf("Next: edit, then `gryph policy validate --file %s`", target)))
 			return nil
 		},
 	}
@@ -173,7 +178,7 @@ func sourceToRow(src loader.Source) sourceRow {
 
 func renderSources(w io.Writer, c *tui.Colorizer, sources []loader.Source, verbose bool) {
 	if len(sources) == 0 {
-		fmt.Fprintln(w, c.Warning("No policy sources configured."))
+		_, _ = fmt.Fprintln(w, c.Warning("No policy sources configured."))
 		return
 	}
 
@@ -185,9 +190,9 @@ func renderSources(w io.Writer, c *tui.Colorizer, sources []loader.Source, verbo
 		}
 	}
 
-	fmt.Fprintln(w, c.Header(fmt.Sprintf("Sources (%d, evaluated in order)", len(rows))))
+	_, _ = fmt.Fprintln(w, c.Header(fmt.Sprintf("Sources (%d, evaluated in order)", len(rows))))
 	if verbose {
-		fmt.Fprintln(w, tui.HorizontalLine(80))
+		_, _ = fmt.Fprintln(w, tui.HorizontalLine(80))
 	}
 	for i, r := range rows {
 		idx := c.Number(fmt.Sprintf("[%d]", i+1))
@@ -196,10 +201,10 @@ func renderSources(w io.Writer, c *tui.Colorizer, sources []loader.Source, verbo
 		if r.Optional {
 			line += "  " + c.Dim("(optional)")
 		}
-		fmt.Fprintln(w, line)
+		_, _ = fmt.Fprintln(w, line)
 		if verbose {
 			for _, h := range r.Hints {
-				fmt.Fprintf(w, "      %s\n", c.Dim(h))
+				_, _ = fmt.Fprintf(w, "      %s\n", c.Dim(h))
 			}
 		}
 	}
@@ -229,13 +234,13 @@ func newPolicyValidateCmd() *cobra.Command {
 
 			c := policyColorizer(app)
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "%s %s\n",
+			_, _ = fmt.Fprintf(out, "%s %s\n",
 				c.StatusOK(),
 				c.Success(fmt.Sprintf("Policy valid: %d rules from %d source(s)", len(policy.Rules), len(ldr.Sources()))))
-			fmt.Fprintln(out)
+			_, _ = fmt.Fprintln(out)
 			renderSources(out, c, ldr.Sources(), false)
 			if len(policy.Disabled) > 0 {
-				fmt.Fprintf(out, "\n%s %s\n", c.Header("Disabled rule IDs:"), c.Dim(strings.Join(policy.Disabled, ", ")))
+				_, _ = fmt.Fprintf(out, "\n%s %s\n", c.Header("Disabled rule IDs:"), c.Dim(strings.Join(policy.Disabled, ", ")))
 			}
 			return nil
 		},
@@ -402,40 +407,40 @@ func sourceNames(sources []loader.Source) []string {
 }
 
 func renderPolicyTest(w io.Writer, c *tui.Colorizer, v policyTestView, sources []loader.Source) {
-	fmt.Fprintf(w, "%s\n", c.Header("Policy evaluation"))
-	fmt.Fprintln(w, tui.HorizontalLine(80))
+	_, _ = fmt.Fprintf(w, "%s\n", c.Header("Policy evaluation"))
+	_, _ = fmt.Fprintln(w, tui.HorizontalLine(80))
 
-	fmt.Fprintf(w, "  %-12s %s %s\n",
+	_, _ = fmt.Fprintf(w, "  %-12s %s %s\n",
 		c.Dim("decision"),
 		decorateDecision(c, v.Decision),
 		decorateSeverity(c, v.Severity))
 
 	if len(v.MatchedRuleIDs) == 0 {
-		fmt.Fprintf(w, "  %-12s %s\n", c.Dim("matched"), c.Dim("(no rules matched)"))
+		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("matched"), c.Dim("(no rules matched)"))
 	} else {
-		fmt.Fprintf(w, "  %-12s %s\n", c.Dim("matched"), c.Cyan(strings.Join(v.MatchedRuleIDs, ", ")))
+		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("matched"), c.Cyan(strings.Join(v.MatchedRuleIDs, ", ")))
 	}
 	if len(v.Tags) > 0 {
-		fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tags"), c.Dim(strings.Join(v.Tags, ", ")))
+		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tags"), c.Dim(strings.Join(v.Tags, ", ")))
 	}
 
 	if len(v.Action) > 0 {
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, c.Header("Action"))
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, c.Header("Action"))
 		for _, key := range orderedActionKeys(v.Action) {
-			fmt.Fprintf(w, "  %-12s %s\n", c.Dim(key), v.Action[key])
+			_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim(key), v.Action[key])
 		}
 	}
 
 	if v.Message != "" {
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, c.Header("Message"))
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, c.Header("Message"))
 		for _, line := range strings.Split(strings.TrimRight(v.Message, "\n"), "\n") {
-			fmt.Fprintf(w, "  %s\n", line)
+			_, _ = fmt.Fprintf(w, "  %s\n", line)
 		}
 	}
 
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w)
 	renderSources(w, c, sources, false)
 }
 
@@ -489,6 +494,72 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths) (*aarmsec.Media
 	}
 	return aarmsec.NewMediator(policy)
 }
+
+// lazyPolicyCheck defers policy load until the first hook event so a broken
+// policy file does not lock the user out of `gryph policy validate/test/sources`,
+// the very commands they need to diagnose and fix it. Load errors propagate
+// to the security evaluator, which applies policy.fail_mode. The first load
+// failure is also recorded in the self-audit log so it surfaces under
+// `gryph self-log` even when fail_mode=open silently allows the action.
+type lazyPolicyCheck struct {
+	cfg      *config.Config
+	paths    *config.Paths
+	getStore func() storage.Store
+
+	once sync.Once
+	med  *aarmsec.Mediator
+	err  error
+}
+
+func newLazyPolicyCheck(cfg *config.Config, paths *config.Paths, getStore func() storage.Store) *lazyPolicyCheck {
+	return &lazyPolicyCheck{cfg: cfg, paths: paths, getStore: getStore}
+}
+
+func (l *lazyPolicyCheck) load() (*aarmsec.Mediator, error) {
+	l.once.Do(func() {
+		l.med, l.err = loadPolicyMediator(l.cfg, l.paths)
+		if l.err != nil {
+			l.recordLoadFailure(l.err)
+		}
+	})
+	return l.med, l.err
+}
+
+func (l *lazyPolicyCheck) recordLoadFailure(loadErr error) {
+	if l.getStore == nil {
+		return
+	}
+	store := l.getStore()
+	if store == nil {
+		return
+	}
+	details := map[string]interface{}{
+		"fail_mode": l.cfg.EffectivePolicy().FailMode,
+	}
+	if err := logSelfAudit(context.Background(), store, SelfAuditActionPolicyLoadError, "",
+		details, SelfAuditResultError, loadErr.Error()); err != nil {
+		log.Errorf("failed to record policy load failure: %v", err)
+	}
+}
+
+func (l *lazyPolicyCheck) Name() string { return "aarm-pdp" }
+
+func (l *lazyPolicyCheck) Enabled() bool {
+	if l == nil || l.cfg == nil {
+		return false
+	}
+	return l.cfg.EffectivePolicy().Enabled
+}
+
+func (l *lazyPolicyCheck) Check(ctx context.Context, event *events.Event) (*coresecurity.CheckResult, error) {
+	med, err := l.load()
+	if err != nil {
+		return nil, fmt.Errorf("policy load failed: %w", err)
+	}
+	return med.Check(ctx, event)
+}
+
+var _ coresecurity.Check = (*lazyPolicyCheck)(nil)
 
 func buildPolicyLoader(cfg *config.Config, paths *config.Paths, override string) (*loader.Loader, error) {
 	if override != "" {

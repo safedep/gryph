@@ -23,8 +23,10 @@ func (SelfAudit) Fields() []ent.Field {
 		field.Time("timestamp").
 			Default(time.Now).
 			Immutable(),
+		// Keep these values in sync with the SelfAuditAction* constants in
+		// cli/audit.go. Ent validates writes against this enum at runtime.
 		field.Enum("action").
-			Values("install", "uninstall", "config_change", "export", "purge", "upgrade", "database_init", "retention_cleanup", "hook_error"),
+			Values("install", "uninstall", "config_change", "export", "purge", "upgrade", "database_init", "retention_cleanup", "hook_error", "policy_load_error"),
 		field.String("agent_name").
 			Optional(),
 		field.JSON("details", map[string]interface{}{}).

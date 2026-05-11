@@ -17,13 +17,6 @@ func writeYAML(t *testing.T, path, body string) {
 	require.NoError(t, os.WriteFile(path, []byte(body), 0o644))
 }
 
-const ruleAllow = `
-version: "1"
-rules:
-  - id: %q
-    action: allow
-`
-
 func TestFileSource_Load(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "policy.yaml")

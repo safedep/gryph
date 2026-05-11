@@ -69,15 +69,18 @@ func NewApp(cfg *config.Config) (*App, error) {
 		UseColors: cfg.ShouldUseColors(),
 	})
 
+	var app *App
+
 	policyCfg := cfg.EffectivePolicy()
 	failOpen := policyCfg.FailMode == string(aarmsec.FailOpen)
 	sec := security.New(&security.Config{FailOpen: failOpen})
 	if policyCfg.Enabled {
-		check, err := loadPolicyMediator(cfg, paths)
-		if err != nil {
-			return nil, err
-		}
-		sec.RegisterCheck(check)
+		sec.RegisterCheck(newLazyPolicyCheck(cfg, paths, func() storage.Store {
+			if app == nil {
+				return nil
+			}
+			return app.Store
+		}))
 	}
 
 	// Invoke any check factories that external binaries registered during
@@ -89,14 +92,15 @@ func NewApp(cfg *config.Config) (*App, error) {
 		}
 	}
 
-	return &App{
+	app = &App{
 		Config:         cfg,
 		Registry:       registry,
 		Presenter:      presenter,
 		Paths:          paths,
 		Security:       sec,
 		PrivacyChecker: privacyChecker,
-	}, nil
+	}
+	return app, nil
 }
 
 // InitStore initializes the database store.
