@@ -29,9 +29,12 @@ import (
 //     It updates result-derived counters (e.g. errors) for that action row;
 //     it does not re-run the PDP.
 //
-// Implementations must be safe for concurrent calls across sessions. Errors
-// returned propagate to the Mediator and are subject to the security
-// evaluator's fail-open / fail-closed policy.
+// Implementations must be safe for concurrent calls across sessions. Within
+// a single session, Append and Snapshot are separate calls — implementations
+// are responsible for any ordering / atomicity guarantees the PDP needs
+// (e.g. that the Snapshot a Check observes reflects its own Append and not
+// a racing one). Errors returned propagate to the Mediator and are subject
+// to the security evaluator's fail-open / fail-closed policy.
 type Accumulator interface {
 	Append(ctx context.Context, action *model.Action) error
 	RecordResult(ctx context.Context, actionID uuid.UUID, result model.Result) error
