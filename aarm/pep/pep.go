@@ -2,6 +2,7 @@
 package pep
 
 import (
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/model"
 	coresecurity "github.com/safedep/gryph/core/security"
 )
@@ -38,6 +39,14 @@ func Apply(result *model.EvaluationResult) *coresecurity.CheckResult {
 		out.Reason = message
 	case model.DecisionGuidance, model.DecisionWarn:
 		out.Decision = coresecurity.DecisionGuidance
+		out.Guidance = message
+	case model.DecisionEscalate:
+		log.Warnf("aarm/pep: escalate decision reached PEP without approval handling (matched_rules=%v); treating as guidance to avoid silent block",
+			result.MatchedRuleIDs)
+		out.Decision = coresecurity.DecisionGuidance
+		if message == "" {
+			message = "Action requires approval but escalation was not routed; configuration bug"
+		}
 		out.Guidance = message
 	default:
 		out.Decision = coresecurity.DecisionAllow

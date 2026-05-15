@@ -207,6 +207,46 @@ func TestSQLiteAccumulator_ConcurrentSessionsDoNotCorrupt(t *testing.T) {
 	assert.Equal(t, 0, snapB.FilesRead)
 }
 
+func TestSQLiteAccumulator_AppendUnionsClassificationsAndEntities(t *testing.T) {
+	acc, _ := newTestSQLiteAccumulator(t)
+	sessionID := uuid.New()
+	ctx := context.Background()
+
+	a1 := newAction(t, sessionID, model.ActionFileRead, "Read")
+	a1.DataClassifications = []string{"secret"}
+	require.NoError(t, acc.Append(ctx, a1))
+
+	a2 := newAction(t, sessionID, model.ActionFileRead, "Read")
+	a2.DataClassifications = []string{"secret", "config"}
+	require.NoError(t, acc.Append(ctx, a2))
+
+	a3 := newAction(t, sessionID, model.ActionCommandExec, "Bash")
+	a3.DataClassifications = []string{"config"}
+	require.NoError(t, acc.Append(ctx, a3))
+
+	snap, err := acc.Snapshot(ctx, sessionID)
+	require.NoError(t, err)
+	require.NotNil(t, snap)
+	assert.ElementsMatch(t, []string{"secret", "config"}, snap.ClassificationsSeen)
+	assert.Empty(t, snap.EntitiesSeen, "entities_seen is reserved for Phase 4 and is not maintained today")
+	assert.ElementsMatch(t, []string{"Read", "Bash"}, snap.ToolsUsed)
+}
+
+func TestSQLiteAccumulator_AppendNoToolSkipsEntities(t *testing.T) {
+	acc, _ := newTestSQLiteAccumulator(t)
+	sessionID := uuid.New()
+	ctx := context.Background()
+
+	a := newAction(t, sessionID, model.ActionFileRead, "")
+	require.NoError(t, acc.Append(ctx, a))
+
+	snap, err := acc.Snapshot(ctx, sessionID)
+	require.NoError(t, err)
+	require.NotNil(t, snap)
+	assert.Empty(t, snap.EntitiesSeen)
+	assert.Empty(t, snap.ToolsUsed)
+}
+
 func TestSQLiteAccumulator_SnapshotComputesSessionDuration(t *testing.T) {
 	acc, _ := newTestSQLiteAccumulator(t)
 	sessionID := uuid.New()

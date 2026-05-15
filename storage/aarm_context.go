@@ -25,6 +25,14 @@ const (
 	// contextListMaxLimit caps QueryAllContextStates to protect against
 	// accidental full-table materialization when callers pass limit <= 0.
 	contextListMaxLimit = 1000
+
+	// contextListSetCap bounds the per-row distinct-value lists
+	// (tools_used, classifications_seen). The upsert SQL stops appending
+	// when the existing list already contains this many values so the row
+	// stays bounded across long sessions. The entities_seen column is
+	// reserved for richer entity extraction landing in Phase 4 and is not
+	// maintained today.
+	contextListSetCap = 100
 )
 
 // AppendContextAction inserts a new action row and upserts the per-session
@@ -142,8 +150,8 @@ INSERT INTO aarm_context_states (
     session_id, first_seen_at, last_action_at,
     total_actions, files_read, files_written,
     commands_executed, network_requests, errors,
-    tools_used, classifications_seen, entities_seen, semantic_drift
-) VALUES (?, ?, ?, 1, ?, ?, ?, ?, 0, ?, ?, '[]', 0)
+    tools_used, classifications_seen, semantic_drift
+) VALUES (?, ?, ?, 1, ?, ?, ?, ?, 0, ?, ?, 0)
 ON CONFLICT(session_id) DO UPDATE SET
     last_action_at = CASE
         WHEN excluded.last_action_at > aarm_context_states.last_action_at
@@ -161,6 +169,8 @@ ON CONFLICT(session_id) DO UPDATE SET
             THEN json_array(?)
         WHEN EXISTS (SELECT 1 FROM json_each(aarm_context_states.tools_used) WHERE value = ?)
             THEN aarm_context_states.tools_used
+        WHEN (SELECT COUNT(*) FROM json_each(aarm_context_states.tools_used)) >= ?
+            THEN aarm_context_states.tools_used
         ELSE json_insert(aarm_context_states.tools_used, '$[#]', ?)
     END,
     classifications_seen = CASE
@@ -169,11 +179,14 @@ ON CONFLICT(session_id) DO UPDATE SET
             THEN ?
         ELSE (
             SELECT json_group_array(value) FROM (
-                SELECT DISTINCT value FROM (
-                    SELECT value FROM json_each(aarm_context_states.classifications_seen)
-                    UNION
-                    SELECT value FROM json_each(?)
+                SELECT value FROM (
+                    SELECT DISTINCT value FROM (
+                        SELECT value FROM json_each(aarm_context_states.classifications_seen)
+                        UNION
+                        SELECT value FROM json_each(?)
+                    )
                 )
+                LIMIT ?
             )
         )
     END
@@ -189,8 +202,8 @@ ON CONFLICT(session_id) DO UPDATE SET
 		deltaFilesRead, deltaFilesWritten, deltaCommands, deltaNetwork,
 		initialTools, initialClassifications,
 		deltaFilesRead, deltaFilesWritten, deltaCommands, deltaNetwork,
-		row.Tool, row.Tool, row.Tool, row.Tool,
-		hasClassificationsArg, initialClassifications, initialClassifications,
+		row.Tool, row.Tool, row.Tool, contextListSetCap, row.Tool,
+		hasClassificationsArg, initialClassifications, initialClassifications, contextListSetCap,
 	); err != nil {
 		return fmt.Errorf("storage: upsert context state: %w", err)
 	}

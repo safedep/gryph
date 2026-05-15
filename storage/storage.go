@@ -138,6 +138,7 @@ type ReceiptStore interface {
 	GetLastReceiptForSession(ctx context.Context, sessionID uuid.UUID) (*ReceiptRow, error)
 	RecordReceiptInTx(ctx context.Context, sessionID uuid.UUID, build func(prev *ReceiptRow) (*ReceiptRow, error)) (*ReceiptRow, error)
 	UpdateReceiptResult(ctx context.Context, sessionID uuid.UUID, sequence int64, status string, durationMS int64, errorMsg string) error
+	UpdateReceiptDecision(ctx context.Context, sessionID uuid.UUID, sequence int64, decision string, resultStatus string, note string) error
 	QueryReceipts(ctx context.Context, filter *ReceiptFilter) ([]*ReceiptRow, error)
 	CountReceipts(ctx context.Context, filter *ReceiptFilter) (int, error)
 	DeleteReceiptsBefore(ctx context.Context, before time.Time) (int, error)
@@ -156,7 +157,13 @@ type ReceiptStore interface {
 //     entire session must be loaded regardless of size. Not for hot paths.
 type ReceiptFilter struct {
 	SessionID *uuid.UUID
-	Decision  string
+	// Decision filters to a single decision value via SQL equality. When
+	// both Decision and Decisions are set, Decisions takes precedence and
+	// Decision is ignored. No existing caller sets both.
+	Decision string
+	// Decisions filters to any decision in the supplied set via SQL IN.
+	// Empty slice means "no decision filter" (same as unset).
+	Decisions []string
 	Since     *time.Time
 	Until     *time.Time
 	Limit     int

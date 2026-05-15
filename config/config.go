@@ -100,6 +100,38 @@ type PolicyConfig struct {
 	ContextRetentionDays int  `mapstructure:"context_retention_days"`
 	ReceiptRetentionDays int  `mapstructure:"receipt_retention_days"`
 	LogAllEvaluations    bool `mapstructure:"log_all_evaluations"`
+
+	Approval       ApprovalConfig       `mapstructure:"approval"`
+	Classify       ClassifyConfig       `mapstructure:"classify"`
+	InjectionScore InjectionScoreConfig `mapstructure:"injection_score"`
+}
+
+// ApprovalMode names the configured approval frontend.
+type ApprovalMode string
+
+const (
+	// ApprovalModeNop denies every escalated action without prompting.
+	ApprovalModeNop ApprovalMode = "nop"
+	// ApprovalModeCLI prompts the operator interactively via /dev/tty.
+	ApprovalModeCLI ApprovalMode = "cli"
+)
+
+// ApprovalConfig configures the approval workflow for escalated decisions.
+type ApprovalConfig struct {
+	Mode           ApprovalMode `mapstructure:"mode"`
+	TimeoutSeconds int          `mapstructure:"timeout_seconds"`
+	RequireNote    bool         `mapstructure:"require_note"`
+}
+
+// ClassifyConfig configures the data-classification heuristic.
+type ClassifyConfig struct {
+	Enabled       bool                `mapstructure:"enabled"`
+	ExtraPatterns map[string][]string `mapstructure:"extra_patterns"`
+}
+
+// InjectionScoreConfig configures the prompt-injection heuristic.
+type InjectionScoreConfig struct {
+	Enabled bool `mapstructure:"enabled"`
 }
 
 // LoggingConfig holds logging-related settings.

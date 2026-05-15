@@ -345,28 +345,62 @@ func writeReceiptsJSON(w io.Writer, rows []*storage.ReceiptRow, breaks []receipt
 	return enc.Encode(out)
 }
 
+// receiptTableTrailing describes the variable trailing portion of the receipt
+// table (after the shared decision column). Header is rendered into the
+// header row and cell(r) returns the per-row text. The two are decoupled so
+// approve history can render its own "note" tail without duplicating the
+// surrounding scaffolding.
+type receiptTableTrailing struct {
+	Title   string
+	Headers []string
+	Format  string
+	Cells   func(r *storage.ReceiptRow) []interface{}
+}
+
+func defaultReceiptTrailing() receiptTableTrailing {
+	return receiptTableTrailing{
+		Title:   "Receipts",
+		Headers: []string{"result", "hash"},
+		Format:  "  %-9s  %s\n",
+		Cells: func(r *storage.ReceiptRow) []interface{} {
+			return []interface{}{r.ResultStatus, shortHash(r.Hash)}
+		},
+	}
+}
+
 func renderReceiptsTable(w io.Writer, c *tui.Colorizer, rows []*storage.ReceiptRow) {
+	renderReceiptsTableWith(w, c, rows, defaultReceiptTrailing(), "No receipts recorded yet.")
+}
+
+func renderReceiptsTableWith(w io.Writer, c *tui.Colorizer, rows []*storage.ReceiptRow, trailing receiptTableTrailing, emptyMsg string) {
 	if len(rows) == 0 {
-		_, _ = fmt.Fprintln(w, c.Dim("No receipts recorded yet."))
+		_, _ = fmt.Fprintln(w, c.Dim(emptyMsg))
 		return
 	}
-	_, _ = fmt.Fprintln(w, c.Header("Receipts"))
+	_, _ = fmt.Fprintln(w, c.Header(trailing.Title))
 	_, _ = fmt.Fprintln(w, tui.HorizontalLine(100))
-	_, _ = fmt.Fprintf(w, "  %-20s  %-5s  %-13s  %-10s  %-12s  %-10s  %-9s  %s\n",
+
+	headerPrefix := fmt.Sprintf("  %-20s  %-5s  %-13s  %-10s  %-12s  %-10s",
 		c.Dim("recorded_at"), c.Dim("seq"), c.Dim("session"),
-		c.Dim("agent"), c.Dim("tool"), c.Dim("decision"),
-		c.Dim("result"), c.Dim("hash"))
+		c.Dim("agent"), c.Dim("tool"), c.Dim("decision"))
+	headerTail := make([]interface{}, len(trailing.Headers))
+	for i, h := range trailing.Headers {
+		headerTail[i] = c.Dim(h)
+	}
+	_, _ = fmt.Fprint(w, headerPrefix)
+	_, _ = fmt.Fprintf(w, trailing.Format, headerTail...)
+
+	rowPrefixFmt := "  %-20s  %-5d  %-13s  %-10s  %-12s  %-10s"
 	for _, r := range rows {
-		_, _ = fmt.Fprintf(w, "  %-20s  %-5d  %-13s  %-10s  %-12s  %-10s  %-9s  %s\n",
+		_, _ = fmt.Fprintf(w, rowPrefixFmt,
 			r.RecordedAt.Format("2006-01-02 15:04:05"),
 			r.Sequence,
 			tui.FormatShortID(r.SessionID.String()),
 			tui.TruncateString(r.Agent, 10),
 			tui.TruncateString(r.Tool, 12),
 			r.Decision,
-			r.ResultStatus,
-			shortHash(r.Hash),
 		)
+		_, _ = fmt.Fprintf(w, trailing.Format, trailing.Cells(r)...)
 	}
 }
 

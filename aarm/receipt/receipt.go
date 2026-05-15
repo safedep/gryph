@@ -19,9 +19,15 @@ var ErrInsert = errors.New("receipt insert")
 // updates result_status post-hook. Implementations must be safe for
 // concurrent calls across sessions. Within a single session, Record must
 // atomically read the previous (sequence, hash) and insert the next row.
+//
+// UpdateDecision mutates the receipt's decision and result_status to the
+// approval outcome. The hash column is NOT recomputed; the hash input
+// always collapses approval-outcome decisions back to "escalate" via
+// DeriveInsertDecision so the chain stays verifiable.
 type Generator interface {
 	Record(ctx context.Context, in *RecordInput) (*Record, error)
 	UpdateResult(ctx context.Context, sessionID uuid.UUID, sequence int64, result model.Result) error
+	UpdateDecision(ctx context.Context, sessionID uuid.UUID, sequence int64, decision string, resultStatus string, note string) error
 }
 
 // RecordInput is the input to Generator.Record.
@@ -65,6 +71,11 @@ func (*Nop) Record(_ context.Context, _ *RecordInput) (*Record, error) { return 
 
 // UpdateResult implements Generator.
 func (*Nop) UpdateResult(_ context.Context, _ uuid.UUID, _ int64, _ model.Result) error {
+	return nil
+}
+
+// UpdateDecision implements Generator.
+func (*Nop) UpdateDecision(_ context.Context, _ uuid.UUID, _ int64, _, _, _ string) error {
 	return nil
 }
 

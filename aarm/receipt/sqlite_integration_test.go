@@ -1,6 +1,7 @@
 package receipt_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	aarmsec "github.com/safedep/gryph/aarm"
 	"github.com/safedep/gryph/aarm/accumulator"
+	"github.com/safedep/gryph/aarm/approval"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/receipt"
@@ -18,6 +20,81 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type fakeApprovalService struct {
+	outcome *approval.Outcome
+}
+
+func (f *fakeApprovalService) Request(_ context.Context, _ *approval.Request) (*approval.Outcome, error) {
+	return f.outcome, nil
+}
+
+func TestMediator_EscalateRecordsApprovedDecision_HashStable(t *testing.T) {
+	store := storagetest.NewStore(t)
+
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: escalate-root
+    action: escalate
+    match:
+      action_types: [file_write]
+      file_patterns: ["/etc/**"]
+    message: "needs approval"
+`))
+	require.NoError(t, err)
+
+	med, err := aarmsec.NewMediator(policy,
+		aarmsec.WithAccumulator(accumulator.NewSQLite(store)),
+		aarmsec.WithReceiptGenerator(receipt.NewSQLite(store)),
+		aarmsec.WithApprovalService(&fakeApprovalService{outcome: &approval.Outcome{
+			Decision: approval.DecisionApprove,
+			Approver: "alice",
+			Note:     "explicit",
+		}}),
+	)
+	require.NoError(t, err)
+
+	sessionID := uuid.New()
+	res, err := med.Check(context.Background(), &events.Event{
+		ID:         uuid.New(),
+		SessionID:  sessionID,
+		Timestamp:  time.Now().UTC(),
+		ActionType: events.ActionFileWrite,
+		AgentName:  "claude-code",
+		ToolName:   "Write",
+		Payload:    []byte(`{"path":"/etc/hosts"}`),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, coresecurity.DecisionAllow, res.Decision)
+
+	rows, err := store.QueryReceipts(context.Background(), &storage.ReceiptFilter{SessionID: &sessionID})
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, receipt.DecisionApproved, rows[0].Decision)
+
+	rehashed, err := receipt.ComputeHash(receipt.NewHashInput(receipt.HashInputFields{
+		Sequence:       rows[0].Sequence,
+		PrevHash:       rows[0].PrevHash,
+		RecordedAtUnix: rows[0].RecordedAt.UnixNano(),
+		SessionID:      rows[0].SessionID,
+		ActionID:       rows[0].ActionID,
+		EventID:        rows[0].EventID,
+		Agent:          rows[0].Agent,
+		Tool:           rows[0].Tool,
+		ActionType:     rows[0].ActionType,
+		Project:        rows[0].Project,
+		Decision:       rows[0].Decision,
+		Severity:       rows[0].Severity,
+		Message:        rows[0].Message,
+		MatchedRuleIDs: rows[0].MatchedRuleIDs,
+		Snapshot:       rows[0].Snapshot,
+		ActionPayload:  rows[0].ActionPayload,
+	}))
+	require.NoError(t, err)
+	assert.True(t, bytes.Equal(rehashed, rows[0].Hash),
+		"hash recomputed via DeriveInsertDecision must match stored hash even after decision mutation")
+}
 
 func TestMediator_BlockProducesReceipt(t *testing.T) {
 	store := storagetest.NewStore(t)

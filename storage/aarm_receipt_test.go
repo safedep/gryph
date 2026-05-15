@@ -130,6 +130,51 @@ func TestQueryReceipts_FilterByDecision(t *testing.T) {
 	assert.Equal(t, "block", rows[0].Decision)
 }
 
+func TestQueryReceipts_FilterByDecisionIn(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	decisions := []string{"allow", "escalate", "approved", "denied", "approval_timeout", "block"}
+	for i, d := range decisions {
+		row := makeReceiptRow(sessionID, int64(i+1))
+		row.Decision = d
+		require.NoError(t, store.InsertReceipt(ctx, row))
+	}
+
+	rows, err := store.QueryReceipts(ctx, &storage.ReceiptFilter{
+		SessionID: &sessionID,
+		Decisions: []string{"escalate", "approved"},
+	})
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	got := []string{rows[0].Decision, rows[1].Decision}
+	assert.ElementsMatch(t, []string{"escalate", "approved"}, got)
+}
+
+func TestQueryReceipts_DecisionsTakesPrecedenceOverDecision(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	for i, d := range []string{"block", "escalate", "approved"} {
+		row := makeReceiptRow(sessionID, int64(i+1))
+		row.Decision = d
+		require.NoError(t, store.InsertReceipt(ctx, row))
+	}
+
+	rows, err := store.QueryReceipts(ctx, &storage.ReceiptFilter{
+		SessionID: &sessionID,
+		Decision:  "block",
+		Decisions: []string{"escalate", "approved"},
+	})
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	for _, r := range rows {
+		assert.Contains(t, []string{"escalate", "approved"}, r.Decision)
+	}
+}
+
 func TestCountReceipts(t *testing.T) {
 	store := storagetest.NewStore(t)
 	ctx := context.Background()

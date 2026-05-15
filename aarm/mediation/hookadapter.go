@@ -11,12 +11,45 @@ import (
 	"github.com/safedep/gryph/core/session"
 )
 
-// HookAdapter normalizes hook events into canonical actions.
-type HookAdapter struct{}
+// HookAdapter normalizes hook events into canonical actions. Optional
+// classifier and injection scorer run after normalization to populate the
+// reserved risk-signal fields on Action.
+type HookAdapter struct {
+	classifier Classifier
+	scorer     InjectionScorer
+}
+
+// HookAdapterOption configures a HookAdapter at construction time.
+type HookAdapterOption func(*HookAdapter)
+
+// WithClassifier wires a Classifier into the adapter. After Normalize
+// produces an Action, the classifier is invoked and its output stored in
+// Action.DataClassifications.
+func WithClassifier(c Classifier) HookAdapterOption {
+	return func(h *HookAdapter) {
+		if c != nil {
+			h.classifier = c
+		}
+	}
+}
+
+// WithInjectionScorer wires an InjectionScorer into the adapter. The score
+// is populated only when Action.Type == ActionToolUse.
+func WithInjectionScorer(s InjectionScorer) HookAdapterOption {
+	return func(h *HookAdapter) {
+		if s != nil {
+			h.scorer = s
+		}
+	}
+}
 
 // NewHookAdapter creates a HookAdapter.
-func NewHookAdapter() *HookAdapter {
-	return &HookAdapter{}
+func NewHookAdapter(opts ...HookAdapterOption) *HookAdapter {
+	h := &HookAdapter{}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 // Normalize implements Adapter.
@@ -52,6 +85,13 @@ func (h *HookAdapter) Normalize(_ context.Context, event *events.Event, sess *se
 		return nil, fmt.Errorf("mediation: extract parameters for %s: %w", event.ActionType, err)
 	}
 	action.Parameters = params
+
+	if h.classifier != nil {
+		action.DataClassifications = h.classifier.Classify(action)
+	}
+	if h.scorer != nil && action.Type == model.ActionToolUse {
+		action.InjectionScore = h.scorer.Score(action)
+	}
 
 	return action, nil
 }

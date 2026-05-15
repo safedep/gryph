@@ -2,13 +2,16 @@ package aarm
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/accumulator"
+	"github.com/safedep/gryph/aarm/approval"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
+	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/core/events"
 	coresecurity "github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
@@ -133,3 +136,185 @@ rules:
 }
 
 var _ accumulator.Accumulator = (*spyAccumulator)(nil)
+
+type fakeApprovalService struct {
+	outcome *approval.Outcome
+	calls   int
+}
+
+func (f *fakeApprovalService) Request(_ context.Context, _ *approval.Request) (*approval.Outcome, error) {
+	f.calls++
+	return f.outcome, nil
+}
+
+type spyReceiptGenerator struct {
+	mu            sync.Mutex
+	records       []*receipt.RecordInput
+	decisionCalls []decisionCall
+}
+
+type decisionCall struct {
+	sequence int64
+	decision string
+	status   string
+	note     string
+}
+
+func (s *spyReceiptGenerator) Record(_ context.Context, in *receipt.RecordInput) (*receipt.Record, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.records = append(s.records, in)
+	return &receipt.Record{Sequence: int64(len(s.records))}, nil
+}
+
+func (s *spyReceiptGenerator) UpdateResult(_ context.Context, _ uuid.UUID, _ int64, _ model.Result) error {
+	return nil
+}
+
+func (s *spyReceiptGenerator) UpdateDecision(_ context.Context, _ uuid.UUID, sequence int64, decision string, status string, note string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.decisionCalls = append(s.decisionCalls, decisionCall{sequence: sequence, decision: decision, status: status, note: note})
+	return nil
+}
+
+func TestMediator_EscalateRoutesToApprovalApprove(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: escalate-write
+    action: escalate
+    match: { action_types: [file_write] }
+    message: "needs review"
+`))
+	require.NoError(t, err)
+
+	rec := &spyReceiptGenerator{}
+	med, err := NewMediator(policy,
+		WithReceiptGenerator(rec),
+		WithApprovalService(&fakeApprovalService{outcome: &approval.Outcome{
+			Decision: approval.DecisionApprove,
+			Approver: "alice",
+			Note:     "explicit override",
+		}}),
+	)
+	require.NoError(t, err)
+
+	event := &events.Event{
+		ID:         uuid.New(),
+		SessionID:  uuid.New(),
+		Timestamp:  time.Now(),
+		ActionType: events.ActionFileWrite,
+		AgentName:  "claude-code",
+		Payload:    []byte(`{"path":"/etc/hosts"}`),
+	}
+	res, err := med.Check(context.Background(), event)
+	require.NoError(t, err)
+	assert.Equal(t, coresecurity.DecisionAllow, res.Decision)
+	assert.Contains(t, res.Guidance, "alice")
+	require.Len(t, rec.records, 1)
+	assert.Equal(t, string(model.DecisionEscalate), string(rec.records[0].Decision.Decision))
+	require.Len(t, rec.decisionCalls, 1)
+	assert.Equal(t, receipt.DecisionApproved, rec.decisionCalls[0].decision)
+	assert.Equal(t, string(model.ResultSuccess), rec.decisionCalls[0].status)
+}
+
+func TestMediator_EscalateRoutesToApprovalDeny(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: escalate-write
+    action: escalate
+    match: { action_types: [file_write] }
+`))
+	require.NoError(t, err)
+
+	rec := &spyReceiptGenerator{}
+	med, err := NewMediator(policy,
+		WithReceiptGenerator(rec),
+		WithApprovalService(&fakeApprovalService{outcome: &approval.Outcome{
+			Decision: approval.DecisionDeny,
+			Approver: "alice",
+			Note:     "nope",
+		}}),
+	)
+	require.NoError(t, err)
+
+	event := &events.Event{
+		ID:         uuid.New(),
+		SessionID:  uuid.New(),
+		Timestamp:  time.Now(),
+		ActionType: events.ActionFileWrite,
+		AgentName:  "claude-code",
+		Payload:    []byte(`{"path":"/etc/hosts"}`),
+	}
+	res, err := med.Check(context.Background(), event)
+	require.NoError(t, err)
+	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
+	assert.Contains(t, res.Reason, "nope")
+	require.Len(t, rec.decisionCalls, 1)
+	assert.Equal(t, receipt.DecisionDenied, rec.decisionCalls[0].decision)
+	assert.Equal(t, string(model.ResultRejected), rec.decisionCalls[0].status)
+}
+
+func TestMediator_EscalateRoutesToApprovalTimeout(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: escalate-write
+    action: escalate
+    match: { action_types: [file_write] }
+`))
+	require.NoError(t, err)
+
+	rec := &spyReceiptGenerator{}
+	med, err := NewMediator(policy,
+		WithReceiptGenerator(rec),
+		WithApprovalService(&fakeApprovalService{outcome: &approval.Outcome{
+			Decision: approval.DecisionTimeout,
+			Approver: "system",
+		}}),
+	)
+	require.NoError(t, err)
+
+	event := &events.Event{
+		ID:         uuid.New(),
+		SessionID:  uuid.New(),
+		Timestamp:  time.Now(),
+		ActionType: events.ActionFileWrite,
+		AgentName:  "claude-code",
+		Payload:    []byte(`{"path":"/etc/hosts"}`),
+	}
+	res, err := med.Check(context.Background(), event)
+	require.NoError(t, err)
+	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
+	require.Len(t, rec.decisionCalls, 1)
+	assert.Equal(t, receipt.DecisionApprovalTimeout, rec.decisionCalls[0].decision)
+	assert.Equal(t, string(model.ResultBlocked), rec.decisionCalls[0].status)
+}
+
+func TestMediator_EscalateDefaultDenies(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: escalate-write
+    action: escalate
+    match: { action_types: [file_write] }
+`))
+	require.NoError(t, err)
+
+	med, err := NewMediator(policy)
+	require.NoError(t, err)
+
+	event := &events.Event{
+		ID:         uuid.New(),
+		SessionID:  uuid.New(),
+		Timestamp:  time.Now(),
+		ActionType: events.ActionFileWrite,
+		AgentName:  "claude-code",
+		Payload:    []byte(`{"path":"/etc/hosts"}`),
+	}
+	res, err := med.Check(context.Background(), event)
+	require.NoError(t, err)
+	assert.Equal(t, coresecurity.DecisionBlock, res.Decision, "Nop approval service denies by default")
+}

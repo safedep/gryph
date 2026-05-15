@@ -92,13 +92,6 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 		}
 	}
 
-	if result.Decision == model.DecisionEscalate {
-		result.Decision = model.DecisionBlock
-		if result.Message == "" {
-			result.Message = "This action requires approval (not yet implemented)."
-		}
-	}
-
 	return result, nil
 }
 
@@ -354,13 +347,19 @@ func actionActivation(action *model.Action) map[string]any {
 	if action == nil {
 		action = &model.Action{}
 	}
+	classifications := action.DataClassifications
+	if classifications == nil {
+		classifications = []string{}
+	}
 	return map[string]any{
-		"type":        string(action.Type),
-		"tool":        action.Tool,
-		"operation":   action.Operation,
-		"agent":       action.Agent,
-		"working_dir": action.WorkingDir,
-		"project":     action.Project,
+		"type":                 string(action.Type),
+		"tool":                 action.Tool,
+		"operation":            action.Operation,
+		"agent":                action.Agent,
+		"working_dir":          action.WorkingDir,
+		"project":              action.Project,
+		"injection_score":      float64(action.InjectionScore),
+		"data_classifications": classifications,
 		"params": map[string]any{
 			"path":          action.Parameters.Path,
 			"command":       action.Parameters.Command,

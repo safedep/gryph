@@ -48,6 +48,16 @@
 // value (e.g. "success") but does not re-hash the row. Verifying the hash
 // chain therefore checks the as-recorded decision, not the post-hook
 // outcome.
+//
+// decision contract (Phase 3)
+//
+// Approval-outcome decisions (approved, denied, approval_timeout) are
+// written to the decision column post-insert by the Mediator's escalate
+// path. They are NOT produced by the PDP. For hash-chain stability the
+// insert-time decision used in the hash input is always the PDP's original
+// value: DeriveInsertDecision collapses approval-outcome values back to
+// "escalate" so the verifier re-derives the same hash regardless of which
+// outcome eventually landed in the column.
 package receipt
 
 import (
@@ -108,6 +118,28 @@ func DeriveInsertResultStatus(decision string) string {
 	return resultStatusPending
 }
 
+// DeriveInsertDecision returns the insert-time decision implied by the
+// stored decision. Approval-outcome values (approved, denied,
+// approval_timeout) collapse to "escalate" so the hash chain remains stable
+// across post-hook decision mutation. Used by both the insert path and the
+// verifier so the hash inputs always agree.
+func DeriveInsertDecision(decision string) string {
+	switch decision {
+	case DecisionApproved, DecisionDenied, DecisionApprovalTimeout:
+		return string(model.DecisionEscalate)
+	}
+	return decision
+}
+
+// Decision values written to the receipt's decision column post-approval.
+// They are not produced by the PDP. The Mediator synthesizes them when the
+// Approval Service returns an outcome.
+const (
+	DecisionApproved        = "approved"
+	DecisionDenied          = "denied"
+	DecisionApprovalTimeout = "approval_timeout"
+)
+
 // HashInputFields collects the row-level inputs that feed NewHashInput. It
 // matches the persisted ReceiptRow shape minus the canonical zeroing the
 // constructor applies (duration_ms, error_message). The caller passes the raw
@@ -132,10 +164,13 @@ type HashInputFields struct {
 }
 
 // NewHashInput builds a *HashInput from the explicit row fields, applying the
-// canonical zeroing rules: ResultStatus is derived from Decision via
+// canonical zeroing rules: Decision is derived from f.Decision via
+// DeriveInsertDecision (so approval-outcome values collapse to "escalate"),
+// ResultStatus is derived from the same insert-time decision via
 // DeriveInsertResultStatus, DurationMS is set to 0, and ErrorMessage is
 // emptied. Single source of truth for the as-recorded hash input shape.
 func NewHashInput(f HashInputFields) *HashInput {
+	insertDecision := DeriveInsertDecision(f.Decision)
 	return &HashInput{
 		Sequence:       f.Sequence,
 		PrevHash:       f.PrevHash,
@@ -147,11 +182,11 @@ func NewHashInput(f HashInputFields) *HashInput {
 		Tool:           f.Tool,
 		ActionType:     f.ActionType,
 		Project:        f.Project,
-		Decision:       f.Decision,
+		Decision:       insertDecision,
 		Severity:       f.Severity,
 		Message:        f.Message,
 		MatchedRuleIDs: f.MatchedRuleIDs,
-		ResultStatus:   DeriveInsertResultStatus(f.Decision),
+		ResultStatus:   DeriveInsertResultStatus(insertDecision),
 		DurationMS:     0,
 		ErrorMessage:   "",
 		Snapshot:       f.Snapshot,

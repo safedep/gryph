@@ -38,6 +38,9 @@ func (AarmContextState) Fields() []ent.Field {
 
 		field.JSON("tools_used", []string{}).Optional(),
 		field.JSON("classifications_seen", []string{}).Optional(),
+		// entities_seen is reserved for richer entity extraction landing in
+		// Phase 4. Today the upsert in storage/aarm_context.go does not
+		// maintain this column so it stays nil for every row.
 		field.JSON("entities_seen", []string{}).Optional(),
 		field.Float("semantic_drift").Default(0),
 	}

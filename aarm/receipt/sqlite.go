@@ -143,6 +143,14 @@ func (g *SQLiteGenerator) UpdateResult(ctx context.Context, sessionID uuid.UUID,
 	return g.store.UpdateReceiptResult(ctx, sessionID, sequence, status, result.Duration.Milliseconds(), result.Error)
 }
 
+// UpdateDecision implements Generator.
+func (g *SQLiteGenerator) UpdateDecision(ctx context.Context, sessionID uuid.UUID, sequence int64, decision string, resultStatus string, note string) error {
+	if g == nil || g.store == nil {
+		return fmt.Errorf("receipt: store is not initialized")
+	}
+	return g.store.UpdateReceiptDecision(ctx, sessionID, sequence, decision, resultStatus, note)
+}
+
 // snapshotMap copies snapshot fields into the JSON-friendly map persisted on
 // the receipt row.
 func snapshotMap(s *model.ContextSnapshot) map[string]interface{} {

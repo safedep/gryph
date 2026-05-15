@@ -194,6 +194,40 @@ func TestHookAdapter_Normalize(t *testing.T) {
 	}
 }
 
+type stubClassifier struct{ labels []string }
+
+func (s stubClassifier) Classify(*model.Action) []string { return s.labels }
+
+type stubScorer struct{ score float32 }
+
+func (s stubScorer) Score(*model.Action) float32 { return s.score }
+
+func TestHookAdapter_Normalize_AppliesClassifierAndScorer(t *testing.T) {
+	now := time.Now()
+	adapter := NewHookAdapter(
+		WithClassifier(stubClassifier{labels: []string{"secret"}}),
+		WithInjectionScorer(stubScorer{score: 0.6}),
+	)
+
+	t.Run("file_read gets classifications, no score", func(t *testing.T) {
+		event := mustEvent(t, uuid.New(), uuid.New(), events.ActionFileRead, "Read", now,
+			events.FileReadPayload{Path: "/work/.env"})
+		action, err := adapter.Normalize(context.Background(), event, nil)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"secret"}, action.DataClassifications)
+		assert.Equal(t, float32(0), action.InjectionScore, "score is gated to tool_use only")
+	})
+
+	t.Run("tool_use gets classifications and score", func(t *testing.T) {
+		event := mustEvent(t, uuid.New(), uuid.New(), events.ActionToolUse, "WebFetch", now,
+			events.ToolUsePayload{ToolName: "WebFetch", Input: json.RawMessage(`{"url":"https://example.com"}`)})
+		action, err := adapter.Normalize(context.Background(), event, nil)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"secret"}, action.DataClassifications)
+		assert.Equal(t, float32(0.6), action.InjectionScore)
+	})
+}
+
 func TestHookAdapter_Normalize_NilEvent(t *testing.T) {
 	_, err := NewHookAdapter().Normalize(context.Background(), nil, nil)
 	require.Error(t, err)

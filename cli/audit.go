@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/aarm/approval"
 	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/storage"
 )
@@ -30,6 +31,10 @@ const (
 	SelfAuditActionReceiptCleanup       = "receipt_cleanup"
 	SelfAuditActionReceiptInsertError   = "receipt_insert_error"
 	SelfAuditActionReceiptChainBroken   = "receipt_chain_broken"
+	SelfAuditActionApprovalRequested    = approval.AuditActionRequested
+	SelfAuditActionApprovalGranted      = approval.AuditActionGranted
+	SelfAuditActionApprovalDenied       = approval.AuditActionDenied
+	SelfAuditActionApprovalTimeout      = approval.AuditActionTimeout
 	SelfAuditResultSuccess              = "success"
 	SelfAuditResultError                = "error"
 	SelfAuditResultSkipped              = "skipped"

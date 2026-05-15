@@ -11,11 +11,16 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/safedep/dry/log"
 	aarmsec "github.com/safedep/gryph/aarm"
 	"github.com/safedep/gryph/aarm/accumulator"
+	"github.com/safedep/gryph/aarm/approval"
+	"github.com/safedep/gryph/aarm/classify"
+	"github.com/safedep/gryph/aarm/injectscore"
 	"github.com/safedep/gryph/aarm/loader"
+	"github.com/safedep/gryph/aarm/mediation"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/receipt"
@@ -46,6 +51,7 @@ func NewPolicyCmd() *cobra.Command {
 		newPolicyTestCmd(),
 		newPolicyContextCmd(),
 		newPolicyReceiptsCmd(),
+		newPolicyApproveCmd(),
 	)
 
 	return cmd
@@ -585,6 +591,8 @@ func decorateDecision(c *tui.Colorizer, d string) string {
 	switch model.Decision(d) {
 	case model.DecisionBlock:
 		return c.Error(upper)
+	case model.DecisionEscalate:
+		return c.Warning(upper)
 	case model.DecisionGuidance, model.DecisionWarn:
 		return c.Warning(upper)
 	case model.DecisionAllow:
@@ -635,11 +643,88 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 		opts = append(opts, aarmsec.WithReceiptGenerator(receipt.NewSQLite(store)))
 	}
 	if cfg != nil {
+		policyCfg := cfg.EffectivePolicy()
 		opts = append(opts, aarmsec.WithMediatorConfig(aarmsec.MediatorConfig{
-			LogAllEvaluations: cfg.EffectivePolicy().LogAllEvaluations,
+			LogAllEvaluations: policyCfg.LogAllEvaluations,
+			ApprovalTimeout:   time.Duration(policyCfg.Approval.TimeoutSeconds) * time.Second,
 		}))
+
+		adapterOpts := []mediation.HookAdapterOption{}
+		if policyCfg.Classify.Enabled {
+			secretPaths := cfg.Privacy.SensitivePaths
+			if len(secretPaths) == 0 {
+				secretPaths = events.DefaultSensitivePatterns()
+			}
+			classifyOpts := []classify.HeuristicOption{classify.WithSecretPaths(secretPaths)}
+			if len(policyCfg.Classify.ExtraPatterns) > 0 {
+				classifyOpts = append(classifyOpts, classify.WithExtraPatterns(policyCfg.Classify.ExtraPatterns))
+			}
+			adapterOpts = append(adapterOpts, mediation.WithClassifier(classify.NewHeuristic(classifyOpts...)))
+		}
+
+		if policyCfg.InjectionScore.Enabled {
+			adapterOpts = append(adapterOpts, mediation.WithInjectionScorer(injectscore.NewHeuristic()))
+		}
+
+		if len(adapterOpts) > 0 {
+			opts = append(opts, aarmsec.WithAdapter(mediation.NewHookAdapter(adapterOpts...)))
+		}
+
+		switch policyCfg.Approval.Mode {
+		case config.ApprovalModeCLI:
+			opts = append(opts, aarmsec.WithApprovalService(approval.NewCLIPrompt(
+				approval.WithRequireNote(policyCfg.Approval.RequireNote),
+			)))
+		default:
+			opts = append(opts, aarmsec.WithApprovalService(approval.NewNop()))
+		}
+
+		if store != nil {
+			opts = append(opts, aarmsec.WithApprovalAuditHook(newApprovalAuditHook(store)))
+		}
 	}
 	return aarmsec.NewMediator(policy, opts...)
+}
+
+func newApprovalAuditHook(store storage.Store) aarmsec.ApprovalAuditHook {
+	return func(ctx context.Context, e aarmsec.ApprovalAudit) {
+		if store == nil {
+			return
+		}
+		details := map[string]interface{}{}
+		agentName := ""
+		if e.Request != nil {
+			details["session_id"] = e.Request.SessionID.String()
+			details["action_id"] = e.Request.ActionID.String()
+			if e.Request.Action != nil {
+				agentName = e.Request.Action.Agent
+				details["agent"] = e.Request.Action.Agent
+				details["tool"] = e.Request.Action.Tool
+				details["action_type"] = string(e.Request.Action.Type)
+			}
+		}
+		if e.Decision != nil {
+			details["matched_rule_ids"] = e.Decision.MatchedRuleIDs
+		}
+		if e.Outcome != nil {
+			details["approver"] = e.Outcome.Approver
+			if e.Outcome.Note != "" {
+				details["note"] = e.Outcome.Note
+			}
+		}
+		result := SelfAuditResultSuccess
+		errMsg := ""
+		if e.Error != nil {
+			result = SelfAuditResultError
+			errMsg = e.Error.Error()
+		}
+		if e.Action == SelfAuditActionApprovalDenied || e.Action == SelfAuditActionApprovalTimeout {
+			result = SelfAuditResultSkipped
+		}
+		if err := logSelfAudit(ctx, store, e.Action, agentName, details, result, errMsg); err != nil {
+			log.Errorf("failed to record %s audit: %v", e.Action, err)
+		}
+	}
 }
 
 // lazyPolicyCheck defers policy load until the first hook event so a broken

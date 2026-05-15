@@ -136,6 +136,14 @@ func validatePolicyConfig(cfg PolicyConfig) error {
 	if cfg.ReceiptRetentionDays < 0 {
 		return fmt.Errorf("policy.receipt_retention_days must be non-negative")
 	}
+	switch cfg.Approval.Mode {
+	case "", ApprovalModeNop, ApprovalModeCLI:
+	default:
+		return fmt.Errorf("invalid policy.approval.mode: %q (must be %s or %s)", cfg.Approval.Mode, ApprovalModeCLI, ApprovalModeNop)
+	}
+	if cfg.Approval.TimeoutSeconds < 1 {
+		return fmt.Errorf("policy.approval.timeout_seconds must be >= 1")
+	}
 	return nil
 }
 

@@ -58,6 +58,12 @@ func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".context_retention_days", 90)
 	v.SetDefault(prefix+".receipt_retention_days", 365)
 	v.SetDefault(prefix+".log_all_evaluations", false)
+	v.SetDefault(prefix+".approval.mode", string(ApprovalModeNop))
+	v.SetDefault(prefix+".approval.timeout_seconds", 60)
+	v.SetDefault(prefix+".approval.require_note", false)
+	v.SetDefault(prefix+".classify.enabled", true)
+	v.SetDefault(prefix+".classify.extra_patterns", map[string][]string{})
+	v.SetDefault(prefix+".injection_score.enabled", true)
 }
 
 // defaultSensitivePaths returns the default list of sensitive path patterns.

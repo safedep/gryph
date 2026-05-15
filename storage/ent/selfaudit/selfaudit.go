@@ -84,6 +84,10 @@ const (
 	ActionReceiptCleanup       Action = "receipt_cleanup"
 	ActionReceiptInsertError   Action = "receipt_insert_error"
 	ActionReceiptChainBroken   Action = "receipt_chain_broken"
+	ActionApprovalRequested    Action = "approval_requested"
+	ActionApprovalGranted      Action = "approval_granted"
+	ActionApprovalDenied       Action = "approval_denied"
+	ActionApprovalTimeout      Action = "approval_timeout"
 )
 
 func (a Action) String() string {
@@ -93,7 +97,7 @@ func (a Action) String() string {
 // ActionValidator is a validator for the "action" field enum values. It is called by the builders before save.
 func ActionValidator(a Action) error {
 	switch a {
-	case ActionInstall, ActionUninstall, ActionConfigChange, ActionExport, ActionPurge, ActionUpgrade, ActionDatabaseInit, ActionRetentionCleanup, ActionHookError, ActionPolicyLoadError, ActionContextCleanup, ActionContextSnapshotError, ActionReceiptCleanup, ActionReceiptInsertError, ActionReceiptChainBroken:
+	case ActionInstall, ActionUninstall, ActionConfigChange, ActionExport, ActionPurge, ActionUpgrade, ActionDatabaseInit, ActionRetentionCleanup, ActionHookError, ActionPolicyLoadError, ActionContextCleanup, ActionContextSnapshotError, ActionReceiptCleanup, ActionReceiptInsertError, ActionReceiptChainBroken, ActionApprovalRequested, ActionApprovalGranted, ActionApprovalDenied, ActionApprovalTimeout:
 		return nil
 	default:
 		return fmt.Errorf("selfaudit: invalid enum value for action field: %q", a)

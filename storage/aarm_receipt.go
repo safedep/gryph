@@ -373,6 +373,48 @@ func (s *SQLiteStore) UpdateReceiptResult(ctx context.Context, sessionID uuid.UU
 	return nil
 }
 
+// UpdateReceiptDecision mutates a receipt row's decision and result_status
+// post-insert. Used by the Mediator's escalate path to transition a
+// "pending" escalate receipt into its approval-outcome state (approved,
+// denied, approval_timeout). The hash column is intentionally NOT
+// recomputed; the verifier collapses approval-outcome decisions back to
+// "escalate" via receipt.DeriveInsertDecision so the chain stays
+// verifiable.
+func (s *SQLiteStore) UpdateReceiptDecision(ctx context.Context, sessionID uuid.UUID, sequence int64, decision string, resultStatus string, note string) error {
+	if sessionID == uuid.Nil {
+		return fmt.Errorf("storage: UpdateReceiptDecision: nil session ID")
+	}
+	if decision == "" {
+		return fmt.Errorf("storage: UpdateReceiptDecision: empty decision")
+	}
+
+	rows, err := s.client.AarmReceipt.Query().
+		Where(
+			aarmreceipt.SessionIDEQ(sessionID),
+			aarmreceipt.SequenceEQ(sequence),
+		).
+		Limit(1).
+		All(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: lookup receipt: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
+	update := s.client.AarmReceipt.UpdateOneID(rows[0].ID).SetDecision(decision)
+	if resultStatus != "" {
+		update.SetResultStatus(aarmreceipt.ResultStatus(resultStatus))
+	}
+	if note != "" {
+		update.SetErrorMessage(note)
+	}
+	if _, err := update.Save(ctx); err != nil {
+		return fmt.Errorf("storage: update receipt decision: %w", err)
+	}
+	return nil
+}
+
 // QueryReceipts returns receipts matching filter. When SessionID is set, rows
 // are ordered by (session_id, sequence) ASC. Otherwise rows are ordered by
 // recorded_at DESC.
@@ -390,7 +432,9 @@ func (s *SQLiteStore) QueryReceipts(ctx context.Context, filter *ReceiptFilter) 
 	if filter.SessionID != nil {
 		q.Where(aarmreceipt.SessionIDEQ(*filter.SessionID))
 	}
-	if filter.Decision != "" {
+	if len(filter.Decisions) > 0 {
+		q.Where(aarmreceipt.DecisionIn(filter.Decisions...))
+	} else if filter.Decision != "" {
 		q.Where(aarmreceipt.DecisionEQ(filter.Decision))
 	}
 	if filter.Since != nil {
@@ -450,7 +494,9 @@ func (s *SQLiteStore) CountReceipts(ctx context.Context, filter *ReceiptFilter) 
 	if filter.SessionID != nil {
 		q.Where(aarmreceipt.SessionIDEQ(*filter.SessionID))
 	}
-	if filter.Decision != "" {
+	if len(filter.Decisions) > 0 {
+		q.Where(aarmreceipt.DecisionIn(filter.Decisions...))
+	} else if filter.Decision != "" {
 		q.Where(aarmreceipt.DecisionEQ(filter.Decision))
 	}
 	if filter.Since != nil {

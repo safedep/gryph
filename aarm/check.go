@@ -3,10 +3,12 @@ package aarm
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/accumulator"
+	"github.com/safedep/gryph/aarm/approval"
 	"github.com/safedep/gryph/aarm/mediation"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
@@ -23,15 +25,37 @@ type MediatorConfig struct {
 	// receipt. Default false: only block / guidance / warn / escalate
 	// generate receipt rows.
 	LogAllEvaluations bool
+
+	// ApprovalTimeout bounds how long the Mediator will block while waiting
+	// for the Approval Service to return. Zero falls back to the Approval
+	// Service's own default.
+	ApprovalTimeout time.Duration
 }
+
+// ApprovalAudit is the data the Mediator hands to the optional approval
+// audit hook. cli wires this through to logSelfAudit so the four
+// approval_* self-audit actions get emitted without aarm depending on cli.
+type ApprovalAudit struct {
+	Action   string
+	Outcome  *approval.Outcome
+	Request  *approval.Request
+	Decision *model.EvaluationResult
+	Error    error
+}
+
+// ApprovalAuditHook receives ApprovalAudit events from the Mediator escalate
+// path. Nil disables emission.
+type ApprovalAuditHook func(ctx context.Context, e ApprovalAudit)
 
 // Mediator implements the Gryph security.Check interface with AARM components.
 type Mediator struct {
-	adapter mediation.Adapter
-	pdp     *pdp.PDP
-	accum   accumulator.Accumulator
-	receipt receipt.Generator
-	cfg     MediatorConfig
+	adapter   mediation.Adapter
+	pdp       *pdp.PDP
+	accum     accumulator.Accumulator
+	receipt   receipt.Generator
+	approval  approval.Service
+	auditHook ApprovalAuditHook
+	cfg       MediatorConfig
 }
 
 var _ coresecurity.Check = (*Mediator)(nil)
@@ -64,9 +88,42 @@ func WithMediatorConfig(c MediatorConfig) MediatorOption {
 	}
 }
 
+// WithApprovalService overrides the default Nop approval service.
+func WithApprovalService(s approval.Service) MediatorOption {
+	return func(m *Mediator) {
+		if s != nil {
+			m.approval = s
+		}
+	}
+}
+
+// WithApprovalAuditHook installs an audit hook called from the escalate
+// path. Used by the CLI to emit approval_* self-audit rows without aarm
+// importing cli.
+func WithApprovalAuditHook(h ApprovalAuditHook) MediatorOption {
+	return func(m *Mediator) {
+		if h != nil {
+			m.auditHook = h
+		}
+	}
+}
+
+// WithAdapter overrides the default mediation adapter. Callers that need to
+// wire a classifier or an injection scorer construct the adapter themselves
+// (with mediation.NewHookAdapter) and pass it in. Keeps adapter-shaped
+// configuration outside the Mediator's option surface.
+func WithAdapter(a mediation.Adapter) MediatorOption {
+	return func(m *Mediator) {
+		if a != nil {
+			m.adapter = a
+		}
+	}
+}
+
 // NewMediator creates an enabled AARM security check from a parsed policy. By
-// default the Context Accumulator and receipt generator are no-ops. Pass
-// WithAccumulator / WithReceiptGenerator to swap in persistent
+// default the Context Accumulator and receipt generator are no-ops and the
+// adapter is a plain HookAdapter with no classifier or scorer. Pass
+// WithAccumulator / WithReceiptGenerator / WithAdapter to swap in real
 // implementations.
 func NewMediator(policy *pdp.Policy, opts ...MediatorOption) (*Mediator, error) {
 	engine, err := pdp.New(policy)
@@ -74,10 +131,11 @@ func NewMediator(policy *pdp.Policy, opts ...MediatorOption) (*Mediator, error) 
 		return nil, err
 	}
 	m := &Mediator{
-		adapter: mediation.NewHookAdapter(),
-		pdp:     engine,
-		accum:   accumulator.NewNop(),
-		receipt: receipt.NewNop(),
+		pdp:      engine,
+		accum:    accumulator.NewNop(),
+		receipt:  receipt.NewNop(),
+		approval: approval.NewNop(),
+		adapter:  mediation.NewHookAdapter(),
 	}
 	for _, opt := range opts {
 		opt(m)
@@ -121,6 +179,10 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 		return nil, err
 	}
 
+	if decision.Decision == model.DecisionEscalate {
+		return m.handleEscalate(ctx, action, snapshot, decision)
+	}
+
 	result := pep.Apply(decision)
 	result.AarmActionID = action.ID
 	result.AarmSessionID = action.SessionID
@@ -143,6 +205,134 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 	}
 
 	return result, nil
+}
+
+// handleEscalate routes an escalated decision through the Approval Service
+// and synthesizes a security.CheckResult from the outcome.
+func (m *Mediator) handleEscalate(ctx context.Context, action *model.Action, snapshot *model.ContextSnapshot, decision *model.EvaluationResult) (*coresecurity.CheckResult, error) {
+	rec, rerr := m.receipt.Record(ctx, &receipt.RecordInput{
+		SessionID: action.SessionID,
+		ActionID:  action.ID,
+		EventID:   action.EventID,
+		Action:    action,
+		Snapshot:  snapshot,
+		Decision:  decision,
+	})
+	if rerr != nil {
+		return nil, rerr
+	}
+
+	req := &approval.Request{
+		SessionID: action.SessionID,
+		EventID:   action.EventID,
+		ActionID:  action.ID,
+		Action:    action,
+		Snapshot:  snapshot,
+		Rule:      decision,
+		Timeout:   m.cfg.ApprovalTimeout,
+	}
+	m.emitAudit(ctx, ApprovalAudit{
+		Action:   approval.AuditActionRequested,
+		Request:  req,
+		Decision: decision,
+	})
+
+	outcome, aerr := m.approval.Request(ctx, req)
+	if aerr != nil && outcome == nil {
+		m.emitAudit(ctx, ApprovalAudit{
+			Action:   approval.AuditActionDenied,
+			Request:  req,
+			Decision: decision,
+			Error:    aerr,
+		})
+		log.Warnf("aarm: approval service error: %v", aerr)
+		return m.applyApprovalOutcome(ctx, action, decision, rec, &approval.Outcome{
+			Decision:  approval.DecisionDeny,
+			Approver:  "system",
+			Note:      aerr.Error(),
+			DecidedAt: time.Now().UTC(),
+		}), nil
+	}
+
+	switch outcome.Decision {
+	case approval.DecisionApprove:
+		m.emitAudit(ctx, ApprovalAudit{Action: approval.AuditActionGranted, Request: req, Decision: decision, Outcome: outcome})
+	case approval.DecisionTimeout:
+		m.emitAudit(ctx, ApprovalAudit{Action: approval.AuditActionTimeout, Request: req, Decision: decision, Outcome: outcome})
+	default:
+		m.emitAudit(ctx, ApprovalAudit{Action: approval.AuditActionDenied, Request: req, Decision: decision, Outcome: outcome})
+	}
+
+	return m.applyApprovalOutcome(ctx, action, decision, rec, outcome), nil
+}
+
+func (m *Mediator) applyApprovalOutcome(ctx context.Context, action *model.Action, decision *model.EvaluationResult, rec *receipt.Record, outcome *approval.Outcome) *coresecurity.CheckResult {
+	var (
+		decisionValue string
+		resultStatus  string
+		coreDecision  coresecurity.Decision
+		message       string
+	)
+
+	switch outcome.Decision {
+	case approval.DecisionApprove:
+		decisionValue = receipt.DecisionApproved
+		resultStatus = string(model.ResultSuccess)
+		coreDecision = coresecurity.DecisionAllow
+		if outcome.Note != "" {
+			message = fmt.Sprintf("Approved by %s: %s", outcome.Approver, outcome.Note)
+		} else {
+			message = fmt.Sprintf("Approved by %s", outcome.Approver)
+		}
+	case approval.DecisionTimeout:
+		decisionValue = receipt.DecisionApprovalTimeout
+		resultStatus = string(model.ResultBlocked)
+		coreDecision = coresecurity.DecisionBlock
+		message = "Approval timed out"
+		if outcome.Note != "" {
+			message = outcome.Note
+		}
+	default:
+		decisionValue = receipt.DecisionDenied
+		resultStatus = string(model.ResultRejected)
+		coreDecision = coresecurity.DecisionBlock
+		message = "Denied by approval policy"
+		if outcome.Note != "" {
+			message = fmt.Sprintf("Denied by %s: %s", outcome.Approver, outcome.Note)
+		}
+	}
+
+	if rec != nil && rec.Sequence > 0 {
+		if err := m.receipt.UpdateDecision(ctx, action.SessionID, rec.Sequence, decisionValue, resultStatus, outcome.Note); err != nil {
+			log.Warnf("aarm: receipt update decision: %v", err)
+		}
+	}
+
+	result := &coresecurity.CheckResult{
+		CheckName:      CheckName,
+		Decision:       coreDecision,
+		MatchedRuleIDs: decision.MatchedRuleIDs,
+		Severity:       mapSeverity(decision.Severity),
+		Tags:           decision.Tags,
+		AarmActionID:   action.ID,
+		AarmSessionID:  action.SessionID,
+	}
+	if rec != nil {
+		result.AarmSequence = rec.Sequence
+	}
+	if coreDecision == coresecurity.DecisionBlock {
+		result.Reason = message
+	} else {
+		result.Guidance = message
+	}
+	return result
+}
+
+func (m *Mediator) emitAudit(ctx context.Context, e ApprovalAudit) {
+	if m == nil || m.auditHook == nil {
+		return
+	}
+	m.auditHook(ctx, e)
 }
 
 // shouldRecordReceipt encodes the LogAllEvaluations gating: an allow
@@ -176,4 +366,21 @@ func (m *Mediator) RecordResult(ctx context.Context, actionID uuid.UUID, session
 		}
 	}
 	return nil
+}
+
+func mapSeverity(s model.Severity) coresecurity.Severity {
+	switch s {
+	case model.SeverityCritical:
+		return coresecurity.SeverityCritical
+	case model.SeverityHigh:
+		return coresecurity.SeverityHigh
+	case model.SeverityMedium:
+		return coresecurity.SeverityMedium
+	case model.SeverityLow:
+		return coresecurity.SeverityLow
+	case model.SeverityInfo:
+		return coresecurity.SeverityInfo
+	default:
+		return coresecurity.SeverityUnspecified
+	}
 }

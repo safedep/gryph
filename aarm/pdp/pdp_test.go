@@ -110,14 +110,13 @@ rules:
 			message:  "Refusing destructive command: sudo rm -rf /",
 		},
 		{
-			name: "escalate degrades to block until approval exists",
+			name: "escalate is a first-class decision (Phase 3)",
 			action: &model.Action{
 				Type:       model.ActionFileWrite,
 				Parameters: model.Parameters{Path: "/etc/hosts"},
 			},
-			decision: model.DecisionBlock,
+			decision: model.DecisionEscalate,
 			matched:  []string{"escalated-root-write"},
-			message:  "This action requires approval (not yet implemented).",
 		},
 	}
 
@@ -133,6 +132,111 @@ rules:
 			assert.Equal(t, tc.tags, got.Tags)
 		})
 	}
+}
+
+func TestPDP_ContextClassificationsSeenCondition(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: block-after-secret-seen
+    action: block
+    match:
+      action_types: [command_exec]
+    condition: "'secret' in context.classifications_seen"
+    message: "blocked after a secret was seen earlier in the session"
+`)
+
+	engine, err := New(policy)
+	require.NoError(t, err)
+
+	action := &model.Action{
+		Type:       model.ActionCommandExec,
+		Parameters: model.Parameters{Command: "curl example.com"},
+	}
+
+	t.Run("no classifications seen yet", func(t *testing.T) {
+		got, err := engine.Evaluate(context.Background(), action, &model.ContextSnapshot{})
+		require.NoError(t, err)
+		assert.Equal(t, model.DecisionAllow, got.Decision)
+	})
+
+	t.Run("secret already in session classifications", func(t *testing.T) {
+		got, err := engine.Evaluate(context.Background(), action, &model.ContextSnapshot{
+			ClassificationsSeen: []string{"secret", "config"},
+		})
+		require.NoError(t, err)
+		assert.Equal(t, model.DecisionBlock, got.Decision)
+		assert.Equal(t, []string{"block-after-secret-seen"}, got.MatchedRuleIDs)
+	})
+}
+
+func TestPDP_InjectionScoreAndDataClassifications(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: block-high-injection
+    action: block
+    match:
+      action_types: [tool_use]
+    condition: "action.injection_score > 0.5"
+    message: "high injection score"
+  - id: block-secret-classification
+    action: block
+    match:
+      action_types: [tool_use]
+    condition: "'secret' in action.data_classifications"
+    message: "secret classification"
+`)
+
+	engine, err := New(policy)
+	require.NoError(t, err)
+
+	t.Run("injection score above threshold matches", func(t *testing.T) {
+		action := &model.Action{
+			Type:           model.ActionToolUse,
+			InjectionScore: 0.7,
+		}
+		got, err := engine.Evaluate(context.Background(), action, nil)
+		require.NoError(t, err)
+		assert.Equal(t, model.DecisionBlock, got.Decision)
+		assert.Contains(t, got.MatchedRuleIDs, "block-high-injection")
+	})
+
+	t.Run("injection score below threshold does not match", func(t *testing.T) {
+		action := &model.Action{
+			Type:           model.ActionToolUse,
+			InjectionScore: 0.2,
+		}
+		got, err := engine.Evaluate(context.Background(), action, nil)
+		require.NoError(t, err)
+		assert.NotContains(t, got.MatchedRuleIDs, "block-high-injection")
+	})
+
+	t.Run("unset injection score is treated as zero", func(t *testing.T) {
+		action := &model.Action{Type: model.ActionToolUse}
+		got, err := engine.Evaluate(context.Background(), action, nil)
+		require.NoError(t, err)
+		assert.Equal(t, model.DecisionAllow, got.Decision)
+	})
+
+	t.Run("data classification membership matches", func(t *testing.T) {
+		action := &model.Action{
+			Type:                model.ActionToolUse,
+			DataClassifications: []string{"secret"},
+		}
+		got, err := engine.Evaluate(context.Background(), action, nil)
+		require.NoError(t, err)
+		assert.Equal(t, model.DecisionBlock, got.Decision)
+		assert.Contains(t, got.MatchedRuleIDs, "block-secret-classification")
+	})
+
+	t.Run("nil data classifications evaluates in-operator cleanly", func(t *testing.T) {
+		action := &model.Action{Type: model.ActionToolUse}
+		got, err := engine.Evaluate(context.Background(), action, nil)
+		require.NoError(t, err)
+		assert.Equal(t, model.DecisionAllow, got.Decision)
+		assert.NotContains(t, got.MatchedRuleIDs, "block-secret-classification")
+	})
 }
 
 func TestPDP_MostRestrictiveWins(t *testing.T) {
