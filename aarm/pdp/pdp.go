@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"text/template"
 	"time"
@@ -42,6 +43,17 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 		return result, nil
 	}
 
+	var (
+		evalCtx     context.Context
+		cancel      context.CancelFunc
+		activations map[string]any
+	)
+	defer func() {
+		if cancel != nil {
+			cancel()
+		}
+	}()
+
 	for _, rule := range p.rules {
 		if !isRuleEnabled(rule.rule) {
 			continue
@@ -52,12 +64,24 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 		if !rule.matches(action) {
 			continue
 		}
-		ok, err := rule.conditionMatches(ctx, action, snapshot)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			continue
+		if rule.hasCondition {
+			if activations == nil {
+				if ctx == nil {
+					ctx = context.Background()
+				}
+				evalCtx, cancel = context.WithTimeout(ctx, conditionTimeout)
+				activations = map[string]any{
+					"action":  actionActivation(action),
+					"context": contextActivation(snapshot),
+				}
+			}
+			ok, err := rule.conditionMatches(evalCtx, activations)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				continue
+			}
 		}
 
 		result.MatchedRuleIDs = append(result.MatchedRuleIDs, rule.rule.ID)
@@ -69,7 +93,7 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 			result.Decision = rule.rule.Action
 			result.Message = msg
 			result.Severity = rule.rule.Severity
-			result.Tags = append([]string(nil), rule.rule.Tags...)
+			result.Tags = rule.rule.Tags
 		}
 	}
 
@@ -99,13 +123,13 @@ func precedence(d model.Decision) int {
 }
 
 func matchesScope(scope Scope, action *model.Action) bool {
-	if len(scope.Agents) > 0 && !contains(scope.Agents, action.Agent) {
+	if len(scope.Agents) > 0 && !containsFold(scope.Agents, action.Agent) {
 		return false
 	}
-	if len(scope.Projects) > 0 && !contains(scope.Projects, action.Project) {
+	if len(scope.Projects) > 0 && !containsFold(scope.Projects, action.Project) {
 		return false
 	}
-	if len(scope.Tools) > 0 && !contains(scope.Tools, action.Tool) {
+	if len(scope.Tools) > 0 && !containsFold(scope.Tools, action.Tool) {
 		return false
 	}
 	return true
@@ -187,10 +211,10 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 
 func (r compiledRule) matches(action *model.Action) bool {
 	match := r.rule.Match
-	if len(match.ActionTypes) > 0 && !contains(match.ActionTypes, string(action.Type)) {
+	if len(match.ActionTypes) > 0 && !containsFold(match.ActionTypes, string(action.Type)) {
 		return false
 	}
-	if len(match.ToolNames) > 0 && !contains(match.ToolNames, action.Tool) {
+	if len(match.ToolNames) > 0 && !containsFold(match.ToolNames, action.Tool) {
 		return false
 	}
 	if len(r.filePatterns) > 0 && !matchesAnyPath(r.filePatterns, action.Parameters.Path) {
@@ -208,20 +232,8 @@ func (r compiledRule) matches(action *model.Action) bool {
 	return true
 }
 
-func (r compiledRule) conditionMatches(ctx context.Context, action *model.Action, snapshot *model.ContextSnapshot) (bool, error) {
-	if !r.hasCondition {
-		return true, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	evalCtx, cancel := context.WithTimeout(ctx, conditionTimeout)
-	defer cancel()
-
-	out, _, err := r.condition.ContextEval(evalCtx, map[string]any{
-		"action":  actionActivation(action),
-		"context": contextActivation(snapshot),
-	})
+func (r compiledRule) conditionMatches(ctx context.Context, activations map[string]any) (bool, error) {
+	out, _, err := r.condition.ContextEval(ctx, activations)
 	if err != nil {
 		return false, fmt.Errorf("rule %q condition: %w", r.rule.ID, err)
 	}
@@ -254,13 +266,10 @@ func (r compiledRule) renderMessage(action *model.Action, snapshot *model.Contex
 	return strings.TrimSpace(buf.String()), nil
 }
 
-func contains(values []string, want string) bool {
-	for _, v := range values {
-		if strings.EqualFold(v, want) {
-			return true
-		}
-	}
-	return false
+func containsFold(values []string, want string) bool {
+	return slices.ContainsFunc(values, func(v string) bool {
+		return strings.EqualFold(v, want)
+	})
 }
 
 func matchesAnyPath(patterns []string, value string) bool {

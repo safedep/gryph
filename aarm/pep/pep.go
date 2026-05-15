@@ -22,9 +22,9 @@ func Apply(result *model.EvaluationResult) *coresecurity.CheckResult {
 
 	out := &coresecurity.CheckResult{
 		CheckName:      CheckName,
-		MatchedRuleIDs: append([]string(nil), result.MatchedRuleIDs...),
+		MatchedRuleIDs: result.MatchedRuleIDs,
 		Severity:       mapSeverity(result.Severity),
-		Tags:           append([]string(nil), result.Tags...),
+		Tags:           result.Tags,
 	}
 
 	message := result.Message

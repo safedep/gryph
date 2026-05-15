@@ -16,7 +16,6 @@ type templateAction struct {
 	WorkingDir string
 	Project    string
 	Params     templateParams
-	Parameters templateParams
 }
 
 type templateParams struct {
@@ -74,7 +73,6 @@ func newTemplateAction(action *model.Action) templateAction {
 		WorkingDir: action.WorkingDir,
 		Project:    action.Project,
 		Params:     params,
-		Parameters: params,
 	}
 }
 

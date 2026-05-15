@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"regexp"
+
+	"github.com/safedep/gryph/aarm/model"
 )
 
 // validate checks the configuration for errors.
@@ -123,10 +125,10 @@ func validatePolicyConfig(cfg PolicyConfig) error {
 	if !cfg.Enabled {
 		return nil
 	}
-	switch cfg.FailMode {
-	case "open", "closed":
+	switch model.FailMode(cfg.FailMode) {
+	case model.FailOpen, model.FailClosed:
 	default:
-		return fmt.Errorf("invalid policy.fail_mode: %q (must be open or closed)", cfg.FailMode)
+		return fmt.Errorf("invalid policy.fail_mode: %q (must be %s or %s)", cfg.FailMode, model.FailOpen, model.FailClosed)
 	}
 	if cfg.ContextRetentionDays < 0 {
 		return fmt.Errorf("policy.context_retention_days must be non-negative")

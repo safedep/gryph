@@ -95,22 +95,10 @@ func validateRule(rule Rule) error {
 	if !isValidDecision(rule.Action) {
 		return fmt.Errorf("rule %q has invalid action %q", rule.ID, rule.Action)
 	}
-	if !isValidSeverity(rule.Severity) {
+	if !rule.Severity.IsValid() {
 		return fmt.Errorf("rule %q has invalid severity %q: must be one of %v", rule.ID, rule.Severity, model.AllSeverities)
 	}
 	return nil
-}
-
-func isValidSeverity(s model.Severity) bool {
-	if s == model.SeverityUnspecified {
-		return true
-	}
-	for _, known := range model.AllSeverities {
-		if s == known {
-			return true
-		}
-	}
-	return false
 }
 
 func isRuleEnabled(rule Rule) bool {

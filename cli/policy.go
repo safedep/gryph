@@ -85,7 +85,10 @@ func newPolicyInitCmd() *cobra.Command {
 				return ErrConfig("write policy file", err)
 			}
 
-			app, _ := loadApp()
+			app, err := loadApp()
+			if err != nil {
+				log.Warnf("loadApp failed during policy init, falling back to plain output: %v", err)
+			}
 			c := policyColorizer(app)
 			out := cmd.OutOrStdout()
 			_, _ = fmt.Fprintf(out, "%s Wrote example policy to %s\n", c.StatusOK(), c.Path(target))
@@ -574,13 +577,14 @@ func renderPolicyTest(w io.Writer, c *tui.Colorizer, v policyTestView, sources [
 }
 
 func decorateDecision(c *tui.Colorizer, d string) string {
-	switch d {
-	case "block":
-		return c.Error(strings.ToUpper(d))
-	case "guidance", "warn":
-		return c.Warning(strings.ToUpper(d))
-	case "allow":
-		return c.Success(strings.ToUpper(d))
+	upper := strings.ToUpper(d)
+	switch model.Decision(d) {
+	case model.DecisionBlock:
+		return c.Error(upper)
+	case model.DecisionGuidance, model.DecisionWarn:
+		return c.Warning(upper)
+	case model.DecisionAllow:
+		return c.Success(upper)
 	default:
 		return d
 	}
@@ -591,10 +595,10 @@ func decorateSeverity(c *tui.Colorizer, sev string) string {
 		return ""
 	}
 	tag := fmt.Sprintf("(severity: %s)", sev)
-	switch sev {
-	case "critical", "high":
+	switch model.Severity(sev) {
+	case model.SeverityCritical, model.SeverityHigh:
 		return c.Error(tag)
-	case "medium":
+	case model.SeverityMedium:
 		return c.Warning(tag)
 	default:
 		return c.Dim(tag)

@@ -20,7 +20,6 @@ type Mediator struct {
 	adapter mediation.Adapter
 	pdp     *pdp.PDP
 	accum   accumulator.Accumulator
-	enabled bool
 }
 
 var _ coresecurity.Check = (*Mediator)(nil)
@@ -49,7 +48,6 @@ func NewMediator(policy *pdp.Policy, opts ...MediatorOption) (*Mediator, error) 
 		adapter: mediation.NewHookAdapter(),
 		pdp:     engine,
 		accum:   accumulator.NewNop(),
-		enabled: true,
 	}
 	for _, opt := range opts {
 		opt(m)
@@ -64,7 +62,7 @@ func (m *Mediator) Name() string {
 
 // Enabled implements security.Check.
 func (m *Mediator) Enabled() bool {
-	return m != nil && m.enabled
+	return m != nil
 }
 
 // Check implements security.Check.
@@ -73,13 +71,6 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 		return nil, fmt.Errorf("aarm: mediator is not initialized")
 	}
 
-	// Session is optional, not required. Today the only caller is cli/hook.go
-	// which always wraps ctx via session.WithSession, so a miss would be a bug
-	// in that path. Future non-hook adapters (MCP proxy, HTTP proxy, OS
-	// mediation) may legitimately have no Gryph session, and the Mediator must
-	// still produce decisions for rules that don't depend on session-derived
-	// fields (Action.Project / AgentSessionID). Tighten to fail-fast when a
-	// sessionless adapter is no longer plausible.
 	sess, _ := session.FromContext(ctx)
 	action, err := m.adapter.Normalize(ctx, event, sess)
 	if err != nil {

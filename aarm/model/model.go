@@ -134,6 +134,20 @@ var AllSeverities = []Severity{
 	SeverityCritical,
 }
 
+// IsValid reports whether the severity is unspecified or one of the known
+// constants.
+func (s Severity) IsValid() bool {
+	if s == SeverityUnspecified {
+		return true
+	}
+	for _, known := range AllSeverities {
+		if s == known {
+			return true
+		}
+	}
+	return false
+}
+
 // EvaluationResult is the aggregated PDP decision for an action.
 type EvaluationResult struct {
 	Decision       Decision

@@ -201,7 +201,7 @@ func generatePolicySchema() jsonSchema {
 			},
 			"message": {
 				Type:        "string",
-				Description: "Go text/template rendered when the rule matches. Available references: .Action (Type, Tool, Operation, Agent, WorkingDir, Project, Params/Parameters), .Context (TotalActions, FilesRead, FilesWritten, CommandsExecuted, NetworkRequests, Errors, ToolsUsed, SessionDurationMs, ClassificationsSeen, EntitiesSeen, SemanticDrift), .Rule (ID, Description, Action, Severity, Tags).",
+				Description: "Go text/template rendered when the rule matches. Available references: .Action (Type, Tool, Operation, Agent, WorkingDir, Project, Params), .Context (TotalActions, FilesRead, FilesWritten, CommandsExecuted, NetworkRequests, Errors, ToolsUsed, SessionDurationMs, ClassificationsSeen, EntitiesSeen, SemanticDrift), .Rule (ID, Description, Action, Severity, Tags).",
 			},
 			"match": {
 				Ref: "#/$defs/match",
