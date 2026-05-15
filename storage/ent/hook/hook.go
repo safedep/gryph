@@ -9,6 +9,30 @@ import (
 	"github.com/safedep/gryph/storage/ent"
 )
 
+// The AarmContextActionFunc type is an adapter to allow the use of ordinary
+// function as AarmContextAction mutator.
+type AarmContextActionFunc func(context.Context, *ent.AarmContextActionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AarmContextActionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AarmContextActionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AarmContextActionMutation", m)
+}
+
+// The AarmContextStateFunc type is an adapter to allow the use of ordinary
+// function as AarmContextState mutator.
+type AarmContextStateFunc func(context.Context, *ent.AarmContextStateMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AarmContextStateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AarmContextStateMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AarmContextStateMutation", m)
+}
+
 // The AuditEventFunc type is an adapter to allow the use of ordinary
 // function as AuditEvent mutator.
 type AuditEventFunc func(context.Context, *ent.AuditEventMutation) (ent.Value, error)

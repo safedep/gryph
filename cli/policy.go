@@ -14,6 +14,7 @@ import (
 
 	"github.com/safedep/dry/log"
 	aarmsec "github.com/safedep/gryph/aarm"
+	"github.com/safedep/gryph/aarm/accumulator"
 	"github.com/safedep/gryph/aarm/loader"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
@@ -42,6 +43,7 @@ func NewPolicyCmd() *cobra.Command {
 		newPolicySourcesCmd(),
 		newPolicyValidateCmd(),
 		newPolicyTestCmd(),
+		newPolicyContextCmd(),
 	)
 
 	return cmd
@@ -616,7 +618,7 @@ func orderedActionKeys(m map[string]string) []string {
 	return out
 }
 
-func loadPolicyMediator(cfg *config.Config, paths *config.Paths) (*aarmsec.Mediator, error) {
+func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.Store) (*aarmsec.Mediator, error) {
 	ldr, err := buildPolicyLoader(cfg, paths, "")
 	if err != nil {
 		return nil, err
@@ -625,7 +627,11 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths) (*aarmsec.Media
 	if err != nil {
 		return nil, err
 	}
-	return aarmsec.NewMediator(policy)
+	var opts []aarmsec.MediatorOption
+	if store != nil {
+		opts = append(opts, aarmsec.WithAccumulator(accumulator.NewSQLite(store)))
+	}
+	return aarmsec.NewMediator(policy, opts...)
 }
 
 // lazyPolicyCheck defers policy load until the first hook event so a broken
@@ -650,7 +656,11 @@ func newLazyPolicyCheck(cfg *config.Config, paths *config.Paths, getStore func()
 
 func (l *lazyPolicyCheck) load() (*aarmsec.Mediator, error) {
 	l.once.Do(func() {
-		l.med, l.err = loadPolicyMediator(l.cfg, l.paths)
+		var store storage.Store
+		if l.getStore != nil {
+			store = l.getStore()
+		}
+		l.med, l.err = loadPolicyMediator(l.cfg, l.paths, store)
 		if l.err != nil {
 			l.recordLoadFailure(l.err)
 		}
@@ -689,7 +699,35 @@ func (l *lazyPolicyCheck) Check(ctx context.Context, event *events.Event) (*core
 	if err != nil {
 		return nil, fmt.Errorf("policy load failed: %w", err)
 	}
-	return med.Check(ctx, event)
+	result, checkErr := med.Check(ctx, event)
+	if checkErr != nil && errors.Is(checkErr, accumulator.ErrSnapshot) {
+		l.recordSnapshotFailure(event, checkErr)
+	}
+	return result, checkErr
+}
+
+func (l *lazyPolicyCheck) recordSnapshotFailure(event *events.Event, snapErr error) {
+	if l.getStore == nil {
+		log.Warnf("aarm: accumulator snapshot failure (no store): %v", snapErr)
+		return
+	}
+	store := l.getStore()
+	if store == nil {
+		log.Warnf("aarm: accumulator snapshot failure (nil store): %v", snapErr)
+		return
+	}
+	details := map[string]interface{}{}
+	agentName := ""
+	if event != nil {
+		details["session_id"] = event.SessionID.String()
+		details["agent"] = event.AgentName
+		agentName = event.AgentName
+	}
+	details["error"] = snapErr.Error()
+	if err := logSelfAudit(context.Background(), store, SelfAuditActionContextSnapshotError, agentName,
+		details, SelfAuditResultError, snapErr.Error()); err != nil {
+		log.Errorf("failed to record context snapshot failure: %v", err)
+	}
 }
 
 var _ coresecurity.Check = (*lazyPolicyCheck)(nil)

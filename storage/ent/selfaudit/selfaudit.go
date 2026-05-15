@@ -69,16 +69,18 @@ type Action string
 
 // Action values.
 const (
-	ActionInstall          Action = "install"
-	ActionUninstall        Action = "uninstall"
-	ActionConfigChange     Action = "config_change"
-	ActionExport           Action = "export"
-	ActionPurge            Action = "purge"
-	ActionUpgrade          Action = "upgrade"
-	ActionDatabaseInit     Action = "database_init"
-	ActionRetentionCleanup Action = "retention_cleanup"
-	ActionHookError        Action = "hook_error"
-	ActionPolicyLoadError  Action = "policy_load_error"
+	ActionInstall              Action = "install"
+	ActionUninstall            Action = "uninstall"
+	ActionConfigChange         Action = "config_change"
+	ActionExport               Action = "export"
+	ActionPurge                Action = "purge"
+	ActionUpgrade              Action = "upgrade"
+	ActionDatabaseInit         Action = "database_init"
+	ActionRetentionCleanup     Action = "retention_cleanup"
+	ActionHookError            Action = "hook_error"
+	ActionPolicyLoadError      Action = "policy_load_error"
+	ActionContextCleanup       Action = "context_cleanup"
+	ActionContextSnapshotError Action = "context_snapshot_error"
 )
 
 func (a Action) String() string {
@@ -88,7 +90,7 @@ func (a Action) String() string {
 // ActionValidator is a validator for the "action" field enum values. It is called by the builders before save.
 func ActionValidator(a Action) error {
 	switch a {
-	case ActionInstall, ActionUninstall, ActionConfigChange, ActionExport, ActionPurge, ActionUpgrade, ActionDatabaseInit, ActionRetentionCleanup, ActionHookError, ActionPolicyLoadError:
+	case ActionInstall, ActionUninstall, ActionConfigChange, ActionExport, ActionPurge, ActionUpgrade, ActionDatabaseInit, ActionRetentionCleanup, ActionHookError, ActionPolicyLoadError, ActionContextCleanup, ActionContextSnapshotError:
 		return nil
 	default:
 		return fmt.Errorf("selfaudit: invalid enum value for action field: %q", a)

@@ -8,6 +8,76 @@ import (
 )
 
 var (
+	// AarmContextActionsColumns holds the columns for the "aarm_context_actions" table.
+	AarmContextActionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "session_id", Type: field.TypeUUID},
+		{Name: "event_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "timestamp", Type: field.TypeTime},
+		{Name: "action_type", Type: field.TypeEnum, Enums: []string{"file_read", "file_write", "file_delete", "command_exec", "network_request", "tool_use", "session_start", "session_end", "notification", "subagent_start", "subagent_stop", "unknown"}},
+		{Name: "tool", Type: field.TypeString, Nullable: true},
+		{Name: "agent", Type: field.TypeString, Nullable: true},
+		{Name: "project", Type: field.TypeString, Nullable: true},
+		{Name: "working_dir", Type: field.TypeString, Nullable: true},
+		{Name: "result_status", Type: field.TypeEnum, Enums: []string{"success", "error", "blocked", "rejected", "pending"}, Default: "pending"},
+		{Name: "duration_ms", Type: field.TypeInt64, Nullable: true},
+		{Name: "error_message", Type: field.TypeString, Nullable: true},
+		{Name: "data_classifications", Type: field.TypeJSON, Nullable: true},
+		{Name: "injection_score", Type: field.TypeFloat32, Nullable: true},
+	}
+	// AarmContextActionsTable holds the schema information for the "aarm_context_actions" table.
+	AarmContextActionsTable = &schema.Table{
+		Name:       "aarm_context_actions",
+		Columns:    AarmContextActionsColumns,
+		PrimaryKey: []*schema.Column{AarmContextActionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "aarmcontextaction_session_id_timestamp",
+				Unique:  false,
+				Columns: []*schema.Column{AarmContextActionsColumns[1], AarmContextActionsColumns[3]},
+			},
+			{
+				Name:    "aarmcontextaction_timestamp",
+				Unique:  false,
+				Columns: []*schema.Column{AarmContextActionsColumns[3]},
+			},
+			{
+				Name:    "aarmcontextaction_session_id_action_type",
+				Unique:  false,
+				Columns: []*schema.Column{AarmContextActionsColumns[1], AarmContextActionsColumns[4]},
+			},
+		},
+	}
+	// AarmContextStatesColumns holds the columns for the "aarm_context_states" table.
+	AarmContextStatesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "session_id", Type: field.TypeUUID, Unique: true},
+		{Name: "first_seen_at", Type: field.TypeTime},
+		{Name: "last_action_at", Type: field.TypeTime},
+		{Name: "total_actions", Type: field.TypeInt, Default: 0},
+		{Name: "files_read", Type: field.TypeInt, Default: 0},
+		{Name: "files_written", Type: field.TypeInt, Default: 0},
+		{Name: "commands_executed", Type: field.TypeInt, Default: 0},
+		{Name: "network_requests", Type: field.TypeInt, Default: 0},
+		{Name: "errors", Type: field.TypeInt, Default: 0},
+		{Name: "tools_used", Type: field.TypeJSON, Nullable: true},
+		{Name: "classifications_seen", Type: field.TypeJSON, Nullable: true},
+		{Name: "entities_seen", Type: field.TypeJSON, Nullable: true},
+		{Name: "semantic_drift", Type: field.TypeFloat64, Default: 0},
+	}
+	// AarmContextStatesTable holds the schema information for the "aarm_context_states" table.
+	AarmContextStatesTable = &schema.Table{
+		Name:       "aarm_context_states",
+		Columns:    AarmContextStatesColumns,
+		PrimaryKey: []*schema.Column{AarmContextStatesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "aarmcontextstate_last_action_at",
+				Unique:  false,
+				Columns: []*schema.Column{AarmContextStatesColumns[3]},
+			},
+		},
+	}
 	// AuditEventsColumns holds the columns for the "audit_events" table.
 	AuditEventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -99,7 +169,7 @@ var (
 	SelfAuditsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "timestamp", Type: field.TypeTime},
-		{Name: "action", Type: field.TypeEnum, Enums: []string{"install", "uninstall", "config_change", "export", "purge", "upgrade", "database_init", "retention_cleanup", "hook_error", "policy_load_error"}},
+		{Name: "action", Type: field.TypeEnum, Enums: []string{"install", "uninstall", "config_change", "export", "purge", "upgrade", "database_init", "retention_cleanup", "hook_error", "policy_load_error", "context_cleanup", "context_snapshot_error"}},
 		{Name: "agent_name", Type: field.TypeString, Nullable: true},
 		{Name: "details", Type: field.TypeJSON, Nullable: true},
 		{Name: "result", Type: field.TypeEnum, Enums: []string{"success", "error", "skipped"}, Default: "success"},
@@ -176,6 +246,8 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		AarmContextActionsTable,
+		AarmContextStatesTable,
 		AuditEventsTable,
 		AuditStreamCursorsTable,
 		EventStreamCursorsTable,

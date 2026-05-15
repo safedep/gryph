@@ -83,7 +83,7 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 
 	snapshot, err := m.accum.Snapshot(ctx, action.SessionID)
 	if err != nil {
-		return nil, fmt.Errorf("aarm: accumulator snapshot: %w", err)
+		return nil, fmt.Errorf("aarm: %w: %w", accumulator.ErrSnapshot, err)
 	}
 
 	decision, err := m.pdp.Evaluate(ctx, action, snapshot)

@@ -12,10 +12,17 @@ package accumulator
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/model"
 )
+
+// ErrSnapshot is the sentinel returned (wrapped) when the Context Accumulator
+// fails to produce a snapshot for the PDP. Call sites use errors.Is to detect
+// snapshot failures and record a self-audit entry without coupling to the
+// concrete cause.
+var ErrSnapshot = errors.New("accumulator snapshot")
 
 // Accumulator records mediated actions for a session and produces the
 // point-in-time snapshot consumed by the PDP.

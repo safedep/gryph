@@ -12,6 +12,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/safedep/gryph/storage/ent/aarmcontextaction"
+	"github.com/safedep/gryph/storage/ent/aarmcontextstate"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
 	"github.com/safedep/gryph/storage/ent/eventstreamcursor"
@@ -77,6 +79,8 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			aarmcontextaction.Table: aarmcontextaction.ValidColumn,
+			aarmcontextstate.Table:  aarmcontextstate.ValidColumn,
 			auditevent.Table:        auditevent.ValidColumn,
 			auditstreamcursor.Table: auditstreamcursor.ValidColumn,
 			eventstreamcursor.Table: eventstreamcursor.ValidColumn,

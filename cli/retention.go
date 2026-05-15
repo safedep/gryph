@@ -48,53 +48,95 @@ Self-audit entries are preserved and not affected by this cleanup.`,
 				return err
 			}
 
-			// Initialize store
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 			defer func() {
 				err := app.Close()
 				if err != nil {
-					log.Errorf("failed to close app: %w", err)
+					log.Errorf("failed to close app: %v", err)
 				}
 			}()
 
 			days := app.Config.Storage.RetentionDays
-			if days == 0 {
-				fmt.Fprintln(os.Stderr, "Retention policy disabled (retention_days=0)")
+			policyCfg := app.Config.EffectivePolicy()
+			contextDays := policyCfg.ContextRetentionDays
+			if days == 0 && contextDays == 0 {
+				fmt.Fprintln(os.Stderr, "Retention policy disabled (retention_days=0, policy.context_retention_days=0)")
 				return nil
 			}
 
-			cutoff := time.Now().AddDate(0, 0, -days)
+			now := time.Now()
+			var eventCutoff, contextCutoff time.Time
+			if days > 0 {
+				eventCutoff = now.AddDate(0, 0, -days)
+			}
+			if contextDays > 0 {
+				contextCutoff = now.AddDate(0, 0, -contextDays)
+			}
 
 			if dryRun {
-				// Show what would be deleted
-				count, err := app.Store.CountEventsBefore(ctx, cutoff)
+				if days > 0 {
+					count, err := app.Store.CountEventsBefore(ctx, eventCutoff)
+					if err != nil {
+						return err
+					}
+					fmt.Printf("Would delete %d events older than %s (%d days)\n",
+						count, eventCutoff.Format(time.RFC3339), days)
+				}
+				if contextDays > 0 {
+					count, err := app.Store.CountContextBefore(ctx, contextCutoff)
+					if err != nil {
+						return err
+					}
+					fmt.Printf("Would delete %d context actions older than %s (%d days)\n",
+						count, contextCutoff.Format(time.RFC3339), contextDays)
+				}
+				return nil
+			}
+
+			var eventsDeleted, contextDeleted int
+			if days > 0 {
+				n, err := app.Store.DeleteEventsBefore(ctx, eventCutoff)
 				if err != nil {
 					return err
 				}
-				fmt.Printf("Would delete %d events older than %s (%d days)\n",
-					count, cutoff.Format(time.RFC3339), days)
-				return nil
-			}
-
-			deleted, err := app.Store.DeleteEventsBefore(ctx, cutoff)
-			if err != nil {
-				return err
-			}
-
-			// Log self-audit
-			if err := logSelfAudit(ctx, app.Store, SelfAuditActionRetentionCleanup, "",
-				map[string]interface{}{
-					"events_deleted": deleted,
-					"cutoff_time":    cutoff.Format(time.RFC3339),
+				eventsDeleted = n
+				details := map[string]interface{}{
+					"events_deleted": n,
+					"cutoff_time":    eventCutoff.Format(time.RFC3339),
 					"retention_days": days,
-				},
-				SelfAuditResultSuccess, ""); err != nil {
-				log.Errorf("failed to log self-audit: %w", err)
+				}
+				if err := logSelfAudit(ctx, app.Store, SelfAuditActionRetentionCleanup, "",
+					details, SelfAuditResultSuccess, ""); err != nil {
+					log.Errorf("failed to log self-audit: %v", err)
+				}
+			}
+			if contextDays > 0 {
+				n, err := app.Store.DeleteContextBefore(ctx, contextCutoff)
+				if err != nil {
+					return err
+				}
+				contextDeleted = n
+				if contextDeleted > 0 {
+					details := map[string]interface{}{
+						"aarm_context_actions_deleted": contextDeleted,
+						"cutoff":                       contextCutoff.Format(time.RFC3339),
+						"context_retention_days":       contextDays,
+					}
+					if err := logSelfAudit(ctx, app.Store, SelfAuditActionContextCleanup, "",
+						details, SelfAuditResultSuccess, ""); err != nil {
+						log.Errorf("failed to log self-audit: %v", err)
+					}
+				}
 			}
 
-			fmt.Printf("Deleted %d events older than %d days\n", deleted, days)
+			if days > 0 {
+				fmt.Printf("Deleted %d events older than %d days\n", eventsDeleted, days)
+			}
+			if contextDays > 0 {
+				fmt.Printf("Deleted %d context actions older than %d days\n", contextDeleted, contextDays)
+			}
 			return nil
 		},
 	}
@@ -121,7 +163,6 @@ events that would be affected by cleanup.`,
 				return err
 			}
 
-			// Initialize store
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to initialize database", err)
 			}
@@ -129,7 +170,7 @@ events that would be affected by cleanup.`,
 			defer func() {
 				err := app.Close()
 				if err != nil {
-					log.Errorf("failed to close app: %w", err)
+					log.Errorf("failed to close app: %v", err)
 				}
 			}()
 
@@ -145,7 +186,6 @@ events that would be affected by cleanup.`,
 				cutoff := time.Now().AddDate(0, 0, -days)
 				fmt.Printf("  Cutoff Date:     %s\n", cutoff.Format("2006-01-02 15:04:05"))
 
-				// Count events that would be deleted
 				count, err := app.Store.CountEventsBefore(ctx, cutoff)
 				if err != nil {
 					return err

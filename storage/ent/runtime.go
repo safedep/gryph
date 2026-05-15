@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/storage/ent/aarmcontextaction"
+	"github.com/safedep/gryph/storage/ent/aarmcontextstate"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
 	"github.com/safedep/gryph/storage/ent/eventstreamcursor"
@@ -18,6 +20,54 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	aarmcontextactionFields := schema.AarmContextAction{}.Fields()
+	_ = aarmcontextactionFields
+	// aarmcontextactionDescTimestamp is the schema descriptor for timestamp field.
+	aarmcontextactionDescTimestamp := aarmcontextactionFields[3].Descriptor()
+	// aarmcontextaction.DefaultTimestamp holds the default value on creation for the timestamp field.
+	aarmcontextaction.DefaultTimestamp = aarmcontextactionDescTimestamp.Default.(func() time.Time)
+	// aarmcontextactionDescID is the schema descriptor for id field.
+	aarmcontextactionDescID := aarmcontextactionFields[0].Descriptor()
+	// aarmcontextaction.DefaultID holds the default value on creation for the id field.
+	aarmcontextaction.DefaultID = aarmcontextactionDescID.Default.(func() uuid.UUID)
+	aarmcontextstateFields := schema.AarmContextState{}.Fields()
+	_ = aarmcontextstateFields
+	// aarmcontextstateDescFirstSeenAt is the schema descriptor for first_seen_at field.
+	aarmcontextstateDescFirstSeenAt := aarmcontextstateFields[1].Descriptor()
+	// aarmcontextstate.DefaultFirstSeenAt holds the default value on creation for the first_seen_at field.
+	aarmcontextstate.DefaultFirstSeenAt = aarmcontextstateDescFirstSeenAt.Default.(func() time.Time)
+	// aarmcontextstateDescLastActionAt is the schema descriptor for last_action_at field.
+	aarmcontextstateDescLastActionAt := aarmcontextstateFields[2].Descriptor()
+	// aarmcontextstate.DefaultLastActionAt holds the default value on creation for the last_action_at field.
+	aarmcontextstate.DefaultLastActionAt = aarmcontextstateDescLastActionAt.Default.(func() time.Time)
+	// aarmcontextstateDescTotalActions is the schema descriptor for total_actions field.
+	aarmcontextstateDescTotalActions := aarmcontextstateFields[3].Descriptor()
+	// aarmcontextstate.DefaultTotalActions holds the default value on creation for the total_actions field.
+	aarmcontextstate.DefaultTotalActions = aarmcontextstateDescTotalActions.Default.(int)
+	// aarmcontextstateDescFilesRead is the schema descriptor for files_read field.
+	aarmcontextstateDescFilesRead := aarmcontextstateFields[4].Descriptor()
+	// aarmcontextstate.DefaultFilesRead holds the default value on creation for the files_read field.
+	aarmcontextstate.DefaultFilesRead = aarmcontextstateDescFilesRead.Default.(int)
+	// aarmcontextstateDescFilesWritten is the schema descriptor for files_written field.
+	aarmcontextstateDescFilesWritten := aarmcontextstateFields[5].Descriptor()
+	// aarmcontextstate.DefaultFilesWritten holds the default value on creation for the files_written field.
+	aarmcontextstate.DefaultFilesWritten = aarmcontextstateDescFilesWritten.Default.(int)
+	// aarmcontextstateDescCommandsExecuted is the schema descriptor for commands_executed field.
+	aarmcontextstateDescCommandsExecuted := aarmcontextstateFields[6].Descriptor()
+	// aarmcontextstate.DefaultCommandsExecuted holds the default value on creation for the commands_executed field.
+	aarmcontextstate.DefaultCommandsExecuted = aarmcontextstateDescCommandsExecuted.Default.(int)
+	// aarmcontextstateDescNetworkRequests is the schema descriptor for network_requests field.
+	aarmcontextstateDescNetworkRequests := aarmcontextstateFields[7].Descriptor()
+	// aarmcontextstate.DefaultNetworkRequests holds the default value on creation for the network_requests field.
+	aarmcontextstate.DefaultNetworkRequests = aarmcontextstateDescNetworkRequests.Default.(int)
+	// aarmcontextstateDescErrors is the schema descriptor for errors field.
+	aarmcontextstateDescErrors := aarmcontextstateFields[8].Descriptor()
+	// aarmcontextstate.DefaultErrors holds the default value on creation for the errors field.
+	aarmcontextstate.DefaultErrors = aarmcontextstateDescErrors.Default.(int)
+	// aarmcontextstateDescSemanticDrift is the schema descriptor for semantic_drift field.
+	aarmcontextstateDescSemanticDrift := aarmcontextstateFields[12].Descriptor()
+	// aarmcontextstate.DefaultSemanticDrift holds the default value on creation for the semantic_drift field.
+	aarmcontextstate.DefaultSemanticDrift = aarmcontextstateDescSemanticDrift.Default.(float64)
 	auditeventFields := schema.AuditEvent{}.Fields()
 	_ = auditeventFields
 	// auditeventDescSequence is the schema descriptor for sequence field.

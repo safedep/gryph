@@ -17,17 +17,19 @@ import (
 // adding it to the schema (and running `make generate`) will fail saves
 // silently in production and only surface under careful testing.
 const (
-	SelfAuditActionInstall          = "install"
-	SelfAuditActionUninstall        = "uninstall"
-	SelfAuditActionConfigChange     = "config_change"
-	SelfAuditActionPurge            = "purge"
-	SelfAuditActionDatabaseInit     = "database_init"
-	SelfAuditActionRetentionCleanup = "retention_cleanup"
-	SelfAuditActionHookError        = "hook_error"
-	SelfAuditActionPolicyLoadError  = "policy_load_error"
-	SelfAuditResultSuccess          = "success"
-	SelfAuditResultError            = "error"
-	SelfAuditResultSkipped          = "skipped"
+	SelfAuditActionInstall              = "install"
+	SelfAuditActionUninstall            = "uninstall"
+	SelfAuditActionConfigChange         = "config_change"
+	SelfAuditActionPurge                = "purge"
+	SelfAuditActionDatabaseInit         = "database_init"
+	SelfAuditActionRetentionCleanup     = "retention_cleanup"
+	SelfAuditActionHookError            = "hook_error"
+	SelfAuditActionPolicyLoadError      = "policy_load_error"
+	SelfAuditActionContextCleanup       = "context_cleanup"
+	SelfAuditActionContextSnapshotError = "context_snapshot_error"
+	SelfAuditResultSuccess              = "success"
+	SelfAuditResultError                = "error"
+	SelfAuditResultSkipped              = "skipped"
 )
 
 // logSelfAudit logs a self-audit entry.

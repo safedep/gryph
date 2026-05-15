@@ -12,6 +12,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/storage/ent/aarmcontextaction"
+	"github.com/safedep/gryph/storage/ent/aarmcontextstate"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
 	"github.com/safedep/gryph/storage/ent/eventstreamcursor"
@@ -29,12 +31,2575 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
+	TypeAarmContextAction = "AarmContextAction"
+	TypeAarmContextState  = "AarmContextState"
 	TypeAuditEvent        = "AuditEvent"
 	TypeAuditStreamCursor = "AuditStreamCursor"
 	TypeEventStreamCursor = "EventStreamCursor"
 	TypeSelfAudit         = "SelfAudit"
 	TypeSession           = "Session"
 )
+
+// AarmContextActionMutation represents an operation that mutates the AarmContextAction nodes in the graph.
+type AarmContextActionMutation struct {
+	config
+	op                         Op
+	typ                        string
+	id                         *uuid.UUID
+	session_id                 *uuid.UUID
+	event_id                   *uuid.UUID
+	timestamp                  *time.Time
+	action_type                *aarmcontextaction.ActionType
+	tool                       *string
+	agent                      *string
+	project                    *string
+	working_dir                *string
+	result_status              *aarmcontextaction.ResultStatus
+	duration_ms                *int64
+	addduration_ms             *int64
+	error_message              *string
+	data_classifications       *[]string
+	appenddata_classifications []string
+	injection_score            *float32
+	addinjection_score         *float32
+	clearedFields              map[string]struct{}
+	done                       bool
+	oldValue                   func(context.Context) (*AarmContextAction, error)
+	predicates                 []predicate.AarmContextAction
+}
+
+var _ ent.Mutation = (*AarmContextActionMutation)(nil)
+
+// aarmcontextactionOption allows management of the mutation configuration using functional options.
+type aarmcontextactionOption func(*AarmContextActionMutation)
+
+// newAarmContextActionMutation creates new mutation for the AarmContextAction entity.
+func newAarmContextActionMutation(c config, op Op, opts ...aarmcontextactionOption) *AarmContextActionMutation {
+	m := &AarmContextActionMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAarmContextAction,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAarmContextActionID sets the ID field of the mutation.
+func withAarmContextActionID(id uuid.UUID) aarmcontextactionOption {
+	return func(m *AarmContextActionMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *AarmContextAction
+		)
+		m.oldValue = func(ctx context.Context) (*AarmContextAction, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().AarmContextAction.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAarmContextAction sets the old AarmContextAction of the mutation.
+func withAarmContextAction(node *AarmContextAction) aarmcontextactionOption {
+	return func(m *AarmContextActionMutation) {
+		m.oldValue = func(context.Context) (*AarmContextAction, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AarmContextActionMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AarmContextActionMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of AarmContextAction entities.
+func (m *AarmContextActionMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AarmContextActionMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AarmContextActionMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().AarmContextAction.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *AarmContextActionMutation) SetSessionID(u uuid.UUID) {
+	m.session_id = &u
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *AarmContextActionMutation) SessionID() (r uuid.UUID, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *AarmContextActionMutation) ResetSessionID() {
+	m.session_id = nil
+}
+
+// SetEventID sets the "event_id" field.
+func (m *AarmContextActionMutation) SetEventID(u uuid.UUID) {
+	m.event_id = &u
+}
+
+// EventID returns the value of the "event_id" field in the mutation.
+func (m *AarmContextActionMutation) EventID() (r uuid.UUID, exists bool) {
+	v := m.event_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventID returns the old "event_id" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldEventID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventID: %w", err)
+	}
+	return oldValue.EventID, nil
+}
+
+// ClearEventID clears the value of the "event_id" field.
+func (m *AarmContextActionMutation) ClearEventID() {
+	m.event_id = nil
+	m.clearedFields[aarmcontextaction.FieldEventID] = struct{}{}
+}
+
+// EventIDCleared returns if the "event_id" field was cleared in this mutation.
+func (m *AarmContextActionMutation) EventIDCleared() bool {
+	_, ok := m.clearedFields[aarmcontextaction.FieldEventID]
+	return ok
+}
+
+// ResetEventID resets all changes to the "event_id" field.
+func (m *AarmContextActionMutation) ResetEventID() {
+	m.event_id = nil
+	delete(m.clearedFields, aarmcontextaction.FieldEventID)
+}
+
+// SetTimestamp sets the "timestamp" field.
+func (m *AarmContextActionMutation) SetTimestamp(t time.Time) {
+	m.timestamp = &t
+}
+
+// Timestamp returns the value of the "timestamp" field in the mutation.
+func (m *AarmContextActionMutation) Timestamp() (r time.Time, exists bool) {
+	v := m.timestamp
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTimestamp returns the old "timestamp" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldTimestamp(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTimestamp is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTimestamp requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTimestamp: %w", err)
+	}
+	return oldValue.Timestamp, nil
+}
+
+// ResetTimestamp resets all changes to the "timestamp" field.
+func (m *AarmContextActionMutation) ResetTimestamp() {
+	m.timestamp = nil
+}
+
+// SetActionType sets the "action_type" field.
+func (m *AarmContextActionMutation) SetActionType(at aarmcontextaction.ActionType) {
+	m.action_type = &at
+}
+
+// ActionType returns the value of the "action_type" field in the mutation.
+func (m *AarmContextActionMutation) ActionType() (r aarmcontextaction.ActionType, exists bool) {
+	v := m.action_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActionType returns the old "action_type" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldActionType(ctx context.Context) (v aarmcontextaction.ActionType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActionType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActionType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActionType: %w", err)
+	}
+	return oldValue.ActionType, nil
+}
+
+// ResetActionType resets all changes to the "action_type" field.
+func (m *AarmContextActionMutation) ResetActionType() {
+	m.action_type = nil
+}
+
+// SetTool sets the "tool" field.
+func (m *AarmContextActionMutation) SetTool(s string) {
+	m.tool = &s
+}
+
+// Tool returns the value of the "tool" field in the mutation.
+func (m *AarmContextActionMutation) Tool() (r string, exists bool) {
+	v := m.tool
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTool returns the old "tool" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldTool(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTool is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTool requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTool: %w", err)
+	}
+	return oldValue.Tool, nil
+}
+
+// ClearTool clears the value of the "tool" field.
+func (m *AarmContextActionMutation) ClearTool() {
+	m.tool = nil
+	m.clearedFields[aarmcontextaction.FieldTool] = struct{}{}
+}
+
+// ToolCleared returns if the "tool" field was cleared in this mutation.
+func (m *AarmContextActionMutation) ToolCleared() bool {
+	_, ok := m.clearedFields[aarmcontextaction.FieldTool]
+	return ok
+}
+
+// ResetTool resets all changes to the "tool" field.
+func (m *AarmContextActionMutation) ResetTool() {
+	m.tool = nil
+	delete(m.clearedFields, aarmcontextaction.FieldTool)
+}
+
+// SetAgent sets the "agent" field.
+func (m *AarmContextActionMutation) SetAgent(s string) {
+	m.agent = &s
+}
+
+// Agent returns the value of the "agent" field in the mutation.
+func (m *AarmContextActionMutation) Agent() (r string, exists bool) {
+	v := m.agent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAgent returns the old "agent" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldAgent(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAgent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAgent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAgent: %w", err)
+	}
+	return oldValue.Agent, nil
+}
+
+// ClearAgent clears the value of the "agent" field.
+func (m *AarmContextActionMutation) ClearAgent() {
+	m.agent = nil
+	m.clearedFields[aarmcontextaction.FieldAgent] = struct{}{}
+}
+
+// AgentCleared returns if the "agent" field was cleared in this mutation.
+func (m *AarmContextActionMutation) AgentCleared() bool {
+	_, ok := m.clearedFields[aarmcontextaction.FieldAgent]
+	return ok
+}
+
+// ResetAgent resets all changes to the "agent" field.
+func (m *AarmContextActionMutation) ResetAgent() {
+	m.agent = nil
+	delete(m.clearedFields, aarmcontextaction.FieldAgent)
+}
+
+// SetProject sets the "project" field.
+func (m *AarmContextActionMutation) SetProject(s string) {
+	m.project = &s
+}
+
+// Project returns the value of the "project" field in the mutation.
+func (m *AarmContextActionMutation) Project() (r string, exists bool) {
+	v := m.project
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProject returns the old "project" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldProject(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProject is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProject requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProject: %w", err)
+	}
+	return oldValue.Project, nil
+}
+
+// ClearProject clears the value of the "project" field.
+func (m *AarmContextActionMutation) ClearProject() {
+	m.project = nil
+	m.clearedFields[aarmcontextaction.FieldProject] = struct{}{}
+}
+
+// ProjectCleared returns if the "project" field was cleared in this mutation.
+func (m *AarmContextActionMutation) ProjectCleared() bool {
+	_, ok := m.clearedFields[aarmcontextaction.FieldProject]
+	return ok
+}
+
+// ResetProject resets all changes to the "project" field.
+func (m *AarmContextActionMutation) ResetProject() {
+	m.project = nil
+	delete(m.clearedFields, aarmcontextaction.FieldProject)
+}
+
+// SetWorkingDir sets the "working_dir" field.
+func (m *AarmContextActionMutation) SetWorkingDir(s string) {
+	m.working_dir = &s
+}
+
+// WorkingDir returns the value of the "working_dir" field in the mutation.
+func (m *AarmContextActionMutation) WorkingDir() (r string, exists bool) {
+	v := m.working_dir
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkingDir returns the old "working_dir" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldWorkingDir(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkingDir is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkingDir requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkingDir: %w", err)
+	}
+	return oldValue.WorkingDir, nil
+}
+
+// ClearWorkingDir clears the value of the "working_dir" field.
+func (m *AarmContextActionMutation) ClearWorkingDir() {
+	m.working_dir = nil
+	m.clearedFields[aarmcontextaction.FieldWorkingDir] = struct{}{}
+}
+
+// WorkingDirCleared returns if the "working_dir" field was cleared in this mutation.
+func (m *AarmContextActionMutation) WorkingDirCleared() bool {
+	_, ok := m.clearedFields[aarmcontextaction.FieldWorkingDir]
+	return ok
+}
+
+// ResetWorkingDir resets all changes to the "working_dir" field.
+func (m *AarmContextActionMutation) ResetWorkingDir() {
+	m.working_dir = nil
+	delete(m.clearedFields, aarmcontextaction.FieldWorkingDir)
+}
+
+// SetResultStatus sets the "result_status" field.
+func (m *AarmContextActionMutation) SetResultStatus(as aarmcontextaction.ResultStatus) {
+	m.result_status = &as
+}
+
+// ResultStatus returns the value of the "result_status" field in the mutation.
+func (m *AarmContextActionMutation) ResultStatus() (r aarmcontextaction.ResultStatus, exists bool) {
+	v := m.result_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResultStatus returns the old "result_status" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldResultStatus(ctx context.Context) (v aarmcontextaction.ResultStatus, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResultStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResultStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResultStatus: %w", err)
+	}
+	return oldValue.ResultStatus, nil
+}
+
+// ResetResultStatus resets all changes to the "result_status" field.
+func (m *AarmContextActionMutation) ResetResultStatus() {
+	m.result_status = nil
+}
+
+// SetDurationMs sets the "duration_ms" field.
+func (m *AarmContextActionMutation) SetDurationMs(i int64) {
+	m.duration_ms = &i
+	m.addduration_ms = nil
+}
+
+// DurationMs returns the value of the "duration_ms" field in the mutation.
+func (m *AarmContextActionMutation) DurationMs() (r int64, exists bool) {
+	v := m.duration_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDurationMs returns the old "duration_ms" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldDurationMs(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDurationMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDurationMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDurationMs: %w", err)
+	}
+	return oldValue.DurationMs, nil
+}
+
+// AddDurationMs adds i to the "duration_ms" field.
+func (m *AarmContextActionMutation) AddDurationMs(i int64) {
+	if m.addduration_ms != nil {
+		*m.addduration_ms += i
+	} else {
+		m.addduration_ms = &i
+	}
+}
+
+// AddedDurationMs returns the value that was added to the "duration_ms" field in this mutation.
+func (m *AarmContextActionMutation) AddedDurationMs() (r int64, exists bool) {
+	v := m.addduration_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearDurationMs clears the value of the "duration_ms" field.
+func (m *AarmContextActionMutation) ClearDurationMs() {
+	m.duration_ms = nil
+	m.addduration_ms = nil
+	m.clearedFields[aarmcontextaction.FieldDurationMs] = struct{}{}
+}
+
+// DurationMsCleared returns if the "duration_ms" field was cleared in this mutation.
+func (m *AarmContextActionMutation) DurationMsCleared() bool {
+	_, ok := m.clearedFields[aarmcontextaction.FieldDurationMs]
+	return ok
+}
+
+// ResetDurationMs resets all changes to the "duration_ms" field.
+func (m *AarmContextActionMutation) ResetDurationMs() {
+	m.duration_ms = nil
+	m.addduration_ms = nil
+	delete(m.clearedFields, aarmcontextaction.FieldDurationMs)
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (m *AarmContextActionMutation) SetErrorMessage(s string) {
+	m.error_message = &s
+}
+
+// ErrorMessage returns the value of the "error_message" field in the mutation.
+func (m *AarmContextActionMutation) ErrorMessage() (r string, exists bool) {
+	v := m.error_message
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorMessage returns the old "error_message" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldErrorMessage(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorMessage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorMessage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorMessage: %w", err)
+	}
+	return oldValue.ErrorMessage, nil
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (m *AarmContextActionMutation) ClearErrorMessage() {
+	m.error_message = nil
+	m.clearedFields[aarmcontextaction.FieldErrorMessage] = struct{}{}
+}
+
+// ErrorMessageCleared returns if the "error_message" field was cleared in this mutation.
+func (m *AarmContextActionMutation) ErrorMessageCleared() bool {
+	_, ok := m.clearedFields[aarmcontextaction.FieldErrorMessage]
+	return ok
+}
+
+// ResetErrorMessage resets all changes to the "error_message" field.
+func (m *AarmContextActionMutation) ResetErrorMessage() {
+	m.error_message = nil
+	delete(m.clearedFields, aarmcontextaction.FieldErrorMessage)
+}
+
+// SetDataClassifications sets the "data_classifications" field.
+func (m *AarmContextActionMutation) SetDataClassifications(s []string) {
+	m.data_classifications = &s
+	m.appenddata_classifications = nil
+}
+
+// DataClassifications returns the value of the "data_classifications" field in the mutation.
+func (m *AarmContextActionMutation) DataClassifications() (r []string, exists bool) {
+	v := m.data_classifications
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDataClassifications returns the old "data_classifications" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldDataClassifications(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDataClassifications is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDataClassifications requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDataClassifications: %w", err)
+	}
+	return oldValue.DataClassifications, nil
+}
+
+// AppendDataClassifications adds s to the "data_classifications" field.
+func (m *AarmContextActionMutation) AppendDataClassifications(s []string) {
+	m.appenddata_classifications = append(m.appenddata_classifications, s...)
+}
+
+// AppendedDataClassifications returns the list of values that were appended to the "data_classifications" field in this mutation.
+func (m *AarmContextActionMutation) AppendedDataClassifications() ([]string, bool) {
+	if len(m.appenddata_classifications) == 0 {
+		return nil, false
+	}
+	return m.appenddata_classifications, true
+}
+
+// ClearDataClassifications clears the value of the "data_classifications" field.
+func (m *AarmContextActionMutation) ClearDataClassifications() {
+	m.data_classifications = nil
+	m.appenddata_classifications = nil
+	m.clearedFields[aarmcontextaction.FieldDataClassifications] = struct{}{}
+}
+
+// DataClassificationsCleared returns if the "data_classifications" field was cleared in this mutation.
+func (m *AarmContextActionMutation) DataClassificationsCleared() bool {
+	_, ok := m.clearedFields[aarmcontextaction.FieldDataClassifications]
+	return ok
+}
+
+// ResetDataClassifications resets all changes to the "data_classifications" field.
+func (m *AarmContextActionMutation) ResetDataClassifications() {
+	m.data_classifications = nil
+	m.appenddata_classifications = nil
+	delete(m.clearedFields, aarmcontextaction.FieldDataClassifications)
+}
+
+// SetInjectionScore sets the "injection_score" field.
+func (m *AarmContextActionMutation) SetInjectionScore(f float32) {
+	m.injection_score = &f
+	m.addinjection_score = nil
+}
+
+// InjectionScore returns the value of the "injection_score" field in the mutation.
+func (m *AarmContextActionMutation) InjectionScore() (r float32, exists bool) {
+	v := m.injection_score
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInjectionScore returns the old "injection_score" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldInjectionScore(ctx context.Context) (v *float32, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInjectionScore is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInjectionScore requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInjectionScore: %w", err)
+	}
+	return oldValue.InjectionScore, nil
+}
+
+// AddInjectionScore adds f to the "injection_score" field.
+func (m *AarmContextActionMutation) AddInjectionScore(f float32) {
+	if m.addinjection_score != nil {
+		*m.addinjection_score += f
+	} else {
+		m.addinjection_score = &f
+	}
+}
+
+// AddedInjectionScore returns the value that was added to the "injection_score" field in this mutation.
+func (m *AarmContextActionMutation) AddedInjectionScore() (r float32, exists bool) {
+	v := m.addinjection_score
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearInjectionScore clears the value of the "injection_score" field.
+func (m *AarmContextActionMutation) ClearInjectionScore() {
+	m.injection_score = nil
+	m.addinjection_score = nil
+	m.clearedFields[aarmcontextaction.FieldInjectionScore] = struct{}{}
+}
+
+// InjectionScoreCleared returns if the "injection_score" field was cleared in this mutation.
+func (m *AarmContextActionMutation) InjectionScoreCleared() bool {
+	_, ok := m.clearedFields[aarmcontextaction.FieldInjectionScore]
+	return ok
+}
+
+// ResetInjectionScore resets all changes to the "injection_score" field.
+func (m *AarmContextActionMutation) ResetInjectionScore() {
+	m.injection_score = nil
+	m.addinjection_score = nil
+	delete(m.clearedFields, aarmcontextaction.FieldInjectionScore)
+}
+
+// Where appends a list predicates to the AarmContextActionMutation builder.
+func (m *AarmContextActionMutation) Where(ps ...predicate.AarmContextAction) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AarmContextActionMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AarmContextActionMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.AarmContextAction, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AarmContextActionMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AarmContextActionMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (AarmContextAction).
+func (m *AarmContextActionMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AarmContextActionMutation) Fields() []string {
+	fields := make([]string, 0, 13)
+	if m.session_id != nil {
+		fields = append(fields, aarmcontextaction.FieldSessionID)
+	}
+	if m.event_id != nil {
+		fields = append(fields, aarmcontextaction.FieldEventID)
+	}
+	if m.timestamp != nil {
+		fields = append(fields, aarmcontextaction.FieldTimestamp)
+	}
+	if m.action_type != nil {
+		fields = append(fields, aarmcontextaction.FieldActionType)
+	}
+	if m.tool != nil {
+		fields = append(fields, aarmcontextaction.FieldTool)
+	}
+	if m.agent != nil {
+		fields = append(fields, aarmcontextaction.FieldAgent)
+	}
+	if m.project != nil {
+		fields = append(fields, aarmcontextaction.FieldProject)
+	}
+	if m.working_dir != nil {
+		fields = append(fields, aarmcontextaction.FieldWorkingDir)
+	}
+	if m.result_status != nil {
+		fields = append(fields, aarmcontextaction.FieldResultStatus)
+	}
+	if m.duration_ms != nil {
+		fields = append(fields, aarmcontextaction.FieldDurationMs)
+	}
+	if m.error_message != nil {
+		fields = append(fields, aarmcontextaction.FieldErrorMessage)
+	}
+	if m.data_classifications != nil {
+		fields = append(fields, aarmcontextaction.FieldDataClassifications)
+	}
+	if m.injection_score != nil {
+		fields = append(fields, aarmcontextaction.FieldInjectionScore)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AarmContextActionMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case aarmcontextaction.FieldSessionID:
+		return m.SessionID()
+	case aarmcontextaction.FieldEventID:
+		return m.EventID()
+	case aarmcontextaction.FieldTimestamp:
+		return m.Timestamp()
+	case aarmcontextaction.FieldActionType:
+		return m.ActionType()
+	case aarmcontextaction.FieldTool:
+		return m.Tool()
+	case aarmcontextaction.FieldAgent:
+		return m.Agent()
+	case aarmcontextaction.FieldProject:
+		return m.Project()
+	case aarmcontextaction.FieldWorkingDir:
+		return m.WorkingDir()
+	case aarmcontextaction.FieldResultStatus:
+		return m.ResultStatus()
+	case aarmcontextaction.FieldDurationMs:
+		return m.DurationMs()
+	case aarmcontextaction.FieldErrorMessage:
+		return m.ErrorMessage()
+	case aarmcontextaction.FieldDataClassifications:
+		return m.DataClassifications()
+	case aarmcontextaction.FieldInjectionScore:
+		return m.InjectionScore()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AarmContextActionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case aarmcontextaction.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case aarmcontextaction.FieldEventID:
+		return m.OldEventID(ctx)
+	case aarmcontextaction.FieldTimestamp:
+		return m.OldTimestamp(ctx)
+	case aarmcontextaction.FieldActionType:
+		return m.OldActionType(ctx)
+	case aarmcontextaction.FieldTool:
+		return m.OldTool(ctx)
+	case aarmcontextaction.FieldAgent:
+		return m.OldAgent(ctx)
+	case aarmcontextaction.FieldProject:
+		return m.OldProject(ctx)
+	case aarmcontextaction.FieldWorkingDir:
+		return m.OldWorkingDir(ctx)
+	case aarmcontextaction.FieldResultStatus:
+		return m.OldResultStatus(ctx)
+	case aarmcontextaction.FieldDurationMs:
+		return m.OldDurationMs(ctx)
+	case aarmcontextaction.FieldErrorMessage:
+		return m.OldErrorMessage(ctx)
+	case aarmcontextaction.FieldDataClassifications:
+		return m.OldDataClassifications(ctx)
+	case aarmcontextaction.FieldInjectionScore:
+		return m.OldInjectionScore(ctx)
+	}
+	return nil, fmt.Errorf("unknown AarmContextAction field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AarmContextActionMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case aarmcontextaction.FieldSessionID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case aarmcontextaction.FieldEventID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventID(v)
+		return nil
+	case aarmcontextaction.FieldTimestamp:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTimestamp(v)
+		return nil
+	case aarmcontextaction.FieldActionType:
+		v, ok := value.(aarmcontextaction.ActionType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActionType(v)
+		return nil
+	case aarmcontextaction.FieldTool:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTool(v)
+		return nil
+	case aarmcontextaction.FieldAgent:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAgent(v)
+		return nil
+	case aarmcontextaction.FieldProject:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProject(v)
+		return nil
+	case aarmcontextaction.FieldWorkingDir:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkingDir(v)
+		return nil
+	case aarmcontextaction.FieldResultStatus:
+		v, ok := value.(aarmcontextaction.ResultStatus)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResultStatus(v)
+		return nil
+	case aarmcontextaction.FieldDurationMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDurationMs(v)
+		return nil
+	case aarmcontextaction.FieldErrorMessage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorMessage(v)
+		return nil
+	case aarmcontextaction.FieldDataClassifications:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDataClassifications(v)
+		return nil
+	case aarmcontextaction.FieldInjectionScore:
+		v, ok := value.(float32)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInjectionScore(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AarmContextAction field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AarmContextActionMutation) AddedFields() []string {
+	var fields []string
+	if m.addduration_ms != nil {
+		fields = append(fields, aarmcontextaction.FieldDurationMs)
+	}
+	if m.addinjection_score != nil {
+		fields = append(fields, aarmcontextaction.FieldInjectionScore)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AarmContextActionMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case aarmcontextaction.FieldDurationMs:
+		return m.AddedDurationMs()
+	case aarmcontextaction.FieldInjectionScore:
+		return m.AddedInjectionScore()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AarmContextActionMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case aarmcontextaction.FieldDurationMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDurationMs(v)
+		return nil
+	case aarmcontextaction.FieldInjectionScore:
+		v, ok := value.(float32)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInjectionScore(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AarmContextAction numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AarmContextActionMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(aarmcontextaction.FieldEventID) {
+		fields = append(fields, aarmcontextaction.FieldEventID)
+	}
+	if m.FieldCleared(aarmcontextaction.FieldTool) {
+		fields = append(fields, aarmcontextaction.FieldTool)
+	}
+	if m.FieldCleared(aarmcontextaction.FieldAgent) {
+		fields = append(fields, aarmcontextaction.FieldAgent)
+	}
+	if m.FieldCleared(aarmcontextaction.FieldProject) {
+		fields = append(fields, aarmcontextaction.FieldProject)
+	}
+	if m.FieldCleared(aarmcontextaction.FieldWorkingDir) {
+		fields = append(fields, aarmcontextaction.FieldWorkingDir)
+	}
+	if m.FieldCleared(aarmcontextaction.FieldDurationMs) {
+		fields = append(fields, aarmcontextaction.FieldDurationMs)
+	}
+	if m.FieldCleared(aarmcontextaction.FieldErrorMessage) {
+		fields = append(fields, aarmcontextaction.FieldErrorMessage)
+	}
+	if m.FieldCleared(aarmcontextaction.FieldDataClassifications) {
+		fields = append(fields, aarmcontextaction.FieldDataClassifications)
+	}
+	if m.FieldCleared(aarmcontextaction.FieldInjectionScore) {
+		fields = append(fields, aarmcontextaction.FieldInjectionScore)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AarmContextActionMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AarmContextActionMutation) ClearField(name string) error {
+	switch name {
+	case aarmcontextaction.FieldEventID:
+		m.ClearEventID()
+		return nil
+	case aarmcontextaction.FieldTool:
+		m.ClearTool()
+		return nil
+	case aarmcontextaction.FieldAgent:
+		m.ClearAgent()
+		return nil
+	case aarmcontextaction.FieldProject:
+		m.ClearProject()
+		return nil
+	case aarmcontextaction.FieldWorkingDir:
+		m.ClearWorkingDir()
+		return nil
+	case aarmcontextaction.FieldDurationMs:
+		m.ClearDurationMs()
+		return nil
+	case aarmcontextaction.FieldErrorMessage:
+		m.ClearErrorMessage()
+		return nil
+	case aarmcontextaction.FieldDataClassifications:
+		m.ClearDataClassifications()
+		return nil
+	case aarmcontextaction.FieldInjectionScore:
+		m.ClearInjectionScore()
+		return nil
+	}
+	return fmt.Errorf("unknown AarmContextAction nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AarmContextActionMutation) ResetField(name string) error {
+	switch name {
+	case aarmcontextaction.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case aarmcontextaction.FieldEventID:
+		m.ResetEventID()
+		return nil
+	case aarmcontextaction.FieldTimestamp:
+		m.ResetTimestamp()
+		return nil
+	case aarmcontextaction.FieldActionType:
+		m.ResetActionType()
+		return nil
+	case aarmcontextaction.FieldTool:
+		m.ResetTool()
+		return nil
+	case aarmcontextaction.FieldAgent:
+		m.ResetAgent()
+		return nil
+	case aarmcontextaction.FieldProject:
+		m.ResetProject()
+		return nil
+	case aarmcontextaction.FieldWorkingDir:
+		m.ResetWorkingDir()
+		return nil
+	case aarmcontextaction.FieldResultStatus:
+		m.ResetResultStatus()
+		return nil
+	case aarmcontextaction.FieldDurationMs:
+		m.ResetDurationMs()
+		return nil
+	case aarmcontextaction.FieldErrorMessage:
+		m.ResetErrorMessage()
+		return nil
+	case aarmcontextaction.FieldDataClassifications:
+		m.ResetDataClassifications()
+		return nil
+	case aarmcontextaction.FieldInjectionScore:
+		m.ResetInjectionScore()
+		return nil
+	}
+	return fmt.Errorf("unknown AarmContextAction field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AarmContextActionMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AarmContextActionMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AarmContextActionMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AarmContextActionMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AarmContextActionMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AarmContextActionMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AarmContextActionMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown AarmContextAction unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AarmContextActionMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown AarmContextAction edge %s", name)
+}
+
+// AarmContextStateMutation represents an operation that mutates the AarmContextState nodes in the graph.
+type AarmContextStateMutation struct {
+	config
+	op                         Op
+	typ                        string
+	id                         *int
+	session_id                 *uuid.UUID
+	first_seen_at              *time.Time
+	last_action_at             *time.Time
+	total_actions              *int
+	addtotal_actions           *int
+	files_read                 *int
+	addfiles_read              *int
+	files_written              *int
+	addfiles_written           *int
+	commands_executed          *int
+	addcommands_executed       *int
+	network_requests           *int
+	addnetwork_requests        *int
+	errors                     *int
+	adderrors                  *int
+	tools_used                 *[]string
+	appendtools_used           []string
+	classifications_seen       *[]string
+	appendclassifications_seen []string
+	entities_seen              *[]string
+	appendentities_seen        []string
+	semantic_drift             *float64
+	addsemantic_drift          *float64
+	clearedFields              map[string]struct{}
+	done                       bool
+	oldValue                   func(context.Context) (*AarmContextState, error)
+	predicates                 []predicate.AarmContextState
+}
+
+var _ ent.Mutation = (*AarmContextStateMutation)(nil)
+
+// aarmcontextstateOption allows management of the mutation configuration using functional options.
+type aarmcontextstateOption func(*AarmContextStateMutation)
+
+// newAarmContextStateMutation creates new mutation for the AarmContextState entity.
+func newAarmContextStateMutation(c config, op Op, opts ...aarmcontextstateOption) *AarmContextStateMutation {
+	m := &AarmContextStateMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAarmContextState,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAarmContextStateID sets the ID field of the mutation.
+func withAarmContextStateID(id int) aarmcontextstateOption {
+	return func(m *AarmContextStateMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *AarmContextState
+		)
+		m.oldValue = func(ctx context.Context) (*AarmContextState, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().AarmContextState.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAarmContextState sets the old AarmContextState of the mutation.
+func withAarmContextState(node *AarmContextState) aarmcontextstateOption {
+	return func(m *AarmContextStateMutation) {
+		m.oldValue = func(context.Context) (*AarmContextState, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AarmContextStateMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AarmContextStateMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AarmContextStateMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AarmContextStateMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().AarmContextState.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *AarmContextStateMutation) SetSessionID(u uuid.UUID) {
+	m.session_id = &u
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *AarmContextStateMutation) SessionID() (r uuid.UUID, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the AarmContextState entity.
+// If the AarmContextState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextStateMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *AarmContextStateMutation) ResetSessionID() {
+	m.session_id = nil
+}
+
+// SetFirstSeenAt sets the "first_seen_at" field.
+func (m *AarmContextStateMutation) SetFirstSeenAt(t time.Time) {
+	m.first_seen_at = &t
+}
+
+// FirstSeenAt returns the value of the "first_seen_at" field in the mutation.
+func (m *AarmContextStateMutation) FirstSeenAt() (r time.Time, exists bool) {
+	v := m.first_seen_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFirstSeenAt returns the old "first_seen_at" field's value of the AarmContextState entity.
+// If the AarmContextState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextStateMutation) OldFirstSeenAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFirstSeenAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFirstSeenAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFirstSeenAt: %w", err)
+	}
+	return oldValue.FirstSeenAt, nil
+}
+
+// ResetFirstSeenAt resets all changes to the "first_seen_at" field.
+func (m *AarmContextStateMutation) ResetFirstSeenAt() {
+	m.first_seen_at = nil
+}
+
+// SetLastActionAt sets the "last_action_at" field.
+func (m *AarmContextStateMutation) SetLastActionAt(t time.Time) {
+	m.last_action_at = &t
+}
+
+// LastActionAt returns the value of the "last_action_at" field in the mutation.
+func (m *AarmContextStateMutation) LastActionAt() (r time.Time, exists bool) {
+	v := m.last_action_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastActionAt returns the old "last_action_at" field's value of the AarmContextState entity.
+// If the AarmContextState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextStateMutation) OldLastActionAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastActionAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastActionAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastActionAt: %w", err)
+	}
+	return oldValue.LastActionAt, nil
+}
+
+// ResetLastActionAt resets all changes to the "last_action_at" field.
+func (m *AarmContextStateMutation) ResetLastActionAt() {
+	m.last_action_at = nil
+}
+
+// SetTotalActions sets the "total_actions" field.
+func (m *AarmContextStateMutation) SetTotalActions(i int) {
+	m.total_actions = &i
+	m.addtotal_actions = nil
+}
+
+// TotalActions returns the value of the "total_actions" field in the mutation.
+func (m *AarmContextStateMutation) TotalActions() (r int, exists bool) {
+	v := m.total_actions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTotalActions returns the old "total_actions" field's value of the AarmContextState entity.
+// If the AarmContextState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextStateMutation) OldTotalActions(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTotalActions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTotalActions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTotalActions: %w", err)
+	}
+	return oldValue.TotalActions, nil
+}
+
+// AddTotalActions adds i to the "total_actions" field.
+func (m *AarmContextStateMutation) AddTotalActions(i int) {
+	if m.addtotal_actions != nil {
+		*m.addtotal_actions += i
+	} else {
+		m.addtotal_actions = &i
+	}
+}
+
+// AddedTotalActions returns the value that was added to the "total_actions" field in this mutation.
+func (m *AarmContextStateMutation) AddedTotalActions() (r int, exists bool) {
+	v := m.addtotal_actions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTotalActions resets all changes to the "total_actions" field.
+func (m *AarmContextStateMutation) ResetTotalActions() {
+	m.total_actions = nil
+	m.addtotal_actions = nil
+}
+
+// SetFilesRead sets the "files_read" field.
+func (m *AarmContextStateMutation) SetFilesRead(i int) {
+	m.files_read = &i
+	m.addfiles_read = nil
+}
+
+// FilesRead returns the value of the "files_read" field in the mutation.
+func (m *AarmContextStateMutation) FilesRead() (r int, exists bool) {
+	v := m.files_read
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFilesRead returns the old "files_read" field's value of the AarmContextState entity.
+// If the AarmContextState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextStateMutation) OldFilesRead(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFilesRead is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFilesRead requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFilesRead: %w", err)
+	}
+	return oldValue.FilesRead, nil
+}
+
+// AddFilesRead adds i to the "files_read" field.
+func (m *AarmContextStateMutation) AddFilesRead(i int) {
+	if m.addfiles_read != nil {
+		*m.addfiles_read += i
+	} else {
+		m.addfiles_read = &i
+	}
+}
+
+// AddedFilesRead returns the value that was added to the "files_read" field in this mutation.
+func (m *AarmContextStateMutation) AddedFilesRead() (r int, exists bool) {
+	v := m.addfiles_read
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetFilesRead resets all changes to the "files_read" field.
+func (m *AarmContextStateMutation) ResetFilesRead() {
+	m.files_read = nil
+	m.addfiles_read = nil
+}
+
+// SetFilesWritten sets the "files_written" field.
+func (m *AarmContextStateMutation) SetFilesWritten(i int) {
+	m.files_written = &i
+	m.addfiles_written = nil
+}
+
+// FilesWritten returns the value of the "files_written" field in the mutation.
+func (m *AarmContextStateMutation) FilesWritten() (r int, exists bool) {
+	v := m.files_written
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFilesWritten returns the old "files_written" field's value of the AarmContextState entity.
+// If the AarmContextState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextStateMutation) OldFilesWritten(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFilesWritten is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFilesWritten requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFilesWritten: %w", err)
+	}
+	return oldValue.FilesWritten, nil
+}
+
+// AddFilesWritten adds i to the "files_written" field.
+func (m *AarmContextStateMutation) AddFilesWritten(i int) {
+	if m.addfiles_written != nil {
+		*m.addfiles_written += i
+	} else {
+		m.addfiles_written = &i
+	}
+}
+
+// AddedFilesWritten returns the value that was added to the "files_written" field in this mutation.
+func (m *AarmContextStateMutation) AddedFilesWritten() (r int, exists bool) {
+	v := m.addfiles_written
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetFilesWritten resets all changes to the "files_written" field.
+func (m *AarmContextStateMutation) ResetFilesWritten() {
+	m.files_written = nil
+	m.addfiles_written = nil
+}
+
+// SetCommandsExecuted sets the "commands_executed" field.
+func (m *AarmContextStateMutation) SetCommandsExecuted(i int) {
+	m.commands_executed = &i
+	m.addcommands_executed = nil
+}
+
+// CommandsExecuted returns the value of the "commands_executed" field in the mutation.
+func (m *AarmContextStateMutation) CommandsExecuted() (r int, exists bool) {
+	v := m.commands_executed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommandsExecuted returns the old "commands_executed" field's value of the AarmContextState entity.
+// If the AarmContextState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextStateMutation) OldCommandsExecuted(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommandsExecuted is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommandsExecuted requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommandsExecuted: %w", err)
+	}
+	return oldValue.CommandsExecuted, nil
+}
+
+// AddCommandsExecuted adds i to the "commands_executed" field.
+func (m *AarmContextStateMutation) AddCommandsExecuted(i int) {
+	if m.addcommands_executed != nil {
+		*m.addcommands_executed += i
+	} else {
+		m.addcommands_executed = &i
+	}
+}
+
+// AddedCommandsExecuted returns the value that was added to the "commands_executed" field in this mutation.
+func (m *AarmContextStateMutation) AddedCommandsExecuted() (r int, exists bool) {
+	v := m.addcommands_executed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCommandsExecuted resets all changes to the "commands_executed" field.
+func (m *AarmContextStateMutation) ResetCommandsExecuted() {
+	m.commands_executed = nil
+	m.addcommands_executed = nil
+}
+
+// SetNetworkRequests sets the "network_requests" field.
+func (m *AarmContextStateMutation) SetNetworkRequests(i int) {
+	m.network_requests = &i
+	m.addnetwork_requests = nil
+}
+
+// NetworkRequests returns the value of the "network_requests" field in the mutation.
+func (m *AarmContextStateMutation) NetworkRequests() (r int, exists bool) {
+	v := m.network_requests
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNetworkRequests returns the old "network_requests" field's value of the AarmContextState entity.
+// If the AarmContextState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextStateMutation) OldNetworkRequests(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNetworkRequests is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNetworkRequests requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNetworkRequests: %w", err)
+	}
+	return oldValue.NetworkRequests, nil
+}
+
+// AddNetworkRequests adds i to the "network_requests" field.
+func (m *AarmContextStateMutation) AddNetworkRequests(i int) {
+	if m.addnetwork_requests != nil {
+		*m.addnetwork_requests += i
+	} else {
+		m.addnetwork_requests = &i
+	}
+}
+
+// AddedNetworkRequests returns the value that was added to the "network_requests" field in this mutation.
+func (m *AarmContextStateMutation) AddedNetworkRequests() (r int, exists bool) {
+	v := m.addnetwork_requests
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetNetworkRequests resets all changes to the "network_requests" field.
+func (m *AarmContextStateMutation) ResetNetworkRequests() {
+	m.network_requests = nil
+	m.addnetwork_requests = nil
+}
+
+// SetErrors sets the "errors" field.
+func (m *AarmContextStateMutation) SetErrors(i int) {
+	m.errors = &i
+	m.adderrors = nil
+}
+
+// Errors returns the value of the "errors" field in the mutation.
+func (m *AarmContextStateMutation) Errors() (r int, exists bool) {
+	v := m.errors
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrors returns the old "errors" field's value of the AarmContextState entity.
+// If the AarmContextState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextStateMutation) OldErrors(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrors is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrors requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrors: %w", err)
+	}
+	return oldValue.Errors, nil
+}
+
+// AddErrors adds i to the "errors" field.
+func (m *AarmContextStateMutation) AddErrors(i int) {
+	if m.adderrors != nil {
+		*m.adderrors += i
+	} else {
+		m.adderrors = &i
+	}
+}
+
+// AddedErrors returns the value that was added to the "errors" field in this mutation.
+func (m *AarmContextStateMutation) AddedErrors() (r int, exists bool) {
+	v := m.adderrors
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetErrors resets all changes to the "errors" field.
+func (m *AarmContextStateMutation) ResetErrors() {
+	m.errors = nil
+	m.adderrors = nil
+}
+
+// SetToolsUsed sets the "tools_used" field.
+func (m *AarmContextStateMutation) SetToolsUsed(s []string) {
+	m.tools_used = &s
+	m.appendtools_used = nil
+}
+
+// ToolsUsed returns the value of the "tools_used" field in the mutation.
+func (m *AarmContextStateMutation) ToolsUsed() (r []string, exists bool) {
+	v := m.tools_used
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolsUsed returns the old "tools_used" field's value of the AarmContextState entity.
+// If the AarmContextState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextStateMutation) OldToolsUsed(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolsUsed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolsUsed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolsUsed: %w", err)
+	}
+	return oldValue.ToolsUsed, nil
+}
+
+// AppendToolsUsed adds s to the "tools_used" field.
+func (m *AarmContextStateMutation) AppendToolsUsed(s []string) {
+	m.appendtools_used = append(m.appendtools_used, s...)
+}
+
+// AppendedToolsUsed returns the list of values that were appended to the "tools_used" field in this mutation.
+func (m *AarmContextStateMutation) AppendedToolsUsed() ([]string, bool) {
+	if len(m.appendtools_used) == 0 {
+		return nil, false
+	}
+	return m.appendtools_used, true
+}
+
+// ClearToolsUsed clears the value of the "tools_used" field.
+func (m *AarmContextStateMutation) ClearToolsUsed() {
+	m.tools_used = nil
+	m.appendtools_used = nil
+	m.clearedFields[aarmcontextstate.FieldToolsUsed] = struct{}{}
+}
+
+// ToolsUsedCleared returns if the "tools_used" field was cleared in this mutation.
+func (m *AarmContextStateMutation) ToolsUsedCleared() bool {
+	_, ok := m.clearedFields[aarmcontextstate.FieldToolsUsed]
+	return ok
+}
+
+// ResetToolsUsed resets all changes to the "tools_used" field.
+func (m *AarmContextStateMutation) ResetToolsUsed() {
+	m.tools_used = nil
+	m.appendtools_used = nil
+	delete(m.clearedFields, aarmcontextstate.FieldToolsUsed)
+}
+
+// SetClassificationsSeen sets the "classifications_seen" field.
+func (m *AarmContextStateMutation) SetClassificationsSeen(s []string) {
+	m.classifications_seen = &s
+	m.appendclassifications_seen = nil
+}
+
+// ClassificationsSeen returns the value of the "classifications_seen" field in the mutation.
+func (m *AarmContextStateMutation) ClassificationsSeen() (r []string, exists bool) {
+	v := m.classifications_seen
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClassificationsSeen returns the old "classifications_seen" field's value of the AarmContextState entity.
+// If the AarmContextState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextStateMutation) OldClassificationsSeen(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClassificationsSeen is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClassificationsSeen requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClassificationsSeen: %w", err)
+	}
+	return oldValue.ClassificationsSeen, nil
+}
+
+// AppendClassificationsSeen adds s to the "classifications_seen" field.
+func (m *AarmContextStateMutation) AppendClassificationsSeen(s []string) {
+	m.appendclassifications_seen = append(m.appendclassifications_seen, s...)
+}
+
+// AppendedClassificationsSeen returns the list of values that were appended to the "classifications_seen" field in this mutation.
+func (m *AarmContextStateMutation) AppendedClassificationsSeen() ([]string, bool) {
+	if len(m.appendclassifications_seen) == 0 {
+		return nil, false
+	}
+	return m.appendclassifications_seen, true
+}
+
+// ClearClassificationsSeen clears the value of the "classifications_seen" field.
+func (m *AarmContextStateMutation) ClearClassificationsSeen() {
+	m.classifications_seen = nil
+	m.appendclassifications_seen = nil
+	m.clearedFields[aarmcontextstate.FieldClassificationsSeen] = struct{}{}
+}
+
+// ClassificationsSeenCleared returns if the "classifications_seen" field was cleared in this mutation.
+func (m *AarmContextStateMutation) ClassificationsSeenCleared() bool {
+	_, ok := m.clearedFields[aarmcontextstate.FieldClassificationsSeen]
+	return ok
+}
+
+// ResetClassificationsSeen resets all changes to the "classifications_seen" field.
+func (m *AarmContextStateMutation) ResetClassificationsSeen() {
+	m.classifications_seen = nil
+	m.appendclassifications_seen = nil
+	delete(m.clearedFields, aarmcontextstate.FieldClassificationsSeen)
+}
+
+// SetEntitiesSeen sets the "entities_seen" field.
+func (m *AarmContextStateMutation) SetEntitiesSeen(s []string) {
+	m.entities_seen = &s
+	m.appendentities_seen = nil
+}
+
+// EntitiesSeen returns the value of the "entities_seen" field in the mutation.
+func (m *AarmContextStateMutation) EntitiesSeen() (r []string, exists bool) {
+	v := m.entities_seen
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntitiesSeen returns the old "entities_seen" field's value of the AarmContextState entity.
+// If the AarmContextState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextStateMutation) OldEntitiesSeen(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntitiesSeen is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntitiesSeen requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntitiesSeen: %w", err)
+	}
+	return oldValue.EntitiesSeen, nil
+}
+
+// AppendEntitiesSeen adds s to the "entities_seen" field.
+func (m *AarmContextStateMutation) AppendEntitiesSeen(s []string) {
+	m.appendentities_seen = append(m.appendentities_seen, s...)
+}
+
+// AppendedEntitiesSeen returns the list of values that were appended to the "entities_seen" field in this mutation.
+func (m *AarmContextStateMutation) AppendedEntitiesSeen() ([]string, bool) {
+	if len(m.appendentities_seen) == 0 {
+		return nil, false
+	}
+	return m.appendentities_seen, true
+}
+
+// ClearEntitiesSeen clears the value of the "entities_seen" field.
+func (m *AarmContextStateMutation) ClearEntitiesSeen() {
+	m.entities_seen = nil
+	m.appendentities_seen = nil
+	m.clearedFields[aarmcontextstate.FieldEntitiesSeen] = struct{}{}
+}
+
+// EntitiesSeenCleared returns if the "entities_seen" field was cleared in this mutation.
+func (m *AarmContextStateMutation) EntitiesSeenCleared() bool {
+	_, ok := m.clearedFields[aarmcontextstate.FieldEntitiesSeen]
+	return ok
+}
+
+// ResetEntitiesSeen resets all changes to the "entities_seen" field.
+func (m *AarmContextStateMutation) ResetEntitiesSeen() {
+	m.entities_seen = nil
+	m.appendentities_seen = nil
+	delete(m.clearedFields, aarmcontextstate.FieldEntitiesSeen)
+}
+
+// SetSemanticDrift sets the "semantic_drift" field.
+func (m *AarmContextStateMutation) SetSemanticDrift(f float64) {
+	m.semantic_drift = &f
+	m.addsemantic_drift = nil
+}
+
+// SemanticDrift returns the value of the "semantic_drift" field in the mutation.
+func (m *AarmContextStateMutation) SemanticDrift() (r float64, exists bool) {
+	v := m.semantic_drift
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSemanticDrift returns the old "semantic_drift" field's value of the AarmContextState entity.
+// If the AarmContextState object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextStateMutation) OldSemanticDrift(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSemanticDrift is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSemanticDrift requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSemanticDrift: %w", err)
+	}
+	return oldValue.SemanticDrift, nil
+}
+
+// AddSemanticDrift adds f to the "semantic_drift" field.
+func (m *AarmContextStateMutation) AddSemanticDrift(f float64) {
+	if m.addsemantic_drift != nil {
+		*m.addsemantic_drift += f
+	} else {
+		m.addsemantic_drift = &f
+	}
+}
+
+// AddedSemanticDrift returns the value that was added to the "semantic_drift" field in this mutation.
+func (m *AarmContextStateMutation) AddedSemanticDrift() (r float64, exists bool) {
+	v := m.addsemantic_drift
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSemanticDrift resets all changes to the "semantic_drift" field.
+func (m *AarmContextStateMutation) ResetSemanticDrift() {
+	m.semantic_drift = nil
+	m.addsemantic_drift = nil
+}
+
+// Where appends a list predicates to the AarmContextStateMutation builder.
+func (m *AarmContextStateMutation) Where(ps ...predicate.AarmContextState) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AarmContextStateMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AarmContextStateMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.AarmContextState, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AarmContextStateMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AarmContextStateMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (AarmContextState).
+func (m *AarmContextStateMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AarmContextStateMutation) Fields() []string {
+	fields := make([]string, 0, 13)
+	if m.session_id != nil {
+		fields = append(fields, aarmcontextstate.FieldSessionID)
+	}
+	if m.first_seen_at != nil {
+		fields = append(fields, aarmcontextstate.FieldFirstSeenAt)
+	}
+	if m.last_action_at != nil {
+		fields = append(fields, aarmcontextstate.FieldLastActionAt)
+	}
+	if m.total_actions != nil {
+		fields = append(fields, aarmcontextstate.FieldTotalActions)
+	}
+	if m.files_read != nil {
+		fields = append(fields, aarmcontextstate.FieldFilesRead)
+	}
+	if m.files_written != nil {
+		fields = append(fields, aarmcontextstate.FieldFilesWritten)
+	}
+	if m.commands_executed != nil {
+		fields = append(fields, aarmcontextstate.FieldCommandsExecuted)
+	}
+	if m.network_requests != nil {
+		fields = append(fields, aarmcontextstate.FieldNetworkRequests)
+	}
+	if m.errors != nil {
+		fields = append(fields, aarmcontextstate.FieldErrors)
+	}
+	if m.tools_used != nil {
+		fields = append(fields, aarmcontextstate.FieldToolsUsed)
+	}
+	if m.classifications_seen != nil {
+		fields = append(fields, aarmcontextstate.FieldClassificationsSeen)
+	}
+	if m.entities_seen != nil {
+		fields = append(fields, aarmcontextstate.FieldEntitiesSeen)
+	}
+	if m.semantic_drift != nil {
+		fields = append(fields, aarmcontextstate.FieldSemanticDrift)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AarmContextStateMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case aarmcontextstate.FieldSessionID:
+		return m.SessionID()
+	case aarmcontextstate.FieldFirstSeenAt:
+		return m.FirstSeenAt()
+	case aarmcontextstate.FieldLastActionAt:
+		return m.LastActionAt()
+	case aarmcontextstate.FieldTotalActions:
+		return m.TotalActions()
+	case aarmcontextstate.FieldFilesRead:
+		return m.FilesRead()
+	case aarmcontextstate.FieldFilesWritten:
+		return m.FilesWritten()
+	case aarmcontextstate.FieldCommandsExecuted:
+		return m.CommandsExecuted()
+	case aarmcontextstate.FieldNetworkRequests:
+		return m.NetworkRequests()
+	case aarmcontextstate.FieldErrors:
+		return m.Errors()
+	case aarmcontextstate.FieldToolsUsed:
+		return m.ToolsUsed()
+	case aarmcontextstate.FieldClassificationsSeen:
+		return m.ClassificationsSeen()
+	case aarmcontextstate.FieldEntitiesSeen:
+		return m.EntitiesSeen()
+	case aarmcontextstate.FieldSemanticDrift:
+		return m.SemanticDrift()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AarmContextStateMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case aarmcontextstate.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case aarmcontextstate.FieldFirstSeenAt:
+		return m.OldFirstSeenAt(ctx)
+	case aarmcontextstate.FieldLastActionAt:
+		return m.OldLastActionAt(ctx)
+	case aarmcontextstate.FieldTotalActions:
+		return m.OldTotalActions(ctx)
+	case aarmcontextstate.FieldFilesRead:
+		return m.OldFilesRead(ctx)
+	case aarmcontextstate.FieldFilesWritten:
+		return m.OldFilesWritten(ctx)
+	case aarmcontextstate.FieldCommandsExecuted:
+		return m.OldCommandsExecuted(ctx)
+	case aarmcontextstate.FieldNetworkRequests:
+		return m.OldNetworkRequests(ctx)
+	case aarmcontextstate.FieldErrors:
+		return m.OldErrors(ctx)
+	case aarmcontextstate.FieldToolsUsed:
+		return m.OldToolsUsed(ctx)
+	case aarmcontextstate.FieldClassificationsSeen:
+		return m.OldClassificationsSeen(ctx)
+	case aarmcontextstate.FieldEntitiesSeen:
+		return m.OldEntitiesSeen(ctx)
+	case aarmcontextstate.FieldSemanticDrift:
+		return m.OldSemanticDrift(ctx)
+	}
+	return nil, fmt.Errorf("unknown AarmContextState field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AarmContextStateMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case aarmcontextstate.FieldSessionID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case aarmcontextstate.FieldFirstSeenAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFirstSeenAt(v)
+		return nil
+	case aarmcontextstate.FieldLastActionAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastActionAt(v)
+		return nil
+	case aarmcontextstate.FieldTotalActions:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTotalActions(v)
+		return nil
+	case aarmcontextstate.FieldFilesRead:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFilesRead(v)
+		return nil
+	case aarmcontextstate.FieldFilesWritten:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFilesWritten(v)
+		return nil
+	case aarmcontextstate.FieldCommandsExecuted:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommandsExecuted(v)
+		return nil
+	case aarmcontextstate.FieldNetworkRequests:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNetworkRequests(v)
+		return nil
+	case aarmcontextstate.FieldErrors:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrors(v)
+		return nil
+	case aarmcontextstate.FieldToolsUsed:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolsUsed(v)
+		return nil
+	case aarmcontextstate.FieldClassificationsSeen:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClassificationsSeen(v)
+		return nil
+	case aarmcontextstate.FieldEntitiesSeen:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntitiesSeen(v)
+		return nil
+	case aarmcontextstate.FieldSemanticDrift:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSemanticDrift(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AarmContextState field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AarmContextStateMutation) AddedFields() []string {
+	var fields []string
+	if m.addtotal_actions != nil {
+		fields = append(fields, aarmcontextstate.FieldTotalActions)
+	}
+	if m.addfiles_read != nil {
+		fields = append(fields, aarmcontextstate.FieldFilesRead)
+	}
+	if m.addfiles_written != nil {
+		fields = append(fields, aarmcontextstate.FieldFilesWritten)
+	}
+	if m.addcommands_executed != nil {
+		fields = append(fields, aarmcontextstate.FieldCommandsExecuted)
+	}
+	if m.addnetwork_requests != nil {
+		fields = append(fields, aarmcontextstate.FieldNetworkRequests)
+	}
+	if m.adderrors != nil {
+		fields = append(fields, aarmcontextstate.FieldErrors)
+	}
+	if m.addsemantic_drift != nil {
+		fields = append(fields, aarmcontextstate.FieldSemanticDrift)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AarmContextStateMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case aarmcontextstate.FieldTotalActions:
+		return m.AddedTotalActions()
+	case aarmcontextstate.FieldFilesRead:
+		return m.AddedFilesRead()
+	case aarmcontextstate.FieldFilesWritten:
+		return m.AddedFilesWritten()
+	case aarmcontextstate.FieldCommandsExecuted:
+		return m.AddedCommandsExecuted()
+	case aarmcontextstate.FieldNetworkRequests:
+		return m.AddedNetworkRequests()
+	case aarmcontextstate.FieldErrors:
+		return m.AddedErrors()
+	case aarmcontextstate.FieldSemanticDrift:
+		return m.AddedSemanticDrift()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AarmContextStateMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case aarmcontextstate.FieldTotalActions:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTotalActions(v)
+		return nil
+	case aarmcontextstate.FieldFilesRead:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddFilesRead(v)
+		return nil
+	case aarmcontextstate.FieldFilesWritten:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddFilesWritten(v)
+		return nil
+	case aarmcontextstate.FieldCommandsExecuted:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCommandsExecuted(v)
+		return nil
+	case aarmcontextstate.FieldNetworkRequests:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddNetworkRequests(v)
+		return nil
+	case aarmcontextstate.FieldErrors:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddErrors(v)
+		return nil
+	case aarmcontextstate.FieldSemanticDrift:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSemanticDrift(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AarmContextState numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AarmContextStateMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(aarmcontextstate.FieldToolsUsed) {
+		fields = append(fields, aarmcontextstate.FieldToolsUsed)
+	}
+	if m.FieldCleared(aarmcontextstate.FieldClassificationsSeen) {
+		fields = append(fields, aarmcontextstate.FieldClassificationsSeen)
+	}
+	if m.FieldCleared(aarmcontextstate.FieldEntitiesSeen) {
+		fields = append(fields, aarmcontextstate.FieldEntitiesSeen)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AarmContextStateMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AarmContextStateMutation) ClearField(name string) error {
+	switch name {
+	case aarmcontextstate.FieldToolsUsed:
+		m.ClearToolsUsed()
+		return nil
+	case aarmcontextstate.FieldClassificationsSeen:
+		m.ClearClassificationsSeen()
+		return nil
+	case aarmcontextstate.FieldEntitiesSeen:
+		m.ClearEntitiesSeen()
+		return nil
+	}
+	return fmt.Errorf("unknown AarmContextState nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AarmContextStateMutation) ResetField(name string) error {
+	switch name {
+	case aarmcontextstate.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case aarmcontextstate.FieldFirstSeenAt:
+		m.ResetFirstSeenAt()
+		return nil
+	case aarmcontextstate.FieldLastActionAt:
+		m.ResetLastActionAt()
+		return nil
+	case aarmcontextstate.FieldTotalActions:
+		m.ResetTotalActions()
+		return nil
+	case aarmcontextstate.FieldFilesRead:
+		m.ResetFilesRead()
+		return nil
+	case aarmcontextstate.FieldFilesWritten:
+		m.ResetFilesWritten()
+		return nil
+	case aarmcontextstate.FieldCommandsExecuted:
+		m.ResetCommandsExecuted()
+		return nil
+	case aarmcontextstate.FieldNetworkRequests:
+		m.ResetNetworkRequests()
+		return nil
+	case aarmcontextstate.FieldErrors:
+		m.ResetErrors()
+		return nil
+	case aarmcontextstate.FieldToolsUsed:
+		m.ResetToolsUsed()
+		return nil
+	case aarmcontextstate.FieldClassificationsSeen:
+		m.ResetClassificationsSeen()
+		return nil
+	case aarmcontextstate.FieldEntitiesSeen:
+		m.ResetEntitiesSeen()
+		return nil
+	case aarmcontextstate.FieldSemanticDrift:
+		m.ResetSemanticDrift()
+		return nil
+	}
+	return fmt.Errorf("unknown AarmContextState field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AarmContextStateMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AarmContextStateMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AarmContextStateMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AarmContextStateMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AarmContextStateMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AarmContextStateMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AarmContextStateMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown AarmContextState unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AarmContextStateMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown AarmContextState edge %s", name)
+}
 
 // AuditEventMutation represents an operation that mutates the AuditEvent nodes in the graph.
 type AuditEventMutation struct {

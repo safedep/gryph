@@ -89,6 +89,60 @@ type StreamCursorStore interface {
 	SaveAuditCursor(ctx context.Context, cursor *StreamCursor) error
 }
 
+// ContextStore defines the interface for the AARM Context Accumulator's
+// persistent storage. AppendContextAction is responsible for the atomic
+// per-session counter update on the state row. Implementations must keep
+// the counter UPSERT race-free across concurrent same-session writes.
+type ContextStore interface {
+	AppendContextAction(ctx context.Context, row *ContextActionRow) error
+	UpdateContextActionResult(ctx context.Context, actionID uuid.UUID, status string, durationMS int64, errorMsg string) error
+	GetContextState(ctx context.Context, sessionID uuid.UUID) (*ContextStateRow, error)
+	GetContextStateByPrefix(ctx context.Context, prefix string) (*ContextStateRow, error)
+	QueryContextActions(ctx context.Context, sessionID uuid.UUID, limit int) ([]*ContextActionRow, error)
+	QueryAllContextStates(ctx context.Context, limit int) ([]*ContextStateRow, error)
+	DeleteContextBefore(ctx context.Context, before time.Time) (int, error)
+	CountContextBefore(ctx context.Context, before time.Time) (int, error)
+}
+
+// ContextActionRow is the storage-layer representation of a single mediated
+// action recorded by the Context Accumulator. ResultStatus is "pending" at
+// append time and transitions to one of "success", "error", "blocked", or
+// "rejected" via UpdateContextActionResult.
+type ContextActionRow struct {
+	ID                  uuid.UUID
+	SessionID           uuid.UUID
+	EventID             uuid.UUID
+	Timestamp           time.Time
+	ActionType          string
+	Tool                string
+	Agent               string
+	Project             string
+	WorkingDir          string
+	ResultStatus        string
+	DurationMS          *int64
+	ErrorMessage        string
+	DataClassifications []string
+	InjectionScore      *float32
+}
+
+// ContextStateRow is the storage-layer representation of the per-session
+// counter row used by the PDP to populate the context.* CEL surface.
+type ContextStateRow struct {
+	SessionID           uuid.UUID
+	FirstSeenAt         time.Time
+	LastActionAt        time.Time
+	TotalActions        int
+	FilesRead           int
+	FilesWritten        int
+	CommandsExecuted    int
+	NetworkRequests     int
+	Errors              int
+	ToolsUsed           []string
+	ClassificationsSeen []string
+	EntitiesSeen        []string
+	SemanticDrift       float64
+}
+
 // StreamCursor represents the sync cursor for a single collection (events or audits).
 type StreamCursor struct {
 	TargetName   string
@@ -121,6 +175,7 @@ type Store interface {
 	SessionStore
 	SelfAuditStore
 	StreamCursorStore
+	ContextStore
 
 	// Init initializes the database schema.
 	Init(ctx context.Context) error
