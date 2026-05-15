@@ -43,16 +43,15 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 		return result, nil
 	}
 
-	var (
-		evalCtx     context.Context
-		cancel      context.CancelFunc
-		activations map[string]any
-	)
-	defer func() {
-		if cancel != nil {
-			cancel()
-		}
-	}()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	// The timeout bounds total CEL evaluation across all rules in this call,
+	// not per rule. Allocate up front so cancel is a plain defer.
+	evalCtx, cancel := context.WithTimeout(ctx, conditionTimeout)
+	defer cancel()
+
+	var activations map[string]any
 
 	for _, rule := range p.rules {
 		if !isRuleEnabled(rule.rule) {
@@ -66,10 +65,6 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 		}
 		if rule.hasCondition {
 			if activations == nil {
-				if ctx == nil {
-					ctx = context.Background()
-				}
-				evalCtx, cancel = context.WithTimeout(ctx, conditionTimeout)
 				activations = map[string]any{
 					"action":  actionActivation(action),
 					"context": contextActivation(snapshot),
