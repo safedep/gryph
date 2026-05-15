@@ -399,6 +399,7 @@ const (
 	HookAllow HookDecision = iota
 	HookBlock
 	HookError
+	HookGuidance
 )
 
 type HookResponse struct {
@@ -418,7 +419,8 @@ func (r *HookResponse) ExitCode() int {
 }
 
 func (r *HookResponse) Stderr() string {
-	if r.Decision == HookBlock || r.Decision == HookError {
+	switch r.Decision {
+	case HookBlock, HookError, HookGuidance:
 		return r.Message
 	}
 	return ""
@@ -431,8 +433,12 @@ type hookResponseJSON struct {
 
 func (r *HookResponse) JSON() []byte {
 	resp := hookResponseJSON{Decision: "allow"}
-	if r.Decision == HookBlock {
+	switch r.Decision {
+	case HookBlock:
 		resp.Decision = "block"
+		resp.Reason = r.Message
+	case HookGuidance:
+		resp.Decision = "allow"
 		resp.Reason = r.Message
 	}
 	data, _ := json.Marshal(resp)
@@ -453,6 +459,14 @@ func NewBlockResponse(message string) *HookResponse {
 func NewErrorResponse(message string) *HookResponse {
 	return &HookResponse{
 		Decision: HookError,
+		Message:  message,
+	}
+}
+
+// NewGuidanceResponse creates a non-blocking advisory response.
+func NewGuidanceResponse(message string) *HookResponse {
+	return &HookResponse{
+		Decision: HookGuidance,
 		Message:  message,
 	}
 }

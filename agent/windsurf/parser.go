@@ -353,6 +353,7 @@ const (
 	HookAllow HookDecision = iota
 	HookBlock
 	HookError
+	HookGuidance
 )
 
 type HookResponse struct {
@@ -371,6 +372,16 @@ func (r *HookResponse) ExitCode() int {
 	}
 }
 
+// Stderr returns the advisory text. Windsurf has no JSON advisory channel,
+// so guidance is surfaced via stderr at exit 0.
+func (r *HookResponse) Stderr() string {
+	switch r.Decision {
+	case HookBlock, HookError, HookGuidance:
+		return r.Message
+	}
+	return ""
+}
+
 func NewAllowResponse() *HookResponse {
 	return &HookResponse{Decision: HookAllow}
 }
@@ -381,4 +392,9 @@ func NewBlockResponse(message string) *HookResponse {
 
 func NewErrorResponse(message string) *HookResponse {
 	return &HookResponse{Decision: HookError, Message: message}
+}
+
+// NewGuidanceResponse creates a non-blocking advisory response.
+func NewGuidanceResponse(message string) *HookResponse {
+	return &HookResponse{Decision: HookGuidance, Message: message}
 }

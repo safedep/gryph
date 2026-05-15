@@ -176,4 +176,21 @@ func TestHookResponse_ExitCodes(t *testing.T) {
 	assert.Equal(t, 0, NewAllowResponse().ExitCode())
 	assert.Equal(t, 2, NewBlockResponse("reason").ExitCode())
 	assert.Equal(t, 1, NewErrorResponse("error").ExitCode())
+	assert.Equal(t, 0, NewGuidanceResponse("advisory").ExitCode())
+}
+
+func TestNewGuidanceResponse(t *testing.T) {
+	resp := NewGuidanceResponse("security advisory")
+	assert.Equal(t, HookGuidance, resp.Decision)
+	assert.Equal(t, "security advisory", resp.Message)
+	assert.Equal(t, "security advisory", resp.Stderr())
+
+	data := resp.JSON()
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &parsed))
+
+	hookOutput, ok := parsed["hookSpecificOutput"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "allow", hookOutput["permissionDecision"])
+	assert.Equal(t, "security advisory", hookOutput["permissionDecisionReason"])
 }

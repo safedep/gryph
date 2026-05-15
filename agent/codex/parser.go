@@ -391,6 +391,7 @@ const (
 	HookAllow HookDecision = iota
 	HookBlock
 	HookError
+	HookGuidance
 )
 
 func (r *HookResponse) ExitCode() int {
@@ -402,6 +403,14 @@ func (r *HookResponse) ExitCode() int {
 	default:
 		return 0
 	}
+}
+
+func (r *HookResponse) Stderr() string {
+	switch r.Decision {
+	case HookBlock, HookError, HookGuidance:
+		return r.Message
+	}
+	return ""
 }
 
 type preToolUseOutput struct {
@@ -425,6 +434,9 @@ func (r *HookResponse) JSON() []byte {
 	case HookBlock:
 		output.HookSpecificOutput.PermissionDecision = "deny"
 		output.HookSpecificOutput.PermissionDecisionReason = r.Message
+	case HookGuidance:
+		output.HookSpecificOutput.PermissionDecision = "allow"
+		output.HookSpecificOutput.PermissionDecisionReason = r.Message
 	default:
 		output.HookSpecificOutput.PermissionDecision = "allow"
 	}
@@ -443,4 +455,10 @@ func NewBlockResponse(message string) *HookResponse {
 
 func NewErrorResponse(message string) *HookResponse {
 	return &HookResponse{Decision: HookError, Message: message}
+}
+
+// NewGuidanceResponse creates a non-blocking advisory response.
+// PreToolUse carries the reason inline; other hooks fall back to stderr.
+func NewGuidanceResponse(message string) *HookResponse {
+	return &HookResponse{Decision: HookGuidance, Message: message}
 }
