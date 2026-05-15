@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/storage/ent/aarmcontextaction"
 	"github.com/safedep/gryph/storage/ent/aarmcontextstate"
+	"github.com/safedep/gryph/storage/ent/aarmreceipt"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
 	"github.com/safedep/gryph/storage/ent/eventstreamcursor"
@@ -68,6 +69,28 @@ func init() {
 	aarmcontextstateDescSemanticDrift := aarmcontextstateFields[12].Descriptor()
 	// aarmcontextstate.DefaultSemanticDrift holds the default value on creation for the semantic_drift field.
 	aarmcontextstate.DefaultSemanticDrift = aarmcontextstateDescSemanticDrift.Default.(float64)
+	aarmreceiptFields := schema.AarmReceipt{}.Fields()
+	_ = aarmreceiptFields
+	// aarmreceiptDescRecordedAt is the schema descriptor for recorded_at field.
+	aarmreceiptDescRecordedAt := aarmreceiptFields[4].Descriptor()
+	// aarmreceipt.DefaultRecordedAt holds the default value on creation for the recorded_at field.
+	aarmreceipt.DefaultRecordedAt = aarmreceiptDescRecordedAt.Default.(func() time.Time)
+	// aarmreceiptDescSequence is the schema descriptor for sequence field.
+	aarmreceiptDescSequence := aarmreceiptFields[5].Descriptor()
+	// aarmreceipt.SequenceValidator is a validator for the "sequence" field. It is called by the builders before save.
+	aarmreceipt.SequenceValidator = aarmreceiptDescSequence.Validators[0].(func(int64) error)
+	// aarmreceiptDescPrevHash is the schema descriptor for prev_hash field.
+	aarmreceiptDescPrevHash := aarmreceiptFields[19].Descriptor()
+	// aarmreceipt.PrevHashValidator is a validator for the "prev_hash" field. It is called by the builders before save.
+	aarmreceipt.PrevHashValidator = aarmreceiptDescPrevHash.Validators[0].(func([]byte) error)
+	// aarmreceiptDescHash is the schema descriptor for hash field.
+	aarmreceiptDescHash := aarmreceiptFields[20].Descriptor()
+	// aarmreceipt.HashValidator is a validator for the "hash" field. It is called by the builders before save.
+	aarmreceipt.HashValidator = aarmreceiptDescHash.Validators[0].(func([]byte) error)
+	// aarmreceiptDescID is the schema descriptor for id field.
+	aarmreceiptDescID := aarmreceiptFields[0].Descriptor()
+	// aarmreceipt.DefaultID holds the default value on creation for the id field.
+	aarmreceipt.DefaultID = aarmreceiptDescID.Default.(func() uuid.UUID)
 	auditeventFields := schema.AuditEvent{}.Fields()
 	_ = auditeventFields
 	// auditeventDescSequence is the schema descriptor for sequence field.

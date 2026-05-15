@@ -125,6 +125,70 @@ type ContextActionRow struct {
 	InjectionScore      *float32
 }
 
+// ReceiptStore defines the interface for the AARM receipt log: an
+// append-only, hash-chained record per session. InsertReceipt is called
+// inside the generator's transaction with a pre-computed sequence and hash;
+// GetLastReceiptForSession returns the prior (sequence, hash) the generator
+// needs to chain onto. RecordReceiptInTx atomically reads the prior row,
+// hands it to the caller-supplied builder, and inserts the returned row
+// inside a single writer transaction so concurrent same-session writers
+// cannot observe the same Sequence.
+type ReceiptStore interface {
+	InsertReceipt(ctx context.Context, row *ReceiptRow) error
+	GetLastReceiptForSession(ctx context.Context, sessionID uuid.UUID) (*ReceiptRow, error)
+	RecordReceiptInTx(ctx context.Context, sessionID uuid.UUID, build func(prev *ReceiptRow) (*ReceiptRow, error)) (*ReceiptRow, error)
+	UpdateReceiptResult(ctx context.Context, sessionID uuid.UUID, sequence int64, status string, durationMS int64, errorMsg string) error
+	QueryReceipts(ctx context.Context, filter *ReceiptFilter) ([]*ReceiptRow, error)
+	CountReceipts(ctx context.Context, filter *ReceiptFilter) (int, error)
+	DeleteReceiptsBefore(ctx context.Context, before time.Time) (int, error)
+	CountReceiptsBefore(ctx context.Context, before time.Time) (int, error)
+	ListReceiptSessionIDs(ctx context.Context) ([]uuid.UUID, error)
+}
+
+// ReceiptFilter narrows QueryReceipts and CountReceipts.
+//
+// Limit semantics:
+//   - Limit > 0: return up to Limit rows, capped at receiptListMaxLimit
+//     (defined in the storage package).
+//   - Limit == 0 (or unset): treat as the default cap (receiptListMaxLimit).
+//   - Limit == -1: unbounded. No LIMIT clause is applied. Intended for
+//     admin operations such as full hash-chain verification where the
+//     entire session must be loaded regardless of size. Not for hot paths.
+type ReceiptFilter struct {
+	SessionID *uuid.UUID
+	Decision  string
+	Since     *time.Time
+	Until     *time.Time
+	Limit     int
+}
+
+// ReceiptRow is the storage-layer representation of a single receipt entry.
+// Mirrors the ent schema fields. Snapshot and ActionPayload are JSON-decoded
+// maps. PrevHash is empty for the first receipt of a session.
+type ReceiptRow struct {
+	ID             uuid.UUID
+	SessionID      uuid.UUID
+	ActionID       uuid.UUID
+	EventID        uuid.UUID
+	RecordedAt     time.Time
+	Sequence       int64
+	Agent          string
+	Tool           string
+	ActionType     string
+	Project        string
+	Decision       string
+	MatchedRuleIDs []string
+	Severity       string
+	Message        string
+	ResultStatus   string
+	DurationMS     *int64
+	ErrorMessage   string
+	Snapshot       map[string]interface{}
+	ActionPayload  map[string]interface{}
+	PrevHash       []byte
+	Hash           []byte
+}
+
 // ContextStateRow is the storage-layer representation of the per-session
 // counter row used by the PDP to populate the context.* CEL surface.
 type ContextStateRow struct {
@@ -176,6 +240,7 @@ type Store interface {
 	SelfAuditStore
 	StreamCursorStore
 	ContextStore
+	ReceiptStore
 
 	// Init initializes the database schema.
 	Init(ctx context.Context) error

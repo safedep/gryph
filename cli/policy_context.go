@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
@@ -92,7 +91,7 @@ type policyContextSessionView struct {
 }
 
 func renderPolicyContextSession(ctx context.Context, w io.Writer, c *tui.Colorizer, store storage.Store, sessionRef string, limit int, format string) error {
-	sessionID, err := resolveContextSessionID(ctx, store, sessionRef)
+	sessionID, err := resolveAarmSessionID(ctx, store, sessionRef)
 	if err != nil {
 		return err
 	}
@@ -148,27 +147,6 @@ func renderPolicyContextList(ctx context.Context, w io.Writer, c *tui.Colorizer,
 
 	renderContextStatesTable(w, c, views)
 	return nil
-}
-
-func resolveContextSessionID(ctx context.Context, store storage.Store, ref string) (uuid.UUID, error) {
-	if id, err := uuid.Parse(ref); err == nil {
-		return id, nil
-	}
-	state, err := store.GetContextStateByPrefix(ctx, ref)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to resolve context state prefix: %w", err)
-	}
-	if state != nil {
-		return state.SessionID, nil
-	}
-	sess, err := store.GetSessionByPrefix(ctx, ref)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to resolve session prefix: %w", err)
-	}
-	if sess != nil {
-		return sess.ID, nil
-	}
-	return uuid.Nil, fmt.Errorf("no session or context state matches prefix %q", ref)
 }
 
 func stateRowToView(s *storage.ContextStateRow) policyContextStateView {

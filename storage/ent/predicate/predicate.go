@@ -12,6 +12,9 @@ type AarmContextAction func(*sql.Selector)
 // AarmContextState is the predicate function for aarmcontextstate builders.
 type AarmContextState func(*sql.Selector)
 
+// AarmReceipt is the predicate function for aarmreceipt builders.
+type AarmReceipt func(*sql.Selector)
+
 // AuditEvent is the predicate function for auditevent builders.
 type AuditEvent func(*sql.Selector)
 

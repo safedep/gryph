@@ -1,0 +1,71 @@
+package receipt
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/safedep/gryph/aarm/model"
+)
+
+// ErrInsert is the sentinel returned (wrapped) when the receipt generator
+// fails to persist a row. The lazyPolicyCheck self-audit wiring uses
+// errors.Is to detect insert failures without coupling to the concrete
+// cause.
+var ErrInsert = errors.New("receipt insert")
+
+// Generator records mediated actions to the append-only receipt log and
+// updates result_status post-hook. Implementations must be safe for
+// concurrent calls across sessions. Within a single session, Record must
+// atomically read the previous (sequence, hash) and insert the next row.
+type Generator interface {
+	Record(ctx context.Context, in *RecordInput) (*Record, error)
+	UpdateResult(ctx context.Context, sessionID uuid.UUID, sequence int64, result model.Result) error
+}
+
+// RecordInput is the input to Generator.Record.
+//
+// result_status is not part of this input. It is derived from the decision
+// inside Generator.Record: "blocked" for a block decision, "pending"
+// otherwise. The same derivation is used by the verifier when re-computing
+// the row hash, so the insert-time and verify-time hash inputs always agree.
+type RecordInput struct {
+	SessionID uuid.UUID
+	ActionID  uuid.UUID
+	EventID   uuid.UUID
+	Action    *model.Action
+	Snapshot  *model.ContextSnapshot
+	Decision  *model.EvaluationResult
+	Agent     string
+
+	// RecordedAt overrides the row's recorded_at. Default: time.Now().UTC().
+	RecordedAt time.Time
+}
+
+// Record summarizes a successful Generator.Record call so the Mediator can
+// thread (sessionID, sequence) into the post-hook RecordResult call.
+type Record struct {
+	ID         uuid.UUID
+	Sequence   int64
+	RecordedAt time.Time
+	Hash       []byte
+	PrevHash   []byte
+}
+
+// Nop is a no-op Generator. Used when no store is wired so the Mediator
+// surface stays stable.
+type Nop struct{}
+
+// NewNop returns a no-op Generator.
+func NewNop() *Nop { return &Nop{} }
+
+// Record implements Generator.
+func (*Nop) Record(_ context.Context, _ *RecordInput) (*Record, error) { return &Record{}, nil }
+
+// UpdateResult implements Generator.
+func (*Nop) UpdateResult(_ context.Context, _ uuid.UUID, _ int64, _ model.Result) error {
+	return nil
+}
+
+var _ Generator = (*Nop)(nil)

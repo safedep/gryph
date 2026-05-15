@@ -1,6 +1,10 @@
 package security
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/google/uuid"
+)
 
 // Result aggregates results from all security checks.
 type Result struct {
@@ -40,4 +44,24 @@ func (r *Result) HasGuidance() bool {
 // AggregatedGuidance returns all guidance joined with newlines.
 func (r *Result) AggregatedGuidance() string {
 	return strings.Join(r.Guidance, "\n")
+}
+
+// AarmRef returns the (actionID, sessionID, sequence) from the AARM check
+// result in this evaluation, if any. The post-hook caller uses these to
+// record the action's execution outcome on the accumulator (by actionID)
+// and the receipt (by sessionID+sequence) without re-querying. Returns
+// zero values when the AARM mediator did not participate.
+func (r *Result) AarmRef() (uuid.UUID, uuid.UUID, int64) {
+	if r == nil {
+		return uuid.Nil, uuid.Nil, 0
+	}
+	for _, c := range r.CheckResults {
+		if c == nil {
+			continue
+		}
+		if c.AarmActionID != uuid.Nil || c.AarmSessionID != uuid.Nil {
+			return c.AarmActionID, c.AarmSessionID, c.AarmSequence
+		}
+	}
+	return uuid.Nil, uuid.Nil, 0
 }

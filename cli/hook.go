@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/codex"
@@ -180,10 +182,38 @@ func runHook(ctx context.Context, app *App, agentName, hookType string, rawData 
 		}
 	}
 
+	recordAllowedAarmResult(ctx, app, securityResult, event)
+
 	if securityResult.FinalDecision == security.DecisionGuidance {
 		return sendSecurityGuidanceResponse(agentName, hookType, securityResult)
 	}
 	return sendHookResponse(agentName, hookType)
+}
+
+// recordAllowedAarmResult fans out the post-hook execution outcome to the
+// AARM Mediator on the allow path. The wrapper only sees the hook's own
+// exit, so the recorded status is always ResultSuccess. Future post-hook
+// adapters surfacing real execution outcomes will plug in here.
+func recordAllowedAarmResult(ctx context.Context, app *App, result *security.Result, event *events.Event) {
+	if app == nil || result == nil {
+		return
+	}
+	med := app.AarmMediator()
+	if med == nil {
+		return
+	}
+	actionID, sessionID, sequence := result.AarmRef()
+	if actionID == uuid.Nil && sequence == 0 {
+		return
+	}
+	outcome := model.Result{Status: model.ResultSuccess}
+	if event != nil && event.ResultStatus == events.ResultError {
+		outcome.Status = model.ResultError
+		outcome.Error = event.ErrorMessage
+	}
+	if err := med.RecordResult(ctx, actionID, sessionID, sequence, outcome); err != nil {
+		log.Warnf("aarm: post-hook record result: %v", err)
+	}
 }
 
 // logHookError logs a self-audit entry when hook processing fails.

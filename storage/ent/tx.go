@@ -16,6 +16,8 @@ type Tx struct {
 	AarmContextAction *AarmContextActionClient
 	// AarmContextState is the client for interacting with the AarmContextState builders.
 	AarmContextState *AarmContextStateClient
+	// AarmReceipt is the client for interacting with the AarmReceipt builders.
+	AarmReceipt *AarmReceiptClient
 	// AuditEvent is the client for interacting with the AuditEvent builders.
 	AuditEvent *AuditEventClient
 	// AuditStreamCursor is the client for interacting with the AuditStreamCursor builders.
@@ -159,6 +161,7 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.AarmContextAction = NewAarmContextActionClient(tx.config)
 	tx.AarmContextState = NewAarmContextStateClient(tx.config)
+	tx.AarmReceipt = NewAarmReceiptClient(tx.config)
 	tx.AuditEvent = NewAuditEventClient(tx.config)
 	tx.AuditStreamCursor = NewAuditStreamCursorClient(tx.config)
 	tx.EventStreamCursor = NewEventStreamCursorClient(tx.config)

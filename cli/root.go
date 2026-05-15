@@ -33,6 +33,20 @@ type App struct {
 	Paths          *config.Paths
 	Security       *security.Evaluator
 	PrivacyChecker *events.PrivacyChecker
+
+	// policyCheck holds the lazily-loaded AARM policy check, when the policy
+	// layer is enabled. Used by cli/hook.go to reach the underlying Mediator
+	// for post-hook RecordResult calls.
+	policyCheck *lazyPolicyCheck
+}
+
+// AarmMediator returns the loaded AARM Mediator, or nil if policy is
+// disabled, has not been used yet, or failed to load.
+func (a *App) AarmMediator() *aarmsec.Mediator {
+	if a == nil || a.policyCheck == nil {
+		return nil
+	}
+	return a.policyCheck.Mediator()
 }
 
 // NewApp creates a new App with the given configuration.
@@ -74,13 +88,15 @@ func NewApp(cfg *config.Config) (*App, error) {
 	policyCfg := cfg.EffectivePolicy()
 	failOpen := policyCfg.FailMode == string(aarmsec.FailOpen)
 	sec := security.New(&security.Config{FailOpen: failOpen})
+	var policyCheck *lazyPolicyCheck
 	if policyCfg.Enabled {
-		sec.RegisterCheck(newLazyPolicyCheck(cfg, paths, func() storage.Store {
+		policyCheck = newLazyPolicyCheck(cfg, paths, func() storage.Store {
 			if app == nil {
 				return nil
 			}
 			return app.Store
-		}))
+		})
+		sec.RegisterCheck(policyCheck)
 	}
 
 	// Invoke any check factories that external binaries registered during
@@ -99,6 +115,7 @@ func NewApp(cfg *config.Config) (*App, error) {
 		Paths:          paths,
 		Security:       sec,
 		PrivacyChecker: privacyChecker,
+		policyCheck:    policyCheck,
 	}
 	return app, nil
 }

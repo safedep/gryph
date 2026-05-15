@@ -18,6 +18,7 @@ import (
 	"github.com/safedep/gryph/aarm/loader"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
+	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	coresecurity "github.com/safedep/gryph/core/security"
@@ -44,6 +45,7 @@ func NewPolicyCmd() *cobra.Command {
 		newPolicyValidateCmd(),
 		newPolicyTestCmd(),
 		newPolicyContextCmd(),
+		newPolicyReceiptsCmd(),
 	)
 
 	return cmd
@@ -630,6 +632,12 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 	var opts []aarmsec.MediatorOption
 	if store != nil {
 		opts = append(opts, aarmsec.WithAccumulator(accumulator.NewSQLite(store)))
+		opts = append(opts, aarmsec.WithReceiptGenerator(receipt.NewSQLite(store)))
+	}
+	if cfg != nil {
+		opts = append(opts, aarmsec.WithMediatorConfig(aarmsec.MediatorConfig{
+			LogAllEvaluations: cfg.EffectivePolicy().LogAllEvaluations,
+		}))
 	}
 	return aarmsec.NewMediator(policy, opts...)
 }
@@ -685,6 +693,16 @@ func (l *lazyPolicyCheck) recordLoadFailure(loadErr error) {
 	}
 }
 
+// Mediator returns the underlying aarm Mediator if it has been loaded
+// successfully. Returns nil if the policy has not yet been loaded or load
+// failed. Used by cli/hook.go to drive post-hook RecordResult calls.
+func (l *lazyPolicyCheck) Mediator() *aarmsec.Mediator {
+	if l == nil {
+		return nil
+	}
+	return l.med
+}
+
 func (l *lazyPolicyCheck) Name() string { return aarmsec.CheckName }
 
 func (l *lazyPolicyCheck) Enabled() bool {
@@ -700,20 +718,28 @@ func (l *lazyPolicyCheck) Check(ctx context.Context, event *events.Event) (*core
 		return nil, fmt.Errorf("policy load failed: %w", err)
 	}
 	result, checkErr := med.Check(ctx, event)
-	if checkErr != nil && errors.Is(checkErr, accumulator.ErrSnapshot) {
-		l.recordSnapshotFailure(event, checkErr)
+	if checkErr != nil {
+		if errors.Is(checkErr, accumulator.ErrSnapshot) {
+			l.recordAarmFailure(event, SelfAuditActionContextSnapshotError, "accumulator snapshot", checkErr)
+		}
+		if errors.Is(checkErr, receipt.ErrInsert) {
+			l.recordAarmFailure(event, SelfAuditActionReceiptInsertError, "receipt insert", checkErr)
+		}
 	}
 	return result, checkErr
 }
 
-func (l *lazyPolicyCheck) recordSnapshotFailure(event *events.Event, snapErr error) {
+// recordAarmFailure is the shared shape behind every AARM-component self-audit
+// emission. label is the short human string used in the fallback log line
+// when no store is available. action selects the SelfAudit action constant.
+func (l *lazyPolicyCheck) recordAarmFailure(event *events.Event, action, label string, recErr error) {
 	if l.getStore == nil {
-		log.Warnf("aarm: accumulator snapshot failure (no store): %v", snapErr)
+		log.Warnf("aarm: %s failure (no store): %v", label, recErr)
 		return
 	}
 	store := l.getStore()
 	if store == nil {
-		log.Warnf("aarm: accumulator snapshot failure (nil store): %v", snapErr)
+		log.Warnf("aarm: %s failure (nil store): %v", label, recErr)
 		return
 	}
 	details := map[string]interface{}{}
@@ -723,10 +749,10 @@ func (l *lazyPolicyCheck) recordSnapshotFailure(event *events.Event, snapErr err
 		details["agent"] = event.AgentName
 		agentName = event.AgentName
 	}
-	details["error"] = snapErr.Error()
-	if err := logSelfAudit(context.Background(), store, SelfAuditActionContextSnapshotError, agentName,
-		details, SelfAuditResultError, snapErr.Error()); err != nil {
-		log.Errorf("failed to record context snapshot failure: %v", err)
+	details["error"] = recErr.Error()
+	if err := logSelfAudit(context.Background(), store, action, agentName,
+		details, SelfAuditResultError, recErr.Error()); err != nil {
+		log.Errorf("failed to record %s failure: %v", label, err)
 	}
 }
 

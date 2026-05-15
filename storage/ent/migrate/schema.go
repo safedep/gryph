@@ -78,6 +78,63 @@ var (
 			},
 		},
 	}
+	// AarmReceiptsColumns holds the columns for the "aarm_receipts" table.
+	AarmReceiptsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "session_id", Type: field.TypeUUID},
+		{Name: "action_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "event_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "recorded_at", Type: field.TypeTime},
+		{Name: "sequence", Type: field.TypeInt64},
+		{Name: "agent", Type: field.TypeString, Nullable: true},
+		{Name: "tool", Type: field.TypeString, Nullable: true},
+		{Name: "action_type", Type: field.TypeString},
+		{Name: "project", Type: field.TypeString, Nullable: true},
+		{Name: "decision", Type: field.TypeString},
+		{Name: "matched_rule_ids", Type: field.TypeJSON, Nullable: true},
+		{Name: "severity", Type: field.TypeString, Nullable: true},
+		{Name: "message", Type: field.TypeString, Nullable: true},
+		{Name: "result_status", Type: field.TypeEnum, Enums: []string{"success", "error", "blocked", "rejected", "pending"}, Default: "pending"},
+		{Name: "duration_ms", Type: field.TypeInt64, Nullable: true},
+		{Name: "error_message", Type: field.TypeString, Nullable: true},
+		{Name: "snapshot", Type: field.TypeJSON, Nullable: true},
+		{Name: "action_payload", Type: field.TypeJSON, Nullable: true},
+		{Name: "prev_hash", Type: field.TypeBytes, Nullable: true, Size: 32},
+		{Name: "hash", Type: field.TypeBytes, Size: 32},
+	}
+	// AarmReceiptsTable holds the schema information for the "aarm_receipts" table.
+	AarmReceiptsTable = &schema.Table{
+		Name:       "aarm_receipts",
+		Columns:    AarmReceiptsColumns,
+		PrimaryKey: []*schema.Column{AarmReceiptsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "aarmreceipt_session_id_sequence",
+				Unique:  true,
+				Columns: []*schema.Column{AarmReceiptsColumns[1], AarmReceiptsColumns[5]},
+			},
+			{
+				Name:    "aarmreceipt_session_id_recorded_at",
+				Unique:  false,
+				Columns: []*schema.Column{AarmReceiptsColumns[1], AarmReceiptsColumns[4]},
+			},
+			{
+				Name:    "aarmreceipt_recorded_at",
+				Unique:  false,
+				Columns: []*schema.Column{AarmReceiptsColumns[4]},
+			},
+			{
+				Name:    "aarmreceipt_decision",
+				Unique:  false,
+				Columns: []*schema.Column{AarmReceiptsColumns[10]},
+			},
+			{
+				Name:    "aarmreceipt_action_id",
+				Unique:  false,
+				Columns: []*schema.Column{AarmReceiptsColumns[2]},
+			},
+		},
+	}
 	// AuditEventsColumns holds the columns for the "audit_events" table.
 	AuditEventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -169,7 +226,7 @@ var (
 	SelfAuditsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "timestamp", Type: field.TypeTime},
-		{Name: "action", Type: field.TypeEnum, Enums: []string{"install", "uninstall", "config_change", "export", "purge", "upgrade", "database_init", "retention_cleanup", "hook_error", "policy_load_error", "context_cleanup", "context_snapshot_error"}},
+		{Name: "action", Type: field.TypeEnum, Enums: []string{"install", "uninstall", "config_change", "export", "purge", "upgrade", "database_init", "retention_cleanup", "hook_error", "policy_load_error", "context_cleanup", "context_snapshot_error", "receipt_cleanup", "receipt_insert_error", "receipt_chain_broken"}},
 		{Name: "agent_name", Type: field.TypeString, Nullable: true},
 		{Name: "details", Type: field.TypeJSON, Nullable: true},
 		{Name: "result", Type: field.TypeEnum, Enums: []string{"success", "error", "skipped"}, Default: "success"},
@@ -248,6 +305,7 @@ var (
 	Tables = []*schema.Table{
 		AarmContextActionsTable,
 		AarmContextStatesTable,
+		AarmReceiptsTable,
 		AuditEventsTable,
 		AuditStreamCursorsTable,
 		EventStreamCursorsTable,

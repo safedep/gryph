@@ -331,16 +331,29 @@ func (s *SQLiteStore) QueryAllContextStates(ctx context.Context, limit int) ([]*
 	return out, nil
 }
 
-// DeleteContextBefore removes action rows older than before and prunes
-// orphaned state rows whose last_action_at is also past the cutoff and have
-// no remaining actions referencing their session_id. Returns the number of
-// action rows deleted.
+// DeleteContextBefore removes action rows older than before in fixed-size
+// batches, then prunes orphaned state rows whose last_action_at is also past
+// the cutoff and have no remaining actions referencing their session_id.
+// Returns the total number of action rows deleted.
 func (s *SQLiteStore) DeleteContextBefore(ctx context.Context, before time.Time) (int, error) {
-	deleted, err := s.client.AarmContextAction.Delete().
-		Where(aarmcontextaction.TimestampLT(before)).
-		Exec(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("storage: delete context actions: %w", err)
+	const deleteBatch = 1000
+	total := 0
+	for {
+		res, err := s.db.ExecContext(ctx,
+			`DELETE FROM aarm_context_actions WHERE id IN (SELECT id FROM aarm_context_actions WHERE timestamp < ? LIMIT ?)`,
+			before, deleteBatch,
+		)
+		if err != nil {
+			return total, fmt.Errorf("storage: delete context actions: %w", err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return total, fmt.Errorf("storage: delete context actions rows affected: %w", err)
+		}
+		total += int(n)
+		if n == 0 {
+			break
+		}
 	}
 
 	if _, err := s.db.ExecContext(ctx, `
@@ -350,10 +363,10 @@ WHERE last_action_at < ?
       SELECT 1 FROM aarm_context_actions
       WHERE aarm_context_actions.session_id = aarm_context_states.session_id
   )`, before); err != nil {
-		return deleted, fmt.Errorf("storage: prune context states: %w", err)
+		return total, fmt.Errorf("storage: prune context states: %w", err)
 	}
 
-	return deleted, nil
+	return total, nil
 }
 
 // CountContextBefore returns the number of action rows older than before.
