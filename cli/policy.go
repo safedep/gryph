@@ -671,7 +671,7 @@ func (l *lazyPolicyCheck) recordLoadFailure(loadErr error) {
 	}
 }
 
-func (l *lazyPolicyCheck) Name() string { return "aarm-pdp" }
+func (l *lazyPolicyCheck) Name() string { return aarmsec.CheckName }
 
 func (l *lazyPolicyCheck) Enabled() bool {
 	if l == nil || l.cfg == nil {

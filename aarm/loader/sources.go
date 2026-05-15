@@ -98,7 +98,7 @@ func (s *DirSource) Load(_ context.Context) ([]*pdp.Policy, error) {
 }
 
 // ConventionalSource walks upward from StartDir looking for any file in
-// Filenames. The first match wins; nothing-found returns zero documents.
+// Filenames. The first match wins. When nothing is found it returns zero documents.
 type ConventionalSource struct {
 	StartDir  string
 	Filenames []string

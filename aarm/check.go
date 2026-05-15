@@ -15,8 +15,6 @@ import (
 	"github.com/safedep/gryph/core/session"
 )
 
-const mediatorName = "aarm-pdp"
-
 // Mediator implements the Gryph security.Check interface with AARM components.
 type Mediator struct {
 	adapter mediation.Adapter
@@ -40,7 +38,8 @@ func WithAccumulator(a accumulator.Accumulator) MediatorOption {
 }
 
 // NewMediator creates an enabled AARM security check from a parsed policy. By
-// default the Context Accumulator is a no-op; pass WithAccumulator to override.
+// default the Context Accumulator is a no-op. Pass WithAccumulator to swap in
+// a persistent implementation.
 func NewMediator(policy *pdp.Policy, opts ...MediatorOption) (*Mediator, error) {
 	engine, err := pdp.New(policy)
 	if err != nil {
@@ -60,7 +59,7 @@ func NewMediator(policy *pdp.Policy, opts ...MediatorOption) (*Mediator, error) 
 
 // Name implements security.Check.
 func (m *Mediator) Name() string {
-	return mediatorName
+	return CheckName
 }
 
 // Enabled implements security.Check.
@@ -76,7 +75,7 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 
 	// Session is optional, not required. Today the only caller is cli/hook.go
 	// which always wraps ctx via session.WithSession, so a miss would be a bug
-	// in that path — but future non-hook adapters (MCP proxy, HTTP proxy, OS
+	// in that path. Future non-hook adapters (MCP proxy, HTTP proxy, OS
 	// mediation) may legitimately have no Gryph session, and the Mediator must
 	// still produce decisions for rules that don't depend on session-derived
 	// fields (Action.Project / AgentSessionID). Tighten to fail-fast when a
@@ -105,7 +104,7 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 }
 
 // RecordResult propagates a post-hook execution outcome to the Context
-// Accumulator. cli/hook.go does not invoke this yet; it exists so post-hook
+// Accumulator. cli/hook.go does not invoke this yet. It exists so post-hook
 // wiring (Phase 2) can be added without further plumbing on the Mediator.
 func (m *Mediator) RecordResult(ctx context.Context, actionID uuid.UUID, result model.Result) error {
 	if m == nil || m.accum == nil {

@@ -1,6 +1,14 @@
 package aarm
 
-import "github.com/safedep/gryph/aarm/model"
+import (
+	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/aarm/pep"
+)
+
+// CheckName is the security.Check name reported by the AARM mediator and any
+// wrapper that delegates to it. Re-exported from pep so the mediator, the PEP
+// boundary, and the CLI lazy-load wrapper all share one source of truth.
+const CheckName = pep.CheckName
 
 type ActionType = model.ActionType
 type Action = model.Action

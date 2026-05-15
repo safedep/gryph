@@ -6,7 +6,10 @@ import (
 	coresecurity "github.com/safedep/gryph/core/security"
 )
 
-const checkName = "aarm-pdp"
+// CheckName is the security.Check name set on every CheckResult emitted via
+// the PEP boundary. The aarm package re-exports it so adapters and CLI
+// wrappers can refer to a single source of truth.
+const CheckName = "aarm-pdp"
 
 // Apply converts a PDP decision into a security.CheckResult. MatchedRuleIDs,
 // Severity, and Tags from the PDP are propagated so audit, receipts, and UX
@@ -18,7 +21,7 @@ func Apply(result *model.EvaluationResult) *coresecurity.CheckResult {
 	}
 
 	out := &coresecurity.CheckResult{
-		CheckName:      checkName,
+		CheckName:      CheckName,
 		MatchedRuleIDs: append([]string(nil), result.MatchedRuleIDs...),
 		Severity:       mapSeverity(result.Severity),
 		Tags:           append([]string(nil), result.Tags...),
@@ -62,6 +65,6 @@ func mapSeverity(s model.Severity) coresecurity.Severity {
 func allow() *coresecurity.CheckResult {
 	return &coresecurity.CheckResult{
 		Decision:  coresecurity.DecisionAllow,
-		CheckName: checkName,
+		CheckName: CheckName,
 	}
 }

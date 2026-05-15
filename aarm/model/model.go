@@ -112,7 +112,7 @@ const (
 
 // Severity classifies how serious a rule's decision is. The zero value
 // (SeverityUnspecified) means the rule did not assign a severity. The PEP
-// boundary maps this onto core/security.Severity; the two types intentionally
+// boundary maps this onto core/security.Severity. The two types intentionally
 // stay independent so AARM internals do not depend on core/security.
 type Severity string
 
