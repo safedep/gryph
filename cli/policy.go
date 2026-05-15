@@ -3,19 +3,21 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/safedep/dry/log"
 	aarmsec "github.com/safedep/gryph/aarm"
 	"github.com/safedep/gryph/aarm/loader"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/config"
-	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/events"
 	coresecurity "github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/schema"
@@ -126,7 +128,7 @@ func newPolicySourcesCmd() *cobra.Command {
 				return ErrConfig("failed to assemble policy loader", err)
 			}
 
-			renderSources(cmd.OutOrStdout(), policyColorizer(app), ldr.Sources(), true)
+			renderSources(cmd.OutOrStdout(), policyColorizer(app), ldr.Sources(), globalFlags.Verbose)
 			return nil
 		},
 	}
@@ -136,8 +138,21 @@ type sourceRow struct {
 	Kind     string
 	Path     string
 	Optional bool
+	Status   string
+	Problem  bool
 	Hints    []string
 }
+
+const (
+	sourceStatusFound           = "found"
+	sourceStatusMissing         = "missing"
+	sourceStatusUnreadable      = "unreadable"
+	sourceStatusNotFound        = "not found"
+	sourceStatusEmpty           = "empty"
+	sourceStatusUnknown         = "unknown"
+	sourceStatusIsDirectory     = "is a directory"
+	sourceStatusInvalidStartDir = "invalid start dir"
+)
 
 func sourceRows(sources []loader.Source) []sourceRow {
 	rows := make([]sourceRow, 0, len(sources))
@@ -150,12 +165,16 @@ func sourceRows(sources []loader.Source) []sourceRow {
 func sourceToRow(src loader.Source) sourceRow {
 	switch s := src.(type) {
 	case *loader.FileSource:
-		return sourceRow{Kind: "file", Path: s.Path, Optional: s.Optional}
+		status, problem := fileSourceStatus(s.Path, s.Optional)
+		return sourceRow{Kind: "file", Path: s.Path, Optional: s.Optional, Status: status, Problem: problem}
 	case *loader.DirSource:
+		status, problem := dirSourceStatus(s.Path, s.Optional)
 		return sourceRow{
 			Kind:     "dir",
 			Path:     s.Path,
 			Optional: s.Optional,
+			Status:   status,
+			Problem:  problem,
 			Hints:    []string{"Loads every *.yaml or *.yml file sorted by filename"},
 		}
 	case *loader.ConventionalSource:
@@ -164,16 +183,113 @@ func sourceToRow(src loader.Source) sourceRow {
 			filenames = loader.DefaultConventionalFilenames
 		}
 		hints := []string{
+			"Starts from " + s.StartDir,
 			"Walks up from this directory until a policy file is found",
 			"Looks for " + strings.Join(filenames, " or "),
 		}
 		if s.StopAt != "" {
 			hints = append(hints, "Stops at "+s.StopAt)
 		}
-		return sourceRow{Kind: "conventional", Path: s.StartDir, Optional: true, Hints: hints}
+		status, path, problem := conventionalSourceStatus(s)
+		if path == "" {
+			path = s.StartDir
+		}
+		return sourceRow{Kind: "conventional", Path: path, Optional: true, Status: status, Problem: problem, Hints: hints}
 	default:
-		return sourceRow{Kind: "source", Path: src.Name()}
+		return sourceRow{Kind: "source", Path: src.Name(), Status: sourceStatusUnknown}
 	}
+}
+
+func fileSourceStatus(path string, optional bool) (string, bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return missingStatus(err, optional)
+	}
+	if info.IsDir() {
+		return sourceStatusIsDirectory, true
+	}
+	return sourceStatusFound, false
+}
+
+func dirSourceStatus(path string, optional bool) (string, bool) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return missingStatus(err, optional)
+	}
+
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		if ext == ".yaml" || ext == ".yml" {
+			count++
+		}
+	}
+	if count == 0 {
+		return sourceStatusEmpty, false
+	}
+	if count == 1 {
+		return "1 policy file", false
+	}
+	return fmt.Sprintf("%d policy files", count), false
+}
+
+func conventionalSourceStatus(s *loader.ConventionalSource) (string, string, bool) {
+	if s.StartDir == "" {
+		return sourceStatusNotFound, "", false
+	}
+	filenames := s.Filenames
+	if len(filenames) == 0 {
+		filenames = loader.DefaultConventionalFilenames
+	}
+
+	dir, err := filepath.Abs(s.StartDir)
+	if err != nil {
+		return sourceStatusInvalidStartDir, "", true
+	}
+	stopAt := s.StopAt
+	if stopAt != "" {
+		if abs, err := filepath.Abs(stopAt); err == nil {
+			stopAt = abs
+		}
+	}
+
+	for {
+		for _, name := range filenames {
+			candidate := filepath.Join(dir, name)
+			info, err := os.Stat(candidate)
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					continue
+				}
+				return sourceStatusUnreadable, candidate, true
+			}
+			if !info.IsDir() {
+				return sourceStatusFound, candidate, false
+			}
+		}
+
+		if stopAt != "" && dir == stopAt {
+			return sourceStatusNotFound, "", false
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return sourceStatusNotFound, "", false
+		}
+		dir = parent
+	}
+}
+
+func missingStatus(err error, optional bool) (string, bool) {
+	if errors.Is(err, fs.ErrNotExist) {
+		if optional {
+			return sourceStatusMissing, false
+		}
+		return sourceStatusMissing, true
+	}
+	return sourceStatusUnreadable, true
 }
 
 func renderSources(w io.Writer, c *tui.Colorizer, sources []loader.Source, verbose bool) {
@@ -190,23 +306,36 @@ func renderSources(w io.Writer, c *tui.Colorizer, sources []loader.Source, verbo
 		}
 	}
 
-	_, _ = fmt.Fprintln(w, c.Header(fmt.Sprintf("Sources (%d, evaluated in order)", len(rows))))
-	if verbose {
-		_, _ = fmt.Fprintln(w, tui.HorizontalLine(80))
-	}
+	_, _ = fmt.Fprintln(w, c.Header("Policy sources"))
 	for i, r := range rows {
-		idx := c.Number(fmt.Sprintf("[%d]", i+1))
+		idx := c.Number(fmt.Sprintf("%d", i+1))
 		kind := c.Cyan(fmt.Sprintf("%-*s", kindWidth, r.Kind))
-		line := fmt.Sprintf("  %s  %s  %s", idx, kind, c.Path(r.Path))
+		path := c.Path(r.Path)
+		status := decorateSourceStatus(c, r.Status, r.Problem)
+		line := fmt.Sprintf("%s  %s  %s  %s", idx, kind, path, status)
 		if r.Optional {
-			line += "  " + c.Dim("(optional)")
+			line += "  " + c.Dim("optional")
 		}
 		_, _ = fmt.Fprintln(w, line)
 		if verbose {
 			for _, h := range r.Hints {
-				_, _ = fmt.Fprintf(w, "      %s\n", c.Dim(h))
+				_, _ = fmt.Fprintf(w, "   %s\n", c.Dim(h))
 			}
 		}
+	}
+}
+
+func decorateSourceStatus(c *tui.Colorizer, status string, problem bool) string {
+	if problem {
+		return c.Warning(status)
+	}
+	switch {
+	case status == sourceStatusFound, strings.HasPrefix(status, sourceStatusFound+": "), strings.Contains(status, "policy file"):
+		return c.Success(status)
+	case status == sourceStatusMissing || status == sourceStatusNotFound || status == sourceStatusEmpty || status == sourceStatusUnknown:
+		return c.Dim(status)
+	default:
+		return status
 	}
 }
 
