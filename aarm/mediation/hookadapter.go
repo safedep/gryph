@@ -13,7 +13,9 @@ import (
 
 // HookAdapter normalizes hook events into canonical actions. Optional
 // classifier and injection scorer run after normalization to populate the
-// reserved risk-signal fields on Action.
+// reserved risk-signal fields on Action. The AARM safe-by-default
+// classification safety net lives in classify.NewFailSafe so callers can
+// wrap any Classifier (including nil) once at construction.
 type HookAdapter struct {
 	classifier Classifier
 	scorer     InjectionScorer
@@ -24,7 +26,8 @@ type HookAdapterOption func(*HookAdapter)
 
 // WithClassifier wires a Classifier into the adapter. After Normalize
 // produces an Action, the classifier is invoked and its output stored in
-// Action.DataClassifications.
+// Action.DataClassifications. Wrap the supplied Classifier in
+// classify.NewFailSafe to keep the AARM-conformant safety-net label.
 func WithClassifier(c Classifier) HookAdapterOption {
 	return func(h *HookAdapter) {
 		if c != nil {

@@ -48,6 +48,10 @@ func (AarmContextAction) Fields() []ent.Field {
 
 		field.JSON("data_classifications", []string{}).Optional(),
 		field.Float32("injection_score").Optional().Nillable(),
+
+		field.Int64("sequence").Positive().Optional().Nillable(),
+		field.Bytes("prev_hash").Optional().MaxLen(32),
+		field.Bytes("hash").Optional().MaxLen(32),
 	}
 }
 
@@ -62,5 +66,6 @@ func (AarmContextAction) Indexes() []ent.Index {
 		index.Fields("session_id", "timestamp"),
 		index.Fields("timestamp"),
 		index.Fields("session_id", "action_type"),
+		index.Fields("session_id", "sequence").Unique(),
 	}
 }

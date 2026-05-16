@@ -10,6 +10,7 @@ import (
 
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/aarm/accumulator/contextchain"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/storage/ent"
 	"github.com/safedep/gryph/storage/ent/aarmcontextaction"
@@ -35,10 +36,17 @@ const (
 	contextListSetCap = 100
 )
 
-// AppendContextAction inserts a new action row and upserts the per-session
-// state counters in a single sql.Tx. The state UPSERT uses
-// INSERT ... ON CONFLICT(session_id) DO UPDATE so the counter increment is
-// atomic against concurrent same-session writes.
+// AppendContextAction inserts a new action row, computes its place in the
+// per-session hash chain, and upserts the per-session state counters inside
+// a single writer transaction. contextWriteMu serializes the SELECT-then-
+// INSERT path so two concurrent same-session writers cannot both observe the
+// same last (sequence, hash) before one upgrades to a writer (which would
+// surface as SQLITE_BUSY under WAL).
+//
+// The hash input mirrors aarm/accumulator.ContextChainInput. See that
+// package for the canonical field ordering. The chain hash covers the
+// as-mediated row, not the post-hook outcome, so UpdateContextActionResult
+// does not need to re-hash.
 func (s *SQLiteStore) AppendContextAction(ctx context.Context, row *ContextActionRow) error {
 	if row == nil {
 		return fmt.Errorf("storage: AppendContextAction: nil row")
@@ -64,41 +72,46 @@ func (s *SQLiteStore) AppendContextAction(ctx context.Context, row *ContextActio
 		return err
 	}
 
+	s.contextWriteMu.Lock()
+	defer s.contextWriteMu.Unlock()
+
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return fmt.Errorf("storage: begin tx for context append: %w", err)
 	}
 
-	insertSQL := `
-INSERT INTO aarm_context_actions (
-    id, session_id, event_id, timestamp, action_type, tool, agent, project,
-    working_dir, result_status, duration_ms, error_message,
-    data_classifications, injection_score
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	prevSeq, prevHash, err := readLastContextChainTx(ctx, tx, row.SessionID)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("storage: read last context chain: %w", err)
+	}
 
-	var eventID interface{}
-	if row.EventID != uuid.Nil {
-		eventID = row.EventID
+	var nextSeq int64 = 1
+	if prevSeq != nil {
+		nextSeq = *prevSeq + 1
 	}
-	var duration interface{}
-	if row.DurationMS != nil {
-		duration = *row.DurationMS
-	}
-	var classificationsArg interface{}
-	if classifications != "" {
-		classificationsArg = classifications
-	}
-	var injection interface{}
+
+	var injectionScore float32
 	if row.InjectionScore != nil {
-		injection = *row.InjectionScore
+		injectionScore = *row.InjectionScore
+	}
+	hashInput := contextchain.InputFromRow(
+		nextSeq, prevHash, row.Timestamp,
+		row.SessionID, row.EventID, row.ID,
+		row.ActionType, row.Tool, row.Agent, row.Project, row.WorkingDir,
+		row.DataClassifications, injectionScore,
+	)
+	hash, err := contextchain.ComputeHash(hashInput)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("storage: compute context hash: %w", err)
 	}
 
-	if _, err := tx.ExecContext(ctx, insertSQL,
-		row.ID, row.SessionID, eventID, row.Timestamp, row.ActionType,
-		row.Tool, row.Agent, row.Project, row.WorkingDir,
-		row.ResultStatus, duration, row.ErrorMessage,
-		classificationsArg, injection,
-	); err != nil {
+	row.Sequence = &nextSeq
+	row.PrevHash = prevHash
+	row.Hash = hash
+
+	if err := insertContextActionTx(ctx, tx, row, classifications); err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("storage: insert context action: %w", err)
 	}
@@ -112,6 +125,82 @@ INSERT INTO aarm_context_actions (
 		return fmt.Errorf("storage: commit context append: %w", err)
 	}
 	return nil
+}
+
+// readLastContextChainTx fetches the highest-sequence chain row for
+// sessionID inside an open sql.Tx, returning (nil, nil, nil) when the
+// session has no chained rows yet.
+func readLastContextChainTx(ctx context.Context, tx *sql.Tx, sessionID uuid.UUID) (*int64, []byte, error) {
+	const q = `
+SELECT sequence, hash
+FROM aarm_context_actions
+WHERE session_id = ? AND sequence IS NOT NULL
+ORDER BY sequence DESC
+LIMIT 1`
+	row := tx.QueryRowContext(ctx, q, sessionID)
+	var (
+		seq  sql.NullInt64
+		hash []byte
+	)
+	if err := row.Scan(&seq, &hash); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, nil
+		}
+		return nil, nil, err
+	}
+	if !seq.Valid {
+		return nil, nil, nil
+	}
+	v := seq.Int64
+	return &v, hash, nil
+}
+
+func insertContextActionTx(ctx context.Context, tx *sql.Tx, row *ContextActionRow, classificationsJSON string) error {
+	const insertSQL = `
+INSERT INTO aarm_context_actions (
+    id, session_id, event_id, timestamp, action_type, tool, agent, project,
+    working_dir, result_status, duration_ms, error_message,
+    data_classifications, injection_score,
+    sequence, prev_hash, hash
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	var eventID interface{}
+	if row.EventID != uuid.Nil {
+		eventID = row.EventID
+	}
+	var duration interface{}
+	if row.DurationMS != nil {
+		duration = *row.DurationMS
+	}
+	var classificationsArg interface{}
+	if classificationsJSON != "" {
+		classificationsArg = classificationsJSON
+	}
+	var injection interface{}
+	if row.InjectionScore != nil {
+		injection = *row.InjectionScore
+	}
+	var sequenceArg interface{}
+	if row.Sequence != nil {
+		sequenceArg = *row.Sequence
+	}
+	var prevHashArg interface{}
+	if len(row.PrevHash) > 0 {
+		prevHashArg = row.PrevHash
+	}
+	var hashArg interface{}
+	if len(row.Hash) > 0 {
+		hashArg = row.Hash
+	}
+
+	_, err := tx.ExecContext(ctx, insertSQL,
+		row.ID, row.SessionID, eventID, row.Timestamp, row.ActionType,
+		row.Tool, row.Agent, row.Project, row.WorkingDir,
+		row.ResultStatus, duration, row.ErrorMessage,
+		classificationsArg, injection,
+		sequenceArg, prevHashArg, hashArg,
+	)
+	return err
 }
 
 func upsertContextState(ctx context.Context, tx *sql.Tx, row *ContextActionRow, classificationsJSON string) error {
@@ -323,6 +412,55 @@ func (s *SQLiteStore) QueryContextActions(ctx context.Context, sessionID uuid.UU
 	return out, nil
 }
 
+// QueryContextActionsFiltered returns action rows matching filter. When
+// filter.SessionID is set and filter.Ascending is true, rows are ordered by
+// (sequence ASC, timestamp ASC) so the full per-session chain is returned in
+// chain order. Otherwise rows fall back to the table-friendly
+// (timestamp DESC, id DESC) ordering.
+//
+// Limit semantics:
+//   - filter.Limit > 0: capped at contextListMaxLimit.
+//   - filter.Limit == 0 (default): capped at contextListMaxLimit.
+//   - filter.Limit == -1: no LIMIT clause. Reserved for admin operations
+//     such as full per-session chain verification.
+func (s *SQLiteStore) QueryContextActionsFiltered(ctx context.Context, filter *ContextActionFilter) ([]*ContextActionRow, error) {
+	if filter == nil {
+		filter = &ContextActionFilter{}
+	}
+	q := s.client.AarmContextAction.Query()
+	if filter.SessionID != nil {
+		q.Where(aarmcontextaction.SessionIDEQ(*filter.SessionID))
+	}
+
+	if filter.SessionID != nil && filter.Ascending {
+		q.Order(
+			aarmcontextaction.BySequence(entsql.OrderAsc()),
+			aarmcontextaction.ByTimestamp(entsql.OrderAsc()),
+			aarmcontextaction.ByID(entsql.OrderAsc()),
+		)
+	} else {
+		q.Order(aarmcontextaction.ByTimestamp(entsql.OrderDesc()), aarmcontextaction.ByID(entsql.OrderDesc()))
+	}
+
+	if filter.Limit != -1 {
+		limit := filter.Limit
+		if limit <= 0 || limit > contextListMaxLimit {
+			limit = contextListMaxLimit
+		}
+		q.Limit(limit)
+	}
+
+	rows, err := q.All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: query context actions filtered: %w", err)
+	}
+	out := make([]*ContextActionRow, len(rows))
+	for i, r := range rows {
+		out[i] = entToContextAction(r)
+	}
+	return out, nil
+}
+
 // QueryAllContextStates returns every state row, ordered by last_action_at
 // DESC. Used by `gryph policy context` without --session. limit is clamped
 // to contextListMaxLimit to prevent unbounded materialization.
@@ -342,6 +480,21 @@ func (s *SQLiteStore) QueryAllContextStates(ctx context.Context, limit int) ([]*
 		out[i] = entToContextState(r)
 	}
 	return out, nil
+}
+
+// ListContextSessionIDs returns the distinct session IDs that appear in the
+// context-action log. Intended for admin operations such as full-cluster
+// chain verification.
+func (s *SQLiteStore) ListContextSessionIDs(ctx context.Context) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := s.client.AarmContextAction.Query().
+		Unique(true).
+		Select(aarmcontextaction.FieldSessionID).
+		Scan(ctx, &ids)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list context session IDs: %w", err)
+	}
+	return ids, nil
 }
 
 // DeleteContextBefore removes action rows older than before in fixed-size
@@ -418,6 +571,8 @@ func entToContextAction(e *ent.AarmContextAction) *ContextActionRow {
 		ResultStatus:        string(e.ResultStatus),
 		ErrorMessage:        e.ErrorMessage,
 		DataClassifications: e.DataClassifications,
+		PrevHash:            e.PrevHash,
+		Hash:                e.Hash,
 	}
 	if e.DurationMs != nil {
 		v := *e.DurationMs
@@ -426,6 +581,10 @@ func entToContextAction(e *ent.AarmContextAction) *ContextActionRow {
 	if e.InjectionScore != nil {
 		v := *e.InjectionScore
 		row.InjectionScore = &v
+	}
+	if e.Sequence != nil {
+		v := *e.Sequence
+		row.Sequence = &v
 	}
 	return row
 }

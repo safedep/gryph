@@ -179,6 +179,32 @@ func (_c *AarmContextActionCreate) SetNillableInjectionScore(v *float32) *AarmCo
 	return _c
 }
 
+// SetSequence sets the "sequence" field.
+func (_c *AarmContextActionCreate) SetSequence(v int64) *AarmContextActionCreate {
+	_c.mutation.SetSequence(v)
+	return _c
+}
+
+// SetNillableSequence sets the "sequence" field if the given value is not nil.
+func (_c *AarmContextActionCreate) SetNillableSequence(v *int64) *AarmContextActionCreate {
+	if v != nil {
+		_c.SetSequence(*v)
+	}
+	return _c
+}
+
+// SetPrevHash sets the "prev_hash" field.
+func (_c *AarmContextActionCreate) SetPrevHash(v []byte) *AarmContextActionCreate {
+	_c.mutation.SetPrevHash(v)
+	return _c
+}
+
+// SetHash sets the "hash" field.
+func (_c *AarmContextActionCreate) SetHash(v []byte) *AarmContextActionCreate {
+	_c.mutation.SetHash(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AarmContextActionCreate) SetID(v uuid.UUID) *AarmContextActionCreate {
 	_c.mutation.SetID(v)
@@ -264,6 +290,21 @@ func (_c *AarmContextActionCreate) check() error {
 	if v, ok := _c.mutation.ResultStatus(); ok {
 		if err := aarmcontextaction.ResultStatusValidator(v); err != nil {
 			return &ValidationError{Name: "result_status", err: fmt.Errorf(`ent: validator failed for field "AarmContextAction.result_status": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.Sequence(); ok {
+		if err := aarmcontextaction.SequenceValidator(v); err != nil {
+			return &ValidationError{Name: "sequence", err: fmt.Errorf(`ent: validator failed for field "AarmContextAction.sequence": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.PrevHash(); ok {
+		if err := aarmcontextaction.PrevHashValidator(v); err != nil {
+			return &ValidationError{Name: "prev_hash", err: fmt.Errorf(`ent: validator failed for field "AarmContextAction.prev_hash": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.Hash(); ok {
+		if err := aarmcontextaction.HashValidator(v); err != nil {
+			return &ValidationError{Name: "hash", err: fmt.Errorf(`ent: validator failed for field "AarmContextAction.hash": %w`, err)}
 		}
 	}
 	return nil
@@ -352,6 +393,18 @@ func (_c *AarmContextActionCreate) createSpec() (*AarmContextAction, *sqlgraph.C
 	if value, ok := _c.mutation.InjectionScore(); ok {
 		_spec.SetField(aarmcontextaction.FieldInjectionScore, field.TypeFloat32, value)
 		_node.InjectionScore = &value
+	}
+	if value, ok := _c.mutation.Sequence(); ok {
+		_spec.SetField(aarmcontextaction.FieldSequence, field.TypeInt64, value)
+		_node.Sequence = &value
+	}
+	if value, ok := _c.mutation.PrevHash(); ok {
+		_spec.SetField(aarmcontextaction.FieldPrevHash, field.TypeBytes, value)
+		_node.PrevHash = value
+	}
+	if value, ok := _c.mutation.Hash(); ok {
+		_spec.SetField(aarmcontextaction.FieldHash, field.TypeBytes, value)
+		_node.Hash = value
 	}
 	return _node, _spec
 }

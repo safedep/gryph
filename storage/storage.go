@@ -93,21 +93,57 @@ type StreamCursorStore interface {
 // persistent storage. AppendContextAction is responsible for the atomic
 // per-session counter update on the state row. Implementations must keep
 // the counter UPSERT race-free across concurrent same-session writes.
+//
+// AppendContextAction now chains rows per session with a SHA-256 hash of
+// the previous row, computed inside the same writer transaction that
+// inserts the row and upserts the per-session state. Implementations must
+// serialize same-session writes so two goroutines cannot observe the same
+// last (sequence, hash) before one upgrades to writer. The chain primitives
+// live in aarm/accumulator/contextchain so they can be shared with the
+// verifier.
+//
+// ListContextSessionIDs returns the distinct session IDs that appear in the
+// context-action log. Intended for admin operations such as full-cluster
+// chain verification. Not for hot paths.
 type ContextStore interface {
 	AppendContextAction(ctx context.Context, row *ContextActionRow) error
 	UpdateContextActionResult(ctx context.Context, actionID uuid.UUID, status string, durationMS int64, errorMsg string) error
 	GetContextState(ctx context.Context, sessionID uuid.UUID) (*ContextStateRow, error)
 	GetContextStateByPrefix(ctx context.Context, prefix string) (*ContextStateRow, error)
 	QueryContextActions(ctx context.Context, sessionID uuid.UUID, limit int) ([]*ContextActionRow, error)
+	QueryContextActionsFiltered(ctx context.Context, filter *ContextActionFilter) ([]*ContextActionRow, error)
 	QueryAllContextStates(ctx context.Context, limit int) ([]*ContextStateRow, error)
+	ListContextSessionIDs(ctx context.Context) ([]uuid.UUID, error)
 	DeleteContextBefore(ctx context.Context, before time.Time) (int, error)
 	CountContextBefore(ctx context.Context, before time.Time) (int, error)
+}
+
+// ContextActionFilter narrows QueryContextActionsFiltered.
+//
+// Limit semantics mirror ReceiptFilter:
+//   - Limit > 0: return up to Limit rows, capped at the storage-internal
+//     contextListMaxLimit.
+//   - Limit == 0 (or unset): treat as the default cap.
+//   - Limit == -1: unbounded. Intended for admin operations such as full
+//     chain verification.
+type ContextActionFilter struct {
+	SessionID *uuid.UUID
+	Limit     int
+	// Ascending controls ordering when SessionID is set: true orders by
+	// (sequence ASC, timestamp ASC) so the full per-session chain is
+	// returned in chain order; false defaults to the existing
+	// (timestamp DESC, id DESC) ordering used by the table view.
+	Ascending bool
 }
 
 // ContextActionRow is the storage-layer representation of a single mediated
 // action recorded by the Context Accumulator. ResultStatus is "pending" at
 // append time and transitions to one of "success", "error", "blocked", or
 // "rejected" via UpdateContextActionResult.
+//
+// Sequence, PrevHash, and Hash are the per-session chain fields populated by
+// AppendContextAction. Rows pre-Phase-5a have a nil Sequence (and empty
+// PrevHash / Hash) and are reported as "unchained" by the verifier.
 type ContextActionRow struct {
 	ID                  uuid.UUID
 	SessionID           uuid.UUID
@@ -123,6 +159,10 @@ type ContextActionRow struct {
 	ErrorMessage        string
 	DataClassifications []string
 	InjectionScore      *float32
+
+	Sequence *int64
+	PrevHash []byte
+	Hash     []byte
 }
 
 // ReceiptStore defines the interface for the AARM receipt log: an

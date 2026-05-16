@@ -31,6 +31,7 @@ const (
 	SelfAuditActionReceiptCleanup          = "receipt_cleanup"
 	SelfAuditActionReceiptInsertError      = "receipt_insert_error"
 	SelfAuditActionReceiptChainBroken      = "receipt_chain_broken"
+	SelfAuditActionContextChainBroken      = "context_chain_broken"
 	SelfAuditActionReceiptSigned           = "receipt_signed"
 	SelfAuditActionReceiptSignatureInvalid = "receipt_signature_invalid"
 	SelfAuditActionReceiptKeyRotated       = "receipt_key_rotated"

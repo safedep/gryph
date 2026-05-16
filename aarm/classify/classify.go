@@ -25,6 +25,16 @@ const (
 	LabelConfig      = "config"
 	LabelGitInternal = "git_internal"
 	LabelExternalURL = "external_url"
+
+	// LabelUnknownSensitive is the AARM-required fail-safe default applied
+	// by the mediation adapter when no classifier label was produced (the
+	// classifier is disabled, the classifier returned an empty set, or the
+	// action carries no classifiable surface). AARM R2 requires defaulting
+	// to the highest sensitivity level when no classification mechanism
+	// produces a result so policies that gate on classification fail safe.
+	// Operators who explicitly want classification off and do not want this
+	// label can flip policy.classify.fail_open to true.
+	LabelUnknownSensitive = "unknown_sensitive"
 )
 
 // Classifier returns zero or more classification labels for an action.
@@ -137,6 +147,38 @@ func NewNop() *Nop { return &Nop{} }
 
 // Classify implements Classifier.
 func (*Nop) Classify(*model.Action) []string { return nil }
+
+// FailSafe wraps an inner Classifier so that any action the inner Classifier
+// leaves unlabeled (including the case where inner is nil) is tagged with a
+// single fallback label. The mediation adapter wires this in by default so
+// policies that gate on classification fail safe. Operators who explicitly
+// want classification off and do not want this label can construct the
+// adapter without wrapping the inner classifier in FailSafe.
+type FailSafe struct {
+	inner Classifier
+	label string
+}
+
+// NewFailSafe returns a Classifier that delegates to inner and, when inner
+// produces no labels (or inner is nil), returns []string{label}.
+func NewFailSafe(inner Classifier, label string) Classifier {
+	return &FailSafe{inner: inner, label: label}
+}
+
+// Classify implements Classifier.
+func (f *FailSafe) Classify(action *model.Action) []string {
+	if f == nil {
+		return nil
+	}
+	var labels []string
+	if f.inner != nil {
+		labels = f.inner.Classify(action)
+	}
+	if len(labels) == 0 {
+		return []string{f.label}
+	}
+	return labels
+}
 
 func candidatePaths(action *model.Action) []string {
 	out := make([]string, 0, 4)

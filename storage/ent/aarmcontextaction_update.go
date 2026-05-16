@@ -263,6 +263,57 @@ func (_u *AarmContextActionUpdate) ClearInjectionScore() *AarmContextActionUpdat
 	return _u
 }
 
+// SetSequence sets the "sequence" field.
+func (_u *AarmContextActionUpdate) SetSequence(v int64) *AarmContextActionUpdate {
+	_u.mutation.ResetSequence()
+	_u.mutation.SetSequence(v)
+	return _u
+}
+
+// SetNillableSequence sets the "sequence" field if the given value is not nil.
+func (_u *AarmContextActionUpdate) SetNillableSequence(v *int64) *AarmContextActionUpdate {
+	if v != nil {
+		_u.SetSequence(*v)
+	}
+	return _u
+}
+
+// AddSequence adds value to the "sequence" field.
+func (_u *AarmContextActionUpdate) AddSequence(v int64) *AarmContextActionUpdate {
+	_u.mutation.AddSequence(v)
+	return _u
+}
+
+// ClearSequence clears the value of the "sequence" field.
+func (_u *AarmContextActionUpdate) ClearSequence() *AarmContextActionUpdate {
+	_u.mutation.ClearSequence()
+	return _u
+}
+
+// SetPrevHash sets the "prev_hash" field.
+func (_u *AarmContextActionUpdate) SetPrevHash(v []byte) *AarmContextActionUpdate {
+	_u.mutation.SetPrevHash(v)
+	return _u
+}
+
+// ClearPrevHash clears the value of the "prev_hash" field.
+func (_u *AarmContextActionUpdate) ClearPrevHash() *AarmContextActionUpdate {
+	_u.mutation.ClearPrevHash()
+	return _u
+}
+
+// SetHash sets the "hash" field.
+func (_u *AarmContextActionUpdate) SetHash(v []byte) *AarmContextActionUpdate {
+	_u.mutation.SetHash(v)
+	return _u
+}
+
+// ClearHash clears the value of the "hash" field.
+func (_u *AarmContextActionUpdate) ClearHash() *AarmContextActionUpdate {
+	_u.mutation.ClearHash()
+	return _u
+}
+
 // Mutation returns the AarmContextActionMutation object of the builder.
 func (_u *AarmContextActionUpdate) Mutation() *AarmContextActionMutation {
 	return _u.mutation
@@ -305,6 +356,21 @@ func (_u *AarmContextActionUpdate) check() error {
 	if v, ok := _u.mutation.ResultStatus(); ok {
 		if err := aarmcontextaction.ResultStatusValidator(v); err != nil {
 			return &ValidationError{Name: "result_status", err: fmt.Errorf(`ent: validator failed for field "AarmContextAction.result_status": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Sequence(); ok {
+		if err := aarmcontextaction.SequenceValidator(v); err != nil {
+			return &ValidationError{Name: "sequence", err: fmt.Errorf(`ent: validator failed for field "AarmContextAction.sequence": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PrevHash(); ok {
+		if err := aarmcontextaction.PrevHashValidator(v); err != nil {
+			return &ValidationError{Name: "prev_hash", err: fmt.Errorf(`ent: validator failed for field "AarmContextAction.prev_hash": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Hash(); ok {
+		if err := aarmcontextaction.HashValidator(v); err != nil {
+			return &ValidationError{Name: "hash", err: fmt.Errorf(`ent: validator failed for field "AarmContextAction.hash": %w`, err)}
 		}
 	}
 	return nil
@@ -395,6 +461,27 @@ func (_u *AarmContextActionUpdate) sqlSave(ctx context.Context) (_node int, err 
 	}
 	if _u.mutation.InjectionScoreCleared() {
 		_spec.ClearField(aarmcontextaction.FieldInjectionScore, field.TypeFloat32)
+	}
+	if value, ok := _u.mutation.Sequence(); ok {
+		_spec.SetField(aarmcontextaction.FieldSequence, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSequence(); ok {
+		_spec.AddField(aarmcontextaction.FieldSequence, field.TypeInt64, value)
+	}
+	if _u.mutation.SequenceCleared() {
+		_spec.ClearField(aarmcontextaction.FieldSequence, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.PrevHash(); ok {
+		_spec.SetField(aarmcontextaction.FieldPrevHash, field.TypeBytes, value)
+	}
+	if _u.mutation.PrevHashCleared() {
+		_spec.ClearField(aarmcontextaction.FieldPrevHash, field.TypeBytes)
+	}
+	if value, ok := _u.mutation.Hash(); ok {
+		_spec.SetField(aarmcontextaction.FieldHash, field.TypeBytes, value)
+	}
+	if _u.mutation.HashCleared() {
+		_spec.ClearField(aarmcontextaction.FieldHash, field.TypeBytes)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -650,6 +737,57 @@ func (_u *AarmContextActionUpdateOne) ClearInjectionScore() *AarmContextActionUp
 	return _u
 }
 
+// SetSequence sets the "sequence" field.
+func (_u *AarmContextActionUpdateOne) SetSequence(v int64) *AarmContextActionUpdateOne {
+	_u.mutation.ResetSequence()
+	_u.mutation.SetSequence(v)
+	return _u
+}
+
+// SetNillableSequence sets the "sequence" field if the given value is not nil.
+func (_u *AarmContextActionUpdateOne) SetNillableSequence(v *int64) *AarmContextActionUpdateOne {
+	if v != nil {
+		_u.SetSequence(*v)
+	}
+	return _u
+}
+
+// AddSequence adds value to the "sequence" field.
+func (_u *AarmContextActionUpdateOne) AddSequence(v int64) *AarmContextActionUpdateOne {
+	_u.mutation.AddSequence(v)
+	return _u
+}
+
+// ClearSequence clears the value of the "sequence" field.
+func (_u *AarmContextActionUpdateOne) ClearSequence() *AarmContextActionUpdateOne {
+	_u.mutation.ClearSequence()
+	return _u
+}
+
+// SetPrevHash sets the "prev_hash" field.
+func (_u *AarmContextActionUpdateOne) SetPrevHash(v []byte) *AarmContextActionUpdateOne {
+	_u.mutation.SetPrevHash(v)
+	return _u
+}
+
+// ClearPrevHash clears the value of the "prev_hash" field.
+func (_u *AarmContextActionUpdateOne) ClearPrevHash() *AarmContextActionUpdateOne {
+	_u.mutation.ClearPrevHash()
+	return _u
+}
+
+// SetHash sets the "hash" field.
+func (_u *AarmContextActionUpdateOne) SetHash(v []byte) *AarmContextActionUpdateOne {
+	_u.mutation.SetHash(v)
+	return _u
+}
+
+// ClearHash clears the value of the "hash" field.
+func (_u *AarmContextActionUpdateOne) ClearHash() *AarmContextActionUpdateOne {
+	_u.mutation.ClearHash()
+	return _u
+}
+
 // Mutation returns the AarmContextActionMutation object of the builder.
 func (_u *AarmContextActionUpdateOne) Mutation() *AarmContextActionMutation {
 	return _u.mutation
@@ -705,6 +843,21 @@ func (_u *AarmContextActionUpdateOne) check() error {
 	if v, ok := _u.mutation.ResultStatus(); ok {
 		if err := aarmcontextaction.ResultStatusValidator(v); err != nil {
 			return &ValidationError{Name: "result_status", err: fmt.Errorf(`ent: validator failed for field "AarmContextAction.result_status": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Sequence(); ok {
+		if err := aarmcontextaction.SequenceValidator(v); err != nil {
+			return &ValidationError{Name: "sequence", err: fmt.Errorf(`ent: validator failed for field "AarmContextAction.sequence": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PrevHash(); ok {
+		if err := aarmcontextaction.PrevHashValidator(v); err != nil {
+			return &ValidationError{Name: "prev_hash", err: fmt.Errorf(`ent: validator failed for field "AarmContextAction.prev_hash": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Hash(); ok {
+		if err := aarmcontextaction.HashValidator(v); err != nil {
+			return &ValidationError{Name: "hash", err: fmt.Errorf(`ent: validator failed for field "AarmContextAction.hash": %w`, err)}
 		}
 	}
 	return nil
@@ -812,6 +965,27 @@ func (_u *AarmContextActionUpdateOne) sqlSave(ctx context.Context) (_node *AarmC
 	}
 	if _u.mutation.InjectionScoreCleared() {
 		_spec.ClearField(aarmcontextaction.FieldInjectionScore, field.TypeFloat32)
+	}
+	if value, ok := _u.mutation.Sequence(); ok {
+		_spec.SetField(aarmcontextaction.FieldSequence, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSequence(); ok {
+		_spec.AddField(aarmcontextaction.FieldSequence, field.TypeInt64, value)
+	}
+	if _u.mutation.SequenceCleared() {
+		_spec.ClearField(aarmcontextaction.FieldSequence, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.PrevHash(); ok {
+		_spec.SetField(aarmcontextaction.FieldPrevHash, field.TypeBytes, value)
+	}
+	if _u.mutation.PrevHashCleared() {
+		_spec.ClearField(aarmcontextaction.FieldPrevHash, field.TypeBytes)
+	}
+	if value, ok := _u.mutation.Hash(); ok {
+		_spec.SetField(aarmcontextaction.FieldHash, field.TypeBytes, value)
+	}
+	if _u.mutation.HashCleared() {
+		_spec.ClearField(aarmcontextaction.FieldHash, field.TypeBytes)
 	}
 	_node = &AarmContextAction{config: _u.config}
 	_spec.Assign = _node.assignValues

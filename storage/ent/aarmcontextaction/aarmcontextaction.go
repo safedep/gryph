@@ -41,6 +41,12 @@ const (
 	FieldDataClassifications = "data_classifications"
 	// FieldInjectionScore holds the string denoting the injection_score field in the database.
 	FieldInjectionScore = "injection_score"
+	// FieldSequence holds the string denoting the sequence field in the database.
+	FieldSequence = "sequence"
+	// FieldPrevHash holds the string denoting the prev_hash field in the database.
+	FieldPrevHash = "prev_hash"
+	// FieldHash holds the string denoting the hash field in the database.
+	FieldHash = "hash"
 	// Table holds the table name of the aarmcontextaction in the database.
 	Table = "aarm_context_actions"
 )
@@ -61,6 +67,9 @@ var Columns = []string{
 	FieldErrorMessage,
 	FieldDataClassifications,
 	FieldInjectionScore,
+	FieldSequence,
+	FieldPrevHash,
+	FieldHash,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -76,6 +85,12 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultTimestamp holds the default value on creation for the "timestamp" field.
 	DefaultTimestamp func() time.Time
+	// SequenceValidator is a validator for the "sequence" field. It is called by the builders before save.
+	SequenceValidator func(int64) error
+	// PrevHashValidator is a validator for the "prev_hash" field. It is called by the builders before save.
+	PrevHashValidator func([]byte) error
+	// HashValidator is a validator for the "hash" field. It is called by the builders before save.
+	HashValidator func([]byte) error
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -208,4 +223,9 @@ func ByErrorMessage(opts ...sql.OrderTermOption) OrderOption {
 // ByInjectionScore orders the results by the injection_score field.
 func ByInjectionScore(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInjectionScore, opts...).ToFunc()
+}
+
+// BySequence orders the results by the sequence field.
+func BySequence(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSequence, opts...).ToFunc()
 }

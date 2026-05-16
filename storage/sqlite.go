@@ -37,6 +37,12 @@ type SQLiteStore struct {
 	// cheaper and clearer than _txlock=immediate at the driver level since
 	// only the receipt path needs this guarantee.
 	receiptWriteMu sync.Mutex
+
+	// contextWriteMu serializes the context-action insert path. Same
+	// rationale as receiptWriteMu: the chain insert is a SELECT-last-row
+	// then INSERT transaction and an in-process mutex avoids SQLITE_BUSY
+	// from concurrent writers that both acquired a read snapshot.
+	contextWriteMu sync.Mutex
 }
 
 // NewSQLiteStore creates a new SQLite store at the given path.

@@ -195,3 +195,37 @@ func TestNop_Classify(t *testing.T) {
 	})
 	assert.Nil(t, got)
 }
+
+type stubLabels struct{ labels []string }
+
+func (s stubLabels) Classify(*model.Action) []string { return s.labels }
+
+func TestFailSafe_NilInner(t *testing.T) {
+	c := NewFailSafe(nil, LabelUnknownSensitive)
+	got := c.Classify(&model.Action{
+		Type:       model.ActionFileRead,
+		Parameters: model.Parameters{Path: "/work/anything"},
+	})
+	assert.Equal(t, []string{LabelUnknownSensitive}, got,
+		"nil inner Classifier must produce the fail-safe label")
+}
+
+func TestFailSafe_EmptyInner(t *testing.T) {
+	c := NewFailSafe(stubLabels{labels: nil}, LabelUnknownSensitive)
+	got := c.Classify(&model.Action{
+		Type:       model.ActionFileRead,
+		Parameters: model.Parameters{Path: "/work/anything"},
+	})
+	assert.Equal(t, []string{LabelUnknownSensitive}, got,
+		"inner Classifier returning empty must produce the fail-safe label")
+}
+
+func TestFailSafe_InnerHitNotPolluted(t *testing.T) {
+	c := NewFailSafe(stubLabels{labels: []string{LabelSecret}}, LabelUnknownSensitive)
+	got := c.Classify(&model.Action{
+		Type:       model.ActionFileRead,
+		Parameters: model.Parameters{Path: "/work/anything"},
+	})
+	assert.Equal(t, []string{LabelSecret}, got,
+		"inner Classifier hits must pass through without the fail-safe label")
+}

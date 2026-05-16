@@ -199,6 +199,20 @@ policy:
 
 The legacy `sign: true` / `sign: false` bool is still accepted as a deprecated alias for `sign_mode: always` / `sign_mode: never`. Each receipt then carries an Ed25519 signature and `signer_key_id`. `gryph policy receipts --verify` walks the chain, recomputes every hash, and verifies signatures against the trust store. `gryph policy receipts export ... | gryph policy receipts verify-log --input -` round-trips the same checks without database access.
 
+### Context chain
+
+The Context Accumulator log (`aarm_context_actions`) carries a per-session hash chain of the same shape as the receipt chain: each row stores `sequence`, `prev_hash`, and `hash`. The chain attests to the as-mediated action (identity + counter-feeding fields), not the post-hook result, so a result_status update never invalidates the chain. Verify it with:
+
+```
+gryph policy context --verify --session <id|prefix>     # one session, full chain
+gryph policy context --verify                           # sessions touched by the most recent --limit rows
+gryph policy context --verify --all-sessions            # every session in the log
+```
+
+`--verify` exits non-zero on any chain break and records a `context_chain_broken` self-audit row. Rows written before the chain was added show up as `unchained` in the summary and do not fail verification. `--format json` emits a machine-readable verdict (`actions`, `chain_breaks`, `summary`).
+
+The chain is not signed today. The receipt chain remains the authenticated audit log. The context chain is for the policy engine to read and for tamper-evidence within the same database.
+
 ## Approval workflow
 
 A rule with `action: escalate` pauses the agent's tool call and prompts the operator on `/dev/tty` for approve or deny.
@@ -221,6 +235,7 @@ Two heuristic signals populate the action record. Disable either if a custom ana
 policy:
   classify:
     enabled: true
+    fail_open: false
     extra_patterns:
       pii: ["**/customer-list*"]
   injection_score:
@@ -240,6 +255,23 @@ policy:
   match: { action_types: [tool_use] }
   condition: "action.injection_score > 0.5"
 ```
+
+### Safe-by-default classification
+
+AARM R2 requires the engine to default to the highest sensitivity level when no classification mechanism produces a result. Gryph honours this by appending the `unknown_sensitive` label to any action the classifier left unlabeled. The label fires in three cases: the classifier is disabled (`classify.enabled: false`), the classifier ran and matched nothing, or the action has no classifiable surface (no path, URL, or content). Policies that gate on classification now fail safe instead of waving the action through.
+
+Rules that match on explicit labels (`'secret' in context.classifications_seen`) are unaffected. Rules can also opt into a paranoid mode by gating on `'unknown_sensitive' in action.data_classifications`.
+
+Operators who explicitly want classification off and do not want the fail-safe label flip `classify.fail_open: true`:
+
+```yaml
+policy:
+  classify:
+    enabled: false
+    fail_open: true   # opt out of the AARM safety-net label
+```
+
+The default (`fail_open: false`) keeps AARM conformance.
 
 ## Worked examples
 

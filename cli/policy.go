@@ -666,7 +666,7 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 			ApprovalTimeout:   time.Duration(policyCfg.Approval.TimeoutSeconds) * time.Second,
 		}))
 
-		adapterOpts := []mediation.HookAdapterOption{}
+		var classifier classify.Classifier
 		if policyCfg.Classify.Enabled {
 			secretPaths := cfg.Privacy.SensitivePaths
 			if len(secretPaths) == 0 {
@@ -676,16 +676,22 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 			if len(policyCfg.Classify.ExtraPatterns) > 0 {
 				classifyOpts = append(classifyOpts, classify.WithExtraPatterns(policyCfg.Classify.ExtraPatterns))
 			}
-			adapterOpts = append(adapterOpts, mediation.WithClassifier(classify.NewHeuristic(classifyOpts...)))
+			classifier = classify.NewHeuristic(classifyOpts...)
+		}
+		if !policyCfg.Classify.FailOpen {
+			classifier = classify.NewFailSafe(classifier, classify.LabelUnknownSensitive)
+		}
+
+		var adapterOpts []mediation.HookAdapterOption
+		if classifier != nil {
+			adapterOpts = append(adapterOpts, mediation.WithClassifier(classifier))
 		}
 
 		if policyCfg.InjectionScore.Enabled {
 			adapterOpts = append(adapterOpts, mediation.WithInjectionScorer(injectscore.NewHeuristic()))
 		}
 
-		if len(adapterOpts) > 0 {
-			opts = append(opts, aarmsec.WithAdapter(mediation.NewHookAdapter(adapterOpts...)))
-		}
+		opts = append(opts, aarmsec.WithAdapter(mediation.NewHookAdapter(adapterOpts...)))
 
 		switch policyCfg.Approval.Mode {
 		case config.ApprovalModeCLI:

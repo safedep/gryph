@@ -24,6 +24,9 @@ var (
 		{Name: "error_message", Type: field.TypeString, Nullable: true},
 		{Name: "data_classifications", Type: field.TypeJSON, Nullable: true},
 		{Name: "injection_score", Type: field.TypeFloat32, Nullable: true},
+		{Name: "sequence", Type: field.TypeInt64, Nullable: true},
+		{Name: "prev_hash", Type: field.TypeBytes, Nullable: true, Size: 32},
+		{Name: "hash", Type: field.TypeBytes, Nullable: true, Size: 32},
 	}
 	// AarmContextActionsTable holds the schema information for the "aarm_context_actions" table.
 	AarmContextActionsTable = &schema.Table{
@@ -45,6 +48,11 @@ var (
 				Name:    "aarmcontextaction_session_id_action_type",
 				Unique:  false,
 				Columns: []*schema.Column{AarmContextActionsColumns[1], AarmContextActionsColumns[4]},
+			},
+			{
+				Name:    "aarmcontextaction_session_id_sequence",
+				Unique:  true,
+				Columns: []*schema.Column{AarmContextActionsColumns[1], AarmContextActionsColumns[14]},
 			},
 		},
 	}
@@ -231,7 +239,7 @@ var (
 	SelfAuditsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "timestamp", Type: field.TypeTime},
-		{Name: "action", Type: field.TypeEnum, Enums: []string{"install", "uninstall", "config_change", "export", "purge", "upgrade", "database_init", "retention_cleanup", "hook_error", "policy_load_error", "context_cleanup", "context_snapshot_error", "receipt_cleanup", "receipt_insert_error", "receipt_chain_broken", "receipt_signed", "receipt_signature_invalid", "receipt_key_rotated", "approval_requested", "approval_granted", "approval_denied", "approval_timeout"}},
+		{Name: "action", Type: field.TypeEnum, Enums: []string{"install", "uninstall", "config_change", "export", "purge", "upgrade", "database_init", "retention_cleanup", "hook_error", "policy_load_error", "context_cleanup", "context_snapshot_error", "context_chain_broken", "receipt_cleanup", "receipt_insert_error", "receipt_chain_broken", "receipt_signed", "receipt_signature_invalid", "receipt_key_rotated", "approval_requested", "approval_granted", "approval_denied", "approval_timeout"}},
 		{Name: "agent_name", Type: field.TypeString, Nullable: true},
 		{Name: "details", Type: field.TypeJSON, Nullable: true},
 		{Name: "result", Type: field.TypeEnum, Enums: []string{"success", "error", "skipped"}, Default: "success"},

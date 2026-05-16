@@ -62,6 +62,7 @@ func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".approval.timeout_seconds", 60)
 	v.SetDefault(prefix+".approval.require_note", false)
 	v.SetDefault(prefix+".classify.enabled", true)
+	v.SetDefault(prefix+".classify.fail_open", false)
 	v.SetDefault(prefix+".classify.extra_patterns", map[string][]string{})
 	v.SetDefault(prefix+".injection_score.enabled", true)
 	v.SetDefault(prefix+".receipts.sign_mode", SignModeAuto)

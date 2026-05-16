@@ -27,6 +27,18 @@ func init() {
 	aarmcontextactionDescTimestamp := aarmcontextactionFields[3].Descriptor()
 	// aarmcontextaction.DefaultTimestamp holds the default value on creation for the timestamp field.
 	aarmcontextaction.DefaultTimestamp = aarmcontextactionDescTimestamp.Default.(func() time.Time)
+	// aarmcontextactionDescSequence is the schema descriptor for sequence field.
+	aarmcontextactionDescSequence := aarmcontextactionFields[14].Descriptor()
+	// aarmcontextaction.SequenceValidator is a validator for the "sequence" field. It is called by the builders before save.
+	aarmcontextaction.SequenceValidator = aarmcontextactionDescSequence.Validators[0].(func(int64) error)
+	// aarmcontextactionDescPrevHash is the schema descriptor for prev_hash field.
+	aarmcontextactionDescPrevHash := aarmcontextactionFields[15].Descriptor()
+	// aarmcontextaction.PrevHashValidator is a validator for the "prev_hash" field. It is called by the builders before save.
+	aarmcontextaction.PrevHashValidator = aarmcontextactionDescPrevHash.Validators[0].(func([]byte) error)
+	// aarmcontextactionDescHash is the schema descriptor for hash field.
+	aarmcontextactionDescHash := aarmcontextactionFields[16].Descriptor()
+	// aarmcontextaction.HashValidator is a validator for the "hash" field. It is called by the builders before save.
+	aarmcontextaction.HashValidator = aarmcontextactionDescHash.Validators[0].(func([]byte) error)
 	// aarmcontextactionDescID is the schema descriptor for id field.
 	aarmcontextactionDescID := aarmcontextactionFields[0].Descriptor()
 	// aarmcontextaction.DefaultID holds the default value on creation for the id field.

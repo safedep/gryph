@@ -26,7 +26,7 @@ type MCPToolCallParams struct {
 
 // MCPAdapter normalizes MCP tool-call requests into canonical actions.
 // Mirrors HookAdapter so the classifier / scorer wiring is identical across
-// adapters. The Phase 4 surface is the contract; the full JSON-RPC proxy is
+// adapters. The Phase 4 surface is the contract. The full JSON-RPC proxy is
 // deferred to Phase 5.
 type MCPAdapter struct {
 	classifier Classifier
@@ -36,7 +36,9 @@ type MCPAdapter struct {
 // MCPAdapterOption configures a MCPAdapter at construction time.
 type MCPAdapterOption func(*MCPAdapter)
 
-// WithMCPClassifier wires a Classifier into the adapter.
+// WithMCPClassifier wires a Classifier into the adapter. Wrap the supplied
+// Classifier in classify.NewFailSafe to keep the AARM-conformant safety-net
+// label.
 func WithMCPClassifier(c Classifier) MCPAdapterOption {
 	return func(a *MCPAdapter) {
 		if c != nil {

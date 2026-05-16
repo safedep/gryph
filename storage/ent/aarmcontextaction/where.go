@@ -105,6 +105,21 @@ func InjectionScore(v float32) predicate.AarmContextAction {
 	return predicate.AarmContextAction(sql.FieldEQ(FieldInjectionScore, v))
 }
 
+// Sequence applies equality check predicate on the "sequence" field. It's identical to SequenceEQ.
+func Sequence(v int64) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldEQ(FieldSequence, v))
+}
+
+// PrevHash applies equality check predicate on the "prev_hash" field. It's identical to PrevHashEQ.
+func PrevHash(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldEQ(FieldPrevHash, v))
+}
+
+// Hash applies equality check predicate on the "hash" field. It's identical to HashEQ.
+func Hash(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldEQ(FieldHash, v))
+}
+
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
 func SessionIDEQ(v uuid.UUID) predicate.AarmContextAction {
 	return predicate.AarmContextAction(sql.FieldEQ(FieldSessionID, v))
@@ -758,6 +773,156 @@ func InjectionScoreIsNil() predicate.AarmContextAction {
 // InjectionScoreNotNil applies the NotNil predicate on the "injection_score" field.
 func InjectionScoreNotNil() predicate.AarmContextAction {
 	return predicate.AarmContextAction(sql.FieldNotNull(FieldInjectionScore))
+}
+
+// SequenceEQ applies the EQ predicate on the "sequence" field.
+func SequenceEQ(v int64) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldEQ(FieldSequence, v))
+}
+
+// SequenceNEQ applies the NEQ predicate on the "sequence" field.
+func SequenceNEQ(v int64) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldNEQ(FieldSequence, v))
+}
+
+// SequenceIn applies the In predicate on the "sequence" field.
+func SequenceIn(vs ...int64) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldIn(FieldSequence, vs...))
+}
+
+// SequenceNotIn applies the NotIn predicate on the "sequence" field.
+func SequenceNotIn(vs ...int64) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldNotIn(FieldSequence, vs...))
+}
+
+// SequenceGT applies the GT predicate on the "sequence" field.
+func SequenceGT(v int64) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldGT(FieldSequence, v))
+}
+
+// SequenceGTE applies the GTE predicate on the "sequence" field.
+func SequenceGTE(v int64) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldGTE(FieldSequence, v))
+}
+
+// SequenceLT applies the LT predicate on the "sequence" field.
+func SequenceLT(v int64) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldLT(FieldSequence, v))
+}
+
+// SequenceLTE applies the LTE predicate on the "sequence" field.
+func SequenceLTE(v int64) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldLTE(FieldSequence, v))
+}
+
+// SequenceIsNil applies the IsNil predicate on the "sequence" field.
+func SequenceIsNil() predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldIsNull(FieldSequence))
+}
+
+// SequenceNotNil applies the NotNil predicate on the "sequence" field.
+func SequenceNotNil() predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldNotNull(FieldSequence))
+}
+
+// PrevHashEQ applies the EQ predicate on the "prev_hash" field.
+func PrevHashEQ(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldEQ(FieldPrevHash, v))
+}
+
+// PrevHashNEQ applies the NEQ predicate on the "prev_hash" field.
+func PrevHashNEQ(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldNEQ(FieldPrevHash, v))
+}
+
+// PrevHashIn applies the In predicate on the "prev_hash" field.
+func PrevHashIn(vs ...[]byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldIn(FieldPrevHash, vs...))
+}
+
+// PrevHashNotIn applies the NotIn predicate on the "prev_hash" field.
+func PrevHashNotIn(vs ...[]byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldNotIn(FieldPrevHash, vs...))
+}
+
+// PrevHashGT applies the GT predicate on the "prev_hash" field.
+func PrevHashGT(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldGT(FieldPrevHash, v))
+}
+
+// PrevHashGTE applies the GTE predicate on the "prev_hash" field.
+func PrevHashGTE(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldGTE(FieldPrevHash, v))
+}
+
+// PrevHashLT applies the LT predicate on the "prev_hash" field.
+func PrevHashLT(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldLT(FieldPrevHash, v))
+}
+
+// PrevHashLTE applies the LTE predicate on the "prev_hash" field.
+func PrevHashLTE(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldLTE(FieldPrevHash, v))
+}
+
+// PrevHashIsNil applies the IsNil predicate on the "prev_hash" field.
+func PrevHashIsNil() predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldIsNull(FieldPrevHash))
+}
+
+// PrevHashNotNil applies the NotNil predicate on the "prev_hash" field.
+func PrevHashNotNil() predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldNotNull(FieldPrevHash))
+}
+
+// HashEQ applies the EQ predicate on the "hash" field.
+func HashEQ(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldEQ(FieldHash, v))
+}
+
+// HashNEQ applies the NEQ predicate on the "hash" field.
+func HashNEQ(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldNEQ(FieldHash, v))
+}
+
+// HashIn applies the In predicate on the "hash" field.
+func HashIn(vs ...[]byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldIn(FieldHash, vs...))
+}
+
+// HashNotIn applies the NotIn predicate on the "hash" field.
+func HashNotIn(vs ...[]byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldNotIn(FieldHash, vs...))
+}
+
+// HashGT applies the GT predicate on the "hash" field.
+func HashGT(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldGT(FieldHash, v))
+}
+
+// HashGTE applies the GTE predicate on the "hash" field.
+func HashGTE(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldGTE(FieldHash, v))
+}
+
+// HashLT applies the LT predicate on the "hash" field.
+func HashLT(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldLT(FieldHash, v))
+}
+
+// HashLTE applies the LTE predicate on the "hash" field.
+func HashLTE(v []byte) predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldLTE(FieldHash, v))
+}
+
+// HashIsNil applies the IsNil predicate on the "hash" field.
+func HashIsNil() predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldIsNull(FieldHash))
+}
+
+// HashNotNil applies the NotNil predicate on the "hash" field.
+func HashNotNil() predicate.AarmContextAction {
+	return predicate.AarmContextAction(sql.FieldNotNull(FieldHash))
 }
 
 // And groups predicates with the AND operator between them.

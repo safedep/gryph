@@ -45,7 +45,13 @@ type AarmContextAction struct {
 	DataClassifications []string `json:"data_classifications,omitempty"`
 	// InjectionScore holds the value of the "injection_score" field.
 	InjectionScore *float32 `json:"injection_score,omitempty"`
-	selectValues   sql.SelectValues
+	// Sequence holds the value of the "sequence" field.
+	Sequence *int64 `json:"sequence,omitempty"`
+	// PrevHash holds the value of the "prev_hash" field.
+	PrevHash []byte `json:"prev_hash,omitempty"`
+	// Hash holds the value of the "hash" field.
+	Hash         []byte `json:"hash,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -53,11 +59,11 @@ func (*AarmContextAction) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case aarmcontextaction.FieldDataClassifications:
+		case aarmcontextaction.FieldDataClassifications, aarmcontextaction.FieldPrevHash, aarmcontextaction.FieldHash:
 			values[i] = new([]byte)
 		case aarmcontextaction.FieldInjectionScore:
 			values[i] = new(sql.NullFloat64)
-		case aarmcontextaction.FieldDurationMs:
+		case aarmcontextaction.FieldDurationMs, aarmcontextaction.FieldSequence:
 			values[i] = new(sql.NullInt64)
 		case aarmcontextaction.FieldActionType, aarmcontextaction.FieldTool, aarmcontextaction.FieldAgent, aarmcontextaction.FieldProject, aarmcontextaction.FieldWorkingDir, aarmcontextaction.FieldResultStatus, aarmcontextaction.FieldErrorMessage:
 			values[i] = new(sql.NullString)
@@ -168,6 +174,25 @@ func (_m *AarmContextAction) assignValues(columns []string, values []any) error 
 				_m.InjectionScore = new(float32)
 				*_m.InjectionScore = float32(value.Float64)
 			}
+		case aarmcontextaction.FieldSequence:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sequence", values[i])
+			} else if value.Valid {
+				_m.Sequence = new(int64)
+				*_m.Sequence = value.Int64
+			}
+		case aarmcontextaction.FieldPrevHash:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field prev_hash", values[i])
+			} else if value != nil {
+				_m.PrevHash = *value
+			}
+		case aarmcontextaction.FieldHash:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field hash", values[i])
+			} else if value != nil {
+				_m.Hash = *value
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -246,6 +271,17 @@ func (_m *AarmContextAction) String() string {
 		builder.WriteString("injection_score=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	if v := _m.Sequence; v != nil {
+		builder.WriteString("sequence=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("prev_hash=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PrevHash))
+	builder.WriteString(", ")
+	builder.WriteString("hash=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Hash))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -64,6 +64,10 @@ type AarmContextActionMutation struct {
 	appenddata_classifications []string
 	injection_score            *float32
 	addinjection_score         *float32
+	sequence                   *int64
+	addsequence                *int64
+	prev_hash                  *[]byte
+	hash                       *[]byte
 	clearedFields              map[string]struct{}
 	done                       bool
 	oldValue                   func(context.Context) (*AarmContextAction, error)
@@ -817,6 +821,174 @@ func (m *AarmContextActionMutation) ResetInjectionScore() {
 	delete(m.clearedFields, aarmcontextaction.FieldInjectionScore)
 }
 
+// SetSequence sets the "sequence" field.
+func (m *AarmContextActionMutation) SetSequence(i int64) {
+	m.sequence = &i
+	m.addsequence = nil
+}
+
+// Sequence returns the value of the "sequence" field in the mutation.
+func (m *AarmContextActionMutation) Sequence() (r int64, exists bool) {
+	v := m.sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSequence returns the old "sequence" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldSequence(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSequence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSequence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSequence: %w", err)
+	}
+	return oldValue.Sequence, nil
+}
+
+// AddSequence adds i to the "sequence" field.
+func (m *AarmContextActionMutation) AddSequence(i int64) {
+	if m.addsequence != nil {
+		*m.addsequence += i
+	} else {
+		m.addsequence = &i
+	}
+}
+
+// AddedSequence returns the value that was added to the "sequence" field in this mutation.
+func (m *AarmContextActionMutation) AddedSequence() (r int64, exists bool) {
+	v := m.addsequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearSequence clears the value of the "sequence" field.
+func (m *AarmContextActionMutation) ClearSequence() {
+	m.sequence = nil
+	m.addsequence = nil
+	m.clearedFields[aarmcontextaction.FieldSequence] = struct{}{}
+}
+
+// SequenceCleared returns if the "sequence" field was cleared in this mutation.
+func (m *AarmContextActionMutation) SequenceCleared() bool {
+	_, ok := m.clearedFields[aarmcontextaction.FieldSequence]
+	return ok
+}
+
+// ResetSequence resets all changes to the "sequence" field.
+func (m *AarmContextActionMutation) ResetSequence() {
+	m.sequence = nil
+	m.addsequence = nil
+	delete(m.clearedFields, aarmcontextaction.FieldSequence)
+}
+
+// SetPrevHash sets the "prev_hash" field.
+func (m *AarmContextActionMutation) SetPrevHash(b []byte) {
+	m.prev_hash = &b
+}
+
+// PrevHash returns the value of the "prev_hash" field in the mutation.
+func (m *AarmContextActionMutation) PrevHash() (r []byte, exists bool) {
+	v := m.prev_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPrevHash returns the old "prev_hash" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldPrevHash(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPrevHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPrevHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPrevHash: %w", err)
+	}
+	return oldValue.PrevHash, nil
+}
+
+// ClearPrevHash clears the value of the "prev_hash" field.
+func (m *AarmContextActionMutation) ClearPrevHash() {
+	m.prev_hash = nil
+	m.clearedFields[aarmcontextaction.FieldPrevHash] = struct{}{}
+}
+
+// PrevHashCleared returns if the "prev_hash" field was cleared in this mutation.
+func (m *AarmContextActionMutation) PrevHashCleared() bool {
+	_, ok := m.clearedFields[aarmcontextaction.FieldPrevHash]
+	return ok
+}
+
+// ResetPrevHash resets all changes to the "prev_hash" field.
+func (m *AarmContextActionMutation) ResetPrevHash() {
+	m.prev_hash = nil
+	delete(m.clearedFields, aarmcontextaction.FieldPrevHash)
+}
+
+// SetHash sets the "hash" field.
+func (m *AarmContextActionMutation) SetHash(b []byte) {
+	m.hash = &b
+}
+
+// Hash returns the value of the "hash" field in the mutation.
+func (m *AarmContextActionMutation) Hash() (r []byte, exists bool) {
+	v := m.hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHash returns the old "hash" field's value of the AarmContextAction entity.
+// If the AarmContextAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmContextActionMutation) OldHash(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHash: %w", err)
+	}
+	return oldValue.Hash, nil
+}
+
+// ClearHash clears the value of the "hash" field.
+func (m *AarmContextActionMutation) ClearHash() {
+	m.hash = nil
+	m.clearedFields[aarmcontextaction.FieldHash] = struct{}{}
+}
+
+// HashCleared returns if the "hash" field was cleared in this mutation.
+func (m *AarmContextActionMutation) HashCleared() bool {
+	_, ok := m.clearedFields[aarmcontextaction.FieldHash]
+	return ok
+}
+
+// ResetHash resets all changes to the "hash" field.
+func (m *AarmContextActionMutation) ResetHash() {
+	m.hash = nil
+	delete(m.clearedFields, aarmcontextaction.FieldHash)
+}
+
 // Where appends a list predicates to the AarmContextActionMutation builder.
 func (m *AarmContextActionMutation) Where(ps ...predicate.AarmContextAction) {
 	m.predicates = append(m.predicates, ps...)
@@ -851,7 +1023,7 @@ func (m *AarmContextActionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AarmContextActionMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 16)
 	if m.session_id != nil {
 		fields = append(fields, aarmcontextaction.FieldSessionID)
 	}
@@ -891,6 +1063,15 @@ func (m *AarmContextActionMutation) Fields() []string {
 	if m.injection_score != nil {
 		fields = append(fields, aarmcontextaction.FieldInjectionScore)
 	}
+	if m.sequence != nil {
+		fields = append(fields, aarmcontextaction.FieldSequence)
+	}
+	if m.prev_hash != nil {
+		fields = append(fields, aarmcontextaction.FieldPrevHash)
+	}
+	if m.hash != nil {
+		fields = append(fields, aarmcontextaction.FieldHash)
+	}
 	return fields
 }
 
@@ -925,6 +1106,12 @@ func (m *AarmContextActionMutation) Field(name string) (ent.Value, bool) {
 		return m.DataClassifications()
 	case aarmcontextaction.FieldInjectionScore:
 		return m.InjectionScore()
+	case aarmcontextaction.FieldSequence:
+		return m.Sequence()
+	case aarmcontextaction.FieldPrevHash:
+		return m.PrevHash()
+	case aarmcontextaction.FieldHash:
+		return m.Hash()
 	}
 	return nil, false
 }
@@ -960,6 +1147,12 @@ func (m *AarmContextActionMutation) OldField(ctx context.Context, name string) (
 		return m.OldDataClassifications(ctx)
 	case aarmcontextaction.FieldInjectionScore:
 		return m.OldInjectionScore(ctx)
+	case aarmcontextaction.FieldSequence:
+		return m.OldSequence(ctx)
+	case aarmcontextaction.FieldPrevHash:
+		return m.OldPrevHash(ctx)
+	case aarmcontextaction.FieldHash:
+		return m.OldHash(ctx)
 	}
 	return nil, fmt.Errorf("unknown AarmContextAction field %s", name)
 }
@@ -1060,6 +1253,27 @@ func (m *AarmContextActionMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetInjectionScore(v)
 		return nil
+	case aarmcontextaction.FieldSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSequence(v)
+		return nil
+	case aarmcontextaction.FieldPrevHash:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPrevHash(v)
+		return nil
+	case aarmcontextaction.FieldHash:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHash(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AarmContextAction field %s", name)
 }
@@ -1074,6 +1288,9 @@ func (m *AarmContextActionMutation) AddedFields() []string {
 	if m.addinjection_score != nil {
 		fields = append(fields, aarmcontextaction.FieldInjectionScore)
 	}
+	if m.addsequence != nil {
+		fields = append(fields, aarmcontextaction.FieldSequence)
+	}
 	return fields
 }
 
@@ -1086,6 +1303,8 @@ func (m *AarmContextActionMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedDurationMs()
 	case aarmcontextaction.FieldInjectionScore:
 		return m.AddedInjectionScore()
+	case aarmcontextaction.FieldSequence:
+		return m.AddedSequence()
 	}
 	return nil, false
 }
@@ -1108,6 +1327,13 @@ func (m *AarmContextActionMutation) AddField(name string, value ent.Value) error
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddInjectionScore(v)
+		return nil
+	case aarmcontextaction.FieldSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSequence(v)
 		return nil
 	}
 	return fmt.Errorf("unknown AarmContextAction numeric field %s", name)
@@ -1143,6 +1369,15 @@ func (m *AarmContextActionMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(aarmcontextaction.FieldInjectionScore) {
 		fields = append(fields, aarmcontextaction.FieldInjectionScore)
+	}
+	if m.FieldCleared(aarmcontextaction.FieldSequence) {
+		fields = append(fields, aarmcontextaction.FieldSequence)
+	}
+	if m.FieldCleared(aarmcontextaction.FieldPrevHash) {
+		fields = append(fields, aarmcontextaction.FieldPrevHash)
+	}
+	if m.FieldCleared(aarmcontextaction.FieldHash) {
+		fields = append(fields, aarmcontextaction.FieldHash)
 	}
 	return fields
 }
@@ -1184,6 +1419,15 @@ func (m *AarmContextActionMutation) ClearField(name string) error {
 		return nil
 	case aarmcontextaction.FieldInjectionScore:
 		m.ClearInjectionScore()
+		return nil
+	case aarmcontextaction.FieldSequence:
+		m.ClearSequence()
+		return nil
+	case aarmcontextaction.FieldPrevHash:
+		m.ClearPrevHash()
+		return nil
+	case aarmcontextaction.FieldHash:
+		m.ClearHash()
 		return nil
 	}
 	return fmt.Errorf("unknown AarmContextAction nullable field %s", name)
@@ -1231,6 +1475,15 @@ func (m *AarmContextActionMutation) ResetField(name string) error {
 		return nil
 	case aarmcontextaction.FieldInjectionScore:
 		m.ResetInjectionScore()
+		return nil
+	case aarmcontextaction.FieldSequence:
+		m.ResetSequence()
+		return nil
+	case aarmcontextaction.FieldPrevHash:
+		m.ResetPrevHash()
+		return nil
+	case aarmcontextaction.FieldHash:
+		m.ResetHash()
 		return nil
 	}
 	return fmt.Errorf("unknown AarmContextAction field %s", name)

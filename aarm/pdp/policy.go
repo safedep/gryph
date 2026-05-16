@@ -248,4 +248,3 @@ func addSortedStrings(dst map[string]interface{}, key string, values []string) {
 	sort.Strings(sorted)
 	dst[key] = sorted
 }
-
