@@ -185,7 +185,7 @@ func TestVerifyReceiptChains_DetectsNonZeroFirstPrevHash(t *testing.T) {
 
 func TestRenderReceiptsTable_EmptyShowsHint(t *testing.T) {
 	var buf bytes.Buffer
-	renderReceiptsTable(&buf, tui.NewColorizer(false), nil)
+	renderReceiptsTable(&buf, tui.NewColorizer(false), nil, false)
 	assert.Contains(t, buf.String(), "No receipts recorded yet.")
 }
 
@@ -203,7 +203,7 @@ func TestRenderReceiptsTable_ListsRows(t *testing.T) {
 		ResultStatus: "pending",
 		Hash:         bytes.Repeat([]byte{0xab}, 32),
 	}
-	renderReceiptsTable(&buf, tui.NewColorizer(false), []*storage.ReceiptRow{row})
+	renderReceiptsTable(&buf, tui.NewColorizer(false), []*storage.ReceiptRow{row}, true)
 	out := buf.String()
 	assert.Contains(t, out, "ababababab")
 	assert.Contains(t, out, "guidance")

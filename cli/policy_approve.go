@@ -29,19 +29,18 @@ func newPolicyApproveCmd() *cobra.Command {
 func newPolicyApproveListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "List pending approval requests (stub)",
-		Long: "Lists pending approval requests. With the CLI-only frontend, " +
-			"requests live only in the prompting process and cannot be " +
-			"enumerated across processes. A persistent queue lands in Phase 4.",
+		Short: "List pending approval requests",
+		Long: "Lists pending approval requests. The CLI frontend handles each " +
+			"prompt in-process and does not expose a cross-process queue, so " +
+			"this always reports zero pending. Use `gryph policy approve history` " +
+			"to review past approval decisions.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			app, err := loadApp()
 			if err != nil {
 				log.Warnf("loadApp failed during policy approve list: %v", err)
 			}
 			c := policyColorizer(app)
-			out := cmd.OutOrStdout()
-			_, _ = fmt.Fprintln(out, c.Dim("no pending approvals"))
-			_, _ = fmt.Fprintln(out, c.Dim("CLI prompts block in-process; a persistent queue lands in Phase 4"))
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), c.Dim("no pending approvals"))
 			return nil
 		},
 	}

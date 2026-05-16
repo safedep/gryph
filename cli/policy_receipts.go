@@ -29,6 +29,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 		format      string
 		verify      bool
 		allSessions bool
+		showHash    bool
 	)
 
 	cmd := &cobra.Command{
@@ -110,7 +111,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 				if format == "json" {
 					return writeReceiptsJSONWithSignatures(out, rows, breaks, sigResults, sigSummary)
 				}
-				renderReceiptsTable(out, c, rows)
+				renderReceiptsTable(out, c, rows, true)
 				renderVerifyResults(out, c, breaks)
 				renderSignatureVerifyResults(out, c, sigSummary, sigResults)
 				if len(breaks) > 0 || sigSummary.SignedInvalid > 0 {
@@ -122,7 +123,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 			if format == "json" {
 				return writeReceiptsJSON(out, rows, nil)
 			}
-			renderReceiptsTable(out, c, rows)
+			renderReceiptsTable(out, c, rows, showHash)
 			return nil
 		},
 	}
@@ -135,6 +136,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json")
 	cmd.Flags().BoolVar(&verify, "verify", false, "re-derive the hash chain and report any breaks")
 	cmd.Flags().BoolVar(&allSessions, "all-sessions", false, "with --verify, enumerate every session in the receipt log and verify each chain in full. Mutually exclusive with --session")
+	cmd.Flags().BoolVar(&showHash, "show-hash", false, "include the per-row hash in the table output")
 	return cmd
 }
 
@@ -317,19 +319,29 @@ type receiptTableTrailing struct {
 	Cells   func(r *storage.ReceiptRow) []interface{}
 }
 
-func defaultReceiptTrailing() receiptTableTrailing {
+func defaultReceiptTrailing(showHash bool) receiptTableTrailing {
+	if showHash {
+		return receiptTableTrailing{
+			Title:   "Receipts",
+			Headers: []string{"result", "hash"},
+			Format:  "  %-9s  %s\n",
+			Cells: func(r *storage.ReceiptRow) []interface{} {
+				return []interface{}{r.ResultStatus, shortHash(r.Hash)}
+			},
+		}
+	}
 	return receiptTableTrailing{
 		Title:   "Receipts",
-		Headers: []string{"result", "hash"},
-		Format:  "  %-9s  %s\n",
+		Headers: []string{"result"},
+		Format:  "  %s\n",
 		Cells: func(r *storage.ReceiptRow) []interface{} {
-			return []interface{}{r.ResultStatus, shortHash(r.Hash)}
+			return []interface{}{r.ResultStatus}
 		},
 	}
 }
 
-func renderReceiptsTable(w io.Writer, c *tui.Colorizer, rows []*storage.ReceiptRow) {
-	renderReceiptsTableWith(w, c, rows, defaultReceiptTrailing(), "No receipts recorded yet.")
+func renderReceiptsTable(w io.Writer, c *tui.Colorizer, rows []*storage.ReceiptRow, showHash bool) {
+	renderReceiptsTableWith(w, c, rows, defaultReceiptTrailing(showHash), "No receipts recorded yet.")
 }
 
 func renderReceiptsTableWith(w io.Writer, c *tui.Colorizer, rows []*storage.ReceiptRow, trailing receiptTableTrailing, emptyMsg string) {

@@ -182,19 +182,24 @@ func actionRowToView(a *storage.ContextActionRow) policyContextActionView {
 }
 
 func renderContextStateTable(w io.Writer, c *tui.Colorizer, v policyContextStateView) {
-	_, _ = fmt.Fprintln(w, c.Header("Context snapshot"))
-	_, _ = fmt.Fprintln(w, tui.HorizontalLine(80))
-	_, _ = fmt.Fprintf(w, "  %-22s %s\n", c.Dim("session_id"), c.Cyan(v.SessionID))
-	_, _ = fmt.Fprintf(w, "  %-22s %s\n", c.Dim("first_seen_at"), v.FirstSeenAt)
-	_, _ = fmt.Fprintf(w, "  %-22s %s\n", c.Dim("last_action_at"), v.LastActionAt)
-	_, _ = fmt.Fprintf(w, "  %-22s %d\n", c.Dim("total_actions"), v.TotalActions)
-	_, _ = fmt.Fprintf(w, "  %-22s %d\n", c.Dim("files_read"), v.FilesRead)
-	_, _ = fmt.Fprintf(w, "  %-22s %d\n", c.Dim("files_written"), v.FilesWritten)
-	_, _ = fmt.Fprintf(w, "  %-22s %d\n", c.Dim("commands_executed"), v.CommandsExecuted)
-	_, _ = fmt.Fprintf(w, "  %-22s %d\n", c.Dim("network_requests"), v.NetworkRequests)
-	_, _ = fmt.Fprintf(w, "  %-22s %d\n", c.Dim("errors"), v.Errors)
+	_, _ = fmt.Fprintf(w, "%s %s\n", c.Header("Session"), c.Cyan(tui.FormatShortID(v.SessionID)))
+	_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("first seen"), v.FirstSeenAt)
+	_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("last action"), v.LastActionAt)
+	_, _ = fmt.Fprintf(w, "  %-12s %d\n", c.Dim("actions"), v.TotalActions)
+	if v.FilesRead > 0 || v.FilesWritten > 0 {
+		_, _ = fmt.Fprintf(w, "  %-12s %d read, %d written\n", c.Dim("files"), v.FilesRead, v.FilesWritten)
+	}
+	if v.CommandsExecuted > 0 {
+		_, _ = fmt.Fprintf(w, "  %-12s %d\n", c.Dim("commands"), v.CommandsExecuted)
+	}
+	if v.NetworkRequests > 0 {
+		_, _ = fmt.Fprintf(w, "  %-12s %d\n", c.Dim("network"), v.NetworkRequests)
+	}
+	if v.Errors > 0 {
+		_, _ = fmt.Fprintf(w, "  %-12s %d\n", c.Dim("errors"), v.Errors)
+	}
 	if len(v.ToolsUsed) > 0 {
-		_, _ = fmt.Fprintf(w, "  %-22s %s\n", c.Dim("tools_used"), strings.Join(v.ToolsUsed, ", "))
+		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tools"), strings.Join(v.ToolsUsed, ", "))
 	}
 }
 

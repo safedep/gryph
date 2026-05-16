@@ -114,11 +114,9 @@ func newPolicyKeysGenerateCmd() *cobra.Command {
 
 			c := policyColorizer(app)
 			out := cmd.OutOrStdout()
-			_, _ = fmt.Fprintf(out, "%s Generated key %s\n", c.StatusOK(), c.Cyan(pkFile.KeyID))
-			_, _ = fmt.Fprintf(out, "  %s %s\n", c.Dim("private:"), c.Path(keyPath))
-			_, _ = fmt.Fprintf(out, "  %s %s\n", c.Dim("trust store:"), c.Path(trustPath))
+			_, _ = fmt.Fprintf(out, "%s Generated key %s -> %s\n", c.StatusOK(), c.Cyan(pkFile.KeyID), c.Path(keyPath))
 			if !app.Config.Policy.Receipts.Sign {
-				_, _ = fmt.Fprintln(out, c.Dim("Set policy.receipts.sign: true in config to start signing receipts."))
+				_, _ = fmt.Fprintln(out, c.Dim("Set policy.receipts.sign: true to start signing receipts."))
 			}
 			return nil
 		},
@@ -246,18 +244,17 @@ func newPolicyKeysRevokeCmd() *cobra.Command {
 }
 
 func renderKeysTable(w io.Writer, c *tui.Colorizer, ts *receipt.TrustStore, path string) {
-	_, _ = fmt.Fprintf(w, "%s %s\n", c.Header("Trust store"), c.Path(path))
 	if ts == nil || len(ts.Keys) == 0 {
-		_, _ = fmt.Fprintln(w, c.Dim("no trusted keys"))
+		_, _ = fmt.Fprintf(w, "%s (%s)\n", c.Dim("no trusted keys"), c.Path(path))
 		return
 	}
-	_, _ = fmt.Fprintf(w, "  %-16s  %-20s  %s\n", c.Dim("key_id"), c.Dim("created"), c.Dim("note"))
+	_, _ = fmt.Fprintf(w, "%-16s  %-20s  %s\n", c.Dim("key_id"), c.Dim("created"), c.Dim("note"))
 	for _, k := range ts.Keys {
 		created := ""
 		if !k.Created.IsZero() {
 			created = k.Created.UTC().Format(time.RFC3339)
 		}
-		_, _ = fmt.Fprintf(w, "  %-16s  %-20s  %s\n", k.KeyID, created, tui.TruncateString(k.Note, 40))
+		_, _ = fmt.Fprintf(w, "%-16s  %-20s  %s\n", k.KeyID, created, tui.TruncateString(k.Note, 40))
 	}
 }
 
