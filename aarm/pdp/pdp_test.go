@@ -366,6 +366,77 @@ func mustPolicy(t *testing.T, data string) *Policy {
 	return policy
 }
 
+func TestPDP_IdentityBindings(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: block-no-principal
+    action: block
+    match:
+      action_types: [file_write]
+    condition: "action.human_principal == ''"
+    message: "no principal"
+  - id: warn-non-sso
+    action: warn
+    match:
+      action_types: [file_write]
+    condition: "!action.human_principal.startsWith('sso:')"
+    message: "non-sso"
+  - id: block-on-service
+    action: block
+    match:
+      action_types: [file_read]
+    condition: "action.service_identity.startsWith('github-actions:')"
+    message: "ci"
+  - id: warn-on-scope
+    action: warn
+    match:
+      action_types: [file_read]
+    condition: "action.role_scope.contains('uid=0')"
+    message: "root"
+`)
+	engine, err := New(policy)
+	require.NoError(t, err)
+
+	t.Run("empty human_principal blocks", func(t *testing.T) {
+		got, err := engine.Evaluate(context.Background(), &model.Action{
+			Type: model.ActionFileWrite,
+		}, nil)
+		require.NoError(t, err)
+		assert.Equal(t, model.DecisionBlock, got.Decision)
+		assert.Contains(t, got.MatchedRuleIDs, "block-no-principal")
+	})
+
+	t.Run("populated human_principal does not match empty rule", func(t *testing.T) {
+		got, err := engine.Evaluate(context.Background(), &model.Action{
+			Type:           model.ActionFileWrite,
+			HumanPrincipal: "alice@example.com",
+		}, nil)
+		require.NoError(t, err)
+		assert.NotContains(t, got.MatchedRuleIDs, "block-no-principal")
+		assert.Contains(t, got.MatchedRuleIDs, "warn-non-sso")
+	})
+
+	t.Run("service_identity matcher fires", func(t *testing.T) {
+		got, err := engine.Evaluate(context.Background(), &model.Action{
+			Type:            model.ActionFileRead,
+			ServiceIdentity: "github-actions:safedep/gryph#release",
+		}, nil)
+		require.NoError(t, err)
+		assert.Contains(t, got.MatchedRuleIDs, "block-on-service")
+		assert.Equal(t, model.DecisionBlock, got.Decision)
+	})
+
+	t.Run("role_scope condition matches", func(t *testing.T) {
+		got, err := engine.Evaluate(context.Background(), &model.Action{
+			Type:      model.ActionFileRead,
+			RoleScope: "uid=0,euid=0",
+		}, nil)
+		require.NoError(t, err)
+		assert.Contains(t, got.MatchedRuleIDs, "warn-on-scope")
+	})
+}
+
 func TestParsePolicy_DeferRequiresReason(t *testing.T) {
 	t.Run("defer with empty reason rejected", func(t *testing.T) {
 		_, err := ParsePolicy([]byte(`

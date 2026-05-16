@@ -41,6 +41,9 @@
 //  22. policy_hash        (length-prefixed bytes; empty for pre-Phase-4.5 rows)
 //  23. defer_reason       (utf-8 bytes; empty for non-defer rows)
 //  24. deferral_of_sequence (int64, 8 bytes BE; 0 for original defer / non-defer rows)
+//  25. human_principal    (utf-8 bytes; empty when capture failed or disabled)
+//  26. service_identity   (utf-8 bytes; empty when no CI / service identity)
+//  27. role_scope         (utf-8 bytes; empty when no OS credentials captured)
 //
 // result_status contract
 //
@@ -119,6 +122,9 @@ type HashInput struct {
 	PolicyHash         []byte
 	DeferReason        string
 	DeferralOfSequence int64
+	HumanPrincipal     string
+	ServiceIdentity    string
+	RoleScope          string
 }
 
 // DeriveInsertResultStatus returns the insert-time result_status implied by
@@ -184,6 +190,9 @@ type HashInputFields struct {
 	PolicyHash         []byte
 	DeferReason        string
 	DeferralOfSequence int64
+	HumanPrincipal     string
+	ServiceIdentity    string
+	RoleScope          string
 }
 
 // NewHashInput builds a *HashInput from the explicit row fields, applying the
@@ -219,6 +228,9 @@ func NewHashInput(f HashInputFields) *HashInput {
 		PolicyHash:         f.PolicyHash,
 		DeferReason:        f.DeferReason,
 		DeferralOfSequence: f.DeferralOfSequence,
+		HumanPrincipal:     f.HumanPrincipal,
+		ServiceIdentity:    f.ServiceIdentity,
+		RoleScope:          f.RoleScope,
 	}
 }
 
@@ -314,6 +326,15 @@ func ComputeHash(in *HashInput) ([]byte, error) {
 		return nil, err
 	}
 	if err := writeInt64(&buf, in.DeferralOfSequence); err != nil {
+		return nil, err
+	}
+	if err := writeString(&buf, in.HumanPrincipal); err != nil {
+		return nil, err
+	}
+	if err := writeString(&buf, in.ServiceIdentity); err != nil {
+		return nil, err
+	}
+	if err := writeString(&buf, in.RoleScope); err != nil {
 		return nil, err
 	}
 

@@ -311,6 +311,48 @@ func (_c *AarmReceiptCreate) SetNillableDeferralOfSequence(v *int64) *AarmReceip
 	return _c
 }
 
+// SetHumanPrincipal sets the "human_principal" field.
+func (_c *AarmReceiptCreate) SetHumanPrincipal(v string) *AarmReceiptCreate {
+	_c.mutation.SetHumanPrincipal(v)
+	return _c
+}
+
+// SetNillableHumanPrincipal sets the "human_principal" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillableHumanPrincipal(v *string) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetHumanPrincipal(*v)
+	}
+	return _c
+}
+
+// SetServiceIdentity sets the "service_identity" field.
+func (_c *AarmReceiptCreate) SetServiceIdentity(v string) *AarmReceiptCreate {
+	_c.mutation.SetServiceIdentity(v)
+	return _c
+}
+
+// SetNillableServiceIdentity sets the "service_identity" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillableServiceIdentity(v *string) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetServiceIdentity(*v)
+	}
+	return _c
+}
+
+// SetRoleScope sets the "role_scope" field.
+func (_c *AarmReceiptCreate) SetRoleScope(v string) *AarmReceiptCreate {
+	_c.mutation.SetRoleScope(v)
+	return _c
+}
+
+// SetNillableRoleScope sets the "role_scope" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillableRoleScope(v *string) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetRoleScope(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AarmReceiptCreate) SetID(v uuid.UUID) *AarmReceiptCreate {
 	_c.mutation.SetID(v)
@@ -564,6 +606,18 @@ func (_c *AarmReceiptCreate) createSpec() (*AarmReceipt, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DeferralOfSequence(); ok {
 		_spec.SetField(aarmreceipt.FieldDeferralOfSequence, field.TypeInt64, value)
 		_node.DeferralOfSequence = &value
+	}
+	if value, ok := _c.mutation.HumanPrincipal(); ok {
+		_spec.SetField(aarmreceipt.FieldHumanPrincipal, field.TypeString, value)
+		_node.HumanPrincipal = value
+	}
+	if value, ok := _c.mutation.ServiceIdentity(); ok {
+		_spec.SetField(aarmreceipt.FieldServiceIdentity, field.TypeString, value)
+		_node.ServiceIdentity = value
+	}
+	if value, ok := _c.mutation.RoleScope(); ok {
+		_spec.SetField(aarmreceipt.FieldRoleScope, field.TypeString, value)
+		_node.RoleScope = value
 	}
 	return _node, _spec
 }

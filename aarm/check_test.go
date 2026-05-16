@@ -9,6 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/accumulator"
 	"github.com/safedep/gryph/aarm/approval"
+	"github.com/safedep/gryph/aarm/identity"
+	"github.com/safedep/gryph/aarm/mediation"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/receipt"
@@ -151,6 +153,7 @@ type spyReceiptGenerator struct {
 	mu            sync.Mutex
 	records       []*receipt.RecordInput
 	decisionCalls []decisionCall
+	resultCalls   []resultCall
 }
 
 type decisionCall struct {
@@ -160,6 +163,12 @@ type decisionCall struct {
 	note     string
 }
 
+type resultCall struct {
+	sessionID uuid.UUID
+	sequence  int64
+	result    model.Result
+}
+
 func (s *spyReceiptGenerator) Record(_ context.Context, in *receipt.RecordInput) (*receipt.Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -167,7 +176,10 @@ func (s *spyReceiptGenerator) Record(_ context.Context, in *receipt.RecordInput)
 	return &receipt.Record{Sequence: int64(len(s.records))}, nil
 }
 
-func (s *spyReceiptGenerator) UpdateResult(_ context.Context, _ uuid.UUID, _ int64, _ model.Result) error {
+func (s *spyReceiptGenerator) UpdateResult(_ context.Context, sessionID uuid.UUID, sequence int64, result model.Result) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.resultCalls = append(s.resultCalls, resultCall{sessionID: sessionID, sequence: sequence, result: result})
 	return nil
 }
 
@@ -367,4 +379,116 @@ rules:
 	res, err := med.Check(context.Background(), event)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision, "Nop approval service denies by default")
+}
+
+func TestMediator_RequireHumanPrincipalBlocksWhenEmpty(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules: []
+`))
+	require.NoError(t, err)
+
+	rec := &spyReceiptGenerator{}
+	accum := &spyAccumulator{}
+	adapter := mediation.NewHookAdapter(
+		mediation.WithIdentityCapturer(identity.NewStaticCapturer(identity.Capture{})),
+	)
+	var auditCalls int
+	med, err := NewMediator(policy,
+		WithAdapter(adapter),
+		WithAccumulator(accum),
+		WithReceiptGenerator(rec),
+		WithIdentityConfig(IdentityConfig{Enabled: true, RequireHumanPrincipal: true}),
+		WithIdentityAuditHook(func(_ context.Context, _ IdentityAudit) {
+			auditCalls++
+		}),
+	)
+	require.NoError(t, err)
+
+	event := &events.Event{
+		ID:         uuid.New(),
+		SessionID:  uuid.New(),
+		Timestamp:  time.Now(),
+		ActionType: events.ActionFileWrite,
+		AgentName:  "claude-code",
+		Payload:    []byte(`{"path":"/tmp/x"}`),
+	}
+
+	res, err := med.Check(context.Background(), event)
+	require.NoError(t, err)
+	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
+	assert.Contains(t, res.Reason, "no verifiable human principal")
+	assert.Equal(t, 1, auditCalls, "identity audit hook must fire once")
+	assert.Equal(t, 0, accum.appendCalls, "denied action must not contribute to context.total_actions")
+	assert.Equal(t, 0, accum.snapshotCalls, "denied action must not query the accumulator")
+	require.Len(t, rec.records, 1, "block must still produce a receipt")
+	assert.Equal(t, model.DecisionBlock, rec.records[0].Decision.Decision)
+	assert.Equal(t, identityMissingReason, rec.records[0].ErrorMessage,
+		"ErrorMessage must be folded into the initial insert so a second UpdateResult round trip is unnecessary")
+	assert.Empty(t, rec.resultCalls, "block path must not invoke UpdateResult: error_message rides on the initial insert")
+}
+
+func TestMediator_RequireHumanPrincipalAllowsWhenPopulated(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules: []
+`))
+	require.NoError(t, err)
+
+	rec := &spyReceiptGenerator{}
+	adapter := mediation.NewHookAdapter(
+		mediation.WithIdentityCapturer(identity.NewStaticCapturer(identity.Capture{
+			HumanPrincipal: "alice@example.com",
+		})),
+	)
+	med, err := NewMediator(policy,
+		WithAdapter(adapter),
+		WithReceiptGenerator(rec),
+		WithIdentityConfig(IdentityConfig{Enabled: true, RequireHumanPrincipal: true}),
+	)
+	require.NoError(t, err)
+
+	event := &events.Event{
+		ID:         uuid.New(),
+		SessionID:  uuid.New(),
+		Timestamp:  time.Now(),
+		ActionType: events.ActionFileWrite,
+		AgentName:  "claude-code",
+		Payload:    []byte(`{"path":"/tmp/x"}`),
+	}
+
+	res, err := med.Check(context.Background(), event)
+	require.NoError(t, err)
+	assert.Equal(t, coresecurity.DecisionAllow, res.Decision)
+}
+
+func TestMediator_IdentityDisabledSkipsEnforcement(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules: []
+`))
+	require.NoError(t, err)
+
+	adapter := mediation.NewHookAdapter(
+		mediation.WithIdentityCapturer(identity.NewStaticCapturer(identity.Capture{})),
+	)
+	med, err := NewMediator(policy,
+		WithAdapter(adapter),
+		WithIdentityConfig(IdentityConfig{Enabled: false, RequireHumanPrincipal: true}),
+	)
+	require.NoError(t, err)
+
+	event := &events.Event{
+		ID:         uuid.New(),
+		SessionID:  uuid.New(),
+		Timestamp:  time.Now(),
+		ActionType: events.ActionFileWrite,
+		AgentName:  "claude-code",
+		Payload:    []byte(`{"path":"/tmp/x"}`),
+	}
+
+	res, err := med.Check(context.Background(), event)
+	require.NoError(t, err)
+	assert.Equal(t, coresecurity.DecisionAllow, res.Decision,
+		"require_human_principal is a silent no-op when identity.enabled=false")
 }

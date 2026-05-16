@@ -170,6 +170,21 @@ func DeferralOfSequence(v int64) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldDeferralOfSequence, v))
 }
 
+// HumanPrincipal applies equality check predicate on the "human_principal" field. It's identical to HumanPrincipalEQ.
+func HumanPrincipal(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldHumanPrincipal, v))
+}
+
+// ServiceIdentity applies equality check predicate on the "service_identity" field. It's identical to ServiceIdentityEQ.
+func ServiceIdentity(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldServiceIdentity, v))
+}
+
+// RoleScope applies equality check predicate on the "role_scope" field. It's identical to RoleScopeEQ.
+func RoleScope(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldRoleScope, v))
+}
+
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
 func SessionIDEQ(v uuid.UUID) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldSessionID, v))
@@ -1608,6 +1623,231 @@ func DeferralOfSequenceIsNil() predicate.AarmReceipt {
 // DeferralOfSequenceNotNil applies the NotNil predicate on the "deferral_of_sequence" field.
 func DeferralOfSequenceNotNil() predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldNotNull(FieldDeferralOfSequence))
+}
+
+// HumanPrincipalEQ applies the EQ predicate on the "human_principal" field.
+func HumanPrincipalEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldHumanPrincipal, v))
+}
+
+// HumanPrincipalNEQ applies the NEQ predicate on the "human_principal" field.
+func HumanPrincipalNEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldHumanPrincipal, v))
+}
+
+// HumanPrincipalIn applies the In predicate on the "human_principal" field.
+func HumanPrincipalIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldHumanPrincipal, vs...))
+}
+
+// HumanPrincipalNotIn applies the NotIn predicate on the "human_principal" field.
+func HumanPrincipalNotIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldHumanPrincipal, vs...))
+}
+
+// HumanPrincipalGT applies the GT predicate on the "human_principal" field.
+func HumanPrincipalGT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldHumanPrincipal, v))
+}
+
+// HumanPrincipalGTE applies the GTE predicate on the "human_principal" field.
+func HumanPrincipalGTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldHumanPrincipal, v))
+}
+
+// HumanPrincipalLT applies the LT predicate on the "human_principal" field.
+func HumanPrincipalLT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldHumanPrincipal, v))
+}
+
+// HumanPrincipalLTE applies the LTE predicate on the "human_principal" field.
+func HumanPrincipalLTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldHumanPrincipal, v))
+}
+
+// HumanPrincipalContains applies the Contains predicate on the "human_principal" field.
+func HumanPrincipalContains(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContains(FieldHumanPrincipal, v))
+}
+
+// HumanPrincipalHasPrefix applies the HasPrefix predicate on the "human_principal" field.
+func HumanPrincipalHasPrefix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasPrefix(FieldHumanPrincipal, v))
+}
+
+// HumanPrincipalHasSuffix applies the HasSuffix predicate on the "human_principal" field.
+func HumanPrincipalHasSuffix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasSuffix(FieldHumanPrincipal, v))
+}
+
+// HumanPrincipalIsNil applies the IsNil predicate on the "human_principal" field.
+func HumanPrincipalIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldHumanPrincipal))
+}
+
+// HumanPrincipalNotNil applies the NotNil predicate on the "human_principal" field.
+func HumanPrincipalNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldHumanPrincipal))
+}
+
+// HumanPrincipalEqualFold applies the EqualFold predicate on the "human_principal" field.
+func HumanPrincipalEqualFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEqualFold(FieldHumanPrincipal, v))
+}
+
+// HumanPrincipalContainsFold applies the ContainsFold predicate on the "human_principal" field.
+func HumanPrincipalContainsFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContainsFold(FieldHumanPrincipal, v))
+}
+
+// ServiceIdentityEQ applies the EQ predicate on the "service_identity" field.
+func ServiceIdentityEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldServiceIdentity, v))
+}
+
+// ServiceIdentityNEQ applies the NEQ predicate on the "service_identity" field.
+func ServiceIdentityNEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldServiceIdentity, v))
+}
+
+// ServiceIdentityIn applies the In predicate on the "service_identity" field.
+func ServiceIdentityIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldServiceIdentity, vs...))
+}
+
+// ServiceIdentityNotIn applies the NotIn predicate on the "service_identity" field.
+func ServiceIdentityNotIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldServiceIdentity, vs...))
+}
+
+// ServiceIdentityGT applies the GT predicate on the "service_identity" field.
+func ServiceIdentityGT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldServiceIdentity, v))
+}
+
+// ServiceIdentityGTE applies the GTE predicate on the "service_identity" field.
+func ServiceIdentityGTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldServiceIdentity, v))
+}
+
+// ServiceIdentityLT applies the LT predicate on the "service_identity" field.
+func ServiceIdentityLT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldServiceIdentity, v))
+}
+
+// ServiceIdentityLTE applies the LTE predicate on the "service_identity" field.
+func ServiceIdentityLTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldServiceIdentity, v))
+}
+
+// ServiceIdentityContains applies the Contains predicate on the "service_identity" field.
+func ServiceIdentityContains(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContains(FieldServiceIdentity, v))
+}
+
+// ServiceIdentityHasPrefix applies the HasPrefix predicate on the "service_identity" field.
+func ServiceIdentityHasPrefix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasPrefix(FieldServiceIdentity, v))
+}
+
+// ServiceIdentityHasSuffix applies the HasSuffix predicate on the "service_identity" field.
+func ServiceIdentityHasSuffix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasSuffix(FieldServiceIdentity, v))
+}
+
+// ServiceIdentityIsNil applies the IsNil predicate on the "service_identity" field.
+func ServiceIdentityIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldServiceIdentity))
+}
+
+// ServiceIdentityNotNil applies the NotNil predicate on the "service_identity" field.
+func ServiceIdentityNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldServiceIdentity))
+}
+
+// ServiceIdentityEqualFold applies the EqualFold predicate on the "service_identity" field.
+func ServiceIdentityEqualFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEqualFold(FieldServiceIdentity, v))
+}
+
+// ServiceIdentityContainsFold applies the ContainsFold predicate on the "service_identity" field.
+func ServiceIdentityContainsFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContainsFold(FieldServiceIdentity, v))
+}
+
+// RoleScopeEQ applies the EQ predicate on the "role_scope" field.
+func RoleScopeEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldRoleScope, v))
+}
+
+// RoleScopeNEQ applies the NEQ predicate on the "role_scope" field.
+func RoleScopeNEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldRoleScope, v))
+}
+
+// RoleScopeIn applies the In predicate on the "role_scope" field.
+func RoleScopeIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldRoleScope, vs...))
+}
+
+// RoleScopeNotIn applies the NotIn predicate on the "role_scope" field.
+func RoleScopeNotIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldRoleScope, vs...))
+}
+
+// RoleScopeGT applies the GT predicate on the "role_scope" field.
+func RoleScopeGT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldRoleScope, v))
+}
+
+// RoleScopeGTE applies the GTE predicate on the "role_scope" field.
+func RoleScopeGTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldRoleScope, v))
+}
+
+// RoleScopeLT applies the LT predicate on the "role_scope" field.
+func RoleScopeLT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldRoleScope, v))
+}
+
+// RoleScopeLTE applies the LTE predicate on the "role_scope" field.
+func RoleScopeLTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldRoleScope, v))
+}
+
+// RoleScopeContains applies the Contains predicate on the "role_scope" field.
+func RoleScopeContains(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContains(FieldRoleScope, v))
+}
+
+// RoleScopeHasPrefix applies the HasPrefix predicate on the "role_scope" field.
+func RoleScopeHasPrefix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasPrefix(FieldRoleScope, v))
+}
+
+// RoleScopeHasSuffix applies the HasSuffix predicate on the "role_scope" field.
+func RoleScopeHasSuffix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasSuffix(FieldRoleScope, v))
+}
+
+// RoleScopeIsNil applies the IsNil predicate on the "role_scope" field.
+func RoleScopeIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldRoleScope))
+}
+
+// RoleScopeNotNil applies the NotNil predicate on the "role_scope" field.
+func RoleScopeNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldRoleScope))
+}
+
+// RoleScopeEqualFold applies the EqualFold predicate on the "role_scope" field.
+func RoleScopeEqualFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEqualFold(FieldRoleScope, v))
+}
+
+// RoleScopeContainsFold applies the ContainsFold predicate on the "role_scope" field.
+func RoleScopeContainsFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContainsFold(FieldRoleScope, v))
 }
 
 // And groups predicates with the AND operator between them.

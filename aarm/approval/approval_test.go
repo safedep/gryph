@@ -158,3 +158,33 @@ func TestCLIPrompt_ReadError(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, out)
 }
+
+func TestOSUsernameOrDefault_EnvWalkOrder(t *testing.T) {
+	t.Run("USER wins over LOGNAME and USERNAME", func(t *testing.T) {
+		t.Setenv("USER", "user-val")
+		t.Setenv("LOGNAME", "logname-val")
+		t.Setenv("USERNAME", "username-val")
+		assert.Equal(t, "user-val", OSUsernameOrDefault("fallback"))
+	})
+
+	t.Run("LOGNAME wins when USER is empty", func(t *testing.T) {
+		t.Setenv("USER", "")
+		t.Setenv("LOGNAME", "logname-val")
+		t.Setenv("USERNAME", "username-val")
+		assert.Equal(t, "logname-val", OSUsernameOrDefault("fallback"))
+	})
+
+	t.Run("USERNAME wins when USER and LOGNAME are empty (Windows case)", func(t *testing.T) {
+		t.Setenv("USER", "")
+		t.Setenv("LOGNAME", "")
+		t.Setenv("USERNAME", "windows-user")
+		assert.Equal(t, "windows-user", OSUsernameOrDefault("fallback"))
+	})
+
+	t.Run("fallback wins when all env vars are empty", func(t *testing.T) {
+		t.Setenv("USER", "")
+		t.Setenv("LOGNAME", "")
+		t.Setenv("USERNAME", "")
+		assert.Equal(t, "fallback", OSUsernameOrDefault("fallback"))
+	})
+}

@@ -263,6 +263,13 @@ type ReceiptRow struct {
 	// original defer receipt's sequence within the same session. Nil on the
 	// original defer row and on every non-resolution receipt.
 	DeferralOfSequence *int64
+
+	// HumanPrincipal, ServiceIdentity and RoleScope are the three R6
+	// identity-level fields captured at the mediation boundary. Empty when
+	// identity capture is disabled or the resolver could not derive a value.
+	HumanPrincipal  string
+	ServiceIdentity string
+	RoleScope       string
 }
 
 // DeferralStore persists pending deferrals so the operator-resolve and

@@ -627,6 +627,9 @@ func actionActivation(action *model.Action) map[string]any {
 		"project":              action.Project,
 		"injection_score":      float64(action.InjectionScore),
 		"data_classifications": classifications,
+		"human_principal":      action.HumanPrincipal,
+		"service_identity":     action.ServiceIdentity,
+		"role_scope":           action.RoleScope,
 		"params": map[string]any{
 			"path":          action.Parameters.Path,
 			"command":       action.Parameters.Command,

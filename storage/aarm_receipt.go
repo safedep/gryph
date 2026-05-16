@@ -161,8 +161,9 @@ INSERT INTO aarm_receipts (
     snapshot, action_payload, prev_hash, hash,
     subagent_id, subagent_type, policy_hash,
     signature, signer_key_id,
-    defer_reason, deferral_of_sequence
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    defer_reason, deferral_of_sequence,
+    human_principal, service_identity, role_scope
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	var actionIDArg, eventIDArg, agentArg, toolArg, projectArg interface{}
 	if row.ActionID != uuid.Nil {
@@ -255,6 +256,17 @@ INSERT INTO aarm_receipts (
 		deferralOfSequenceArg = *row.DeferralOfSequence
 	}
 
+	var humanPrincipalArg, serviceIdentityArg, roleScopeArg interface{}
+	if row.HumanPrincipal != "" {
+		humanPrincipalArg = row.HumanPrincipal
+	}
+	if row.ServiceIdentity != "" {
+		serviceIdentityArg = row.ServiceIdentity
+	}
+	if row.RoleScope != "" {
+		roleScopeArg = row.RoleScope
+	}
+
 	_, err := tx.ExecContext(ctx, stmt,
 		row.ID, row.SessionID, actionIDArg, eventIDArg, row.RecordedAt, row.Sequence,
 		agentArg, toolArg, row.ActionType, projectArg,
@@ -264,6 +276,7 @@ INSERT INTO aarm_receipts (
 		subagentIDArg, subagentTypeArg, policyHashArg,
 		signatureArg, signerKeyIDArg,
 		deferReasonArg, deferralOfSequenceArg,
+		humanPrincipalArg, serviceIdentityArg, roleScopeArg,
 	)
 	return err
 }
@@ -369,6 +382,15 @@ func receiptCreate(client *ent.AarmReceiptClient, row *ReceiptRow) *ent.AarmRece
 	}
 	if row.DeferralOfSequence != nil {
 		create.SetDeferralOfSequence(*row.DeferralOfSequence)
+	}
+	if row.HumanPrincipal != "" {
+		create.SetHumanPrincipal(row.HumanPrincipal)
+	}
+	if row.ServiceIdentity != "" {
+		create.SetServiceIdentity(row.ServiceIdentity)
+	}
+	if row.RoleScope != "" {
+		create.SetRoleScope(row.RoleScope)
 	}
 	return create
 }
@@ -670,32 +692,35 @@ func (s *SQLiteStore) CountReceiptsBefore(ctx context.Context, before time.Time)
 
 func entToReceipt(e *ent.AarmReceipt) *ReceiptRow {
 	row := &ReceiptRow{
-		ID:             e.ID,
-		SessionID:      e.SessionID,
-		ActionID:       e.ActionID,
-		EventID:        e.EventID,
-		RecordedAt:     e.RecordedAt,
-		Sequence:       e.Sequence,
-		Agent:          e.Agent,
-		Tool:           e.Tool,
-		ActionType:     e.ActionType,
-		Project:        e.Project,
-		Decision:       e.Decision,
-		MatchedRuleIDs: e.MatchedRuleIds,
-		Severity:       e.Severity,
-		Message:        e.Message,
-		ResultStatus:   string(e.ResultStatus),
-		ErrorMessage:   e.ErrorMessage,
-		Snapshot:       e.Snapshot,
-		ActionPayload:  e.ActionPayload,
-		PrevHash:       e.PrevHash,
-		Hash:           e.Hash,
-		SubagentID:     e.SubagentID,
-		SubagentType:   e.SubagentType,
-		PolicyHash:     e.PolicyHash,
-		Signature:      e.Signature,
-		SignerKeyID:    e.SignerKeyID,
-		DeferReason:    e.DeferReason,
+		ID:              e.ID,
+		SessionID:       e.SessionID,
+		ActionID:        e.ActionID,
+		EventID:         e.EventID,
+		RecordedAt:      e.RecordedAt,
+		Sequence:        e.Sequence,
+		Agent:           e.Agent,
+		Tool:            e.Tool,
+		ActionType:      e.ActionType,
+		Project:         e.Project,
+		Decision:        e.Decision,
+		MatchedRuleIDs:  e.MatchedRuleIds,
+		Severity:        e.Severity,
+		Message:         e.Message,
+		ResultStatus:    string(e.ResultStatus),
+		ErrorMessage:    e.ErrorMessage,
+		Snapshot:        e.Snapshot,
+		ActionPayload:   e.ActionPayload,
+		PrevHash:        e.PrevHash,
+		Hash:            e.Hash,
+		SubagentID:      e.SubagentID,
+		SubagentType:    e.SubagentType,
+		PolicyHash:      e.PolicyHash,
+		Signature:       e.Signature,
+		SignerKeyID:     e.SignerKeyID,
+		DeferReason:     e.DeferReason,
+		HumanPrincipal:  e.HumanPrincipal,
+		ServiceIdentity: e.ServiceIdentity,
+		RoleScope:       e.RoleScope,
 	}
 	if e.DurationMs != nil {
 		v := *e.DurationMs

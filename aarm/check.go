@@ -80,6 +80,27 @@ type DeferralConfig struct {
 	ConflictTriggersDefer bool
 }
 
+// IdentityConfig controls the AARM identity-capture enforcement layer at the
+// Mediator boundary. Enabled mirrors the config.PolicyConfig.Identity.Enabled
+// switch. When false, capture and enforcement are both no-ops.
+// RequireHumanPrincipal is the pre-PDP block trigger.
+type IdentityConfig struct {
+	Enabled               bool
+	RequireHumanPrincipal bool
+}
+
+// IdentityAudit is the data the Mediator hands to the optional identity audit
+// hook when a Check is blocked because no human principal was captured. cli
+// wires this through to logSelfAudit so aarm does not depend on cli.
+type IdentityAudit struct {
+	Action   *model.Action
+	Decision *coresecurity.CheckResult
+}
+
+// IdentityAuditHook receives IdentityAudit events from the Mediator. Nil
+// disables emission.
+type IdentityAuditHook func(ctx context.Context, e IdentityAudit)
+
 // Mediator implements the Gryph security.Check interface with AARM components.
 type Mediator struct {
 	adapter      mediation.Adapter
@@ -89,7 +110,9 @@ type Mediator struct {
 	approval     approval.Service
 	auditHook    ApprovalAuditHook
 	deferralHook DeferralHook
+	identityHook IdentityAuditHook
 	deferralCfg  DeferralConfig
+	identityCfg  IdentityConfig
 	cfg          MediatorConfig
 	policyHash   []byte
 }
@@ -159,6 +182,26 @@ func WithDeferralHook(h DeferralHook) MediatorOption {
 func WithDeferralConfig(cfg DeferralConfig) MediatorOption {
 	return func(m *Mediator) {
 		m.deferralCfg = cfg
+	}
+}
+
+// WithIdentityConfig overrides the default identity configuration (disabled).
+// When Enabled and RequireHumanPrincipal are both true, the Mediator blocks
+// any action whose HumanPrincipal field is empty before consulting the PDP.
+func WithIdentityConfig(cfg IdentityConfig) MediatorOption {
+	return func(m *Mediator) {
+		m.identityCfg = cfg
+	}
+}
+
+// WithIdentityAuditHook installs an audit hook called from the
+// identity-missing pre-PDP block path. Used by the CLI to emit the
+// identity_missing self-audit row without aarm importing cli.
+func WithIdentityAuditHook(h IdentityAuditHook) MediatorOption {
+	return func(m *Mediator) {
+		if h != nil {
+			m.identityHook = h
+		}
 	}
 }
 
@@ -234,6 +277,10 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 		return nil, err
 	}
 
+	if res, blocked := m.enforceIdentity(ctx, action); blocked {
+		return res, nil
+	}
+
 	if err := m.accum.Append(ctx, action); err != nil {
 		return nil, fmt.Errorf("aarm: accumulator append: %w", err)
 	}
@@ -279,6 +326,63 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 	}
 
 	return result, nil
+}
+
+// identityMissingReason is the operator-facing block message returned when
+// require_human_principal is true and no human principal was captured.
+const identityMissingReason = "Action denied: no verifiable human principal"
+
+// enforceIdentity blocks before PDP eval (and before the accumulator append)
+// when require_human_principal is true and the captured HumanPrincipal is
+// empty. Returns (result, true) when the action is denied. Records a block
+// receipt with error_message populated on the initial insert (one writer-lock
+// round trip) and fires the identity-missing audit hook so the CLI can emit
+// the identity_missing self-audit row. A denied action did not happen, so it
+// is recorded with a nil snapshot and does not contribute to
+// context.total_actions.
+func (m *Mediator) enforceIdentity(ctx context.Context, action *model.Action) (*coresecurity.CheckResult, bool) {
+	if !m.identityCfg.Enabled || !m.identityCfg.RequireHumanPrincipal {
+		return nil, false
+	}
+	if action.HumanPrincipal != "" {
+		return nil, false
+	}
+
+	decision := &model.EvaluationResult{
+		Decision:       model.DecisionBlock,
+		MatchedRuleIDs: []string{},
+		Message:        identityMissingReason,
+		Severity:       model.SeverityHigh,
+	}
+	rec, rerr := m.receipt.Record(ctx, &receipt.RecordInput{
+		SessionID:    action.SessionID,
+		ActionID:     action.ID,
+		EventID:      action.EventID,
+		Action:       action,
+		Decision:     decision,
+		PolicyHash:   m.policyHash,
+		ErrorMessage: identityMissingReason,
+	})
+	if rerr != nil {
+		log.Warnf("aarm: identity-missing receipt insert: %v", rerr)
+	}
+
+	result := &coresecurity.CheckResult{
+		CheckName:      CheckName,
+		Decision:       coresecurity.DecisionBlock,
+		MatchedRuleIDs: decision.MatchedRuleIDs,
+		Severity:       mapSeverity(decision.Severity),
+		Reason:         identityMissingReason,
+		AarmActionID:   action.ID,
+		AarmSessionID:  action.SessionID,
+	}
+	if rec != nil {
+		result.AarmSequence = rec.Sequence
+	}
+	if m.identityHook != nil {
+		m.identityHook(ctx, IdentityAudit{Action: action, Decision: result})
+	}
+	return result, true
 }
 
 // handleEscalate routes an escalated decision through the Approval Service
@@ -479,7 +583,6 @@ func (m *Mediator) handleDefer(ctx context.Context, action *model.Action, snapsh
 	}
 	return result, nil
 }
-
 
 // shouldRecordReceipt encodes the LogAllEvaluations gating: an allow
 // decision only produces a receipt when LogAllEvaluations=true. Every other

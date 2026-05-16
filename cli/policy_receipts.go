@@ -238,53 +238,59 @@ func emitChainBrokenAudit(ctx context.Context, store storage.Store, breaks []rec
 }
 
 type policyReceiptView struct {
-	ID             string                 `json:"id"`
-	SessionID      string                 `json:"session_id"`
-	Sequence       int64                  `json:"sequence"`
-	RecordedAt     string                 `json:"recorded_at"`
-	Agent          string                 `json:"agent,omitempty"`
-	Tool           string                 `json:"tool,omitempty"`
-	ActionType     string                 `json:"action_type"`
-	Project        string                 `json:"project,omitempty"`
-	Decision       string                 `json:"decision"`
-	MatchedRuleIDs []string               `json:"matched_rule_ids,omitempty"`
-	Severity       string                 `json:"severity,omitempty"`
-	Message        string                 `json:"message,omitempty"`
-	ResultStatus   string                 `json:"result_status"`
-	DurationMS     *int64                 `json:"duration_ms,omitempty"`
-	ErrorMessage   string                 `json:"error_message,omitempty"`
-	Snapshot       map[string]interface{} `json:"snapshot,omitempty"`
-	ActionPayload  map[string]interface{} `json:"action_payload,omitempty"`
-	PrevHash       string                 `json:"prev_hash,omitempty"`
-	Hash           string                 `json:"hash"`
-	SubagentID     string                 `json:"subagent_id,omitempty"`
-	SubagentType   string                 `json:"subagent_type,omitempty"`
-	PolicyHash     string                 `json:"policy_hash,omitempty"`
-	SignerKeyID    string                 `json:"signer_key_id,omitempty"`
+	ID              string                 `json:"id"`
+	SessionID       string                 `json:"session_id"`
+	Sequence        int64                  `json:"sequence"`
+	RecordedAt      string                 `json:"recorded_at"`
+	Agent           string                 `json:"agent,omitempty"`
+	Tool            string                 `json:"tool,omitempty"`
+	ActionType      string                 `json:"action_type"`
+	Project         string                 `json:"project,omitempty"`
+	Decision        string                 `json:"decision"`
+	MatchedRuleIDs  []string               `json:"matched_rule_ids,omitempty"`
+	Severity        string                 `json:"severity,omitempty"`
+	Message         string                 `json:"message,omitempty"`
+	ResultStatus    string                 `json:"result_status"`
+	DurationMS      *int64                 `json:"duration_ms,omitempty"`
+	ErrorMessage    string                 `json:"error_message,omitempty"`
+	Snapshot        map[string]interface{} `json:"snapshot,omitempty"`
+	ActionPayload   map[string]interface{} `json:"action_payload,omitempty"`
+	PrevHash        string                 `json:"prev_hash,omitempty"`
+	Hash            string                 `json:"hash"`
+	SubagentID      string                 `json:"subagent_id,omitempty"`
+	SubagentType    string                 `json:"subagent_type,omitempty"`
+	PolicyHash      string                 `json:"policy_hash,omitempty"`
+	SignerKeyID     string                 `json:"signer_key_id,omitempty"`
+	HumanPrincipal  string                 `json:"human_principal,omitempty"`
+	ServiceIdentity string                 `json:"service_identity,omitempty"`
+	RoleScope       string                 `json:"role_scope,omitempty"`
 }
 
 func receiptToView(r *storage.ReceiptRow) policyReceiptView {
 	v := policyReceiptView{
-		ID:             r.ID.String(),
-		SessionID:      r.SessionID.String(),
-		Sequence:       r.Sequence,
-		RecordedAt:     r.RecordedAt.Format(time.RFC3339Nano),
-		Agent:          r.Agent,
-		Tool:           r.Tool,
-		ActionType:     r.ActionType,
-		Project:        r.Project,
-		Decision:       r.Decision,
-		MatchedRuleIDs: r.MatchedRuleIDs,
-		Severity:       r.Severity,
-		Message:        r.Message,
-		ResultStatus:   r.ResultStatus,
-		ErrorMessage:   r.ErrorMessage,
-		Snapshot:       r.Snapshot,
-		ActionPayload:  r.ActionPayload,
-		Hash:           hex.EncodeToString(r.Hash),
-		SubagentID:     r.SubagentID,
-		SubagentType:   r.SubagentType,
-		SignerKeyID:    r.SignerKeyID,
+		ID:              r.ID.String(),
+		SessionID:       r.SessionID.String(),
+		Sequence:        r.Sequence,
+		RecordedAt:      r.RecordedAt.Format(time.RFC3339Nano),
+		Agent:           r.Agent,
+		Tool:            r.Tool,
+		ActionType:      r.ActionType,
+		Project:         r.Project,
+		Decision:        r.Decision,
+		MatchedRuleIDs:  r.MatchedRuleIDs,
+		Severity:        r.Severity,
+		Message:         r.Message,
+		ResultStatus:    r.ResultStatus,
+		ErrorMessage:    r.ErrorMessage,
+		Snapshot:        r.Snapshot,
+		ActionPayload:   r.ActionPayload,
+		Hash:            hex.EncodeToString(r.Hash),
+		SubagentID:      r.SubagentID,
+		SubagentType:    r.SubagentType,
+		SignerKeyID:     r.SignerKeyID,
+		HumanPrincipal:  r.HumanPrincipal,
+		ServiceIdentity: r.ServiceIdentity,
+		RoleScope:       r.RoleScope,
 	}
 	if r.DurationMS != nil {
 		d := *r.DurationMS

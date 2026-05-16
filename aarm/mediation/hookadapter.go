@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/aarm/identity"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
@@ -15,48 +16,25 @@ import (
 // classifier and injection scorer run after normalization to populate the
 // reserved risk-signal fields on Action. The AARM safe-by-default
 // classification safety net lives in classify.NewFailSafe so callers can
-// wrap any Classifier (including nil) once at construction.
+// wrap any Classifier (including nil) once at construction. The shared
+// Common holds the classifier, scorer, and identity capturer so both
+// adapters configure them through the same option helpers.
 type HookAdapter struct {
-	classifier Classifier
-	scorer     InjectionScorer
+	Common
 }
 
-// HookAdapterOption configures a HookAdapter at construction time.
-type HookAdapterOption func(*HookAdapter)
-
-// WithClassifier wires a Classifier into the adapter. After Normalize
-// produces an Action, the classifier is invoked and its output stored in
-// Action.DataClassifications. Wrap the supplied Classifier in
-// classify.NewFailSafe to keep the AARM-conformant safety-net label.
-func WithClassifier(c Classifier) HookAdapterOption {
-	return func(h *HookAdapter) {
-		if c != nil {
-			h.classifier = c
-		}
-	}
-}
-
-// WithInjectionScorer wires an InjectionScorer into the adapter. The score
-// is populated only when Action.Type == ActionToolUse.
-func WithInjectionScorer(s InjectionScorer) HookAdapterOption {
-	return func(h *HookAdapter) {
-		if s != nil {
-			h.scorer = s
-		}
-	}
-}
-
-// NewHookAdapter creates a HookAdapter.
-func NewHookAdapter(opts ...HookAdapterOption) *HookAdapter {
-	h := &HookAdapter{}
+// NewHookAdapter creates a HookAdapter. Accepts the shared CommonOption set
+// (WithClassifier, WithInjectionScorer, WithIdentityCapturer).
+func NewHookAdapter(opts ...CommonOption) *HookAdapter {
+	h := &HookAdapter{Common: Common{IdentityCapture: identity.NewDefaultCapturer()}}
 	for _, opt := range opts {
-		opt(h)
+		opt(&h.Common)
 	}
 	return h
 }
 
 // Normalize implements Adapter.
-func (h *HookAdapter) Normalize(_ context.Context, event *events.Event, sess *session.Session) (*model.Action, error) {
+func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *session.Session) (*model.Action, error) {
 	if event == nil {
 		return nil, fmt.Errorf("mediation: event must not be nil")
 	}
@@ -91,12 +69,7 @@ func (h *HookAdapter) Normalize(_ context.Context, event *events.Event, sess *se
 	}
 	action.Parameters = params
 
-	if h.classifier != nil {
-		action.DataClassifications = h.classifier.Classify(action)
-	}
-	if h.scorer != nil && action.Type == model.ActionToolUse {
-		action.InjectionScore = h.scorer.Score(action)
-	}
+	h.applyEnrichment(ctx, action, nil)
 
 	return action, nil
 }

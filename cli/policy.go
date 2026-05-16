@@ -19,6 +19,7 @@ import (
 	"github.com/safedep/gryph/aarm/accumulator"
 	"github.com/safedep/gryph/aarm/approval"
 	"github.com/safedep/gryph/aarm/classify"
+	"github.com/safedep/gryph/aarm/identity"
 	"github.com/safedep/gryph/aarm/injectscore"
 	"github.com/safedep/gryph/aarm/loader"
 	"github.com/safedep/gryph/aarm/mediation"
@@ -446,12 +447,16 @@ func newPolicyTestCmd() *cobra.Command {
 				at = model.ActionToolUse
 			}
 
+			got := identity.NewDefaultCapturer().Capture(context.Background())
 			action := &aarmsec.Action{
-				Type:       at,
-				Tool:       tool,
-				Agent:      agentName,
-				WorkingDir: workingDir,
-				Project:    project,
+				Type:            at,
+				Tool:            tool,
+				Agent:           agentName,
+				WorkingDir:      workingDir,
+				Project:         project,
+				HumanPrincipal:  got.HumanPrincipal,
+				ServiceIdentity: got.ServiceIdentity,
+				RoleScope:       got.RoleScope,
 				Parameters: aarmsec.Parameters{
 					Path:    path,
 					Command: command,
@@ -544,6 +549,15 @@ func actionSummary(a *aarmsec.Action) map[string]string {
 	if a.Parameters.URL != "" {
 		out["url"] = a.Parameters.URL
 	}
+	if a.HumanPrincipal != "" {
+		out["human_principal"] = a.HumanPrincipal
+	}
+	if a.ServiceIdentity != "" {
+		out["service_identity"] = a.ServiceIdentity
+	}
+	if a.RoleScope != "" {
+		out["role_scope"] = a.RoleScope
+	}
 	return out
 }
 
@@ -625,7 +639,7 @@ func decorateSeverity(c *tui.Colorizer, sev string) string {
 }
 
 func orderedActionKeys(m map[string]string) []string {
-	order := []string{"type", "tool", "agent", "project", "working_dir", "path", "command", "url"}
+	order := []string{"type", "tool", "agent", "project", "working_dir", "path", "command", "url", "human_principal", "service_identity", "role_scope"}
 	out := make([]string, 0, len(m))
 	for _, k := range order {
 		if _, ok := m[k]; ok {
@@ -683,7 +697,7 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 			classifier = classify.NewFailSafe(classifier, classify.LabelUnknownSensitive)
 		}
 
-		var adapterOpts []mediation.HookAdapterOption
+		var adapterOpts []mediation.CommonOption
 		if classifier != nil {
 			adapterOpts = append(adapterOpts, mediation.WithClassifier(classifier))
 		}
@@ -692,7 +706,22 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 			adapterOpts = append(adapterOpts, mediation.WithInjectionScorer(injectscore.NewHeuristic()))
 		}
 
+		var identityCapturer identity.Capturer
+		if policyCfg.Identity.Enabled {
+			identityCapturer = identity.NewDefaultCapturer()
+		} else {
+			identityCapturer = identity.NewStaticCapturer(identity.Capture{})
+		}
+		adapterOpts = append(adapterOpts, mediation.WithIdentityCapturer(identityCapturer))
+
 		opts = append(opts, aarmsec.WithAdapter(mediation.NewHookAdapter(adapterOpts...)))
+		opts = append(opts, aarmsec.WithIdentityConfig(aarmsec.IdentityConfig{
+			Enabled:               policyCfg.Identity.Enabled,
+			RequireHumanPrincipal: policyCfg.Identity.RequireHumanPrincipal,
+		}))
+		if store != nil {
+			opts = append(opts, aarmsec.WithIdentityAuditHook(newIdentityAuditHook(store)))
+		}
 
 		switch policyCfg.Approval.Mode {
 		case config.ApprovalModeCLI:
@@ -861,6 +890,34 @@ func newApprovalAuditHook(store storage.Store) aarmsec.ApprovalAuditHook {
 		}
 		if err := logSelfAudit(ctx, store, e.Action, agentName, details, result, errMsg); err != nil {
 			log.Errorf("failed to record %s audit: %v", e.Action, err)
+		}
+	}
+}
+
+// newIdentityAuditHook returns a Mediator IdentityAuditHook that emits the
+// identity_missing self-audit row on the pre-PDP block path.
+func newIdentityAuditHook(store storage.Store) aarmsec.IdentityAuditHook {
+	return func(ctx context.Context, e aarmsec.IdentityAudit) {
+		if store == nil {
+			return
+		}
+		details := map[string]interface{}{}
+		agentName := ""
+		if e.Action != nil {
+			agentName = e.Action.Agent
+			details["session_id"] = e.Action.SessionID.String()
+			details["action_id"] = e.Action.ID.String()
+			details["agent"] = e.Action.Agent
+			details["tool"] = e.Action.Tool
+			details["action_type"] = string(e.Action.Type)
+		}
+		errMsg := ""
+		if e.Decision != nil {
+			errMsg = e.Decision.Reason
+		}
+		if err := logSelfAudit(ctx, store, SelfAuditActionIdentityMissing, agentName,
+			details, SelfAuditResultError, errMsg); err != nil {
+			log.Errorf("failed to record identity_missing audit: %v", err)
 		}
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/aarm/identity"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
@@ -245,6 +246,23 @@ func TestHookAdapter_Normalize_GeneratesUniqueIDs(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.NotEqual(t, a1.ID, a2.ID, "each normalization gets its own Action ID")
+}
+
+func TestHookAdapter_Normalize_PopulatesIdentity(t *testing.T) {
+	got := identity.Capture{
+		HumanPrincipal:  "alice@example.com",
+		ServiceIdentity: "github-actions:safedep/gryph#release",
+		RoleScope:       "uid=501,euid=501",
+	}
+	adapter := NewHookAdapter(WithIdentityCapturer(identity.NewStaticCapturer(got)))
+
+	event := mustEvent(t, uuid.New(), uuid.New(), events.ActionFileRead, "Read", time.Now(),
+		events.FileReadPayload{Path: "/x"})
+	action, err := adapter.Normalize(context.Background(), event, nil)
+	require.NoError(t, err)
+	assert.Equal(t, got.HumanPrincipal, action.HumanPrincipal)
+	assert.Equal(t, got.ServiceIdentity, action.ServiceIdentity)
+	assert.Equal(t, got.RoleScope, action.RoleScope)
 }
 
 func mustEvent(t *testing.T, id, sessID uuid.UUID, at events.ActionType, tool string, ts time.Time, payload any) *events.Event {

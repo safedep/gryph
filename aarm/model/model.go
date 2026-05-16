@@ -57,6 +57,10 @@ type Action struct {
 	SubagentID   string
 	SubagentType string
 
+	HumanPrincipal  string
+	ServiceIdentity string
+	RoleScope       string
+
 	OriginalRequest     string
 	DataClassifications []string
 	InjectionScore      float32

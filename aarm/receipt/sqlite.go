@@ -86,6 +86,9 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 			next.ActionPayload = actionPayloadMap(in.Action)
 			next.SubagentID = in.Action.SubagentID
 			next.SubagentType = in.Action.SubagentType
+			next.HumanPrincipal = in.Action.HumanPrincipal
+			next.ServiceIdentity = in.Action.ServiceIdentity
+			next.RoleScope = in.Action.RoleScope
 		}
 		if next.Agent == "" {
 			next.Agent = in.Agent
@@ -104,6 +107,7 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 
 		next.PolicyHash = in.PolicyHash
 		next.DeferReason = in.DeferReason
+		next.ErrorMessage = in.ErrorMessage
 		if in.DeferralOfSequence != nil {
 			v := *in.DeferralOfSequence
 			next.DeferralOfSequence = &v
@@ -111,26 +115,29 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 		next.ResultStatus = DeriveInsertResultStatus(next.Decision)
 
 		hashFields := HashInputFields{
-			Sequence:       next.Sequence,
-			PrevHash:       next.PrevHash,
-			RecordedAtUnix: next.RecordedAt.UnixNano(),
-			SessionID:      next.SessionID,
-			ActionID:       next.ActionID,
-			EventID:        next.EventID,
-			Agent:          next.Agent,
-			Tool:           next.Tool,
-			ActionType:     next.ActionType,
-			Project:        next.Project,
-			Decision:       next.Decision,
-			Severity:       next.Severity,
-			Message:        next.Message,
-			MatchedRuleIDs: next.MatchedRuleIDs,
-			Snapshot:       next.Snapshot,
-			ActionPayload:  next.ActionPayload,
-			SubagentID:     next.SubagentID,
-			SubagentType:   next.SubagentType,
-			PolicyHash:     next.PolicyHash,
-			DeferReason:    next.DeferReason,
+			Sequence:        next.Sequence,
+			PrevHash:        next.PrevHash,
+			RecordedAtUnix:  next.RecordedAt.UnixNano(),
+			SessionID:       next.SessionID,
+			ActionID:        next.ActionID,
+			EventID:         next.EventID,
+			Agent:           next.Agent,
+			Tool:            next.Tool,
+			ActionType:      next.ActionType,
+			Project:         next.Project,
+			Decision:        next.Decision,
+			Severity:        next.Severity,
+			Message:         next.Message,
+			MatchedRuleIDs:  next.MatchedRuleIDs,
+			Snapshot:        next.Snapshot,
+			ActionPayload:   next.ActionPayload,
+			SubagentID:      next.SubagentID,
+			SubagentType:    next.SubagentType,
+			PolicyHash:      next.PolicyHash,
+			DeferReason:     next.DeferReason,
+			HumanPrincipal:  next.HumanPrincipal,
+			ServiceIdentity: next.ServiceIdentity,
+			RoleScope:       next.RoleScope,
 		}
 		if next.DeferralOfSequence != nil {
 			hashFields.DeferralOfSequence = *next.DeferralOfSequence

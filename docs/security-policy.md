@@ -108,12 +108,17 @@ action.type / tool / operation / agent / working_dir / project
 action.params.{path, command, args, url, size_bytes, lines_added, lines_removed, content}
 action.data_classifications        list, set by the heuristic classifier
 action.injection_score             float 0..1, set for tool_use actions only
+action.human_principal             captured identity, see Identity capture
+action.service_identity            CI / service identity, see Identity capture
+action.role_scope                  OS uid/gid + asserted scopes
 context.{total_actions, files_read, files_written, commands_executed,
          network_requests, errors, tools_used, session_duration_ms,
          classifications_seen, entities_seen, semantic_drift}
 ```
 
 `action.data_classifications` carries labels like `secret`, `pii`, `source_code`, `config`, `git_internal`, `external_url`. `context.classifications_seen` is the running union across the session. `semantic_drift` is reserved and reads as `0.0` today.
+
+`action.human_principal`, `action.service_identity`, and `action.role_scope` carry the AARM R6 identity fields. They are empty strings when capture is disabled or the resolver could not derive a value. See [Identity capture](#identity-capture).
 
 CEL evaluation runs sandboxed with a 100 ms timeout.
 
@@ -190,6 +195,8 @@ block > escalate > defer > guidance > warn > allow
 Every mediated action produces a receipt row in the event store. The default `policy.log_all_evaluations: true` records receipts for `allow` decisions too, which keeps Gryph aligned with AARM's "receipt for every action" requirement. Operators who want the prior behavior (only `block` / `guidance` / `warn` / `escalate` rows) set `policy.log_all_evaluations: false` explicitly. Note that the new default raises per-event storage and signing cost on allow-heavy workloads.
 
 Receipts form a per-session hash chain (`hash`, `prev_hash`). The hash now also covers the SHA-256 of the active policy document (`policy_hash`), so an after-the-fact rule edit is visible at verify time. The chain detects tampering and lets you verify the audit trail off-host.
+
+Receipt rows carry the three identity fields (`human_principal`, `service_identity`, `role_scope`) captured at the mediation boundary. They surface in the `gryph policy receipts --format json` view and in the JSONL and CSV exports. Pre-Phase-6 rows have NULL identity columns and continue to verify cleanly: the hash recipe treats the empty string as the same length-prefixed zero bytes as the insert path.
 
 Signing defaults to `sign_mode: auto`: receipts carry an Ed25519 signature when a key file is present at the configured `key_path`, and skip the signature when no key is on disk. Pick the explicit mode that matches your operational policy:
 
@@ -339,6 +346,37 @@ at the same severity returning different decisions), unless disabled via
   action: warn
   match: { action_types: [tool_use] }
   condition: "action.injection_score > 0.5"
+```
+
+### Identity capture
+
+Gryph captures three identity-level fields at the mediation boundary and writes them onto every action and receipt:
+
+- `human_principal`: operator-asserted via `GRYPH_HUMAN_PRINCIPAL` (SSO claim, email, etc.). Falls back to `uid:<N>:<username>` derived from the OS process credentials. On Unix the format is `uid:<N>:<username>`. On Windows (no uid available) it is `user:<username>`.
+- `service_identity`: operator-asserted via `GRYPH_SERVICE_IDENTITY`. Otherwise auto-detected for GitHub Actions, Buildkite, GitLab, and CircleCI, with a generic `ci:unknown` fallback when `CI=true` is set.
+- `role_scope`: operator-asserted via `GRYPH_ROLE_SCOPE`. Otherwise derived from OS uid/euid/gid plus up to eight supplementary groups.
+
+Capture runs once at process start and is cached. Disable the layer with `policy.identity.enabled: false` to leave the three fields empty.
+
+```yaml
+policy:
+  identity:
+    enabled: true                  # off disables capture entirely
+    require_human_principal: false # if true, missing principal denies the action
+```
+
+When `require_human_principal: true`, the Mediator blocks any action whose `human_principal` is empty before consulting the PDP. The block message is `Action denied: no verifiable human principal`, a receipt with `decision=block` is still written, and an `identity_missing` self-audit row is emitted. The switch is a silent no-op when `enabled: false` (we cannot enforce what we did not capture).
+
+The OS-derived human principal is a weak proxy. On a developer workstation `uid:501:alice` is the most we know. Real SSO identity requires the operator to set `GRYPH_HUMAN_PRINCIPAL` from the SSO session. Receipts record what was captured. Downstream tooling decides what to trust.
+
+Policies can gate on identity directly:
+
+```yaml
+- id: block-prod-without-sso
+  action: block
+  match: { action_types: [file_write], file_patterns: ["**/prod/**"] }
+  condition: "!action.human_principal.startsWith('sso:')"
+  message: "Prod writes require SSO identity, got {{.Action.HumanPrincipal}}"
 ```
 
 ### Safe-by-default classification

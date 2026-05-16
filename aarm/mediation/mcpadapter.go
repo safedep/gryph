@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/aarm/identity"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/core/session"
 )
@@ -27,40 +28,21 @@ type MCPToolCallParams struct {
 // MCPAdapter normalizes MCP tool-call requests into canonical actions.
 // Mirrors HookAdapter so the classifier / scorer wiring is identical across
 // adapters. The Phase 4 surface is the contract. The full JSON-RPC proxy is
-// deferred to Phase 5.
+// deferred to Phase 5. The shared Common holds the classifier, scorer, and
+// identity capturer so both adapters configure them through the same option
+// helpers (WithClassifier, WithInjectionScorer, WithIdentityCapturer).
 type MCPAdapter struct {
-	classifier Classifier
-	scorer     InjectionScorer
+	Common
 }
 
-// MCPAdapterOption configures a MCPAdapter at construction time.
-type MCPAdapterOption func(*MCPAdapter)
-
-// WithMCPClassifier wires a Classifier into the adapter. Wrap the supplied
-// Classifier in classify.NewFailSafe to keep the AARM-conformant safety-net
-// label.
-func WithMCPClassifier(c Classifier) MCPAdapterOption {
-	return func(a *MCPAdapter) {
-		if c != nil {
-			a.classifier = c
-		}
-	}
-}
-
-// WithMCPInjectionScorer wires an InjectionScorer into the adapter.
-func WithMCPInjectionScorer(s InjectionScorer) MCPAdapterOption {
-	return func(a *MCPAdapter) {
-		if s != nil {
-			a.scorer = s
-		}
-	}
-}
-
-// NewMCPAdapter creates an MCPAdapter.
-func NewMCPAdapter(opts ...MCPAdapterOption) *MCPAdapter {
-	a := &MCPAdapter{}
+// NewMCPAdapter creates an MCPAdapter. Accepts the shared CommonOption set.
+// Per-event Meta overrides (req.Meta["human_principal"],
+// ["service_identity"], ["role_scope"]) take precedence over the capturer's
+// output when present and non-empty.
+func NewMCPAdapter(opts ...CommonOption) *MCPAdapter {
+	a := &MCPAdapter{Common: Common{IdentityCapture: identity.NewDefaultCapturer()}}
 	for _, opt := range opts {
-		opt(a)
+		opt(&a.Common)
 	}
 	return a
 }
@@ -68,9 +50,9 @@ func NewMCPAdapter(opts ...MCPAdapterOption) *MCPAdapter {
 // Normalize converts an MCP tools/call request into a canonical Action.
 // Type is always ActionToolUse, Tool comes from params.name, Parameters.Raw
 // is params.arguments, and AgentSessionID comes from _meta.sessionID (string)
-// when present. Optional classifier / scorer hooks run after normalization,
-// matching the HookAdapter shape.
-func (a *MCPAdapter) Normalize(_ context.Context, req *MCPToolCall, sess *session.Session) (*model.Action, error) {
+// when present. Optional classifier / scorer / identity hooks run after
+// normalization, matching the HookAdapter shape.
+func (a *MCPAdapter) Normalize(ctx context.Context, req *MCPToolCall, sess *session.Session) (*model.Action, error) {
 	if req == nil {
 		return nil, fmt.Errorf("mediation: nil MCP tool call")
 	}
@@ -116,12 +98,7 @@ func (a *MCPAdapter) Normalize(_ context.Context, req *MCPToolCall, sess *sessio
 		}
 	}
 
-	if a.classifier != nil {
-		action.DataClassifications = a.classifier.Classify(action)
-	}
-	if a.scorer != nil && action.Type == model.ActionToolUse {
-		action.InjectionScore = a.scorer.Score(action)
-	}
+	a.applyEnrichment(ctx, action, req.Meta)
 
 	return action, nil
 }

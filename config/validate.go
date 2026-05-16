@@ -167,8 +167,17 @@ func validatePolicyConfig(cfg PolicyConfig) error {
 	if err := validatePolicyDeferConfig(cfg.Defer); err != nil {
 		return err
 	}
+	validatePolicyIdentityConfig(cfg.Identity)
 	return nil
 }
+
+// validatePolicyIdentityConfig is a structural no-op today: every combination
+// of (Enabled, RequireHumanPrincipal) is legal. When enabled=false the
+// require_human_principal switch is silently a no-op at the mediator (we
+// cannot enforce identity we did not capture). Kept as a hook so future
+// validation (e.g. forbidden providers, well-formed values) lands in one
+// place.
+func validatePolicyIdentityConfig(_ IdentityConfig) {}
 
 func validatePolicyDeferConfig(cfg DeferConfig) error {
 	if cfg.FreshSessionSeconds < 0 {

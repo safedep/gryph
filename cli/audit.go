@@ -44,6 +44,7 @@ const (
 	SelfAuditActionDeferralTimeout         = "deferral_timeout"
 	SelfAuditActionDeferralSweep           = "deferral_sweep"
 	SelfAuditActionDeferralCleanup         = "deferral_cleanup"
+	SelfAuditActionIdentityMissing         = "identity_missing"
 	SelfAuditResultSuccess                 = "success"
 	SelfAuditResultError                   = "error"
 	SelfAuditResultSkipped                 = "skipped"

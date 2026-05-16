@@ -73,7 +73,13 @@ type AarmReceipt struct {
 	DeferReason string `json:"defer_reason,omitempty"`
 	// DeferralOfSequence holds the value of the "deferral_of_sequence" field.
 	DeferralOfSequence *int64 `json:"deferral_of_sequence,omitempty"`
-	selectValues       sql.SelectValues
+	// HumanPrincipal holds the value of the "human_principal" field.
+	HumanPrincipal string `json:"human_principal,omitempty"`
+	// ServiceIdentity holds the value of the "service_identity" field.
+	ServiceIdentity string `json:"service_identity,omitempty"`
+	// RoleScope holds the value of the "role_scope" field.
+	RoleScope    string `json:"role_scope,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -85,7 +91,7 @@ func (*AarmReceipt) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case aarmreceipt.FieldSequence, aarmreceipt.FieldDurationMs, aarmreceipt.FieldDeferralOfSequence:
 			values[i] = new(sql.NullInt64)
-		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSubagentID, aarmreceipt.FieldSubagentType, aarmreceipt.FieldSignerKeyID, aarmreceipt.FieldDeferReason:
+		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSubagentID, aarmreceipt.FieldSubagentType, aarmreceipt.FieldSignerKeyID, aarmreceipt.FieldDeferReason, aarmreceipt.FieldHumanPrincipal, aarmreceipt.FieldServiceIdentity, aarmreceipt.FieldRoleScope:
 			values[i] = new(sql.NullString)
 		case aarmreceipt.FieldRecordedAt:
 			values[i] = new(sql.NullTime)
@@ -282,6 +288,24 @@ func (_m *AarmReceipt) assignValues(columns []string, values []any) error {
 				_m.DeferralOfSequence = new(int64)
 				*_m.DeferralOfSequence = value.Int64
 			}
+		case aarmreceipt.FieldHumanPrincipal:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field human_principal", values[i])
+			} else if value.Valid {
+				_m.HumanPrincipal = value.String
+			}
+		case aarmreceipt.FieldServiceIdentity:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field service_identity", values[i])
+			} else if value.Valid {
+				_m.ServiceIdentity = value.String
+			}
+		case aarmreceipt.FieldRoleScope:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field role_scope", values[i])
+			} else if value.Valid {
+				_m.RoleScope = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -402,6 +426,15 @@ func (_m *AarmReceipt) String() string {
 		builder.WriteString("deferral_of_sequence=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("human_principal=")
+	builder.WriteString(_m.HumanPrincipal)
+	builder.WriteString(", ")
+	builder.WriteString("service_identity=")
+	builder.WriteString(_m.ServiceIdentity)
+	builder.WriteString(", ")
+	builder.WriteString("role_scope=")
+	builder.WriteString(_m.RoleScope)
 	builder.WriteByte(')')
 	return builder.String()
 }

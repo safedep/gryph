@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/safedep/gryph/aarm/identity"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/core/session"
 	"github.com/stretchr/testify/assert"
@@ -114,10 +115,63 @@ type fakeScorer struct{ score float32 }
 
 func (f fakeScorer) Score(_ *model.Action) float32 { return f.score }
 
+func TestMCPAdapterPopulatesIdentityFromCapturer(t *testing.T) {
+	got := identity.Capture{
+		HumanPrincipal:  "alice@example.com",
+		ServiceIdentity: "github-actions:safedep/gryph#release",
+		RoleScope:       "uid=501,euid=501",
+	}
+	a := NewMCPAdapter(WithIdentityCapturer(identity.NewStaticCapturer(got)))
+	req := &MCPToolCall{Params: MCPToolCallParams{Name: "tool"}}
+
+	action, err := a.Normalize(context.Background(), req, nil)
+	require.NoError(t, err)
+	assert.Equal(t, got.HumanPrincipal, action.HumanPrincipal)
+	assert.Equal(t, got.ServiceIdentity, action.ServiceIdentity)
+	assert.Equal(t, got.RoleScope, action.RoleScope)
+}
+
+func TestMCPAdapterMetaOverridesIdentity(t *testing.T) {
+	got := identity.Capture{
+		HumanPrincipal:  "default@example.com",
+		ServiceIdentity: "ci:unknown",
+		RoleScope:       "uid=0",
+	}
+	a := NewMCPAdapter(WithIdentityCapturer(identity.NewStaticCapturer(got)))
+	req := &MCPToolCall{
+		Params: MCPToolCallParams{Name: "tool"},
+		Meta: map[string]any{
+			"human_principal":  "override@example.com",
+			"service_identity": "proxy:upstream#1",
+			"role_scope":       "role:admin",
+		},
+	}
+
+	action, err := a.Normalize(context.Background(), req, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "override@example.com", action.HumanPrincipal)
+	assert.Equal(t, "proxy:upstream#1", action.ServiceIdentity)
+	assert.Equal(t, "role:admin", action.RoleScope)
+}
+
+func TestMCPAdapterMetaEmptyDoesNotOverride(t *testing.T) {
+	got := identity.Capture{HumanPrincipal: "default@example.com"}
+	a := NewMCPAdapter(WithIdentityCapturer(identity.NewStaticCapturer(got)))
+	req := &MCPToolCall{
+		Params: MCPToolCallParams{Name: "tool"},
+		Meta:   map[string]any{"human_principal": ""},
+	}
+
+	action, err := a.Normalize(context.Background(), req, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "default@example.com", action.HumanPrincipal,
+		"empty Meta override must not blank a capturer-supplied identity")
+}
+
 func TestMCPAdapterRunsClassifierAndScorer(t *testing.T) {
 	a := NewMCPAdapter(
-		WithMCPClassifier(fakeClassifier{labels: []string{"secret"}}),
-		WithMCPInjectionScorer(fakeScorer{score: 0.42}),
+		WithClassifier(fakeClassifier{labels: []string{"secret"}}),
+		WithInjectionScorer(fakeScorer{score: 0.42}),
 	)
 	req := &MCPToolCall{
 		Params: MCPToolCallParams{Name: "tool", Arguments: map[string]any{"x": 1}},

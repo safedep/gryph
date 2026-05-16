@@ -3809,6 +3809,9 @@ type AarmReceiptMutation struct {
 	defer_reason            *string
 	deferral_of_sequence    *int64
 	adddeferral_of_sequence *int64
+	human_principal         *string
+	service_identity        *string
+	role_scope              *string
 	clearedFields           map[string]struct{}
 	done                    bool
 	oldValue                func(context.Context) (*AarmReceipt, error)
@@ -5229,6 +5232,153 @@ func (m *AarmReceiptMutation) ResetDeferralOfSequence() {
 	delete(m.clearedFields, aarmreceipt.FieldDeferralOfSequence)
 }
 
+// SetHumanPrincipal sets the "human_principal" field.
+func (m *AarmReceiptMutation) SetHumanPrincipal(s string) {
+	m.human_principal = &s
+}
+
+// HumanPrincipal returns the value of the "human_principal" field in the mutation.
+func (m *AarmReceiptMutation) HumanPrincipal() (r string, exists bool) {
+	v := m.human_principal
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHumanPrincipal returns the old "human_principal" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldHumanPrincipal(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHumanPrincipal is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHumanPrincipal requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHumanPrincipal: %w", err)
+	}
+	return oldValue.HumanPrincipal, nil
+}
+
+// ClearHumanPrincipal clears the value of the "human_principal" field.
+func (m *AarmReceiptMutation) ClearHumanPrincipal() {
+	m.human_principal = nil
+	m.clearedFields[aarmreceipt.FieldHumanPrincipal] = struct{}{}
+}
+
+// HumanPrincipalCleared returns if the "human_principal" field was cleared in this mutation.
+func (m *AarmReceiptMutation) HumanPrincipalCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldHumanPrincipal]
+	return ok
+}
+
+// ResetHumanPrincipal resets all changes to the "human_principal" field.
+func (m *AarmReceiptMutation) ResetHumanPrincipal() {
+	m.human_principal = nil
+	delete(m.clearedFields, aarmreceipt.FieldHumanPrincipal)
+}
+
+// SetServiceIdentity sets the "service_identity" field.
+func (m *AarmReceiptMutation) SetServiceIdentity(s string) {
+	m.service_identity = &s
+}
+
+// ServiceIdentity returns the value of the "service_identity" field in the mutation.
+func (m *AarmReceiptMutation) ServiceIdentity() (r string, exists bool) {
+	v := m.service_identity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldServiceIdentity returns the old "service_identity" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldServiceIdentity(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldServiceIdentity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldServiceIdentity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldServiceIdentity: %w", err)
+	}
+	return oldValue.ServiceIdentity, nil
+}
+
+// ClearServiceIdentity clears the value of the "service_identity" field.
+func (m *AarmReceiptMutation) ClearServiceIdentity() {
+	m.service_identity = nil
+	m.clearedFields[aarmreceipt.FieldServiceIdentity] = struct{}{}
+}
+
+// ServiceIdentityCleared returns if the "service_identity" field was cleared in this mutation.
+func (m *AarmReceiptMutation) ServiceIdentityCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldServiceIdentity]
+	return ok
+}
+
+// ResetServiceIdentity resets all changes to the "service_identity" field.
+func (m *AarmReceiptMutation) ResetServiceIdentity() {
+	m.service_identity = nil
+	delete(m.clearedFields, aarmreceipt.FieldServiceIdentity)
+}
+
+// SetRoleScope sets the "role_scope" field.
+func (m *AarmReceiptMutation) SetRoleScope(s string) {
+	m.role_scope = &s
+}
+
+// RoleScope returns the value of the "role_scope" field in the mutation.
+func (m *AarmReceiptMutation) RoleScope() (r string, exists bool) {
+	v := m.role_scope
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRoleScope returns the old "role_scope" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldRoleScope(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRoleScope is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRoleScope requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRoleScope: %w", err)
+	}
+	return oldValue.RoleScope, nil
+}
+
+// ClearRoleScope clears the value of the "role_scope" field.
+func (m *AarmReceiptMutation) ClearRoleScope() {
+	m.role_scope = nil
+	m.clearedFields[aarmreceipt.FieldRoleScope] = struct{}{}
+}
+
+// RoleScopeCleared returns if the "role_scope" field was cleared in this mutation.
+func (m *AarmReceiptMutation) RoleScopeCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldRoleScope]
+	return ok
+}
+
+// ResetRoleScope resets all changes to the "role_scope" field.
+func (m *AarmReceiptMutation) ResetRoleScope() {
+	m.role_scope = nil
+	delete(m.clearedFields, aarmreceipt.FieldRoleScope)
+}
+
 // Where appends a list predicates to the AarmReceiptMutation builder.
 func (m *AarmReceiptMutation) Where(ps ...predicate.AarmReceipt) {
 	m.predicates = append(m.predicates, ps...)
@@ -5263,7 +5413,7 @@ func (m *AarmReceiptMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AarmReceiptMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 30)
 	if m.session_id != nil {
 		fields = append(fields, aarmreceipt.FieldSessionID)
 	}
@@ -5345,6 +5495,15 @@ func (m *AarmReceiptMutation) Fields() []string {
 	if m.deferral_of_sequence != nil {
 		fields = append(fields, aarmreceipt.FieldDeferralOfSequence)
 	}
+	if m.human_principal != nil {
+		fields = append(fields, aarmreceipt.FieldHumanPrincipal)
+	}
+	if m.service_identity != nil {
+		fields = append(fields, aarmreceipt.FieldServiceIdentity)
+	}
+	if m.role_scope != nil {
+		fields = append(fields, aarmreceipt.FieldRoleScope)
+	}
 	return fields
 }
 
@@ -5407,6 +5566,12 @@ func (m *AarmReceiptMutation) Field(name string) (ent.Value, bool) {
 		return m.DeferReason()
 	case aarmreceipt.FieldDeferralOfSequence:
 		return m.DeferralOfSequence()
+	case aarmreceipt.FieldHumanPrincipal:
+		return m.HumanPrincipal()
+	case aarmreceipt.FieldServiceIdentity:
+		return m.ServiceIdentity()
+	case aarmreceipt.FieldRoleScope:
+		return m.RoleScope()
 	}
 	return nil, false
 }
@@ -5470,6 +5635,12 @@ func (m *AarmReceiptMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldDeferReason(ctx)
 	case aarmreceipt.FieldDeferralOfSequence:
 		return m.OldDeferralOfSequence(ctx)
+	case aarmreceipt.FieldHumanPrincipal:
+		return m.OldHumanPrincipal(ctx)
+	case aarmreceipt.FieldServiceIdentity:
+		return m.OldServiceIdentity(ctx)
+	case aarmreceipt.FieldRoleScope:
+		return m.OldRoleScope(ctx)
 	}
 	return nil, fmt.Errorf("unknown AarmReceipt field %s", name)
 }
@@ -5668,6 +5839,27 @@ func (m *AarmReceiptMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDeferralOfSequence(v)
 		return nil
+	case aarmreceipt.FieldHumanPrincipal:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHumanPrincipal(v)
+		return nil
+	case aarmreceipt.FieldServiceIdentity:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetServiceIdentity(v)
+		return nil
+	case aarmreceipt.FieldRoleScope:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRoleScope(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt field %s", name)
 }
@@ -5797,6 +5989,15 @@ func (m *AarmReceiptMutation) ClearedFields() []string {
 	if m.FieldCleared(aarmreceipt.FieldDeferralOfSequence) {
 		fields = append(fields, aarmreceipt.FieldDeferralOfSequence)
 	}
+	if m.FieldCleared(aarmreceipt.FieldHumanPrincipal) {
+		fields = append(fields, aarmreceipt.FieldHumanPrincipal)
+	}
+	if m.FieldCleared(aarmreceipt.FieldServiceIdentity) {
+		fields = append(fields, aarmreceipt.FieldServiceIdentity)
+	}
+	if m.FieldCleared(aarmreceipt.FieldRoleScope) {
+		fields = append(fields, aarmreceipt.FieldRoleScope)
+	}
 	return fields
 }
 
@@ -5870,6 +6071,15 @@ func (m *AarmReceiptMutation) ClearField(name string) error {
 		return nil
 	case aarmreceipt.FieldDeferralOfSequence:
 		m.ClearDeferralOfSequence()
+		return nil
+	case aarmreceipt.FieldHumanPrincipal:
+		m.ClearHumanPrincipal()
+		return nil
+	case aarmreceipt.FieldServiceIdentity:
+		m.ClearServiceIdentity()
+		return nil
+	case aarmreceipt.FieldRoleScope:
+		m.ClearRoleScope()
 		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt nullable field %s", name)
@@ -5959,6 +6169,15 @@ func (m *AarmReceiptMutation) ResetField(name string) error {
 		return nil
 	case aarmreceipt.FieldDeferralOfSequence:
 		m.ResetDeferralOfSequence()
+		return nil
+	case aarmreceipt.FieldHumanPrincipal:
+		m.ResetHumanPrincipal()
+		return nil
+	case aarmreceipt.FieldServiceIdentity:
+		m.ResetServiceIdentity()
+		return nil
+	case aarmreceipt.FieldRoleScope:
+		m.ResetRoleScope()
 		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt field %s", name)

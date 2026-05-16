@@ -64,6 +64,10 @@ func (AarmReceipt) Fields() []ent.Field {
 
 		field.String("defer_reason").Optional(),
 		field.Int64("deferral_of_sequence").Optional().Nillable(),
+
+		field.String("human_principal").Optional(),
+		field.String("service_identity").Optional(),
+		field.String("role_scope").Optional(),
 	}
 }
 

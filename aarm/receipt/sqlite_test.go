@@ -243,6 +243,61 @@ func TestSQLiteGenerator_PolicyHashAndSubagentPersist(t *testing.T) {
 	assert.True(t, bytes.Equal(expected, last.Hash), "row hash must match recomputed hash from chain row")
 }
 
+func TestSQLiteGenerator_IdentityFieldsPersistAndChainVerifies(t *testing.T) {
+	store := storagetest.NewStore(t)
+	g := NewSQLite(store)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	in := newInput(sessionID, model.DecisionGuidance)
+	in.Action.HumanPrincipal = "alice@example.com"
+	in.Action.ServiceIdentity = "github-actions:safedep/gryph#release"
+	in.Action.RoleScope = "uid=501,euid=501,gid=20"
+
+	rec, err := g.Record(ctx, in)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+
+	last, err := store.GetLastReceiptForSession(ctx, sessionID)
+	require.NoError(t, err)
+	require.NotNil(t, last)
+	assert.Equal(t, "alice@example.com", last.HumanPrincipal)
+	assert.Equal(t, "github-actions:safedep/gryph#release", last.ServiceIdentity)
+	assert.Equal(t, "uid=501,euid=501,gid=20", last.RoleScope)
+
+	chain := ChainRowFromReceipt(last)
+	expected, err := ComputeHash(NewHashInput(chain.Fields))
+	require.NoError(t, err)
+	assert.True(t, bytes.Equal(expected, last.Hash),
+		"identity fields must round-trip through the hash chain")
+}
+
+func TestSQLiteGenerator_BackwardsCompatNullIdentityColumns(t *testing.T) {
+	store := storagetest.NewStore(t)
+	g := NewSQLite(store)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	in := newInput(sessionID, model.DecisionGuidance)
+
+	rec, err := g.Record(ctx, in)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+
+	last, err := store.GetLastReceiptForSession(ctx, sessionID)
+	require.NoError(t, err)
+	require.NotNil(t, last)
+	assert.Empty(t, last.HumanPrincipal)
+	assert.Empty(t, last.ServiceIdentity)
+	assert.Empty(t, last.RoleScope)
+
+	chain := ChainRowFromReceipt(last)
+	expected, err := ComputeHash(NewHashInput(chain.Fields))
+	require.NoError(t, err)
+	assert.True(t, bytes.Equal(expected, last.Hash),
+		"rows without identity fields must verify under the same hash recipe")
+}
+
 func TestSQLiteGenerator_PolicyHashFlipChangesHash(t *testing.T) {
 	store := storagetest.NewStore(t)
 	g := NewSQLite(store)

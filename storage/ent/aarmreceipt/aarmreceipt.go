@@ -69,6 +69,12 @@ const (
 	FieldDeferReason = "defer_reason"
 	// FieldDeferralOfSequence holds the string denoting the deferral_of_sequence field in the database.
 	FieldDeferralOfSequence = "deferral_of_sequence"
+	// FieldHumanPrincipal holds the string denoting the human_principal field in the database.
+	FieldHumanPrincipal = "human_principal"
+	// FieldServiceIdentity holds the string denoting the service_identity field in the database.
+	FieldServiceIdentity = "service_identity"
+	// FieldRoleScope holds the string denoting the role_scope field in the database.
+	FieldRoleScope = "role_scope"
 	// Table holds the table name of the aarmreceipt in the database.
 	Table = "aarm_receipts"
 )
@@ -103,6 +109,9 @@ var Columns = []string{
 	FieldSignerKeyID,
 	FieldDeferReason,
 	FieldDeferralOfSequence,
+	FieldHumanPrincipal,
+	FieldServiceIdentity,
+	FieldRoleScope,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -266,4 +275,19 @@ func ByDeferReason(opts ...sql.OrderTermOption) OrderOption {
 // ByDeferralOfSequence orders the results by the deferral_of_sequence field.
 func ByDeferralOfSequence(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeferralOfSequence, opts...).ToFunc()
+}
+
+// ByHumanPrincipal orders the results by the human_principal field.
+func ByHumanPrincipal(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHumanPrincipal, opts...).ToFunc()
+}
+
+// ByServiceIdentity orders the results by the service_identity field.
+func ByServiceIdentity(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldServiceIdentity, opts...).ToFunc()
+}
+
+// ByRoleScope orders the results by the role_scope field.
+func ByRoleScope(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRoleScope, opts...).ToFunc()
 }

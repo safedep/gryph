@@ -62,6 +62,14 @@ type RecordInput struct {
 	// defer receipt's sequence within the same session. Nil on the original
 	// defer row and on non-resolution receipts.
 	DeferralOfSequence *int64
+
+	// ErrorMessage is an optional explanation persisted on the receipt row's
+	// error_message column at insert time. The hash chain ignores
+	// error_message (the verifier zeros it via DeriveInsertResultStatus), so
+	// setting this changes only the row write, not the row's hash. Used by
+	// pre-PDP block paths that want to record the failure reason without a
+	// second UpdateResult round trip.
+	ErrorMessage string
 }
 
 // Record summarizes a successful Generator.Record call so the Mediator can

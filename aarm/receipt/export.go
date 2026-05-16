@@ -166,6 +166,9 @@ type ExportedReceipt struct {
 	Signature          string                 `json:"signature,omitempty"`
 	DeferReason        string                 `json:"defer_reason,omitempty"`
 	DeferralOfSequence *int64                 `json:"deferral_of_sequence,omitempty"`
+	HumanPrincipal     string                 `json:"human_principal,omitempty"`
+	ServiceIdentity    string                 `json:"service_identity,omitempty"`
+	RoleScope          string                 `json:"role_scope,omitempty"`
 }
 
 // ToExported converts a storage.ReceiptRow into the export shape. When
@@ -219,6 +222,9 @@ func ToExported(r *storage.ReceiptRow, includeSig bool) ExportedReceipt {
 		v := *r.DeferralOfSequence
 		out.DeferralOfSequence = &v
 	}
+	out.HumanPrincipal = r.HumanPrincipal
+	out.ServiceIdentity = r.ServiceIdentity
+	out.RoleScope = r.RoleScope
 	return out
 }
 
@@ -256,6 +262,7 @@ func csvHeaders(includeSig bool) []string {
 		"prev_hash", "hash",
 		"subagent_id", "subagent_type", "policy_hash",
 		"defer_reason", "deferral_of_sequence",
+		"human_principal", "service_identity", "role_scope",
 	}
 	if includeSig {
 		h = append(h, "signature", "signer_key_id")
@@ -311,6 +318,9 @@ func csvRow(r *storage.ReceiptRow, includeSig bool) []string {
 		hex.EncodeToString(r.PolicyHash),
 		r.DeferReason,
 		deferralOfSequence,
+		r.HumanPrincipal,
+		r.ServiceIdentity,
+		r.RoleScope,
 	}
 	if includeSig {
 		row = append(row, base64.StdEncoding.EncodeToString(r.Signature), r.SignerKeyID)

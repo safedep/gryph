@@ -484,6 +484,66 @@ func (_u *AarmReceiptUpdate) ClearDeferralOfSequence() *AarmReceiptUpdate {
 	return _u
 }
 
+// SetHumanPrincipal sets the "human_principal" field.
+func (_u *AarmReceiptUpdate) SetHumanPrincipal(v string) *AarmReceiptUpdate {
+	_u.mutation.SetHumanPrincipal(v)
+	return _u
+}
+
+// SetNillableHumanPrincipal sets the "human_principal" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableHumanPrincipal(v *string) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetHumanPrincipal(*v)
+	}
+	return _u
+}
+
+// ClearHumanPrincipal clears the value of the "human_principal" field.
+func (_u *AarmReceiptUpdate) ClearHumanPrincipal() *AarmReceiptUpdate {
+	_u.mutation.ClearHumanPrincipal()
+	return _u
+}
+
+// SetServiceIdentity sets the "service_identity" field.
+func (_u *AarmReceiptUpdate) SetServiceIdentity(v string) *AarmReceiptUpdate {
+	_u.mutation.SetServiceIdentity(v)
+	return _u
+}
+
+// SetNillableServiceIdentity sets the "service_identity" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableServiceIdentity(v *string) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetServiceIdentity(*v)
+	}
+	return _u
+}
+
+// ClearServiceIdentity clears the value of the "service_identity" field.
+func (_u *AarmReceiptUpdate) ClearServiceIdentity() *AarmReceiptUpdate {
+	_u.mutation.ClearServiceIdentity()
+	return _u
+}
+
+// SetRoleScope sets the "role_scope" field.
+func (_u *AarmReceiptUpdate) SetRoleScope(v string) *AarmReceiptUpdate {
+	_u.mutation.SetRoleScope(v)
+	return _u
+}
+
+// SetNillableRoleScope sets the "role_scope" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableRoleScope(v *string) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetRoleScope(*v)
+	}
+	return _u
+}
+
+// ClearRoleScope clears the value of the "role_scope" field.
+func (_u *AarmReceiptUpdate) ClearRoleScope() *AarmReceiptUpdate {
+	_u.mutation.ClearRoleScope()
+	return _u
+}
+
 // Mutation returns the AarmReceiptMutation object of the builder.
 func (_u *AarmReceiptUpdate) Mutation() *AarmReceiptMutation {
 	return _u.mutation
@@ -709,6 +769,24 @@ func (_u *AarmReceiptUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.DeferralOfSequenceCleared() {
 		_spec.ClearField(aarmreceipt.FieldDeferralOfSequence, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.HumanPrincipal(); ok {
+		_spec.SetField(aarmreceipt.FieldHumanPrincipal, field.TypeString, value)
+	}
+	if _u.mutation.HumanPrincipalCleared() {
+		_spec.ClearField(aarmreceipt.FieldHumanPrincipal, field.TypeString)
+	}
+	if value, ok := _u.mutation.ServiceIdentity(); ok {
+		_spec.SetField(aarmreceipt.FieldServiceIdentity, field.TypeString, value)
+	}
+	if _u.mutation.ServiceIdentityCleared() {
+		_spec.ClearField(aarmreceipt.FieldServiceIdentity, field.TypeString)
+	}
+	if value, ok := _u.mutation.RoleScope(); ok {
+		_spec.SetField(aarmreceipt.FieldRoleScope, field.TypeString, value)
+	}
+	if _u.mutation.RoleScopeCleared() {
+		_spec.ClearField(aarmreceipt.FieldRoleScope, field.TypeString)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -1185,6 +1263,66 @@ func (_u *AarmReceiptUpdateOne) ClearDeferralOfSequence() *AarmReceiptUpdateOne 
 	return _u
 }
 
+// SetHumanPrincipal sets the "human_principal" field.
+func (_u *AarmReceiptUpdateOne) SetHumanPrincipal(v string) *AarmReceiptUpdateOne {
+	_u.mutation.SetHumanPrincipal(v)
+	return _u
+}
+
+// SetNillableHumanPrincipal sets the "human_principal" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableHumanPrincipal(v *string) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetHumanPrincipal(*v)
+	}
+	return _u
+}
+
+// ClearHumanPrincipal clears the value of the "human_principal" field.
+func (_u *AarmReceiptUpdateOne) ClearHumanPrincipal() *AarmReceiptUpdateOne {
+	_u.mutation.ClearHumanPrincipal()
+	return _u
+}
+
+// SetServiceIdentity sets the "service_identity" field.
+func (_u *AarmReceiptUpdateOne) SetServiceIdentity(v string) *AarmReceiptUpdateOne {
+	_u.mutation.SetServiceIdentity(v)
+	return _u
+}
+
+// SetNillableServiceIdentity sets the "service_identity" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableServiceIdentity(v *string) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetServiceIdentity(*v)
+	}
+	return _u
+}
+
+// ClearServiceIdentity clears the value of the "service_identity" field.
+func (_u *AarmReceiptUpdateOne) ClearServiceIdentity() *AarmReceiptUpdateOne {
+	_u.mutation.ClearServiceIdentity()
+	return _u
+}
+
+// SetRoleScope sets the "role_scope" field.
+func (_u *AarmReceiptUpdateOne) SetRoleScope(v string) *AarmReceiptUpdateOne {
+	_u.mutation.SetRoleScope(v)
+	return _u
+}
+
+// SetNillableRoleScope sets the "role_scope" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableRoleScope(v *string) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetRoleScope(*v)
+	}
+	return _u
+}
+
+// ClearRoleScope clears the value of the "role_scope" field.
+func (_u *AarmReceiptUpdateOne) ClearRoleScope() *AarmReceiptUpdateOne {
+	_u.mutation.ClearRoleScope()
+	return _u
+}
+
 // Mutation returns the AarmReceiptMutation object of the builder.
 func (_u *AarmReceiptUpdateOne) Mutation() *AarmReceiptMutation {
 	return _u.mutation
@@ -1440,6 +1578,24 @@ func (_u *AarmReceiptUpdateOne) sqlSave(ctx context.Context) (_node *AarmReceipt
 	}
 	if _u.mutation.DeferralOfSequenceCleared() {
 		_spec.ClearField(aarmreceipt.FieldDeferralOfSequence, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.HumanPrincipal(); ok {
+		_spec.SetField(aarmreceipt.FieldHumanPrincipal, field.TypeString, value)
+	}
+	if _u.mutation.HumanPrincipalCleared() {
+		_spec.ClearField(aarmreceipt.FieldHumanPrincipal, field.TypeString)
+	}
+	if value, ok := _u.mutation.ServiceIdentity(); ok {
+		_spec.SetField(aarmreceipt.FieldServiceIdentity, field.TypeString, value)
+	}
+	if _u.mutation.ServiceIdentityCleared() {
+		_spec.ClearField(aarmreceipt.FieldServiceIdentity, field.TypeString)
+	}
+	if value, ok := _u.mutation.RoleScope(); ok {
+		_spec.SetField(aarmreceipt.FieldRoleScope, field.TypeString, value)
+	}
+	if _u.mutation.RoleScopeCleared() {
+		_spec.ClearField(aarmreceipt.FieldRoleScope, field.TypeString)
 	}
 	_node = &AarmReceipt{config: _u.config}
 	_spec.Assign = _node.assignValues

@@ -108,6 +108,15 @@ type PolicyConfig struct {
 	InjectionScore InjectionScoreConfig `mapstructure:"injection_score"`
 	Receipts       ReceiptsConfig       `mapstructure:"receipts"`
 	Defer          DeferConfig          `mapstructure:"defer"`
+	Identity       IdentityConfig       `mapstructure:"identity"`
+}
+
+// IdentityConfig controls the AARM identity-capture layer. Enabled gates the
+// capturer entirely. RequireHumanPrincipal turns a missing principal into a
+// pre-PDP block ("Action denied: no verifiable human principal").
+type IdentityConfig struct {
+	Enabled               bool `mapstructure:"enabled"`
+	RequireHumanPrincipal bool `mapstructure:"require_human_principal"`
 }
 
 // DeferConfig configures the deferral service. Enabled gates both the
