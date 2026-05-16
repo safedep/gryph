@@ -24,6 +24,7 @@ const (
 	DecisionGuidance = model.DecisionGuidance
 	DecisionBlock    = model.DecisionBlock
 	DecisionEscalate = model.DecisionEscalate
+	DecisionDefer    = model.DecisionDefer
 
 	FailClosed = model.FailClosed
 	FailOpen   = model.FailOpen

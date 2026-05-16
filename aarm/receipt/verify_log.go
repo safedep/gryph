@@ -120,32 +120,37 @@ func chainRowFromExported(row ExportedReceipt) (ChainRow, error) {
 			return ChainRow{}, fmt.Errorf("decode policy_hash: %w", err)
 		}
 	}
+	fields := HashInputFields{
+		Sequence:       row.Sequence,
+		PrevHash:       prevHashBytes,
+		RecordedAtUnix: row.RecordedAtUnix,
+		SessionID:      sessID,
+		ActionID:       actionID,
+		EventID:        eventID,
+		Agent:          row.Agent,
+		Tool:           row.Tool,
+		ActionType:     row.ActionType,
+		Project:        row.Project,
+		Decision:       row.Decision,
+		Severity:       row.Severity,
+		Message:        row.Message,
+		MatchedRuleIDs: row.MatchedRuleIDs,
+		Snapshot:       row.Snapshot,
+		ActionPayload:  row.ActionPayload,
+		SubagentID:     row.SubagentID,
+		SubagentType:   row.SubagentType,
+		PolicyHash:     policyHashBytes,
+		DeferReason:    row.DeferReason,
+	}
+	if row.DeferralOfSequence != nil {
+		fields.DeferralOfSequence = *row.DeferralOfSequence
+	}
 	return ChainRow{
 		SessionID: sessID,
 		Sequence:  row.Sequence,
 		PrevHash:  prevHashBytes,
 		Hash:      hashBytes,
-		Fields: HashInputFields{
-			Sequence:       row.Sequence,
-			PrevHash:       prevHashBytes,
-			RecordedAtUnix: row.RecordedAtUnix,
-			SessionID:      sessID,
-			ActionID:       actionID,
-			EventID:        eventID,
-			Agent:          row.Agent,
-			Tool:           row.Tool,
-			ActionType:     row.ActionType,
-			Project:        row.Project,
-			Decision:       row.Decision,
-			Severity:       row.Severity,
-			Message:        row.Message,
-			MatchedRuleIDs: row.MatchedRuleIDs,
-			Snapshot:       row.Snapshot,
-			ActionPayload:  row.ActionPayload,
-			SubagentID:     row.SubagentID,
-			SubagentType:   row.SubagentType,
-			PolicyHash:     policyHashBytes,
-		},
+		Fields:    fields,
 	}, nil
 }
 

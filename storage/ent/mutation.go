@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/storage/ent/aarmcontextaction"
 	"github.com/safedep/gryph/storage/ent/aarmcontextstate"
+	"github.com/safedep/gryph/storage/ent/aarmdeferredaction"
 	"github.com/safedep/gryph/storage/ent/aarmreceipt"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
@@ -32,14 +33,15 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeAarmContextAction = "AarmContextAction"
-	TypeAarmContextState  = "AarmContextState"
-	TypeAarmReceipt       = "AarmReceipt"
-	TypeAuditEvent        = "AuditEvent"
-	TypeAuditStreamCursor = "AuditStreamCursor"
-	TypeEventStreamCursor = "EventStreamCursor"
-	TypeSelfAudit         = "SelfAudit"
-	TypeSession           = "Session"
+	TypeAarmContextAction  = "AarmContextAction"
+	TypeAarmContextState   = "AarmContextState"
+	TypeAarmDeferredAction = "AarmDeferredAction"
+	TypeAarmReceipt        = "AarmReceipt"
+	TypeAuditEvent         = "AuditEvent"
+	TypeAuditStreamCursor  = "AuditStreamCursor"
+	TypeEventStreamCursor  = "EventStreamCursor"
+	TypeSelfAudit          = "SelfAudit"
+	TypeSession            = "Session"
 )
 
 // AarmContextActionMutation represents an operation that mutates the AarmContextAction nodes in the graph.
@@ -2856,44 +2858,961 @@ func (m *AarmContextStateMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown AarmContextState edge %s", name)
 }
 
+// AarmDeferredActionMutation represents an operation that mutates the AarmDeferredAction nodes in the graph.
+type AarmDeferredActionMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *uuid.UUID
+	session_id          *uuid.UUID
+	receipt_sequence    *int64
+	addreceipt_sequence *int64
+	action_id           *uuid.UUID
+	deferred_at         *time.Time
+	expires_at          *time.Time
+	reason              *string
+	status              *aarmdeferredaction.Status
+	resolved_at         *time.Time
+	resolver            *string
+	resolution_note     *string
+	clearedFields       map[string]struct{}
+	done                bool
+	oldValue            func(context.Context) (*AarmDeferredAction, error)
+	predicates          []predicate.AarmDeferredAction
+}
+
+var _ ent.Mutation = (*AarmDeferredActionMutation)(nil)
+
+// aarmdeferredactionOption allows management of the mutation configuration using functional options.
+type aarmdeferredactionOption func(*AarmDeferredActionMutation)
+
+// newAarmDeferredActionMutation creates new mutation for the AarmDeferredAction entity.
+func newAarmDeferredActionMutation(c config, op Op, opts ...aarmdeferredactionOption) *AarmDeferredActionMutation {
+	m := &AarmDeferredActionMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAarmDeferredAction,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAarmDeferredActionID sets the ID field of the mutation.
+func withAarmDeferredActionID(id uuid.UUID) aarmdeferredactionOption {
+	return func(m *AarmDeferredActionMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *AarmDeferredAction
+		)
+		m.oldValue = func(ctx context.Context) (*AarmDeferredAction, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().AarmDeferredAction.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAarmDeferredAction sets the old AarmDeferredAction of the mutation.
+func withAarmDeferredAction(node *AarmDeferredAction) aarmdeferredactionOption {
+	return func(m *AarmDeferredActionMutation) {
+		m.oldValue = func(context.Context) (*AarmDeferredAction, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AarmDeferredActionMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AarmDeferredActionMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of AarmDeferredAction entities.
+func (m *AarmDeferredActionMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AarmDeferredActionMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AarmDeferredActionMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().AarmDeferredAction.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *AarmDeferredActionMutation) SetSessionID(u uuid.UUID) {
+	m.session_id = &u
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *AarmDeferredActionMutation) SessionID() (r uuid.UUID, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the AarmDeferredAction entity.
+// If the AarmDeferredAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmDeferredActionMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *AarmDeferredActionMutation) ResetSessionID() {
+	m.session_id = nil
+}
+
+// SetReceiptSequence sets the "receipt_sequence" field.
+func (m *AarmDeferredActionMutation) SetReceiptSequence(i int64) {
+	m.receipt_sequence = &i
+	m.addreceipt_sequence = nil
+}
+
+// ReceiptSequence returns the value of the "receipt_sequence" field in the mutation.
+func (m *AarmDeferredActionMutation) ReceiptSequence() (r int64, exists bool) {
+	v := m.receipt_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReceiptSequence returns the old "receipt_sequence" field's value of the AarmDeferredAction entity.
+// If the AarmDeferredAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmDeferredActionMutation) OldReceiptSequence(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReceiptSequence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReceiptSequence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReceiptSequence: %w", err)
+	}
+	return oldValue.ReceiptSequence, nil
+}
+
+// AddReceiptSequence adds i to the "receipt_sequence" field.
+func (m *AarmDeferredActionMutation) AddReceiptSequence(i int64) {
+	if m.addreceipt_sequence != nil {
+		*m.addreceipt_sequence += i
+	} else {
+		m.addreceipt_sequence = &i
+	}
+}
+
+// AddedReceiptSequence returns the value that was added to the "receipt_sequence" field in this mutation.
+func (m *AarmDeferredActionMutation) AddedReceiptSequence() (r int64, exists bool) {
+	v := m.addreceipt_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetReceiptSequence resets all changes to the "receipt_sequence" field.
+func (m *AarmDeferredActionMutation) ResetReceiptSequence() {
+	m.receipt_sequence = nil
+	m.addreceipt_sequence = nil
+}
+
+// SetActionID sets the "action_id" field.
+func (m *AarmDeferredActionMutation) SetActionID(u uuid.UUID) {
+	m.action_id = &u
+}
+
+// ActionID returns the value of the "action_id" field in the mutation.
+func (m *AarmDeferredActionMutation) ActionID() (r uuid.UUID, exists bool) {
+	v := m.action_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActionID returns the old "action_id" field's value of the AarmDeferredAction entity.
+// If the AarmDeferredAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmDeferredActionMutation) OldActionID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActionID: %w", err)
+	}
+	return oldValue.ActionID, nil
+}
+
+// ResetActionID resets all changes to the "action_id" field.
+func (m *AarmDeferredActionMutation) ResetActionID() {
+	m.action_id = nil
+}
+
+// SetDeferredAt sets the "deferred_at" field.
+func (m *AarmDeferredActionMutation) SetDeferredAt(t time.Time) {
+	m.deferred_at = &t
+}
+
+// DeferredAt returns the value of the "deferred_at" field in the mutation.
+func (m *AarmDeferredActionMutation) DeferredAt() (r time.Time, exists bool) {
+	v := m.deferred_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeferredAt returns the old "deferred_at" field's value of the AarmDeferredAction entity.
+// If the AarmDeferredAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmDeferredActionMutation) OldDeferredAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeferredAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeferredAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeferredAt: %w", err)
+	}
+	return oldValue.DeferredAt, nil
+}
+
+// ResetDeferredAt resets all changes to the "deferred_at" field.
+func (m *AarmDeferredActionMutation) ResetDeferredAt() {
+	m.deferred_at = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *AarmDeferredActionMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *AarmDeferredActionMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the AarmDeferredAction entity.
+// If the AarmDeferredAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmDeferredActionMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *AarmDeferredActionMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// SetReason sets the "reason" field.
+func (m *AarmDeferredActionMutation) SetReason(s string) {
+	m.reason = &s
+}
+
+// Reason returns the value of the "reason" field in the mutation.
+func (m *AarmDeferredActionMutation) Reason() (r string, exists bool) {
+	v := m.reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReason returns the old "reason" field's value of the AarmDeferredAction entity.
+// If the AarmDeferredAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmDeferredActionMutation) OldReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReason: %w", err)
+	}
+	return oldValue.Reason, nil
+}
+
+// ResetReason resets all changes to the "reason" field.
+func (m *AarmDeferredActionMutation) ResetReason() {
+	m.reason = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *AarmDeferredActionMutation) SetStatus(a aarmdeferredaction.Status) {
+	m.status = &a
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *AarmDeferredActionMutation) Status() (r aarmdeferredaction.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the AarmDeferredAction entity.
+// If the AarmDeferredAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmDeferredActionMutation) OldStatus(ctx context.Context) (v aarmdeferredaction.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *AarmDeferredActionMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (m *AarmDeferredActionMutation) SetResolvedAt(t time.Time) {
+	m.resolved_at = &t
+}
+
+// ResolvedAt returns the value of the "resolved_at" field in the mutation.
+func (m *AarmDeferredActionMutation) ResolvedAt() (r time.Time, exists bool) {
+	v := m.resolved_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResolvedAt returns the old "resolved_at" field's value of the AarmDeferredAction entity.
+// If the AarmDeferredAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmDeferredActionMutation) OldResolvedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResolvedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResolvedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResolvedAt: %w", err)
+	}
+	return oldValue.ResolvedAt, nil
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (m *AarmDeferredActionMutation) ClearResolvedAt() {
+	m.resolved_at = nil
+	m.clearedFields[aarmdeferredaction.FieldResolvedAt] = struct{}{}
+}
+
+// ResolvedAtCleared returns if the "resolved_at" field was cleared in this mutation.
+func (m *AarmDeferredActionMutation) ResolvedAtCleared() bool {
+	_, ok := m.clearedFields[aarmdeferredaction.FieldResolvedAt]
+	return ok
+}
+
+// ResetResolvedAt resets all changes to the "resolved_at" field.
+func (m *AarmDeferredActionMutation) ResetResolvedAt() {
+	m.resolved_at = nil
+	delete(m.clearedFields, aarmdeferredaction.FieldResolvedAt)
+}
+
+// SetResolver sets the "resolver" field.
+func (m *AarmDeferredActionMutation) SetResolver(s string) {
+	m.resolver = &s
+}
+
+// Resolver returns the value of the "resolver" field in the mutation.
+func (m *AarmDeferredActionMutation) Resolver() (r string, exists bool) {
+	v := m.resolver
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResolver returns the old "resolver" field's value of the AarmDeferredAction entity.
+// If the AarmDeferredAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmDeferredActionMutation) OldResolver(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResolver is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResolver requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResolver: %w", err)
+	}
+	return oldValue.Resolver, nil
+}
+
+// ClearResolver clears the value of the "resolver" field.
+func (m *AarmDeferredActionMutation) ClearResolver() {
+	m.resolver = nil
+	m.clearedFields[aarmdeferredaction.FieldResolver] = struct{}{}
+}
+
+// ResolverCleared returns if the "resolver" field was cleared in this mutation.
+func (m *AarmDeferredActionMutation) ResolverCleared() bool {
+	_, ok := m.clearedFields[aarmdeferredaction.FieldResolver]
+	return ok
+}
+
+// ResetResolver resets all changes to the "resolver" field.
+func (m *AarmDeferredActionMutation) ResetResolver() {
+	m.resolver = nil
+	delete(m.clearedFields, aarmdeferredaction.FieldResolver)
+}
+
+// SetResolutionNote sets the "resolution_note" field.
+func (m *AarmDeferredActionMutation) SetResolutionNote(s string) {
+	m.resolution_note = &s
+}
+
+// ResolutionNote returns the value of the "resolution_note" field in the mutation.
+func (m *AarmDeferredActionMutation) ResolutionNote() (r string, exists bool) {
+	v := m.resolution_note
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResolutionNote returns the old "resolution_note" field's value of the AarmDeferredAction entity.
+// If the AarmDeferredAction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmDeferredActionMutation) OldResolutionNote(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResolutionNote is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResolutionNote requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResolutionNote: %w", err)
+	}
+	return oldValue.ResolutionNote, nil
+}
+
+// ClearResolutionNote clears the value of the "resolution_note" field.
+func (m *AarmDeferredActionMutation) ClearResolutionNote() {
+	m.resolution_note = nil
+	m.clearedFields[aarmdeferredaction.FieldResolutionNote] = struct{}{}
+}
+
+// ResolutionNoteCleared returns if the "resolution_note" field was cleared in this mutation.
+func (m *AarmDeferredActionMutation) ResolutionNoteCleared() bool {
+	_, ok := m.clearedFields[aarmdeferredaction.FieldResolutionNote]
+	return ok
+}
+
+// ResetResolutionNote resets all changes to the "resolution_note" field.
+func (m *AarmDeferredActionMutation) ResetResolutionNote() {
+	m.resolution_note = nil
+	delete(m.clearedFields, aarmdeferredaction.FieldResolutionNote)
+}
+
+// Where appends a list predicates to the AarmDeferredActionMutation builder.
+func (m *AarmDeferredActionMutation) Where(ps ...predicate.AarmDeferredAction) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AarmDeferredActionMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AarmDeferredActionMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.AarmDeferredAction, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AarmDeferredActionMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AarmDeferredActionMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (AarmDeferredAction).
+func (m *AarmDeferredActionMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AarmDeferredActionMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.session_id != nil {
+		fields = append(fields, aarmdeferredaction.FieldSessionID)
+	}
+	if m.receipt_sequence != nil {
+		fields = append(fields, aarmdeferredaction.FieldReceiptSequence)
+	}
+	if m.action_id != nil {
+		fields = append(fields, aarmdeferredaction.FieldActionID)
+	}
+	if m.deferred_at != nil {
+		fields = append(fields, aarmdeferredaction.FieldDeferredAt)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, aarmdeferredaction.FieldExpiresAt)
+	}
+	if m.reason != nil {
+		fields = append(fields, aarmdeferredaction.FieldReason)
+	}
+	if m.status != nil {
+		fields = append(fields, aarmdeferredaction.FieldStatus)
+	}
+	if m.resolved_at != nil {
+		fields = append(fields, aarmdeferredaction.FieldResolvedAt)
+	}
+	if m.resolver != nil {
+		fields = append(fields, aarmdeferredaction.FieldResolver)
+	}
+	if m.resolution_note != nil {
+		fields = append(fields, aarmdeferredaction.FieldResolutionNote)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AarmDeferredActionMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case aarmdeferredaction.FieldSessionID:
+		return m.SessionID()
+	case aarmdeferredaction.FieldReceiptSequence:
+		return m.ReceiptSequence()
+	case aarmdeferredaction.FieldActionID:
+		return m.ActionID()
+	case aarmdeferredaction.FieldDeferredAt:
+		return m.DeferredAt()
+	case aarmdeferredaction.FieldExpiresAt:
+		return m.ExpiresAt()
+	case aarmdeferredaction.FieldReason:
+		return m.Reason()
+	case aarmdeferredaction.FieldStatus:
+		return m.Status()
+	case aarmdeferredaction.FieldResolvedAt:
+		return m.ResolvedAt()
+	case aarmdeferredaction.FieldResolver:
+		return m.Resolver()
+	case aarmdeferredaction.FieldResolutionNote:
+		return m.ResolutionNote()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AarmDeferredActionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case aarmdeferredaction.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case aarmdeferredaction.FieldReceiptSequence:
+		return m.OldReceiptSequence(ctx)
+	case aarmdeferredaction.FieldActionID:
+		return m.OldActionID(ctx)
+	case aarmdeferredaction.FieldDeferredAt:
+		return m.OldDeferredAt(ctx)
+	case aarmdeferredaction.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case aarmdeferredaction.FieldReason:
+		return m.OldReason(ctx)
+	case aarmdeferredaction.FieldStatus:
+		return m.OldStatus(ctx)
+	case aarmdeferredaction.FieldResolvedAt:
+		return m.OldResolvedAt(ctx)
+	case aarmdeferredaction.FieldResolver:
+		return m.OldResolver(ctx)
+	case aarmdeferredaction.FieldResolutionNote:
+		return m.OldResolutionNote(ctx)
+	}
+	return nil, fmt.Errorf("unknown AarmDeferredAction field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AarmDeferredActionMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case aarmdeferredaction.FieldSessionID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case aarmdeferredaction.FieldReceiptSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReceiptSequence(v)
+		return nil
+	case aarmdeferredaction.FieldActionID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActionID(v)
+		return nil
+	case aarmdeferredaction.FieldDeferredAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeferredAt(v)
+		return nil
+	case aarmdeferredaction.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case aarmdeferredaction.FieldReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReason(v)
+		return nil
+	case aarmdeferredaction.FieldStatus:
+		v, ok := value.(aarmdeferredaction.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case aarmdeferredaction.FieldResolvedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResolvedAt(v)
+		return nil
+	case aarmdeferredaction.FieldResolver:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResolver(v)
+		return nil
+	case aarmdeferredaction.FieldResolutionNote:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResolutionNote(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AarmDeferredAction field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AarmDeferredActionMutation) AddedFields() []string {
+	var fields []string
+	if m.addreceipt_sequence != nil {
+		fields = append(fields, aarmdeferredaction.FieldReceiptSequence)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AarmDeferredActionMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case aarmdeferredaction.FieldReceiptSequence:
+		return m.AddedReceiptSequence()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AarmDeferredActionMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case aarmdeferredaction.FieldReceiptSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddReceiptSequence(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AarmDeferredAction numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AarmDeferredActionMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(aarmdeferredaction.FieldResolvedAt) {
+		fields = append(fields, aarmdeferredaction.FieldResolvedAt)
+	}
+	if m.FieldCleared(aarmdeferredaction.FieldResolver) {
+		fields = append(fields, aarmdeferredaction.FieldResolver)
+	}
+	if m.FieldCleared(aarmdeferredaction.FieldResolutionNote) {
+		fields = append(fields, aarmdeferredaction.FieldResolutionNote)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AarmDeferredActionMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AarmDeferredActionMutation) ClearField(name string) error {
+	switch name {
+	case aarmdeferredaction.FieldResolvedAt:
+		m.ClearResolvedAt()
+		return nil
+	case aarmdeferredaction.FieldResolver:
+		m.ClearResolver()
+		return nil
+	case aarmdeferredaction.FieldResolutionNote:
+		m.ClearResolutionNote()
+		return nil
+	}
+	return fmt.Errorf("unknown AarmDeferredAction nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AarmDeferredActionMutation) ResetField(name string) error {
+	switch name {
+	case aarmdeferredaction.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case aarmdeferredaction.FieldReceiptSequence:
+		m.ResetReceiptSequence()
+		return nil
+	case aarmdeferredaction.FieldActionID:
+		m.ResetActionID()
+		return nil
+	case aarmdeferredaction.FieldDeferredAt:
+		m.ResetDeferredAt()
+		return nil
+	case aarmdeferredaction.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case aarmdeferredaction.FieldReason:
+		m.ResetReason()
+		return nil
+	case aarmdeferredaction.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case aarmdeferredaction.FieldResolvedAt:
+		m.ResetResolvedAt()
+		return nil
+	case aarmdeferredaction.FieldResolver:
+		m.ResetResolver()
+		return nil
+	case aarmdeferredaction.FieldResolutionNote:
+		m.ResetResolutionNote()
+		return nil
+	}
+	return fmt.Errorf("unknown AarmDeferredAction field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AarmDeferredActionMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AarmDeferredActionMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AarmDeferredActionMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AarmDeferredActionMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AarmDeferredActionMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AarmDeferredActionMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AarmDeferredActionMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown AarmDeferredAction unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AarmDeferredActionMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown AarmDeferredAction edge %s", name)
+}
+
 // AarmReceiptMutation represents an operation that mutates the AarmReceipt nodes in the graph.
 type AarmReceiptMutation struct {
 	config
-	op                     Op
-	typ                    string
-	id                     *uuid.UUID
-	session_id             *uuid.UUID
-	action_id              *uuid.UUID
-	event_id               *uuid.UUID
-	recorded_at            *time.Time
-	sequence               *int64
-	addsequence            *int64
-	agent                  *string
-	tool                   *string
-	action_type            *string
-	project                *string
-	decision               *string
-	matched_rule_ids       *[]string
-	appendmatched_rule_ids []string
-	severity               *string
-	message                *string
-	result_status          *aarmreceipt.ResultStatus
-	duration_ms            *int64
-	addduration_ms         *int64
-	error_message          *string
-	snapshot               *map[string]interface{}
-	action_payload         *map[string]interface{}
-	prev_hash              *[]byte
-	hash                   *[]byte
-	subagent_id            *string
-	subagent_type          *string
-	policy_hash            *[]byte
-	signature              *[]byte
-	signer_key_id          *string
-	clearedFields          map[string]struct{}
-	done                   bool
-	oldValue               func(context.Context) (*AarmReceipt, error)
-	predicates             []predicate.AarmReceipt
+	op                      Op
+	typ                     string
+	id                      *uuid.UUID
+	session_id              *uuid.UUID
+	action_id               *uuid.UUID
+	event_id                *uuid.UUID
+	recorded_at             *time.Time
+	sequence                *int64
+	addsequence             *int64
+	agent                   *string
+	tool                    *string
+	action_type             *string
+	project                 *string
+	decision                *string
+	matched_rule_ids        *[]string
+	appendmatched_rule_ids  []string
+	severity                *string
+	message                 *string
+	result_status           *aarmreceipt.ResultStatus
+	duration_ms             *int64
+	addduration_ms          *int64
+	error_message           *string
+	snapshot                *map[string]interface{}
+	action_payload          *map[string]interface{}
+	prev_hash               *[]byte
+	hash                    *[]byte
+	subagent_id             *string
+	subagent_type           *string
+	policy_hash             *[]byte
+	signature               *[]byte
+	signer_key_id           *string
+	defer_reason            *string
+	deferral_of_sequence    *int64
+	adddeferral_of_sequence *int64
+	clearedFields           map[string]struct{}
+	done                    bool
+	oldValue                func(context.Context) (*AarmReceipt, error)
+	predicates              []predicate.AarmReceipt
 }
 
 var _ ent.Mutation = (*AarmReceiptMutation)(nil)
@@ -4191,6 +5110,125 @@ func (m *AarmReceiptMutation) ResetSignerKeyID() {
 	delete(m.clearedFields, aarmreceipt.FieldSignerKeyID)
 }
 
+// SetDeferReason sets the "defer_reason" field.
+func (m *AarmReceiptMutation) SetDeferReason(s string) {
+	m.defer_reason = &s
+}
+
+// DeferReason returns the value of the "defer_reason" field in the mutation.
+func (m *AarmReceiptMutation) DeferReason() (r string, exists bool) {
+	v := m.defer_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeferReason returns the old "defer_reason" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldDeferReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeferReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeferReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeferReason: %w", err)
+	}
+	return oldValue.DeferReason, nil
+}
+
+// ClearDeferReason clears the value of the "defer_reason" field.
+func (m *AarmReceiptMutation) ClearDeferReason() {
+	m.defer_reason = nil
+	m.clearedFields[aarmreceipt.FieldDeferReason] = struct{}{}
+}
+
+// DeferReasonCleared returns if the "defer_reason" field was cleared in this mutation.
+func (m *AarmReceiptMutation) DeferReasonCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldDeferReason]
+	return ok
+}
+
+// ResetDeferReason resets all changes to the "defer_reason" field.
+func (m *AarmReceiptMutation) ResetDeferReason() {
+	m.defer_reason = nil
+	delete(m.clearedFields, aarmreceipt.FieldDeferReason)
+}
+
+// SetDeferralOfSequence sets the "deferral_of_sequence" field.
+func (m *AarmReceiptMutation) SetDeferralOfSequence(i int64) {
+	m.deferral_of_sequence = &i
+	m.adddeferral_of_sequence = nil
+}
+
+// DeferralOfSequence returns the value of the "deferral_of_sequence" field in the mutation.
+func (m *AarmReceiptMutation) DeferralOfSequence() (r int64, exists bool) {
+	v := m.deferral_of_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeferralOfSequence returns the old "deferral_of_sequence" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldDeferralOfSequence(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeferralOfSequence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeferralOfSequence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeferralOfSequence: %w", err)
+	}
+	return oldValue.DeferralOfSequence, nil
+}
+
+// AddDeferralOfSequence adds i to the "deferral_of_sequence" field.
+func (m *AarmReceiptMutation) AddDeferralOfSequence(i int64) {
+	if m.adddeferral_of_sequence != nil {
+		*m.adddeferral_of_sequence += i
+	} else {
+		m.adddeferral_of_sequence = &i
+	}
+}
+
+// AddedDeferralOfSequence returns the value that was added to the "deferral_of_sequence" field in this mutation.
+func (m *AarmReceiptMutation) AddedDeferralOfSequence() (r int64, exists bool) {
+	v := m.adddeferral_of_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearDeferralOfSequence clears the value of the "deferral_of_sequence" field.
+func (m *AarmReceiptMutation) ClearDeferralOfSequence() {
+	m.deferral_of_sequence = nil
+	m.adddeferral_of_sequence = nil
+	m.clearedFields[aarmreceipt.FieldDeferralOfSequence] = struct{}{}
+}
+
+// DeferralOfSequenceCleared returns if the "deferral_of_sequence" field was cleared in this mutation.
+func (m *AarmReceiptMutation) DeferralOfSequenceCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldDeferralOfSequence]
+	return ok
+}
+
+// ResetDeferralOfSequence resets all changes to the "deferral_of_sequence" field.
+func (m *AarmReceiptMutation) ResetDeferralOfSequence() {
+	m.deferral_of_sequence = nil
+	m.adddeferral_of_sequence = nil
+	delete(m.clearedFields, aarmreceipt.FieldDeferralOfSequence)
+}
+
 // Where appends a list predicates to the AarmReceiptMutation builder.
 func (m *AarmReceiptMutation) Where(ps ...predicate.AarmReceipt) {
 	m.predicates = append(m.predicates, ps...)
@@ -4225,7 +5263,7 @@ func (m *AarmReceiptMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AarmReceiptMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 27)
 	if m.session_id != nil {
 		fields = append(fields, aarmreceipt.FieldSessionID)
 	}
@@ -4301,6 +5339,12 @@ func (m *AarmReceiptMutation) Fields() []string {
 	if m.signer_key_id != nil {
 		fields = append(fields, aarmreceipt.FieldSignerKeyID)
 	}
+	if m.defer_reason != nil {
+		fields = append(fields, aarmreceipt.FieldDeferReason)
+	}
+	if m.deferral_of_sequence != nil {
+		fields = append(fields, aarmreceipt.FieldDeferralOfSequence)
+	}
 	return fields
 }
 
@@ -4359,6 +5403,10 @@ func (m *AarmReceiptMutation) Field(name string) (ent.Value, bool) {
 		return m.Signature()
 	case aarmreceipt.FieldSignerKeyID:
 		return m.SignerKeyID()
+	case aarmreceipt.FieldDeferReason:
+		return m.DeferReason()
+	case aarmreceipt.FieldDeferralOfSequence:
+		return m.DeferralOfSequence()
 	}
 	return nil, false
 }
@@ -4418,6 +5466,10 @@ func (m *AarmReceiptMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldSignature(ctx)
 	case aarmreceipt.FieldSignerKeyID:
 		return m.OldSignerKeyID(ctx)
+	case aarmreceipt.FieldDeferReason:
+		return m.OldDeferReason(ctx)
+	case aarmreceipt.FieldDeferralOfSequence:
+		return m.OldDeferralOfSequence(ctx)
 	}
 	return nil, fmt.Errorf("unknown AarmReceipt field %s", name)
 }
@@ -4602,6 +5654,20 @@ func (m *AarmReceiptMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSignerKeyID(v)
 		return nil
+	case aarmreceipt.FieldDeferReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeferReason(v)
+		return nil
+	case aarmreceipt.FieldDeferralOfSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeferralOfSequence(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt field %s", name)
 }
@@ -4616,6 +5682,9 @@ func (m *AarmReceiptMutation) AddedFields() []string {
 	if m.addduration_ms != nil {
 		fields = append(fields, aarmreceipt.FieldDurationMs)
 	}
+	if m.adddeferral_of_sequence != nil {
+		fields = append(fields, aarmreceipt.FieldDeferralOfSequence)
+	}
 	return fields
 }
 
@@ -4628,6 +5697,8 @@ func (m *AarmReceiptMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedSequence()
 	case aarmreceipt.FieldDurationMs:
 		return m.AddedDurationMs()
+	case aarmreceipt.FieldDeferralOfSequence:
+		return m.AddedDeferralOfSequence()
 	}
 	return nil, false
 }
@@ -4650,6 +5721,13 @@ func (m *AarmReceiptMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddDurationMs(v)
+		return nil
+	case aarmreceipt.FieldDeferralOfSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDeferralOfSequence(v)
 		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt numeric field %s", name)
@@ -4712,6 +5790,12 @@ func (m *AarmReceiptMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(aarmreceipt.FieldSignerKeyID) {
 		fields = append(fields, aarmreceipt.FieldSignerKeyID)
+	}
+	if m.FieldCleared(aarmreceipt.FieldDeferReason) {
+		fields = append(fields, aarmreceipt.FieldDeferReason)
+	}
+	if m.FieldCleared(aarmreceipt.FieldDeferralOfSequence) {
+		fields = append(fields, aarmreceipt.FieldDeferralOfSequence)
 	}
 	return fields
 }
@@ -4780,6 +5864,12 @@ func (m *AarmReceiptMutation) ClearField(name string) error {
 		return nil
 	case aarmreceipt.FieldSignerKeyID:
 		m.ClearSignerKeyID()
+		return nil
+	case aarmreceipt.FieldDeferReason:
+		m.ClearDeferReason()
+		return nil
+	case aarmreceipt.FieldDeferralOfSequence:
+		m.ClearDeferralOfSequence()
 		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt nullable field %s", name)
@@ -4863,6 +5953,12 @@ func (m *AarmReceiptMutation) ResetField(name string) error {
 		return nil
 	case aarmreceipt.FieldSignerKeyID:
 		m.ResetSignerKeyID()
+		return nil
+	case aarmreceipt.FieldDeferReason:
+		m.ResetDeferReason()
+		return nil
+	case aarmreceipt.FieldDeferralOfSequence:
+		m.ResetDeferralOfSequence()
 		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt field %s", name)

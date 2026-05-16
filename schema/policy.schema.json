@@ -14,7 +14,7 @@
     },
     "rules": {
       "type": "array",
-      "description": "Ordered list of policy rules. Each rule produces a Decision; when multiple match the most restrictive wins (block \u003e escalate \u003e guidance \u003e warn \u003e allow).",
+      "description": "Ordered list of policy rules. Each rule produces a Decision; when multiple match the most restrictive wins (block \u003e escalate \u003e defer \u003e guidance \u003e warn \u003e allow).",
       "items": {
         "$ref": "#/$defs/rule"
       }
@@ -82,13 +82,14 @@
       "properties": {
         "action": {
           "type": "string",
-          "description": "Decision returned when the rule matches. `escalate` is reserved for approval workflows and currently degrades to `block`.",
+          "description": "Decision returned when the rule matches. `escalate` routes to the approval workflow. `defer` queues the action for operator resolution and blocks the agent in the meantime; requires a non-empty `reason`.",
           "enum": [
             "allow",
             "warn",
             "guidance",
             "block",
-            "escalate"
+            "escalate",
+            "defer"
           ]
         },
         "condition": {
@@ -114,6 +115,10 @@
         "message": {
           "type": "string",
           "description": "Go text/template rendered when the rule matches. Available references: .Action (Type, Tool, Operation, Agent, WorkingDir, Project, Params), .Context (TotalActions, FilesRead, FilesWritten, CommandsExecuted, NetworkRequests, Errors, ToolsUsed, SessionDurationMs, ClassificationsSeen, EntitiesSeen, SemanticDrift), .Rule (ID, Description, Action, Severity, Tags)."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Required when action is `defer`. Surfaces on the receipt's defer_reason and in the operator-facing block message."
         },
         "scope": {
           "$ref": "#/$defs/scope"

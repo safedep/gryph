@@ -48,6 +48,14 @@ func Apply(result *model.EvaluationResult) *coresecurity.CheckResult {
 			message = "Action requires approval but escalation was not routed; configuration bug"
 		}
 		out.Guidance = message
+	case model.DecisionDefer:
+		log.Warnf("aarm/pep: defer decision reached PEP without deferral handling (matched_rules=%v); treating as block to avoid silent allow",
+			result.MatchedRuleIDs)
+		out.Decision = coresecurity.DecisionBlock
+		if message == "" {
+			message = "Action deferred but deferral was not routed; configuration bug"
+		}
+		out.Reason = message
 	default:
 		out.Decision = coresecurity.DecisionAllow
 	}

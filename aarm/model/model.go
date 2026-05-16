@@ -89,6 +89,8 @@ const (
 	DecisionBlock Decision = "block"
 	// DecisionEscalate is reserved for approval workflows.
 	DecisionEscalate Decision = "escalate"
+	// DecisionDefer pauses execution pending operator resolution or timeout.
+	DecisionDefer Decision = "defer"
 )
 
 // Result is the post-execution outcome recorded for an action.
@@ -158,6 +160,12 @@ type EvaluationResult struct {
 	Message        string
 	Severity       Severity
 	Tags           []string
+
+	// DeferReason is set when Decision == DecisionDefer. Either the rule's
+	// reason field for explicit defer rules, or one of the synthetic reasons
+	// (fresh_session_insufficient_context, conflicting_policies) for the
+	// auto-defer triggers.
+	DeferReason string
 }
 
 // ContextSnapshot is the point-in-time session context exposed to the PDP.

@@ -283,6 +283,34 @@ func (_c *AarmReceiptCreate) SetNillableSignerKeyID(v *string) *AarmReceiptCreat
 	return _c
 }
 
+// SetDeferReason sets the "defer_reason" field.
+func (_c *AarmReceiptCreate) SetDeferReason(v string) *AarmReceiptCreate {
+	_c.mutation.SetDeferReason(v)
+	return _c
+}
+
+// SetNillableDeferReason sets the "defer_reason" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillableDeferReason(v *string) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetDeferReason(*v)
+	}
+	return _c
+}
+
+// SetDeferralOfSequence sets the "deferral_of_sequence" field.
+func (_c *AarmReceiptCreate) SetDeferralOfSequence(v int64) *AarmReceiptCreate {
+	_c.mutation.SetDeferralOfSequence(v)
+	return _c
+}
+
+// SetNillableDeferralOfSequence sets the "deferral_of_sequence" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillableDeferralOfSequence(v *int64) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetDeferralOfSequence(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AarmReceiptCreate) SetID(v uuid.UUID) *AarmReceiptCreate {
 	_c.mutation.SetID(v)
@@ -528,6 +556,14 @@ func (_c *AarmReceiptCreate) createSpec() (*AarmReceipt, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SignerKeyID(); ok {
 		_spec.SetField(aarmreceipt.FieldSignerKeyID, field.TypeString, value)
 		_node.SignerKeyID = value
+	}
+	if value, ok := _c.mutation.DeferReason(); ok {
+		_spec.SetField(aarmreceipt.FieldDeferReason, field.TypeString, value)
+		_node.DeferReason = value
+	}
+	if value, ok := _c.mutation.DeferralOfSequence(); ok {
+		_spec.SetField(aarmreceipt.FieldDeferralOfSequence, field.TypeInt64, value)
+		_node.DeferralOfSequence = &value
 	}
 	return _node, _spec
 }

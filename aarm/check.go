@@ -48,16 +48,50 @@ type ApprovalAudit struct {
 // path. Nil disables emission.
 type ApprovalAuditHook func(ctx context.Context, e ApprovalAudit)
 
+// DeferralRecord describes a deferral the Mediator is about to record. The
+// hook owns the actual storage insert (so aarm does not depend on storage)
+// and emits the deferral_requested self-audit row.
+type DeferralRecord struct {
+	SessionID       uuid.UUID
+	ActionID        uuid.UUID
+	ReceiptSequence int64
+	Reason          string
+	DeferredAt      time.Time
+	ExpiresAt       time.Time
+	Action          *model.Action
+	Decision        *model.EvaluationResult
+}
+
+// DeferralHook receives DeferralRecord events from the Mediator defer path
+// and returns the deferred-action row id assigned by the storage layer plus
+// the operator-actionable hint that gets spliced into the block message
+// returned to the agent. Returning an empty hint omits it from the block
+// message. The hook keeps CLI-shaped guidance out of aarm. Nil disables
+// emission. The hook must be safe for concurrent calls.
+type DeferralHook func(ctx context.Context, r DeferralRecord) (uuid.UUID, string, error)
+
+// DeferralConfig configures the Mediator's defer path. TimeoutSeconds bounds
+// the per-deferral expires_at written to the queue. FreshSessionSeconds and
+// ConflictTriggersDefer are forwarded to the PDP's synthetic-defer triggers.
+type DeferralConfig struct {
+	Enabled               bool
+	TimeoutSeconds        int
+	FreshSessionSeconds   int
+	ConflictTriggersDefer bool
+}
+
 // Mediator implements the Gryph security.Check interface with AARM components.
 type Mediator struct {
-	adapter    mediation.Adapter
-	pdp        *pdp.PDP
-	accum      accumulator.Accumulator
-	receipt    receipt.Generator
-	approval   approval.Service
-	auditHook  ApprovalAuditHook
-	cfg        MediatorConfig
-	policyHash []byte
+	adapter      mediation.Adapter
+	pdp          *pdp.PDP
+	accum        accumulator.Accumulator
+	receipt      receipt.Generator
+	approval     approval.Service
+	auditHook    ApprovalAuditHook
+	deferralHook DeferralHook
+	deferralCfg  DeferralConfig
+	cfg          MediatorConfig
+	policyHash   []byte
 }
 
 var _ coresecurity.Check = (*Mediator)(nil)
@@ -110,6 +144,24 @@ func WithApprovalAuditHook(h ApprovalAuditHook) MediatorOption {
 	}
 }
 
+// WithDeferralHook installs a hook called from the defer path so the CLI can
+// persist the deferred-action row and emit a deferral_requested self-audit
+// row without aarm importing storage or cli.
+func WithDeferralHook(h DeferralHook) MediatorOption {
+	return func(m *Mediator) {
+		if h != nil {
+			m.deferralHook = h
+		}
+	}
+}
+
+// WithDeferralConfig overrides the default deferral configuration (disabled).
+func WithDeferralConfig(cfg DeferralConfig) MediatorOption {
+	return func(m *Mediator) {
+		m.deferralCfg = cfg
+	}
+}
+
 // WithAdapter overrides the default mediation adapter. Callers that need to
 // wire a classifier or an injection scorer construct the adapter themselves
 // (with mediation.NewHookAdapter) and pass it in. Keeps adapter-shaped
@@ -128,12 +180,7 @@ func WithAdapter(a mediation.Adapter) MediatorOption {
 // WithAccumulator / WithReceiptGenerator / WithAdapter to swap in real
 // implementations.
 func NewMediator(policy *pdp.Policy, opts ...MediatorOption) (*Mediator, error) {
-	engine, err := pdp.New(policy)
-	if err != nil {
-		return nil, err
-	}
 	m := &Mediator{
-		pdp:        engine,
 		accum:      accumulator.NewNop(),
 		receipt:    receipt.NewNop(),
 		approval:   approval.NewNop(),
@@ -143,6 +190,25 @@ func NewMediator(policy *pdp.Policy, opts ...MediatorOption) (*Mediator, error) 
 	for _, opt := range opts {
 		opt(m)
 	}
+	pdpOpts := []pdp.Option{
+		pdp.WithDeferConfig(pdp.DeferConfig{
+			Enabled:               m.deferralCfg.Enabled,
+			FreshSessionSeconds:   m.deferralCfg.FreshSessionSeconds,
+			ConflictTriggersDefer: m.deferralCfg.ConflictTriggersDefer,
+		}),
+		pdp.WithSessionStartFn(func(ctx context.Context) (time.Time, bool) {
+			sess, ok := session.FromContext(ctx)
+			if !ok || sess == nil {
+				return time.Time{}, false
+			}
+			return sess.StartedAt, true
+		}),
+	}
+	engine, err := pdp.New(policy, pdpOpts...)
+	if err != nil {
+		return nil, err
+	}
+	m.pdp = engine
 	return m, nil
 }
 
@@ -184,6 +250,10 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 
 	if decision.Decision == model.DecisionEscalate {
 		return m.handleEscalate(ctx, action, snapshot, decision)
+	}
+
+	if decision.Decision == model.DecisionDefer {
+		return m.handleDefer(ctx, action, snapshot, decision)
 	}
 
 	result := pep.Apply(decision)
@@ -339,6 +409,77 @@ func (m *Mediator) emitAudit(ctx context.Context, e ApprovalAudit) {
 	}
 	m.auditHook(ctx, e)
 }
+
+// handleDefer persists the defer receipt and asks the optional DeferralHook
+// to record the pending-deferral queue row. The agent always sees a block so
+// the action does not execute until an operator (or the timeout sweep)
+// resolves it out-of-band.
+func (m *Mediator) handleDefer(ctx context.Context, action *model.Action, snapshot *model.ContextSnapshot, decision *model.EvaluationResult) (*coresecurity.CheckResult, error) {
+	reason := decision.DeferReason
+	if reason == "" {
+		reason = "unspecified"
+	}
+	now := time.Now().UTC()
+	timeout := time.Duration(m.deferralCfg.TimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 10 * time.Minute
+	}
+	expiresAt := now.Add(timeout)
+
+	rec, rerr := m.receipt.Record(ctx, &receipt.RecordInput{
+		SessionID:   action.SessionID,
+		ActionID:    action.ID,
+		EventID:     action.EventID,
+		Action:      action,
+		Snapshot:    snapshot,
+		Decision:    decision,
+		PolicyHash:  m.policyHash,
+		RecordedAt:  now,
+		DeferReason: reason,
+	})
+	if rerr != nil {
+		return nil, rerr
+	}
+
+	var operatorHint string
+	if m.deferralHook != nil && rec != nil {
+		_, hint, hookErr := m.deferralHook(ctx, DeferralRecord{
+			SessionID:       action.SessionID,
+			ActionID:        action.ID,
+			ReceiptSequence: rec.Sequence,
+			Reason:          reason,
+			DeferredAt:      now,
+			ExpiresAt:       expiresAt,
+			Action:          action,
+			Decision:        decision,
+		})
+		if hookErr != nil {
+			log.Warnf("aarm: deferral hook: %v", hookErr)
+		}
+		operatorHint = hint
+	}
+
+	message := fmt.Sprintf("Action deferred: %s.", reason)
+	if operatorHint != "" {
+		message = message + " " + operatorHint
+	}
+
+	result := &coresecurity.CheckResult{
+		CheckName:      CheckName,
+		Decision:       coresecurity.DecisionBlock,
+		MatchedRuleIDs: decision.MatchedRuleIDs,
+		Severity:       mapSeverity(decision.Severity),
+		Tags:           decision.Tags,
+		AarmActionID:   action.ID,
+		AarmSessionID:  action.SessionID,
+		Reason:         message,
+	}
+	if rec != nil {
+		result.AarmSequence = rec.Sequence
+	}
+	return result, nil
+}
+
 
 // shouldRecordReceipt encodes the LogAllEvaluations gating: an allow
 // decision only produces a receipt when LogAllEvaluations=true. Every other

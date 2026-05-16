@@ -65,6 +65,87 @@ func TestInsertReceipt_RejectsDuplicateSequence(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestGetReceiptBySessionSequence_ReturnsRow(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	r1 := makeReceiptRow(sessionID, 1)
+	r2 := makeReceiptRow(sessionID, 2)
+	r2.PrevHash = r1.Hash
+	r2.Hash = []byte("00000000000000000000000000000002")
+	require.NoError(t, store.InsertReceipt(ctx, r1))
+	require.NoError(t, store.InsertReceipt(ctx, r2))
+
+	got, err := store.GetReceiptBySessionSequence(ctx, sessionID, 2)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, sessionID, got.SessionID)
+	assert.Equal(t, int64(2), got.Sequence)
+	assert.Equal(t, r2.Hash, got.Hash)
+}
+
+func TestGetReceiptBySessionSequence_NotFound(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	require.NoError(t, store.InsertReceipt(ctx, makeReceiptRow(sessionID, 1)))
+
+	got, err := store.GetReceiptBySessionSequence(ctx, sessionID, 99)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+
+	got, err = store.GetReceiptBySessionSequence(ctx, uuid.New(), 1)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+}
+
+func TestGetReceiptBySessionSequence_RejectsNilSession(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	got, err := store.GetReceiptBySessionSequence(ctx, uuid.Nil, 1)
+	require.Error(t, err)
+	assert.Nil(t, got)
+}
+
+func TestGetFollowUpReceipt_ReturnsRowWhenPresent(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	original := makeReceiptRow(sessionID, 1)
+	original.Decision = "defer"
+	require.NoError(t, store.InsertReceipt(ctx, original))
+
+	followUp := makeReceiptRow(sessionID, 2)
+	followUp.Decision = "allow"
+	followUp.PrevHash = original.Hash
+	followUp.Hash = []byte("00000000000000000000000000000002")
+	originalSeq := int64(1)
+	followUp.DeferralOfSequence = &originalSeq
+	require.NoError(t, store.InsertReceipt(ctx, followUp))
+
+	got, err := store.GetFollowUpReceipt(ctx, sessionID, 1)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, int64(2), got.Sequence)
+	require.NotNil(t, got.DeferralOfSequence)
+	assert.Equal(t, int64(1), *got.DeferralOfSequence)
+}
+
+func TestGetFollowUpReceipt_ReturnsNilWhenAbsent(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	require.NoError(t, store.InsertReceipt(ctx, makeReceiptRow(sessionID, 1)))
+
+	got, err := store.GetFollowUpReceipt(ctx, sessionID, 1)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+}
+
 func TestUpdateReceiptResult(t *testing.T) {
 	store := storagetest.NewStore(t)
 	ctx := context.Background()

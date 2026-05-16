@@ -5,8 +5,18 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/aarm/approval"
 	"github.com/safedep/gryph/storage"
 )
+
+// detectOperatorIdentity returns the operator's login name from the
+// conventional environment variables, falling back to "operator" when none
+// are set. Thin shim over approval.DefaultOperatorIdentity so the CLI
+// deferral commands and the AARM CLIPrompt approver default share a single
+// source of truth without a circular import.
+func detectOperatorIdentity() string {
+	return approval.DefaultOperatorIdentity()
+}
 
 // resolveAarmSessionID resolves a session reference (full UUID, context-state
 // prefix, or session-row prefix) to the canonical session UUID. Shared by the

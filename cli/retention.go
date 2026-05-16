@@ -69,6 +69,16 @@ func retentionBuckets(store storage.Store, eventDays, contextDays, receiptDays i
 			countFn:     store.CountReceiptsBefore,
 			deleteFn:    store.DeleteReceiptsBefore,
 		},
+		{
+			nounPlural:  "deferred actions",
+			days:        receiptDays,
+			auditAction: SelfAuditActionDeferralCleanup,
+			auditKey:    "aarm_deferred_actions_deleted",
+			cutoffKey:   "cutoff",
+			daysKey:     "receipt_retention_days",
+			countFn:     store.CountDeferredActionsBefore,
+			deleteFn:    store.DeleteDeferredActionsBefore,
+		},
 	}
 }
 

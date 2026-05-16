@@ -39,6 +39,8 @@
 //  20. subagent_id        (utf-8 bytes; empty when not a subagent action)
 //  21. subagent_type      (utf-8 bytes; empty when not a subagent action)
 //  22. policy_hash        (length-prefixed bytes; empty for pre-Phase-4.5 rows)
+//  23. defer_reason       (utf-8 bytes; empty for non-defer rows)
+//  24. deferral_of_sequence (int64, 8 bytes BE; 0 for original defer / non-defer rows)
 //
 // result_status contract
 //
@@ -84,42 +86,52 @@ const HashSize = 32
 // import storage. The string value is the load-bearing contract.
 const resultStatusPending = "pending"
 
+// resultStatusDeferred is the insert-time result_status assigned to a defer
+// decision. Surfaces on the receipt row until the deferral is resolved or
+// times out.
+const resultStatusDeferred = "deferred"
+
 // HashInput collects every byte that participates in the receipt hash. The
 // receipt generator constructs one of these per insert, computes the hash,
 // and persists both the input and its hash.
 type HashInput struct {
-	Sequence       int64
-	PrevHash       []byte
-	RecordedAtUnix int64
-	SessionID      uuid.UUID
-	ActionID       uuid.UUID
-	EventID        uuid.UUID
-	Agent          string
-	Tool           string
-	ActionType     string
-	Project        string
-	Decision       string
-	Severity       string
-	Message        string
-	MatchedRuleIDs []string
-	ResultStatus   string
-	DurationMS     int64
-	ErrorMessage   string
-	Snapshot       map[string]interface{}
-	ActionPayload  map[string]interface{}
-	SubagentID     string
-	SubagentType   string
-	PolicyHash     []byte
+	Sequence           int64
+	PrevHash           []byte
+	RecordedAtUnix     int64
+	SessionID          uuid.UUID
+	ActionID           uuid.UUID
+	EventID            uuid.UUID
+	Agent              string
+	Tool               string
+	ActionType         string
+	Project            string
+	Decision           string
+	Severity           string
+	Message            string
+	MatchedRuleIDs     []string
+	ResultStatus       string
+	DurationMS         int64
+	ErrorMessage       string
+	Snapshot           map[string]interface{}
+	ActionPayload      map[string]interface{}
+	SubagentID         string
+	SubagentType       string
+	PolicyHash         []byte
+	DeferReason        string
+	DeferralOfSequence int64
 }
 
 // DeriveInsertResultStatus returns the insert-time result_status implied by
-// the policy decision. Blocked decisions short-circuit to "blocked", every
-// other decision starts as "pending" and is later promoted by
-// UpdateReceiptResult. Used by both the insert path and the verifier so the
-// hash inputs always agree.
+// the policy decision. Blocked decisions short-circuit to "blocked", deferred
+// decisions short-circuit to "deferred", every other decision starts as
+// "pending" and is later promoted by UpdateReceiptResult. Used by both the
+// insert path and the verifier so the hash inputs always agree.
 func DeriveInsertResultStatus(decision string) string {
-	if decision == string(model.DecisionBlock) {
+	switch decision {
+	case string(model.DecisionBlock):
 		return string(model.ResultBlocked)
+	case string(model.DecisionDefer):
+		return resultStatusDeferred
 	}
 	return resultStatusPending
 }
@@ -151,25 +163,27 @@ const (
 // constructor applies (duration_ms, error_message). The caller passes the raw
 // fields; NewHashInput owns the derivation rules.
 type HashInputFields struct {
-	Sequence       int64
-	PrevHash       []byte
-	RecordedAtUnix int64
-	SessionID      uuid.UUID
-	ActionID       uuid.UUID
-	EventID        uuid.UUID
-	Agent          string
-	Tool           string
-	ActionType     string
-	Project        string
-	Decision       string
-	Severity       string
-	Message        string
-	MatchedRuleIDs []string
-	Snapshot       map[string]interface{}
-	ActionPayload  map[string]interface{}
-	SubagentID     string
-	SubagentType   string
-	PolicyHash     []byte
+	Sequence           int64
+	PrevHash           []byte
+	RecordedAtUnix     int64
+	SessionID          uuid.UUID
+	ActionID           uuid.UUID
+	EventID            uuid.UUID
+	Agent              string
+	Tool               string
+	ActionType         string
+	Project            string
+	Decision           string
+	Severity           string
+	Message            string
+	MatchedRuleIDs     []string
+	Snapshot           map[string]interface{}
+	ActionPayload      map[string]interface{}
+	SubagentID         string
+	SubagentType       string
+	PolicyHash         []byte
+	DeferReason        string
+	DeferralOfSequence int64
 }
 
 // NewHashInput builds a *HashInput from the explicit row fields, applying the
@@ -181,28 +195,30 @@ type HashInputFields struct {
 func NewHashInput(f HashInputFields) *HashInput {
 	insertDecision := DeriveInsertDecision(f.Decision)
 	return &HashInput{
-		Sequence:       f.Sequence,
-		PrevHash:       f.PrevHash,
-		RecordedAtUnix: f.RecordedAtUnix,
-		SessionID:      f.SessionID,
-		ActionID:       f.ActionID,
-		EventID:        f.EventID,
-		Agent:          f.Agent,
-		Tool:           f.Tool,
-		ActionType:     f.ActionType,
-		Project:        f.Project,
-		Decision:       insertDecision,
-		Severity:       f.Severity,
-		Message:        f.Message,
-		MatchedRuleIDs: f.MatchedRuleIDs,
-		ResultStatus:   DeriveInsertResultStatus(insertDecision),
-		DurationMS:     0,
-		ErrorMessage:   "",
-		Snapshot:       f.Snapshot,
-		ActionPayload:  f.ActionPayload,
-		SubagentID:     f.SubagentID,
-		SubagentType:   f.SubagentType,
-		PolicyHash:     f.PolicyHash,
+		Sequence:           f.Sequence,
+		PrevHash:           f.PrevHash,
+		RecordedAtUnix:     f.RecordedAtUnix,
+		SessionID:          f.SessionID,
+		ActionID:           f.ActionID,
+		EventID:            f.EventID,
+		Agent:              f.Agent,
+		Tool:               f.Tool,
+		ActionType:         f.ActionType,
+		Project:            f.Project,
+		Decision:           insertDecision,
+		Severity:           f.Severity,
+		Message:            f.Message,
+		MatchedRuleIDs:     f.MatchedRuleIDs,
+		ResultStatus:       DeriveInsertResultStatus(insertDecision),
+		DurationMS:         0,
+		ErrorMessage:       "",
+		Snapshot:           f.Snapshot,
+		ActionPayload:      f.ActionPayload,
+		SubagentID:         f.SubagentID,
+		SubagentType:       f.SubagentType,
+		PolicyHash:         f.PolicyHash,
+		DeferReason:        f.DeferReason,
+		DeferralOfSequence: f.DeferralOfSequence,
 	}
 }
 
@@ -292,6 +308,12 @@ func ComputeHash(in *HashInput) ([]byte, error) {
 		return nil, err
 	}
 	if err := writeBytes(&buf, in.PolicyHash); err != nil {
+		return nil, err
+	}
+	if err := writeString(&buf, in.DeferReason); err != nil {
+		return nil, err
+	}
+	if err := writeInt64(&buf, in.DeferralOfSequence); err != nil {
 		return nil, err
 	}
 

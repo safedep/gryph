@@ -293,6 +293,56 @@ rules:
 	assert.Equal(t, string(model.ResultBlocked), rec.decisionCalls[0].status)
 }
 
+func TestMediator_DeferRecordsReceiptAndInvokesHook(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: defer-on-classify
+    action: defer
+    reason: wait_for_classification
+    match: { action_types: [file_write] }
+`))
+	require.NoError(t, err)
+
+	rec := &spyReceiptGenerator{}
+	hookCalls := 0
+	var capturedReason string
+	var capturedReceiptSeq int64
+	med, err := NewMediator(policy,
+		WithReceiptGenerator(rec),
+		WithDeferralConfig(DeferralConfig{Enabled: true, TimeoutSeconds: 600}),
+		WithDeferralHook(func(_ context.Context, r DeferralRecord) (uuid.UUID, string, error) {
+			hookCalls++
+			capturedReason = r.Reason
+			capturedReceiptSeq = r.ReceiptSequence
+			return uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+				"Resolve with `gryph policy deferrals resolve --id aaaaaaaa`.",
+				nil
+		}),
+	)
+	require.NoError(t, err)
+	event := &events.Event{
+		ID:         uuid.New(),
+		SessionID:  uuid.New(),
+		Timestamp:  time.Now(),
+		ActionType: events.ActionFileWrite,
+		AgentName:  "claude-code",
+		Payload:    []byte(`{"path":"/work/main.go"}`),
+	}
+	res, err := med.Check(context.Background(), event)
+	require.NoError(t, err)
+	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
+	assert.Contains(t, res.Reason, "Action deferred:")
+	assert.Contains(t, res.Reason, "wait_for_classification")
+	assert.Contains(t, res.Reason, "aaaaaaaa")
+	require.Len(t, rec.records, 1)
+	assert.Equal(t, string(model.DecisionDefer), string(rec.records[0].Decision.Decision))
+	assert.Equal(t, "wait_for_classification", rec.records[0].DeferReason)
+	assert.Equal(t, 1, hookCalls)
+	assert.Equal(t, "wait_for_classification", capturedReason)
+	assert.Equal(t, int64(1), capturedReceiptSeq)
+}
+
 func TestMediator_EscalateDefaultDenies(t *testing.T) {
 	policy, err := pdp.ParsePolicy([]byte(`
 version: "1"

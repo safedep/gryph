@@ -33,6 +33,18 @@ func (f AarmContextStateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.V
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AarmContextStateMutation", m)
 }
 
+// The AarmDeferredActionFunc type is an adapter to allow the use of ordinary
+// function as AarmDeferredAction mutator.
+type AarmDeferredActionFunc func(context.Context, *ent.AarmDeferredActionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AarmDeferredActionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AarmDeferredActionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AarmDeferredActionMutation", m)
+}
+
 // The AarmReceiptFunc type is an adapter to allow the use of ordinary
 // function as AarmReceipt mutator.
 type AarmReceiptFunc func(context.Context, *ent.AarmReceiptMutation) (ent.Value, error)

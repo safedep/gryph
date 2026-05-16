@@ -68,6 +68,11 @@ func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".receipts.sign_mode", SignModeAuto)
 	v.SetDefault(prefix+".receipts.key_path", "")
 	v.SetDefault(prefix+".receipts.trust_store", "")
+	v.SetDefault(prefix+".defer.enabled", true)
+	v.SetDefault(prefix+".defer.fresh_session_seconds", 60)
+	v.SetDefault(prefix+".defer.conflict_triggers_defer", true)
+	v.SetDefault(prefix+".defer.timeout_seconds", 600)
+	v.SetDefault(prefix+".defer.auto_resolve_on_timeout", DeferAutoResolveDeny)
 }
 
 // defaultSensitivePaths returns the default list of sensitive path patterns.

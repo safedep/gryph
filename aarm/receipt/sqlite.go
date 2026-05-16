@@ -103,9 +103,14 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 		}
 
 		next.PolicyHash = in.PolicyHash
+		next.DeferReason = in.DeferReason
+		if in.DeferralOfSequence != nil {
+			v := *in.DeferralOfSequence
+			next.DeferralOfSequence = &v
+		}
 		next.ResultStatus = DeriveInsertResultStatus(next.Decision)
 
-		hashInput := NewHashInput(HashInputFields{
+		hashFields := HashInputFields{
 			Sequence:       next.Sequence,
 			PrevHash:       next.PrevHash,
 			RecordedAtUnix: next.RecordedAt.UnixNano(),
@@ -125,7 +130,12 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 			SubagentID:     next.SubagentID,
 			SubagentType:   next.SubagentType,
 			PolicyHash:     next.PolicyHash,
-		})
+			DeferReason:    next.DeferReason,
+		}
+		if next.DeferralOfSequence != nil {
+			hashFields.DeferralOfSequence = *next.DeferralOfSequence
+		}
+		hashInput := NewHashInput(hashFields)
 		hash, err := ComputeHash(hashInput)
 		if err != nil {
 			return nil, fmt.Errorf("compute hash: %w", err)

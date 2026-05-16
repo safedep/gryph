@@ -58,6 +58,7 @@ func NewPolicyCmd() *cobra.Command {
 		receiptsCmd,
 		newPolicyApproveCmd(),
 		newPolicyKeysCmd(),
+		newPolicyDeferralsCmd(),
 	)
 
 	return cmd
@@ -597,7 +598,7 @@ func decorateDecision(c *tui.Colorizer, d string) string {
 	switch model.Decision(d) {
 	case model.DecisionBlock:
 		return c.Error(upper)
-	case model.DecisionEscalate:
+	case model.DecisionEscalate, model.DecisionDefer:
 		return c.Warning(upper)
 	case model.DecisionGuidance, model.DecisionWarn:
 		return c.Warning(upper)
@@ -705,6 +706,16 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 		if store != nil {
 			opts = append(opts, aarmsec.WithApprovalAuditHook(newApprovalAuditHook(store)))
 		}
+
+		opts = append(opts, aarmsec.WithDeferralConfig(aarmsec.DeferralConfig{
+			Enabled:               policyCfg.Defer.Enabled,
+			TimeoutSeconds:        policyCfg.Defer.TimeoutSeconds,
+			FreshSessionSeconds:   policyCfg.Defer.FreshSessionSeconds,
+			ConflictTriggersDefer: policyCfg.Defer.ConflictTriggersDefer,
+		}))
+		if store != nil {
+			opts = append(opts, aarmsec.WithDeferralHook(newDeferralHook(store)))
+		}
 	}
 	return aarmsec.NewMediator(policy, opts...)
 }
@@ -748,6 +759,69 @@ func (a *auditingReceiptGenerator) UpdateResult(ctx context.Context, sessionID u
 
 func (a *auditingReceiptGenerator) UpdateDecision(ctx context.Context, sessionID uuid.UUID, sequence int64, decision string, resultStatus string, note string) error {
 	return a.inner.UpdateDecision(ctx, sessionID, sequence, decision, resultStatus, note)
+}
+
+// newDeferralHook returns the Mediator DeferralHook that persists the
+// pending-deferral row, emits the deferral_requested self-audit row, and
+// renders the CLI-shaped operator hint the Mediator splices into the
+// agent-facing block message. Keeping the hint here (instead of inside
+// aarm) lets aarm stay decoupled from CLI command spellings.
+func newDeferralHook(store storage.Store) aarmsec.DeferralHook {
+	return func(ctx context.Context, r aarmsec.DeferralRecord) (uuid.UUID, string, error) {
+		if store == nil {
+			return uuid.Nil, "", nil
+		}
+		row := &storage.DeferredActionRow{
+			ID:              uuid.New(),
+			SessionID:       r.SessionID,
+			ReceiptSequence: r.ReceiptSequence,
+			ActionID:        r.ActionID,
+			DeferredAt:      r.DeferredAt,
+			ExpiresAt:       r.ExpiresAt,
+			Reason:          r.Reason,
+			Status:          storage.DeferredActionStatusPending,
+		}
+		if err := store.InsertDeferredAction(ctx, row); err != nil {
+			log.Errorf("failed to insert deferred action: %v", err)
+			return uuid.Nil, "", err
+		}
+		details := map[string]interface{}{
+			"session_id":         r.SessionID.String(),
+			"action_id":          r.ActionID.String(),
+			"receipt_sequence":   r.ReceiptSequence,
+			"deferred_action_id": row.ID.String(),
+			"reason":             r.Reason,
+			"expires_at":         r.ExpiresAt.Format(time.RFC3339),
+		}
+		agent := ""
+		if r.Action != nil {
+			agent = r.Action.Agent
+			details["agent"] = r.Action.Agent
+			details["tool"] = r.Action.Tool
+			details["action_type"] = string(r.Action.Type)
+		}
+		if r.Decision != nil {
+			details["matched_rule_ids"] = r.Decision.MatchedRuleIDs
+		}
+		if err := logSelfAudit(ctx, store, SelfAuditActionDeferralRequested, agent,
+			details, SelfAuditResultSuccess, ""); err != nil {
+			log.Errorf("failed to record deferral_requested audit: %v", err)
+		}
+		hint := fmt.Sprintf("Resolve with `gryph policy deferrals resolve --id %s`.",
+			shortDeferralID(row.ID))
+		return row.ID, hint, nil
+	}
+}
+
+// shortDeferralID renders the 8-character prefix used in operator hints.
+// Falls back to the full string for IDs that are somehow shorter so the
+// hint always references something the operator can act on.
+func shortDeferralID(id uuid.UUID) string {
+	s := id.String()
+	if len(s) >= 8 {
+		return s[:8]
+	}
+	return s
 }
 
 func newApprovalAuditHook(store storage.Store) aarmsec.ApprovalAuditHook {

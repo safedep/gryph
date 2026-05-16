@@ -18,6 +18,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/safedep/gryph/storage/ent/aarmcontextaction"
 	"github.com/safedep/gryph/storage/ent/aarmcontextstate"
+	"github.com/safedep/gryph/storage/ent/aarmdeferredaction"
 	"github.com/safedep/gryph/storage/ent/aarmreceipt"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
@@ -35,6 +36,8 @@ type Client struct {
 	AarmContextAction *AarmContextActionClient
 	// AarmContextState is the client for interacting with the AarmContextState builders.
 	AarmContextState *AarmContextStateClient
+	// AarmDeferredAction is the client for interacting with the AarmDeferredAction builders.
+	AarmDeferredAction *AarmDeferredActionClient
 	// AarmReceipt is the client for interacting with the AarmReceipt builders.
 	AarmReceipt *AarmReceiptClient
 	// AuditEvent is the client for interacting with the AuditEvent builders.
@@ -60,6 +63,7 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.AarmContextAction = NewAarmContextActionClient(c.config)
 	c.AarmContextState = NewAarmContextStateClient(c.config)
+	c.AarmDeferredAction = NewAarmDeferredActionClient(c.config)
 	c.AarmReceipt = NewAarmReceiptClient(c.config)
 	c.AuditEvent = NewAuditEventClient(c.config)
 	c.AuditStreamCursor = NewAuditStreamCursorClient(c.config)
@@ -156,16 +160,17 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:               ctx,
-		config:            cfg,
-		AarmContextAction: NewAarmContextActionClient(cfg),
-		AarmContextState:  NewAarmContextStateClient(cfg),
-		AarmReceipt:       NewAarmReceiptClient(cfg),
-		AuditEvent:        NewAuditEventClient(cfg),
-		AuditStreamCursor: NewAuditStreamCursorClient(cfg),
-		EventStreamCursor: NewEventStreamCursorClient(cfg),
-		SelfAudit:         NewSelfAuditClient(cfg),
-		Session:           NewSessionClient(cfg),
+		ctx:                ctx,
+		config:             cfg,
+		AarmContextAction:  NewAarmContextActionClient(cfg),
+		AarmContextState:   NewAarmContextStateClient(cfg),
+		AarmDeferredAction: NewAarmDeferredActionClient(cfg),
+		AarmReceipt:        NewAarmReceiptClient(cfg),
+		AuditEvent:         NewAuditEventClient(cfg),
+		AuditStreamCursor:  NewAuditStreamCursorClient(cfg),
+		EventStreamCursor:  NewEventStreamCursorClient(cfg),
+		SelfAudit:          NewSelfAuditClient(cfg),
+		Session:            NewSessionClient(cfg),
 	}, nil
 }
 
@@ -183,16 +188,17 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:               ctx,
-		config:            cfg,
-		AarmContextAction: NewAarmContextActionClient(cfg),
-		AarmContextState:  NewAarmContextStateClient(cfg),
-		AarmReceipt:       NewAarmReceiptClient(cfg),
-		AuditEvent:        NewAuditEventClient(cfg),
-		AuditStreamCursor: NewAuditStreamCursorClient(cfg),
-		EventStreamCursor: NewEventStreamCursorClient(cfg),
-		SelfAudit:         NewSelfAuditClient(cfg),
-		Session:           NewSessionClient(cfg),
+		ctx:                ctx,
+		config:             cfg,
+		AarmContextAction:  NewAarmContextActionClient(cfg),
+		AarmContextState:   NewAarmContextStateClient(cfg),
+		AarmDeferredAction: NewAarmDeferredActionClient(cfg),
+		AarmReceipt:        NewAarmReceiptClient(cfg),
+		AuditEvent:         NewAuditEventClient(cfg),
+		AuditStreamCursor:  NewAuditStreamCursorClient(cfg),
+		EventStreamCursor:  NewEventStreamCursorClient(cfg),
+		SelfAudit:          NewSelfAuditClient(cfg),
+		Session:            NewSessionClient(cfg),
 	}, nil
 }
 
@@ -222,8 +228,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AarmContextAction, c.AarmContextState, c.AarmReceipt, c.AuditEvent,
-		c.AuditStreamCursor, c.EventStreamCursor, c.SelfAudit, c.Session,
+		c.AarmContextAction, c.AarmContextState, c.AarmDeferredAction, c.AarmReceipt,
+		c.AuditEvent, c.AuditStreamCursor, c.EventStreamCursor, c.SelfAudit, c.Session,
 	} {
 		n.Use(hooks...)
 	}
@@ -233,8 +239,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AarmContextAction, c.AarmContextState, c.AarmReceipt, c.AuditEvent,
-		c.AuditStreamCursor, c.EventStreamCursor, c.SelfAudit, c.Session,
+		c.AarmContextAction, c.AarmContextState, c.AarmDeferredAction, c.AarmReceipt,
+		c.AuditEvent, c.AuditStreamCursor, c.EventStreamCursor, c.SelfAudit, c.Session,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -247,6 +253,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AarmContextAction.mutate(ctx, m)
 	case *AarmContextStateMutation:
 		return c.AarmContextState.mutate(ctx, m)
+	case *AarmDeferredActionMutation:
+		return c.AarmDeferredAction.mutate(ctx, m)
 	case *AarmReceiptMutation:
 		return c.AarmReceipt.mutate(ctx, m)
 	case *AuditEventMutation:
@@ -527,6 +535,139 @@ func (c *AarmContextStateClient) mutate(ctx context.Context, m *AarmContextState
 		return (&AarmContextStateDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AarmContextState mutation op: %q", m.Op())
+	}
+}
+
+// AarmDeferredActionClient is a client for the AarmDeferredAction schema.
+type AarmDeferredActionClient struct {
+	config
+}
+
+// NewAarmDeferredActionClient returns a client for the AarmDeferredAction from the given config.
+func NewAarmDeferredActionClient(c config) *AarmDeferredActionClient {
+	return &AarmDeferredActionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `aarmdeferredaction.Hooks(f(g(h())))`.
+func (c *AarmDeferredActionClient) Use(hooks ...Hook) {
+	c.hooks.AarmDeferredAction = append(c.hooks.AarmDeferredAction, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `aarmdeferredaction.Intercept(f(g(h())))`.
+func (c *AarmDeferredActionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AarmDeferredAction = append(c.inters.AarmDeferredAction, interceptors...)
+}
+
+// Create returns a builder for creating a AarmDeferredAction entity.
+func (c *AarmDeferredActionClient) Create() *AarmDeferredActionCreate {
+	mutation := newAarmDeferredActionMutation(c.config, OpCreate)
+	return &AarmDeferredActionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AarmDeferredAction entities.
+func (c *AarmDeferredActionClient) CreateBulk(builders ...*AarmDeferredActionCreate) *AarmDeferredActionCreateBulk {
+	return &AarmDeferredActionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AarmDeferredActionClient) MapCreateBulk(slice any, setFunc func(*AarmDeferredActionCreate, int)) *AarmDeferredActionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AarmDeferredActionCreateBulk{err: fmt.Errorf("calling to AarmDeferredActionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AarmDeferredActionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AarmDeferredActionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AarmDeferredAction.
+func (c *AarmDeferredActionClient) Update() *AarmDeferredActionUpdate {
+	mutation := newAarmDeferredActionMutation(c.config, OpUpdate)
+	return &AarmDeferredActionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AarmDeferredActionClient) UpdateOne(_m *AarmDeferredAction) *AarmDeferredActionUpdateOne {
+	mutation := newAarmDeferredActionMutation(c.config, OpUpdateOne, withAarmDeferredAction(_m))
+	return &AarmDeferredActionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AarmDeferredActionClient) UpdateOneID(id uuid.UUID) *AarmDeferredActionUpdateOne {
+	mutation := newAarmDeferredActionMutation(c.config, OpUpdateOne, withAarmDeferredActionID(id))
+	return &AarmDeferredActionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AarmDeferredAction.
+func (c *AarmDeferredActionClient) Delete() *AarmDeferredActionDelete {
+	mutation := newAarmDeferredActionMutation(c.config, OpDelete)
+	return &AarmDeferredActionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AarmDeferredActionClient) DeleteOne(_m *AarmDeferredAction) *AarmDeferredActionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AarmDeferredActionClient) DeleteOneID(id uuid.UUID) *AarmDeferredActionDeleteOne {
+	builder := c.Delete().Where(aarmdeferredaction.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AarmDeferredActionDeleteOne{builder}
+}
+
+// Query returns a query builder for AarmDeferredAction.
+func (c *AarmDeferredActionClient) Query() *AarmDeferredActionQuery {
+	return &AarmDeferredActionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAarmDeferredAction},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AarmDeferredAction entity by its id.
+func (c *AarmDeferredActionClient) Get(ctx context.Context, id uuid.UUID) (*AarmDeferredAction, error) {
+	return c.Query().Where(aarmdeferredaction.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AarmDeferredActionClient) GetX(ctx context.Context, id uuid.UUID) *AarmDeferredAction {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AarmDeferredActionClient) Hooks() []Hook {
+	return c.hooks.AarmDeferredAction
+}
+
+// Interceptors returns the client interceptors.
+func (c *AarmDeferredActionClient) Interceptors() []Interceptor {
+	return c.inters.AarmDeferredAction
+}
+
+func (c *AarmDeferredActionClient) mutate(ctx context.Context, m *AarmDeferredActionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AarmDeferredActionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AarmDeferredActionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AarmDeferredActionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AarmDeferredActionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AarmDeferredAction mutation op: %q", m.Op())
 	}
 }
 
@@ -1363,11 +1504,12 @@ func (c *SessionClient) mutate(ctx context.Context, m *SessionMutation) (Value, 
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AarmContextAction, AarmContextState, AarmReceipt, AuditEvent, AuditStreamCursor,
-		EventStreamCursor, SelfAudit, Session []ent.Hook
+		AarmContextAction, AarmContextState, AarmDeferredAction, AarmReceipt,
+		AuditEvent, AuditStreamCursor, EventStreamCursor, SelfAudit, Session []ent.Hook
 	}
 	inters struct {
-		AarmContextAction, AarmContextState, AarmReceipt, AuditEvent, AuditStreamCursor,
-		EventStreamCursor, SelfAudit, Session []ent.Interceptor
+		AarmContextAction, AarmContextState, AarmDeferredAction, AarmReceipt,
+		AuditEvent, AuditStreamCursor, EventStreamCursor, SelfAudit,
+		Session []ent.Interceptor
 	}
 )

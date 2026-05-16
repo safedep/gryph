@@ -137,33 +137,35 @@ func (e *SQLiteExporter) Export(ctx context.Context, w io.Writer, opts ExportOpt
 // ExportedReceipt is the JSONL row shape. Snapshot and ActionPayload preserve
 // their raw map representation so downstream consumers can re-derive the hash.
 type ExportedReceipt struct {
-	ID             string                 `json:"id"`
-	SessionID      string                 `json:"session_id"`
-	ActionID       string                 `json:"action_id,omitempty"`
-	EventID        string                 `json:"event_id,omitempty"`
-	Sequence       int64                  `json:"sequence"`
-	RecordedAt     string                 `json:"recorded_at"`
-	RecordedAtUnix int64                  `json:"recorded_at_unix_ns"`
-	Agent          string                 `json:"agent,omitempty"`
-	Tool           string                 `json:"tool,omitempty"`
-	ActionType     string                 `json:"action_type"`
-	Project        string                 `json:"project,omitempty"`
-	Decision       string                 `json:"decision"`
-	MatchedRuleIDs []string               `json:"matched_rule_ids,omitempty"`
-	Severity       string                 `json:"severity,omitempty"`
-	Message        string                 `json:"message,omitempty"`
-	ResultStatus   string                 `json:"result_status"`
-	DurationMS     *int64                 `json:"duration_ms,omitempty"`
-	ErrorMessage   string                 `json:"error_message,omitempty"`
-	Snapshot       map[string]interface{} `json:"snapshot,omitempty"`
-	ActionPayload  map[string]interface{} `json:"action_payload,omitempty"`
-	PrevHash       string                 `json:"prev_hash,omitempty"`
-	Hash           string                 `json:"hash"`
-	SubagentID     string                 `json:"subagent_id,omitempty"`
-	SubagentType   string                 `json:"subagent_type,omitempty"`
-	PolicyHash     string                 `json:"policy_hash,omitempty"`
-	SignerKeyID    string                 `json:"signer_key_id,omitempty"`
-	Signature      string                 `json:"signature,omitempty"`
+	ID                 string                 `json:"id"`
+	SessionID          string                 `json:"session_id"`
+	ActionID           string                 `json:"action_id,omitempty"`
+	EventID            string                 `json:"event_id,omitempty"`
+	Sequence           int64                  `json:"sequence"`
+	RecordedAt         string                 `json:"recorded_at"`
+	RecordedAtUnix     int64                  `json:"recorded_at_unix_ns"`
+	Agent              string                 `json:"agent,omitempty"`
+	Tool               string                 `json:"tool,omitempty"`
+	ActionType         string                 `json:"action_type"`
+	Project            string                 `json:"project,omitempty"`
+	Decision           string                 `json:"decision"`
+	MatchedRuleIDs     []string               `json:"matched_rule_ids,omitempty"`
+	Severity           string                 `json:"severity,omitempty"`
+	Message            string                 `json:"message,omitempty"`
+	ResultStatus       string                 `json:"result_status"`
+	DurationMS         *int64                 `json:"duration_ms,omitempty"`
+	ErrorMessage       string                 `json:"error_message,omitempty"`
+	Snapshot           map[string]interface{} `json:"snapshot,omitempty"`
+	ActionPayload      map[string]interface{} `json:"action_payload,omitempty"`
+	PrevHash           string                 `json:"prev_hash,omitempty"`
+	Hash               string                 `json:"hash"`
+	SubagentID         string                 `json:"subagent_id,omitempty"`
+	SubagentType       string                 `json:"subagent_type,omitempty"`
+	PolicyHash         string                 `json:"policy_hash,omitempty"`
+	SignerKeyID        string                 `json:"signer_key_id,omitempty"`
+	Signature          string                 `json:"signature,omitempty"`
+	DeferReason        string                 `json:"defer_reason,omitempty"`
+	DeferralOfSequence *int64                 `json:"deferral_of_sequence,omitempty"`
 }
 
 // ToExported converts a storage.ReceiptRow into the export shape. When
@@ -210,6 +212,13 @@ func ToExported(r *storage.ReceiptRow, includeSig bool) ExportedReceipt {
 			out.Signature = base64.StdEncoding.EncodeToString(r.Signature)
 		}
 	}
+	if r.DeferReason != "" {
+		out.DeferReason = r.DeferReason
+	}
+	if r.DeferralOfSequence != nil {
+		v := *r.DeferralOfSequence
+		out.DeferralOfSequence = &v
+	}
 	return out
 }
 
@@ -246,6 +255,7 @@ func csvHeaders(includeSig bool) []string {
 		"result_status", "duration_ms", "error_message",
 		"prev_hash", "hash",
 		"subagent_id", "subagent_type", "policy_hash",
+		"defer_reason", "deferral_of_sequence",
 	}
 	if includeSig {
 		h = append(h, "signature", "signer_key_id")
@@ -271,6 +281,10 @@ func csvRow(r *storage.ReceiptRow, includeSig bool) []string {
 	if r.DurationMS != nil {
 		duration = strconv.FormatInt(*r.DurationMS, 10)
 	}
+	deferralOfSequence := ""
+	if r.DeferralOfSequence != nil {
+		deferralOfSequence = strconv.FormatInt(*r.DeferralOfSequence, 10)
+	}
 	row := []string{
 		r.ID.String(),
 		r.SessionID.String(),
@@ -295,6 +309,8 @@ func csvRow(r *storage.ReceiptRow, includeSig bool) []string {
 		r.SubagentID,
 		r.SubagentType,
 		hex.EncodeToString(r.PolicyHash),
+		r.DeferReason,
+		deferralOfSequence,
 	}
 	if includeSig {
 		row = append(row, base64.StdEncoding.EncodeToString(r.Signature), r.SignerKeyID)

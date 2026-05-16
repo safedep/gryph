@@ -3,6 +3,7 @@ package pdp
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/stretchr/testify/assert"
@@ -363,4 +364,369 @@ func mustPolicy(t *testing.T, data string) *Policy {
 	policy, err := ParsePolicy([]byte(data))
 	require.NoError(t, err)
 	return policy
+}
+
+func TestParsePolicy_DeferRequiresReason(t *testing.T) {
+	t.Run("defer with empty reason rejected", func(t *testing.T) {
+		_, err := ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: defer-no-reason
+    action: defer
+    match:
+      action_types: [file_write]
+`))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "requires a non-empty reason")
+	})
+
+	t.Run("defer with reason parses", func(t *testing.T) {
+		p, err := ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: defer-on-classify
+    action: defer
+    reason: wait_for_classification
+    match:
+      action_types: [file_write]
+`))
+		require.NoError(t, err)
+		require.Len(t, p.Rules, 1)
+		assert.Equal(t, "wait_for_classification", p.Rules[0].Reason)
+	})
+}
+
+func TestPDP_DeferRuleSurfacesReason(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: defer-on-empty-classify
+    action: defer
+    reason: wait_for_classification
+    match:
+      action_types: [file_write]
+`)
+	engine, err := New(policy)
+	require.NoError(t, err)
+	got, err := engine.Evaluate(context.Background(), &model.Action{
+		Type:       model.ActionFileWrite,
+		Parameters: model.Parameters{Path: "main.go"},
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, model.DecisionDefer, got.Decision)
+	assert.Equal(t, "wait_for_classification", got.DeferReason)
+	assert.Equal(t, []string{"defer-on-empty-classify"}, got.MatchedRuleIDs)
+}
+
+func TestPDP_FreshSessionTriggerFires(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: block-on-many-writes
+    action: block
+    match:
+      action_types: [file_write]
+    condition: "context.files_written > 5"
+    message: blocked
+`)
+	start := time.Now().UTC()
+	engine, err := New(policy,
+		WithDeferConfig(DeferConfig{Enabled: true, FreshSessionSeconds: 60, ConflictTriggersDefer: true}),
+		WithSessionStartFn(func(_ context.Context) (time.Time, bool) { return start, true }),
+	)
+	require.NoError(t, err)
+
+	got, err := engine.Evaluate(context.Background(), &model.Action{
+		Type:       model.ActionFileWrite,
+		Parameters: model.Parameters{Path: "main.go"},
+	}, &model.ContextSnapshot{})
+	require.NoError(t, err)
+	assert.Equal(t, model.DecisionDefer, got.Decision)
+	assert.Equal(t, DeferReasonFreshSession, got.DeferReason)
+}
+
+func TestPDP_FreshSessionTriggerSkippedWhenContextPopulated(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: block-on-many-writes
+    action: block
+    match:
+      action_types: [file_write]
+    condition: "context.files_written > 5"
+    message: blocked
+`)
+	start := time.Now().UTC()
+	engine, err := New(policy,
+		WithDeferConfig(DeferConfig{Enabled: true, FreshSessionSeconds: 60, ConflictTriggersDefer: true}),
+		WithSessionStartFn(func(_ context.Context) (time.Time, bool) { return start, true }),
+	)
+	require.NoError(t, err)
+
+	got, err := engine.Evaluate(context.Background(), &model.Action{
+		Type:       model.ActionFileWrite,
+		Parameters: model.Parameters{Path: "main.go"},
+	}, &model.ContextSnapshot{FilesWritten: 6})
+	require.NoError(t, err)
+	assert.Equal(t, model.DecisionBlock, got.Decision)
+}
+
+func TestPDP_FreshSessionTriggerSkippedWhenSessionOld(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: block-on-many-writes
+    action: block
+    match:
+      action_types: [file_write]
+    condition: "context.files_written > 5"
+    message: blocked
+`)
+	old := time.Now().UTC().Add(-2 * time.Hour)
+	engine, err := New(policy,
+		WithDeferConfig(DeferConfig{Enabled: true, FreshSessionSeconds: 60, ConflictTriggersDefer: true}),
+		WithSessionStartFn(func(_ context.Context) (time.Time, bool) { return old, true }),
+	)
+	require.NoError(t, err)
+	got, err := engine.Evaluate(context.Background(), &model.Action{
+		Type:       model.ActionFileWrite,
+		Parameters: model.Parameters{Path: "main.go"},
+	}, &model.ContextSnapshot{})
+	require.NoError(t, err)
+	assert.Equal(t, model.DecisionAllow, got.Decision)
+}
+
+func TestPDP_ConflictTriggerDoesNotFireAcrossTiers(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: block-env
+    action: block
+    match:
+      file_patterns: ["**/.env"]
+    message: block
+  - id: escalate-env
+    action: escalate
+    match:
+      file_patterns: ["**/.env"]
+    message: escalate
+`)
+	engine, err := New(policy,
+		WithDeferConfig(DeferConfig{Enabled: true, ConflictTriggersDefer: true}),
+	)
+	require.NoError(t, err)
+	got, err := engine.Evaluate(context.Background(), &model.Action{
+		Type:       model.ActionFileRead,
+		Parameters: model.Parameters{Path: "/work/.env"},
+	}, nil)
+	require.NoError(t, err)
+	require.Equal(t, model.DecisionBlock, got.Decision, "no conflict at tier=block, only escalate is at tier=escalate")
+}
+
+func TestPDP_ConflictTriggerSilentAcrossTiers(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: block-env-a
+    action: block
+    match:
+      file_patterns: ["**/.env"]
+    message: block-a
+  - id: defer-env
+    action: defer
+    reason: needs_classification
+    match:
+      file_patterns: ["**/.env"]
+`)
+	engine, err := New(policy,
+		WithDeferConfig(DeferConfig{Enabled: true, ConflictTriggersDefer: true}),
+	)
+	require.NoError(t, err)
+	got, err := engine.Evaluate(context.Background(), &model.Action{
+		Type:       model.ActionFileRead,
+		Parameters: model.Parameters{Path: "/work/.env"},
+	}, nil)
+	require.NoError(t, err)
+	// block (tier 5) wins outright over defer (tier 3); no conflict.
+	assert.Equal(t, model.DecisionBlock, got.Decision)
+}
+
+func TestPDP_ConflictTriggerFiresOnSameTierDifferentDecisions(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: guidance-env
+    action: guidance
+    match:
+      file_patterns: ["**/.env"]
+    message: guidance
+  - id: defer-env
+    action: defer
+    reason: wait_for_classification
+    match:
+      file_patterns: ["**/.env"]
+`)
+	engine, err := New(policy,
+		WithDeferConfig(DeferConfig{Enabled: true, ConflictTriggersDefer: true}),
+	)
+	require.NoError(t, err)
+	// guidance (tier 2) and defer (tier 3) at different tiers; defer wins
+	// outright per the new precedence; no conflict.
+	got, err := engine.Evaluate(context.Background(), &model.Action{
+		Type:       model.ActionFileRead,
+		Parameters: model.Parameters{Path: "/work/.env"},
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, model.DecisionDefer, got.Decision)
+}
+
+func TestPDP_ConflictTriggerFiresWhenTwoDifferentBlocks(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: block-a
+    action: block
+    severity: high
+    match:
+      action_types: [file_read]
+    message: block-a
+  - id: block-b
+    action: block
+    severity: critical
+    match:
+      action_types: [file_read]
+    message: block-b
+`)
+	engine, err := New(policy,
+		WithDeferConfig(DeferConfig{Enabled: true, ConflictTriggersDefer: true}),
+	)
+	require.NoError(t, err)
+	got, err := engine.Evaluate(context.Background(), &model.Action{
+		Type: model.ActionFileRead,
+	}, nil)
+	require.NoError(t, err)
+	// Two block rules at the same tier with different severity are a
+	// structural conflict; the synthetic defer trigger fires.
+	assert.Equal(t, model.DecisionDefer, got.Decision)
+	assert.Equal(t, DeferReasonConflictingPolicies, got.DeferReason)
+}
+
+func TestPDP_ConflictTriggerFiresWhenTagsDiffer(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: block-a
+    action: block
+    severity: high
+    tags: [secrets]
+    match:
+      action_types: [file_read]
+    message: block
+  - id: block-b
+    action: block
+    severity: high
+    tags: [network]
+    match:
+      action_types: [file_read]
+    message: block
+`)
+	engine, err := New(policy,
+		WithDeferConfig(DeferConfig{Enabled: true, ConflictTriggersDefer: true}),
+	)
+	require.NoError(t, err)
+	got, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionFileRead}, nil)
+	require.NoError(t, err)
+	// Same decision and severity, distinct tag sets count as a structural
+	// conflict.
+	assert.Equal(t, model.DecisionDefer, got.Decision)
+	assert.Equal(t, DeferReasonConflictingPolicies, got.DeferReason)
+}
+
+func TestPDP_ConflictTriggerSameStructureDoesNotFire(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: warn-a
+    action: warn
+    severity: medium
+    match:
+      action_types: [file_read]
+    message: differing-message-a
+  - id: warn-b
+    action: warn
+    severity: medium
+    match:
+      action_types: [file_read]
+    message: differing-message-b
+`)
+	engine, err := New(policy,
+		WithDeferConfig(DeferConfig{Enabled: true, ConflictTriggersDefer: true}),
+	)
+	require.NoError(t, err)
+	got, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionFileRead}, nil)
+	require.NoError(t, err)
+	// Same decision and severity with no tags: trivially differing wording
+	// is not a conflict under the structural fingerprint.
+	assert.Equal(t, model.DecisionWarn, got.Decision)
+}
+
+func TestPDP_ConflictTriggerTagOrderingIgnored(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: warn-a
+    action: warn
+    severity: medium
+    tags: [alpha, beta]
+    match:
+      action_types: [file_read]
+    message: m
+  - id: warn-b
+    action: warn
+    severity: medium
+    tags: [beta, alpha]
+    match:
+      action_types: [file_read]
+    message: m
+`)
+	engine, err := New(policy,
+		WithDeferConfig(DeferConfig{Enabled: true, ConflictTriggersDefer: true}),
+	)
+	require.NoError(t, err)
+	got, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionFileRead}, nil)
+	require.NoError(t, err)
+	// Same tag set in different author order must not flip the fingerprint.
+	assert.Equal(t, model.DecisionWarn, got.Decision)
+}
+
+func TestPDP_ConflictTriggerDisabledByConfig(t *testing.T) {
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: block-a
+    action: block
+    match:
+      action_types: [file_read]
+    message: block
+  - id: escalate-a
+    action: escalate
+    match:
+      action_types: [file_read]
+`)
+	engine, err := New(policy,
+		WithDeferConfig(DeferConfig{Enabled: true, ConflictTriggersDefer: false}),
+	)
+	require.NoError(t, err)
+	got, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionFileRead}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, model.DecisionBlock, got.Decision)
+}
+
+func TestCollectContextRefs(t *testing.T) {
+	env, err := conditionEnv()
+	require.NoError(t, err)
+	ast, issues := env.Compile(`context.files_written > 5 && context.tools_used.size() > 0 && action.tool == "x"`)
+	require.NoError(t, issues.Err())
+	refs := collectContextRefs(ast)
+	assert.Equal(t, []string{"files_written", "tools_used"}, refs)
 }

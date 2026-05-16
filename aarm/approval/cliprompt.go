@@ -229,14 +229,21 @@ func strOr(v, fallback string) string {
 	return v
 }
 
-func defaultApprover() string {
-	if v := strings.TrimSpace(os.Getenv("USER")); v != "" {
-		return v
-	}
-	if v := strings.TrimSpace(os.Getenv("LOGNAME")); v != "" {
-		return v
+// DefaultOperatorIdentity returns the operator's login name from the
+// conventional environment variables (USER, LOGNAME, USERNAME), falling
+// back to "operator" when none are set. Exposed so the CLI deferral
+// commands can reuse the same lookup the CLIPrompt service applies.
+func DefaultOperatorIdentity() string {
+	for _, key := range []string{"USER", "LOGNAME", "USERNAME"} {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			return v
+		}
 	}
 	return "operator"
+}
+
+func defaultApprover() string {
+	return DefaultOperatorIdentity()
 }
 
 var _ Service = (*CLIPrompt)(nil)

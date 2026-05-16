@@ -68,8 +68,12 @@ type AarmReceipt struct {
 	// Signature holds the value of the "signature" field.
 	Signature []byte `json:"signature,omitempty"`
 	// SignerKeyID holds the value of the "signer_key_id" field.
-	SignerKeyID  string `json:"signer_key_id,omitempty"`
-	selectValues sql.SelectValues
+	SignerKeyID string `json:"signer_key_id,omitempty"`
+	// DeferReason holds the value of the "defer_reason" field.
+	DeferReason string `json:"defer_reason,omitempty"`
+	// DeferralOfSequence holds the value of the "deferral_of_sequence" field.
+	DeferralOfSequence *int64 `json:"deferral_of_sequence,omitempty"`
+	selectValues       sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -79,9 +83,9 @@ func (*AarmReceipt) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case aarmreceipt.FieldMatchedRuleIds, aarmreceipt.FieldSnapshot, aarmreceipt.FieldActionPayload, aarmreceipt.FieldPrevHash, aarmreceipt.FieldHash, aarmreceipt.FieldPolicyHash, aarmreceipt.FieldSignature:
 			values[i] = new([]byte)
-		case aarmreceipt.FieldSequence, aarmreceipt.FieldDurationMs:
+		case aarmreceipt.FieldSequence, aarmreceipt.FieldDurationMs, aarmreceipt.FieldDeferralOfSequence:
 			values[i] = new(sql.NullInt64)
-		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSubagentID, aarmreceipt.FieldSubagentType, aarmreceipt.FieldSignerKeyID:
+		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSubagentID, aarmreceipt.FieldSubagentType, aarmreceipt.FieldSignerKeyID, aarmreceipt.FieldDeferReason:
 			values[i] = new(sql.NullString)
 		case aarmreceipt.FieldRecordedAt:
 			values[i] = new(sql.NullTime)
@@ -265,6 +269,19 @@ func (_m *AarmReceipt) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SignerKeyID = value.String
 			}
+		case aarmreceipt.FieldDeferReason:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field defer_reason", values[i])
+			} else if value.Valid {
+				_m.DeferReason = value.String
+			}
+		case aarmreceipt.FieldDeferralOfSequence:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field deferral_of_sequence", values[i])
+			} else if value.Valid {
+				_m.DeferralOfSequence = new(int64)
+				*_m.DeferralOfSequence = value.Int64
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -377,6 +394,14 @@ func (_m *AarmReceipt) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("signer_key_id=")
 	builder.WriteString(_m.SignerKeyID)
+	builder.WriteString(", ")
+	builder.WriteString("defer_reason=")
+	builder.WriteString(_m.DeferReason)
+	builder.WriteString(", ")
+	if v := _m.DeferralOfSequence; v != nil {
+		builder.WriteString("deferral_of_sequence=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

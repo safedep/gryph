@@ -437,6 +437,53 @@ func (_u *AarmReceiptUpdate) ClearSignerKeyID() *AarmReceiptUpdate {
 	return _u
 }
 
+// SetDeferReason sets the "defer_reason" field.
+func (_u *AarmReceiptUpdate) SetDeferReason(v string) *AarmReceiptUpdate {
+	_u.mutation.SetDeferReason(v)
+	return _u
+}
+
+// SetNillableDeferReason sets the "defer_reason" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableDeferReason(v *string) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetDeferReason(*v)
+	}
+	return _u
+}
+
+// ClearDeferReason clears the value of the "defer_reason" field.
+func (_u *AarmReceiptUpdate) ClearDeferReason() *AarmReceiptUpdate {
+	_u.mutation.ClearDeferReason()
+	return _u
+}
+
+// SetDeferralOfSequence sets the "deferral_of_sequence" field.
+func (_u *AarmReceiptUpdate) SetDeferralOfSequence(v int64) *AarmReceiptUpdate {
+	_u.mutation.ResetDeferralOfSequence()
+	_u.mutation.SetDeferralOfSequence(v)
+	return _u
+}
+
+// SetNillableDeferralOfSequence sets the "deferral_of_sequence" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableDeferralOfSequence(v *int64) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetDeferralOfSequence(*v)
+	}
+	return _u
+}
+
+// AddDeferralOfSequence adds value to the "deferral_of_sequence" field.
+func (_u *AarmReceiptUpdate) AddDeferralOfSequence(v int64) *AarmReceiptUpdate {
+	_u.mutation.AddDeferralOfSequence(v)
+	return _u
+}
+
+// ClearDeferralOfSequence clears the value of the "deferral_of_sequence" field.
+func (_u *AarmReceiptUpdate) ClearDeferralOfSequence() *AarmReceiptUpdate {
+	_u.mutation.ClearDeferralOfSequence()
+	return _u
+}
+
 // Mutation returns the AarmReceiptMutation object of the builder.
 func (_u *AarmReceiptUpdate) Mutation() *AarmReceiptMutation {
 	return _u.mutation
@@ -647,6 +694,21 @@ func (_u *AarmReceiptUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.SignerKeyIDCleared() {
 		_spec.ClearField(aarmreceipt.FieldSignerKeyID, field.TypeString)
+	}
+	if value, ok := _u.mutation.DeferReason(); ok {
+		_spec.SetField(aarmreceipt.FieldDeferReason, field.TypeString, value)
+	}
+	if _u.mutation.DeferReasonCleared() {
+		_spec.ClearField(aarmreceipt.FieldDeferReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.DeferralOfSequence(); ok {
+		_spec.SetField(aarmreceipt.FieldDeferralOfSequence, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedDeferralOfSequence(); ok {
+		_spec.AddField(aarmreceipt.FieldDeferralOfSequence, field.TypeInt64, value)
+	}
+	if _u.mutation.DeferralOfSequenceCleared() {
+		_spec.ClearField(aarmreceipt.FieldDeferralOfSequence, field.TypeInt64)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -1076,6 +1138,53 @@ func (_u *AarmReceiptUpdateOne) ClearSignerKeyID() *AarmReceiptUpdateOne {
 	return _u
 }
 
+// SetDeferReason sets the "defer_reason" field.
+func (_u *AarmReceiptUpdateOne) SetDeferReason(v string) *AarmReceiptUpdateOne {
+	_u.mutation.SetDeferReason(v)
+	return _u
+}
+
+// SetNillableDeferReason sets the "defer_reason" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableDeferReason(v *string) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetDeferReason(*v)
+	}
+	return _u
+}
+
+// ClearDeferReason clears the value of the "defer_reason" field.
+func (_u *AarmReceiptUpdateOne) ClearDeferReason() *AarmReceiptUpdateOne {
+	_u.mutation.ClearDeferReason()
+	return _u
+}
+
+// SetDeferralOfSequence sets the "deferral_of_sequence" field.
+func (_u *AarmReceiptUpdateOne) SetDeferralOfSequence(v int64) *AarmReceiptUpdateOne {
+	_u.mutation.ResetDeferralOfSequence()
+	_u.mutation.SetDeferralOfSequence(v)
+	return _u
+}
+
+// SetNillableDeferralOfSequence sets the "deferral_of_sequence" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableDeferralOfSequence(v *int64) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetDeferralOfSequence(*v)
+	}
+	return _u
+}
+
+// AddDeferralOfSequence adds value to the "deferral_of_sequence" field.
+func (_u *AarmReceiptUpdateOne) AddDeferralOfSequence(v int64) *AarmReceiptUpdateOne {
+	_u.mutation.AddDeferralOfSequence(v)
+	return _u
+}
+
+// ClearDeferralOfSequence clears the value of the "deferral_of_sequence" field.
+func (_u *AarmReceiptUpdateOne) ClearDeferralOfSequence() *AarmReceiptUpdateOne {
+	_u.mutation.ClearDeferralOfSequence()
+	return _u
+}
+
 // Mutation returns the AarmReceiptMutation object of the builder.
 func (_u *AarmReceiptUpdateOne) Mutation() *AarmReceiptMutation {
 	return _u.mutation
@@ -1316,6 +1425,21 @@ func (_u *AarmReceiptUpdateOne) sqlSave(ctx context.Context) (_node *AarmReceipt
 	}
 	if _u.mutation.SignerKeyIDCleared() {
 		_spec.ClearField(aarmreceipt.FieldSignerKeyID, field.TypeString)
+	}
+	if value, ok := _u.mutation.DeferReason(); ok {
+		_spec.SetField(aarmreceipt.FieldDeferReason, field.TypeString, value)
+	}
+	if _u.mutation.DeferReasonCleared() {
+		_spec.ClearField(aarmreceipt.FieldDeferReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.DeferralOfSequence(); ok {
+		_spec.SetField(aarmreceipt.FieldDeferralOfSequence, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedDeferralOfSequence(); ok {
+		_spec.AddField(aarmreceipt.FieldDeferralOfSequence, field.TypeInt64, value)
+	}
+	if _u.mutation.DeferralOfSequenceCleared() {
+		_spec.ClearField(aarmreceipt.FieldDeferralOfSequence, field.TypeInt64)
 	}
 	_node = &AarmReceipt{config: _u.config}
 	_spec.Assign = _node.assignValues

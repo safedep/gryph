@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/storage/ent/aarmcontextaction"
 	"github.com/safedep/gryph/storage/ent/aarmcontextstate"
+	"github.com/safedep/gryph/storage/ent/aarmdeferredaction"
 	"github.com/safedep/gryph/storage/ent/aarmreceipt"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
@@ -81,6 +82,20 @@ func init() {
 	aarmcontextstateDescSemanticDrift := aarmcontextstateFields[12].Descriptor()
 	// aarmcontextstate.DefaultSemanticDrift holds the default value on creation for the semantic_drift field.
 	aarmcontextstate.DefaultSemanticDrift = aarmcontextstateDescSemanticDrift.Default.(float64)
+	aarmdeferredactionFields := schema.AarmDeferredAction{}.Fields()
+	_ = aarmdeferredactionFields
+	// aarmdeferredactionDescReceiptSequence is the schema descriptor for receipt_sequence field.
+	aarmdeferredactionDescReceiptSequence := aarmdeferredactionFields[2].Descriptor()
+	// aarmdeferredaction.ReceiptSequenceValidator is a validator for the "receipt_sequence" field. It is called by the builders before save.
+	aarmdeferredaction.ReceiptSequenceValidator = aarmdeferredactionDescReceiptSequence.Validators[0].(func(int64) error)
+	// aarmdeferredactionDescDeferredAt is the schema descriptor for deferred_at field.
+	aarmdeferredactionDescDeferredAt := aarmdeferredactionFields[4].Descriptor()
+	// aarmdeferredaction.DefaultDeferredAt holds the default value on creation for the deferred_at field.
+	aarmdeferredaction.DefaultDeferredAt = aarmdeferredactionDescDeferredAt.Default.(func() time.Time)
+	// aarmdeferredactionDescID is the schema descriptor for id field.
+	aarmdeferredactionDescID := aarmdeferredactionFields[0].Descriptor()
+	// aarmdeferredaction.DefaultID holds the default value on creation for the id field.
+	aarmdeferredaction.DefaultID = aarmdeferredactionDescID.Default.(func() uuid.UUID)
 	aarmreceiptFields := schema.AarmReceipt{}.Fields()
 	_ = aarmreceiptFields
 	// aarmreceiptDescRecordedAt is the schema descriptor for recorded_at field.

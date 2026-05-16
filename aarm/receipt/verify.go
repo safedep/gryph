@@ -29,32 +29,37 @@ type ChainRow struct {
 
 // ChainRowFromReceipt builds a ChainRow from a storage.ReceiptRow.
 func ChainRowFromReceipt(r *storage.ReceiptRow) ChainRow {
+	fields := HashInputFields{
+		Sequence:       r.Sequence,
+		PrevHash:       r.PrevHash,
+		RecordedAtUnix: r.RecordedAt.UnixNano(),
+		SessionID:      r.SessionID,
+		ActionID:       r.ActionID,
+		EventID:        r.EventID,
+		Agent:          r.Agent,
+		Tool:           r.Tool,
+		ActionType:     r.ActionType,
+		Project:        r.Project,
+		Decision:       r.Decision,
+		Severity:       r.Severity,
+		Message:        r.Message,
+		MatchedRuleIDs: r.MatchedRuleIDs,
+		Snapshot:       r.Snapshot,
+		ActionPayload:  r.ActionPayload,
+		SubagentID:     r.SubagentID,
+		SubagentType:   r.SubagentType,
+		PolicyHash:     r.PolicyHash,
+		DeferReason:    r.DeferReason,
+	}
+	if r.DeferralOfSequence != nil {
+		fields.DeferralOfSequence = *r.DeferralOfSequence
+	}
 	return ChainRow{
 		SessionID: r.SessionID,
 		Sequence:  r.Sequence,
 		PrevHash:  r.PrevHash,
 		Hash:      r.Hash,
-		Fields: HashInputFields{
-			Sequence:       r.Sequence,
-			PrevHash:       r.PrevHash,
-			RecordedAtUnix: r.RecordedAt.UnixNano(),
-			SessionID:      r.SessionID,
-			ActionID:       r.ActionID,
-			EventID:        r.EventID,
-			Agent:          r.Agent,
-			Tool:           r.Tool,
-			ActionType:     r.ActionType,
-			Project:        r.Project,
-			Decision:       r.Decision,
-			Severity:       r.Severity,
-			Message:        r.Message,
-			MatchedRuleIDs: r.MatchedRuleIDs,
-			Snapshot:       r.Snapshot,
-			ActionPayload:  r.ActionPayload,
-			SubagentID:     r.SubagentID,
-			SubagentType:   r.SubagentType,
-			PolicyHash:     r.PolicyHash,
-		},
+		Fields:    fields,
 	}
 }
 

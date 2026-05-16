@@ -40,6 +40,7 @@ type Rule struct {
 	Match       Match          `yaml:"match,omitempty"`
 	Scope       Scope          `yaml:"scope,omitempty"`
 	Condition   string         `yaml:"condition,omitempty"`
+	Reason      string         `yaml:"reason,omitempty"`
 }
 
 // Match declares rule match criteria.
@@ -110,6 +111,9 @@ func validateRule(rule Rule) error {
 	if !rule.Severity.IsValid() {
 		return fmt.Errorf("rule %q has invalid severity %q: must be one of %v", rule.ID, rule.Severity, model.AllSeverities)
 	}
+	if rule.Action == model.DecisionDefer && strings.TrimSpace(rule.Reason) == "" {
+		return fmt.Errorf("rule %q action %q requires a non-empty reason", rule.ID, rule.Action)
+	}
 	return nil
 }
 
@@ -122,7 +126,7 @@ func isRuleEnabled(rule Rule) bool {
 
 func isValidDecision(d model.Decision) bool {
 	switch d {
-	case model.DecisionAllow, model.DecisionWarn, model.DecisionGuidance, model.DecisionEscalate, model.DecisionBlock:
+	case model.DecisionAllow, model.DecisionWarn, model.DecisionGuidance, model.DecisionEscalate, model.DecisionBlock, model.DecisionDefer:
 		return true
 	default:
 		return false
@@ -217,6 +221,9 @@ func ruleCanonical(r Rule) map[string]interface{} {
 	}
 	if r.Condition != "" {
 		m["condition"] = r.Condition
+	}
+	if r.Reason != "" {
+		m["reason"] = r.Reason
 	}
 	return m
 }

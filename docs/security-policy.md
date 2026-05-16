@@ -139,11 +139,12 @@ The rendered message is delivered to the agent on stderr for block and guidance 
 | `guidance` | Action proceeds, message delivered to agent | 0 |
 | `block` | Action refused, message delivered to agent | 2 |
 | `escalate` | Action pauses; operator approves or denies via CLI prompt. Approved -> allow. Denied or timed out -> block. See [Approval](#approval-workflow). | 0 or 2 |
+| `defer` | Action is blocked at the hook, recorded as a deferral, and queued for operator resolution. Resolution writes a follow-up receipt. Timeout flips the queue row to deny and writes a deny follow-up receipt. Requires a non-empty `reason`. See [Deferrals](#deferrals). | 2 |
 
 When multiple rules match, the most restrictive wins:
 
 ```
-block > escalate > guidance > warn > allow
+block > escalate > defer > guidance > warn > allow
 ```
 
 ## Commands
@@ -171,6 +172,9 @@ block > escalate > guidance > warn > allow
 | `gryph policy receipts verify-log --input FILE` | Verify an exported chain stand-alone. No database access needed. Verifies signatures when `--trust-store` resolves to a populated store. |
 | `gryph policy approve list` | List pending approval requests. CLI prompts run in-process, so this is always empty in the CLI frontend. |
 | `gryph policy approve history` | Show receipts whose decision was `escalate`, `approved`, `denied`, or `approval_timeout`. |
+| `gryph policy deferrals` | List the pending-deferral queue. `--status` filters to `pending`, `resolved_allow`, `resolved_deny`, `resolved_timeout`, or `all`. `--session ID` scopes to one session. |
+| `gryph policy deferrals resolve --id ID --decision allow|deny [--note TEXT]` | Resolve a queued deferral by id (or id-prefix). Writes a follow-up receipt with `deferral_of_sequence` set, emits a `deferral_resolved` self-audit row. |
+| `gryph policy deferrals sweep [--dry-run]` | Flip every expired pending deferral to `resolved_timeout`, write a deny follow-up receipt for each, emit `deferral_timeout` per row and a `deferral_sweep` summary. |
 
 ### Signing keys
 
@@ -213,6 +217,81 @@ gryph policy context --verify --all-sessions            # every session in the l
 
 The chain is not signed today. The receipt chain remains the authenticated audit log. The context chain is for the policy engine to read and for tamper-evidence within the same database.
 
+## Deferrals
+
+A `defer` decision pauses the agent's tool call by blocking it at the hook,
+records a `defer` receipt with `result_status=deferred`, and queues a
+pending-deferral row that an operator resolves out-of-band (or the timeout
+sweep flips to deny). Gryph mediates synchronously on hooks and cannot resume
+a previously-blocked tool call, so the agent has to re-issue the action after
+resolution if it still wants to perform it.
+
+A defer rule looks like:
+
+```yaml
+- id: defer-on-missing-classification
+  action: defer
+  reason: wait_for_classification
+  match:
+    action_types: [file_write]
+  condition: "size(action.data_classifications) == 0"
+```
+
+The `reason` field is required on defer rules and surfaces on the receipt's
+`defer_reason` column and in the operator-facing block message returned to
+the agent.
+
+### Auto-defer triggers
+
+Two trigger types produce a synthetic defer decision even without an explicit
+`action: defer` rule, when the PDP detects insufficient or conflicting input:
+
+- `fresh_session_insufficient_context` fires when a rule's CEL condition
+  references context fields that are still zero or empty AND the session is
+  younger than `policy.defer.fresh_session_seconds` (default 60). The action
+  defers rather than evaluating against an unfilled snapshot.
+- `conflicting_policies` fires when multiple rules match at the winning
+  severity tier with materially different rendered messages. Each decision
+  lives at its own tier under the precedence scheme, so the practical case
+  this catches is two or more rules of the same decision (e.g. two `block`
+  rules) firing with different justifications. The PDP normally surfaces the
+  first match's message; this trigger surfaces the ambiguity instead. Gated
+  by `policy.defer.conflict_triggers_defer` (default true).
+
+Both triggers are gated by `policy.defer.enabled` (default true).
+
+### Resolution and timeout
+
+Operators inspect the queue with `gryph policy deferrals` and resolve with
+`gryph policy deferrals resolve --id PREFIX --decision allow|deny`. Each
+resolution:
+
+1. Updates the deferral row to `resolved_allow` / `resolved_deny`.
+2. Inserts a follow-up receipt in the same session whose
+   `deferral_of_sequence` points at the original defer receipt's sequence.
+3. Emits a `deferral_resolved` self-audit row.
+
+Timeouts run via `gryph policy deferrals sweep` (also folded into
+`gryph retention cleanup`). Any pending deferral whose `expires_at` is past
+flips to `resolved_timeout` and gets a deny follow-up receipt. AARM R4
+forbids implicit allow on timeout, so the only valid value for
+`policy.defer.auto_resolve_on_timeout` is `deny`.
+
+```yaml
+policy:
+  defer:
+    enabled: true
+    fresh_session_seconds: 60
+    conflict_triggers_defer: true
+    timeout_seconds: 600
+    auto_resolve_on_timeout: deny
+```
+
+The receipt-hash chain stays valid across the deferral lifecycle: the
+follow-up receipt is appended at the next sequence with `prev_hash` pointing
+at the original defer receipt's hash. `gryph policy receipts --verify`
+exercises the entire chain in one pass.
+
 ## Approval workflow
 
 A rule with `action: escalate` pauses the agent's tool call and prompts the operator on `/dev/tty` for approve or deny.
@@ -243,6 +322,12 @@ policy:
 ```
 
 `classify` labels paths and URLs. `injection_score` scans tool-use content for prompt-injection markers and returns a float between 0 and 1. Use them in conditions:
+
+Defer fires automatically on insufficient context (fresh sessions whose
+counters have not filled in yet) and on conflicting policies (multiple rules
+at the same severity returning different decisions), unless disabled via
+`policy.defer.enabled: false`. See [Deferrals](#deferrals).
+
 
 ```yaml
 - id: block-secret-network-write

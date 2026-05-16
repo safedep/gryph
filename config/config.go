@@ -107,7 +107,25 @@ type PolicyConfig struct {
 	Classify       ClassifyConfig       `mapstructure:"classify"`
 	InjectionScore InjectionScoreConfig `mapstructure:"injection_score"`
 	Receipts       ReceiptsConfig       `mapstructure:"receipts"`
+	Defer          DeferConfig          `mapstructure:"defer"`
 }
+
+// DeferConfig configures the deferral service. Enabled gates both the
+// fresh-session and conflicting-policies synthetic defer triggers and the
+// timeout sweep. AutoResolveOnTimeout is constrained to "deny" by AARM R4:
+// timed-out deferrals must never resolve to allow.
+type DeferConfig struct {
+	Enabled               bool   `mapstructure:"enabled"`
+	FreshSessionSeconds   int    `mapstructure:"fresh_session_seconds"`
+	ConflictTriggersDefer bool   `mapstructure:"conflict_triggers_defer"`
+	TimeoutSeconds        int    `mapstructure:"timeout_seconds"`
+	AutoResolveOnTimeout  string `mapstructure:"auto_resolve_on_timeout"`
+}
+
+// DeferAutoResolveDeny is the only valid value for
+// DeferConfig.AutoResolveOnTimeout. AARM R4 forbids implicit allow on
+// deferral timeout, so this constant is the single supported outcome.
+const DeferAutoResolveDeny = "deny"
 
 // ReceiptsConfig configures cryptographic signing for AARM receipts. SignMode
 // defaults to "auto": Gryph signs when a key is present and silently runs

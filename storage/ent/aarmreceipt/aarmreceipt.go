@@ -65,6 +65,10 @@ const (
 	FieldSignature = "signature"
 	// FieldSignerKeyID holds the string denoting the signer_key_id field in the database.
 	FieldSignerKeyID = "signer_key_id"
+	// FieldDeferReason holds the string denoting the defer_reason field in the database.
+	FieldDeferReason = "defer_reason"
+	// FieldDeferralOfSequence holds the string denoting the deferral_of_sequence field in the database.
+	FieldDeferralOfSequence = "deferral_of_sequence"
 	// Table holds the table name of the aarmreceipt in the database.
 	Table = "aarm_receipts"
 )
@@ -97,6 +101,8 @@ var Columns = []string{
 	FieldPolicyHash,
 	FieldSignature,
 	FieldSignerKeyID,
+	FieldDeferReason,
+	FieldDeferralOfSequence,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -137,6 +143,7 @@ const (
 	ResultStatusBlocked  ResultStatus = "blocked"
 	ResultStatusRejected ResultStatus = "rejected"
 	ResultStatusPending  ResultStatus = "pending"
+	ResultStatusDeferred ResultStatus = "deferred"
 )
 
 func (rs ResultStatus) String() string {
@@ -146,7 +153,7 @@ func (rs ResultStatus) String() string {
 // ResultStatusValidator is a validator for the "result_status" field enum values. It is called by the builders before save.
 func ResultStatusValidator(rs ResultStatus) error {
 	switch rs {
-	case ResultStatusSuccess, ResultStatusError, ResultStatusBlocked, ResultStatusRejected, ResultStatusPending:
+	case ResultStatusSuccess, ResultStatusError, ResultStatusBlocked, ResultStatusRejected, ResultStatusPending, ResultStatusDeferred:
 		return nil
 	default:
 		return fmt.Errorf("aarmreceipt: invalid enum value for result_status field: %q", rs)
@@ -249,4 +256,14 @@ func BySubagentType(opts ...sql.OrderTermOption) OrderOption {
 // BySignerKeyID orders the results by the signer_key_id field.
 func BySignerKeyID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSignerKeyID, opts...).ToFunc()
+}
+
+// ByDeferReason orders the results by the defer_reason field.
+func ByDeferReason(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeferReason, opts...).ToFunc()
+}
+
+// ByDeferralOfSequence orders the results by the deferral_of_sequence field.
+func ByDeferralOfSequence(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeferralOfSequence, opts...).ToFunc()
 }

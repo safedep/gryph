@@ -33,9 +33,10 @@ type Generator interface {
 // RecordInput is the input to Generator.Record.
 //
 // result_status is not part of this input. It is derived from the decision
-// inside Generator.Record: "blocked" for a block decision, "pending"
-// otherwise. The same derivation is used by the verifier when re-computing
-// the row hash, so the insert-time and verify-time hash inputs always agree.
+// inside Generator.Record: "blocked" for a block decision, "deferred" for a
+// defer decision, "pending" otherwise. The same derivation is used by the
+// verifier when re-computing the row hash, so the insert-time and verify-time
+// hash inputs always agree.
 type RecordInput struct {
 	SessionID uuid.UUID
 	ActionID  uuid.UUID
@@ -52,6 +53,15 @@ type RecordInput struct {
 	// evaluated under. Persisted on the row and folded into the receipt hash
 	// so a policy edit is visible at verify time.
 	PolicyHash []byte
+
+	// DeferReason populates the receipt's defer_reason column. Set by the
+	// Mediator when persisting a defer decision.
+	DeferReason string
+
+	// DeferralOfSequence ties a follow-up resolution receipt to the original
+	// defer receipt's sequence within the same session. Nil on the original
+	// defer row and on non-resolution receipts.
+	DeferralOfSequence *int64
 }
 
 // Record summarizes a successful Generator.Record call so the Mediator can

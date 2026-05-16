@@ -164,6 +164,22 @@ func validatePolicyConfig(cfg PolicyConfig) error {
 			return fmt.Errorf("policy.receipts.sign_mode=always but key path %s is a directory", keyPath)
 		}
 	}
+	if err := validatePolicyDeferConfig(cfg.Defer); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validatePolicyDeferConfig(cfg DeferConfig) error {
+	if cfg.FreshSessionSeconds < 0 {
+		return fmt.Errorf("policy.defer.fresh_session_seconds must be non-negative")
+	}
+	if cfg.TimeoutSeconds < 0 {
+		return fmt.Errorf("policy.defer.timeout_seconds must be non-negative")
+	}
+	if cfg.AutoResolveOnTimeout != "" && cfg.AutoResolveOnTimeout != DeferAutoResolveDeny {
+		return fmt.Errorf("policy.defer.auto_resolve_on_timeout must be %q (AARM R4 forbids implicit allow on timeout)", DeferAutoResolveDeny)
+	}
 	return nil
 }
 

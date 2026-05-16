@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	"github.com/google/uuid"
@@ -43,7 +44,7 @@ func (AarmReceipt) Fields() []ent.Field {
 		field.String("message").Optional(),
 
 		field.Enum("result_status").
-			Values("success", "error", "blocked", "rejected", "pending").
+			Values("success", "error", "blocked", "rejected", "pending", "deferred").
 			Default("pending"),
 		field.Int64("duration_ms").Optional().Nillable(),
 		field.String("error_message").Optional(),
@@ -60,6 +61,9 @@ func (AarmReceipt) Fields() []ent.Field {
 
 		field.Bytes("signature").Optional(),
 		field.String("signer_key_id").Optional(),
+
+		field.String("defer_reason").Optional(),
+		field.Int64("deferral_of_sequence").Optional().Nillable(),
 	}
 }
 
@@ -76,5 +80,10 @@ func (AarmReceipt) Indexes() []ent.Index {
 		index.Fields("recorded_at"),
 		index.Fields("decision"),
 		index.Fields("action_id"),
+		// Partial index covering follow-up receipts only. Most rows have
+		// deferral_of_sequence = NULL, so the index stays small while
+		// GetFollowUpReceipt becomes an O(log N) point lookup.
+		index.Fields("session_id", "deferral_of_sequence").
+			Annotations(entsql.IndexWhere("deferral_of_sequence IS NOT NULL")),
 	}
 }

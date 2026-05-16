@@ -7,24 +7,62 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/google/cel-go/cel"
+	celast "github.com/google/cel-go/common/ast"
 	"github.com/safedep/gryph/aarm/model"
 )
 
 const conditionTimeout = 100 * time.Millisecond
 
+// Synthetic defer reasons emitted by the auto-defer triggers. Surfaced on the
+// receipt's defer_reason column and on the CheckResult message.
+const (
+	DeferReasonFreshSession        = "fresh_session_insufficient_context"
+	DeferReasonConflictingPolicies = "conflicting_policies"
+)
+
+// DeferConfig tunes the synthetic defer triggers. Both the fresh-session and
+// the conflicting-policies trigger are gated by Enabled.
+type DeferConfig struct {
+	Enabled               bool
+	FreshSessionSeconds   int
+	ConflictTriggersDefer bool
+}
+
 // PDP evaluates actions against policy rules.
 type PDP struct {
-	rules []compiledRule
+	rules        []compiledRule
+	deferCfg     DeferConfig
+	sessionStart func(ctx context.Context) (time.Time, bool)
+}
+
+// Option configures optional PDP behavior.
+type Option func(*PDP)
+
+// WithDeferConfig wires synthetic-defer behavior into the PDP.
+func WithDeferConfig(cfg DeferConfig) Option {
+	return func(p *PDP) {
+		p.deferCfg = cfg
+	}
+}
+
+// WithSessionStartFn supplies a callback that returns the session start time
+// used by the fresh-session trigger. Returning (zero, false) disables the
+// fresh-session check for that evaluation.
+func WithSessionStartFn(fn func(ctx context.Context) (time.Time, bool)) Option {
+	return func(p *PDP) {
+		p.sessionStart = fn
+	}
 }
 
 // New creates a PDP from a validated policy.
-func New(policy *Policy) (*PDP, error) {
+func New(policy *Policy, opts ...Option) (*PDP, error) {
 	rules := make([]Rule, 0)
 	if policy != nil {
 		rules = append(rules, policy.Rules...)
@@ -33,7 +71,11 @@ func New(policy *Policy) (*PDP, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PDP{rules: compiled}, nil
+	p := &PDP{rules: compiled}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p, nil
 }
 
 // Evaluate computes the final decision and matched rule IDs.
@@ -46,14 +88,24 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	// The timeout bounds total CEL evaluation across all rules in this call,
-	// not per rule. Allocate up front so cancel is a plain defer.
 	evalCtx, cancel := context.WithTimeout(ctx, conditionTimeout)
 	defer cancel()
 
 	var activations map[string]any
 
-	for _, rule := range p.rules {
+	conflictDetection := p.deferCfg.Enabled && p.deferCfg.ConflictTriggersDefer
+	var tiers map[int][]matchedTier
+	if conflictDetection {
+		tiers = map[int][]matchedTier{}
+	}
+
+	freshSessionDeferred := false
+	freshDeferRule := ""
+
+	var winnerRule *compiledRule
+
+	for i := range p.rules {
+		rule := p.rules[i]
 		if !isRuleEnabled(rule.rule) {
 			continue
 		}
@@ -64,6 +116,11 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 			continue
 		}
 		if rule.hasCondition {
+			if !freshSessionDeferred && p.shouldDeferFreshSession(ctx, rule, snapshot) {
+				freshSessionDeferred = true
+				freshDeferRule = rule.rule.ID
+				continue
+			}
 			if activations == nil {
 				activations = map[string]any{
 					"action":  actionActivation(action),
@@ -80,19 +137,185 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 		}
 
 		result.MatchedRuleIDs = append(result.MatchedRuleIDs, rule.rule.ID)
-		if precedence(rule.rule.Action) > precedence(result.Decision) {
-			msg, err := rule.renderMessage(action, snapshot)
-			if err != nil {
-				return nil, err
-			}
+		tier := precedence(rule.rule.Action)
+		if conflictDetection {
+			tiers[tier] = append(tiers[tier], matchedTier{
+				decision: rule.rule.Action,
+				ruleID:   rule.rule.ID,
+				severity: rule.rule.Severity,
+				tags:     rule.rule.Tags,
+			})
+		}
+		if tier > precedence(result.Decision) {
 			result.Decision = rule.rule.Action
-			result.Message = msg
 			result.Severity = rule.rule.Severity
 			result.Tags = rule.rule.Tags
+			if rule.rule.Action == model.DecisionDefer {
+				result.DeferReason = rule.rule.Reason
+			} else {
+				result.DeferReason = ""
+			}
+			winnerRule = &p.rules[i]
 		}
 	}
 
+	if freshSessionDeferred && len(result.MatchedRuleIDs) == 0 {
+		return &model.EvaluationResult{
+			Decision:       model.DecisionDefer,
+			MatchedRuleIDs: []string{freshDeferRule},
+			Message:        DeferReasonFreshSession,
+			DeferReason:    DeferReasonFreshSession,
+		}, nil
+	}
+
+	if conflictDetection {
+		if conflict, ruleIDs := detectConflict(tiers, result.Decision); conflict {
+			return &model.EvaluationResult{
+				Decision:       model.DecisionDefer,
+				MatchedRuleIDs: ruleIDs,
+				Message:        DeferReasonConflictingPolicies,
+				DeferReason:    DeferReasonConflictingPolicies,
+			}, nil
+		}
+	}
+
+	if winnerRule != nil {
+		msg, err := winnerRule.renderMessage(action, snapshot)
+		if err != nil {
+			return nil, err
+		}
+		result.Message = msg
+	}
+
 	return result, nil
+}
+
+// detectConflict returns true when more than one rule matched at the
+// winning precedence tier with structurally different output. Same-tier
+// matches share a decision by construction (precedence is per-decision), so
+// the meaningful disagreement is between severity or tags. Two matches
+// conflict when their (severity, sorted-tags) fingerprint differs. Comparing
+// rendered messages would over-fire on trivially differing wording and
+// under-fire when two rules at the same tier disagree on severity but share
+// a message. The returned rule IDs are the matched rule IDs at the winning
+// tier in stable order. The Mediator treats this as ambiguous policy
+// authorship and synthesizes a defer decision.
+func detectConflict(tiers map[int][]matchedTier, winner model.Decision) (bool, []string) {
+	if winner == model.DecisionAllow {
+		return false, nil
+	}
+	tier := precedence(winner)
+	matches := tiers[tier]
+	if len(matches) < 2 {
+		return false, nil
+	}
+	firstFP := matches[0].fingerprint()
+	conflict := false
+	for _, m := range matches[1:] {
+		if m.fingerprint() != firstFP {
+			conflict = true
+			break
+		}
+	}
+	if !conflict {
+		return false, nil
+	}
+	ids := make([]string, 0, len(matches))
+	for _, m := range matches {
+		ids = append(ids, m.ruleID)
+	}
+	return true, ids
+}
+
+// matchedTier is the per-tier match record used to detect conflicting
+// decisions at the same severity precedence.
+type matchedTier struct {
+	decision model.Decision
+	ruleID   string
+	severity model.Severity
+	tags     []string
+}
+
+// fingerprint returns the structural identity of a matched rule used to
+// detect conflicts at the same precedence tier. Tags are sorted into a
+// stable order so author-side tag ordering does not flip the result.
+func (m matchedTier) fingerprint() string {
+	sortedTags := append([]string(nil), m.tags...)
+	sort.Strings(sortedTags)
+	return string(m.decision) + "|" + string(m.severity) + "|" + strings.Join(sortedTags, ",")
+}
+
+// shouldDeferFreshSession reports whether the rule should defer instead of
+// evaluating its CEL condition. Fires only when defer is enabled, the rule's
+// referenced context fields are zero or empty in the snapshot, and the session
+// is younger than FreshSessionSeconds.
+func (p *PDP) shouldDeferFreshSession(ctx context.Context, rule compiledRule, snapshot *model.ContextSnapshot) bool {
+	if !p.deferCfg.Enabled {
+		return false
+	}
+	if p.deferCfg.FreshSessionSeconds <= 0 {
+		return false
+	}
+	if p.sessionStart == nil {
+		return false
+	}
+	if len(rule.contextRefs) == 0 {
+		return false
+	}
+	start, ok := p.sessionStart(ctx)
+	if !ok || start.IsZero() {
+		return false
+	}
+	if time.Since(start) >= time.Duration(p.deferCfg.FreshSessionSeconds)*time.Second {
+		return false
+	}
+	if !contextRefsEmpty(rule.contextRefs, snapshot) {
+		return false
+	}
+	return true
+}
+
+// contextRefsEmpty reports whether every referenced context field is zero or
+// empty in the snapshot.
+func contextRefsEmpty(refs []string, snapshot *model.ContextSnapshot) bool {
+	if snapshot == nil {
+		return true
+	}
+	for _, ref := range refs {
+		if !contextFieldEmpty(ref, snapshot) {
+			return false
+		}
+	}
+	return true
+}
+
+func contextFieldEmpty(field string, s *model.ContextSnapshot) bool {
+	switch field {
+	case "total_actions":
+		return s.TotalActions == 0
+	case "files_read":
+		return s.FilesRead == 0
+	case "files_written":
+		return s.FilesWritten == 0
+	case "commands_executed":
+		return s.CommandsExecuted == 0
+	case "network_requests":
+		return s.NetworkRequests == 0
+	case "errors":
+		return s.Errors == 0
+	case "tools_used":
+		return len(s.ToolsUsed) == 0
+	case "session_duration_ms":
+		return s.SessionDuration == 0
+	case "classifications_seen":
+		return len(s.ClassificationsSeen) == 0
+	case "entities_seen":
+		return len(s.EntitiesSeen) == 0
+	case "semantic_drift":
+		return s.SemanticDrift == 0
+	default:
+		return false
+	}
 }
 
 func precedence(d model.Decision) int {
@@ -101,12 +324,14 @@ func precedence(d model.Decision) int {
 		return 5
 	case model.DecisionEscalate:
 		return 4
-	case model.DecisionGuidance:
+	case model.DecisionDefer:
 		return 3
-	case model.DecisionWarn:
+	case model.DecisionGuidance:
 		return 2
-	default:
+	case model.DecisionWarn:
 		return 1
+	default:
+		return 0
 	}
 }
 
@@ -133,6 +358,7 @@ type compiledRule struct {
 	workingDirPatterns []string
 	hasCondition       bool
 	hasMessageTemplate bool
+	contextRefs        []string
 }
 
 func compileRules(rules []Rule) ([]compiledRule, error) {
@@ -177,12 +403,13 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 	}
 
 	if strings.TrimSpace(rule.Condition) != "" {
-		prg, err := compileCondition(env, rule.ID, rule.Condition)
+		prg, refs, err := compileCondition(env, rule.ID, rule.Condition)
 		if err != nil {
 			return cr, err
 		}
 		cr.condition = prg
 		cr.hasCondition = true
+		cr.contextRefs = refs
 	}
 
 	if strings.TrimSpace(rule.Message) != "" {
@@ -321,19 +548,59 @@ func validateGlobPatterns(field, ruleID string, patterns []string) error {
 	return nil
 }
 
-func compileCondition(env *cel.Env, ruleID, expr string) (cel.Program, error) {
+func compileCondition(env *cel.Env, ruleID, expr string) (cel.Program, []string, error) {
 	ast, issues := env.Compile(expr)
 	if issues.Err() != nil {
-		return nil, fmt.Errorf("rule %q condition: %w", ruleID, issues.Err())
+		return nil, nil, fmt.Errorf("rule %q condition: %w", ruleID, issues.Err())
 	}
 	if ast.OutputType() != cel.BoolType {
-		return nil, fmt.Errorf("rule %q condition: output type %s, want bool", ruleID, ast.OutputType())
+		return nil, nil, fmt.Errorf("rule %q condition: output type %s, want bool", ruleID, ast.OutputType())
 	}
 	prg, err := env.Program(ast, cel.CostLimit(10000), cel.InterruptCheckFrequency(100))
 	if err != nil {
-		return nil, fmt.Errorf("rule %q condition program: %w", ruleID, err)
+		return nil, nil, fmt.Errorf("rule %q condition program: %w", ruleID, err)
 	}
-	return prg, nil
+	refs := collectContextRefs(ast)
+	return prg, refs, nil
+}
+
+// collectContextRefs walks the compiled CEL AST and returns the immediate
+// `context.<field>` selectors referenced anywhere in the expression. Nested
+// selectors (`context.foo.bar`) and non-context selections are ignored. The
+// returned slice is deduplicated and sorted for stable hashing or display.
+func collectContextRefs(ast *cel.Ast) []string {
+	if ast == nil {
+		return nil
+	}
+	native := ast.NativeRep()
+	if native == nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	visitor := celast.NewExprVisitor(func(e celast.Expr) {
+		if e.Kind() != celast.SelectKind {
+			return
+		}
+		sel := e.AsSelect()
+		operand := sel.Operand()
+		if operand == nil || operand.Kind() != celast.IdentKind {
+			return
+		}
+		if operand.AsIdent() != "context" {
+			return
+		}
+		seen[sel.FieldName()] = struct{}{}
+	})
+	celast.PreOrderVisit(native.Expr(), visitor)
+	if len(seen) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(seen))
+	for k := range seen {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func conditionEnv() (*cel.Env, error) {

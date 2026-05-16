@@ -160,8 +160,9 @@ INSERT INTO aarm_receipts (
     result_status, duration_ms, error_message,
     snapshot, action_payload, prev_hash, hash,
     subagent_id, subagent_type, policy_hash,
-    signature, signer_key_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    signature, signer_key_id,
+    defer_reason, deferral_of_sequence
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	var actionIDArg, eventIDArg, agentArg, toolArg, projectArg interface{}
 	if row.ActionID != uuid.Nil {
@@ -246,6 +247,14 @@ INSERT INTO aarm_receipts (
 		signerKeyIDArg = row.SignerKeyID
 	}
 
+	var deferReasonArg, deferralOfSequenceArg interface{}
+	if row.DeferReason != "" {
+		deferReasonArg = row.DeferReason
+	}
+	if row.DeferralOfSequence != nil {
+		deferralOfSequenceArg = *row.DeferralOfSequence
+	}
+
 	_, err := tx.ExecContext(ctx, stmt,
 		row.ID, row.SessionID, actionIDArg, eventIDArg, row.RecordedAt, row.Sequence,
 		agentArg, toolArg, row.ActionType, projectArg,
@@ -254,6 +263,7 @@ INSERT INTO aarm_receipts (
 		snapshotArg, payloadArg, prevHashArg, row.Hash,
 		subagentIDArg, subagentTypeArg, policyHashArg,
 		signatureArg, signerKeyIDArg,
+		deferReasonArg, deferralOfSequenceArg,
 	)
 	return err
 }
@@ -354,6 +364,12 @@ func receiptCreate(client *ent.AarmReceiptClient, row *ReceiptRow) *ent.AarmRece
 	if row.SignerKeyID != "" {
 		create.SetSignerKeyID(row.SignerKeyID)
 	}
+	if row.DeferReason != "" {
+		create.SetDeferReason(row.DeferReason)
+	}
+	if row.DeferralOfSequence != nil {
+		create.SetDeferralOfSequence(*row.DeferralOfSequence)
+	}
 	return create
 }
 
@@ -371,6 +387,59 @@ func (s *SQLiteStore) GetLastReceiptForSession(ctx context.Context, sessionID uu
 		return nil, fmt.Errorf("storage: get last receipt: %w", err)
 	}
 	return entToReceipt(r), nil
+}
+
+// GetReceiptBySessionSequence returns the receipt row identified by the
+// (session_id, sequence) UNIQUE index, or (nil, nil) when no such row
+// exists. Single-row lookup intended for callers that already know the
+// natural key (e.g. resolving the original defer receipt for a follow-up).
+// Avoids the full-session scan QueryReceipts with Limit=-1 would perform.
+// Matches the (nil, nil) miss convention used by GetLastReceiptForSession
+// and GetFollowUpReceipt.
+func (s *SQLiteStore) GetReceiptBySessionSequence(ctx context.Context, sessionID uuid.UUID, sequence int64) (*ReceiptRow, error) {
+	if sessionID == uuid.Nil {
+		return nil, fmt.Errorf("storage: GetReceiptBySessionSequence: nil session ID")
+	}
+	r, err := s.client.AarmReceipt.Query().
+		Where(
+			aarmreceipt.SessionIDEQ(sessionID),
+			aarmreceipt.SequenceEQ(sequence),
+		).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("storage: get receipt by session/sequence: %w", err)
+	}
+	return entToReceipt(r), nil
+}
+
+// GetFollowUpReceipt returns the follow-up receipt (resolution or timeout)
+// that points back at the given (session_id, deferralOfSequence) pair, or
+// (nil, nil) when no follow-up has been recorded yet. Used by the
+// resolve/sweep paths to stay idempotent: if a previous attempt crashed
+// after the follow-up receipt was inserted but before the deferred-action
+// row was flipped, the retry must not insert a second follow-up.
+func (s *SQLiteStore) GetFollowUpReceipt(ctx context.Context, sessionID uuid.UUID, deferralOfSequence int64) (*ReceiptRow, error) {
+	if sessionID == uuid.Nil {
+		return nil, fmt.Errorf("storage: GetFollowUpReceipt: nil session ID")
+	}
+	rows, err := s.client.AarmReceipt.Query().
+		Where(
+			aarmreceipt.SessionIDEQ(sessionID),
+			aarmreceipt.DeferralOfSequenceEQ(deferralOfSequence),
+		).
+		Order(aarmreceipt.BySequence(entsql.OrderAsc())).
+		Limit(1).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: get follow-up receipt: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return entToReceipt(rows[0]), nil
 }
 
 // UpdateReceiptResult transitions a receipt row from pending to a final
@@ -626,10 +695,15 @@ func entToReceipt(e *ent.AarmReceipt) *ReceiptRow {
 		PolicyHash:     e.PolicyHash,
 		Signature:      e.Signature,
 		SignerKeyID:    e.SignerKeyID,
+		DeferReason:    e.DeferReason,
 	}
 	if e.DurationMs != nil {
 		v := *e.DurationMs
 		row.DurationMS = &v
+	}
+	if e.DeferralOfSequence != nil {
+		v := *e.DeferralOfSequence
+		row.DeferralOfSequence = &v
 	}
 	return row
 }

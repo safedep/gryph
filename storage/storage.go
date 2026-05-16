@@ -176,6 +176,8 @@ type ContextActionRow struct {
 type ReceiptStore interface {
 	InsertReceipt(ctx context.Context, row *ReceiptRow) error
 	GetLastReceiptForSession(ctx context.Context, sessionID uuid.UUID) (*ReceiptRow, error)
+	GetReceiptBySessionSequence(ctx context.Context, sessionID uuid.UUID, sequence int64) (*ReceiptRow, error)
+	GetFollowUpReceipt(ctx context.Context, sessionID uuid.UUID, deferralOfSequence int64) (*ReceiptRow, error)
 	RecordReceiptInTx(ctx context.Context, sessionID uuid.UUID, build func(prev *ReceiptRow) (*ReceiptRow, error)) (*ReceiptRow, error)
 	UpdateReceiptResult(ctx context.Context, sessionID uuid.UUID, sequence int64, status string, durationMS int64, errorMsg string) error
 	UpdateReceiptDecision(ctx context.Context, sessionID uuid.UUID, sequence int64, decision string, resultStatus string, note string) error
@@ -252,7 +254,64 @@ type ReceiptRow struct {
 
 	Signature   []byte
 	SignerKeyID string
+
+	// DeferReason is the operator-facing rationale recorded on defer receipts
+	// (explicit defer rules carry the rule's reason; synthetic defers carry
+	// the trigger name). Empty for non-defer receipts.
+	DeferReason string
+	// DeferralOfSequence ties a follow-up resolution receipt back to the
+	// original defer receipt's sequence within the same session. Nil on the
+	// original defer row and on every non-resolution receipt.
+	DeferralOfSequence *int64
 }
+
+// DeferralStore persists pending deferrals so the operator-resolve and
+// timeout-sweep paths can find the queue out-of-band. Rows are append-once
+// and mutated only through UpdateDeferredActionResolution. Each row points at
+// its originating receipt via (session_id, receipt_sequence) so a follow-up
+// resolution receipt can backreference the original via deferral_of_sequence.
+type DeferralStore interface {
+	InsertDeferredAction(ctx context.Context, row *DeferredActionRow) error
+	GetDeferredAction(ctx context.Context, id uuid.UUID) (*DeferredActionRow, error)
+	GetDeferredActionByPrefix(ctx context.Context, prefix string) (*DeferredActionRow, error)
+	QueryDeferredActions(ctx context.Context, filter *DeferredActionFilter) ([]*DeferredActionRow, error)
+	UpdateDeferredActionResolution(ctx context.Context, id uuid.UUID, status, resolver, note string, resolvedAt time.Time) error
+	DeleteDeferredActionsBefore(ctx context.Context, before time.Time) (int, error)
+	CountDeferredActionsBefore(ctx context.Context, before time.Time) (int, error)
+}
+
+// DeferredActionRow mirrors the aarm_deferred_actions ent row.
+type DeferredActionRow struct {
+	ID              uuid.UUID
+	SessionID       uuid.UUID
+	ReceiptSequence int64
+	ActionID        uuid.UUID
+	DeferredAt      time.Time
+	ExpiresAt       time.Time
+	Reason          string
+	Status          string
+	ResolvedAt      *time.Time
+	Resolver        string
+	ResolutionNote  string
+}
+
+// DeferredActionFilter narrows QueryDeferredActions.
+type DeferredActionFilter struct {
+	SessionID *uuid.UUID
+	Status    string
+	// ExpiredBefore filters to rows whose expires_at is strictly less than
+	// the given time. Used by the timeout sweep.
+	ExpiredBefore *time.Time
+	Limit         int
+}
+
+// Deferred action status values mirror the ent enum.
+const (
+	DeferredActionStatusPending         = "pending"
+	DeferredActionStatusResolvedAllow   = "resolved_allow"
+	DeferredActionStatusResolvedDeny    = "resolved_deny"
+	DeferredActionStatusResolvedTimeout = "resolved_timeout"
+)
 
 // ContextStateRow is the storage-layer representation of the per-session
 // counter row used by the PDP to populate the context.* CEL surface.
@@ -306,6 +365,7 @@ type Store interface {
 	StreamCursorStore
 	ContextStore
 	ReceiptStore
+	DeferralStore
 
 	// Init initializes the database schema.
 	Init(ctx context.Context) error

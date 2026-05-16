@@ -160,6 +160,16 @@ func SignerKeyID(v string) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldSignerKeyID, v))
 }
 
+// DeferReason applies equality check predicate on the "defer_reason" field. It's identical to DeferReasonEQ.
+func DeferReason(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldDeferReason, v))
+}
+
+// DeferralOfSequence applies equality check predicate on the "deferral_of_sequence" field. It's identical to DeferralOfSequenceEQ.
+func DeferralOfSequence(v int64) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldDeferralOfSequence, v))
+}
+
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
 func SessionIDEQ(v uuid.UUID) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldSessionID, v))
@@ -1473,6 +1483,131 @@ func SignerKeyIDEqualFold(v string) predicate.AarmReceipt {
 // SignerKeyIDContainsFold applies the ContainsFold predicate on the "signer_key_id" field.
 func SignerKeyIDContainsFold(v string) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldContainsFold(FieldSignerKeyID, v))
+}
+
+// DeferReasonEQ applies the EQ predicate on the "defer_reason" field.
+func DeferReasonEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldDeferReason, v))
+}
+
+// DeferReasonNEQ applies the NEQ predicate on the "defer_reason" field.
+func DeferReasonNEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldDeferReason, v))
+}
+
+// DeferReasonIn applies the In predicate on the "defer_reason" field.
+func DeferReasonIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldDeferReason, vs...))
+}
+
+// DeferReasonNotIn applies the NotIn predicate on the "defer_reason" field.
+func DeferReasonNotIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldDeferReason, vs...))
+}
+
+// DeferReasonGT applies the GT predicate on the "defer_reason" field.
+func DeferReasonGT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldDeferReason, v))
+}
+
+// DeferReasonGTE applies the GTE predicate on the "defer_reason" field.
+func DeferReasonGTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldDeferReason, v))
+}
+
+// DeferReasonLT applies the LT predicate on the "defer_reason" field.
+func DeferReasonLT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldDeferReason, v))
+}
+
+// DeferReasonLTE applies the LTE predicate on the "defer_reason" field.
+func DeferReasonLTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldDeferReason, v))
+}
+
+// DeferReasonContains applies the Contains predicate on the "defer_reason" field.
+func DeferReasonContains(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContains(FieldDeferReason, v))
+}
+
+// DeferReasonHasPrefix applies the HasPrefix predicate on the "defer_reason" field.
+func DeferReasonHasPrefix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasPrefix(FieldDeferReason, v))
+}
+
+// DeferReasonHasSuffix applies the HasSuffix predicate on the "defer_reason" field.
+func DeferReasonHasSuffix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasSuffix(FieldDeferReason, v))
+}
+
+// DeferReasonIsNil applies the IsNil predicate on the "defer_reason" field.
+func DeferReasonIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldDeferReason))
+}
+
+// DeferReasonNotNil applies the NotNil predicate on the "defer_reason" field.
+func DeferReasonNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldDeferReason))
+}
+
+// DeferReasonEqualFold applies the EqualFold predicate on the "defer_reason" field.
+func DeferReasonEqualFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEqualFold(FieldDeferReason, v))
+}
+
+// DeferReasonContainsFold applies the ContainsFold predicate on the "defer_reason" field.
+func DeferReasonContainsFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContainsFold(FieldDeferReason, v))
+}
+
+// DeferralOfSequenceEQ applies the EQ predicate on the "deferral_of_sequence" field.
+func DeferralOfSequenceEQ(v int64) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldDeferralOfSequence, v))
+}
+
+// DeferralOfSequenceNEQ applies the NEQ predicate on the "deferral_of_sequence" field.
+func DeferralOfSequenceNEQ(v int64) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldDeferralOfSequence, v))
+}
+
+// DeferralOfSequenceIn applies the In predicate on the "deferral_of_sequence" field.
+func DeferralOfSequenceIn(vs ...int64) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldDeferralOfSequence, vs...))
+}
+
+// DeferralOfSequenceNotIn applies the NotIn predicate on the "deferral_of_sequence" field.
+func DeferralOfSequenceNotIn(vs ...int64) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldDeferralOfSequence, vs...))
+}
+
+// DeferralOfSequenceGT applies the GT predicate on the "deferral_of_sequence" field.
+func DeferralOfSequenceGT(v int64) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldDeferralOfSequence, v))
+}
+
+// DeferralOfSequenceGTE applies the GTE predicate on the "deferral_of_sequence" field.
+func DeferralOfSequenceGTE(v int64) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldDeferralOfSequence, v))
+}
+
+// DeferralOfSequenceLT applies the LT predicate on the "deferral_of_sequence" field.
+func DeferralOfSequenceLT(v int64) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldDeferralOfSequence, v))
+}
+
+// DeferralOfSequenceLTE applies the LTE predicate on the "deferral_of_sequence" field.
+func DeferralOfSequenceLTE(v int64) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldDeferralOfSequence, v))
+}
+
+// DeferralOfSequenceIsNil applies the IsNil predicate on the "deferral_of_sequence" field.
+func DeferralOfSequenceIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldDeferralOfSequence))
+}
+
+// DeferralOfSequenceNotNil applies the NotNil predicate on the "deferral_of_sequence" field.
+func DeferralOfSequenceNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldDeferralOfSequence))
 }
 
 // And groups predicates with the AND operator between them.

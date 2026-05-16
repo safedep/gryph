@@ -158,7 +158,7 @@ func generatePolicySchema() jsonSchema {
 			},
 			"rules": {
 				Type:        "array",
-				Description: "Ordered list of policy rules. Each rule produces a Decision; when multiple match the most restrictive wins (block > escalate > guidance > warn > allow).",
+				Description: "Ordered list of policy rules. Each rule produces a Decision; when multiple match the most restrictive wins (block > escalate > defer > guidance > warn > allow).",
 				Items:       &items{Ref: "#/$defs/rule"},
 			},
 		},
@@ -182,7 +182,7 @@ func generatePolicySchema() jsonSchema {
 			},
 			"action": {
 				Type:        "string",
-				Description: "Decision returned when the rule matches. `escalate` is reserved for approval workflows and currently degrades to `block`.",
+				Description: "Decision returned when the rule matches. `escalate` routes to the approval workflow. `defer` queues the action for operator resolution and blocks the agent in the meantime; requires a non-empty `reason`.",
 				Enum:        decisionValues(),
 			},
 			"severity": {
@@ -212,6 +212,10 @@ func generatePolicySchema() jsonSchema {
 			"condition": {
 				Type:        "string",
 				Description: "CEL expression returning bool. Evaluated after `match` succeeds. Variables: action.{type,tool,operation,agent,working_dir,project,params.{path,command,args,url,size_bytes,lines_added,lines_removed,content}}, context.{total_actions,files_read,files_written,commands_executed,network_requests,errors,tools_used,session_duration_ms,classifications_seen,entities_seen,semantic_drift}. Sandboxed; 100ms timeout.",
+			},
+			"reason": {
+				Type:        "string",
+				Description: "Required when action is `defer`. Surfaces on the receipt's defer_reason and in the operator-facing block message.",
 			},
 		},
 	}
@@ -352,6 +356,7 @@ func decisionValues() []string {
 		string(model.DecisionGuidance),
 		string(model.DecisionBlock),
 		string(model.DecisionEscalate),
+		string(model.DecisionDefer),
 	}
 }
 
