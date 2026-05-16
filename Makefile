@@ -8,7 +8,7 @@ VERSION := "$(shell git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)-$
 GO_CFLAGS=-X 'github.com/safedep/gryph/internal/version.Commit=$(GITCOMMIT)' -X 'github.com/safedep/gryph/internal/version.Version=$(VERSION)'
 GO_LDFLAGS=-ldflags "-w $(GO_CFLAGS)"
 
-.PHONY: all deps generate generate-schema verify-schema gryph clean test
+.PHONY: all deps generate generate-schema verify-schema gryph clean test conformance conformance-json conformance-markdown
 
 all: gryph
 
@@ -53,6 +53,21 @@ fmt:
 # Run linter
 lint:
 	golangci-lint run
+
+# AARM conformance suite. Builds the gryph binary (which the CLI invokes
+# to drive the test runner) and the standalone conformance test binary
+# (which the CLI prefers when present), then runs the chosen renderer.
+conformance: gryph create_bin
+	$(GO) test -c -o $(BIN_DIR)/gryph-conformance.test ./test/conformance/aarm/
+	$(BIN) aarm conformance --format text
+
+conformance-json: gryph create_bin
+	$(GO) test -c -o $(BIN_DIR)/gryph-conformance.test ./test/conformance/aarm/
+	$(BIN) aarm conformance --format json
+
+conformance-markdown: gryph create_bin
+	$(GO) test -c -o $(BIN_DIR)/gryph-conformance.test ./test/conformance/aarm/
+	$(BIN) aarm conformance --format markdown
 
 # Build for all platforms
 build-all: create_bin

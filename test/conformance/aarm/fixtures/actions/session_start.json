@@ -1,0 +1,10 @@
+{
+  "kind": "event",
+  "action_type": "session_start",
+  "agent_name": "conformance-suite",
+  "payload": {
+    "source": "conformance",
+    "model": "claude-3-5-sonnet",
+    "agent_type": "main"
+  }
+}

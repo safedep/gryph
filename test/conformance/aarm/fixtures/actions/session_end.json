@@ -1,0 +1,8 @@
+{
+  "kind": "event",
+  "action_type": "session_end",
+  "agent_name": "conformance-suite",
+  "payload": {
+    "reason": "clean"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "kind": "action",
+  "action_type": "network_request",
+  "agent": "conformance-suite",
+  "params": {
+    "url": "http://127.0.0.1:8080/health"
+  }
+}

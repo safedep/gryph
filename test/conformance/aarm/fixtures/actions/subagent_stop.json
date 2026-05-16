@@ -1,0 +1,12 @@
+{
+  "kind": "event",
+  "action_type": "subagent_stop",
+  "agent_name": "conformance-suite",
+  "subagent_id": "subagent-001",
+  "subagent_type": "explore",
+  "payload": {
+    "agent_id": "subagent-001",
+    "agent_type": "explore",
+    "last_assistant_message": "done"
+  }
+}

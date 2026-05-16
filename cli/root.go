@@ -235,6 +235,7 @@ native hook systems to create a comprehensive audit trail of all agent actions.`
 		NewCostCmd(),
 		NewVersionCmd(),
 		NewMCPProxyCmd(),
+		NewAarmCmd(),
 	)
 
 	return rootCmd

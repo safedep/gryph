@@ -1,0 +1,8 @@
+{
+  "kind": "action",
+  "action_type": "network_request",
+  "agent": "conformance-suite",
+  "params": {
+    "url": "https://example.com/api/v1/payload"
+  }
+}

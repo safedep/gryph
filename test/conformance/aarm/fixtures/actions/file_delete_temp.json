@@ -1,0 +1,8 @@
+{
+  "kind": "event",
+  "action_type": "file_delete",
+  "agent_name": "conformance-suite",
+  "payload": {
+    "path": "/tmp/scratch-1234.txt"
+  }
+}

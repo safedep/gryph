@@ -1,0 +1,9 @@
+{
+  "kind": "event",
+  "action_type": "notification",
+  "agent_name": "conformance-suite",
+  "payload": {
+    "message": "long-running task complete",
+    "type": "info"
+  }
+}

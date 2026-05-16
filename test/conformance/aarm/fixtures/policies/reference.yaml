@@ -1,0 +1,111 @@
+# AARM Conformance Suite reference policy.
+#
+# Exercises every AARM action type with at least one rule and every decision
+# tier (allow via fall-through, warn, guidance, block, escalate, defer). The
+# CEL bindings exercised here (action.human_principal, action.role_scope,
+# action.injection_score, action.data_classifications,
+# context.classifications_seen, context.commands_executed) are the ones the
+# AARM spec calls out explicitly. Implementation-specific bindings
+# (action.tool, action.operation, context.tools_used) are intentionally not
+# tested through this fixture.
+#
+# This file is a closed artifact. Edits invalidate diff-based regression
+# detection across runs. Bump SUITE_VERSION whenever a rule is added or
+# changed.
+
+version: "1"
+
+rules:
+  - id: r1-block-rm-rf
+    action: block
+    severity: critical
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - '(?i)\brm\s+-[rf]+\s+/'
+    message: "Refusing destructive command"
+
+  - id: r3-defer-network-cold-session
+    action: defer
+    reason: "wait_for_context"
+    match:
+      action_types: [network_request]
+    condition: "context.commands_executed == 0"
+
+  - id: r3-escalate-tool-injection
+    action: escalate
+    severity: high
+    match:
+      action_types: [tool_use]
+    condition: "action.injection_score > 0.5"
+
+  - id: r3-block-secret-write
+    action: block
+    severity: critical
+    match:
+      action_types: [file_write]
+    condition: "'secret' in action.data_classifications"
+
+  - id: r4-guidance-large-edit
+    action: guidance
+    match:
+      action_types: [file_write]
+    condition: "action.params.lines_added > 100"
+    message: "Large edit detected"
+
+  - id: r4-warn-public-network
+    action: warn
+    match:
+      action_types: [network_request]
+    condition: "action.params.url != ''"
+
+  - id: r6-block-without-identity
+    action: block
+    match:
+      action_types: [file_write]
+    condition: "action.human_principal == ''"
+    message: "Action denied: missing human principal"
+
+  - id: r3-identity-role-gated
+    action: warn
+    match:
+      action_types: [command_exec]
+    condition: "!action.role_scope.contains('uid=0')"
+
+  - id: r7-watch-classifications-seen
+    action: guidance
+    match:
+      action_types: [file_read]
+    condition: "'secret' in context.classifications_seen"
+    message: "Session has read a secret"
+
+  - id: r2-warn-file-delete
+    action: warn
+    match:
+      action_types: [file_delete]
+    message: "File delete observed"
+
+  - id: r2-warn-session-start
+    action: warn
+    match:
+      action_types: [session_start]
+
+  - id: r2-warn-session-end
+    action: warn
+    match:
+      action_types: [session_end]
+
+  - id: r2-warn-subagent-start
+    action: warn
+    match:
+      action_types: [subagent_start]
+
+  - id: r2-warn-subagent-stop
+    action: warn
+    match:
+      action_types: [subagent_stop]
+
+  - id: r2-warn-notification
+    action: warn
+    match:
+      action_types: [notification]
