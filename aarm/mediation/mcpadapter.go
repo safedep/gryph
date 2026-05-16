@@ -96,6 +96,12 @@ func (a *MCPAdapter) Normalize(_ context.Context, req *MCPToolCall, sess *sessio
 		if agent, ok := req.Meta["agent"].(string); ok {
 			action.Agent = agent
 		}
+		if subID, ok := req.Meta["subagent_id"].(string); ok {
+			action.SubagentID = subID
+		}
+		if subType, ok := req.Meta["subagent_type"].(string); ok {
+			action.SubagentType = subType
+		}
 	}
 
 	if sess != nil {

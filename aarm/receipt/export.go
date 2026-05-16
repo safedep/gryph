@@ -159,6 +159,9 @@ type ExportedReceipt struct {
 	ActionPayload  map[string]interface{} `json:"action_payload,omitempty"`
 	PrevHash       string                 `json:"prev_hash,omitempty"`
 	Hash           string                 `json:"hash"`
+	SubagentID     string                 `json:"subagent_id,omitempty"`
+	SubagentType   string                 `json:"subagent_type,omitempty"`
+	PolicyHash     string                 `json:"policy_hash,omitempty"`
 	SignerKeyID    string                 `json:"signer_key_id,omitempty"`
 	Signature      string                 `json:"signature,omitempty"`
 }
@@ -186,6 +189,8 @@ func ToExported(r *storage.ReceiptRow, includeSig bool) ExportedReceipt {
 		Snapshot:       r.Snapshot,
 		ActionPayload:  r.ActionPayload,
 		Hash:           hex.EncodeToString(r.Hash),
+		SubagentID:     r.SubagentID,
+		SubagentType:   r.SubagentType,
 	}
 	if r.ActionID != uuid.Nil {
 		out.ActionID = r.ActionID.String()
@@ -195,6 +200,9 @@ func ToExported(r *storage.ReceiptRow, includeSig bool) ExportedReceipt {
 	}
 	if len(r.PrevHash) > 0 {
 		out.PrevHash = hex.EncodeToString(r.PrevHash)
+	}
+	if len(r.PolicyHash) > 0 {
+		out.PolicyHash = hex.EncodeToString(r.PolicyHash)
 	}
 	if includeSig {
 		out.SignerKeyID = r.SignerKeyID
@@ -237,6 +245,7 @@ func csvHeaders(includeSig bool) []string {
 		"decision", "matched_rule_ids", "severity", "message",
 		"result_status", "duration_ms", "error_message",
 		"prev_hash", "hash",
+		"subagent_id", "subagent_type", "policy_hash",
 	}
 	if includeSig {
 		h = append(h, "signature", "signer_key_id")
@@ -283,6 +292,9 @@ func csvRow(r *storage.ReceiptRow, includeSig bool) []string {
 		r.ErrorMessage,
 		hex.EncodeToString(r.PrevHash),
 		hex.EncodeToString(r.Hash),
+		r.SubagentID,
+		r.SubagentType,
+		hex.EncodeToString(r.PolicyHash),
 	}
 	if includeSig {
 		row = append(row, base64.StdEncoding.EncodeToString(r.Signature), r.SignerKeyID)

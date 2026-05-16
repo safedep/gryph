@@ -257,6 +257,9 @@ type policyReceiptView struct {
 	ActionPayload  map[string]interface{} `json:"action_payload,omitempty"`
 	PrevHash       string                 `json:"prev_hash,omitempty"`
 	Hash           string                 `json:"hash"`
+	SubagentID     string                 `json:"subagent_id,omitempty"`
+	SubagentType   string                 `json:"subagent_type,omitempty"`
+	PolicyHash     string                 `json:"policy_hash,omitempty"`
 	SignerKeyID    string                 `json:"signer_key_id,omitempty"`
 }
 
@@ -279,6 +282,8 @@ func receiptToView(r *storage.ReceiptRow) policyReceiptView {
 		Snapshot:       r.Snapshot,
 		ActionPayload:  r.ActionPayload,
 		Hash:           hex.EncodeToString(r.Hash),
+		SubagentID:     r.SubagentID,
+		SubagentType:   r.SubagentType,
 		SignerKeyID:    r.SignerKeyID,
 	}
 	if r.DurationMS != nil {
@@ -287,6 +292,9 @@ func receiptToView(r *storage.ReceiptRow) policyReceiptView {
 	}
 	if len(r.PrevHash) > 0 {
 		v.PrevHash = hex.EncodeToString(r.PrevHash)
+	}
+	if len(r.PolicyHash) > 0 {
+		v.PolicyHash = hex.EncodeToString(r.PolicyHash)
 	}
 	return v
 }

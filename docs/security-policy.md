@@ -183,19 +183,21 @@ block > escalate > guidance > warn > allow
 
 ## Receipts
 
-Every mediated action that resolves to anything other than `allow` produces a receipt row in the event store. Setting `policy.log_all_evaluations: true` records receipts for `allow` decisions too.
+Every mediated action produces a receipt row in the event store. The default `policy.log_all_evaluations: true` records receipts for `allow` decisions too, which keeps Gryph aligned with AARM's "receipt for every action" requirement. Operators who want the prior behavior (only `block` / `guidance` / `warn` / `escalate` rows) set `policy.log_all_evaluations: false` explicitly. Note that the new default raises per-event storage and signing cost on allow-heavy workloads.
 
-Receipts form a per-session hash chain (`hash`, `prev_hash`). The chain detects tampering and lets you verify the audit trail off-host.
+Receipts form a per-session hash chain (`hash`, `prev_hash`). The hash now also covers the SHA-256 of the active policy document (`policy_hash`), so an after-the-fact rule edit is visible at verify time. The chain detects tampering and lets you verify the audit trail off-host.
 
-Enable signing once a keypair exists:
+Signing defaults to `sign_mode: auto`: receipts carry an Ed25519 signature when a key file is present at the configured `key_path`, and skip the signature when no key is on disk. Pick the explicit mode that matches your operational policy:
 
 ```yaml
 policy:
   receipts:
-    sign: true
+    sign_mode: auto      # default: sign when a key exists, otherwise unsigned
+    # sign_mode: always  # hard-fail at startup if the key is missing
+    # sign_mode: never   # skip signing unconditionally
 ```
 
-Each receipt then carries an Ed25519 signature and `signer_key_id`. `gryph policy receipts --verify` walks the chain, recomputes every hash, and verifies signatures against the trust store. `gryph policy receipts export ... | gryph policy receipts verify-log --input -` round-trips the same checks without database access.
+The legacy `sign: true` / `sign: false` bool is still accepted as a deprecated alias for `sign_mode: always` / `sign_mode: never`. Each receipt then carries an Ed25519 signature and `signer_key_id`. `gryph policy receipts --verify` walks the chain, recomputes every hash, and verifies signatures against the trust store. `gryph policy receipts export ... | gryph policy receipts verify-log --input -` round-trips the same checks without database access.
 
 ## Approval workflow
 

@@ -215,6 +215,54 @@ func TestComputeHash_DeterministicAndStable(t *testing.T) {
 	assert.Len(t, h1, HashSize)
 }
 
+func TestSQLiteGenerator_PolicyHashAndSubagentPersist(t *testing.T) {
+	store := storagetest.NewStore(t)
+	g := NewSQLite(store)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	in := newInput(sessionID, model.DecisionGuidance)
+	in.PolicyHash = []byte("0123456789abcdef0123456789abcdef")
+	in.Action.SubagentID = "sub-1"
+	in.Action.SubagentType = "Plan"
+
+	rec, err := g.Record(ctx, in)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+
+	last, err := store.GetLastReceiptForSession(ctx, sessionID)
+	require.NoError(t, err)
+	require.NotNil(t, last)
+	assert.Equal(t, "sub-1", last.SubagentID)
+	assert.Equal(t, "Plan", last.SubagentType)
+	assert.True(t, bytes.Equal(in.PolicyHash, last.PolicyHash))
+
+	chain := ChainRowFromReceipt(last)
+	expected, err := ComputeHash(NewHashInput(chain.Fields))
+	require.NoError(t, err)
+	assert.True(t, bytes.Equal(expected, last.Hash), "row hash must match recomputed hash from chain row")
+}
+
+func TestSQLiteGenerator_PolicyHashFlipChangesHash(t *testing.T) {
+	store := storagetest.NewStore(t)
+	g := NewSQLite(store)
+	ctx := context.Background()
+
+	sessionA := uuid.New()
+	inA := newInput(sessionA, model.DecisionGuidance)
+	inA.PolicyHash = bytes.Repeat([]byte{0xaa}, 32)
+	recA, err := g.Record(ctx, inA)
+	require.NoError(t, err)
+
+	sessionB := uuid.New()
+	inB := newInput(sessionB, model.DecisionGuidance)
+	inB.PolicyHash = bytes.Repeat([]byte{0xbb}, 32)
+	recB, err := g.Record(ctx, inB)
+	require.NoError(t, err)
+
+	assert.False(t, bytes.Equal(recA.Hash, recB.Hash), "different policy hashes must yield different receipt hashes")
+}
+
 func TestComputeHash_SortedKeysMatter(t *testing.T) {
 	a := &HashInput{
 		Sequence:       1,

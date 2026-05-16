@@ -73,27 +73,17 @@ rules:
 	require.Len(t, rows, 1)
 	assert.Equal(t, receipt.DecisionApproved, rows[0].Decision)
 
-	rehashed, err := receipt.ComputeHash(receipt.NewHashInput(receipt.HashInputFields{
-		Sequence:       rows[0].Sequence,
-		PrevHash:       rows[0].PrevHash,
-		RecordedAtUnix: rows[0].RecordedAt.UnixNano(),
-		SessionID:      rows[0].SessionID,
-		ActionID:       rows[0].ActionID,
-		EventID:        rows[0].EventID,
-		Agent:          rows[0].Agent,
-		Tool:           rows[0].Tool,
-		ActionType:     rows[0].ActionType,
-		Project:        rows[0].Project,
-		Decision:       rows[0].Decision,
-		Severity:       rows[0].Severity,
-		Message:        rows[0].Message,
-		MatchedRuleIDs: rows[0].MatchedRuleIDs,
-		Snapshot:       rows[0].Snapshot,
-		ActionPayload:  rows[0].ActionPayload,
-	}))
+	policyHash := policy.Hash()
+	require.NotEmpty(t, policyHash, "test setup: policy hash must be non-empty")
+	require.NotEmpty(t, rows[0].PolicyHash, "escalate path must persist a non-empty policy_hash")
+	assert.True(t, bytes.Equal(policyHash, rows[0].PolicyHash),
+		"persisted policy_hash must equal policy.Hash()")
+
+	chainRow := receipt.ChainRowFromReceipt(rows[0])
+	rehashed, err := receipt.ComputeHash(receipt.NewHashInput(chainRow.Fields))
 	require.NoError(t, err)
 	assert.True(t, bytes.Equal(rehashed, rows[0].Hash),
-		"hash recomputed via DeriveInsertDecision must match stored hash even after decision mutation")
+		"hash recomputed via ChainRowFromReceipt must match stored hash even after decision mutation")
 }
 
 func TestMediator_BlockProducesReceipt(t *testing.T) {
@@ -142,7 +132,7 @@ rules:
 	assert.NotEmpty(t, rows[0].Hash)
 }
 
-func TestMediator_AllowDecision_SkipsReceiptByDefault(t *testing.T) {
+func TestMediator_AllowDecision_SkipsReceiptWhenLogAllEvalsFalse(t *testing.T) {
 	store := storagetest.NewStore(t)
 
 	policy, err := pdp.ParsePolicy([]byte(`
@@ -174,7 +164,7 @@ rules: []
 	assert.Empty(t, rows, "allow + LogAllEvaluations=false must not record a receipt")
 }
 
-func TestMediator_AllowDecision_LogAllEvaluationsTrue(t *testing.T) {
+func TestMediator_AllowDecision_RecordsReceiptWhenLogAllEvalsTrue(t *testing.T) {
 	store := storagetest.NewStore(t)
 
 	policy, err := pdp.ParsePolicy([]byte(`

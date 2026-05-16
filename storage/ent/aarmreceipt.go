@@ -59,6 +59,12 @@ type AarmReceipt struct {
 	PrevHash []byte `json:"prev_hash,omitempty"`
 	// Hash holds the value of the "hash" field.
 	Hash []byte `json:"hash,omitempty"`
+	// SubagentID holds the value of the "subagent_id" field.
+	SubagentID string `json:"subagent_id,omitempty"`
+	// SubagentType holds the value of the "subagent_type" field.
+	SubagentType string `json:"subagent_type,omitempty"`
+	// PolicyHash holds the value of the "policy_hash" field.
+	PolicyHash []byte `json:"policy_hash,omitempty"`
 	// Signature holds the value of the "signature" field.
 	Signature []byte `json:"signature,omitempty"`
 	// SignerKeyID holds the value of the "signer_key_id" field.
@@ -71,11 +77,11 @@ func (*AarmReceipt) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case aarmreceipt.FieldMatchedRuleIds, aarmreceipt.FieldSnapshot, aarmreceipt.FieldActionPayload, aarmreceipt.FieldPrevHash, aarmreceipt.FieldHash, aarmreceipt.FieldSignature:
+		case aarmreceipt.FieldMatchedRuleIds, aarmreceipt.FieldSnapshot, aarmreceipt.FieldActionPayload, aarmreceipt.FieldPrevHash, aarmreceipt.FieldHash, aarmreceipt.FieldPolicyHash, aarmreceipt.FieldSignature:
 			values[i] = new([]byte)
 		case aarmreceipt.FieldSequence, aarmreceipt.FieldDurationMs:
 			values[i] = new(sql.NullInt64)
-		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSignerKeyID:
+		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSubagentID, aarmreceipt.FieldSubagentType, aarmreceipt.FieldSignerKeyID:
 			values[i] = new(sql.NullString)
 		case aarmreceipt.FieldRecordedAt:
 			values[i] = new(sql.NullTime)
@@ -229,6 +235,24 @@ func (_m *AarmReceipt) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				_m.Hash = *value
 			}
+		case aarmreceipt.FieldSubagentID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field subagent_id", values[i])
+			} else if value.Valid {
+				_m.SubagentID = value.String
+			}
+		case aarmreceipt.FieldSubagentType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field subagent_type", values[i])
+			} else if value.Valid {
+				_m.SubagentType = value.String
+			}
+		case aarmreceipt.FieldPolicyHash:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field policy_hash", values[i])
+			} else if value != nil {
+				_m.PolicyHash = *value
+			}
 		case aarmreceipt.FieldSignature:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field signature", values[i])
@@ -338,6 +362,15 @@ func (_m *AarmReceipt) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("hash=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Hash))
+	builder.WriteString(", ")
+	builder.WriteString("subagent_id=")
+	builder.WriteString(_m.SubagentID)
+	builder.WriteString(", ")
+	builder.WriteString("subagent_type=")
+	builder.WriteString(_m.SubagentType)
+	builder.WriteString(", ")
+	builder.WriteString("policy_hash=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PolicyHash))
 	builder.WriteString(", ")
 	builder.WriteString("signature=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Signature))

@@ -84,6 +84,8 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 			next.ActionType = string(in.Action.Type)
 			next.Project = in.Action.Project
 			next.ActionPayload = actionPayloadMap(in.Action)
+			next.SubagentID = in.Action.SubagentID
+			next.SubagentType = in.Action.SubagentType
 		}
 		if next.Agent == "" {
 			next.Agent = in.Agent
@@ -100,6 +102,7 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 			next.Snapshot = snapshotMap(in.Snapshot)
 		}
 
+		next.PolicyHash = in.PolicyHash
 		next.ResultStatus = DeriveInsertResultStatus(next.Decision)
 
 		hashInput := NewHashInput(HashInputFields{
@@ -119,6 +122,9 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 			MatchedRuleIDs: next.MatchedRuleIDs,
 			Snapshot:       next.Snapshot,
 			ActionPayload:  next.ActionPayload,
+			SubagentID:     next.SubagentID,
+			SubagentType:   next.SubagentType,
+			PolicyHash:     next.PolicyHash,
 		})
 		hash, err := ComputeHash(hashInput)
 		if err != nil {

@@ -229,6 +229,40 @@ func (_c *AarmReceiptCreate) SetHash(v []byte) *AarmReceiptCreate {
 	return _c
 }
 
+// SetSubagentID sets the "subagent_id" field.
+func (_c *AarmReceiptCreate) SetSubagentID(v string) *AarmReceiptCreate {
+	_c.mutation.SetSubagentID(v)
+	return _c
+}
+
+// SetNillableSubagentID sets the "subagent_id" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillableSubagentID(v *string) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetSubagentID(*v)
+	}
+	return _c
+}
+
+// SetSubagentType sets the "subagent_type" field.
+func (_c *AarmReceiptCreate) SetSubagentType(v string) *AarmReceiptCreate {
+	_c.mutation.SetSubagentType(v)
+	return _c
+}
+
+// SetNillableSubagentType sets the "subagent_type" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillableSubagentType(v *string) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetSubagentType(*v)
+	}
+	return _c
+}
+
+// SetPolicyHash sets the "policy_hash" field.
+func (_c *AarmReceiptCreate) SetPolicyHash(v []byte) *AarmReceiptCreate {
+	_c.mutation.SetPolicyHash(v)
+	return _c
+}
+
 // SetSignature sets the "signature" field.
 func (_c *AarmReceiptCreate) SetSignature(v []byte) *AarmReceiptCreate {
 	_c.mutation.SetSignature(v)
@@ -355,6 +389,11 @@ func (_c *AarmReceiptCreate) check() error {
 			return &ValidationError{Name: "hash", err: fmt.Errorf(`ent: validator failed for field "AarmReceipt.hash": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.PolicyHash(); ok {
+		if err := aarmreceipt.PolicyHashValidator(v); err != nil {
+			return &ValidationError{Name: "policy_hash", err: fmt.Errorf(`ent: validator failed for field "AarmReceipt.policy_hash": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -469,6 +508,18 @@ func (_c *AarmReceiptCreate) createSpec() (*AarmReceipt, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Hash(); ok {
 		_spec.SetField(aarmreceipt.FieldHash, field.TypeBytes, value)
 		_node.Hash = value
+	}
+	if value, ok := _c.mutation.SubagentID(); ok {
+		_spec.SetField(aarmreceipt.FieldSubagentID, field.TypeString, value)
+		_node.SubagentID = value
+	}
+	if value, ok := _c.mutation.SubagentType(); ok {
+		_spec.SetField(aarmreceipt.FieldSubagentType, field.TypeString, value)
+		_node.SubagentType = value
+	}
+	if value, ok := _c.mutation.PolicyHash(); ok {
+		_spec.SetField(aarmreceipt.FieldPolicyHash, field.TypeBytes, value)
+		_node.PolicyHash = value
 	}
 	if value, ok := _c.mutation.Signature(); ok {
 		_spec.SetField(aarmreceipt.FieldSignature, field.TypeBytes, value)

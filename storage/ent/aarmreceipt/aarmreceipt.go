@@ -55,6 +55,12 @@ const (
 	FieldPrevHash = "prev_hash"
 	// FieldHash holds the string denoting the hash field in the database.
 	FieldHash = "hash"
+	// FieldSubagentID holds the string denoting the subagent_id field in the database.
+	FieldSubagentID = "subagent_id"
+	// FieldSubagentType holds the string denoting the subagent_type field in the database.
+	FieldSubagentType = "subagent_type"
+	// FieldPolicyHash holds the string denoting the policy_hash field in the database.
+	FieldPolicyHash = "policy_hash"
 	// FieldSignature holds the string denoting the signature field in the database.
 	FieldSignature = "signature"
 	// FieldSignerKeyID holds the string denoting the signer_key_id field in the database.
@@ -86,6 +92,9 @@ var Columns = []string{
 	FieldActionPayload,
 	FieldPrevHash,
 	FieldHash,
+	FieldSubagentID,
+	FieldSubagentType,
+	FieldPolicyHash,
 	FieldSignature,
 	FieldSignerKeyID,
 }
@@ -109,6 +118,8 @@ var (
 	PrevHashValidator func([]byte) error
 	// HashValidator is a validator for the "hash" field. It is called by the builders before save.
 	HashValidator func([]byte) error
+	// PolicyHashValidator is a validator for the "policy_hash" field. It is called by the builders before save.
+	PolicyHashValidator func([]byte) error
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -223,6 +234,16 @@ func ByDurationMs(opts ...sql.OrderTermOption) OrderOption {
 // ByErrorMessage orders the results by the error_message field.
 func ByErrorMessage(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldErrorMessage, opts...).ToFunc()
+}
+
+// BySubagentID orders the results by the subagent_id field.
+func BySubagentID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubagentID, opts...).ToFunc()
+}
+
+// BySubagentType orders the results by the subagent_type field.
+func BySubagentType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubagentType, opts...).ToFunc()
 }
 
 // BySignerKeyID orders the results by the signer_key_id field.

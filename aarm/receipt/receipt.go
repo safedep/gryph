@@ -47,6 +47,11 @@ type RecordInput struct {
 
 	// RecordedAt overrides the row's recorded_at. Default: time.Now().UTC().
 	RecordedAt time.Time
+
+	// PolicyHash is the SHA-256 over the policy document this action was
+	// evaluated under. Persisted on the row and folded into the receipt hash
+	// so a policy edit is visible at verify time.
+	PolicyHash []byte
 }
 
 // Record summarizes a successful Generator.Record call so the Mediator can

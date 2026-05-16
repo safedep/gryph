@@ -647,7 +647,7 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 	if store != nil {
 		opts = append(opts, aarmsec.WithAccumulator(accumulator.NewSQLite(store)))
 		var recOpts []receipt.GeneratorOption
-		if cfg != nil && cfg.Policy.Receipts.Sign {
+		if cfg != nil && cfg.Policy.Receipts.EffectiveSignMode() != config.SignModeNever {
 			signer, signErr := loadReceiptSignerFromConfig(cfg, paths)
 			if signErr != nil {
 				return nil, fmt.Errorf("load receipt signer: %w", signErr)

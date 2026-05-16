@@ -159,8 +159,9 @@ INSERT INTO aarm_receipts (
     decision, matched_rule_ids, severity, message,
     result_status, duration_ms, error_message,
     snapshot, action_payload, prev_hash, hash,
+    subagent_id, subagent_type, policy_hash,
     signature, signer_key_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	var actionIDArg, eventIDArg, agentArg, toolArg, projectArg interface{}
 	if row.ActionID != uuid.Nil {
@@ -226,6 +227,17 @@ INSERT INTO aarm_receipts (
 		prevHashArg = row.PrevHash
 	}
 
+	var subagentIDArg, subagentTypeArg, policyHashArg interface{}
+	if row.SubagentID != "" {
+		subagentIDArg = row.SubagentID
+	}
+	if row.SubagentType != "" {
+		subagentTypeArg = row.SubagentType
+	}
+	if len(row.PolicyHash) > 0 {
+		policyHashArg = row.PolicyHash
+	}
+
 	var signatureArg, signerKeyIDArg interface{}
 	if len(row.Signature) > 0 {
 		signatureArg = row.Signature
@@ -240,6 +252,7 @@ INSERT INTO aarm_receipts (
 		row.Decision, ruleIDsArg, severityArg, messageArg,
 		row.ResultStatus, durationArg, errorMsgArg,
 		snapshotArg, payloadArg, prevHashArg, row.Hash,
+		subagentIDArg, subagentTypeArg, policyHashArg,
 		signatureArg, signerKeyIDArg,
 	)
 	return err
@@ -325,6 +338,15 @@ func receiptCreate(client *ent.AarmReceiptClient, row *ReceiptRow) *ent.AarmRece
 	}
 	if len(row.PrevHash) > 0 {
 		create.SetPrevHash(row.PrevHash)
+	}
+	if row.SubagentID != "" {
+		create.SetSubagentID(row.SubagentID)
+	}
+	if row.SubagentType != "" {
+		create.SetSubagentType(row.SubagentType)
+	}
+	if len(row.PolicyHash) > 0 {
+		create.SetPolicyHash(row.PolicyHash)
 	}
 	if len(row.Signature) > 0 {
 		create.SetSignature(row.Signature)
@@ -599,6 +621,9 @@ func entToReceipt(e *ent.AarmReceipt) *ReceiptRow {
 		ActionPayload:  e.ActionPayload,
 		PrevHash:       e.PrevHash,
 		Hash:           e.Hash,
+		SubagentID:     e.SubagentID,
+		SubagentType:   e.SubagentType,
+		PolicyHash:     e.PolicyHash,
 		Signature:      e.Signature,
 		SignerKeyID:    e.SignerKeyID,
 	}

@@ -51,6 +51,9 @@ func ChainRowFromReceipt(r *storage.ReceiptRow) ChainRow {
 			MatchedRuleIDs: r.MatchedRuleIDs,
 			Snapshot:       r.Snapshot,
 			ActionPayload:  r.ActionPayload,
+			SubagentID:     r.SubagentID,
+			SubagentType:   r.SubagentType,
+			PolicyHash:     r.PolicyHash,
 		},
 	}
 }

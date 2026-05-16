@@ -101,6 +101,9 @@ var (
 		{Name: "action_payload", Type: field.TypeJSON, Nullable: true},
 		{Name: "prev_hash", Type: field.TypeBytes, Nullable: true, Size: 32},
 		{Name: "hash", Type: field.TypeBytes, Size: 32},
+		{Name: "subagent_id", Type: field.TypeString, Nullable: true},
+		{Name: "subagent_type", Type: field.TypeString, Nullable: true},
+		{Name: "policy_hash", Type: field.TypeBytes, Nullable: true, Size: 32},
 		{Name: "signature", Type: field.TypeBytes, Nullable: true},
 		{Name: "signer_key_id", Type: field.TypeString, Nullable: true},
 	}

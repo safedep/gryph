@@ -113,6 +113,13 @@ func chainRowFromExported(row ExportedReceipt) (ChainRow, error) {
 			return ChainRow{}, fmt.Errorf("parse event_id: %w", err)
 		}
 	}
+	var policyHashBytes []byte
+	if row.PolicyHash != "" {
+		policyHashBytes, err = hex.DecodeString(row.PolicyHash)
+		if err != nil {
+			return ChainRow{}, fmt.Errorf("decode policy_hash: %w", err)
+		}
+	}
 	return ChainRow{
 		SessionID: sessID,
 		Sequence:  row.Sequence,
@@ -135,6 +142,9 @@ func chainRowFromExported(row ExportedReceipt) (ChainRow, error) {
 			MatchedRuleIDs: row.MatchedRuleIDs,
 			Snapshot:       row.Snapshot,
 			ActionPayload:  row.ActionPayload,
+			SubagentID:     row.SubagentID,
+			SubagentType:   row.SubagentType,
+			PolicyHash:     policyHashBytes,
 		},
 	}, nil
 }

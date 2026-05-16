@@ -353,6 +353,58 @@ func (_u *AarmReceiptUpdate) SetHash(v []byte) *AarmReceiptUpdate {
 	return _u
 }
 
+// SetSubagentID sets the "subagent_id" field.
+func (_u *AarmReceiptUpdate) SetSubagentID(v string) *AarmReceiptUpdate {
+	_u.mutation.SetSubagentID(v)
+	return _u
+}
+
+// SetNillableSubagentID sets the "subagent_id" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableSubagentID(v *string) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetSubagentID(*v)
+	}
+	return _u
+}
+
+// ClearSubagentID clears the value of the "subagent_id" field.
+func (_u *AarmReceiptUpdate) ClearSubagentID() *AarmReceiptUpdate {
+	_u.mutation.ClearSubagentID()
+	return _u
+}
+
+// SetSubagentType sets the "subagent_type" field.
+func (_u *AarmReceiptUpdate) SetSubagentType(v string) *AarmReceiptUpdate {
+	_u.mutation.SetSubagentType(v)
+	return _u
+}
+
+// SetNillableSubagentType sets the "subagent_type" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableSubagentType(v *string) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetSubagentType(*v)
+	}
+	return _u
+}
+
+// ClearSubagentType clears the value of the "subagent_type" field.
+func (_u *AarmReceiptUpdate) ClearSubagentType() *AarmReceiptUpdate {
+	_u.mutation.ClearSubagentType()
+	return _u
+}
+
+// SetPolicyHash sets the "policy_hash" field.
+func (_u *AarmReceiptUpdate) SetPolicyHash(v []byte) *AarmReceiptUpdate {
+	_u.mutation.SetPolicyHash(v)
+	return _u
+}
+
+// ClearPolicyHash clears the value of the "policy_hash" field.
+func (_u *AarmReceiptUpdate) ClearPolicyHash() *AarmReceiptUpdate {
+	_u.mutation.ClearPolicyHash()
+	return _u
+}
+
 // SetSignature sets the "signature" field.
 func (_u *AarmReceiptUpdate) SetSignature(v []byte) *AarmReceiptUpdate {
 	_u.mutation.SetSignature(v)
@@ -437,6 +489,11 @@ func (_u *AarmReceiptUpdate) check() error {
 	if v, ok := _u.mutation.Hash(); ok {
 		if err := aarmreceipt.HashValidator(v); err != nil {
 			return &ValidationError{Name: "hash", err: fmt.Errorf(`ent: validator failed for field "AarmReceipt.hash": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PolicyHash(); ok {
+		if err := aarmreceipt.PolicyHashValidator(v); err != nil {
+			return &ValidationError{Name: "policy_hash", err: fmt.Errorf(`ent: validator failed for field "AarmReceipt.policy_hash": %w`, err)}
 		}
 	}
 	return nil
@@ -560,6 +617,24 @@ func (_u *AarmReceiptUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.Hash(); ok {
 		_spec.SetField(aarmreceipt.FieldHash, field.TypeBytes, value)
+	}
+	if value, ok := _u.mutation.SubagentID(); ok {
+		_spec.SetField(aarmreceipt.FieldSubagentID, field.TypeString, value)
+	}
+	if _u.mutation.SubagentIDCleared() {
+		_spec.ClearField(aarmreceipt.FieldSubagentID, field.TypeString)
+	}
+	if value, ok := _u.mutation.SubagentType(); ok {
+		_spec.SetField(aarmreceipt.FieldSubagentType, field.TypeString, value)
+	}
+	if _u.mutation.SubagentTypeCleared() {
+		_spec.ClearField(aarmreceipt.FieldSubagentType, field.TypeString)
+	}
+	if value, ok := _u.mutation.PolicyHash(); ok {
+		_spec.SetField(aarmreceipt.FieldPolicyHash, field.TypeBytes, value)
+	}
+	if _u.mutation.PolicyHashCleared() {
+		_spec.ClearField(aarmreceipt.FieldPolicyHash, field.TypeBytes)
 	}
 	if value, ok := _u.mutation.Signature(); ok {
 		_spec.SetField(aarmreceipt.FieldSignature, field.TypeBytes, value)
@@ -917,6 +992,58 @@ func (_u *AarmReceiptUpdateOne) SetHash(v []byte) *AarmReceiptUpdateOne {
 	return _u
 }
 
+// SetSubagentID sets the "subagent_id" field.
+func (_u *AarmReceiptUpdateOne) SetSubagentID(v string) *AarmReceiptUpdateOne {
+	_u.mutation.SetSubagentID(v)
+	return _u
+}
+
+// SetNillableSubagentID sets the "subagent_id" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableSubagentID(v *string) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetSubagentID(*v)
+	}
+	return _u
+}
+
+// ClearSubagentID clears the value of the "subagent_id" field.
+func (_u *AarmReceiptUpdateOne) ClearSubagentID() *AarmReceiptUpdateOne {
+	_u.mutation.ClearSubagentID()
+	return _u
+}
+
+// SetSubagentType sets the "subagent_type" field.
+func (_u *AarmReceiptUpdateOne) SetSubagentType(v string) *AarmReceiptUpdateOne {
+	_u.mutation.SetSubagentType(v)
+	return _u
+}
+
+// SetNillableSubagentType sets the "subagent_type" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableSubagentType(v *string) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetSubagentType(*v)
+	}
+	return _u
+}
+
+// ClearSubagentType clears the value of the "subagent_type" field.
+func (_u *AarmReceiptUpdateOne) ClearSubagentType() *AarmReceiptUpdateOne {
+	_u.mutation.ClearSubagentType()
+	return _u
+}
+
+// SetPolicyHash sets the "policy_hash" field.
+func (_u *AarmReceiptUpdateOne) SetPolicyHash(v []byte) *AarmReceiptUpdateOne {
+	_u.mutation.SetPolicyHash(v)
+	return _u
+}
+
+// ClearPolicyHash clears the value of the "policy_hash" field.
+func (_u *AarmReceiptUpdateOne) ClearPolicyHash() *AarmReceiptUpdateOne {
+	_u.mutation.ClearPolicyHash()
+	return _u
+}
+
 // SetSignature sets the "signature" field.
 func (_u *AarmReceiptUpdateOne) SetSignature(v []byte) *AarmReceiptUpdateOne {
 	_u.mutation.SetSignature(v)
@@ -1014,6 +1141,11 @@ func (_u *AarmReceiptUpdateOne) check() error {
 	if v, ok := _u.mutation.Hash(); ok {
 		if err := aarmreceipt.HashValidator(v); err != nil {
 			return &ValidationError{Name: "hash", err: fmt.Errorf(`ent: validator failed for field "AarmReceipt.hash": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PolicyHash(); ok {
+		if err := aarmreceipt.PolicyHashValidator(v); err != nil {
+			return &ValidationError{Name: "policy_hash", err: fmt.Errorf(`ent: validator failed for field "AarmReceipt.policy_hash": %w`, err)}
 		}
 	}
 	return nil
@@ -1154,6 +1286,24 @@ func (_u *AarmReceiptUpdateOne) sqlSave(ctx context.Context) (_node *AarmReceipt
 	}
 	if value, ok := _u.mutation.Hash(); ok {
 		_spec.SetField(aarmreceipt.FieldHash, field.TypeBytes, value)
+	}
+	if value, ok := _u.mutation.SubagentID(); ok {
+		_spec.SetField(aarmreceipt.FieldSubagentID, field.TypeString, value)
+	}
+	if _u.mutation.SubagentIDCleared() {
+		_spec.ClearField(aarmreceipt.FieldSubagentID, field.TypeString)
+	}
+	if value, ok := _u.mutation.SubagentType(); ok {
+		_spec.SetField(aarmreceipt.FieldSubagentType, field.TypeString, value)
+	}
+	if _u.mutation.SubagentTypeCleared() {
+		_spec.ClearField(aarmreceipt.FieldSubagentType, field.TypeString)
+	}
+	if value, ok := _u.mutation.PolicyHash(); ok {
+		_spec.SetField(aarmreceipt.FieldPolicyHash, field.TypeBytes, value)
+	}
+	if _u.mutation.PolicyHashCleared() {
+		_spec.ClearField(aarmreceipt.FieldPolicyHash, field.TypeBytes)
 	}
 	if value, ok := _u.mutation.Signature(); ok {
 		_spec.SetField(aarmreceipt.FieldSignature, field.TypeBytes, value)

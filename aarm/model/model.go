@@ -54,6 +54,9 @@ type Action struct {
 	WorkingDir     string
 	Project        string
 
+	SubagentID   string
+	SubagentType string
+
 	OriginalRequest     string
 	DataClassifications []string
 	InjectionScore      float32

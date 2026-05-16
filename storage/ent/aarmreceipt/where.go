@@ -135,6 +135,21 @@ func Hash(v []byte) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldHash, v))
 }
 
+// SubagentID applies equality check predicate on the "subagent_id" field. It's identical to SubagentIDEQ.
+func SubagentID(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldSubagentID, v))
+}
+
+// SubagentType applies equality check predicate on the "subagent_type" field. It's identical to SubagentTypeEQ.
+func SubagentType(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldSubagentType, v))
+}
+
+// PolicyHash applies equality check predicate on the "policy_hash" field. It's identical to PolicyHashEQ.
+func PolicyHash(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldPolicyHash, v))
+}
+
 // Signature applies equality check predicate on the "signature" field. It's identical to SignatureEQ.
 func Signature(v []byte) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldSignature, v))
@@ -1133,6 +1148,206 @@ func HashLT(v []byte) predicate.AarmReceipt {
 // HashLTE applies the LTE predicate on the "hash" field.
 func HashLTE(v []byte) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldLTE(FieldHash, v))
+}
+
+// SubagentIDEQ applies the EQ predicate on the "subagent_id" field.
+func SubagentIDEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldSubagentID, v))
+}
+
+// SubagentIDNEQ applies the NEQ predicate on the "subagent_id" field.
+func SubagentIDNEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldSubagentID, v))
+}
+
+// SubagentIDIn applies the In predicate on the "subagent_id" field.
+func SubagentIDIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldSubagentID, vs...))
+}
+
+// SubagentIDNotIn applies the NotIn predicate on the "subagent_id" field.
+func SubagentIDNotIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldSubagentID, vs...))
+}
+
+// SubagentIDGT applies the GT predicate on the "subagent_id" field.
+func SubagentIDGT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldSubagentID, v))
+}
+
+// SubagentIDGTE applies the GTE predicate on the "subagent_id" field.
+func SubagentIDGTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldSubagentID, v))
+}
+
+// SubagentIDLT applies the LT predicate on the "subagent_id" field.
+func SubagentIDLT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldSubagentID, v))
+}
+
+// SubagentIDLTE applies the LTE predicate on the "subagent_id" field.
+func SubagentIDLTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldSubagentID, v))
+}
+
+// SubagentIDContains applies the Contains predicate on the "subagent_id" field.
+func SubagentIDContains(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContains(FieldSubagentID, v))
+}
+
+// SubagentIDHasPrefix applies the HasPrefix predicate on the "subagent_id" field.
+func SubagentIDHasPrefix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasPrefix(FieldSubagentID, v))
+}
+
+// SubagentIDHasSuffix applies the HasSuffix predicate on the "subagent_id" field.
+func SubagentIDHasSuffix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasSuffix(FieldSubagentID, v))
+}
+
+// SubagentIDIsNil applies the IsNil predicate on the "subagent_id" field.
+func SubagentIDIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldSubagentID))
+}
+
+// SubagentIDNotNil applies the NotNil predicate on the "subagent_id" field.
+func SubagentIDNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldSubagentID))
+}
+
+// SubagentIDEqualFold applies the EqualFold predicate on the "subagent_id" field.
+func SubagentIDEqualFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEqualFold(FieldSubagentID, v))
+}
+
+// SubagentIDContainsFold applies the ContainsFold predicate on the "subagent_id" field.
+func SubagentIDContainsFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContainsFold(FieldSubagentID, v))
+}
+
+// SubagentTypeEQ applies the EQ predicate on the "subagent_type" field.
+func SubagentTypeEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldSubagentType, v))
+}
+
+// SubagentTypeNEQ applies the NEQ predicate on the "subagent_type" field.
+func SubagentTypeNEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldSubagentType, v))
+}
+
+// SubagentTypeIn applies the In predicate on the "subagent_type" field.
+func SubagentTypeIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldSubagentType, vs...))
+}
+
+// SubagentTypeNotIn applies the NotIn predicate on the "subagent_type" field.
+func SubagentTypeNotIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldSubagentType, vs...))
+}
+
+// SubagentTypeGT applies the GT predicate on the "subagent_type" field.
+func SubagentTypeGT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldSubagentType, v))
+}
+
+// SubagentTypeGTE applies the GTE predicate on the "subagent_type" field.
+func SubagentTypeGTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldSubagentType, v))
+}
+
+// SubagentTypeLT applies the LT predicate on the "subagent_type" field.
+func SubagentTypeLT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldSubagentType, v))
+}
+
+// SubagentTypeLTE applies the LTE predicate on the "subagent_type" field.
+func SubagentTypeLTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldSubagentType, v))
+}
+
+// SubagentTypeContains applies the Contains predicate on the "subagent_type" field.
+func SubagentTypeContains(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContains(FieldSubagentType, v))
+}
+
+// SubagentTypeHasPrefix applies the HasPrefix predicate on the "subagent_type" field.
+func SubagentTypeHasPrefix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasPrefix(FieldSubagentType, v))
+}
+
+// SubagentTypeHasSuffix applies the HasSuffix predicate on the "subagent_type" field.
+func SubagentTypeHasSuffix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasSuffix(FieldSubagentType, v))
+}
+
+// SubagentTypeIsNil applies the IsNil predicate on the "subagent_type" field.
+func SubagentTypeIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldSubagentType))
+}
+
+// SubagentTypeNotNil applies the NotNil predicate on the "subagent_type" field.
+func SubagentTypeNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldSubagentType))
+}
+
+// SubagentTypeEqualFold applies the EqualFold predicate on the "subagent_type" field.
+func SubagentTypeEqualFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEqualFold(FieldSubagentType, v))
+}
+
+// SubagentTypeContainsFold applies the ContainsFold predicate on the "subagent_type" field.
+func SubagentTypeContainsFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContainsFold(FieldSubagentType, v))
+}
+
+// PolicyHashEQ applies the EQ predicate on the "policy_hash" field.
+func PolicyHashEQ(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldPolicyHash, v))
+}
+
+// PolicyHashNEQ applies the NEQ predicate on the "policy_hash" field.
+func PolicyHashNEQ(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldPolicyHash, v))
+}
+
+// PolicyHashIn applies the In predicate on the "policy_hash" field.
+func PolicyHashIn(vs ...[]byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldPolicyHash, vs...))
+}
+
+// PolicyHashNotIn applies the NotIn predicate on the "policy_hash" field.
+func PolicyHashNotIn(vs ...[]byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldPolicyHash, vs...))
+}
+
+// PolicyHashGT applies the GT predicate on the "policy_hash" field.
+func PolicyHashGT(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldPolicyHash, v))
+}
+
+// PolicyHashGTE applies the GTE predicate on the "policy_hash" field.
+func PolicyHashGTE(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldPolicyHash, v))
+}
+
+// PolicyHashLT applies the LT predicate on the "policy_hash" field.
+func PolicyHashLT(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldPolicyHash, v))
+}
+
+// PolicyHashLTE applies the LTE predicate on the "policy_hash" field.
+func PolicyHashLTE(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldPolicyHash, v))
+}
+
+// PolicyHashIsNil applies the IsNil predicate on the "policy_hash" field.
+func PolicyHashIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldPolicyHash))
+}
+
+// PolicyHashNotNil applies the NotNil predicate on the "policy_hash" field.
+func PolicyHashNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldPolicyHash))
 }
 
 // SignatureEQ applies the EQ predicate on the "signature" field.

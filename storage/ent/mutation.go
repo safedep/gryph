@@ -2632,6 +2632,9 @@ type AarmReceiptMutation struct {
 	action_payload         *map[string]interface{}
 	prev_hash              *[]byte
 	hash                   *[]byte
+	subagent_id            *string
+	subagent_type          *string
+	policy_hash            *[]byte
 	signature              *[]byte
 	signer_key_id          *string
 	clearedFields          map[string]struct{}
@@ -3690,6 +3693,153 @@ func (m *AarmReceiptMutation) ResetHash() {
 	m.hash = nil
 }
 
+// SetSubagentID sets the "subagent_id" field.
+func (m *AarmReceiptMutation) SetSubagentID(s string) {
+	m.subagent_id = &s
+}
+
+// SubagentID returns the value of the "subagent_id" field in the mutation.
+func (m *AarmReceiptMutation) SubagentID() (r string, exists bool) {
+	v := m.subagent_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubagentID returns the old "subagent_id" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldSubagentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubagentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubagentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubagentID: %w", err)
+	}
+	return oldValue.SubagentID, nil
+}
+
+// ClearSubagentID clears the value of the "subagent_id" field.
+func (m *AarmReceiptMutation) ClearSubagentID() {
+	m.subagent_id = nil
+	m.clearedFields[aarmreceipt.FieldSubagentID] = struct{}{}
+}
+
+// SubagentIDCleared returns if the "subagent_id" field was cleared in this mutation.
+func (m *AarmReceiptMutation) SubagentIDCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldSubagentID]
+	return ok
+}
+
+// ResetSubagentID resets all changes to the "subagent_id" field.
+func (m *AarmReceiptMutation) ResetSubagentID() {
+	m.subagent_id = nil
+	delete(m.clearedFields, aarmreceipt.FieldSubagentID)
+}
+
+// SetSubagentType sets the "subagent_type" field.
+func (m *AarmReceiptMutation) SetSubagentType(s string) {
+	m.subagent_type = &s
+}
+
+// SubagentType returns the value of the "subagent_type" field in the mutation.
+func (m *AarmReceiptMutation) SubagentType() (r string, exists bool) {
+	v := m.subagent_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubagentType returns the old "subagent_type" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldSubagentType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubagentType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubagentType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubagentType: %w", err)
+	}
+	return oldValue.SubagentType, nil
+}
+
+// ClearSubagentType clears the value of the "subagent_type" field.
+func (m *AarmReceiptMutation) ClearSubagentType() {
+	m.subagent_type = nil
+	m.clearedFields[aarmreceipt.FieldSubagentType] = struct{}{}
+}
+
+// SubagentTypeCleared returns if the "subagent_type" field was cleared in this mutation.
+func (m *AarmReceiptMutation) SubagentTypeCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldSubagentType]
+	return ok
+}
+
+// ResetSubagentType resets all changes to the "subagent_type" field.
+func (m *AarmReceiptMutation) ResetSubagentType() {
+	m.subagent_type = nil
+	delete(m.clearedFields, aarmreceipt.FieldSubagentType)
+}
+
+// SetPolicyHash sets the "policy_hash" field.
+func (m *AarmReceiptMutation) SetPolicyHash(b []byte) {
+	m.policy_hash = &b
+}
+
+// PolicyHash returns the value of the "policy_hash" field in the mutation.
+func (m *AarmReceiptMutation) PolicyHash() (r []byte, exists bool) {
+	v := m.policy_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPolicyHash returns the old "policy_hash" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldPolicyHash(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPolicyHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPolicyHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPolicyHash: %w", err)
+	}
+	return oldValue.PolicyHash, nil
+}
+
+// ClearPolicyHash clears the value of the "policy_hash" field.
+func (m *AarmReceiptMutation) ClearPolicyHash() {
+	m.policy_hash = nil
+	m.clearedFields[aarmreceipt.FieldPolicyHash] = struct{}{}
+}
+
+// PolicyHashCleared returns if the "policy_hash" field was cleared in this mutation.
+func (m *AarmReceiptMutation) PolicyHashCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldPolicyHash]
+	return ok
+}
+
+// ResetPolicyHash resets all changes to the "policy_hash" field.
+func (m *AarmReceiptMutation) ResetPolicyHash() {
+	m.policy_hash = nil
+	delete(m.clearedFields, aarmreceipt.FieldPolicyHash)
+}
+
 // SetSignature sets the "signature" field.
 func (m *AarmReceiptMutation) SetSignature(b []byte) {
 	m.signature = &b
@@ -3822,7 +3972,7 @@ func (m *AarmReceiptMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AarmReceiptMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 25)
 	if m.session_id != nil {
 		fields = append(fields, aarmreceipt.FieldSessionID)
 	}
@@ -3883,6 +4033,15 @@ func (m *AarmReceiptMutation) Fields() []string {
 	if m.hash != nil {
 		fields = append(fields, aarmreceipt.FieldHash)
 	}
+	if m.subagent_id != nil {
+		fields = append(fields, aarmreceipt.FieldSubagentID)
+	}
+	if m.subagent_type != nil {
+		fields = append(fields, aarmreceipt.FieldSubagentType)
+	}
+	if m.policy_hash != nil {
+		fields = append(fields, aarmreceipt.FieldPolicyHash)
+	}
 	if m.signature != nil {
 		fields = append(fields, aarmreceipt.FieldSignature)
 	}
@@ -3937,6 +4096,12 @@ func (m *AarmReceiptMutation) Field(name string) (ent.Value, bool) {
 		return m.PrevHash()
 	case aarmreceipt.FieldHash:
 		return m.Hash()
+	case aarmreceipt.FieldSubagentID:
+		return m.SubagentID()
+	case aarmreceipt.FieldSubagentType:
+		return m.SubagentType()
+	case aarmreceipt.FieldPolicyHash:
+		return m.PolicyHash()
 	case aarmreceipt.FieldSignature:
 		return m.Signature()
 	case aarmreceipt.FieldSignerKeyID:
@@ -3990,6 +4155,12 @@ func (m *AarmReceiptMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldPrevHash(ctx)
 	case aarmreceipt.FieldHash:
 		return m.OldHash(ctx)
+	case aarmreceipt.FieldSubagentID:
+		return m.OldSubagentID(ctx)
+	case aarmreceipt.FieldSubagentType:
+		return m.OldSubagentType(ctx)
+	case aarmreceipt.FieldPolicyHash:
+		return m.OldPolicyHash(ctx)
 	case aarmreceipt.FieldSignature:
 		return m.OldSignature(ctx)
 	case aarmreceipt.FieldSignerKeyID:
@@ -4143,6 +4314,27 @@ func (m *AarmReceiptMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetHash(v)
 		return nil
+	case aarmreceipt.FieldSubagentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubagentID(v)
+		return nil
+	case aarmreceipt.FieldSubagentType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubagentType(v)
+		return nil
+	case aarmreceipt.FieldPolicyHash:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPolicyHash(v)
+		return nil
 	case aarmreceipt.FieldSignature:
 		v, ok := value.([]byte)
 		if !ok {
@@ -4253,6 +4445,15 @@ func (m *AarmReceiptMutation) ClearedFields() []string {
 	if m.FieldCleared(aarmreceipt.FieldPrevHash) {
 		fields = append(fields, aarmreceipt.FieldPrevHash)
 	}
+	if m.FieldCleared(aarmreceipt.FieldSubagentID) {
+		fields = append(fields, aarmreceipt.FieldSubagentID)
+	}
+	if m.FieldCleared(aarmreceipt.FieldSubagentType) {
+		fields = append(fields, aarmreceipt.FieldSubagentType)
+	}
+	if m.FieldCleared(aarmreceipt.FieldPolicyHash) {
+		fields = append(fields, aarmreceipt.FieldPolicyHash)
+	}
 	if m.FieldCleared(aarmreceipt.FieldSignature) {
 		fields = append(fields, aarmreceipt.FieldSignature)
 	}
@@ -4311,6 +4512,15 @@ func (m *AarmReceiptMutation) ClearField(name string) error {
 		return nil
 	case aarmreceipt.FieldPrevHash:
 		m.ClearPrevHash()
+		return nil
+	case aarmreceipt.FieldSubagentID:
+		m.ClearSubagentID()
+		return nil
+	case aarmreceipt.FieldSubagentType:
+		m.ClearSubagentType()
+		return nil
+	case aarmreceipt.FieldPolicyHash:
+		m.ClearPolicyHash()
 		return nil
 	case aarmreceipt.FieldSignature:
 		m.ClearSignature()
@@ -4385,6 +4595,15 @@ func (m *AarmReceiptMutation) ResetField(name string) error {
 		return nil
 	case aarmreceipt.FieldHash:
 		m.ResetHash()
+		return nil
+	case aarmreceipt.FieldSubagentID:
+		m.ResetSubagentID()
+		return nil
+	case aarmreceipt.FieldSubagentType:
+		m.ResetSubagentType()
+		return nil
+	case aarmreceipt.FieldPolicyHash:
+		m.ResetPolicyHash()
 		return nil
 	case aarmreceipt.FieldSignature:
 		m.ResetSignature()

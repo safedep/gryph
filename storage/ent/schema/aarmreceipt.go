@@ -54,6 +54,10 @@ func (AarmReceipt) Fields() []ent.Field {
 		field.Bytes("prev_hash").Optional().MaxLen(32),
 		field.Bytes("hash").MaxLen(32),
 
+		field.String("subagent_id").Optional(),
+		field.String("subagent_type").Optional(),
+		field.Bytes("policy_hash").Optional().MaxLen(32),
+
 		field.Bytes("signature").Optional(),
 		field.String("signer_key_id").Optional(),
 	}

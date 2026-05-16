@@ -145,17 +145,23 @@ func validatePolicyConfig(cfg PolicyConfig) error {
 	if cfg.Approval.TimeoutSeconds < 1 {
 		return fmt.Errorf("policy.approval.timeout_seconds must be >= 1")
 	}
-	if cfg.Receipts.Sign {
+	mode := cfg.Receipts.EffectiveSignMode()
+	switch mode {
+	case SignModeAuto, SignModeAlways, SignModeNever:
+	default:
+		return fmt.Errorf("invalid policy.receipts.sign_mode: %q (must be %s, %s, or %s)", cfg.Receipts.SignMode, SignModeAuto, SignModeAlways, SignModeNever)
+	}
+	if mode == SignModeAlways {
 		keyPath := cfg.Receipts.KeyPath
 		if keyPath == "" {
 			keyPath = DefaultReceiptKeyPath(nil)
 		}
 		info, err := os.Stat(keyPath)
 		if err != nil {
-			return fmt.Errorf("policy.receipts.sign=true but key file %s is unreadable: %w", keyPath, err)
+			return fmt.Errorf("policy.receipts.sign_mode=always but key file %s is unreadable: %w", keyPath, err)
 		}
 		if info.IsDir() {
-			return fmt.Errorf("policy.receipts.sign=true but key path %s is a directory", keyPath)
+			return fmt.Errorf("policy.receipts.sign_mode=always but key path %s is a directory", keyPath)
 		}
 	}
 	return nil

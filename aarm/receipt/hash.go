@@ -10,10 +10,11 @@
 // String fields are encoded as UTF-8. Numbers are encoded as 8-byte
 // big-endian. UUIDs use their 16-byte binary form. matched_rule_ids is a
 // sorted-key-canonical JSON array. JSON objects (snapshot, action_payload)
-// are passed through canonicalJSON: keys are recursively sorted, arrays
-// keep order, scalars are encoded by encoding/json. The final SHA-256 is
-// the value stored in the receipt's hash column. The prev_hash for the
-// first receipt of a session is 32 zero bytes.
+// are passed through canonical.MarshalJSON: keys are recursively sorted,
+// arrays keep order, scalars are encoded by encoding/json, and nil values
+// serialize to the literal "null". The final SHA-256 is the value stored in
+// the receipt's hash column. The prev_hash for the first receipt of a
+// session is 32 zero bytes.
 //
 // Field order (canonical):
 //  1. sequence            (int64, 8 bytes BE)
@@ -35,6 +36,9 @@
 //  17. error_message      (utf-8 bytes)
 //  18. snapshot           (canonical JSON, "null" when nil)
 //  19. action_payload     (canonical JSON, "null" when nil)
+//  20. subagent_id        (utf-8 bytes; empty when not a subagent action)
+//  21. subagent_type      (utf-8 bytes; empty when not a subagent action)
+//  22. policy_hash        (length-prefixed bytes; empty for pre-Phase-4.5 rows)
 //
 // result_status contract
 //
@@ -64,11 +68,10 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
-	"sort"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/aarm/canonical"
 	"github.com/safedep/gryph/aarm/model"
 )
 
@@ -104,6 +107,9 @@ type HashInput struct {
 	ErrorMessage   string
 	Snapshot       map[string]interface{}
 	ActionPayload  map[string]interface{}
+	SubagentID     string
+	SubagentType   string
+	PolicyHash     []byte
 }
 
 // DeriveInsertResultStatus returns the insert-time result_status implied by
@@ -161,6 +167,9 @@ type HashInputFields struct {
 	MatchedRuleIDs []string
 	Snapshot       map[string]interface{}
 	ActionPayload  map[string]interface{}
+	SubagentID     string
+	SubagentType   string
+	PolicyHash     []byte
 }
 
 // NewHashInput builds a *HashInput from the explicit row fields, applying the
@@ -191,6 +200,9 @@ func NewHashInput(f HashInputFields) *HashInput {
 		ErrorMessage:   "",
 		Snapshot:       f.Snapshot,
 		ActionPayload:  f.ActionPayload,
+		SubagentID:     f.SubagentID,
+		SubagentType:   f.SubagentType,
+		PolicyHash:     f.PolicyHash,
 	}
 }
 
@@ -239,7 +251,7 @@ func ComputeHash(in *HashInput) ([]byte, error) {
 		}
 	}
 
-	ruleIDs, err := canonicalJSONFromValue(in.MatchedRuleIDs)
+	ruleIDs, err := canonical.MarshalJSON(in.MatchedRuleIDs)
 	if err != nil {
 		return nil, fmt.Errorf("receipt: canonicalize matched_rule_ids: %w", err)
 	}
@@ -257,7 +269,7 @@ func ComputeHash(in *HashInput) ([]byte, error) {
 		return nil, err
 	}
 
-	snap, err := canonicalJSONFromMap(in.Snapshot)
+	snap, err := canonical.MarshalJSON(in.Snapshot)
 	if err != nil {
 		return nil, fmt.Errorf("receipt: canonicalize snapshot: %w", err)
 	}
@@ -265,11 +277,21 @@ func ComputeHash(in *HashInput) ([]byte, error) {
 		return nil, err
 	}
 
-	payload, err := canonicalJSONFromMap(in.ActionPayload)
+	payload, err := canonical.MarshalJSON(in.ActionPayload)
 	if err != nil {
 		return nil, fmt.Errorf("receipt: canonicalize action_payload: %w", err)
 	}
 	if err := writeBytes(&buf, payload); err != nil {
+		return nil, err
+	}
+
+	if err := writeString(&buf, in.SubagentID); err != nil {
+		return nil, err
+	}
+	if err := writeString(&buf, in.SubagentType); err != nil {
+		return nil, err
+	}
+	if err := writeBytes(&buf, in.PolicyHash); err != nil {
 		return nil, err
 	}
 
@@ -300,99 +322,4 @@ func writeString(buf *bytes.Buffer, s string) error {
 
 func writeUUID(buf *bytes.Buffer, id uuid.UUID) error {
 	return writeBytes(buf, id[:])
-}
-
-func canonicalJSONFromMap(m map[string]interface{}) ([]byte, error) {
-	if m == nil {
-		return []byte("null"), nil
-	}
-	return canonicalJSONFromValue(m)
-}
-
-// canonicalJSONFromValue serializes v with recursively sorted object keys.
-// Arrays preserve order. Scalars use encoding/json defaults. Hot inputs
-// (map[string]interface{}, []interface{}, []string) are routed directly to
-// marshalCanonical without round-tripping through encoding/json first.
-func canonicalJSONFromValue(v interface{}) ([]byte, error) {
-	if v == nil {
-		return []byte("null"), nil
-	}
-	switch v.(type) {
-	case map[string]interface{}, []interface{}:
-		return marshalCanonical(v)
-	case []string:
-		return marshalCanonical(v)
-	}
-	raw, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-	var parsed interface{}
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return nil, err
-	}
-	return marshalCanonical(parsed)
-}
-
-func marshalCanonical(v interface{}) ([]byte, error) {
-	switch x := v.(type) {
-	case map[string]interface{}:
-		keys := make([]string, 0, len(x))
-		for k := range x {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		var buf bytes.Buffer
-		buf.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			keyBytes, err := json.Marshal(k)
-			if err != nil {
-				return nil, err
-			}
-			buf.Write(keyBytes)
-			buf.WriteByte(':')
-			child, err := marshalCanonical(x[k])
-			if err != nil {
-				return nil, err
-			}
-			buf.Write(child)
-		}
-		buf.WriteByte('}')
-		return buf.Bytes(), nil
-	case []interface{}:
-		var buf bytes.Buffer
-		buf.WriteByte('[')
-		for i, item := range x {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			child, err := marshalCanonical(item)
-			if err != nil {
-				return nil, err
-			}
-			buf.Write(child)
-		}
-		buf.WriteByte(']')
-		return buf.Bytes(), nil
-	case []string:
-		var buf bytes.Buffer
-		buf.WriteByte('[')
-		for i, item := range x {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			child, err := json.Marshal(item)
-			if err != nil {
-				return nil, err
-			}
-			buf.Write(child)
-		}
-		buf.WriteByte(']')
-		return buf.Bytes(), nil
-	default:
-		return json.Marshal(x)
-	}
 }

@@ -22,8 +22,9 @@ import (
 // MediatorConfig holds runtime tuning for the Mediator.
 type MediatorConfig struct {
 	// LogAllEvaluations controls whether allow decisions also produce a
-	// receipt. Default false: only block / guidance / warn / escalate
-	// generate receipt rows.
+	// receipt. The Go zero value is false (only block / guidance / warn /
+	// escalate generate receipt rows), but the CLI default sourced from
+	// policy.log_all_evaluations is true so allow rows are recorded too.
 	LogAllEvaluations bool
 
 	// ApprovalTimeout bounds how long the Mediator will block while waiting
@@ -49,13 +50,14 @@ type ApprovalAuditHook func(ctx context.Context, e ApprovalAudit)
 
 // Mediator implements the Gryph security.Check interface with AARM components.
 type Mediator struct {
-	adapter   mediation.Adapter
-	pdp       *pdp.PDP
-	accum     accumulator.Accumulator
-	receipt   receipt.Generator
-	approval  approval.Service
-	auditHook ApprovalAuditHook
-	cfg       MediatorConfig
+	adapter    mediation.Adapter
+	pdp        *pdp.PDP
+	accum      accumulator.Accumulator
+	receipt    receipt.Generator
+	approval   approval.Service
+	auditHook  ApprovalAuditHook
+	cfg        MediatorConfig
+	policyHash []byte
 }
 
 var _ coresecurity.Check = (*Mediator)(nil)
@@ -131,11 +133,12 @@ func NewMediator(policy *pdp.Policy, opts ...MediatorOption) (*Mediator, error) 
 		return nil, err
 	}
 	m := &Mediator{
-		pdp:      engine,
-		accum:    accumulator.NewNop(),
-		receipt:  receipt.NewNop(),
-		approval: approval.NewNop(),
-		adapter:  mediation.NewHookAdapter(),
+		pdp:        engine,
+		accum:      accumulator.NewNop(),
+		receipt:    receipt.NewNop(),
+		approval:   approval.NewNop(),
+		adapter:    mediation.NewHookAdapter(),
+		policyHash: policy.Hash(),
 	}
 	for _, opt := range opts {
 		opt(m)
@@ -189,12 +192,13 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 
 	if m.shouldRecordReceipt(decision) {
 		rec, rerr := m.receipt.Record(ctx, &receipt.RecordInput{
-			SessionID: action.SessionID,
-			ActionID:  action.ID,
-			EventID:   action.EventID,
-			Action:    action,
-			Snapshot:  snapshot,
-			Decision:  decision,
+			SessionID:  action.SessionID,
+			ActionID:   action.ID,
+			EventID:    action.EventID,
+			Action:     action,
+			Snapshot:   snapshot,
+			Decision:   decision,
+			PolicyHash: m.policyHash,
 		})
 		if rerr != nil {
 			return result, rerr
@@ -211,12 +215,13 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 // and synthesizes a security.CheckResult from the outcome.
 func (m *Mediator) handleEscalate(ctx context.Context, action *model.Action, snapshot *model.ContextSnapshot, decision *model.EvaluationResult) (*coresecurity.CheckResult, error) {
 	rec, rerr := m.receipt.Record(ctx, &receipt.RecordInput{
-		SessionID: action.SessionID,
-		ActionID:  action.ID,
-		EventID:   action.EventID,
-		Action:    action,
-		Snapshot:  snapshot,
-		Decision:  decision,
+		SessionID:  action.SessionID,
+		ActionID:   action.ID,
+		EventID:    action.EventID,
+		Action:     action,
+		Snapshot:   snapshot,
+		Decision:   decision,
+		PolicyHash: m.policyHash,
 	})
 	if rerr != nil {
 		return nil, rerr

@@ -206,6 +206,10 @@ type ReceiptRow struct {
 	PrevHash       []byte
 	Hash           []byte
 
+	SubagentID   string
+	SubagentType string
+	PolicyHash   []byte
+
 	Signature   []byte
 	SignerKeyID string
 }

@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
+	"github.com/safedep/dry/log"
 	"github.com/spf13/viper"
 )
 
@@ -107,13 +109,37 @@ type PolicyConfig struct {
 	Receipts       ReceiptsConfig       `mapstructure:"receipts"`
 }
 
-// ReceiptsConfig configures cryptographic signing for AARM receipts. Off by
-// default to preserve the existing unsigned behavior; opt in by setting
-// Sign: true after generating a key via `gryph policy keys generate`.
+// ReceiptsConfig configures cryptographic signing for AARM receipts. SignMode
+// defaults to "auto": Gryph signs when a key is present and silently runs
+// unsigned when no key exists. Set to "always" to hard-fail on a missing
+// key, or "never" to disable signing entirely. The legacy bool `sign` is a
+// deprecated alias mapped to `always` (true) or `never` (false).
 type ReceiptsConfig struct {
 	Sign       bool   `mapstructure:"sign"`
+	SignMode   string `mapstructure:"sign_mode"`
 	KeyPath    string `mapstructure:"key_path"`
 	TrustStore string `mapstructure:"trust_store"`
+}
+
+// Sign mode constants.
+const (
+	SignModeAuto   = "auto"
+	SignModeAlways = "always"
+	SignModeNever  = "never"
+)
+
+var signDeprecationOnce sync.Once
+
+// EffectiveSignMode returns the configured sign_mode. After Load() it is
+// always the resolved value. The legacy bool is normalized into SignMode
+// during Load(), and SignMode itself is trimmed and lowercased there. When
+// called on a hand-constructed config that bypassed Load() and left
+// SignMode empty, the auto default is returned.
+func (r ReceiptsConfig) EffectiveSignMode() string {
+	if r.SignMode == "" {
+		return SignModeAuto
+	}
+	return r.SignMode
 }
 
 // ApprovalMode names the configured approval frontend.
@@ -255,12 +281,29 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("error parsing config: %w", err)
 	}
 
+	cfg.Policy.Receipts.SignMode = strings.ToLower(strings.TrimSpace(cfg.Policy.Receipts.SignMode))
+
+	if v.InConfig("policy.receipts.sign") && !v.InConfig("policy.receipts.sign_mode") {
+		aliased := signModeFromLegacyBool(cfg.Policy.Receipts.Sign)
+		signDeprecationOnce.Do(func() {
+			log.Warnf("config: policy.receipts.sign is deprecated, use policy.receipts.sign_mode: %v", aliased)
+		})
+		cfg.Policy.Receipts.SignMode = aliased
+	}
+
 	// Validate config
 	if err := validate(&cfg); err != nil {
 		return nil, err
 	}
 
 	return &cfg, nil
+}
+
+func signModeFromLegacyBool(b bool) string {
+	if b {
+		return SignModeAlways
+	}
+	return SignModeNever
 }
 
 // Default returns a Config with all default values.

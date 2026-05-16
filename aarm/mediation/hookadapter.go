@@ -68,6 +68,8 @@ func (h *HookAdapter) Normalize(_ context.Context, event *events.Event, sess *se
 		Agent:          event.AgentName,
 		AgentSessionID: event.AgentSessionID,
 		WorkingDir:     event.WorkingDirectory,
+		SubagentID:     event.SubagentID,
+		SubagentType:   event.SubagentType,
 	}
 
 	if sess != nil {

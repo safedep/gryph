@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/safedep/dry/log"
@@ -24,7 +25,8 @@ func newPolicyKeysCmd() *cobra.Command {
 			"that produce receipt signatures. The private key lives at " +
 			"~/.config/gryph/keys/receipt.key (mode 0600). Public keys " +
 			"the verifier trusts live in ~/.config/gryph/keys/receipt-pub.json. " +
-			"Enable signing by setting policy.receipts.sign: true in the config.",
+			"Signing defaults to sign_mode: auto: receipts are signed when a key " +
+			"is present and unsigned when not. Set sign_mode: always to require a key.",
 	}
 	cmd.AddCommand(
 		newPolicyKeysGenerateCmd(),
@@ -115,8 +117,8 @@ func newPolicyKeysGenerateCmd() *cobra.Command {
 			c := policyColorizer(app)
 			out := cmd.OutOrStdout()
 			_, _ = fmt.Fprintf(out, "%s Generated key %s -> %s\n", c.StatusOK(), c.Cyan(pkFile.KeyID), c.Path(keyPath))
-			if !app.Config.Policy.Receipts.Sign {
-				_, _ = fmt.Fprintln(out, c.Dim("Set policy.receipts.sign: true to start signing receipts."))
+			if app.Config.Policy.Receipts.EffectiveSignMode() == config.SignModeNever {
+				_, _ = fmt.Fprintln(out, c.Dim("Set policy.receipts.sign_mode: auto (default) or always to start signing receipts."))
 			}
 			return nil
 		},
@@ -269,13 +271,36 @@ func loadReceiptVerifierFromConfig(cfg *config.Config, paths *config.Paths) (*re
 	return receipt.NewEd25519Verifier(ts)
 }
 
+// signerAutoMissingKeyOnce guards the one-time log line emitted when
+// sign_mode=auto is selected but no key file is present on disk.
+var signerAutoMissingKeyOnce sync.Once
+
 // loadReceiptSignerFromConfig loads the configured signing key into an
-// Ed25519Signer. Returns (nil, nil) when signing is disabled in config.
+// Ed25519Signer. The behavior depends on policy.receipts.sign_mode:
+//   - never: return (nil, nil) unconditionally
+//   - always: load the key. Hard-fail when the key is missing
+//   - auto (default): load the key if present, otherwise log once and
+//     return (nil, nil) so the mediator writes unsigned receipts.
 func loadReceiptSignerFromConfig(cfg *config.Config, paths *config.Paths) (*receipt.Ed25519Signer, error) {
-	if cfg == nil || !cfg.Policy.Receipts.Sign {
+	if cfg == nil {
+		return nil, nil
+	}
+	mode := cfg.Policy.Receipts.EffectiveSignMode()
+	if mode == config.SignModeNever {
 		return nil, nil
 	}
 	keyPath := cfg.ResolveReceiptKeyPath(paths)
+	if mode == config.SignModeAuto {
+		if _, err := os.Stat(keyPath); err != nil {
+			if os.IsNotExist(err) {
+				signerAutoMissingKeyOnce.Do(func() {
+					log.Warnf("config: policy.receipts.sign_mode=auto but no key at %v; receipts will be unsigned", keyPath)
+				})
+				return nil, nil
+			}
+			return nil, fmt.Errorf("stat private key %s: %w", keyPath, err)
+		}
+	}
 	pkFile, err := receipt.ReadPrivateKeyFile(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("read private key %s: %w", keyPath, err)
