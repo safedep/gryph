@@ -60,7 +60,7 @@ func TestVerifyReceiptChains_FreshDataPasses(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rows, 4)
 
-	breaks, err := verifyReceiptChains(ctx, store, rows, &sessionID, false)
+	breaks, _, err := verifyReceiptChains(ctx, store, rows, &sessionID, false, nil)
 	require.NoError(t, err)
 	assert.Empty(t, breaks, "fresh chain must verify clean")
 }
@@ -81,7 +81,7 @@ func TestVerifyReceiptChains_DetectsHashMutation(t *testing.T) {
 	rows, err := store.QueryReceipts(ctx, &storage.ReceiptFilter{SessionID: &sessionID})
 	require.NoError(t, err)
 
-	breaks, err := verifyReceiptChains(ctx, store, rows, &sessionID, false)
+	breaks, _, err := verifyReceiptChains(ctx, store, rows, &sessionID, false, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, breaks, "tampered row must break verification")
 
@@ -105,7 +105,7 @@ func TestVerifyReceiptChains_SessionLargerThanLimit(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, truncated, 5, "list path must respect --limit")
 
-	breaks, err := verifyReceiptChains(ctx, store, truncated, &sessionID, false)
+	breaks, _, err := verifyReceiptChains(ctx, store, truncated, &sessionID, false, nil)
 	require.NoError(t, err)
 	assert.Empty(t, breaks, "verify with --session must re-fetch the full chain, ignoring --limit")
 }
@@ -132,11 +132,11 @@ func TestVerifyReceiptChains_AllSessionsCoversChainsOutsideLimit(t *testing.T) {
 		require.Equal(t, newSession, r.SessionID, "older session must not appear within the limit")
 	}
 
-	withoutAll, err := verifyReceiptChains(ctx, store, rows, nil, false)
+	withoutAll, _, err := verifyReceiptChains(ctx, store, rows, nil, false, nil)
 	require.NoError(t, err)
 	assert.Empty(t, withoutAll, "the truncated default verify never visits the tampered older session")
 
-	withAll, err := verifyReceiptChains(ctx, store, rows, nil, true)
+	withAll, _, err := verifyReceiptChains(ctx, store, rows, nil, true, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, withAll, "--all-sessions must enumerate every session and catch the tamper")
 	var tamperedSeen bool
@@ -146,6 +146,41 @@ func TestVerifyReceiptChains_AllSessionsCoversChainsOutsideLimit(t *testing.T) {
 		}
 	}
 	assert.True(t, tamperedSeen, "the older tampered session must be among the reported breaks")
+}
+
+// TestVerifyReceiptChains_DetectsNonZeroFirstPrevHash exercises the
+// "first receipt prev_hash is not the zero state" rule on the DB-side chain
+// verifier. The exported-log verifier already enforced this; the DB-side
+// verifier silently let it pass before the shared VerifyChain unification.
+func TestVerifyReceiptChains_DetectsNonZeroFirstPrevHash(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	recordSampleReceipts(t, store, sessionID, 2)
+
+	bogus := bytes.Repeat([]byte{0x01}, 32)
+	_, err := store.DB().ExecContext(ctx,
+		`UPDATE aarm_receipts SET prev_hash = ? WHERE session_id = ? AND sequence = 1`,
+		bogus, sessionID,
+	)
+	require.NoError(t, err)
+
+	rows, err := store.QueryReceipts(ctx, &storage.ReceiptFilter{SessionID: &sessionID})
+	require.NoError(t, err)
+
+	breaks, _, err := verifyReceiptChains(ctx, store, rows, &sessionID, false, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, breaks, "non-zero prev_hash on the first receipt must surface as a chain break")
+	var sawZeroStateReason bool
+	for _, b := range breaks {
+		if b.Sequence == 1 && b.Reason != "" &&
+			(b.Reason == "first receipt prev_hash is not the zero state" ||
+				b.Reason == "stored hash does not match recomputed hash") {
+			sawZeroStateReason = true
+		}
+	}
+	assert.True(t, sawZeroStateReason, "expected zero-state or hash mismatch break, got: %+v", breaks)
 }
 
 func TestRenderReceiptsTable_EmptyShowsHint(t *testing.T) {

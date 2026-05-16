@@ -17,13 +17,22 @@ import (
 // (session_id, sequence) unique index is the crash-recovery rail that
 // surfaces any racing duplicate as an insert error.
 type SQLiteGenerator struct {
-	store storage.ReceiptStore
-	now   func() time.Time
+	store  storage.ReceiptStore
+	now    func() time.Time
+	signer Signer
 }
 
 // NewSQLite returns a SQLite-backed Generator. The store must be non-nil.
-func NewSQLite(store storage.ReceiptStore) *SQLiteGenerator {
-	return &SQLiteGenerator{store: store, now: func() time.Time { return time.Now().UTC() }}
+func NewSQLite(store storage.ReceiptStore, opts ...GeneratorOption) *SQLiteGenerator {
+	cfg := &generatorConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return &SQLiteGenerator{
+		store:  store,
+		now:    func() time.Time { return time.Now().UTC() },
+		signer: cfg.signer,
+	}
 }
 
 var _ Generator = (*SQLiteGenerator)(nil)
@@ -116,6 +125,15 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 			return nil, fmt.Errorf("compute hash: %w", err)
 		}
 		next.Hash = hash
+
+		if g.signer != nil {
+			sig, keyID, signErr := g.signer.Sign(hash)
+			if signErr != nil {
+				return nil, fmt.Errorf("sign receipt hash: %w", signErr)
+			}
+			next.Signature = sig
+			next.SignerKeyID = keyID
+		}
 		return next, nil
 	})
 	if err != nil {
@@ -123,11 +141,12 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 	}
 
 	return &Record{
-		ID:         row.ID,
-		Sequence:   row.Sequence,
-		RecordedAt: row.RecordedAt,
-		Hash:       row.Hash,
-		PrevHash:   row.PrevHash,
+		ID:          row.ID,
+		Sequence:    row.Sequence,
+		RecordedAt:  row.RecordedAt,
+		Hash:        row.Hash,
+		PrevHash:    row.PrevHash,
+		SignerKeyID: row.SignerKeyID,
 	}, nil
 }
 

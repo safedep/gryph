@@ -135,6 +135,16 @@ func Hash(v []byte) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldHash, v))
 }
 
+// Signature applies equality check predicate on the "signature" field. It's identical to SignatureEQ.
+func Signature(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldSignature, v))
+}
+
+// SignerKeyID applies equality check predicate on the "signer_key_id" field. It's identical to SignerKeyIDEQ.
+func SignerKeyID(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldSignerKeyID, v))
+}
+
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
 func SessionIDEQ(v uuid.UUID) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldSessionID, v))
@@ -1123,6 +1133,131 @@ func HashLT(v []byte) predicate.AarmReceipt {
 // HashLTE applies the LTE predicate on the "hash" field.
 func HashLTE(v []byte) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldLTE(FieldHash, v))
+}
+
+// SignatureEQ applies the EQ predicate on the "signature" field.
+func SignatureEQ(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldSignature, v))
+}
+
+// SignatureNEQ applies the NEQ predicate on the "signature" field.
+func SignatureNEQ(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldSignature, v))
+}
+
+// SignatureIn applies the In predicate on the "signature" field.
+func SignatureIn(vs ...[]byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldSignature, vs...))
+}
+
+// SignatureNotIn applies the NotIn predicate on the "signature" field.
+func SignatureNotIn(vs ...[]byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldSignature, vs...))
+}
+
+// SignatureGT applies the GT predicate on the "signature" field.
+func SignatureGT(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldSignature, v))
+}
+
+// SignatureGTE applies the GTE predicate on the "signature" field.
+func SignatureGTE(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldSignature, v))
+}
+
+// SignatureLT applies the LT predicate on the "signature" field.
+func SignatureLT(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldSignature, v))
+}
+
+// SignatureLTE applies the LTE predicate on the "signature" field.
+func SignatureLTE(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldSignature, v))
+}
+
+// SignatureIsNil applies the IsNil predicate on the "signature" field.
+func SignatureIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldSignature))
+}
+
+// SignatureNotNil applies the NotNil predicate on the "signature" field.
+func SignatureNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldSignature))
+}
+
+// SignerKeyIDEQ applies the EQ predicate on the "signer_key_id" field.
+func SignerKeyIDEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldSignerKeyID, v))
+}
+
+// SignerKeyIDNEQ applies the NEQ predicate on the "signer_key_id" field.
+func SignerKeyIDNEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldSignerKeyID, v))
+}
+
+// SignerKeyIDIn applies the In predicate on the "signer_key_id" field.
+func SignerKeyIDIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldSignerKeyID, vs...))
+}
+
+// SignerKeyIDNotIn applies the NotIn predicate on the "signer_key_id" field.
+func SignerKeyIDNotIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldSignerKeyID, vs...))
+}
+
+// SignerKeyIDGT applies the GT predicate on the "signer_key_id" field.
+func SignerKeyIDGT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldSignerKeyID, v))
+}
+
+// SignerKeyIDGTE applies the GTE predicate on the "signer_key_id" field.
+func SignerKeyIDGTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldSignerKeyID, v))
+}
+
+// SignerKeyIDLT applies the LT predicate on the "signer_key_id" field.
+func SignerKeyIDLT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldSignerKeyID, v))
+}
+
+// SignerKeyIDLTE applies the LTE predicate on the "signer_key_id" field.
+func SignerKeyIDLTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldSignerKeyID, v))
+}
+
+// SignerKeyIDContains applies the Contains predicate on the "signer_key_id" field.
+func SignerKeyIDContains(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContains(FieldSignerKeyID, v))
+}
+
+// SignerKeyIDHasPrefix applies the HasPrefix predicate on the "signer_key_id" field.
+func SignerKeyIDHasPrefix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasPrefix(FieldSignerKeyID, v))
+}
+
+// SignerKeyIDHasSuffix applies the HasSuffix predicate on the "signer_key_id" field.
+func SignerKeyIDHasSuffix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasSuffix(FieldSignerKeyID, v))
+}
+
+// SignerKeyIDIsNil applies the IsNil predicate on the "signer_key_id" field.
+func SignerKeyIDIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldSignerKeyID))
+}
+
+// SignerKeyIDNotNil applies the NotNil predicate on the "signer_key_id" field.
+func SignerKeyIDNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldSignerKeyID))
+}
+
+// SignerKeyIDEqualFold applies the EqualFold predicate on the "signer_key_id" field.
+func SignerKeyIDEqualFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEqualFold(FieldSignerKeyID, v))
+}
+
+// SignerKeyIDContainsFold applies the ContainsFold predicate on the "signer_key_id" field.
+func SignerKeyIDContainsFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContainsFold(FieldSignerKeyID, v))
 }
 
 // And groups predicates with the AND operator between them.

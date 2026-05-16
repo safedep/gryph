@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	aarmsec "github.com/safedep/gryph/aarm"
 	"github.com/safedep/gryph/aarm/accumulator"
@@ -43,6 +44,10 @@ func NewPolicyCmd() *cobra.Command {
 			"approval workflows.",
 	}
 
+	receiptsCmd := newPolicyReceiptsCmd()
+	receiptsCmd.AddCommand(newPolicyReceiptsExportCmd())
+	receiptsCmd.AddCommand(newPolicyReceiptsVerifyLogCmd())
+
 	cmd.AddCommand(
 		newPolicyInitCmd(),
 		newPolicySchemaCmd(),
@@ -50,8 +55,9 @@ func NewPolicyCmd() *cobra.Command {
 		newPolicyValidateCmd(),
 		newPolicyTestCmd(),
 		newPolicyContextCmd(),
-		newPolicyReceiptsCmd(),
+		receiptsCmd,
 		newPolicyApproveCmd(),
+		newPolicyKeysCmd(),
 	)
 
 	return cmd
@@ -640,7 +646,18 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 	var opts []aarmsec.MediatorOption
 	if store != nil {
 		opts = append(opts, aarmsec.WithAccumulator(accumulator.NewSQLite(store)))
-		opts = append(opts, aarmsec.WithReceiptGenerator(receipt.NewSQLite(store)))
+		var recOpts []receipt.GeneratorOption
+		if cfg != nil && cfg.Policy.Receipts.Sign {
+			signer, signErr := loadReceiptSignerFromConfig(cfg, paths)
+			if signErr != nil {
+				return nil, fmt.Errorf("load receipt signer: %w", signErr)
+			}
+			if signer != nil {
+				recOpts = append(recOpts, receipt.WithSigner(signer))
+			}
+		}
+		base := receipt.NewSQLite(store, recOpts...)
+		opts = append(opts, aarmsec.WithReceiptGenerator(newAuditingReceiptGenerator(base, store)))
 	}
 	if cfg != nil {
 		policyCfg := cfg.EffectivePolicy()
@@ -684,6 +701,47 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 		}
 	}
 	return aarmsec.NewMediator(policy, opts...)
+}
+
+// auditingReceiptGenerator wraps a receipt.Generator and emits a
+// receipt_signed self-audit row after each signed receipt insert completes.
+// The audit is emitted after the receipt's write transaction has committed
+// so the audit insert does not contend with the receipt insert for the
+// SQLite writer lock.
+type auditingReceiptGenerator struct {
+	inner receipt.Generator
+	store storage.Store
+}
+
+func newAuditingReceiptGenerator(inner receipt.Generator, store storage.Store) *auditingReceiptGenerator {
+	return &auditingReceiptGenerator{inner: inner, store: store}
+}
+
+func (a *auditingReceiptGenerator) Record(ctx context.Context, in *receipt.RecordInput) (*receipt.Record, error) {
+	rec, err := a.inner.Record(ctx, in)
+	if err != nil {
+		return rec, err
+	}
+	if rec != nil && rec.SignerKeyID != "" && a.store != nil {
+		details := map[string]interface{}{
+			"key_id":     rec.SignerKeyID,
+			"session_id": in.SessionID.String(),
+			"sequence":   rec.Sequence,
+		}
+		if logErr := logSelfAudit(ctx, a.store, SelfAuditActionReceiptSigned, "",
+			details, SelfAuditResultSuccess, ""); logErr != nil {
+			log.Errorf("failed to record receipt_signed audit: %v", logErr)
+		}
+	}
+	return rec, nil
+}
+
+func (a *auditingReceiptGenerator) UpdateResult(ctx context.Context, sessionID uuid.UUID, sequence int64, result model.Result) error {
+	return a.inner.UpdateResult(ctx, sessionID, sequence, result)
+}
+
+func (a *auditingReceiptGenerator) UpdateDecision(ctx context.Context, sessionID uuid.UUID, sequence int64, decision string, resultStatus string, note string) error {
+	return a.inner.UpdateDecision(ctx, sessionID, sequence, decision, resultStatus, note)
 }
 
 func newApprovalAuditHook(store storage.Store) aarmsec.ApprovalAuditHook {

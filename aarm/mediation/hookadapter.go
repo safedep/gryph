@@ -153,17 +153,7 @@ func extractParameters(event *events.Event) (model.Parameters, error) {
 			return model.Parameters{}, err
 		}
 		params := model.Parameters{Raw: rawToolInput(p.Input)}
-		if v, ok := params.Raw["url"].(string); ok {
-			params.URL = v
-		}
-		if v, ok := params.Raw["file_path"].(string); ok {
-			params.Path = v
-		} else if v, ok := params.Raw["path"].(string); ok {
-			params.Path = v
-		}
-		if v, ok := params.Raw["command"].(string); ok {
-			params.Command = v
-		}
+		populateWellKnownParams(&params, params.Raw)
 		return params, nil
 
 	default:

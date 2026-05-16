@@ -55,6 +55,10 @@ const (
 	FieldPrevHash = "prev_hash"
 	// FieldHash holds the string denoting the hash field in the database.
 	FieldHash = "hash"
+	// FieldSignature holds the string denoting the signature field in the database.
+	FieldSignature = "signature"
+	// FieldSignerKeyID holds the string denoting the signer_key_id field in the database.
+	FieldSignerKeyID = "signer_key_id"
 	// Table holds the table name of the aarmreceipt in the database.
 	Table = "aarm_receipts"
 )
@@ -82,6 +86,8 @@ var Columns = []string{
 	FieldActionPayload,
 	FieldPrevHash,
 	FieldHash,
+	FieldSignature,
+	FieldSignerKeyID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -217,4 +223,9 @@ func ByDurationMs(opts ...sql.OrderTermOption) OrderOption {
 // ByErrorMessage orders the results by the error_message field.
 func ByErrorMessage(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldErrorMessage, opts...).ToFunc()
+}
+
+// BySignerKeyID orders the results by the signer_key_id field.
+func BySignerKeyID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSignerKeyID, opts...).ToFunc()
 }

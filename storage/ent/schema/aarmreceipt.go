@@ -53,6 +53,9 @@ func (AarmReceipt) Fields() []ent.Field {
 
 		field.Bytes("prev_hash").Optional().MaxLen(32),
 		field.Bytes("hash").MaxLen(32),
+
+		field.Bytes("signature").Optional(),
+		field.String("signer_key_id").Optional(),
 	}
 }
 

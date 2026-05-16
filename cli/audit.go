@@ -18,26 +18,29 @@ import (
 // adding it to the schema (and running `make generate`) will fail saves
 // silently in production and only surface under careful testing.
 const (
-	SelfAuditActionInstall              = "install"
-	SelfAuditActionUninstall            = "uninstall"
-	SelfAuditActionConfigChange         = "config_change"
-	SelfAuditActionPurge                = "purge"
-	SelfAuditActionDatabaseInit         = "database_init"
-	SelfAuditActionRetentionCleanup     = "retention_cleanup"
-	SelfAuditActionHookError            = "hook_error"
-	SelfAuditActionPolicyLoadError      = "policy_load_error"
-	SelfAuditActionContextCleanup       = "context_cleanup"
-	SelfAuditActionContextSnapshotError = "context_snapshot_error"
-	SelfAuditActionReceiptCleanup       = "receipt_cleanup"
-	SelfAuditActionReceiptInsertError   = "receipt_insert_error"
-	SelfAuditActionReceiptChainBroken   = "receipt_chain_broken"
-	SelfAuditActionApprovalRequested    = approval.AuditActionRequested
-	SelfAuditActionApprovalGranted      = approval.AuditActionGranted
-	SelfAuditActionApprovalDenied       = approval.AuditActionDenied
-	SelfAuditActionApprovalTimeout      = approval.AuditActionTimeout
-	SelfAuditResultSuccess              = "success"
-	SelfAuditResultError                = "error"
-	SelfAuditResultSkipped              = "skipped"
+	SelfAuditActionInstall                 = "install"
+	SelfAuditActionUninstall               = "uninstall"
+	SelfAuditActionConfigChange            = "config_change"
+	SelfAuditActionPurge                   = "purge"
+	SelfAuditActionDatabaseInit            = "database_init"
+	SelfAuditActionRetentionCleanup        = "retention_cleanup"
+	SelfAuditActionHookError               = "hook_error"
+	SelfAuditActionPolicyLoadError         = "policy_load_error"
+	SelfAuditActionContextCleanup          = "context_cleanup"
+	SelfAuditActionContextSnapshotError    = "context_snapshot_error"
+	SelfAuditActionReceiptCleanup          = "receipt_cleanup"
+	SelfAuditActionReceiptInsertError      = "receipt_insert_error"
+	SelfAuditActionReceiptChainBroken      = "receipt_chain_broken"
+	SelfAuditActionReceiptSigned           = "receipt_signed"
+	SelfAuditActionReceiptSignatureInvalid = "receipt_signature_invalid"
+	SelfAuditActionReceiptKeyRotated       = "receipt_key_rotated"
+	SelfAuditActionApprovalRequested       = approval.AuditActionRequested
+	SelfAuditActionApprovalGranted         = approval.AuditActionGranted
+	SelfAuditActionApprovalDenied          = approval.AuditActionDenied
+	SelfAuditActionApprovalTimeout         = approval.AuditActionTimeout
+	SelfAuditResultSuccess                 = "success"
+	SelfAuditResultError                   = "error"
+	SelfAuditResultSkipped                 = "skipped"
 )
 
 // logSelfAudit logs a self-audit entry.

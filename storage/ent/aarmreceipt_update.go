@@ -353,6 +353,38 @@ func (_u *AarmReceiptUpdate) SetHash(v []byte) *AarmReceiptUpdate {
 	return _u
 }
 
+// SetSignature sets the "signature" field.
+func (_u *AarmReceiptUpdate) SetSignature(v []byte) *AarmReceiptUpdate {
+	_u.mutation.SetSignature(v)
+	return _u
+}
+
+// ClearSignature clears the value of the "signature" field.
+func (_u *AarmReceiptUpdate) ClearSignature() *AarmReceiptUpdate {
+	_u.mutation.ClearSignature()
+	return _u
+}
+
+// SetSignerKeyID sets the "signer_key_id" field.
+func (_u *AarmReceiptUpdate) SetSignerKeyID(v string) *AarmReceiptUpdate {
+	_u.mutation.SetSignerKeyID(v)
+	return _u
+}
+
+// SetNillableSignerKeyID sets the "signer_key_id" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableSignerKeyID(v *string) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetSignerKeyID(*v)
+	}
+	return _u
+}
+
+// ClearSignerKeyID clears the value of the "signer_key_id" field.
+func (_u *AarmReceiptUpdate) ClearSignerKeyID() *AarmReceiptUpdate {
+	_u.mutation.ClearSignerKeyID()
+	return _u
+}
+
 // Mutation returns the AarmReceiptMutation object of the builder.
 func (_u *AarmReceiptUpdate) Mutation() *AarmReceiptMutation {
 	return _u.mutation
@@ -528,6 +560,18 @@ func (_u *AarmReceiptUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.Hash(); ok {
 		_spec.SetField(aarmreceipt.FieldHash, field.TypeBytes, value)
+	}
+	if value, ok := _u.mutation.Signature(); ok {
+		_spec.SetField(aarmreceipt.FieldSignature, field.TypeBytes, value)
+	}
+	if _u.mutation.SignatureCleared() {
+		_spec.ClearField(aarmreceipt.FieldSignature, field.TypeBytes)
+	}
+	if value, ok := _u.mutation.SignerKeyID(); ok {
+		_spec.SetField(aarmreceipt.FieldSignerKeyID, field.TypeString, value)
+	}
+	if _u.mutation.SignerKeyIDCleared() {
+		_spec.ClearField(aarmreceipt.FieldSignerKeyID, field.TypeString)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -873,6 +917,38 @@ func (_u *AarmReceiptUpdateOne) SetHash(v []byte) *AarmReceiptUpdateOne {
 	return _u
 }
 
+// SetSignature sets the "signature" field.
+func (_u *AarmReceiptUpdateOne) SetSignature(v []byte) *AarmReceiptUpdateOne {
+	_u.mutation.SetSignature(v)
+	return _u
+}
+
+// ClearSignature clears the value of the "signature" field.
+func (_u *AarmReceiptUpdateOne) ClearSignature() *AarmReceiptUpdateOne {
+	_u.mutation.ClearSignature()
+	return _u
+}
+
+// SetSignerKeyID sets the "signer_key_id" field.
+func (_u *AarmReceiptUpdateOne) SetSignerKeyID(v string) *AarmReceiptUpdateOne {
+	_u.mutation.SetSignerKeyID(v)
+	return _u
+}
+
+// SetNillableSignerKeyID sets the "signer_key_id" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableSignerKeyID(v *string) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetSignerKeyID(*v)
+	}
+	return _u
+}
+
+// ClearSignerKeyID clears the value of the "signer_key_id" field.
+func (_u *AarmReceiptUpdateOne) ClearSignerKeyID() *AarmReceiptUpdateOne {
+	_u.mutation.ClearSignerKeyID()
+	return _u
+}
+
 // Mutation returns the AarmReceiptMutation object of the builder.
 func (_u *AarmReceiptUpdateOne) Mutation() *AarmReceiptMutation {
 	return _u.mutation
@@ -1078,6 +1154,18 @@ func (_u *AarmReceiptUpdateOne) sqlSave(ctx context.Context) (_node *AarmReceipt
 	}
 	if value, ok := _u.mutation.Hash(); ok {
 		_spec.SetField(aarmreceipt.FieldHash, field.TypeBytes, value)
+	}
+	if value, ok := _u.mutation.Signature(); ok {
+		_spec.SetField(aarmreceipt.FieldSignature, field.TypeBytes, value)
+	}
+	if _u.mutation.SignatureCleared() {
+		_spec.ClearField(aarmreceipt.FieldSignature, field.TypeBytes)
+	}
+	if value, ok := _u.mutation.SignerKeyID(); ok {
+		_spec.SetField(aarmreceipt.FieldSignerKeyID, field.TypeString, value)
+	}
+	if _u.mutation.SignerKeyIDCleared() {
+		_spec.ClearField(aarmreceipt.FieldSignerKeyID, field.TypeString)
 	}
 	_node = &AarmReceipt{config: _u.config}
 	_spec.Assign = _node.assignValues

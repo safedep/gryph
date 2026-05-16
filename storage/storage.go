@@ -166,7 +166,18 @@ type ReceiptFilter struct {
 	Decisions []string
 	Since     *time.Time
 	Until     *time.Time
-	Limit     int
+	// UntilExclusive applies a strict "recorded_at < UntilExclusive"
+	// predicate. Stronger than the inclusive Until and intended for paged
+	// cursors that must advance past timestamp duplicates. When both Until
+	// and UntilExclusive are set, both predicates are applied.
+	UntilExclusive *time.Time
+	// UntilID pairs with UntilExclusive to form a compound (recorded_at, id)
+	// cursor. When both are set the effective predicate becomes
+	// "recorded_at < UntilExclusive OR (recorded_at = UntilExclusive AND
+	// id < UntilID)" so paging is stable across rows that share a
+	// recorded_at timestamp.
+	UntilID *uuid.UUID
+	Limit   int
 }
 
 // ReceiptRow is the storage-layer representation of a single receipt entry.
@@ -194,6 +205,9 @@ type ReceiptRow struct {
 	ActionPayload  map[string]interface{}
 	PrevHash       []byte
 	Hash           []byte
+
+	Signature   []byte
+	SignerKeyID string
 }
 
 // ContextStateRow is the storage-layer representation of the per-session

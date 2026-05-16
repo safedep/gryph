@@ -229,6 +229,26 @@ func (_c *AarmReceiptCreate) SetHash(v []byte) *AarmReceiptCreate {
 	return _c
 }
 
+// SetSignature sets the "signature" field.
+func (_c *AarmReceiptCreate) SetSignature(v []byte) *AarmReceiptCreate {
+	_c.mutation.SetSignature(v)
+	return _c
+}
+
+// SetSignerKeyID sets the "signer_key_id" field.
+func (_c *AarmReceiptCreate) SetSignerKeyID(v string) *AarmReceiptCreate {
+	_c.mutation.SetSignerKeyID(v)
+	return _c
+}
+
+// SetNillableSignerKeyID sets the "signer_key_id" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillableSignerKeyID(v *string) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetSignerKeyID(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AarmReceiptCreate) SetID(v uuid.UUID) *AarmReceiptCreate {
 	_c.mutation.SetID(v)
@@ -449,6 +469,14 @@ func (_c *AarmReceiptCreate) createSpec() (*AarmReceipt, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Hash(); ok {
 		_spec.SetField(aarmreceipt.FieldHash, field.TypeBytes, value)
 		_node.Hash = value
+	}
+	if value, ok := _c.mutation.Signature(); ok {
+		_spec.SetField(aarmreceipt.FieldSignature, field.TypeBytes, value)
+		_node.Signature = value
+	}
+	if value, ok := _c.mutation.SignerKeyID(); ok {
+		_spec.SetField(aarmreceipt.FieldSignerKeyID, field.TypeString, value)
+		_node.SignerKeyID = value
 	}
 	return _node, _spec
 }

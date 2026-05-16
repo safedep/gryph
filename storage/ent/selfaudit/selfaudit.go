@@ -69,25 +69,28 @@ type Action string
 
 // Action values.
 const (
-	ActionInstall              Action = "install"
-	ActionUninstall            Action = "uninstall"
-	ActionConfigChange         Action = "config_change"
-	ActionExport               Action = "export"
-	ActionPurge                Action = "purge"
-	ActionUpgrade              Action = "upgrade"
-	ActionDatabaseInit         Action = "database_init"
-	ActionRetentionCleanup     Action = "retention_cleanup"
-	ActionHookError            Action = "hook_error"
-	ActionPolicyLoadError      Action = "policy_load_error"
-	ActionContextCleanup       Action = "context_cleanup"
-	ActionContextSnapshotError Action = "context_snapshot_error"
-	ActionReceiptCleanup       Action = "receipt_cleanup"
-	ActionReceiptInsertError   Action = "receipt_insert_error"
-	ActionReceiptChainBroken   Action = "receipt_chain_broken"
-	ActionApprovalRequested    Action = "approval_requested"
-	ActionApprovalGranted      Action = "approval_granted"
-	ActionApprovalDenied       Action = "approval_denied"
-	ActionApprovalTimeout      Action = "approval_timeout"
+	ActionInstall                 Action = "install"
+	ActionUninstall               Action = "uninstall"
+	ActionConfigChange            Action = "config_change"
+	ActionExport                  Action = "export"
+	ActionPurge                   Action = "purge"
+	ActionUpgrade                 Action = "upgrade"
+	ActionDatabaseInit            Action = "database_init"
+	ActionRetentionCleanup        Action = "retention_cleanup"
+	ActionHookError               Action = "hook_error"
+	ActionPolicyLoadError         Action = "policy_load_error"
+	ActionContextCleanup          Action = "context_cleanup"
+	ActionContextSnapshotError    Action = "context_snapshot_error"
+	ActionReceiptCleanup          Action = "receipt_cleanup"
+	ActionReceiptInsertError      Action = "receipt_insert_error"
+	ActionReceiptChainBroken      Action = "receipt_chain_broken"
+	ActionReceiptSigned           Action = "receipt_signed"
+	ActionReceiptSignatureInvalid Action = "receipt_signature_invalid"
+	ActionReceiptKeyRotated       Action = "receipt_key_rotated"
+	ActionApprovalRequested       Action = "approval_requested"
+	ActionApprovalGranted         Action = "approval_granted"
+	ActionApprovalDenied          Action = "approval_denied"
+	ActionApprovalTimeout         Action = "approval_timeout"
 )
 
 func (a Action) String() string {
@@ -97,7 +100,7 @@ func (a Action) String() string {
 // ActionValidator is a validator for the "action" field enum values. It is called by the builders before save.
 func ActionValidator(a Action) error {
 	switch a {
-	case ActionInstall, ActionUninstall, ActionConfigChange, ActionExport, ActionPurge, ActionUpgrade, ActionDatabaseInit, ActionRetentionCleanup, ActionHookError, ActionPolicyLoadError, ActionContextCleanup, ActionContextSnapshotError, ActionReceiptCleanup, ActionReceiptInsertError, ActionReceiptChainBroken, ActionApprovalRequested, ActionApprovalGranted, ActionApprovalDenied, ActionApprovalTimeout:
+	case ActionInstall, ActionUninstall, ActionConfigChange, ActionExport, ActionPurge, ActionUpgrade, ActionDatabaseInit, ActionRetentionCleanup, ActionHookError, ActionPolicyLoadError, ActionContextCleanup, ActionContextSnapshotError, ActionReceiptCleanup, ActionReceiptInsertError, ActionReceiptChainBroken, ActionReceiptSigned, ActionReceiptSignatureInvalid, ActionReceiptKeyRotated, ActionApprovalRequested, ActionApprovalGranted, ActionApprovalDenied, ActionApprovalTimeout:
 		return nil
 	default:
 		return fmt.Errorf("selfaudit: invalid enum value for action field: %q", a)

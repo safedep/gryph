@@ -158,8 +158,9 @@ INSERT INTO aarm_receipts (
     agent, tool, action_type, project,
     decision, matched_rule_ids, severity, message,
     result_status, duration_ms, error_message,
-    snapshot, action_payload, prev_hash, hash
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    snapshot, action_payload, prev_hash, hash,
+    signature, signer_key_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	var actionIDArg, eventIDArg, agentArg, toolArg, projectArg interface{}
 	if row.ActionID != uuid.Nil {
@@ -225,12 +226,21 @@ INSERT INTO aarm_receipts (
 		prevHashArg = row.PrevHash
 	}
 
+	var signatureArg, signerKeyIDArg interface{}
+	if len(row.Signature) > 0 {
+		signatureArg = row.Signature
+	}
+	if row.SignerKeyID != "" {
+		signerKeyIDArg = row.SignerKeyID
+	}
+
 	_, err := tx.ExecContext(ctx, stmt,
 		row.ID, row.SessionID, actionIDArg, eventIDArg, row.RecordedAt, row.Sequence,
 		agentArg, toolArg, row.ActionType, projectArg,
 		row.Decision, ruleIDsArg, severityArg, messageArg,
 		row.ResultStatus, durationArg, errorMsgArg,
 		snapshotArg, payloadArg, prevHashArg, row.Hash,
+		signatureArg, signerKeyIDArg,
 	)
 	return err
 }
@@ -315,6 +325,12 @@ func receiptCreate(client *ent.AarmReceiptClient, row *ReceiptRow) *ent.AarmRece
 	}
 	if len(row.PrevHash) > 0 {
 		create.SetPrevHash(row.PrevHash)
+	}
+	if len(row.Signature) > 0 {
+		create.SetSignature(row.Signature)
+	}
+	if row.SignerKeyID != "" {
+		create.SetSignerKeyID(row.SignerKeyID)
 	}
 	return create
 }
@@ -443,6 +459,19 @@ func (s *SQLiteStore) QueryReceipts(ctx context.Context, filter *ReceiptFilter) 
 	if filter.Until != nil {
 		q.Where(aarmreceipt.RecordedAtLTE(*filter.Until))
 	}
+	if filter.UntilExclusive != nil {
+		if filter.UntilID != nil {
+			q.Where(aarmreceipt.Or(
+				aarmreceipt.RecordedAtLT(*filter.UntilExclusive),
+				aarmreceipt.And(
+					aarmreceipt.RecordedAtEQ(*filter.UntilExclusive),
+					aarmreceipt.IDLT(*filter.UntilID),
+				),
+			))
+		} else {
+			q.Where(aarmreceipt.RecordedAtLT(*filter.UntilExclusive))
+		}
+	}
 
 	if filter.SessionID != nil {
 		q.Order(aarmreceipt.BySequence(entsql.OrderAsc()))
@@ -570,6 +599,8 @@ func entToReceipt(e *ent.AarmReceipt) *ReceiptRow {
 		ActionPayload:  e.ActionPayload,
 		PrevHash:       e.PrevHash,
 		Hash:           e.Hash,
+		Signature:      e.Signature,
+		SignerKeyID:    e.SignerKeyID,
 	}
 	if e.DurationMs != nil {
 		v := *e.DurationMs

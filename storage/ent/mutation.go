@@ -2632,6 +2632,8 @@ type AarmReceiptMutation struct {
 	action_payload         *map[string]interface{}
 	prev_hash              *[]byte
 	hash                   *[]byte
+	signature              *[]byte
+	signer_key_id          *string
 	clearedFields          map[string]struct{}
 	done                   bool
 	oldValue               func(context.Context) (*AarmReceipt, error)
@@ -3688,6 +3690,104 @@ func (m *AarmReceiptMutation) ResetHash() {
 	m.hash = nil
 }
 
+// SetSignature sets the "signature" field.
+func (m *AarmReceiptMutation) SetSignature(b []byte) {
+	m.signature = &b
+}
+
+// Signature returns the value of the "signature" field in the mutation.
+func (m *AarmReceiptMutation) Signature() (r []byte, exists bool) {
+	v := m.signature
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSignature returns the old "signature" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldSignature(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSignature is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSignature requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSignature: %w", err)
+	}
+	return oldValue.Signature, nil
+}
+
+// ClearSignature clears the value of the "signature" field.
+func (m *AarmReceiptMutation) ClearSignature() {
+	m.signature = nil
+	m.clearedFields[aarmreceipt.FieldSignature] = struct{}{}
+}
+
+// SignatureCleared returns if the "signature" field was cleared in this mutation.
+func (m *AarmReceiptMutation) SignatureCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldSignature]
+	return ok
+}
+
+// ResetSignature resets all changes to the "signature" field.
+func (m *AarmReceiptMutation) ResetSignature() {
+	m.signature = nil
+	delete(m.clearedFields, aarmreceipt.FieldSignature)
+}
+
+// SetSignerKeyID sets the "signer_key_id" field.
+func (m *AarmReceiptMutation) SetSignerKeyID(s string) {
+	m.signer_key_id = &s
+}
+
+// SignerKeyID returns the value of the "signer_key_id" field in the mutation.
+func (m *AarmReceiptMutation) SignerKeyID() (r string, exists bool) {
+	v := m.signer_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSignerKeyID returns the old "signer_key_id" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldSignerKeyID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSignerKeyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSignerKeyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSignerKeyID: %w", err)
+	}
+	return oldValue.SignerKeyID, nil
+}
+
+// ClearSignerKeyID clears the value of the "signer_key_id" field.
+func (m *AarmReceiptMutation) ClearSignerKeyID() {
+	m.signer_key_id = nil
+	m.clearedFields[aarmreceipt.FieldSignerKeyID] = struct{}{}
+}
+
+// SignerKeyIDCleared returns if the "signer_key_id" field was cleared in this mutation.
+func (m *AarmReceiptMutation) SignerKeyIDCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldSignerKeyID]
+	return ok
+}
+
+// ResetSignerKeyID resets all changes to the "signer_key_id" field.
+func (m *AarmReceiptMutation) ResetSignerKeyID() {
+	m.signer_key_id = nil
+	delete(m.clearedFields, aarmreceipt.FieldSignerKeyID)
+}
+
 // Where appends a list predicates to the AarmReceiptMutation builder.
 func (m *AarmReceiptMutation) Where(ps ...predicate.AarmReceipt) {
 	m.predicates = append(m.predicates, ps...)
@@ -3722,7 +3822,7 @@ func (m *AarmReceiptMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AarmReceiptMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 22)
 	if m.session_id != nil {
 		fields = append(fields, aarmreceipt.FieldSessionID)
 	}
@@ -3783,6 +3883,12 @@ func (m *AarmReceiptMutation) Fields() []string {
 	if m.hash != nil {
 		fields = append(fields, aarmreceipt.FieldHash)
 	}
+	if m.signature != nil {
+		fields = append(fields, aarmreceipt.FieldSignature)
+	}
+	if m.signer_key_id != nil {
+		fields = append(fields, aarmreceipt.FieldSignerKeyID)
+	}
 	return fields
 }
 
@@ -3831,6 +3937,10 @@ func (m *AarmReceiptMutation) Field(name string) (ent.Value, bool) {
 		return m.PrevHash()
 	case aarmreceipt.FieldHash:
 		return m.Hash()
+	case aarmreceipt.FieldSignature:
+		return m.Signature()
+	case aarmreceipt.FieldSignerKeyID:
+		return m.SignerKeyID()
 	}
 	return nil, false
 }
@@ -3880,6 +3990,10 @@ func (m *AarmReceiptMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldPrevHash(ctx)
 	case aarmreceipt.FieldHash:
 		return m.OldHash(ctx)
+	case aarmreceipt.FieldSignature:
+		return m.OldSignature(ctx)
+	case aarmreceipt.FieldSignerKeyID:
+		return m.OldSignerKeyID(ctx)
 	}
 	return nil, fmt.Errorf("unknown AarmReceipt field %s", name)
 }
@@ -4029,6 +4143,20 @@ func (m *AarmReceiptMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetHash(v)
 		return nil
+	case aarmreceipt.FieldSignature:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSignature(v)
+		return nil
+	case aarmreceipt.FieldSignerKeyID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSignerKeyID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt field %s", name)
 }
@@ -4125,6 +4253,12 @@ func (m *AarmReceiptMutation) ClearedFields() []string {
 	if m.FieldCleared(aarmreceipt.FieldPrevHash) {
 		fields = append(fields, aarmreceipt.FieldPrevHash)
 	}
+	if m.FieldCleared(aarmreceipt.FieldSignature) {
+		fields = append(fields, aarmreceipt.FieldSignature)
+	}
+	if m.FieldCleared(aarmreceipt.FieldSignerKeyID) {
+		fields = append(fields, aarmreceipt.FieldSignerKeyID)
+	}
 	return fields
 }
 
@@ -4177,6 +4311,12 @@ func (m *AarmReceiptMutation) ClearField(name string) error {
 		return nil
 	case aarmreceipt.FieldPrevHash:
 		m.ClearPrevHash()
+		return nil
+	case aarmreceipt.FieldSignature:
+		m.ClearSignature()
+		return nil
+	case aarmreceipt.FieldSignerKeyID:
+		m.ClearSignerKeyID()
 		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt nullable field %s", name)
@@ -4245,6 +4385,12 @@ func (m *AarmReceiptMutation) ResetField(name string) error {
 		return nil
 	case aarmreceipt.FieldHash:
 		m.ResetHash()
+		return nil
+	case aarmreceipt.FieldSignature:
+		m.ResetSignature()
+		return nil
+	case aarmreceipt.FieldSignerKeyID:
+		m.ResetSignerKeyID()
 		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt field %s", name)

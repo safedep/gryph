@@ -58,7 +58,11 @@ type AarmReceipt struct {
 	// PrevHash holds the value of the "prev_hash" field.
 	PrevHash []byte `json:"prev_hash,omitempty"`
 	// Hash holds the value of the "hash" field.
-	Hash         []byte `json:"hash,omitempty"`
+	Hash []byte `json:"hash,omitempty"`
+	// Signature holds the value of the "signature" field.
+	Signature []byte `json:"signature,omitempty"`
+	// SignerKeyID holds the value of the "signer_key_id" field.
+	SignerKeyID  string `json:"signer_key_id,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -67,11 +71,11 @@ func (*AarmReceipt) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case aarmreceipt.FieldMatchedRuleIds, aarmreceipt.FieldSnapshot, aarmreceipt.FieldActionPayload, aarmreceipt.FieldPrevHash, aarmreceipt.FieldHash:
+		case aarmreceipt.FieldMatchedRuleIds, aarmreceipt.FieldSnapshot, aarmreceipt.FieldActionPayload, aarmreceipt.FieldPrevHash, aarmreceipt.FieldHash, aarmreceipt.FieldSignature:
 			values[i] = new([]byte)
 		case aarmreceipt.FieldSequence, aarmreceipt.FieldDurationMs:
 			values[i] = new(sql.NullInt64)
-		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage:
+		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSignerKeyID:
 			values[i] = new(sql.NullString)
 		case aarmreceipt.FieldRecordedAt:
 			values[i] = new(sql.NullTime)
@@ -225,6 +229,18 @@ func (_m *AarmReceipt) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				_m.Hash = *value
 			}
+		case aarmreceipt.FieldSignature:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field signature", values[i])
+			} else if value != nil {
+				_m.Signature = *value
+			}
+		case aarmreceipt.FieldSignerKeyID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field signer_key_id", values[i])
+			} else if value.Valid {
+				_m.SignerKeyID = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -322,6 +338,12 @@ func (_m *AarmReceipt) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("hash=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Hash))
+	builder.WriteString(", ")
+	builder.WriteString("signature=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Signature))
+	builder.WriteString(", ")
+	builder.WriteString("signer_key_id=")
+	builder.WriteString(_m.SignerKeyID)
 	builder.WriteByte(')')
 	return builder.String()
 }

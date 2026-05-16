@@ -57,6 +57,33 @@ type Record struct {
 	RecordedAt time.Time
 	Hash       []byte
 	PrevHash   []byte
+
+	// SignerKeyID is non-empty when the row was signed at insert time. The
+	// CLI uses this to emit a SelfAuditActionReceiptSigned row without
+	// re-querying the receipt.
+	SignerKeyID string
+}
+
+// GeneratorOption configures a Generator at construction time. Today the
+// SQLite-backed generator is the only consumer; the Nop generator ignores
+// options so callers can pass them unconditionally.
+type GeneratorOption func(*generatorConfig)
+
+// generatorConfig collects optional dependencies shared by Generator
+// implementations. Kept un-exported to keep the option surface small.
+type generatorConfig struct {
+	signer Signer
+}
+
+// WithSigner wires a Signer into a Generator. When set, every receipt insert
+// also produces and stores the signature column. When nil, signing is
+// disabled (the same as the default).
+func WithSigner(s Signer) GeneratorOption {
+	return func(c *generatorConfig) {
+		if s != nil {
+			c.signer = s
+		}
+	}
 }
 
 // Nop is a no-op Generator. Used when no store is wired so the Mediator

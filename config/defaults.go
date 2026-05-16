@@ -64,6 +64,9 @@ func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".classify.enabled", true)
 	v.SetDefault(prefix+".classify.extra_patterns", map[string][]string{})
 	v.SetDefault(prefix+".injection_score.enabled", true)
+	v.SetDefault(prefix+".receipts.sign", false)
+	v.SetDefault(prefix+".receipts.key_path", "")
+	v.SetDefault(prefix+".receipts.trust_store", "")
 }
 
 // defaultSensitivePaths returns the default list of sensitive path patterns.

@@ -104,6 +104,16 @@ type PolicyConfig struct {
 	Approval       ApprovalConfig       `mapstructure:"approval"`
 	Classify       ClassifyConfig       `mapstructure:"classify"`
 	InjectionScore InjectionScoreConfig `mapstructure:"injection_score"`
+	Receipts       ReceiptsConfig       `mapstructure:"receipts"`
+}
+
+// ReceiptsConfig configures cryptographic signing for AARM receipts. Off by
+// default to preserve the existing unsigned behavior; opt in by setting
+// Sign: true after generating a key via `gryph policy keys generate`.
+type ReceiptsConfig struct {
+	Sign       bool   `mapstructure:"sign"`
+	KeyPath    string `mapstructure:"key_path"`
+	TrustStore string `mapstructure:"trust_store"`
 }
 
 // ApprovalMode names the configured approval frontend.
@@ -296,6 +306,42 @@ func (c *Config) EffectivePolicy() PolicyConfig {
 		return PolicyConfig{}
 	}
 	return c.Policy
+}
+
+// DefaultReceiptKeyPath returns the on-disk default for the private signing
+// key.
+func DefaultReceiptKeyPath(paths *Paths) string {
+	if paths == nil {
+		paths = ResolvePaths()
+	}
+	return filepath.Join(paths.ConfigDir, "keys", "receipt.key")
+}
+
+// DefaultReceiptTrustStorePath returns the on-disk default for the trust
+// store JSON.
+func DefaultReceiptTrustStorePath(paths *Paths) string {
+	if paths == nil {
+		paths = ResolvePaths()
+	}
+	return filepath.Join(paths.ConfigDir, "keys", "receipt-pub.json")
+}
+
+// ResolveReceiptKeyPath returns the configured signing-key path or the
+// platform default.
+func (c *Config) ResolveReceiptKeyPath(paths *Paths) string {
+	if c != nil && c.Policy.Receipts.KeyPath != "" {
+		return c.Policy.Receipts.KeyPath
+	}
+	return DefaultReceiptKeyPath(paths)
+}
+
+// ResolveReceiptTrustStorePath returns the configured trust store path or the
+// platform default.
+func (c *Config) ResolveReceiptTrustStorePath(paths *Paths) string {
+	if c != nil && c.Policy.Receipts.TrustStore != "" {
+		return c.Policy.Receipts.TrustStore
+	}
+	return DefaultReceiptTrustStorePath(paths)
 }
 
 // ShouldUseColors returns true if colors should be used based on config and terminal.

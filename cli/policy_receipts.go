@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -99,17 +98,23 @@ func newPolicyReceiptsCmd() *cobra.Command {
 			}
 
 			if verify {
-				breaks, verr := verifyReceiptChains(ctx, app.Store, rows, filter.SessionID, allSessions)
+				verifier, verifyErr := loadReceiptVerifierFromConfig(app.Config, app.Paths)
+				if verifyErr != nil {
+					return ErrConfig("load trust store", verifyErr)
+				}
+				breaks, sigResults, verr := verifyReceiptChains(ctx, app.Store, rows, filter.SessionID, allSessions, verifier)
 				if verr != nil {
 					return verr
 				}
+				sigSummary := summarizeSignatureResults(sigResults)
 				if format == "json" {
-					return writeReceiptsJSON(out, rows, breaks)
+					return writeReceiptsJSONWithSignatures(out, rows, breaks, sigResults, sigSummary)
 				}
 				renderReceiptsTable(out, c, rows)
 				renderVerifyResults(out, c, breaks)
-				if len(breaks) > 0 {
-					return ErrConfig("receipt chain verification failed", fmt.Errorf("%d break(s) detected", len(breaks)))
+				renderSignatureVerifyResults(out, c, sigSummary, sigResults)
+				if len(breaks) > 0 || sigSummary.SignedInvalid > 0 {
+					return ErrConfig("receipt verification failed", fmt.Errorf("%d chain break(s), %d invalid signature(s)", len(breaks), sigSummary.SignedInvalid))
 				}
 				return nil
 			}
@@ -139,29 +144,50 @@ type receiptVerifyBreak struct {
 	Reason    string    `json:"reason"`
 }
 
-func verifyReceiptChains(ctx context.Context, store storage.Store, rows []*storage.ReceiptRow, sessionFilter *uuid.UUID, allSessions bool) ([]receiptVerifyBreak, error) {
+// verifyReceiptChains visits every session implied by rows / sessionFilter /
+// allSessions, loads its full chain, re-derives every receipt hash, and (when
+// verifier is non-nil) verifies each signature inline. Chain breaks and per-
+// receipt signature verdicts are returned together so callers can render
+// both without a second full pass over the data.
+func verifyReceiptChains(ctx context.Context, store storage.Store, rows []*storage.ReceiptRow, sessionFilter *uuid.UUID, allSessions bool, verifier *receipt.Ed25519Verifier) ([]receiptVerifyBreak, []receiptSignatureResult, error) {
 	sessionIDs, err := collectVerifySessionIDs(ctx, store, rows, sessionFilter, allSessions)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	var breaks []receiptVerifyBreak
+	var (
+		breaks     []receiptVerifyBreak
+		sigResults []receiptSignatureResult
+	)
 	for _, sid := range sessionIDs {
 		full, err := store.QueryReceipts(ctx, &storage.ReceiptFilter{
 			SessionID: &sid,
 			Limit:     -1,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("verify: load session receipts: %w", err)
+			return nil, nil, fmt.Errorf("verify: load session receipts: %w", err)
 		}
 		sort.Slice(full, func(i, j int) bool { return full[i].Sequence < full[j].Sequence })
-		breaks = append(breaks, verifyOneChain(full)...)
+		chainRows := make([]receipt.ChainRow, 0, len(full))
+		for _, r := range full {
+			chainRows = append(chainRows, receipt.ChainRowFromReceipt(r))
+		}
+		for _, b := range receipt.VerifyChain(chainRows) {
+			breaks = append(breaks, receiptVerifyBreak{
+				SessionID: b.SessionID,
+				Sequence:  b.Sequence,
+				Reason:    b.Reason,
+			})
+		}
+		for _, r := range full {
+			sigResults = append(sigResults, verifyOneSignature(ctx, store, r, verifier))
+		}
 	}
 
 	if len(breaks) > 0 {
 		emitChainBrokenAudit(ctx, store, breaks)
 	}
-	return breaks, nil
+	return breaks, sigResults, nil
 }
 
 func collectVerifySessionIDs(ctx context.Context, store storage.Store, rows []*storage.ReceiptRow, sessionFilter *uuid.UUID, allSessions bool) ([]uuid.UUID, error) {
@@ -185,74 +211,6 @@ func collectVerifySessionIDs(ctx context.Context, store storage.Store, rows []*s
 		ids = append(ids, r.SessionID)
 	}
 	return ids, nil
-}
-
-func verifyOneChain(rows []*storage.ReceiptRow) []receiptVerifyBreak {
-	var breaks []receiptVerifyBreak
-	var prevHash []byte
-	var prevSeq int64
-	for _, r := range rows {
-		expectedSeq := prevSeq + 1
-		if prevSeq == 0 && r.Sequence != 1 {
-			breaks = append(breaks, receiptVerifyBreak{
-				SessionID: r.SessionID,
-				Sequence:  r.Sequence,
-				Reason:    fmt.Sprintf("first receipt sequence is %d, expected 1", r.Sequence),
-			})
-		} else if prevSeq > 0 && r.Sequence != expectedSeq {
-			breaks = append(breaks, receiptVerifyBreak{
-				SessionID: r.SessionID,
-				Sequence:  r.Sequence,
-				Reason:    fmt.Sprintf("sequence gap: got %d, expected %d", r.Sequence, expectedSeq),
-			})
-		}
-		if len(prevHash) > 0 && !bytes.Equal(r.PrevHash, prevHash) {
-			breaks = append(breaks, receiptVerifyBreak{
-				SessionID: r.SessionID,
-				Sequence:  r.Sequence,
-				Reason:    "prev_hash does not match previous row hash",
-			})
-		}
-		expectedHash, err := recomputeReceiptHash(r)
-		if err != nil {
-			breaks = append(breaks, receiptVerifyBreak{
-				SessionID: r.SessionID,
-				Sequence:  r.Sequence,
-				Reason:    fmt.Sprintf("recompute hash: %v", err),
-			})
-		} else if !bytes.Equal(expectedHash, r.Hash) {
-			breaks = append(breaks, receiptVerifyBreak{
-				SessionID: r.SessionID,
-				Sequence:  r.Sequence,
-				Reason:    "stored hash does not match recomputed hash",
-			})
-		}
-		prevHash = r.Hash
-		prevSeq = r.Sequence
-	}
-	return breaks
-}
-
-func recomputeReceiptHash(r *storage.ReceiptRow) ([]byte, error) {
-	in := receipt.NewHashInput(receipt.HashInputFields{
-		Sequence:       r.Sequence,
-		PrevHash:       r.PrevHash,
-		RecordedAtUnix: r.RecordedAt.UnixNano(),
-		SessionID:      r.SessionID,
-		ActionID:       r.ActionID,
-		EventID:        r.EventID,
-		Agent:          r.Agent,
-		Tool:           r.Tool,
-		ActionType:     r.ActionType,
-		Project:        r.Project,
-		Decision:       r.Decision,
-		Severity:       r.Severity,
-		Message:        r.Message,
-		MatchedRuleIDs: r.MatchedRuleIDs,
-		Snapshot:       r.Snapshot,
-		ActionPayload:  r.ActionPayload,
-	})
-	return receipt.ComputeHash(in)
 }
 
 func emitChainBrokenAudit(ctx context.Context, store storage.Store, breaks []receiptVerifyBreak) {
@@ -297,6 +255,7 @@ type policyReceiptView struct {
 	ActionPayload  map[string]interface{} `json:"action_payload,omitempty"`
 	PrevHash       string                 `json:"prev_hash,omitempty"`
 	Hash           string                 `json:"hash"`
+	SignerKeyID    string                 `json:"signer_key_id,omitempty"`
 }
 
 func receiptToView(r *storage.ReceiptRow) policyReceiptView {
@@ -318,6 +277,7 @@ func receiptToView(r *storage.ReceiptRow) policyReceiptView {
 		Snapshot:       r.Snapshot,
 		ActionPayload:  r.ActionPayload,
 		Hash:           hex.EncodeToString(r.Hash),
+		SignerKeyID:    r.SignerKeyID,
 	}
 	if r.DurationMS != nil {
 		d := *r.DurationMS
@@ -426,4 +386,128 @@ func shortHash(b []byte) string {
 		return s[:12]
 	}
 	return s
+}
+
+// signatureStatus is the per-receipt outcome of signature verification.
+type signatureStatus string
+
+const (
+	signatureStatusUnsigned signatureStatus = "unsigned"
+	signatureStatusOK       signatureStatus = "signed_ok"
+	signatureStatusInvalid  signatureStatus = "signed_invalid"
+)
+
+// receiptSignatureResult records the signature verification verdict for one
+// receipt. ReceiptID + (SessionID, Sequence) identify the row.
+type receiptSignatureResult struct {
+	SessionID uuid.UUID       `json:"session_id"`
+	Sequence  int64           `json:"sequence"`
+	ReceiptID uuid.UUID       `json:"receipt_id"`
+	KeyID     string          `json:"key_id,omitempty"`
+	Status    signatureStatus `json:"status"`
+	Reason    string          `json:"reason,omitempty"`
+}
+
+type signatureSummary struct {
+	SignedOK      int `json:"signed_ok"`
+	Unsigned      int `json:"unsigned"`
+	SignedInvalid int `json:"signed_invalid"`
+}
+
+func verifyOneSignature(ctx context.Context, store storage.Store, r *storage.ReceiptRow, verifier *receipt.Ed25519Verifier) receiptSignatureResult {
+	res := receiptSignatureResult{
+		SessionID: r.SessionID,
+		Sequence:  r.Sequence,
+		ReceiptID: r.ID,
+		KeyID:     r.SignerKeyID,
+	}
+	if len(r.Signature) == 0 {
+		res.Status = signatureStatusUnsigned
+		return res
+	}
+	if verifier == nil {
+		res.Status = signatureStatusInvalid
+		res.Reason = "no trust store configured"
+		emitSignatureInvalidAudit(ctx, store, r, res.Reason)
+		return res
+	}
+	if !verifier.HasKey(r.SignerKeyID) {
+		res.Status = signatureStatusInvalid
+		res.Reason = "unknown signer_key_id"
+		emitSignatureInvalidAudit(ctx, store, r, res.Reason)
+		return res
+	}
+	if err := verifier.Verify(r.Hash, r.Signature, r.SignerKeyID); err != nil {
+		res.Status = signatureStatusInvalid
+		res.Reason = err.Error()
+		emitSignatureInvalidAudit(ctx, store, r, res.Reason)
+		return res
+	}
+	res.Status = signatureStatusOK
+	return res
+}
+
+func emitSignatureInvalidAudit(ctx context.Context, store storage.Store, r *storage.ReceiptRow, reason string) {
+	if store == nil {
+		return
+	}
+	details := map[string]interface{}{
+		"session_id":    r.SessionID.String(),
+		"sequence":      r.Sequence,
+		"signer_key_id": r.SignerKeyID,
+	}
+	if err := logSelfAudit(ctx, store, SelfAuditActionReceiptSignatureInvalid, "",
+		details, SelfAuditResultError, reason); err != nil {
+		log.Errorf("failed to record receipt_signature_invalid audit: %v", err)
+	}
+}
+
+func summarizeSignatureResults(results []receiptSignatureResult) signatureSummary {
+	var s signatureSummary
+	for _, r := range results {
+		switch r.Status {
+		case signatureStatusOK:
+			s.SignedOK++
+		case signatureStatusUnsigned:
+			s.Unsigned++
+		case signatureStatusInvalid:
+			s.SignedInvalid++
+		}
+	}
+	return s
+}
+
+func writeReceiptsJSONWithSignatures(w io.Writer, rows []*storage.ReceiptRow, breaks []receiptVerifyBreak, sigResults []receiptSignatureResult, summary signatureSummary) error {
+	views := make([]policyReceiptView, 0, len(rows))
+	for _, r := range rows {
+		views = append(views, receiptToView(r))
+	}
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	out := map[string]interface{}{
+		"receipts":          views,
+		"chain_breaks":      breaks,
+		"signature_results": sigResults,
+		"signature_summary": summary,
+	}
+	return enc.Encode(out)
+}
+
+func renderSignatureVerifyResults(w io.Writer, c *tui.Colorizer, summary signatureSummary, results []receiptSignatureResult) {
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintf(w, "%s signed_ok=%d unsigned=%d signed_invalid=%d\n",
+		c.Header("Signature verification:"),
+		summary.SignedOK, summary.Unsigned, summary.SignedInvalid)
+	if summary.SignedInvalid == 0 {
+		return
+	}
+	for _, r := range results {
+		if r.Status != signatureStatusInvalid {
+			continue
+		}
+		_, _ = fmt.Fprintf(w, "  %s session=%s seq=%d key_id=%s %s\n",
+			c.Error("INVALID"),
+			tui.FormatShortID(r.SessionID.String()),
+			r.Sequence, r.KeyID, r.Reason)
+	}
 }

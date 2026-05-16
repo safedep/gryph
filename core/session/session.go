@@ -37,9 +37,9 @@ type Session struct {
 	// CommandsExecuted is the count of command_exec actions.
 	CommandsExecuted int `json:"commands_executed"`
 	// Errors is the count of events with error status.
-	Errors int `json:"errors"`
+	Errors           int `json:"errors"`
 	SensitiveActions int `json:"sensitive_actions"`
-	BlockedActions int `json:"blocked_actions"`
+	BlockedActions   int `json:"blocked_actions"`
 	// TranscriptPath is the path to the agent's transcript file.
 	TranscriptPath string `json:"transcript_path,omitempty"`
 	// InputTokens is the total input tokens across all models (denormalized).
@@ -115,7 +115,7 @@ type SessionFilter struct {
 	// Limit is the maximum number of results.
 	Limit int
 	// Offset is the number of results to skip.
-	Offset int
+	Offset         int
 	AgentNames     []string
 	HasErrors      *bool
 	HasSensitive   *bool
