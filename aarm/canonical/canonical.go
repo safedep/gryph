@@ -25,7 +25,7 @@ func MarshalJSON(v interface{}) ([]byte, error) {
 	}
 	if rv := reflect.ValueOf(v); rv.IsValid() {
 		switch rv.Kind() {
-		case reflect.Map, reflect.Slice, reflect.Ptr, reflect.Interface:
+		case reflect.Map, reflect.Slice, reflect.Pointer, reflect.Interface:
 			if rv.IsNil() {
 				return []byte("null"), nil
 			}
