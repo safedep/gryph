@@ -417,18 +417,26 @@ func (m *Mediator) handleEscalate(ctx context.Context, action *model.Action, sna
 	})
 
 	outcome, aerr := m.approval.Request(ctx, req)
-	if aerr != nil && outcome == nil {
+	if outcome == nil {
+		// Fail closed: a nil outcome (with or without an error) must never
+		// fall through to the switch below, which would panic on a nil
+		// dereference. Any approval service that fails to return a verdict is
+		// treated as a denial.
+		note := "approval service returned no outcome"
+		if aerr != nil {
+			note = aerr.Error()
+			log.Warnf("aarm: approval service error: %v", aerr)
+		}
 		m.emitAudit(ctx, ApprovalAudit{
 			Action:   approval.AuditActionDenied,
 			Request:  req,
 			Decision: decision,
 			Error:    aerr,
 		})
-		log.Warnf("aarm: approval service error: %v", aerr)
 		return m.applyApprovalOutcome(ctx, action, decision, rec, &approval.Outcome{
 			Decision:  approval.DecisionDeny,
 			Approver:  "system",
-			Note:      aerr.Error(),
+			Note:      note,
 			DecidedAt: time.Now().UTC(),
 		}), nil
 	}

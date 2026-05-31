@@ -59,6 +59,7 @@ policy:
   enabled: true
   fail_mode: closed
   conventional_paths: false
+  log_all_evaluations: true
   policy_paths:
     - %s
 `, dbPath, policyPath)

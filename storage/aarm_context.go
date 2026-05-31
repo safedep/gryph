@@ -497,16 +497,34 @@ func (s *SQLiteStore) ListContextSessionIDs(ctx context.Context) ([]uuid.UUID, e
 	return ids, nil
 }
 
-// DeleteContextBefore removes action rows older than before in fixed-size
-// batches, then prunes orphaned state rows whose last_action_at is also past
-// the cutoff and have no remaining actions referencing their session_id.
-// Returns the total number of action rows deleted.
+// DeleteContextBefore removes context action rows in fixed-size batches, then
+// prunes the now-orphaned per-session state rows.
+//
+// Retention operates at session granularity for two reasons. First, the
+// per-session action rows form a hash chain; deleting only a prefix would leave
+// the oldest surviving row with a non-zero prev_hash and a sequence other than
+// 1, which the chain verifier reports as a spurious break. Second, the
+// aarm_context_states counters are cumulative over the whole session, so
+// deleting a subset of a session's actions without resetting the state row
+// would leave context.total_actions (and the per-type counters) permanently
+// larger than the rows that remain, firing threshold rules on phantom history.
+// A session is therefore purged only when its most recent action is older than
+// before, so it is deleted whole (actions plus state) or not at all. Returns
+// the total number of action rows deleted.
 func (s *SQLiteStore) DeleteContextBefore(ctx context.Context, before time.Time) (int, error) {
 	const deleteBatch = 1000
 	total := 0
 	for {
 		res, err := s.db.ExecContext(ctx,
-			`DELETE FROM aarm_context_actions WHERE id IN (SELECT id FROM aarm_context_actions WHERE timestamp < ? LIMIT ?)`,
+			`DELETE FROM aarm_context_actions WHERE id IN (
+				SELECT id FROM aarm_context_actions
+				WHERE session_id IN (
+					SELECT session_id FROM aarm_context_actions
+					GROUP BY session_id
+					HAVING MAX(timestamp) < ?
+				)
+				LIMIT ?
+			)`,
 			before, deleteBatch,
 		)
 		if err != nil {
@@ -535,11 +553,21 @@ WHERE last_action_at < ?
 	return total, nil
 }
 
-// CountContextBefore returns the number of action rows older than before.
+// CountContextBefore returns the number of action rows eligible for retention
+// deletion: rows belonging to sessions whose most recent action is older than
+// before. This mirrors the session-granularity DeleteContextBefore so the
+// retention dry-run reports the count that will actually be purged.
 func (s *SQLiteStore) CountContextBefore(ctx context.Context, before time.Time) (int, error) {
-	n, err := s.client.AarmContextAction.Query().
-		Where(aarmcontextaction.TimestampLT(before)).
-		Count(ctx)
+	var n int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM aarm_context_actions
+		WHERE session_id IN (
+			SELECT session_id FROM aarm_context_actions
+			GROUP BY session_id
+			HAVING MAX(timestamp) < ?
+		)`,
+		before,
+	).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("storage: count context actions: %w", err)
 	}

@@ -57,7 +57,7 @@ func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".conventional_paths", true)
 	v.SetDefault(prefix+".context_retention_days", 90)
 	v.SetDefault(prefix+".receipt_retention_days", 365)
-	v.SetDefault(prefix+".log_all_evaluations", true)
+	v.SetDefault(prefix+".log_all_evaluations", false)
 	v.SetDefault(prefix+".approval.mode", string(ApprovalModeNop))
 	v.SetDefault(prefix+".approval.timeout_seconds", 60)
 	v.SetDefault(prefix+".approval.require_note", false)

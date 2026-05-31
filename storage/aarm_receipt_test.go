@@ -311,25 +311,46 @@ func TestListReceiptSessionIDs(t *testing.T) {
 func TestDeleteReceiptsBefore(t *testing.T) {
 	store := storagetest.NewStore(t)
 	ctx := context.Background()
-	sessionID := uuid.New()
 
-	old := makeReceiptRow(sessionID, 1)
-	old.RecordedAt = time.Now().UTC().Add(-48 * time.Hour)
-	require.NoError(t, store.InsertReceipt(ctx, old))
-
-	fresh := makeReceiptRow(sessionID, 2)
-	require.NoError(t, store.InsertReceipt(ctx, fresh))
-
+	// Retention operates at session granularity to keep each surviving
+	// session's hash chain intact (starts at sequence 1 with the zero-state
+	// prev_hash). A session is purged whole only when its most recent receipt
+	// is past the cutoff; a session with any recent activity is retained
+	// entirely, even its old early receipts. Deleting only a chain prefix would
+	// leave the oldest surviving row with a non-zero prev_hash and a sequence
+	// other than 1, which --verify reports as a spurious break.
 	cutoff := time.Now().UTC().Add(-1 * time.Hour)
+
+	// staleSession: every receipt is older than the cutoff -> purged whole.
+	staleSession := uuid.New()
+	stale1 := makeReceiptRow(staleSession, 1)
+	stale1.RecordedAt = time.Now().UTC().Add(-72 * time.Hour)
+	require.NoError(t, store.InsertReceipt(ctx, stale1))
+	stale2 := makeReceiptRow(staleSession, 2)
+	stale2.RecordedAt = time.Now().UTC().Add(-48 * time.Hour)
+	require.NoError(t, store.InsertReceipt(ctx, stale2))
+
+	// activeSession: an old seq-1 receipt but a recent seq-2 receipt. The whole
+	// session must be retained so its chain is not truncated mid-stream.
+	activeSession := uuid.New()
+	active1 := makeReceiptRow(activeSession, 1)
+	active1.RecordedAt = time.Now().UTC().Add(-48 * time.Hour)
+	require.NoError(t, store.InsertReceipt(ctx, active1))
+	require.NoError(t, store.InsertReceipt(ctx, makeReceiptRow(activeSession, 2)))
+
 	n, err := store.CountReceiptsBefore(ctx, cutoff)
 	require.NoError(t, err)
-	assert.Equal(t, 1, n)
+	assert.Equal(t, 2, n, "only the stale session's rows are eligible")
 
 	deleted, err := store.DeleteReceiptsBefore(ctx, cutoff)
 	require.NoError(t, err)
-	assert.Equal(t, 1, deleted)
+	assert.Equal(t, 2, deleted, "both rows of the stale session are purged")
 
-	remaining, err := store.CountReceipts(ctx, &storage.ReceiptFilter{SessionID: &sessionID})
+	staleRemaining, err := store.CountReceipts(ctx, &storage.ReceiptFilter{SessionID: &staleSession})
 	require.NoError(t, err)
-	assert.Equal(t, 1, remaining)
+	assert.Equal(t, 0, staleRemaining, "stale session fully removed")
+
+	activeRemaining, err := store.CountReceipts(ctx, &storage.ReceiptFilter{SessionID: &activeSession})
+	require.NoError(t, err)
+	assert.Equal(t, 2, activeRemaining, "active session retained whole, chain intact")
 }

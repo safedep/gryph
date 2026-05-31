@@ -654,15 +654,31 @@ func (s *SQLiteStore) CountReceipts(ctx context.Context, filter *ReceiptFilter) 
 	return n, nil
 }
 
-// DeleteReceiptsBefore deletes receipts older than before in fixed-size
-// batches so a heavy retention sweep does not hold the SQLite writer lock
-// for the entire purge. Returns the total number of rows deleted.
+// DeleteReceiptsBefore deletes receipts in fixed-size batches so a heavy
+// retention sweep does not hold the SQLite writer lock for the entire purge.
+//
+// Retention operates at session granularity to preserve the per-session hash
+// chain. A session is purged only when its most recent receipt is older than
+// before, so a surviving session always retains its full chain starting at
+// sequence 1 with the zero-state prev_hash. Deleting only a prefix of a
+// session's chain (the naive recorded_at < before predicate) would leave the
+// oldest surviving row with a non-zero prev_hash and a sequence other than 1,
+// which gryph policy receipts --verify reports as a spurious chain break.
+// Returns the total number of rows deleted.
 func (s *SQLiteStore) DeleteReceiptsBefore(ctx context.Context, before time.Time) (int, error) {
 	const deleteBatch = 1000
 	total := 0
 	for {
 		res, err := s.db.ExecContext(ctx,
-			`DELETE FROM aarm_receipts WHERE id IN (SELECT id FROM aarm_receipts WHERE recorded_at < ? LIMIT ?)`,
+			`DELETE FROM aarm_receipts WHERE id IN (
+				SELECT id FROM aarm_receipts
+				WHERE session_id IN (
+					SELECT session_id FROM aarm_receipts
+					GROUP BY session_id
+					HAVING MAX(recorded_at) < ?
+				)
+				LIMIT ?
+			)`,
 			before, deleteBatch,
 		)
 		if err != nil {
@@ -679,11 +695,21 @@ func (s *SQLiteStore) DeleteReceiptsBefore(ctx context.Context, before time.Time
 	}
 }
 
-// CountReceiptsBefore returns the number of receipts older than before.
+// CountReceiptsBefore returns the number of receipts eligible for retention
+// deletion: rows belonging to sessions whose most recent receipt is older than
+// before. This mirrors the session-granularity DeleteReceiptsBefore so the
+// retention dry-run reports the count that will actually be purged.
 func (s *SQLiteStore) CountReceiptsBefore(ctx context.Context, before time.Time) (int, error) {
-	n, err := s.client.AarmReceipt.Query().
-		Where(aarmreceipt.RecordedAtLT(before)).
-		Count(ctx)
+	var n int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM aarm_receipts
+		WHERE session_id IN (
+			SELECT session_id FROM aarm_receipts
+			GROUP BY session_id
+			HAVING MAX(recorded_at) < ?
+		)`,
+		before,
+	).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("storage: count receipts: %w", err)
 	}

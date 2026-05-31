@@ -50,7 +50,7 @@ func TestDefault(t *testing.T) {
 	assert.True(t, cfg.Policy.ConventionalPaths)
 	assert.Equal(t, 90, cfg.Policy.ContextRetentionDays)
 	assert.Equal(t, 365, cfg.Policy.ReceiptRetentionDays)
-	assert.True(t, cfg.Policy.LogAllEvaluations)
+	assert.False(t, cfg.Policy.LogAllEvaluations)
 	assert.Equal(t, SignModeAuto, cfg.Policy.Receipts.SignMode)
 	assert.Equal(t, ApprovalModeNop, cfg.Policy.Approval.Mode)
 	assert.Equal(t, 60, cfg.Policy.Approval.TimeoutSeconds)
