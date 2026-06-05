@@ -13,6 +13,7 @@ import (
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/codex"
 	"github.com/safedep/gryph/agent/cursor"
+	"github.com/safedep/gryph/agent/devin"
 	"github.com/safedep/gryph/agent/gemini"
 	"github.com/safedep/gryph/agent/openclaw"
 	"github.com/safedep/gryph/agent/opencode"
@@ -295,6 +296,11 @@ func sendHookResponse(agentName, hookType string) error {
 		// support the "allow" permissionDecision value).
 		return nil
 
+	case agent.AgentDevin:
+		// Devin CLI: same hook semantics as Codex (exit 0 = allow, exit 2 = block).
+		// PreToolUse supports deny via JSON on stdout or exit code 2.
+		return nil
+
 	default:
 		// Unknown agent, just succeed
 		return nil
@@ -364,6 +370,15 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 			}
 		}
 		return handleCodexResponse(response)
+
+	case agent.AgentDevin:
+		response := devin.NewBlockResponse(result.BlockReason)
+		if hookType == "PreToolUse" {
+			if _, err := os.Stdout.Write(response.JSON()); err != nil {
+				log.Errorf("failed to write to stdout: %v", err)
+			}
+		}
+		return handleDevinResponse(response)
 
 	default:
 		return nil
@@ -488,6 +503,18 @@ func handleCodexResponse(response *codex.HookResponse) error {
 	case codex.HookBlock:
 		return &exitError{code: 2, message: response.Message}
 	case codex.HookError:
+		return &exitError{code: 1, message: response.Message}
+	default:
+		return nil
+	}
+}
+
+// handleDevinResponse processes a Devin CLI hook response.
+func handleDevinResponse(response *devin.HookResponse) error {
+	switch response.Decision {
+	case devin.HookBlock:
+		return &exitError{code: 2, message: response.Message}
+	case devin.HookError:
 		return &exitError{code: 1, message: response.Message}
 	default:
 		return nil

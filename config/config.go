@@ -21,6 +21,7 @@ const (
 	agentNameWindsurf   = "windsurf"
 	agentNamePiAgent    = "pi-agent"
 	agentNameCodex      = "codex"
+	agentNameDevin      = "devin"
 
 	streamTargetTypeStdout = "stdout"
 	streamTargetTypeNop    = "nop"
@@ -126,6 +127,7 @@ type AgentsConfig struct {
 	Windsurf   AgentConfig `mapstructure:"windsurf"`
 	PiAgent    AgentConfig `mapstructure:"pi-agent"`
 	Codex      AgentConfig `mapstructure:"codex"`
+	Devin      AgentConfig `mapstructure:"devin"`
 }
 
 // DisplayConfig holds display-related settings.
@@ -290,6 +292,10 @@ func (c *Config) GetAgentLoggingLevel(agentName string) LoggingLevel {
 		if c.Agents.Codex.LoggingLevel != "" {
 			return c.Agents.Codex.LoggingLevel
 		}
+	case agentNameDevin:
+		if c.Agents.Devin.LoggingLevel != "" {
+			return c.Agents.Devin.LoggingLevel
+		}
 	}
 
 	return c.Logging.Level
@@ -314,6 +320,8 @@ func (c *Config) IsAgentEnabled(agentName string) bool {
 		return c.Agents.PiAgent.Enabled
 	case agentNameCodex:
 		return c.Agents.Codex.Enabled
+	case agentNameDevin:
+		return c.Agents.Devin.Enabled
 	default:
 		return true
 	}

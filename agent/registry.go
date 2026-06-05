@@ -82,6 +82,7 @@ func SupportedAgents() []string {
 		"claude-code",
 		"codex",
 		"cursor",
+		"devin",
 		"gemini",
 		"opencode",
 		"openclaw",

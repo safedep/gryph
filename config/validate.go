@@ -75,6 +75,9 @@ func validate(cfg *Config) error {
 	if cfg.Agents.Codex.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.Codex.LoggingLevel) {
 		return fmt.Errorf("invalid agents.codex.logging_level: %s", cfg.Agents.Codex.LoggingLevel)
 	}
+	if cfg.Agents.Devin.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.Devin.LoggingLevel) {
+		return fmt.Errorf("invalid agents.devin.logging_level: %s", cfg.Agents.Devin.LoggingLevel)
+	}
 
 	return nil
 }
