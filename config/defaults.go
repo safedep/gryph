@@ -75,6 +75,7 @@ func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".defer.auto_resolve_on_timeout", DeferAutoResolveDeny)
 	v.SetDefault(prefix+".identity.enabled", true)
 	v.SetDefault(prefix+".identity.require_human_principal", false)
+	v.SetDefault(prefix+".self_protection.enabled", true)
 }
 
 // defaultSensitivePaths returns the default list of sensitive path patterns.

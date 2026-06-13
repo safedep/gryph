@@ -13,6 +13,7 @@ func ApplyLoggingLevel(event *events.Event, level config.LoggingLevel) {
 		event.RawEvent = nil
 		event.DiffContent = ""
 		event.ConversationContext = ""
+		event.FullContent = ""
 
 		stripPayloadContent(event)
 		return

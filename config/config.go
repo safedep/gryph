@@ -109,6 +109,14 @@ type PolicyConfig struct {
 	Receipts       ReceiptsConfig       `mapstructure:"receipts"`
 	Defer          DeferConfig          `mapstructure:"defer"`
 	Identity       IdentityConfig       `mapstructure:"identity"`
+	SelfProtection SelfProtectionConfig `mapstructure:"self_protection"`
+}
+
+// SelfProtectionConfig toggles the built-in rules that block agent writes to
+// Gryph's policy files, database, keys, and the agents' hook configs. Honored
+// only from the operator-owned config file, never a repo-local policy.
+type SelfProtectionConfig struct {
+	Enabled bool `mapstructure:"enabled"`
 }
 
 // IdentityConfig controls the AARM identity-capture layer. Enabled gates the

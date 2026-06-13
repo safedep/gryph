@@ -26,6 +26,7 @@ import (
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/receipt"
+	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	coresecurity "github.com/safedep/gryph/core/security"
@@ -33,6 +34,7 @@ import (
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 func NewPolicyCmd() *cobra.Command {
@@ -52,6 +54,7 @@ func NewPolicyCmd() *cobra.Command {
 	cmd.AddCommand(
 		newPolicyInitCmd(),
 		newPolicySchemaCmd(),
+		newPolicyBuiltinCmd(),
 		newPolicySourcesCmd(),
 		newPolicyValidateCmd(),
 		newPolicyTestCmd(),
@@ -129,6 +132,54 @@ func newPolicySchemaCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := fmt.Fprint(cmd.OutOrStdout(), schema.PolicyJSON())
 			return err
+		},
+	}
+}
+
+func newPolicyBuiltinCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "builtin",
+		Short: "Print the built-in self-protection rules",
+		Long: "Prints the AARM self-protection rules compiled into Gryph as YAML. " +
+			"These rules block agent writes to Gryph's own policy files, config, " +
+			"database, signing keys, and the agents' hook configs. They load last, " +
+			"cannot be disabled by a repo-local policy, and are toggled only via " +
+			"policy.self_protection.enabled in the operator's config file.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			app, err := loadApp()
+			if err != nil {
+				log.Warnf("loadApp failed during policy builtin, using resolved defaults: %v", err)
+			}
+			var cfg *config.Config
+			var paths *config.Paths
+			policyCfg := config.PolicyConfig{}
+			if app != nil {
+				cfg = app.Config
+				paths = app.Paths
+			}
+			if cfg != nil {
+				policyCfg = cfg.EffectivePolicy()
+			}
+			if paths == nil {
+				paths = config.ResolvePaths()
+			}
+
+			src := loader.NewBuiltinSource(selfProtectionGlobs(cfg, paths, policyCfg)...)
+			docs, err := src.Load(cmd.Context())
+			if err != nil {
+				return ErrConfig("build self-protection rules", err)
+			}
+			out := cmd.OutOrStdout()
+			for _, doc := range docs {
+				data, err := yaml.Marshal(doc)
+				if err != nil {
+					return ErrConfig("marshal self-protection rules", err)
+				}
+				if _, err := out.Write(data); err != nil {
+					return err
+				}
+			}
+			return nil
 		},
 	}
 }
@@ -216,6 +267,18 @@ func sourceToRow(src loader.Source) sourceRow {
 			path = s.StartDir
 		}
 		return sourceRow{Kind: "conventional", Path: path, Optional: true, Status: status, Problem: problem, Hints: hints}
+	case *loader.BuiltinSource:
+		return sourceRow{
+			Kind:     "builtin",
+			Path:     "self-protection",
+			Optional: false,
+			Status:   sourceStatusFound,
+			Hints: []string{
+				"Built-in rules protecting Gryph policy files, config, database, keys, and agent hook configs",
+				"Always loaded last; not affected by user disabled: lists",
+				"Toggle with policy.self_protection.enabled in the config file",
+			},
+		}
 	default:
 		return sourceRow{Kind: "source", Path: src.Name(), Status: sourceStatusUnknown}
 	}
@@ -1039,10 +1102,6 @@ func (l *lazyPolicyCheck) recordAarmFailure(event *events.Event, action, label s
 var _ coresecurity.Check = (*lazyPolicyCheck)(nil)
 
 func buildPolicyLoader(cfg *config.Config, paths *config.Paths, override string) (*loader.Loader, error) {
-	if override != "" {
-		return loader.New(loader.NewFileSource(override)), nil
-	}
-
 	var (
 		policyCfg config.PolicyConfig
 		hasCfg    bool
@@ -1054,29 +1113,76 @@ func buildPolicyLoader(cfg *config.Config, paths *config.Paths, override string)
 
 	var sources []loader.Source
 
-	if policyCfg.ConventionalPaths {
-		if cwd, err := os.Getwd(); err == nil {
-			sources = append(sources, loader.NewConventionalSource(cwd))
+	if override != "" {
+		sources = append(sources, loader.NewFileSource(override))
+	} else {
+		if policyCfg.ConventionalPaths {
+			if cwd, err := os.Getwd(); err == nil {
+				sources = append(sources, loader.NewConventionalSource(cwd))
+			}
+		}
+
+		for _, p := range policyCfg.PolicyPaths {
+			src, err := sourceForPath(p)
+			if err != nil {
+				return nil, err
+			}
+			sources = append(sources, src)
+		}
+
+		if !hasCfg || len(policyCfg.PolicyPaths) == 0 {
+			if paths == nil {
+				paths = config.ResolvePaths()
+			}
+			fallback := filepath.Join(paths.ConfigDir, "policy.yaml")
+			sources = append(sources, loader.NewOptionalFileSource(fallback))
 		}
 	}
 
-	for _, p := range policyCfg.PolicyPaths {
-		src, err := sourceForPath(p)
-		if err != nil {
-			return nil, err
-		}
-		sources = append(sources, src)
-	}
-
-	if !hasCfg || len(policyCfg.PolicyPaths) == 0 {
+	if policyCfg.SelfProtection.Enabled {
 		if paths == nil {
 			paths = config.ResolvePaths()
 		}
-		fallback := filepath.Join(paths.ConfigDir, "policy.yaml")
-		sources = append(sources, loader.NewOptionalFileSource(fallback))
+		sources = append(sources, loader.NewBuiltinSource(selfProtectionGlobs(cfg, paths, policyCfg)...))
 	}
 
 	return loader.New(sources...), nil
+}
+
+// selfProtectionGlobs assembles the doublestar globs the built-in
+// self-protection rules block writes against: the conventional policy
+// filenames, the configured policy source paths, Gryph's config / data /
+// key paths, and every agent's hook config. Forward-slash normalized; the
+// BuiltinSource dedupes.
+func selfProtectionGlobs(cfg *config.Config, paths *config.Paths, policyCfg config.PolicyConfig) []string {
+	globs := []string{
+		"**/.gryph-policy.yml",
+		"**/.gryph-policy.yaml",
+	}
+
+	for _, p := range policyCfg.PolicyPaths {
+		if p == "" {
+			continue
+		}
+		slash := filepath.ToSlash(p)
+		globs = append(globs, slash, slash+"/**")
+	}
+
+	if paths != nil && paths.ConfigDir != "" {
+		globs = append(globs, filepath.ToSlash(paths.ConfigDir)+"/**")
+	}
+	if cfg != nil {
+		if db := cfg.GetDatabasePath(); db != "" {
+			globs = append(globs, filepath.ToSlash(db))
+		}
+		globs = append(globs,
+			filepath.ToSlash(cfg.ResolveReceiptKeyPath(paths)),
+			filepath.ToSlash(cfg.ResolveReceiptTrustStorePath(paths)),
+		)
+	}
+
+	globs = append(globs, agent.HookConfigGlobs()...)
+	return globs
 }
 
 func sourceForPath(p string) (loader.Source, error) {

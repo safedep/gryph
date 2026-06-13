@@ -64,7 +64,25 @@ type Action struct {
 	OriginalRequest     string
 	DataClassifications []string
 	InjectionScore      float32
+
+	// Phase is the source hook's execution phase, surfaced to CEL as
+	// action.phase and persisted on the receipt's action_payload.
+	Phase ActionPhase
+
+	// ContentTruncated is true when content matching hit the cap and only a
+	// prefix was inspected.
+	ContentTruncated bool
 }
+
+// ActionPhase records whether the source hook fired before the operation
+// executed (PhasePre, enforceable) or after (PhasePost, detection only).
+type ActionPhase string
+
+const (
+	PhaseUnknown ActionPhase = "unknown"
+	PhasePre     ActionPhase = "pre"
+	PhasePost    ActionPhase = "post"
+)
 
 // Parameters carries normalized action payload fields.
 type Parameters struct {
@@ -77,6 +95,11 @@ type Parameters struct {
 	LinesRemoved int
 	Content      string
 	Raw          map[string]any
+
+	// ContentFull is the untruncated content used only for content_patterns
+	// matching. Never persisted, dropped after evaluation, and empty for
+	// sensitive paths.
+	ContentFull string
 }
 
 // Decision is the policy evaluation outcome for an action.
@@ -117,6 +140,8 @@ const (
 	ResultBlocked ResultStatus = "blocked"
 	// ResultRejected indicates the action was rejected.
 	ResultRejected ResultStatus = "rejected"
+	// ResultDeferred indicates the action is paused pending operator resolution.
+	ResultDeferred ResultStatus = "deferred"
 )
 
 // Severity classifies how serious a rule's decision is. The zero value

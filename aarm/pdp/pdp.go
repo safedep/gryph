@@ -438,13 +438,22 @@ func (r compiledRule) matches(action *model.Action) bool {
 	if len(r.workingDirPatterns) > 0 && !matchesAnyPath(r.workingDirPatterns, action.WorkingDir) {
 		return false
 	}
-	if len(r.commandPatterns) > 0 && !matchesAnyRegex(r.commandPatterns, action.Parameters.Command) {
+	if len(r.commandPatterns) > 0 && !matchesAnyRegex(r.commandPatterns, commandLine(action.Parameters)) {
 		return false
 	}
-	if len(r.contentPatterns) > 0 && !matchesAnyRegex(r.contentPatterns, action.Parameters.Content) {
+	if len(r.contentPatterns) > 0 && !matchesAnyRegex(r.contentPatterns, matchContent(action.Parameters)) {
 		return false
 	}
 	return true
+}
+
+// matchContent prefers the untruncated ContentFull so a payload past the
+// preview boundary cannot evade a content rule, falling back to the preview.
+func matchContent(p model.Parameters) string {
+	if p.ContentFull != "" {
+		return p.ContentFull
+	}
+	return p.Content
 }
 
 func (r compiledRule) conditionMatches(ctx context.Context, activations map[string]any) (bool, error) {
@@ -498,6 +507,19 @@ func matchesAnyPath(patterns []string, value string) bool {
 		}
 	}
 	return false
+}
+
+// commandLine joins the command and its promoted args so command_patterns
+// match the full invocation, not just the executable name. Args empty yields
+// the bare command, preserving prior behavior.
+func commandLine(p model.Parameters) string {
+	if len(p.Args) == 0 {
+		return p.Command
+	}
+	if p.Command == "" {
+		return strings.Join(p.Args, " ")
+	}
+	return p.Command + " " + strings.Join(p.Args, " ")
 }
 
 func matchesAnyRegex(patterns []*regexp.Regexp, value string) bool {
@@ -610,6 +632,15 @@ func conditionEnv() (*cel.Env, error) {
 	)
 }
 
+// phaseOrUnknown normalizes the empty ActionPhase zero value to PhaseUnknown
+// so action.phase is always one of the three documented strings in CEL.
+func phaseOrUnknown(p model.ActionPhase) model.ActionPhase {
+	if p == "" {
+		return model.PhaseUnknown
+	}
+	return p
+}
+
 func actionActivation(action *model.Action) map[string]any {
 	if action == nil {
 		action = &model.Action{}
@@ -627,6 +658,8 @@ func actionActivation(action *model.Action) map[string]any {
 		"project":              action.Project,
 		"injection_score":      float64(action.InjectionScore),
 		"data_classifications": classifications,
+		"phase":                string(phaseOrUnknown(action.Phase)),
+		"content_truncated":    action.ContentTruncated,
 		"human_principal":      action.HumanPrincipal,
 		"service_identity":     action.ServiceIdentity,
 		"role_scope":           action.RoleScope,

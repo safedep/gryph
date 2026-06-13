@@ -58,21 +58,31 @@ var ToolNameMapping = map[string]events.ActionType{
 }
 
 func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event, error) {
+	var event *events.Event
+	var err error
+
 	switch hookType {
 	case "before_tool_call":
-		return a.parseToolEvent(hookType, rawData, false)
+		event, err = a.parseToolEvent(hookType, rawData, false)
 	case "after_tool_call":
-		return a.parseToolEvent(hookType, rawData, true)
+		event, err = a.parseToolEvent(hookType, rawData, true)
 	case "session_start":
-		return a.parseSessionEvent(rawData, events.ActionSessionStart)
+		event, err = a.parseSessionEvent(rawData, events.ActionSessionStart)
 	case "session_end":
-		return a.parseSessionEvent(rawData, events.ActionSessionEnd)
+		event, err = a.parseSessionEvent(rawData, events.ActionSessionEnd)
 	default:
 		sessionID := resolveSessionID("")
-		event := events.NewEvent(sessionID, AgentName, events.ActionUnknown)
+		event = events.NewEvent(sessionID, AgentName, events.ActionUnknown)
 		event.RawEvent = rawData
-		return event, nil
 	}
+
+	if err != nil {
+		return nil, err
+	}
+	if event != nil {
+		event.HookType = hookType
+	}
+	return event, nil
 }
 
 func (a *Adapter) parseToolEvent(hookType string, rawData []byte, isAfter bool) (*events.Event, error) {
@@ -209,6 +219,7 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 
 		if fullContent != "" {
 			payload.ContentPreview = truncateString(fullContent, 200)
+			event.FullContent = fullContent
 		}
 		if fullOldStr != "" {
 			payload.OldString = truncateString(fullOldStr, 200)

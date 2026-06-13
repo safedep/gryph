@@ -279,6 +279,7 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	}
 	if event != nil {
 		event.TranscriptPath = baseInput.TranscriptPath
+		event.HookType = hookType
 	}
 	return event, nil
 }
@@ -796,6 +797,7 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 
 		if fullContent != "" {
 			payload.ContentPreview = truncateString(fullContent, 200)
+			event.FullContent = fullContent
 		}
 		if fullOldStr != "" {
 			payload.OldString = truncateString(fullOldStr, 200)

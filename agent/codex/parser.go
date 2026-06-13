@@ -87,25 +87,35 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	sessionID := resolveSessionID(baseInput.SessionID)
 	agentSessionID := baseInput.SessionID
 
+	var event *events.Event
+	var err error
+
 	switch eventName {
 	case "SessionStart":
-		return parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
+		event, err = parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
 	case "PreToolUse":
-		return a.parsePreToolUse(sessionID, agentSessionID, rawData)
+		event, err = a.parsePreToolUse(sessionID, agentSessionID, rawData)
 	case "PostToolUse":
-		return a.parsePostToolUse(sessionID, agentSessionID, rawData)
+		event, err = a.parsePostToolUse(sessionID, agentSessionID, rawData)
 	case "UserPromptSubmit":
-		return parseUserPromptSubmit(sessionID, agentSessionID, rawData)
+		event, err = parseUserPromptSubmit(sessionID, agentSessionID, rawData)
 	case "Stop":
-		return parseStop(sessionID, agentSessionID, rawData)
+		event, err = parseStop(sessionID, agentSessionID, rawData)
 	default:
-		event := events.NewEvent(sessionID, AgentName, events.ActionUnknown)
+		event = events.NewEvent(sessionID, AgentName, events.ActionUnknown)
 		event.AgentSessionID = agentSessionID
 		event.WorkingDirectory = baseInput.Cwd
 		event.TranscriptPath = baseInput.TranscriptPath
 		event.RawEvent = rawData
-		return event, nil
 	}
+
+	if err != nil {
+		return nil, err
+	}
+	if event != nil {
+		event.HookType = eventName
+	}
+	return event, nil
 }
 
 func resolveSessionID(rawSessionID string) uuid.UUID {
@@ -307,6 +317,7 @@ func (a *Adapter) buildToolPayload(event *events.Event, actionType events.Action
 
 		if fullContent != "" {
 			payload.ContentPreview = truncateString(fullContent, 200)
+			event.FullContent = fullContent
 		}
 		if fullOldStr != "" {
 			payload.OldString = truncateString(fullOldStr, 200)

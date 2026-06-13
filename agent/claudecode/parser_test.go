@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/safedep/gryph/config"
@@ -74,6 +75,33 @@ func TestParseHookEvent_PreToolUseWrite(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "/home/user/project/src/main.go", payload.Path)
 	assert.Contains(t, payload.ContentPreview, "package main")
+}
+
+func TestParseHookEvent_FullContentAndHookType(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "pre_tool_use_write.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, "PreToolUse", event.HookType, "raw hook type must be captured for phase mapping")
+	assert.Contains(t, event.FullContent, "package main",
+		"full untruncated content must be retained in-memory for the policy matcher")
+}
+
+func TestParseHookEvent_EditFeedsFullContent(t *testing.T) {
+	ctx := context.Background()
+	newText := strings.Repeat("x", 500) + "EVIL_PAYLOAD"
+	data := []byte(`{"session_id":"s1","cwd":"/p","hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"/p/a.go","old_string":"foo","new_string":"` + newText + `"}}`)
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionFileWrite, event.ActionType)
+	assert.Contains(t, event.FullContent, "EVIL_PAYLOAD",
+		"edit new_string beyond the preview boundary must reach the content matcher")
 }
 
 func TestParseHookEvent_PostToolUseRead(t *testing.T) {

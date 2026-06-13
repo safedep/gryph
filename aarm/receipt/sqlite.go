@@ -255,6 +255,12 @@ func actionPayloadMap(a *model.Action) map[string]interface{} {
 	if a.WorkingDir != "" {
 		m["working_dir"] = a.WorkingDir
 	}
+	if a.Phase != "" && a.Phase != model.PhaseUnknown {
+		m["phase"] = string(a.Phase)
+	}
+	if a.ContentTruncated {
+		m["content_truncated"] = true
+	}
 	if len(m) == 0 {
 		return nil
 	}

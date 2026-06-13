@@ -74,11 +74,13 @@ rules:
 }
 
 type spyAccumulator struct {
-	appendCalls   int
-	snapshotCalls int
-	lastAction    *model.Action
-	lastSessionID uuid.UUID
-	snapshot      *model.ContextSnapshot
+	appendCalls       int
+	snapshotCalls     int
+	recordResultCalls int
+	lastAction        *model.Action
+	lastSessionID     uuid.UUID
+	lastResult        model.Result
+	snapshot          *model.ContextSnapshot
 }
 
 func (s *spyAccumulator) Append(_ context.Context, a *model.Action) error {
@@ -87,7 +89,9 @@ func (s *spyAccumulator) Append(_ context.Context, a *model.Action) error {
 	return nil
 }
 
-func (s *spyAccumulator) RecordResult(context.Context, uuid.UUID, model.Result) error {
+func (s *spyAccumulator) RecordResult(_ context.Context, _ uuid.UUID, r model.Result) error {
+	s.recordResultCalls++
+	s.lastResult = r
 	return nil
 }
 
@@ -135,6 +139,37 @@ rules:
 	assert.Equal(t, sessID, spy.lastSessionID, "Snapshot must be queried by the action's session id")
 	assert.Equal(t, coresecurity.DecisionGuidance, res.Decision,
 		"PDP should observe the injected snapshot (files_written=15) and match the rule")
+}
+
+func TestMediator_BlockRecordsTerminalResult(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: block-writes
+    action: block
+    match: { action_types: [file_write] }
+    message: "no writes"
+`))
+	require.NoError(t, err)
+
+	spy := &spyAccumulator{}
+	med, err := NewMediator(policy, WithAccumulator(spy))
+	require.NoError(t, err)
+
+	event := &events.Event{
+		ID:         uuid.New(),
+		SessionID:  uuid.New(),
+		Timestamp:  time.Now(),
+		ActionType: events.ActionFileWrite,
+		AgentName:  "claude-code",
+		Payload:    []byte(`{"path":"main.go"}`),
+	}
+
+	res, err := med.Check(context.Background(), event)
+	require.NoError(t, err)
+	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
+	assert.Equal(t, 1, spy.recordResultCalls, "a blocked action must record a terminal context result")
+	assert.Equal(t, model.ResultBlocked, spy.lastResult.Status)
 }
 
 var _ accumulator.Accumulator = (*spyAccumulator)(nil)

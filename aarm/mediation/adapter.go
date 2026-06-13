@@ -3,6 +3,7 @@ package mediation
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/safedep/gryph/aarm/identity"
 	"github.com/safedep/gryph/aarm/model"
@@ -137,5 +138,43 @@ func populateWellKnownParams(p *model.Parameters, args map[string]any) {
 		if v, ok := args["command"].(string); ok && v != "" {
 			p.Command = v
 		}
+	}
+	if len(p.Args) == 0 {
+		if v, ok := args["args"]; ok {
+			p.Args = coerceStringSlice(v)
+		} else if v, ok := args["arguments"]; ok {
+			p.Args = coerceStringSlice(v)
+		}
+	}
+}
+
+// coerceStringSlice converts a raw JSON-decoded argument vector into a
+// []string. A []any of scalars (the common shape from json.Unmarshal into
+// map[string]any) has each element rendered to its string form; a []string
+// passes through. Non-list values yield nil so command matching falls back to
+// the bare command. Used to promote tool-use argument vectors so
+// command_patterns see the full invocation, not just the executable name.
+func coerceStringSlice(v any) []string {
+	switch vv := v.(type) {
+	case []string:
+		return append([]string(nil), vv...)
+	case []any:
+		out := make([]string, 0, len(vv))
+		for _, e := range vv {
+			switch ev := e.(type) {
+			case string:
+				out = append(out, ev)
+			case nil:
+				continue
+			default:
+				out = append(out, fmt.Sprintf("%v", ev))
+			}
+		}
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	default:
+		return nil
 	}
 }

@@ -295,6 +295,10 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 		return nil, err
 	}
 
+	// Drop the full match buffer so no later serialization of the action can
+	// leak full content.
+	action.Parameters.ContentFull = ""
+
 	if decision.Decision == model.DecisionEscalate {
 		return m.handleEscalate(ctx, action, snapshot, decision)
 	}
@@ -306,6 +310,12 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 	result := pep.Apply(decision)
 	result.AarmActionID = action.ID
 	result.AarmSessionID = action.SessionID
+
+	// The hook returns before the allow-path RecordResult, so record a blocked
+	// outcome here. Guidance and warn proceed and are recorded on the allow path.
+	if decision.Decision == model.DecisionBlock {
+		m.recordContextResult(ctx, action.ID, model.ResultBlocked)
+	}
 
 	if m.shouldRecordReceipt(decision) {
 		rec, rerr := m.receipt.Record(ctx, &receipt.RecordInput{
@@ -495,6 +505,12 @@ func (m *Mediator) applyApprovalOutcome(ctx context.Context, action *model.Actio
 		}
 	}
 
+	// Approved actions proceed and are recorded on the allow path; record the
+	// terminal result here only for deny/timeout.
+	if coreDecision == coresecurity.DecisionBlock {
+		m.recordContextResult(ctx, action.ID, model.ResultStatus(resultStatus))
+	}
+
 	result := &coresecurity.CheckResult{
 		CheckName:      CheckName,
 		Decision:       coreDecision,
@@ -571,6 +587,8 @@ func (m *Mediator) handleDefer(ctx context.Context, action *model.Action, snapsh
 		operatorHint = hint
 	}
 
+	m.recordContextResult(ctx, action.ID, model.ResultDeferred)
+
 	message := fmt.Sprintf("Action deferred: %s.", reason)
 	if operatorHint != "" {
 		message = message + " " + operatorHint
@@ -623,6 +641,18 @@ func (m *Mediator) RecordResult(ctx context.Context, actionID uuid.UUID, session
 		}
 	}
 	return nil
+}
+
+// recordContextResult sets a terminal result status on the already-appended
+// context-action row. Errors are logged, not propagated, so a failed status
+// update never turns a block into an allow.
+func (m *Mediator) recordContextResult(ctx context.Context, actionID uuid.UUID, status model.ResultStatus) {
+	if m == nil || m.accum == nil || actionID == uuid.Nil {
+		return
+	}
+	if err := m.accum.RecordResult(ctx, actionID, model.Result{Status: status}); err != nil {
+		log.Warnf("aarm: accumulator record terminal result: %v", err)
+	}
 }
 
 func mapSeverity(s model.Severity) coresecurity.Severity {

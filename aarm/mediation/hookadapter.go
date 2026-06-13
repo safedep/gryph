@@ -68,6 +68,8 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 		return nil, fmt.Errorf("mediation: extract parameters for %s: %w", event.ActionType, err)
 	}
 	action.Parameters = params
+	action.Phase = phaseForHookType(event.HookType)
+	applyContentMatch(action, event.FullContent)
 
 	h.applyEnrichment(ctx, action, nil)
 
