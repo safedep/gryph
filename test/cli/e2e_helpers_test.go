@@ -43,8 +43,14 @@ func newTestEnvWithPolicy(t *testing.T, policyYAML string) *testEnv {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	policyPath := filepath.Join(tmpDir, "policy.yaml")
 
+	// Gryph loads policy from policy.yaml in its config directory. Point the
+	// config directory at a temp location via XDG_CONFIG_HOME and seed the
+	// policy there.
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	configDir := filepath.Join(tmpDir, "gryph")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	policyPath := filepath.Join(configDir, "policy.yaml")
 	require.NoError(t, os.WriteFile(policyPath, []byte(policyYAML), 0o600))
 
 	configYAML := fmt.Sprintf(`logging:
@@ -58,11 +64,8 @@ display:
 policy:
   enabled: true
   fail_mode: closed
-  conventional_paths: false
   log_all_evaluations: true
-  policy_paths:
-    - %s
-`, dbPath, policyPath)
+`, dbPath)
 
 	require.NoError(t, os.WriteFile(configPath, []byte(configYAML), 0o600))
 

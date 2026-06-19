@@ -40,52 +40,6 @@ func TestFileSource_MissingOptional(t *testing.T) {
 	assert.Empty(t, docs)
 }
 
-func TestDirSource_LoadSorted(t *testing.T) {
-	dir := t.TempDir()
-	writeYAML(t, filepath.Join(dir, "b.yaml"), "version: \"1\"\nrules:\n  - id: b\n    action: allow\n")
-	writeYAML(t, filepath.Join(dir, "a.yml"), "version: \"1\"\nrules:\n  - id: a\n    action: allow\n")
-	writeYAML(t, filepath.Join(dir, "ignore.txt"), "not yaml")
-	writeYAML(t, filepath.Join(dir, ".hidden.yaml"), "version: \"1\"\nrules: []\n")
-
-	docs, err := NewDirSource(dir).Load(context.Background())
-	require.NoError(t, err)
-	require.Len(t, docs, 2)
-	assert.Equal(t, "a", docs[0].Rules[0].ID)
-	assert.Equal(t, "b", docs[1].Rules[0].ID)
-}
-
-func TestDirSource_MissingOptional(t *testing.T) {
-	docs, err := NewOptionalDirSource(filepath.Join(t.TempDir(), "absent")).Load(context.Background())
-	require.NoError(t, err)
-	assert.Empty(t, docs)
-}
-
-func TestConventionalSource_WalksUp(t *testing.T) {
-	root := t.TempDir()
-	deep := filepath.Join(root, "a", "b", "c")
-	require.NoError(t, os.MkdirAll(deep, 0o755))
-	writeYAML(t, filepath.Join(root, ".gryph-policy.yml"), "version: \"1\"\nrules:\n  - id: from-root\n    action: allow\n")
-
-	src := NewConventionalSource(deep)
-	src.StopAt = root
-	docs, err := src.Load(context.Background())
-	require.NoError(t, err)
-	require.Len(t, docs, 1)
-	assert.Equal(t, "from-root", docs[0].Rules[0].ID)
-}
-
-func TestConventionalSource_StopsAtBoundary(t *testing.T) {
-	root := t.TempDir()
-	deep := filepath.Join(root, "a")
-	require.NoError(t, os.MkdirAll(deep, 0o755))
-
-	src := NewConventionalSource(deep)
-	src.StopAt = root
-	docs, err := src.Load(context.Background())
-	require.NoError(t, err)
-	assert.Empty(t, docs)
-}
-
 func TestLoader_MergesRules(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.yaml")

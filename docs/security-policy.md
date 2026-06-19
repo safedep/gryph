@@ -8,12 +8,13 @@ policy authoring and usage.
 ## Quick start
 
 ```bash
-gryph policy init ./.gryph-policy.yml
+gryph policy init          # write the example policy to the global config dir
+gryph policy edit          # open it in $EDITOR to author your rules
 gryph policy validate
 gryph policy test --action file_write --path ./secrets/db.env
 ```
 
-Edit `.gryph-policy.yml` between steps. Every feature has inline documentation in the generated file.
+Edit the global policy between steps using `gryph policy edit`. Every feature has inline documentation in the generated file.
 
 Turn enforcement in configuration. See `gryph config show` for details. You can also run `gryph
 policy set policy.enabled=true` to enable policy enforcement or edit the `config.yml` file directly.
@@ -27,13 +28,14 @@ Once enabled, every supported agent hook runs through the engine.
 
 ## Where policy files live
 
-Gryph loads policy from these locations, in order. Run `gryph policy sources` to see the resolved list for your current setup.
+Gryph loads policy from exactly two sources, in this order:
 
-1. **Conventional**. Gryph walks up from the current working directory looking for `.gryph-policy.yml` or `.gryph-policy.yaml`. First match wins. Enabled by default.
-2. **Configured paths**. Every entry of `policy.policy_paths` in config. A file becomes a single-file source, a directory becomes a non-recursive load of every `*.yaml` and `*.yml` inside it.
-3. **Fallback**. If nothing else is configured, Gryph tries `<config dir>/policy.yaml` (optional, skipped if missing).
+1. **Global policy file** (`${ConfigDir}/policy.yaml`, optional). The single operator-owned file. On macOS this is `~/Library/Application Support/gryph/policy.yaml`; on Linux `~/.config/gryph/policy.yaml`. A missing file is not an error: with `policy.enabled: true` and no `policy.yaml` on disk, the merged policy contains built-in self-protection rules only.
+2. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, and agent hook configs from agent self-modification.
 
-All loaded documents are merged into one policy. Rule IDs must be unique across sources. Use `disabled:` at the top of any file to suppress a rule defined elsewhere without forking it.
+Write the global file with `gryph policy init` (non-interactive, honors `--force` to overwrite) or open it in your editor with `gryph policy edit` (scaffolds from the built-in example when the file is missing, then runs validation after save). Per-project policy overlays are a planned future iteration; today, one host-global policy governs every project and agent on the host.
+
+Use `disabled:` in the global file to suppress a built-in rule by ID. Rule IDs must be unique within the file; user rules may not use the `gryph-builtin-` prefix.
 
 ```yaml
 disabled:
@@ -158,10 +160,10 @@ block > escalate > defer > guidance > warn > allow
 
 | Command | Purpose |
 |---|---|
-| `gryph policy init <path>` | Write a fully documented example to `<path>`. Use as a template. |
+| `gryph policy init` | Write the fully documented example policy to `${ConfigDir}/policy.yaml`. Use `--force` to overwrite an existing file. |
+| `gryph policy edit` | Open the global policy in `$EDITOR`. Scaffolds from the built-in example when the file is missing. Runs validation after save. |
 | `gryph policy schema` | Print the JSON Schema. Pipe into editor tooling or an AI agent. |
-| `gryph policy sources` | Show the resolved source list without loading any files. |
-| `gryph policy validate` | Parse and compile every configured source. Reports rule count and source list. |
+| `gryph policy validate` | Parse and compile the global policy. Reports rule count and the resolved file path. |
 | `gryph policy test ...` | Dry-run a synthetic action through the merged policy. See `--help` for flags. |
 
 `gryph policy test` accepts `--format json` for machine-readable output.
@@ -455,10 +457,10 @@ The default (`fail_open: false`) keeps AARM conformance.
 
 ## Troubleshooting
 
-- **Rule never matches.** Check the resolved sources with `gryph policy sources` and confirm your file is in the list. Then `gryph policy test --action <type> --path <path>` and inspect the matched-rule output.
+- **Rule never matches.** Confirm the global policy file is present and valid with `gryph policy validate`, which also prints the resolved file path. Then `gryph policy test --action <type> --path <path>` and inspect the matched-rule output.
 - **Policy fails to load.** `gryph policy validate` reports the first compile error with the rule ID and line.
 - **Policy is enabled but nothing is blocked.** Confirm `policy.enabled: true` and that the agent in question is registered. Check `gryph query --status blocked` to see what was caught.
-- **I want to override a global rule on one project.** Add a `.gryph-policy.yml` in the project root with `disabled: [global-rule-id]`. No need to fork the upstream file.
+- **I want to override a rule for one project.** Per-project policy overlays are a planned future iteration. Today, edit the global policy (`gryph policy edit`) and use `disabled: [rule-id]` or tighten the rule's `scope` field to exclude the project you want to exempt.
 
 <details>
 <summary><strong>Threat model: receipt keys and trust</strong></summary>

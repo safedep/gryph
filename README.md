@@ -147,7 +147,8 @@ Gryph installs lightweight hooks into AI coding agents. When an agent reads a fi
 Beyond logging, Gryph can enforce a YAML policy over agent actions. Rules can `block`, `warn`, `guide`, or `allow` based on action type, file path, command pattern, tool name, agent, project, and CEL expressions over per-session counters. Blocked actions never reach the agent's tool, guidance is delivered back to the agent as stderr text, and every decision is persisted.
 
 ```bash
-gryph policy init ./.gryph-policy.yml
+gryph policy init          # write the example policy to the global config dir
+gryph policy edit          # open it in $EDITOR and scaffold if missing
 gryph policy validate
 gryph policy test --action file_write --path ./secrets/db.env
 gryph config set policy.enabled true

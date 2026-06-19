@@ -4,6 +4,7 @@ package loader
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/safedep/gryph/aarm/pdp"
@@ -94,4 +95,13 @@ func (l *Loader) Load(ctx context.Context) (*pdp.Policy, error) {
 		return nil, fmt.Errorf("loader: compile merged policy: %w", err)
 	}
 	return merged, nil
+}
+
+func sortedKeys(set map[string]struct{}) []string {
+	keys := make([]string, 0, len(set))
+	for k := range set {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

@@ -92,13 +92,6 @@ type PolicyConfig struct {
 	Enabled  bool   `mapstructure:"enabled"`
 	FailMode string `mapstructure:"fail_mode"`
 
-	// PolicyPaths is an ordered list of files or directories. Files are loaded
-	// as-is; directories are scanned non-recursively for *.yaml / *.yml.
-	PolicyPaths []string `mapstructure:"policy_paths"`
-	// ConventionalPaths enables walking up from the current working directory
-	// to discover a project-local .gryph-policy.yml / .gryph-policy.yaml.
-	ConventionalPaths bool `mapstructure:"conventional_paths"`
-
 	ContextRetentionDays int  `mapstructure:"context_retention_days"`
 	ReceiptRetentionDays int  `mapstructure:"receipt_retention_days"`
 	LogAllEvaluations    bool `mapstructure:"log_all_evaluations"`
@@ -411,6 +404,15 @@ func DefaultReceiptTrustStorePath(paths *Paths) string {
 		paths = ResolvePaths()
 	}
 	return filepath.Join(paths.ConfigDir, "keys", "receipt-pub.json")
+}
+
+// DefaultPolicyFilePath returns the on-disk default for the global policy
+// file.
+func DefaultPolicyFilePath(paths *Paths) string {
+	if paths == nil {
+		paths = ResolvePaths()
+	}
+	return filepath.Join(paths.ConfigDir, "policy.yaml")
 }
 
 // ResolveReceiptKeyPath returns the configured signing-key path or the

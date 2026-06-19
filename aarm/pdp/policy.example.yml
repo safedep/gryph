@@ -17,11 +17,11 @@
 #     `block` with a placeholder message.
 #
 # Policy assembly:
-#   This file can be loaded directly via `policy.policy_paths` in config, or
-#   placed in your repository root as `.gryph-policy.yml` to be picked up by
-#   `conventional_paths` (default-on). Multiple files merge cleanly — duplicate
-#   rule IDs across files are an error. To suppress an inherited rule without
-#   editing the file that defines it, list its ID under `disabled:`.
+#   Gryph loads a single global policy from policy.yaml in its config directory.
+#   Write it there with `gryph policy init` and edit it with `gryph policy edit`.
+#   Built-in self-protection rules always load last and cannot be disabled by
+#   this file. To suppress one of your own rules without deleting it, list its
+#   ID under `disabled:`.
 
 version: "1"
 
