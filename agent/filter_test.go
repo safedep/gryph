@@ -207,3 +207,31 @@ func TestApplyLoggingLevel_Minimal_FileRead(t *testing.T) {
 	assert.Nil(t, event.RawEvent)
 	assert.Equal(t, json.RawMessage(originalPayload), event.Payload)
 }
+
+func TestApplyLoggingLevel_MinimalStripsSubagentStopMessage(t *testing.T) {
+	event := events.NewEvent(uuid.New(), "test-agent", events.ActionSubagentStop)
+	require.NoError(t, event.SetPayload(events.SubagentStopPayload{
+		AgentID:              "agent-1",
+		LastAssistantMessage: "secret summary of the repo",
+	}))
+
+	ApplyLoggingLevel(event, config.LoggingMinimal)
+
+	var p events.SubagentStopPayload
+	require.NoError(t, json.Unmarshal(event.Payload, &p))
+	assert.Empty(t, p.LastAssistantMessage)
+	assert.Equal(t, "agent-1", p.AgentID)
+}
+
+func TestApplyLoggingLevel_MinimalStripsSessionEndReason(t *testing.T) {
+	event := events.NewEvent(uuid.New(), "test-agent", events.ActionSessionEnd)
+	require.NoError(t, event.SetPayload(events.SessionEndPayload{
+		Reason: "secret summary of the repo",
+	}))
+
+	ApplyLoggingLevel(event, config.LoggingMinimal)
+
+	var p events.SessionEndPayload
+	require.NoError(t, json.Unmarshal(event.Payload, &p))
+	assert.Empty(t, p.Reason)
+}

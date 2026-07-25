@@ -46,5 +46,15 @@ func RedactEvent(event *events.Event, checker *events.PrivacyChecker) {
 			p.Output = checker.RedactJSON(p.Output)
 			p.OutputPreview = checker.Redact(p.OutputPreview)
 		})
+
+	case events.ActionSubagentStop:
+		mutatePayload(event, func(p *events.SubagentStopPayload) {
+			p.LastAssistantMessage = checker.Redact(p.LastAssistantMessage)
+		})
+
+	case events.ActionSessionEnd:
+		mutatePayload(event, func(p *events.SessionEndPayload) {
+			p.Reason = checker.Redact(p.Reason)
+		})
 	}
 }

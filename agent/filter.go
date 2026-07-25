@@ -65,5 +65,15 @@ func stripPayloadContent(event *events.Event) {
 			p.Output = nil
 			p.OutputPreview = ""
 		})
+
+	case events.ActionSubagentStop:
+		mutatePayload(event, func(p *events.SubagentStopPayload) {
+			p.LastAssistantMessage = ""
+		})
+
+	case events.ActionSessionEnd:
+		mutatePayload(event, func(p *events.SessionEndPayload) {
+			p.Reason = ""
+		})
 	}
 }
