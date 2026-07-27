@@ -124,3 +124,38 @@ func TestRedactEvent_NilChecker(t *testing.T) {
 
 	assert.Equal(t, "password=hunter2", event.DiffContent)
 }
+
+func TestRedactEvent_SubagentStop(t *testing.T) {
+	checker, err := events.NewPrivacyChecker(nil, events.DefaultRedactPatterns())
+	require.NoError(t, err)
+
+	event := events.NewEvent(uuid.New(), "test-agent", events.ActionSubagentStop)
+	require.NoError(t, event.SetPayload(events.SubagentStopPayload{
+		AgentID:              "agent-1",
+		AgentType:            "explore",
+		LastAssistantMessage: "the deploy key is password=hunter2",
+	}))
+
+	RedactEvent(event, checker)
+
+	var p events.SubagentStopPayload
+	require.NoError(t, json.Unmarshal(event.Payload, &p))
+	assert.NotContains(t, p.LastAssistantMessage, "hunter2")
+	assert.Equal(t, "agent-1", p.AgentID)
+}
+
+func TestRedactEvent_SessionEnd(t *testing.T) {
+	checker, err := events.NewPrivacyChecker(nil, events.DefaultRedactPatterns())
+	require.NoError(t, err)
+
+	event := events.NewEvent(uuid.New(), "test-agent", events.ActionSessionEnd)
+	require.NoError(t, event.SetPayload(events.SessionEndPayload{
+		Reason: "wrapped up, token=xyz789 was rotated",
+	}))
+
+	RedactEvent(event, checker)
+
+	var p events.SessionEndPayload
+	require.NoError(t, json.Unmarshal(event.Payload, &p))
+	assert.NotContains(t, p.Reason, "xyz789")
+}
