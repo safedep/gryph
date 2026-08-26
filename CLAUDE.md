@@ -1,1 +1,1 @@
-AGENTS.md
+Use @AGENTS.md

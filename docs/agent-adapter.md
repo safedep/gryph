@@ -1,6 +1,6 @@
 # Adding a New Agent Adapter
 
-This guide walks through adding support for a new AI coding agent to Gryph. The adapter pattern is in `agent/` - see the existing `claudecode/`, `cursor/`, and `gemini/` packages for reference.
+This guide shows how to add support for a new AI coding agent to Gryph. The adapter pattern is in `agent/`. Use an existing adapter for reference. The current adapters are `claudecode/`, `codex/`, `cursor/`, `gemini/`, `openclaw/`, `opencode/`, `piagent/`, and `windsurf/`. The `gemini/` package is the recommended reference for the `settings.json` pattern.
 
 ## Overview
 
@@ -87,7 +87,13 @@ This is where hook stdin JSON gets converted to `events.Event` objects.
 7. Generate diffs at `LoggingFull` level using `utils.GenerateDiff()`
 8. Hash content when `contentHash` is enabled using `utils.HashContent()`
 
-**Hook response types** - Define allow/block/error responses with the exit code semantics your agent expects. Common pattern: exit 0 = allow, exit 2 = block.
+**Hook response types** - The Security Policy Engine drives three response paths. Define a response type for each:
+
+- **Allow** - `NewAllowResponse()`. The event passes.
+- **Block** - `NewBlockResponse(reason)`. The engine blocks the action.
+- **Guidance** - `NewGuidanceResponse(guidance)`. The engine sends an advisory but does not block.
+
+The guidance response must satisfy the `guidanceResponse` interface in `cli/hook.go` (`JSON() []byte` and `Stderr() string`). Use the exit code semantics your agent expects. The common pattern is exit 0 for allow and exit 2 for block.
 
 See `agent/gemini/parser.go` for a complete example.
 
@@ -103,9 +109,11 @@ Modify these files to wire everything up:
 | `config/defaults.go` | Add `v.SetDefault("agents.youragent.enabled", true)` |
 | `config/validate.go` | Add logging level validation |
 | `cli/root.go` | Import package and call `Register()` |
-| `cli/hook.go` | Add cases in `sendHookResponse()` and `sendSecurityBlockedResponse()`, add `handleYourAgentResponse()` |
+| `cli/hook.go` | Add cases in `sendHookResponse()`, `sendSecurityBlockedResponse()`, and `sendSecurityGuidanceResponse()`, add `handleYourAgentResponse()` |
 | `tui/component/livelog/model.go` | Add agent name to `agentCycle` slice |
 | `tui/component/livelog/styles.go` | Add agent badge color case in `agentBadge()` |
+
+An adapter can be fully wired but not active. To keep an adapter out of the registry, comment out its `Register()` call in `cli/root.go`. See the `openclaw` adapter for this pattern. All other wiring stays in place.
 
 ### 7. Write tests
 

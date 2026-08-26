@@ -64,11 +64,13 @@ tui/            Output formatters (table, json, csv)
 
 - `docs/e2e.md` - Writing and running E2E tests (`test/cli/`)
 - `docs/agent-adapter.md` - Adding a new agent adapter
+- `docs/aarm-dev.md` - AARM / policy layer (`aarm/`, `cli/policy.go`)
 
 ## IMPORTANT
 
 - NO EMOJI
-- Do not add unnecessary code comments. No inline comments except complex logic
+- Write all docs, markdown, and code comments in ASD-STE100 (Simplified Technical English): short sentences, active voice, one instruction per sentence, approved simple words, present tense.
+- Keep code comments minimal. Add a comment only when the code cannot reveal its own intent. Make the code intention revealing through clear names and structure instead of comments. No inline comments except for complex logic.
 - Re-use existing code and patterns. Refactor to share code instead of adding duplicate code.
 - Follow idiomatic Go code conventions.
 - Use `testify/assert` and `testify/require` for tests. Never use `t.Fatal` or `t.Error` directly.
