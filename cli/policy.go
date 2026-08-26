@@ -269,12 +269,28 @@ func newPolicyInitCmd() *cobra.Command {
 			if _, err := fmt.Fprintf(out, "%s Wrote example policy to %s\n", c.StatusOK(), c.Path(target.path)); err != nil {
 				return err
 			}
+			if target.managed() {
+				warnMergedPolicyConflict(cmd, app)
+			}
 			return printInitNextStep(out, c, target)
 		},
 	}
 
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite the target file if it already exists")
 	return cmd
+}
+
+// warnMergedPolicyConflict warns when the merged policy no longer loads after a
+// scaffold write into the config directory, for example because the example
+// reuses rule IDs that another file already defines. It does not fail. The file
+// is written, and the author edits the IDs to make them unique.
+func warnMergedPolicyConflict(cmd *cobra.Command, app *App) {
+	if _, err := buildPolicyLoader(appConfig(app), appPaths(app)).Load(cmd.Context()); err != nil {
+		c := policyColorizer(app)
+		out := cmd.OutOrStdout()
+		_, _ = fmt.Fprintf(out, "  %s %s\n", c.Warning("Warning:"), firstLine(err.Error()))
+		_, _ = fmt.Fprintf(out, "  %s\n", c.Dim("Edit the file so every rule ID is unique across your policy files."))
+	}
 }
 
 func printInitNextStep(out io.Writer, c *tui.Colorizer, target policyTarget) error {

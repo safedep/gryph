@@ -171,9 +171,9 @@ func newPolicyInstallCmd() *cobra.Command {
 				return ErrConfig("candidate policy is not valid", err)
 			}
 
-			destName := filepath.Base(src)
-			if name != "" {
-				destName = loader.NormalizePolicyFileName(name)
+			destName, err := installDestName(src, name)
+			if err != nil {
+				return err
 			}
 			dest := filepath.Join(config.DefaultPolicyDirPath(paths), destName)
 
@@ -211,6 +211,21 @@ func newPolicyInstallCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing installed file")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "validate and show the destination without copying")
 	return cmd
+}
+
+// installDestName resolves the destination file name for install. It rejects a
+// name with a path component or a parent reference, so install always writes a
+// direct YAML child of the policies directory that DirSource loads. It
+// normalizes a missing extension to .yaml.
+func installDestName(src, name string) (string, error) {
+	raw := name
+	if raw == "" {
+		raw = filepath.Base(src)
+	}
+	if raw == "." || raw == ".." || strings.ContainsAny(raw, `/\`) {
+		return "", ErrConfig("invalid policy name", fmt.Errorf("%q must be a plain file name without a path", raw))
+	}
+	return loader.NormalizePolicyFileName(raw), nil
 }
 
 // checkMergedWithCandidate loads the policy that would result after install, so

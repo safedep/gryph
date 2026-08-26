@@ -184,6 +184,58 @@ func TestPolicyInstall_RefusesMergeConflict(t *testing.T) {
 	assert.Contains(t, err.Error(), "conflicts")
 }
 
+func TestInstallDestName(t *testing.T) {
+	cases := []struct {
+		name    string
+		src     string
+		flag    string
+		want    string
+		wantErr bool
+	}{
+		{"basename with yaml", "/tmp/cand.yaml", "", "cand.yaml", false},
+		{"basename without extension normalizes", "/tmp/cand", "", "cand.yaml", false},
+		{"name flag normalizes", "/tmp/cand.yaml", "guard", "guard.yaml", false},
+		{"name flag keeps yml", "/tmp/cand.yaml", "guard.yml", "guard.yml", false},
+		{"name with separator rejected", "/tmp/cand.yaml", "sub/guard", "", true},
+		{"name with parent rejected", "/tmp/cand.yaml", "../guard", "", true},
+		{"name dotdot rejected", "/tmp/cand.yaml", "..", "", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := installDestName(tc.src, tc.flag)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestPolicyInstall_RejectsPathName(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+	cand := filepath.Join(t.TempDir(), "cand.yaml")
+	writePolicyFile(t, cand, "version: \"1\"\nrules:\n  - id: r\n    action: allow\n")
+
+	_, err := runPolicyCmd(t, newPolicyInstallCmd(), cand, "--name", "sub/guard")
+	require.Error(t, err)
+}
+
+func TestPolicyInit_WarnsOnMergedConflict(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+
+	_, err := runPolicyCmd(t, newPolicyInitCmd())
+	require.NoError(t, err)
+
+	out, err := runPolicyCmd(t, newPolicyInitCmd(), "guard")
+	require.NoError(t, err)
+	assert.Contains(t, out, "Warning")
+	assert.Contains(t, out, "duplicate rule id")
+}
+
 func TestPolicyList_EmptyHostShowsBuiltinOnly(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", root)

@@ -197,6 +197,16 @@ func TestLoader_UserDisabledCannotRemoveBuiltin(t *testing.T) {
 	assert.Contains(t, ids, builtinProtectedFilesRuleID)
 }
 
+func TestLoader_ReservedPrefixRejectedEvenWhenDisabled(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a.yaml")
+	writeYAML(t, a, "version: \"1\"\nrules:\n  - id: "+BuiltinRuleIDPrefix+"foo\n    action: allow\ndisabled:\n  - "+BuiltinRuleIDPrefix+"foo\n")
+
+	_, err := New(NewFileSource(a)).Load(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "reserved prefix")
+}
+
 func TestLoader_EmptyReturnsEmptyPolicy(t *testing.T) {
 	policy, err := New().Load(context.Background())
 	require.NoError(t, err)

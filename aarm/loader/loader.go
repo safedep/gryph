@@ -38,8 +38,9 @@ func (l *Loader) Sources() []Source {
 //
 // Built-in rules (from a *BuiltinSource) are isolated from user sources: they
 // are appended after user rules and are never removed by a disabled: entry, so
-// a user policy cannot weaken the self-protection rules. User rules may not use
-// the reserved BuiltinRuleIDPrefix; any that do are a load error.
+// a user policy cannot weaken the self-protection rules. A user rule may not use
+// the reserved BuiltinRuleIDPrefix. Any that does is a load error, even when the
+// same file also lists that ID under disabled:.
 func (l *Loader) Load(ctx context.Context) (*pdp.Policy, error) {
 	owner := make(map[string]string)
 	appliedDisabled := make(map[string]struct{})
@@ -59,6 +60,9 @@ func (l *Loader) Load(ctx context.Context) (*pdp.Policy, error) {
 			disabled := docDisabledSet(doc, isBuiltin)
 			matchedDisabled := make(map[string]struct{}, len(disabled))
 			for _, rule := range doc.Rules {
+				if !isBuiltin && strings.HasPrefix(rule.ID, BuiltinRuleIDPrefix) {
+					return nil, fmt.Errorf("loader: rule id %q in %s uses reserved prefix %q", rule.ID, src.Name(), BuiltinRuleIDPrefix)
+				}
 				if _, off := disabled[rule.ID]; off {
 					matchedDisabled[rule.ID] = struct{}{}
 					appliedDisabled[rule.ID] = struct{}{}
@@ -71,9 +75,6 @@ func (l *Loader) Load(ctx context.Context) (*pdp.Policy, error) {
 				if isBuiltin {
 					builtinRules = append(builtinRules, rule)
 					continue
-				}
-				if strings.HasPrefix(rule.ID, BuiltinRuleIDPrefix) {
-					return nil, fmt.Errorf("loader: rule id %q in %s uses reserved prefix %q", rule.ID, src.Name(), BuiltinRuleIDPrefix)
 				}
 				userRules = append(userRules, rule)
 			}
@@ -117,7 +118,7 @@ func docDisabledSet(doc *pdp.Policy, isBuiltin bool) map[string]struct{} {
 func warnUnmatchedDisabled(source string, disabled, matched map[string]struct{}) {
 	for id := range disabled {
 		if _, ok := matched[id]; !ok {
-			log.Warnf("loader: source %s disables rule %q that it does not define; disabled: only removes rules from the same file", source, id)
+			log.Warnf("loader: source %s lists rule %q under disabled but does not define it. A disabled entry removes only a rule from the same file", source, id)
 		}
 	}
 }
