@@ -49,6 +49,14 @@ type Event struct {
 	// TranscriptPath is the path to the agent's transcript file (if provided by the agent).
 	// Excluded from JSON export as it is internal to the local machine.
 	TranscriptPath string `json:"-"`
+	// HookType is the raw agent hook identifier (e.g. "PreToolUse") used by the
+	// AARM layer for execution-phase classification. In-memory only: excluded
+	// from JSON and storage.
+	HookType string `json:"-"`
+	// FullContent is the untruncated content read by the AARM content matcher.
+	// In-memory only (excluded from JSON, storage, logs); only the short
+	// ContentPreview is persisted. Empty for sensitive paths.
+	FullContent string `json:"-"`
 	// IsSensitive is true if path matched sensitive_paths pattern.
 	IsSensitive bool `json:"is_sensitive"`
 	// SubagentID is set when this event was performed by a subagent (empty for main agent).

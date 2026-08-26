@@ -132,7 +132,6 @@ func (p *PrivacyChecker) redactValue(v any) any {
 	}
 }
 
-
 // matchGlob performs a simple glob pattern match.
 // Supports ** for any path segment and * for any characters within a segment.
 func matchGlob(pattern, path string) bool {

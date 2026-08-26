@@ -82,40 +82,50 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 
 	agentSessionID := input.TrajectoryID
 
+	var event *events.Event
+	var err error
+
 	switch hookType {
 	case "pre_read_code":
-		return a.parseReadCode(sessionID, agentSessionID, input, false)
+		event, err = a.parseReadCode(sessionID, agentSessionID, input, false)
 	case "post_read_code":
-		return a.parseReadCode(sessionID, agentSessionID, input, true)
+		event, err = a.parseReadCode(sessionID, agentSessionID, input, true)
 	case "pre_write_code":
-		return a.parseWriteCode(sessionID, agentSessionID, input, false)
+		event, err = a.parseWriteCode(sessionID, agentSessionID, input, false)
 	case "post_write_code":
-		return a.parseWriteCode(sessionID, agentSessionID, input, true)
+		event, err = a.parseWriteCode(sessionID, agentSessionID, input, true)
 	case "pre_run_command":
-		return parseRunCommand(sessionID, agentSessionID, input, false)
+		event, err = parseRunCommand(sessionID, agentSessionID, input, false)
 	case "post_run_command":
-		return parseRunCommand(sessionID, agentSessionID, input, true)
+		event, err = parseRunCommand(sessionID, agentSessionID, input, true)
 	case "pre_mcp_tool_use":
-		return parseMCPToolUse(sessionID, agentSessionID, input, false)
+		event, err = parseMCPToolUse(sessionID, agentSessionID, input, false)
 	case "post_mcp_tool_use":
-		return parseMCPToolUse(sessionID, agentSessionID, input, true)
+		event, err = parseMCPToolUse(sessionID, agentSessionID, input, true)
 	case "pre_user_prompt":
-		return parseUserPrompt(sessionID, agentSessionID, input)
+		event, err = parseUserPrompt(sessionID, agentSessionID, input)
 	case "post_cascade_response":
-		return parseCascadeResponse(sessionID, agentSessionID, input)
+		event, err = parseCascadeResponse(sessionID, agentSessionID, input)
 	case "post_setup_worktree":
-		return parseSetupWorktree(sessionID, agentSessionID, input)
+		event, err = parseSetupWorktree(sessionID, agentSessionID, input)
 	default:
 		actionType := events.ActionUnknown
 		if at, ok := HookTypeMapping[hookType]; ok {
 			actionType = at
 		}
-		event := events.NewEvent(sessionID, AgentName, actionType)
+		event = events.NewEvent(sessionID, AgentName, actionType)
 		event.AgentSessionID = agentSessionID
 		event.ToolName = hookType
 		event.RawEvent = rawData
-		return event, nil
 	}
+
+	if err != nil {
+		return nil, err
+	}
+	if event != nil {
+		event.HookType = hookType
+	}
+	return event, nil
 }
 
 func (a *Adapter) parseReadCode(sessionID uuid.UUID, agentSessionID string, input HookInput, isPost bool) (*events.Event, error) {
@@ -353,6 +363,7 @@ const (
 	HookAllow HookDecision = iota
 	HookBlock
 	HookError
+	HookGuidance
 )
 
 type HookResponse struct {
@@ -371,6 +382,16 @@ func (r *HookResponse) ExitCode() int {
 	}
 }
 
+// Stderr returns the advisory text. Windsurf has no JSON advisory channel,
+// so guidance is surfaced via stderr at exit 0.
+func (r *HookResponse) Stderr() string {
+	switch r.Decision {
+	case HookBlock, HookError, HookGuidance:
+		return r.Message
+	}
+	return ""
+}
+
 func NewAllowResponse() *HookResponse {
 	return &HookResponse{Decision: HookAllow}
 }
@@ -381,4 +402,9 @@ func NewBlockResponse(message string) *HookResponse {
 
 func NewErrorResponse(message string) *HookResponse {
 	return &HookResponse{Decision: HookError, Message: message}
+}
+
+// NewGuidanceResponse creates a non-blocking advisory response.
+func NewGuidanceResponse(message string) *HookResponse {
+	return &HookResponse{Decision: HookGuidance, Message: message}
 }

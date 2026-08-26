@@ -17,12 +17,12 @@ When modifying the Event model (`core/events/event.go`) or any payload types, ru
 ## Architecture
 
 ```
-core/           → Domain models (events, sessions, audit, security) - most stable
-config/         → Viper-based configuration
-storage/        → SQLite + ent ORM
-agent/          → Adapter pattern (claudecode/, cursor/ and more)
-cli/            → Cobra commands as an App pattern
-tui/            → Output formatters (table, json, csv)
+core/           Domain models (events, sessions, audit, security) - most stable
+config/         Viper-based configuration
+storage/        SQLite + ent ORM
+agent/          Adapter pattern (claudecode/, cursor/ and more)
+cli/            Cobra commands as an App pattern
+tui/            Output formatters (table, json, csv)
 ```
 
 ## Key Entry Points
@@ -42,12 +42,14 @@ tui/            → Output formatters (table, json, csv)
 ## Hook Implementation
 
 ### Claude Code
+
 - Hooks configured in `~/.claude/settings.json` (per official docs)
 - Hook types: `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `SessionStart`, `SessionEnd`, `Notification`
 - Uses matcher pattern `"*"` for tool hooks to capture all tools
 - Version detection via `claude -v` command
 
 ### Cursor
+
 - Hooks configured in `~/.cursor/hooks.json`
 - Hook types: `beforeSubmitPrompt`, `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `afterFileEdit`, `stop`
 
@@ -65,8 +67,11 @@ tui/            → Output formatters (table, json, csv)
 
 ## IMPORTANT
 
-- Do not use unnecessary code comments
-- Re-use existing code and patterns whenever possible
-- Keep things simple, minimal, extensible, maintainable
-- Code should be easy to understand and maintain
-- Follow idiomatic Go code conventions, especially for error handling, testing (table driven tests) and documentation
+- NO EMOJI
+- Do not add unnecessary code comments. No inline comments except complex logic
+- Re-use existing code and patterns. Refactor to share code instead of adding duplicate code.
+- Follow idiomatic Go code conventions.
+- Use `testify/assert` and `testify/require` for tests. Never use `t.Fatal` or `t.Error` directly.
+- `dry/log` for internal logging. `log.Warnf` for soft failures.
+- DO NOT use `;` to join sentences. No em-dash, unnecessary compound words.
+- DO NOT use non-ascii characters in code or markdown docs.

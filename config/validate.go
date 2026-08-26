@@ -2,7 +2,10 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"regexp"
+
+	"github.com/safedep/gryph/aarm/model"
 )
 
 // validate checks the configuration for errors.
@@ -47,6 +50,10 @@ func validate(cfg *Config) error {
 
 	// Validate stream targets
 	if err := validateStreamTargets(cfg.Streams.Targets); err != nil {
+		return err
+	}
+
+	if err := validatePolicyConfig(cfg.Policy); err != nil {
 		return err
 	}
 
@@ -113,6 +120,76 @@ func isValidTimezoneMode(mode TimezoneMode) bool {
 var knownStreamTargetTypes = map[string]bool{
 	streamTargetTypeStdout: true,
 	streamTargetTypeNop:    true,
+}
+
+func validatePolicyConfig(cfg PolicyConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+	switch model.FailMode(cfg.FailMode) {
+	case model.FailOpen, model.FailClosed:
+	default:
+		return fmt.Errorf("invalid policy.fail_mode: %q (must be %s or %s)", cfg.FailMode, model.FailOpen, model.FailClosed)
+	}
+	if cfg.ContextRetentionDays < 0 {
+		return fmt.Errorf("policy.context_retention_days must be non-negative")
+	}
+	if cfg.ReceiptRetentionDays < 0 {
+		return fmt.Errorf("policy.receipt_retention_days must be non-negative")
+	}
+	switch cfg.Approval.Mode {
+	case "", ApprovalModeNop, ApprovalModeCLI:
+	default:
+		return fmt.Errorf("invalid policy.approval.mode: %q (must be %s or %s)", cfg.Approval.Mode, ApprovalModeCLI, ApprovalModeNop)
+	}
+	if cfg.Approval.TimeoutSeconds < 1 {
+		return fmt.Errorf("policy.approval.timeout_seconds must be >= 1")
+	}
+	mode := cfg.Receipts.EffectiveSignMode()
+	switch mode {
+	case SignModeAuto, SignModeAlways, SignModeNever:
+	default:
+		return fmt.Errorf("invalid policy.receipts.sign_mode: %q (must be %s, %s, or %s)", cfg.Receipts.SignMode, SignModeAuto, SignModeAlways, SignModeNever)
+	}
+	if mode == SignModeAlways {
+		keyPath := cfg.Receipts.KeyPath
+		if keyPath == "" {
+			keyPath = DefaultReceiptKeyPath(nil)
+		}
+		info, err := os.Stat(keyPath)
+		if err != nil {
+			return fmt.Errorf("policy.receipts.sign_mode=always but key file %s is unreadable: %w", keyPath, err)
+		}
+		if info.IsDir() {
+			return fmt.Errorf("policy.receipts.sign_mode=always but key path %s is a directory", keyPath)
+		}
+	}
+	if err := validatePolicyDeferConfig(cfg.Defer); err != nil {
+		return err
+	}
+	validatePolicyIdentityConfig(cfg.Identity)
+	return nil
+}
+
+// validatePolicyIdentityConfig is a structural no-op today: every combination
+// of (Enabled, RequireHumanPrincipal) is legal. When enabled=false the
+// require_human_principal switch is silently a no-op at the mediator (we
+// cannot enforce identity we did not capture). Kept as a hook so future
+// validation (e.g. forbidden providers, well-formed values) lands in one
+// place.
+func validatePolicyIdentityConfig(_ IdentityConfig) {}
+
+func validatePolicyDeferConfig(cfg DeferConfig) error {
+	if cfg.FreshSessionSeconds < 0 {
+		return fmt.Errorf("policy.defer.fresh_session_seconds must be non-negative")
+	}
+	if cfg.TimeoutSeconds < 0 {
+		return fmt.Errorf("policy.defer.timeout_seconds must be non-negative")
+	}
+	if cfg.AutoResolveOnTimeout != "" && cfg.AutoResolveOnTimeout != DeferAutoResolveDeny {
+		return fmt.Errorf("policy.defer.auto_resolve_on_timeout must be %q (AARM R4 forbids implicit allow on timeout)", DeferAutoResolveDeny)
+	}
+	return nil
 }
 
 func validateStreamTargets(targets []StreamTargetConfig) error {

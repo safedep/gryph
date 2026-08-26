@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.safedep.io/gryph/policy.schema.json",
+  "title": "Gryph Security Policy",
+  "description": "A Gryph security policy document. Authored as YAML or JSON; merged with other sources by the policy loader and evaluated by the AARM Policy Decision Point.",
+  "type": "object",
+  "properties": {
+    "disabled": {
+      "type": "array",
+      "description": "Rule IDs to suppress in the merged policy. Listed IDs are dropped regardless of which source defined the rule, allowing project-local policies to neutralize global rules without forking.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rules": {
+      "type": "array",
+      "description": "Ordered list of policy rules. Each rule produces a Decision; when multiple match the most restrictive wins (block \u003e escalate \u003e defer \u003e guidance \u003e warn \u003e allow).",
+      "items": {
+        "$ref": "#/$defs/rule"
+      }
+    },
+    "version": {
+      "type": "string",
+      "description": "Schema version identifier. Reserved; \"1\" is the current value."
+    }
+  },
+  "required": [
+    "rules"
+  ],
+  "$defs": {
+    "match": {
+      "type": "object",
+      "description": "Match criteria. An empty match block matches every action (subject to scope/condition).",
+      "properties": {
+        "action_types": {
+          "type": "array",
+          "description": "Action types this rule applies to.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "command_patterns": {
+          "type": "array",
+          "description": "Go regexp patterns matched against the executed command line.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "content_patterns": {
+          "type": "array",
+          "description": "Go regexp patterns matched against the captured content preview (write payload preview, command stdout preview, etc).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "file_patterns": {
+          "type": "array",
+          "description": "Doublestar glob patterns matched against the action's file path. Forward-slash normalized.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tool_names": {
+          "type": "array",
+          "description": "Tool names this rule applies to (case-insensitive equality).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "working_directory_patterns": {
+          "type": "array",
+          "description": "Doublestar glob patterns matched against the action's working directory.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "description": "A single policy rule.",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "Decision returned when the rule matches. `escalate` routes to the approval workflow. `defer` queues the action for operator resolution and blocks the agent in the meantime; requires a non-empty `reason`.",
+          "enum": [
+            "allow",
+            "warn",
+            "guidance",
+            "block",
+            "escalate",
+            "defer"
+          ]
+        },
+        "condition": {
+          "type": "string",
+          "description": "CEL expression returning bool. Evaluated after `match` succeeds. Variables: action.{type,tool,operation,agent,working_dir,project,params.{path,command,args,url,size_bytes,lines_added,lines_removed,content}}, context.{total_actions,files_read,files_written,commands_executed,network_requests,errors,tools_used,session_duration_ms,classifications_seen,entities_seen,semantic_drift}. Sandboxed; 100ms timeout."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable explanation of what the rule does and why."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "When false, the rule is parsed and validated but skipped during evaluation. Default true."
+        },
+        "id": {
+          "type": "string",
+          "description": "Stable identifier for this rule. Must be unique across all merged sources.",
+          "minLength": 1
+        },
+        "match": {
+          "$ref": "#/$defs/match"
+        },
+        "message": {
+          "type": "string",
+          "description": "Go text/template rendered when the rule matches. Available references: .Action (Type, Tool, Operation, Agent, WorkingDir, Project, Params), .Context (TotalActions, FilesRead, FilesWritten, CommandsExecuted, NetworkRequests, Errors, ToolsUsed, SessionDurationMs, ClassificationsSeen, EntitiesSeen, SemanticDrift), .Rule (ID, Description, Action, Severity, Tags)."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Required when action is `defer`. Surfaces on the receipt's defer_reason and in the operator-facing block message."
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "severity": {
+          "type": "string",
+          "description": "Severity tag surfaced in audit and receipts. Does not affect evaluation order.",
+          "enum": [
+            "info",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "description": "Free-form labels propagated to receipts (e.g. \"compliance\", \"pii\").",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "action"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "description": "Narrows the rule to selected agents, projects, or tools. Empty fields mean \"any\". AND-combined with `match`.",
+      "properties": {
+        "agents": {
+          "type": "array",
+          "description": "Agent identifiers (e.g. claude-code, cursor, gemini).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "projects": {
+          "type": "array",
+          "description": "Detected project names.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tools": {
+          "type": "array",
+          "description": "Tool names (e.g. Bash, Write, WebFetch).",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

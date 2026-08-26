@@ -12,6 +12,14 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// AarmContextAction is the client for interacting with the AarmContextAction builders.
+	AarmContextAction *AarmContextActionClient
+	// AarmContextState is the client for interacting with the AarmContextState builders.
+	AarmContextState *AarmContextStateClient
+	// AarmDeferredAction is the client for interacting with the AarmDeferredAction builders.
+	AarmDeferredAction *AarmDeferredActionClient
+	// AarmReceipt is the client for interacting with the AarmReceipt builders.
+	AarmReceipt *AarmReceiptClient
 	// AuditEvent is the client for interacting with the AuditEvent builders.
 	AuditEvent *AuditEventClient
 	// AuditStreamCursor is the client for interacting with the AuditStreamCursor builders.
@@ -153,6 +161,10 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.AarmContextAction = NewAarmContextActionClient(tx.config)
+	tx.AarmContextState = NewAarmContextStateClient(tx.config)
+	tx.AarmDeferredAction = NewAarmDeferredActionClient(tx.config)
+	tx.AarmReceipt = NewAarmReceiptClient(tx.config)
 	tx.AuditEvent = NewAuditEventClient(tx.config)
 	tx.AuditStreamCursor = NewAuditStreamCursorClient(tx.config)
 	tx.EventStreamCursor = NewEventStreamCursorClient(tx.config)
@@ -167,7 +179,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: AuditEvent.QueryXXX(), the query will be executed
+// applies a query, for example: AarmContextAction.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

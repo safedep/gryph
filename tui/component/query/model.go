@@ -59,8 +59,8 @@ type Model struct {
 	filters   FilterState
 
 	// Search-as-filter state
-	searchInput          string
-	activeSearchQuery    string
+	searchInput            string
+	activeSearchQuery      string
 	activeSearchSessionIDs map[uuid.UUID]bool
 	activeSearchEventIDs   map[uuid.UUID]bool
 

@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/safedep/gryph/test/conformance/aarm/report.schema.json",
+  "title": "Gryph AARM Conformance Report",
+  "description": "Machine-readable conformance report produced by `gryph aarm conformance --format json`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "aarm_spec_version",
+    "suite_version",
+    "gryph_commit",
+    "ran_at",
+    "summary",
+    "requirements"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Schema version. Consumers MAY refuse to parse unknown future versions."
+    },
+    "aarm_spec_version": {
+      "type": "string"
+    },
+    "suite_version": {
+      "type": "string"
+    },
+    "gryph_commit": {
+      "type": "string",
+      "description": "Full SHA. Dirty trees suffix '-dirty'."
+    },
+    "ran_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["must", "should"],
+      "properties": {
+        "must": { "$ref": "#/$defs/counts" },
+        "should": { "$ref": "#/$defs/counts" }
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/requirement" }
+    },
+    "gaps": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/gap" }
+    },
+    "unattributed": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/unattributed" }
+    }
+  },
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "failed", "skipped", "errored"],
+      "properties": {
+        "passed":  { "type": "integer", "minimum": 0 },
+        "failed":  { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "errored": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "tests"],
+      "properties": {
+        "id":    { "type": "string", "pattern": "^R[1-9][0-9]?$" },
+        "title": { "type": "string" },
+        "tests": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/test" }
+        }
+      }
+    },
+    "test": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "tier", "status"],
+      "properties": {
+        "name":   { "type": "string" },
+        "tier":   { "type": "string", "enum": ["MUST", "SHOULD"] },
+        "bullet": { "type": "string" },
+        "status": { "type": "string", "enum": ["pass", "fail", "skip", "error"] },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "skip_category": {
+          "type": "string",
+          "enum": ["not_implemented", "out_of_scope", "deferred", "requires_external"]
+        },
+        "skip_reason":   { "type": "string" },
+        "failure_output": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "skip" } } },
+          "then": { "required": ["skip_category"] }
+        }
+      ]
+    },
+    "gap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirement", "tier", "name", "reason"],
+      "properties": {
+        "requirement": { "type": "string", "pattern": "^R[1-9][0-9]?$" },
+        "tier":        { "type": "string", "enum": ["MUST", "SHOULD"] },
+        "name":        { "type": "string" },
+        "category":    {
+          "type": "string",
+          "enum": ["not_implemented", "out_of_scope", "deferred", "requires_external", "fail"]
+        },
+        "reason":      { "type": "string" }
+      }
+    },
+    "unattributed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status"],
+      "properties": {
+        "name":   { "type": "string" },
+        "status": { "type": "string", "enum": ["pass", "fail", "skip", "error"] },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "reason": { "type": "string" }
+      }
+    }
+  }
+}

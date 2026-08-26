@@ -294,3 +294,11 @@ func TestIsPreHook(t *testing.T) {
 	assert.False(t, isPreHook("post_cascade_response"))
 	assert.False(t, isPreHook("post_setup_worktree"))
 }
+
+func TestNewGuidanceResponse(t *testing.T) {
+	resp := NewGuidanceResponse("security advisory")
+	assert.Equal(t, HookGuidance, resp.Decision)
+	assert.Equal(t, "security advisory", resp.Message)
+	assert.Equal(t, 0, resp.ExitCode())
+	assert.Equal(t, "security advisory", resp.Stderr())
+}

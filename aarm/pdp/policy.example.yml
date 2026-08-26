@@ -1,0 +1,324 @@
+# Gryph Security Policy
+#
+# This file is the canonical example. It demonstrates every feature of the
+# policy language so you can author your own rules by copying and editing the
+# blocks you need. It is intentionally verbose — the inline comments are part
+# of the documentation, not noise.
+#
+# Quick orientation:
+#   - A policy is a list of rules, evaluated in order.
+#   - Each rule has an `action` (the decision it wants to make), `match`
+#     criteria (what action it applies to), optional `scope` (which
+#     agents/projects/tools), an optional CEL `condition` (richer logic), and
+#     an optional `message` (what the agent sees).
+#   - When multiple rules match, the most restrictive decision wins:
+#       block > escalate > guidance > warn > allow
+#   - `escalate` is reserved for an approval workflow; today it degrades to
+#     `block` with a placeholder message.
+#
+# Policy assembly:
+#   Gryph loads a single global policy from policy.yaml in its config directory.
+#   Write it there with `gryph policy init` and edit it with `gryph policy edit`.
+#   Built-in self-protection rules always load last and cannot be disabled by
+#   this file. To suppress one of your own rules without deleting it, list its
+#   ID under `disabled:`.
+
+version: "1"
+
+# `disabled:` is a list of rule IDs to remove from the merged policy. It is
+# the supported way for a project-local policy to neutralize a rule shipped by
+# a global policy without forking the global file.
+#
+# disabled:
+#   - example-rule-id-from-some-other-file
+
+rules:
+  # ---------------------------------------------------------------------------
+  # 1. Block a destructive command.
+  #
+  # The simplest possible rule: match on action_type + a regex over the
+  # command, return `block` with a rendered message. `severity` is metadata
+  # surfaced in receipts and audit UX; it does not affect evaluation order.
+  # ---------------------------------------------------------------------------
+  - id: block-rm-rf-root
+    description: >
+      Refuse `rm -rf` / `rm -fr` invocations that target the filesystem root
+      or `~`. The pattern is intentionally narrow to avoid false positives on
+      legitimate `rm -rf node_modules` style commands.
+    action: block
+    severity: critical
+    tags: [destructive, filesystem]
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - '(?i)\brm\s+-[rf]+\s+(/|~|\$HOME)(\s|$)'
+    message: |
+      Refusing destructive command: {{.Action.Params.Command}}
+
+      Matched rule: {{.Rule.ID}} (severity: {{.Rule.Severity}})
+      Working dir: {{.Action.WorkingDir}}
+
+      If you genuinely need to remove a top-level path, do it interactively
+      outside the agent so a human is in the loop.
+
+  # ---------------------------------------------------------------------------
+  # 2. Guide writes to production paths.
+  #
+  # `guidance` is for "let it through, but tell the agent why this is risky".
+  # The message is delivered on the agent's stderr; the operation still
+  # proceeds. Use this when you want behavioral nudging without blocking.
+  # ---------------------------------------------------------------------------
+  - id: guide-prod-writes
+    description: Nudge the agent away from writing under prod paths.
+    action: guidance
+    severity: high
+    tags: [production, deployment]
+    match:
+      action_types: [file_write]
+      file_patterns:
+        - "**/prod/**"
+        - "**/production/**"
+        - "**/deploy/prod/**"
+    message: |
+      You are writing to a production path: {{.Action.Params.Path}}
+
+      Changes here should go through the release pipeline (see RUNBOOK.md).
+      If this is a hotfix, open a PR first so a reviewer can approve the
+      production change set.
+
+  # ---------------------------------------------------------------------------
+  # 3. Warn on reading secrets.
+  #
+  # `warn` is conceptually weaker than `guidance` (it's "noted, but proceed")
+  # — both currently surface through the same agent channel, but receipts and
+  # audit retain the distinction so policy authors can separate "advisory" from
+  # "behavioral nudge" semantics.
+  # ---------------------------------------------------------------------------
+  - id: warn-secret-file-read
+    description: Note when the agent reads .env / secret files.
+    action: warn
+    severity: medium
+    tags: [secrets, audit]
+    match:
+      action_types: [file_read]
+      file_patterns:
+        - "**/.env"
+        - "**/.env.*"
+        - "**/secrets/**"
+        - "**/*.pem"
+        - "**/*.key"
+    message: |
+      Read of secret-bearing file: {{.Action.Params.Path}}
+
+      Subsequent writes that include this content will be reviewed against
+      data-exfiltration rules.
+
+  # ---------------------------------------------------------------------------
+  # 4. Scope a rule to specific agents / projects / tools.
+  #
+  # `scope` is AND-combined with `match`. Empty fields mean "any". Use this to
+  # carry a single policy file across teams and have rules opt in only where
+  # they're relevant.
+  # ---------------------------------------------------------------------------
+  - id: cursor-block-shell-during-tests
+    description: >
+      For the Cursor agent on the `payments` project, refuse shell execution
+      when run from the tests/ subtree. Other agents and projects are
+      unaffected.
+    action: block
+    severity: high
+    tags: [scoped-example]
+    scope:
+      agents: [cursor]
+      projects: [payments]
+      tools: [Bash]
+    match:
+      action_types: [command_exec]
+      working_directory_patterns:
+        - "**/payments/tests/**"
+    message: |
+      Shell execution from the test tree is disabled for {{.Action.Agent}}
+      on {{.Action.Project}}. Run the test suite via `make test` instead.
+
+  # ---------------------------------------------------------------------------
+  # 5. CEL conditions: cross-field logic over action and context.
+  #
+  # `condition` is a CEL expression that must evaluate to bool. It runs after
+  # `match` succeeds. Variables exposed:
+  #
+  #   action.type                    string
+  #   action.tool                    string
+  #   action.operation               string
+  #   action.agent                   string
+  #   action.working_dir             string
+  #   action.project                 string
+  #   action.params.path             string
+  #   action.params.command          string
+  #   action.params.args             list<string>
+  #   action.params.url              string
+  #   action.params.size_bytes       int
+  #   action.params.lines_added      int
+  #   action.params.lines_removed    int
+  #   action.params.content          string (truncated preview)
+  #
+  #   context.total_actions          int
+  #   context.files_read             int
+  #   context.files_written          int
+  #   context.commands_executed      int
+  #   context.network_requests       int
+  #   context.errors                 int
+  #   context.tools_used             list<string>
+  #   context.session_duration_ms    int (milliseconds, not a CEL duration)
+  #   context.classifications_seen   list<string>  (reserved, empty today)
+  #   context.entities_seen          list<string>  (reserved, empty today)
+  #   context.semantic_drift         double        (reserved, 0 today)
+  #
+  # CEL evaluation is sandboxed with a 100ms timeout and a fixed cost cap.
+  # ---------------------------------------------------------------------------
+  - id: guide-large-edit
+    description: >
+      Flag edits that touch more than 200 lines, unless the file looks
+      auto-generated (the agent is allowed to regenerate large generated
+      files without nag).
+    action: guidance
+    severity: low
+    match:
+      action_types: [file_write]
+    condition: >
+      action.params.lines_added > 200 &&
+      !action.params.path.contains("generated") &&
+      !action.params.path.contains(".pb.go")
+    message: |
+      Large edit: {{.Action.Params.LinesAdded}} lines added to
+      {{.Action.Params.Path}}. Consider splitting into smaller commits so a
+      reviewer can follow the change.
+
+  # ---------------------------------------------------------------------------
+  # 6. Combine context counters with action data.
+  #
+  # This rule uses the per-session context to detect "the agent is touching a
+  # lot of files in a single session" and warns once the threshold is crossed.
+  # ---------------------------------------------------------------------------
+  - id: warn-session-write-volume
+    description: Warn when a single session has written many files.
+    action: warn
+    severity: low
+    tags: [activity]
+    match:
+      action_types: [file_write]
+    condition: "context.files_written >= 25"
+    message: |
+      This session has now written {{.Context.FilesWritten}} files
+      ({{.Context.TotalActions}} total actions). If this is unexpected,
+      consider stopping and reviewing the diff before continuing.
+
+  # ---------------------------------------------------------------------------
+  # 7. Match by content pattern.
+  #
+  # `content_patterns` are Go regexps run against the captured `content`
+  # preview field on the action (e.g. the write payload preview, the command
+  # stdout preview). Useful for catching credential-like content the agent is
+  # about to commit.
+  # ---------------------------------------------------------------------------
+  - id: block-aws-key-in-write
+    description: Refuse writes whose content preview looks like an AWS access key.
+    action: block
+    severity: critical
+    tags: [secrets, exfiltration]
+    match:
+      action_types: [file_write]
+      content_patterns:
+        - 'AKIA[0-9A-Z]{16}'
+    message: |
+      The content being written to {{.Action.Params.Path}} contains what
+      looks like an AWS access key. Refusing the write.
+
+      If this is a fixture, redact it or move it to a path covered by
+      `content_patterns` exclusions in your local policy.
+
+  # ---------------------------------------------------------------------------
+  # 8. Block by URL on tool_use (network / fetch tools).
+  #
+  # `tool_use` is the catch-all action type for tool invocations that don't
+  # map to file/command/network primitives. The mediation adapter best-effort
+  # extracts `url`, `path`, and `command` from the tool's input payload.
+  # ---------------------------------------------------------------------------
+  - id: block-internal-net-fetch
+    description: Refuse any fetch against private network ranges.
+    action: block
+    severity: high
+    tags: [network, ssrf]
+    match:
+      action_types: [tool_use, network_request]
+    condition: >
+      action.params.url.startsWith("http://10.") ||
+      action.params.url.startsWith("http://192.168.") ||
+      action.params.url.startsWith("http://169.254.") ||
+      action.params.url.contains("://localhost") ||
+      action.params.url.contains("://127.0.0.1")
+    message: |
+      Refusing fetch to internal network address: {{.Action.Params.URL}}
+      Tool: {{.Action.Tool}}
+
+  # ---------------------------------------------------------------------------
+  # 9. Escalate (reserved).
+  #
+  # `escalate` is the slot for "send this to a human for approval". Today the
+  # PDP folds it back to `block` with a placeholder message. The rule itself
+  # is valid and will start routing to an approval workflow once Phase 3
+  # lands. You can author escalate rules now and they will behave as a hard
+  # block in the meantime.
+  # ---------------------------------------------------------------------------
+  - id: escalate-root-write
+    description: Writes to /etc, /usr, or /System require a human.
+    action: escalate
+    severity: high
+    tags: [system-paths]
+    match:
+      action_types: [file_write]
+      file_patterns:
+        - "/etc/**"
+        - "/usr/**"
+        - "/System/**"
+    message: |
+      Write to system path {{.Action.Params.Path}} needs approval. Once the
+      approval workflow is wired up, this prompt will go out-of-band; until
+      then the write is refused.
+
+  # ---------------------------------------------------------------------------
+  # 10. Allow rule + tags.
+  #
+  # `allow` rules are useful when you want to record explicit policy intent
+  # (e.g. for receipts and audit) on actions that would otherwise just match
+  # nothing. Allows do not override blocks — the most-restrictive-wins
+  # ordering still applies — but they do show up in matched-rule lists.
+  # ---------------------------------------------------------------------------
+  - id: allow-docs-edits
+    description: Editing documentation is always fine.
+    action: allow
+    tags: [docs]
+    match:
+      action_types: [file_write]
+      file_patterns:
+        - "**/*.md"
+        - "**/docs/**"
+
+  # ---------------------------------------------------------------------------
+  # 11. Disabled by toggle, not by deletion.
+  #
+  # `enabled: false` keeps the rule in the file (so you keep the history of
+  # what was tried) but skips it during evaluation. Useful for staged
+  # rollouts: write the rule, watch its receipts under `enabled: false` mode,
+  # then flip it on.
+  # ---------------------------------------------------------------------------
+  - id: experiment-block-bash-history
+    description: Experimental — reading shell history files.
+    action: block
+    severity: low
+    enabled: false
+    match:
+      action_types: [file_read]
+      file_patterns:
+        - "**/.bash_history"
+        - "**/.zsh_history"
+    message: Shell history reads are blocked under the experimental policy.

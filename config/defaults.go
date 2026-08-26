@@ -38,6 +38,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("display.colors", "auto")
 	v.SetDefault("display.timezone", "local")
 
+	setPolicyDefaults(v, "policy")
+
 	// Streams defaults
 	v.SetDefault("streams.targets", []StreamTargetConfig{
 		{
@@ -46,6 +48,32 @@ func setDefaults(v *viper.Viper) {
 			Enabled: true,
 		},
 	})
+}
+
+func setPolicyDefaults(v *viper.Viper, prefix string) {
+	v.SetDefault(prefix+".enabled", false)
+	v.SetDefault(prefix+".fail_mode", "closed")
+	v.SetDefault(prefix+".context_retention_days", 90)
+	v.SetDefault(prefix+".receipt_retention_days", 365)
+	v.SetDefault(prefix+".log_all_evaluations", false)
+	v.SetDefault(prefix+".approval.mode", string(ApprovalModeNop))
+	v.SetDefault(prefix+".approval.timeout_seconds", 60)
+	v.SetDefault(prefix+".approval.require_note", false)
+	v.SetDefault(prefix+".classify.enabled", true)
+	v.SetDefault(prefix+".classify.fail_open", false)
+	v.SetDefault(prefix+".classify.extra_patterns", map[string][]string{})
+	v.SetDefault(prefix+".injection_score.enabled", true)
+	v.SetDefault(prefix+".receipts.sign_mode", SignModeAuto)
+	v.SetDefault(prefix+".receipts.key_path", "")
+	v.SetDefault(prefix+".receipts.trust_store", "")
+	v.SetDefault(prefix+".defer.enabled", true)
+	v.SetDefault(prefix+".defer.fresh_session_seconds", 60)
+	v.SetDefault(prefix+".defer.conflict_triggers_defer", true)
+	v.SetDefault(prefix+".defer.timeout_seconds", 600)
+	v.SetDefault(prefix+".defer.auto_resolve_on_timeout", DeferAutoResolveDeny)
+	v.SetDefault(prefix+".identity.enabled", true)
+	v.SetDefault(prefix+".identity.require_human_principal", false)
+	v.SetDefault(prefix+".self_protection.enabled", true)
 }
 
 // defaultSensitivePaths returns the default list of sensitive path patterns.

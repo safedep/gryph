@@ -1,0 +1,12 @@
+{
+  "kind": "event",
+  "action_type": "tool_use",
+  "agent_name": "conformance-suite",
+  "tool_name": "echo_message",
+  "payload": {
+    "tool_name": "echo_message",
+    "input": {
+      "message": "hello world"
+    }
+  }
+}

@@ -279,6 +279,7 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	}
 	if event != nil {
 		event.TranscriptPath = baseInput.TranscriptPath
+		event.HookType = hookType
 	}
 	return event, nil
 }
@@ -796,6 +797,7 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 
 		if fullContent != "" {
 			payload.ContentPreview = truncateString(fullContent, 200)
+			event.FullContent = fullContent
 		}
 		if fullOldStr != "" {
 			payload.OldString = truncateString(fullOldStr, 200)
@@ -904,6 +906,16 @@ func NewAskResponse(reason string) *HookResponse {
 	}
 }
 
+// NewGuidanceResponse creates a non-blocking advisory response.
+// Cursor lacks a dedicated guidance channel, so the advisory text rides on
+// the existing per-hook user_message / continue fields.
+func NewGuidanceResponse(message string) *HookResponse {
+	return &HookResponse{
+		Decision: HookAllow,
+		Reason:   message,
+	}
+}
+
 // GeneratePreToolUseResponse generates a response for preToolUse hooks.
 func GeneratePreToolUseResponse(response *HookResponse) []byte {
 	output := map[string]interface{}{}
@@ -926,6 +938,9 @@ func GeneratePermissionResponse(response *HookResponse) []byte {
 	switch response.Decision {
 	case HookAllow:
 		output["permission"] = "allow"
+		if response.Reason != "" {
+			output["user_message"] = response.Reason
+		}
 	case HookDeny:
 		output["permission"] = "deny"
 		if response.Reason != "" {

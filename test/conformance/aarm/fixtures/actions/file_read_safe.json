@@ -1,0 +1,8 @@
+{
+  "kind": "event",
+  "action_type": "file_read",
+  "agent_name": "conformance-suite",
+  "payload": {
+    "path": "/work/app/README.md"
+  }
+}

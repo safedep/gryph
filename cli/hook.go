@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/codex"
@@ -121,7 +123,7 @@ func runHook(ctx context.Context, app *App, agentName, hookType string, rawData 
 		sess.TranscriptPath = event.TranscriptPath
 	}
 
-	securityResult := app.Security.Evaluate(ctx, event)
+	securityResult := app.Security.Evaluate(session.WithSession(ctx, sess), event)
 	if !securityResult.IsAllowed() {
 		event.ResultStatus = events.ResultBlocked
 		event.ErrorMessage = securityResult.BlockReason
@@ -180,10 +182,38 @@ func runHook(ctx context.Context, app *App, agentName, hookType string, rawData 
 		}
 	}
 
+	recordAllowedAarmResult(ctx, app, securityResult, event)
+
 	if securityResult.FinalDecision == security.DecisionGuidance {
 		return sendSecurityGuidanceResponse(agentName, hookType, securityResult)
 	}
 	return sendHookResponse(agentName, hookType)
+}
+
+// recordAllowedAarmResult fans out the post-hook execution outcome to the
+// AARM Mediator on the allow path. The wrapper only sees the hook's own
+// exit, so the recorded status is always ResultSuccess. Future post-hook
+// adapters surfacing real execution outcomes will plug in here.
+func recordAllowedAarmResult(ctx context.Context, app *App, result *security.Result, event *events.Event) {
+	if app == nil || result == nil {
+		return
+	}
+	med := app.AarmMediator()
+	if med == nil {
+		return
+	}
+	actionID, sessionID, sequence := result.AarmRef()
+	if actionID == uuid.Nil && sequence == 0 {
+		return
+	}
+	outcome := model.Result{Status: model.ResultSuccess}
+	if event != nil && event.ResultStatus == events.ResultError {
+		outcome.Status = model.ResultError
+		outcome.Error = event.ErrorMessage
+	}
+	if err := med.RecordResult(ctx, actionID, sessionID, sequence, outcome); err != nil {
+		log.Warnf("aarm: post-hook record result: %v", err)
+	}
 }
 
 // logHookError logs a self-audit entry when hook processing fails.
@@ -227,7 +257,8 @@ func sendHookResponse(agentName, hookType string) error {
 		//   0 = allow (success)
 		//   2 = block (blocking error, stderr shown to Claude)
 		//   1 = non-blocking error (stderr shown to user in verbose mode)
-		// For now, always allow. Future: add policy-based blocking here.
+		// Block/guidance paths are handled upstream by the security evaluator
+		// (see runHook); this is the allow path.
 		response := claudecode.NewAllowResponse()
 		return handleClaudeCodeResponse(response)
 
@@ -301,21 +332,73 @@ func sendHookResponse(agentName, hookType string) error {
 	}
 }
 
-// sendSecurityGuidanceResponse emits advisory guidance from security checks.
-// The event itself is allowed (exit 0), but aggregated guidance text is
-// written to the agent's stderr. Modelled on sendSecurityBlockedResponse;
-// only agents whose hook packages implement a Guidance response are wired
-// up here. Other agents fall through to the normal allow path.
+// guidanceResponse is implemented by per-agent guidance response types that
+// expose both a JSON channel and a stderr fallback.
+type guidanceResponse interface {
+	JSON() []byte
+	Stderr() string
+}
+
+// emitGuidanceResponse writes the JSON response when the current hook type
+// supports a JSON advisory channel, otherwise surfaces the advisory text on
+// stderr at exit 0.
+func emitGuidanceResponse(hookType, jsonHookType string, r guidanceResponse) error {
+	if jsonHookType != "" && hookType == jsonHookType {
+		if _, err := os.Stdout.Write(r.JSON()); err != nil {
+			log.Errorf("failed to write to stdout: %v", err)
+		}
+		return nil
+	}
+	if msg := r.Stderr(); msg != "" {
+		fmt.Fprintln(os.Stderr, msg)
+	}
+	return nil
+}
+
+// sendSecurityGuidanceResponse emits advisory guidance for non-blocking decisions.
 func sendSecurityGuidanceResponse(agentName, hookType string, result *security.Result) error {
+	guidance := result.AggregatedGuidance()
+
 	switch agentName {
 	case agent.AgentClaudeCode:
-		response := claudecode.NewGuidanceResponse(result.AggregatedGuidance())
-		return handleClaudeCodeResponse(response)
+		return handleClaudeCodeResponse(claudecode.NewGuidanceResponse(guidance))
+
+	case agent.AgentCursor:
+		response := cursor.NewGuidanceResponse(guidance)
+		output := generateCursorDecisionResponse(hookType, response, true)
+		if _, err := os.Stdout.Write(output); err != nil {
+			log.Errorf("failed to write to stdout: %v", err)
+		}
+		// preToolUse JSON carries decision=allow with no reason field, so route advisory text to stderr.
+		if hookType == "preToolUse" && response.Reason != "" {
+			fmt.Fprintln(os.Stderr, response.Reason)
+		}
+		return nil
+
+	case agent.AgentGemini:
+		return emitGuidanceResponse(hookType, "BeforeTool", gemini.NewGuidanceResponse(guidance))
+
+	case agent.AgentOpenCode:
+		return emitGuidanceResponse(hookType, "tool.execute.before", opencode.NewGuidanceResponse(guidance))
+
+	case agent.AgentOpenClaw:
+		return emitGuidanceResponse(hookType, "before_tool_call", openclaw.NewGuidanceResponse(guidance))
+
+	case agent.AgentWindsurf:
+		// Windsurf has no JSON advisory channel, fall through to stderr.
+		response := windsurf.NewGuidanceResponse(guidance)
+		if msg := response.Stderr(); msg != "" {
+			fmt.Fprintln(os.Stderr, msg)
+		}
+		return nil
+
+	case agent.AgentPiAgent:
+		return emitGuidanceResponse(hookType, "tool_call", piagent.NewGuidanceResponse(guidance))
+
+	case agent.AgentCodex:
+		return emitGuidanceResponse(hookType, "PreToolUse", codex.NewGuidanceResponse(guidance))
 
 	default:
-		// Other agents don't yet have a guidance wiring — fall through to
-		// the allow response (the evaluator already marked the event
-		// allowed; we simply don't surface the guidance text).
 		return sendHookResponse(agentName, hookType)
 	}
 }
@@ -329,7 +412,7 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 
 	case agent.AgentCursor:
 		denyResponse := cursor.NewDenyResponse(result.BlockReason)
-		output := generateCursorBlockedResponse(hookType, denyResponse)
+		output := generateCursorDecisionResponse(hookType, denyResponse, false)
 		if _, err := os.Stdout.Write(output); err != nil {
 			log.Errorf("failed to write to stdout: %v", err)
 		}
@@ -338,14 +421,29 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 
 	case agent.AgentGemini:
 		response := gemini.NewBlockResponse(result.BlockReason)
+		if hookType == "BeforeTool" {
+			if _, err := os.Stdout.Write(response.JSON()); err != nil {
+				log.Errorf("failed to write to stdout: %v", err)
+			}
+		}
 		return handleGeminiResponse(response)
 
 	case agent.AgentOpenCode:
 		response := opencode.NewBlockResponse(result.BlockReason)
+		if hookType == "tool.execute.before" {
+			if _, err := os.Stdout.Write(response.JSON()); err != nil {
+				log.Errorf("failed to write to stdout: %v", err)
+			}
+		}
 		return handleOpenCodeResponse(response)
 
 	case agent.AgentOpenClaw:
 		response := openclaw.NewBlockResponse(result.BlockReason)
+		if hookType == "before_tool_call" {
+			if _, err := os.Stdout.Write(response.JSON()); err != nil {
+				log.Errorf("failed to write to stdout: %v", err)
+			}
+		}
 		return handleOpenClawResponse(response)
 
 	case agent.AgentWindsurf:
@@ -354,6 +452,11 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 
 	case agent.AgentPiAgent:
 		response := piagent.NewBlockResponse(result.BlockReason)
+		if hookType == "tool_call" {
+			if _, err := os.Stdout.Write(response.JSON()); err != nil {
+				log.Errorf("failed to write to stdout: %v", err)
+			}
+		}
 		return handlePiAgentResponse(response)
 
 	case agent.AgentCodex:
@@ -370,8 +473,10 @@ func sendSecurityBlockedResponse(agentName, hookType string, result *security.Re
 	}
 }
 
-// generateCursorBlockedResponse generates the appropriate blocked response for a Cursor hook type.
-func generateCursorBlockedResponse(hookType string, response *cursor.HookResponse) []byte {
+// generateCursorDecisionResponse builds the JSON response for a Cursor hook
+// type carrying an explicit block (cont=false) or allow-with-advisory
+// (cont=true) decision.
+func generateCursorDecisionResponse(hookType string, response *cursor.HookResponse, cont bool) []byte {
 	switch hookType {
 	case "preToolUse":
 		return cursor.GeneratePreToolUseResponse(response)
@@ -380,44 +485,35 @@ func generateCursorBlockedResponse(hookType string, response *cursor.HookRespons
 		return cursor.GeneratePermissionResponse(response)
 
 	case "beforeSubmitPrompt", "sessionStart":
-		return cursor.GenerateContinueResponse(false, response.Reason)
+		return cursor.GenerateContinueResponse(cont, response.Reason)
 
 	default:
-		// For hooks that don't support blocking, return empty JSON
 		return []byte("{}")
 	}
 }
 
-// generateCursorResponse generates the appropriate response for a Cursor hook type.
 func generateCursorResponse(hookType string) []byte {
-	// Create an allow response for all hooks (policy enforcement can be added later)
 	allowResponse := cursor.NewAllowResponse()
 
 	switch hookType {
 	case "preToolUse":
-		// preToolUse uses decision: allow/deny
 		return cursor.GeneratePreToolUseResponse(allowResponse)
 
 	case "beforeShellExecution", "beforeMCPExecution", "beforeReadFile", "beforeTabFileRead":
-		// Permission hooks use permission: allow/deny/ask
 		return cursor.GeneratePermissionResponse(allowResponse)
 
 	case "beforeSubmitPrompt", "sessionStart":
-		// Continue hooks use continue: true/false
 		return cursor.GenerateContinueResponse(true, "")
 
 	case "stop", "subagentStop":
-		// Stop hooks can have optional followup_message
 		return cursor.GenerateStopResponse("")
 
 	case "postToolUse", "postToolUseFailure", "afterFileEdit", "afterTabFileEdit",
 		"afterShellExecution", "afterMCPExecution", "afterAgentThought",
 		"afterAgentResponse", "sessionEnd", "subagentStart", "preCompact":
-		// Post-action hooks don't require specific responses, return empty JSON
 		return []byte("{}")
 
 	default:
-		// Unknown hook type, return empty JSON
 		return []byte("{}")
 	}
 }

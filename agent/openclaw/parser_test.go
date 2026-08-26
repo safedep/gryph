@@ -358,3 +358,16 @@ func TestParseHookEvent_NoDiff_StandardLevel(t *testing.T) {
 
 	assert.Empty(t, event.DiffContent, "DiffContent should be empty at standard logging level")
 }
+
+func TestNewGuidanceResponse(t *testing.T) {
+	resp := NewGuidanceResponse("security advisory")
+	assert.Equal(t, HookGuidance, resp.Decision)
+	assert.Equal(t, "security advisory", resp.Message)
+	assert.Equal(t, 0, resp.ExitCode())
+	assert.Equal(t, "security advisory", resp.Stderr())
+
+	var result map[string]string
+	require.NoError(t, json.Unmarshal(resp.JSON(), &result))
+	assert.Equal(t, "allow", result["decision"])
+	assert.Equal(t, "security advisory", result["reason"])
+}

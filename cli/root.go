@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/safedep/dry/log"
+	aarmsec "github.com/safedep/gryph/aarm"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/codex"
@@ -18,7 +19,6 @@ import (
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/internal/version"
-	securitychecks "github.com/safedep/gryph/security"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -33,6 +33,20 @@ type App struct {
 	Paths          *config.Paths
 	Security       *security.Evaluator
 	PrivacyChecker *events.PrivacyChecker
+
+	// policyCheck holds the lazily-loaded AARM policy check, when the policy
+	// layer is enabled. Used by cli/hook.go to reach the underlying Mediator
+	// for post-hook RecordResult calls.
+	policyCheck *lazyPolicyCheck
+}
+
+// AarmMediator returns the loaded AARM Mediator, or nil if policy is
+// disabled, has not been used yet, or failed to load.
+func (a *App) AarmMediator() *aarmsec.Mediator {
+	if a == nil || a.policyCheck == nil {
+		return nil
+	}
+	return a.policyCheck.Mediator()
 }
 
 // NewApp creates a new App with the given configuration.
@@ -69,9 +83,21 @@ func NewApp(cfg *config.Config) (*App, error) {
 		UseColors: cfg.ShouldUseColors(),
 	})
 
-	// Create security evaluator with placeholder check
-	sec := security.New(&security.Config{FailOpen: true})
-	sec.RegisterCheck(securitychecks.NewPlaceholderCheck())
+	var app *App
+
+	policyCfg := cfg.EffectivePolicy()
+	failOpen := policyCfg.FailMode == string(aarmsec.FailOpen)
+	sec := security.New(&security.Config{FailOpen: failOpen})
+	var policyCheck *lazyPolicyCheck
+	if policyCfg.Enabled {
+		policyCheck = newLazyPolicyCheck(cfg, paths, func() storage.Store {
+			if app == nil {
+				return nil
+			}
+			return app.Store
+		})
+		sec.RegisterCheck(policyCheck)
+	}
 
 	// Invoke any check factories that external binaries registered during
 	// init() via RegisterCheckFactory. Factories that return nil are
@@ -82,14 +108,16 @@ func NewApp(cfg *config.Config) (*App, error) {
 		}
 	}
 
-	return &App{
+	app = &App{
 		Config:         cfg,
 		Registry:       registry,
 		Presenter:      presenter,
 		Paths:          paths,
 		Security:       sec,
 		PrivacyChecker: privacyChecker,
-	}, nil
+		policyCheck:    policyCheck,
+	}
+	return app, nil
 }
 
 // InitStore initializes the database store.
@@ -196,6 +224,7 @@ native hook systems to create a comprehensive audit trail of all agent actions.`
 		NewSessionCmd(),
 		NewExportCmd(),
 		NewConfigCmd(),
+		NewPolicyCmd(),
 		NewSelfLogCmd(),
 		NewDiffCmd(),
 		NewCatCmd(),
@@ -205,6 +234,8 @@ native hook systems to create a comprehensive audit trail of all agent actions.`
 		NewStatsCmd(),
 		NewCostCmd(),
 		NewVersionCmd(),
+		NewMCPProxyCmd(),
+		NewAarmCmd(),
 	)
 
 	return rootCmd

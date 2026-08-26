@@ -11,14 +11,15 @@
 <h3 align="center">AI coding agents have no security boundaries. Gryph is building one.</h3>
 
 <p align="center">
-  Everyone runs YOLO mode. Nobody checks what happened. Gryph does.
+  Everyone runs YOLO mode. Gryph enforces guardrails and keeps the audit trail.
 </p>
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> ·
   <a href="#see-it-in-action">Demo</a> ·
   <a href="#supported-agents">Supported Agents</a> ·
-  <a href="#use-cases">Use Cases</a>
+  <a href="#use-cases">Use Cases</a> ·
+  <a href="#security-policy">Security Policy</a>
 </p>
 
 <div align="center">
@@ -36,9 +37,9 @@
 
 ---
 
-AI coding agents (Claude Code, Cursor, Windsurf, Gemini CLI, OpenCode) can read any file, write anywhere, and execute arbitrary commands on a developer's machine. They run dozens of tool calls per session. When something goes wrong, there is no audit trail.
+AI coding agents (Claude Code, Cursor, Windsurf, Gemini CLI, OpenCode) can read any file, write anywhere, and execute arbitrary commands on a developer's machine. They run dozens of tool calls per session. There are no boundaries on what they can do and no audit trail when something goes wrong.
 
-**Gryph fixes that.** It hooks into agents, logs every action to a local SQLite database, and provides powerful querying to understand, review, and debug agent activity. All data stays local. No cloud, no telemetry.
+**Gryph fixes that.** It hooks into agents, enforces YAML policy rules that `block`, `warn`, or `guide` actions in real time, and logs every event to a local SQLite database for review and audit. All data stays local. No cloud, no telemetry.
 
 <div align="center">
   <img src="docs/assets/gryph-interactive-query.gif" alt="Gryph Interactive Query Demo" width="90%">
@@ -103,6 +104,7 @@ Pre-built binaries for macOS, Linux, and Windows are available on the [GitHub Re
 | **Windsurf** | Full (file read/write, commands, MCP tools) |
 
 > **Note:** Codex hooks require enabling the `codex_hooks` feature flag in your Codex configuration (`~/.codex/config.toml`):
+>
 > ```toml
 > [features]
 > codex_hooks = true
@@ -125,6 +127,7 @@ Live streaming of agent actions as they happen with `gryph logs --live`:
 | **Replay the full session** | `git diff` shows final changes. Gryph shows the full sequence: what the agent read, what it ran, what it wrote and reverted, and in what order. |
 | **Catch invisible side effects** | Agents run shell commands that leave no trace in git (`npm install`, `curl`, `rm`). `gryph query --action exec` surfaces them all. |
 | **Sensitive file access** | Gryph flags access to `.env`, `*.pem`, `*.key`, and similar files automatically. Actions are logged but content is never stored. |
+| **Block risky agent actions** | Author YAML rules to block destructive commands, refuse writes that leak credentials, or scope behavior per agent or project. See [Security Policy](docs/security-policy.md). |
 | **Security review** | Export events to your SIEM, or use the [OpenSearch observability example](examples/ai-coding-observability/) for centralized dashboards and threat detection alerts. |
 | **Cost and token tracking** | Track per-session token usage and estimated costs across models and agents. [See docs](docs/cost.md) |
 | **Compare agents** | Filter by `--agent` to see how different agents approach the same task: which reads more, which runs more commands, which costs more. |
@@ -138,6 +141,20 @@ Live streaming of agent actions as they happen with `gryph logs --live`:
 </picture>
 
 Gryph installs lightweight hooks into AI coding agents. When an agent reads a file, writes a file, or executes a command, the hook sends a JSON event to Gryph. Events are stored in a local SQLite database and can be queried anytime. Because Gryph hooks into both **pre-tool** and **post-tool** events, it captures the full lifecycle of every agent action.
+
+## Security Policy
+
+Beyond logging, Gryph can enforce a YAML policy over agent actions. Rules can `block`, `warn`, `guide`, or `allow` based on action type, file path, command pattern, tool name, agent, project, and CEL expressions over per-session counters. Blocked actions never reach the agent's tool, guidance is delivered back to the agent as stderr text, and every decision is persisted.
+
+```bash
+gryph policy init          # write the example policy to the global config dir
+gryph policy edit          # open it in $EDITOR and scaffold if missing
+gryph policy validate
+gryph policy test --action file_write --path ./secrets/db.env
+gryph config set policy.enabled true
+```
+
+See [security policy](./docs/security-policy.md) for more details.
 
 ## Commands
 

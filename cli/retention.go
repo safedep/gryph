@@ -3,12 +3,122 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/storage"
 	"github.com/spf13/cobra"
 )
+
+// retentionBucket describes one slice of audit data subject to retention.
+// Each bucket owns its own count/delete operations and the self-audit row
+// emitted after a successful delete. Adding a fourth bucket is a one-liner
+// addition to the slice built in the cleanup runner.
+type retentionBucket struct {
+	nounPlural  string
+	days        int
+	auditAction string
+	auditKey    string
+	cutoffKey   string
+	daysKey     string
+	auditOnZero bool
+	countFn     func(ctx context.Context, before time.Time) (int, error)
+	deleteFn    func(ctx context.Context, before time.Time) (int, error)
+}
+
+// enabled reports whether the bucket is configured for retention sweeps.
+func (b retentionBucket) enabled() bool { return b.days > 0 }
+
+// cutoff returns the timestamp before which entries are eligible for delete.
+func (b retentionBucket) cutoff(now time.Time) time.Time {
+	return now.AddDate(0, 0, -b.days)
+}
+
+func retentionBuckets(store storage.Store, eventDays, contextDays, receiptDays int) []retentionBucket {
+	return []retentionBucket{
+		{
+			nounPlural:  "events",
+			days:        eventDays,
+			auditAction: SelfAuditActionRetentionCleanup,
+			auditKey:    "events_deleted",
+			cutoffKey:   "cutoff_time",
+			daysKey:     "retention_days",
+			auditOnZero: true,
+			countFn:     store.CountEventsBefore,
+			deleteFn:    store.DeleteEventsBefore,
+		},
+		{
+			nounPlural:  "context actions",
+			days:        contextDays,
+			auditAction: SelfAuditActionContextCleanup,
+			auditKey:    "aarm_context_actions_deleted",
+			cutoffKey:   "cutoff",
+			daysKey:     "context_retention_days",
+			countFn:     store.CountContextBefore,
+			deleteFn:    store.DeleteContextBefore,
+		},
+		{
+			nounPlural:  "receipts",
+			days:        receiptDays,
+			auditAction: SelfAuditActionReceiptCleanup,
+			auditKey:    "aarm_receipts_deleted",
+			cutoffKey:   "cutoff",
+			daysKey:     "receipt_retention_days",
+			countFn:     store.CountReceiptsBefore,
+			deleteFn:    store.DeleteReceiptsBefore,
+		},
+		{
+			nounPlural:  "deferred actions",
+			days:        receiptDays,
+			auditAction: SelfAuditActionDeferralCleanup,
+			auditKey:    "aarm_deferred_actions_deleted",
+			cutoffKey:   "cutoff",
+			daysKey:     "receipt_retention_days",
+			countFn:     store.CountDeferredActionsBefore,
+			deleteFn:    store.DeleteDeferredActionsBefore,
+		},
+	}
+}
+
+func reportRetentionDryRun(ctx context.Context, w io.Writer, b retentionBucket, now time.Time) error {
+	if !b.enabled() {
+		return nil
+	}
+	cutoff := b.cutoff(now)
+	count, err := b.countFn(ctx, cutoff)
+	if err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(w, "Would delete %d %s older than %s (%d days)\n",
+		count, b.nounPlural, cutoff.Format(time.RFC3339), b.days)
+	return nil
+}
+
+func runRetentionDelete(ctx context.Context, w io.Writer, store storage.Store, b retentionBucket, now time.Time) (int, error) {
+	if !b.enabled() {
+		return 0, nil
+	}
+	cutoff := b.cutoff(now)
+	deleted, err := b.deleteFn(ctx, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	if deleted > 0 || b.auditOnZero {
+		details := map[string]interface{}{
+			b.auditKey:  deleted,
+			b.cutoffKey: cutoff.Format(time.RFC3339),
+			b.daysKey:   b.days,
+		}
+		if err := logSelfAudit(ctx, store, b.auditAction, "",
+			details, SelfAuditResultSuccess, ""); err != nil {
+			log.Errorf("failed to log self-audit: %v", err)
+		}
+	}
+	_, _ = fmt.Fprintf(w, "Deleted %d %s older than %d days\n", deleted, b.nounPlural, b.days)
+	return deleted, nil
+}
 
 // NewRetentionCmd creates the retention command.
 func NewRetentionCmd() *cobra.Command {
@@ -48,53 +158,42 @@ Self-audit entries are preserved and not affected by this cleanup.`,
 				return err
 			}
 
-			// Initialize store
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 			defer func() {
 				err := app.Close()
 				if err != nil {
-					log.Errorf("failed to close app: %w", err)
+					log.Errorf("failed to close app: %v", err)
 				}
 			}()
 
 			days := app.Config.Storage.RetentionDays
-			if days == 0 {
-				fmt.Fprintln(os.Stderr, "Retention policy disabled (retention_days=0)")
+			policyCfg := app.Config.EffectivePolicy()
+			contextDays := policyCfg.ContextRetentionDays
+			receiptDays := policyCfg.ReceiptRetentionDays
+			if days == 0 && contextDays == 0 && receiptDays == 0 {
+				fmt.Fprintln(os.Stderr, "Retention policy disabled (retention_days=0, policy.context_retention_days=0, policy.receipt_retention_days=0)")
 				return nil
 			}
 
-			cutoff := time.Now().AddDate(0, 0, -days)
+			now := time.Now()
+			buckets := retentionBuckets(app.Store, days, contextDays, receiptDays)
 
 			if dryRun {
-				// Show what would be deleted
-				count, err := app.Store.CountEventsBefore(ctx, cutoff)
-				if err != nil {
-					return err
+				for _, b := range buckets {
+					if err := reportRetentionDryRun(ctx, os.Stdout, b, now); err != nil {
+						return err
+					}
 				}
-				fmt.Printf("Would delete %d events older than %s (%d days)\n",
-					count, cutoff.Format(time.RFC3339), days)
 				return nil
 			}
 
-			deleted, err := app.Store.DeleteEventsBefore(ctx, cutoff)
-			if err != nil {
-				return err
+			for _, b := range buckets {
+				if _, err := runRetentionDelete(ctx, os.Stdout, app.Store, b, now); err != nil {
+					return err
+				}
 			}
-
-			// Log self-audit
-			if err := logSelfAudit(ctx, app.Store, SelfAuditActionRetentionCleanup, "",
-				map[string]interface{}{
-					"events_deleted": deleted,
-					"cutoff_time":    cutoff.Format(time.RFC3339),
-					"retention_days": days,
-				},
-				SelfAuditResultSuccess, ""); err != nil {
-				log.Errorf("failed to log self-audit: %w", err)
-			}
-
-			fmt.Printf("Deleted %d events older than %d days\n", deleted, days)
 			return nil
 		},
 	}
@@ -121,7 +220,6 @@ events that would be affected by cleanup.`,
 				return err
 			}
 
-			// Initialize store
 			if err := app.InitStore(ctx); err != nil {
 				return ErrDatabase("failed to initialize database", err)
 			}
@@ -129,28 +227,55 @@ events that would be affected by cleanup.`,
 			defer func() {
 				err := app.Close()
 				if err != nil {
-					log.Errorf("failed to close app: %w", err)
+					log.Errorf("failed to close app: %v", err)
 				}
 			}()
 
 			days := app.Config.Storage.RetentionDays
+			policyCfg := app.Config.EffectivePolicy()
+			receiptDays := policyCfg.ReceiptRetentionDays
+			contextDays := policyCfg.ContextRetentionDays
+
 			fmt.Printf("Retention Policy:\n")
 			if days == 0 {
-				fmt.Printf("  Status:          Disabled\n")
-				fmt.Printf("  Retention Days:  Unlimited\n")
+				fmt.Printf("  Events Status:           Disabled\n")
+				fmt.Printf("  Events Retention Days:   Unlimited\n")
 			} else {
-				fmt.Printf("  Status:          Enabled\n")
-				fmt.Printf("  Retention Days:  %d\n", days)
+				fmt.Printf("  Events Status:           Enabled\n")
+				fmt.Printf("  Events Retention Days:   %d\n", days)
 
 				cutoff := time.Now().AddDate(0, 0, -days)
-				fmt.Printf("  Cutoff Date:     %s\n", cutoff.Format("2006-01-02 15:04:05"))
+				fmt.Printf("  Events Cutoff Date:      %s\n", cutoff.Format("2006-01-02 15:04:05"))
 
-				// Count events that would be deleted
 				count, err := app.Store.CountEventsBefore(ctx, cutoff)
 				if err != nil {
 					return err
 				}
-				fmt.Printf("  Events to Clean: %d\n", count)
+				fmt.Printf("  Events to Clean:         %d\n", count)
+			}
+
+			if contextDays > 0 {
+				fmt.Printf("  Context Status:          Enabled\n")
+				fmt.Printf("  Context Retention Days:  %d\n", contextDays)
+				cutoff := time.Now().AddDate(0, 0, -contextDays)
+				fmt.Printf("  Context Cutoff Date:     %s\n", cutoff.Format("2006-01-02 15:04:05"))
+				count, err := app.Store.CountContextBefore(ctx, cutoff)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("  Context to Clean:        %d\n", count)
+			}
+
+			if receiptDays > 0 {
+				fmt.Printf("  Receipts Status:         Enabled\n")
+				fmt.Printf("  Receipts Retention Days: %d\n", receiptDays)
+				cutoff := time.Now().AddDate(0, 0, -receiptDays)
+				fmt.Printf("  Receipts Cutoff Date:    %s\n", cutoff.Format("2006-01-02 15:04:05"))
+				count, err := app.Store.CountReceiptsBefore(ctx, cutoff)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("  Receipts to Clean:       %d\n", count)
 			}
 
 			return nil

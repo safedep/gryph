@@ -424,4 +424,3 @@ func TestMatchSimple_Wildcards(t *testing.T) {
 		})
 	}
 }
-

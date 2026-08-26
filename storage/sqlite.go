@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"entgo.io/ent/dialect"
@@ -28,6 +29,20 @@ type SQLiteStore struct {
 	client *ent.Client
 	db     *sql.DB
 	path   string
+
+	// receiptWriteMu serializes the receipt insert path. SQLite's WAL mode
+	// allows concurrent readers but a SELECT-then-INSERT transaction can fail
+	// with SQLITE_BUSY when two goroutines both acquire a read snapshot
+	// before one of them upgrades to a writer. An in-process mutex is
+	// cheaper and clearer than _txlock=immediate at the driver level since
+	// only the receipt path needs this guarantee.
+	receiptWriteMu sync.Mutex
+
+	// contextWriteMu serializes the context-action insert path. Same
+	// rationale as receiptWriteMu: the chain insert is a SELECT-last-row
+	// then INSERT transaction and an in-process mutex avoids SQLITE_BUSY
+	// from concurrent writers that both acquired a read snapshot.
+	contextWriteMu sync.Mutex
 }
 
 // NewSQLiteStore creates a new SQLite store at the given path.
@@ -259,18 +274,31 @@ func (s *SQLiteStore) GetEventsBySession(ctx context.Context, sessionID uuid.UUI
 	return result, nil
 }
 
-// DeleteEventsBefore deletes events older than the given time.
+// DeleteEventsBefore deletes events older than the given time in fixed-size
+// batches so a heavy retention sweep does not hold the SQLite writer lock
+// for the full purge.
 func (s *SQLiteStore) DeleteEventsBefore(ctx context.Context, before time.Time) (int, error) {
 	s.cleanFTSBefore(ctx, before)
 
-	deleted, err := s.client.AuditEvent.Delete().
-		Where(auditevent.TimestampLT(before)).
-		Exec(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to delete events: %w", err)
+	const deleteBatch = 1000
+	total := 0
+	for {
+		res, err := s.db.ExecContext(ctx,
+			`DELETE FROM audit_events WHERE id IN (SELECT id FROM audit_events WHERE timestamp < ? LIMIT ?)`,
+			before, deleteBatch,
+		)
+		if err != nil {
+			return total, fmt.Errorf("failed to delete events: %w", err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return total, fmt.Errorf("failed to read events rows affected: %w", err)
+		}
+		total += int(n)
+		if n == 0 {
+			return total, nil
+		}
 	}
-
-	return deleted, nil
 }
 
 // CountEventsBefore returns the count of events older than the given time.
@@ -1048,7 +1076,6 @@ func buildEventSubQueryPredicate(filter *session.SessionFilter) predicate.Sessio
 		}))
 	})
 }
-
 
 // Ensure SQLiteStore implements Store
 var _ Store = (*SQLiteStore)(nil)

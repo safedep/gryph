@@ -1,0 +1,10 @@
+{
+  "kind": "event",
+  "action_type": "command_exec",
+  "agent_name": "conformance-suite",
+  "payload": {
+    "command": "rm -rf /",
+    "args": ["-rf", "/"],
+    "description": "destructive cleanup"
+  }
+}

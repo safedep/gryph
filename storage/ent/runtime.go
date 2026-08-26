@@ -6,6 +6,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/storage/ent/aarmcontextaction"
+	"github.com/safedep/gryph/storage/ent/aarmcontextstate"
+	"github.com/safedep/gryph/storage/ent/aarmdeferredaction"
+	"github.com/safedep/gryph/storage/ent/aarmreceipt"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
 	"github.com/safedep/gryph/storage/ent/eventstreamcursor"
@@ -18,6 +22,106 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	aarmcontextactionFields := schema.AarmContextAction{}.Fields()
+	_ = aarmcontextactionFields
+	// aarmcontextactionDescTimestamp is the schema descriptor for timestamp field.
+	aarmcontextactionDescTimestamp := aarmcontextactionFields[3].Descriptor()
+	// aarmcontextaction.DefaultTimestamp holds the default value on creation for the timestamp field.
+	aarmcontextaction.DefaultTimestamp = aarmcontextactionDescTimestamp.Default.(func() time.Time)
+	// aarmcontextactionDescSequence is the schema descriptor for sequence field.
+	aarmcontextactionDescSequence := aarmcontextactionFields[14].Descriptor()
+	// aarmcontextaction.SequenceValidator is a validator for the "sequence" field. It is called by the builders before save.
+	aarmcontextaction.SequenceValidator = aarmcontextactionDescSequence.Validators[0].(func(int64) error)
+	// aarmcontextactionDescPrevHash is the schema descriptor for prev_hash field.
+	aarmcontextactionDescPrevHash := aarmcontextactionFields[15].Descriptor()
+	// aarmcontextaction.PrevHashValidator is a validator for the "prev_hash" field. It is called by the builders before save.
+	aarmcontextaction.PrevHashValidator = aarmcontextactionDescPrevHash.Validators[0].(func([]byte) error)
+	// aarmcontextactionDescHash is the schema descriptor for hash field.
+	aarmcontextactionDescHash := aarmcontextactionFields[16].Descriptor()
+	// aarmcontextaction.HashValidator is a validator for the "hash" field. It is called by the builders before save.
+	aarmcontextaction.HashValidator = aarmcontextactionDescHash.Validators[0].(func([]byte) error)
+	// aarmcontextactionDescID is the schema descriptor for id field.
+	aarmcontextactionDescID := aarmcontextactionFields[0].Descriptor()
+	// aarmcontextaction.DefaultID holds the default value on creation for the id field.
+	aarmcontextaction.DefaultID = aarmcontextactionDescID.Default.(func() uuid.UUID)
+	aarmcontextstateFields := schema.AarmContextState{}.Fields()
+	_ = aarmcontextstateFields
+	// aarmcontextstateDescFirstSeenAt is the schema descriptor for first_seen_at field.
+	aarmcontextstateDescFirstSeenAt := aarmcontextstateFields[1].Descriptor()
+	// aarmcontextstate.DefaultFirstSeenAt holds the default value on creation for the first_seen_at field.
+	aarmcontextstate.DefaultFirstSeenAt = aarmcontextstateDescFirstSeenAt.Default.(func() time.Time)
+	// aarmcontextstateDescLastActionAt is the schema descriptor for last_action_at field.
+	aarmcontextstateDescLastActionAt := aarmcontextstateFields[2].Descriptor()
+	// aarmcontextstate.DefaultLastActionAt holds the default value on creation for the last_action_at field.
+	aarmcontextstate.DefaultLastActionAt = aarmcontextstateDescLastActionAt.Default.(func() time.Time)
+	// aarmcontextstateDescTotalActions is the schema descriptor for total_actions field.
+	aarmcontextstateDescTotalActions := aarmcontextstateFields[3].Descriptor()
+	// aarmcontextstate.DefaultTotalActions holds the default value on creation for the total_actions field.
+	aarmcontextstate.DefaultTotalActions = aarmcontextstateDescTotalActions.Default.(int)
+	// aarmcontextstateDescFilesRead is the schema descriptor for files_read field.
+	aarmcontextstateDescFilesRead := aarmcontextstateFields[4].Descriptor()
+	// aarmcontextstate.DefaultFilesRead holds the default value on creation for the files_read field.
+	aarmcontextstate.DefaultFilesRead = aarmcontextstateDescFilesRead.Default.(int)
+	// aarmcontextstateDescFilesWritten is the schema descriptor for files_written field.
+	aarmcontextstateDescFilesWritten := aarmcontextstateFields[5].Descriptor()
+	// aarmcontextstate.DefaultFilesWritten holds the default value on creation for the files_written field.
+	aarmcontextstate.DefaultFilesWritten = aarmcontextstateDescFilesWritten.Default.(int)
+	// aarmcontextstateDescCommandsExecuted is the schema descriptor for commands_executed field.
+	aarmcontextstateDescCommandsExecuted := aarmcontextstateFields[6].Descriptor()
+	// aarmcontextstate.DefaultCommandsExecuted holds the default value on creation for the commands_executed field.
+	aarmcontextstate.DefaultCommandsExecuted = aarmcontextstateDescCommandsExecuted.Default.(int)
+	// aarmcontextstateDescNetworkRequests is the schema descriptor for network_requests field.
+	aarmcontextstateDescNetworkRequests := aarmcontextstateFields[7].Descriptor()
+	// aarmcontextstate.DefaultNetworkRequests holds the default value on creation for the network_requests field.
+	aarmcontextstate.DefaultNetworkRequests = aarmcontextstateDescNetworkRequests.Default.(int)
+	// aarmcontextstateDescErrors is the schema descriptor for errors field.
+	aarmcontextstateDescErrors := aarmcontextstateFields[8].Descriptor()
+	// aarmcontextstate.DefaultErrors holds the default value on creation for the errors field.
+	aarmcontextstate.DefaultErrors = aarmcontextstateDescErrors.Default.(int)
+	// aarmcontextstateDescSemanticDrift is the schema descriptor for semantic_drift field.
+	aarmcontextstateDescSemanticDrift := aarmcontextstateFields[12].Descriptor()
+	// aarmcontextstate.DefaultSemanticDrift holds the default value on creation for the semantic_drift field.
+	aarmcontextstate.DefaultSemanticDrift = aarmcontextstateDescSemanticDrift.Default.(float64)
+	aarmdeferredactionFields := schema.AarmDeferredAction{}.Fields()
+	_ = aarmdeferredactionFields
+	// aarmdeferredactionDescReceiptSequence is the schema descriptor for receipt_sequence field.
+	aarmdeferredactionDescReceiptSequence := aarmdeferredactionFields[2].Descriptor()
+	// aarmdeferredaction.ReceiptSequenceValidator is a validator for the "receipt_sequence" field. It is called by the builders before save.
+	aarmdeferredaction.ReceiptSequenceValidator = aarmdeferredactionDescReceiptSequence.Validators[0].(func(int64) error)
+	// aarmdeferredactionDescDeferredAt is the schema descriptor for deferred_at field.
+	aarmdeferredactionDescDeferredAt := aarmdeferredactionFields[4].Descriptor()
+	// aarmdeferredaction.DefaultDeferredAt holds the default value on creation for the deferred_at field.
+	aarmdeferredaction.DefaultDeferredAt = aarmdeferredactionDescDeferredAt.Default.(func() time.Time)
+	// aarmdeferredactionDescID is the schema descriptor for id field.
+	aarmdeferredactionDescID := aarmdeferredactionFields[0].Descriptor()
+	// aarmdeferredaction.DefaultID holds the default value on creation for the id field.
+	aarmdeferredaction.DefaultID = aarmdeferredactionDescID.Default.(func() uuid.UUID)
+	aarmreceiptFields := schema.AarmReceipt{}.Fields()
+	_ = aarmreceiptFields
+	// aarmreceiptDescRecordedAt is the schema descriptor for recorded_at field.
+	aarmreceiptDescRecordedAt := aarmreceiptFields[4].Descriptor()
+	// aarmreceipt.DefaultRecordedAt holds the default value on creation for the recorded_at field.
+	aarmreceipt.DefaultRecordedAt = aarmreceiptDescRecordedAt.Default.(func() time.Time)
+	// aarmreceiptDescSequence is the schema descriptor for sequence field.
+	aarmreceiptDescSequence := aarmreceiptFields[5].Descriptor()
+	// aarmreceipt.SequenceValidator is a validator for the "sequence" field. It is called by the builders before save.
+	aarmreceipt.SequenceValidator = aarmreceiptDescSequence.Validators[0].(func(int64) error)
+	// aarmreceiptDescPrevHash is the schema descriptor for prev_hash field.
+	aarmreceiptDescPrevHash := aarmreceiptFields[19].Descriptor()
+	// aarmreceipt.PrevHashValidator is a validator for the "prev_hash" field. It is called by the builders before save.
+	aarmreceipt.PrevHashValidator = aarmreceiptDescPrevHash.Validators[0].(func([]byte) error)
+	// aarmreceiptDescHash is the schema descriptor for hash field.
+	aarmreceiptDescHash := aarmreceiptFields[20].Descriptor()
+	// aarmreceipt.HashValidator is a validator for the "hash" field. It is called by the builders before save.
+	aarmreceipt.HashValidator = aarmreceiptDescHash.Validators[0].(func([]byte) error)
+	// aarmreceiptDescPolicyHash is the schema descriptor for policy_hash field.
+	aarmreceiptDescPolicyHash := aarmreceiptFields[23].Descriptor()
+	// aarmreceipt.PolicyHashValidator is a validator for the "policy_hash" field. It is called by the builders before save.
+	aarmreceipt.PolicyHashValidator = aarmreceiptDescPolicyHash.Validators[0].(func([]byte) error)
+	// aarmreceiptDescID is the schema descriptor for id field.
+	aarmreceiptDescID := aarmreceiptFields[0].Descriptor()
+	// aarmreceipt.DefaultID holds the default value on creation for the id field.
+	aarmreceipt.DefaultID = aarmreceiptDescID.Default.(func() uuid.UUID)
 	auditeventFields := schema.AuditEvent{}.Fields()
 	_ = auditeventFields
 	// auditeventDescSequence is the schema descriptor for sequence field.

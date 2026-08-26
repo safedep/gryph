@@ -71,25 +71,36 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	sessionID := resolveSessionID(baseInput.SessionID)
 	agentSessionID := baseInput.SessionID
 
+	var event *events.Event
+	var err error
 	switch eventName {
 	case "BeforeTool":
-		return a.parseBeforeTool(sessionID, agentSessionID, baseInput, rawData)
+		event, err = a.parseBeforeTool(sessionID, agentSessionID, baseInput, rawData)
 	case "AfterTool":
-		return a.parseAfterTool(sessionID, agentSessionID, baseInput, rawData)
+		event, err = a.parseAfterTool(sessionID, agentSessionID, baseInput, rawData)
 	case "SessionStart":
-		return parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
+		event, err = parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
 	case "SessionEnd":
-		return parseSessionEnd(sessionID, agentSessionID, baseInput, rawData)
+		event, err = parseSessionEnd(sessionID, agentSessionID, baseInput, rawData)
 	case "Notification":
-		return parseNotification(sessionID, agentSessionID, baseInput, rawData)
+		event, err = parseNotification(sessionID, agentSessionID, baseInput, rawData)
 	default:
-		event := events.NewEvent(sessionID, AgentName, events.ActionUnknown)
+		event = events.NewEvent(sessionID, AgentName, events.ActionUnknown)
 		event.AgentSessionID = agentSessionID
 		event.WorkingDirectory = baseInput.Cwd
 		event.TranscriptPath = baseInput.TranscriptPath
 		event.RawEvent = rawData
-		return event, nil
 	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if event != nil {
+		event.HookType = eventName
+	}
+
+	return event, nil
 }
 
 func resolveSessionID(rawSessionID string) uuid.UUID {
@@ -278,6 +289,7 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 
 		if fullContent != "" {
 			payload.ContentPreview = truncateString(fullContent, 200)
+			event.FullContent = fullContent
 		}
 		if fullOldStr != "" {
 			payload.OldString = truncateString(fullOldStr, 200)
@@ -399,6 +411,7 @@ const (
 	HookAllow HookDecision = iota
 	HookBlock
 	HookError
+	HookGuidance
 )
 
 type HookResponse struct {
@@ -418,7 +431,8 @@ func (r *HookResponse) ExitCode() int {
 }
 
 func (r *HookResponse) Stderr() string {
-	if r.Decision == HookBlock || r.Decision == HookError {
+	switch r.Decision {
+	case HookBlock, HookError, HookGuidance:
 		return r.Message
 	}
 	return ""
@@ -431,8 +445,12 @@ type hookResponseJSON struct {
 
 func (r *HookResponse) JSON() []byte {
 	resp := hookResponseJSON{Decision: "allow"}
-	if r.Decision == HookBlock {
+	switch r.Decision {
+	case HookBlock:
 		resp.Decision = "block"
+		resp.Reason = r.Message
+	case HookGuidance:
+		resp.Decision = "allow"
 		resp.Reason = r.Message
 	}
 	data, _ := json.Marshal(resp)
@@ -453,6 +471,14 @@ func NewBlockResponse(message string) *HookResponse {
 func NewErrorResponse(message string) *HookResponse {
 	return &HookResponse{
 		Decision: HookError,
+		Message:  message,
+	}
+}
+
+// NewGuidanceResponse creates a non-blocking advisory response.
+func NewGuidanceResponse(message string) *HookResponse {
+	return &HookResponse{
+		Decision: HookGuidance,
 		Message:  message,
 	}
 }

@@ -87,25 +87,35 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	sessionID := resolveSessionID(baseInput.SessionID)
 	agentSessionID := baseInput.SessionID
 
+	var event *events.Event
+	var err error
+
 	switch eventName {
 	case "SessionStart":
-		return parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
+		event, err = parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
 	case "PreToolUse":
-		return a.parsePreToolUse(sessionID, agentSessionID, rawData)
+		event, err = a.parsePreToolUse(sessionID, agentSessionID, rawData)
 	case "PostToolUse":
-		return a.parsePostToolUse(sessionID, agentSessionID, rawData)
+		event, err = a.parsePostToolUse(sessionID, agentSessionID, rawData)
 	case "UserPromptSubmit":
-		return parseUserPromptSubmit(sessionID, agentSessionID, rawData)
+		event, err = parseUserPromptSubmit(sessionID, agentSessionID, rawData)
 	case "Stop":
-		return parseStop(sessionID, agentSessionID, rawData)
+		event, err = parseStop(sessionID, agentSessionID, rawData)
 	default:
-		event := events.NewEvent(sessionID, AgentName, events.ActionUnknown)
+		event = events.NewEvent(sessionID, AgentName, events.ActionUnknown)
 		event.AgentSessionID = agentSessionID
 		event.WorkingDirectory = baseInput.Cwd
 		event.TranscriptPath = baseInput.TranscriptPath
 		event.RawEvent = rawData
-		return event, nil
 	}
+
+	if err != nil {
+		return nil, err
+	}
+	if event != nil {
+		event.HookType = eventName
+	}
+	return event, nil
 }
 
 func resolveSessionID(rawSessionID string) uuid.UUID {
@@ -307,6 +317,7 @@ func (a *Adapter) buildToolPayload(event *events.Event, actionType events.Action
 
 		if fullContent != "" {
 			payload.ContentPreview = truncateString(fullContent, 200)
+			event.FullContent = fullContent
 		}
 		if fullOldStr != "" {
 			payload.OldString = truncateString(fullOldStr, 200)
@@ -391,6 +402,7 @@ const (
 	HookAllow HookDecision = iota
 	HookBlock
 	HookError
+	HookGuidance
 )
 
 func (r *HookResponse) ExitCode() int {
@@ -402,6 +414,14 @@ func (r *HookResponse) ExitCode() int {
 	default:
 		return 0
 	}
+}
+
+func (r *HookResponse) Stderr() string {
+	switch r.Decision {
+	case HookBlock, HookError, HookGuidance:
+		return r.Message
+	}
+	return ""
 }
 
 type preToolUseOutput struct {
@@ -425,6 +445,9 @@ func (r *HookResponse) JSON() []byte {
 	case HookBlock:
 		output.HookSpecificOutput.PermissionDecision = "deny"
 		output.HookSpecificOutput.PermissionDecisionReason = r.Message
+	case HookGuidance:
+		output.HookSpecificOutput.PermissionDecision = "allow"
+		output.HookSpecificOutput.PermissionDecisionReason = r.Message
 	default:
 		output.HookSpecificOutput.PermissionDecision = "allow"
 	}
@@ -443,4 +466,10 @@ func NewBlockResponse(message string) *HookResponse {
 
 func NewErrorResponse(message string) *HookResponse {
 	return &HookResponse{Decision: HookError, Message: message}
+}
+
+// NewGuidanceResponse creates a non-blocking advisory response.
+// PreToolUse carries the reason inline; other hooks fall back to stderr.
+func NewGuidanceResponse(message string) *HookResponse {
+	return &HookResponse{Decision: HookGuidance, Message: message}
 }

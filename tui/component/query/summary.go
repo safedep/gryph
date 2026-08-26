@@ -64,4 +64,3 @@ func computeSummary(evts []*events.Event) sessionSummary {
 	}
 	return s
 }
-

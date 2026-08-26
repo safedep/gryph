@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
+	"github.com/safedep/dry/log"
 	"github.com/spf13/viper"
 )
 
@@ -82,6 +84,127 @@ type Config struct {
 	Agents  AgentsConfig  `mapstructure:"agents"`
 	Display DisplayConfig `mapstructure:"display"`
 	Streams StreamsConfig `mapstructure:"streams"`
+	Policy  PolicyConfig  `mapstructure:"policy"`
+}
+
+// PolicyConfig holds Gryph policy-layer settings.
+type PolicyConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	FailMode string `mapstructure:"fail_mode"`
+
+	ContextRetentionDays int  `mapstructure:"context_retention_days"`
+	ReceiptRetentionDays int  `mapstructure:"receipt_retention_days"`
+	LogAllEvaluations    bool `mapstructure:"log_all_evaluations"`
+
+	Approval       ApprovalConfig       `mapstructure:"approval"`
+	Classify       ClassifyConfig       `mapstructure:"classify"`
+	InjectionScore InjectionScoreConfig `mapstructure:"injection_score"`
+	Receipts       ReceiptsConfig       `mapstructure:"receipts"`
+	Defer          DeferConfig          `mapstructure:"defer"`
+	Identity       IdentityConfig       `mapstructure:"identity"`
+	SelfProtection SelfProtectionConfig `mapstructure:"self_protection"`
+}
+
+// SelfProtectionConfig toggles the built-in rules that block agent writes to
+// Gryph's policy files, database, keys, and the agents' hook configs. Honored
+// only from the operator-owned config file, never a repo-local policy.
+type SelfProtectionConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+}
+
+// IdentityConfig controls the AARM identity-capture layer. Enabled gates the
+// capturer entirely. RequireHumanPrincipal turns a missing principal into a
+// pre-PDP block ("Action denied: no verifiable human principal").
+type IdentityConfig struct {
+	Enabled               bool `mapstructure:"enabled"`
+	RequireHumanPrincipal bool `mapstructure:"require_human_principal"`
+}
+
+// DeferConfig configures the deferral service. Enabled gates both the
+// fresh-session and conflicting-policies synthetic defer triggers and the
+// timeout sweep. AutoResolveOnTimeout is constrained to "deny" by AARM R4:
+// timed-out deferrals must never resolve to allow.
+type DeferConfig struct {
+	Enabled               bool   `mapstructure:"enabled"`
+	FreshSessionSeconds   int    `mapstructure:"fresh_session_seconds"`
+	ConflictTriggersDefer bool   `mapstructure:"conflict_triggers_defer"`
+	TimeoutSeconds        int    `mapstructure:"timeout_seconds"`
+	AutoResolveOnTimeout  string `mapstructure:"auto_resolve_on_timeout"`
+}
+
+// DeferAutoResolveDeny is the only valid value for
+// DeferConfig.AutoResolveOnTimeout. AARM R4 forbids implicit allow on
+// deferral timeout, so this constant is the single supported outcome.
+const DeferAutoResolveDeny = "deny"
+
+// ReceiptsConfig configures cryptographic signing for AARM receipts. SignMode
+// defaults to "auto": Gryph signs when a key is present and silently runs
+// unsigned when no key exists. Set to "always" to hard-fail on a missing
+// key, or "never" to disable signing entirely. The legacy bool `sign` is a
+// deprecated alias mapped to `always` (true) or `never` (false).
+type ReceiptsConfig struct {
+	Sign       bool   `mapstructure:"sign"`
+	SignMode   string `mapstructure:"sign_mode"`
+	KeyPath    string `mapstructure:"key_path"`
+	TrustStore string `mapstructure:"trust_store"`
+}
+
+// Sign mode constants.
+const (
+	SignModeAuto   = "auto"
+	SignModeAlways = "always"
+	SignModeNever  = "never"
+)
+
+var signDeprecationOnce sync.Once
+
+// EffectiveSignMode returns the configured sign_mode. After Load() it is
+// always the resolved value. The legacy bool is normalized into SignMode
+// during Load(), and SignMode itself is trimmed and lowercased there. When
+// called on a hand-constructed config that bypassed Load() and left
+// SignMode empty, the auto default is returned.
+func (r ReceiptsConfig) EffectiveSignMode() string {
+	if r.SignMode == "" {
+		return SignModeAuto
+	}
+	return r.SignMode
+}
+
+// ApprovalMode names the configured approval frontend.
+type ApprovalMode string
+
+const (
+	// ApprovalModeNop denies every escalated action without prompting.
+	ApprovalModeNop ApprovalMode = "nop"
+	// ApprovalModeCLI prompts the operator interactively via /dev/tty.
+	ApprovalModeCLI ApprovalMode = "cli"
+)
+
+// ApprovalConfig configures the approval workflow for escalated decisions.
+type ApprovalConfig struct {
+	Mode           ApprovalMode `mapstructure:"mode"`
+	TimeoutSeconds int          `mapstructure:"timeout_seconds"`
+	RequireNote    bool         `mapstructure:"require_note"`
+}
+
+// ClassifyConfig configures the data-classification heuristic.
+//
+// FailOpen toggles the AARM safe-by-default classification safety net. When
+// false (the default and AARM-conformant), the mediation adapter appends
+// classify.LabelUnknownSensitive to any action the classifier left
+// unlabeled so policies that gate on classification fail safe. When true,
+// the adapter skips the safety-net label so an unlabeled action carries an
+// empty list. Operators who explicitly want classification off and do not
+// want the fail-safe label flip this to true.
+type ClassifyConfig struct {
+	Enabled       bool                `mapstructure:"enabled"`
+	FailOpen      bool                `mapstructure:"fail_open"`
+	ExtraPatterns map[string][]string `mapstructure:"extra_patterns"`
+}
+
+// InjectionScoreConfig configures the prompt-injection heuristic.
+type InjectionScoreConfig struct {
+	Enabled bool `mapstructure:"enabled"`
 }
 
 // LoggingConfig holds logging-related settings.
@@ -195,12 +318,29 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("error parsing config: %w", err)
 	}
 
+	cfg.Policy.Receipts.SignMode = strings.ToLower(strings.TrimSpace(cfg.Policy.Receipts.SignMode))
+
+	if v.InConfig("policy.receipts.sign") && !v.InConfig("policy.receipts.sign_mode") {
+		aliased := signModeFromLegacyBool(cfg.Policy.Receipts.Sign)
+		signDeprecationOnce.Do(func() {
+			log.Warnf("config: policy.receipts.sign is deprecated, use policy.receipts.sign_mode: %v", aliased)
+		})
+		cfg.Policy.Receipts.SignMode = aliased
+	}
+
 	// Validate config
 	if err := validate(&cfg); err != nil {
 		return nil, err
 	}
 
 	return &cfg, nil
+}
+
+func signModeFromLegacyBool(b bool) string {
+	if b {
+		return SignModeAlways
+	}
+	return SignModeNever
 }
 
 // Default returns a Config with all default values.
@@ -238,6 +378,59 @@ func (c *Config) GetDatabasePath() string {
 
 	paths := ResolvePaths()
 	return paths.DatabaseFile
+}
+
+// EffectivePolicy returns the active policy-layer settings.
+func (c *Config) EffectivePolicy() PolicyConfig {
+	if c == nil {
+		return PolicyConfig{}
+	}
+	return c.Policy
+}
+
+// DefaultReceiptKeyPath returns the on-disk default for the private signing
+// key.
+func DefaultReceiptKeyPath(paths *Paths) string {
+	if paths == nil {
+		paths = ResolvePaths()
+	}
+	return filepath.Join(paths.ConfigDir, "keys", "receipt.key")
+}
+
+// DefaultReceiptTrustStorePath returns the on-disk default for the trust
+// store JSON.
+func DefaultReceiptTrustStorePath(paths *Paths) string {
+	if paths == nil {
+		paths = ResolvePaths()
+	}
+	return filepath.Join(paths.ConfigDir, "keys", "receipt-pub.json")
+}
+
+// DefaultPolicyFilePath returns the on-disk default for the global policy
+// file.
+func DefaultPolicyFilePath(paths *Paths) string {
+	if paths == nil {
+		paths = ResolvePaths()
+	}
+	return filepath.Join(paths.ConfigDir, "policy.yaml")
+}
+
+// ResolveReceiptKeyPath returns the configured signing-key path or the
+// platform default.
+func (c *Config) ResolveReceiptKeyPath(paths *Paths) string {
+	if c != nil && c.Policy.Receipts.KeyPath != "" {
+		return c.Policy.Receipts.KeyPath
+	}
+	return DefaultReceiptKeyPath(paths)
+}
+
+// ResolveReceiptTrustStorePath returns the configured trust store path or the
+// platform default.
+func (c *Config) ResolveReceiptTrustStorePath(paths *Paths) string {
+	if c != nil && c.Policy.Receipts.TrustStore != "" {
+		return c.Policy.Receipts.TrustStore
+	}
+	return DefaultReceiptTrustStorePath(paths)
 }
 
 // ShouldUseColors returns true if colors should be used based on config and terminal.

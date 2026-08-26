@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,6 +33,48 @@ type testEnv struct {
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 	return newTestEnvWithConfig(t, "")
+}
+
+// newTestEnvWithPolicy builds a testEnv with policy enabled and pointed at a
+// temp policy.yaml seeded with policyYAML.
+func newTestEnvWithPolicy(t *testing.T, policyYAML string) *testEnv {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Gryph loads policy from policy.yaml in its config directory. Point the
+	// config directory at a temp location via XDG_CONFIG_HOME and seed the
+	// policy there.
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	configDir := filepath.Join(tmpDir, "gryph")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	policyPath := filepath.Join(configDir, "policy.yaml")
+	require.NoError(t, os.WriteFile(policyPath, []byte(policyYAML), 0o600))
+
+	configYAML := fmt.Sprintf(`logging:
+  level: full
+  content_hash: true
+storage:
+  path: %s
+  retention_days: 90
+display:
+  colors: never
+policy:
+  enabled: true
+  fail_mode: closed
+  log_all_evaluations: true
+`, dbPath)
+
+	require.NoError(t, os.WriteFile(configPath, []byte(configYAML), 0o600))
+
+	return &testEnv{
+		t:          t,
+		tmpDir:     tmpDir,
+		dbPath:     dbPath,
+		configPath: configPath,
+	}
 }
 
 func newTestEnvWithConfig(t *testing.T, configYAML string) *testEnv {
@@ -93,6 +136,66 @@ func (env *testEnv) runHook(agentName, hookType string, payload []byte) (stdout,
 	defer func() { os.Stdin = oldStdin }()
 
 	return env.run("_hook", agentName, hookType)
+}
+
+// runHookCapturingStd is like runHook but additionally captures os.Stdout
+// and os.Stderr so tests can assert on agent response JSON / advisory text.
+func (env *testEnv) runHookCapturingStd(agentName, hookType string, payload []byte) (stdout, stderr string, err error) {
+	env.t.Helper()
+
+	oldStdin := os.Stdin
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+
+	stdinR, stdinW, pipeErr := os.Pipe()
+	require.NoError(env.t, pipeErr)
+	stdoutR, stdoutW, pipeErr := os.Pipe()
+	require.NoError(env.t, pipeErr)
+	stderrR, stderrW, pipeErr := os.Pipe()
+	require.NoError(env.t, pipeErr)
+
+	os.Stdin = stdinR
+	os.Stdout = stdoutW
+	os.Stderr = stderrW
+
+	stdoutCh := make(chan string, 1)
+	stderrCh := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(stdoutR)
+		stdoutCh <- buf.String()
+	}()
+	go func() {
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(stderrR)
+		stderrCh <- buf.String()
+	}()
+
+	go func() {
+		_, _ = stdinW.Write(payload)
+		_ = stdinW.Close()
+	}()
+
+	// Defers run LIFO: restore globals first (top of stack runs last), then
+	// close the writer ends so drain goroutines see EOF even on panic.
+	defer func() {
+		os.Stdin = oldStdin
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+	}()
+	defer func() {
+		_ = stdoutR.Close()
+		_ = stderrR.Close()
+	}()
+	defer func() {
+		_ = stdoutW.Close()
+		_ = stderrW.Close()
+		stdout = <-stdoutCh
+		stderr = <-stderrCh
+	}()
+
+	_, _, err = env.run("_hook", agentName, hookType)
+	return
 }
 
 func (env *testEnv) openStore() (storage.Store, func()) {
@@ -640,4 +743,49 @@ func assertAllEventsFromYesterday(t *testing.T, stdout string, err error) {
 		assert.True(t, (ts.After(yesterdayStart) || ts.Equal(yesterdayStart)) && ts.Before(todayStart),
 			"event timestamp %v is not from yesterday [%v, %v)", ts, yesterdayStart, todayStart)
 	}
+}
+
+// hookExitCode pulls the exit code carried by the error returned from
+// runHook. A nil error means exit 0. Block paths return a cli.ExitCoder
+// with code 2; non-blocking error paths return code 1.
+func hookExitCode(t *testing.T, err error) int {
+	t.Helper()
+	if err == nil {
+		return 0
+	}
+	var ec cli.ExitCoder
+	require.True(t, errors.As(err, &ec), "unexpected non-exit error from hook: %v", err)
+	return ec.ExitCode()
+}
+
+// assertHookBlocked checks that the hook returned exit code 2 and that the
+// expected block reason is present in stderr or in the cli.ExitCoder message.
+func assertHookBlocked(t *testing.T, stdout, stderr string, err error, expectedReason string) {
+	t.Helper()
+	code := hookExitCode(t, err)
+	assert.Equal(t, 2, code, "expected exit code 2 for block (stdout=%q stderr=%q err=%v)", stdout, stderr, err)
+	if expectedReason == "" {
+		return
+	}
+	var ec cli.ExitCoder
+	combined := stderr + stdout
+	if errors.As(err, &ec) {
+		combined += " " + err.Error()
+	}
+	assert.Contains(t, combined, expectedReason,
+		"expected block reason %q in stderr/stdout/error", expectedReason)
+}
+
+// assertHookGuidance checks that the hook returned exit code 0 and that the
+// expected advisory text is present in stderr or stdout (depending on which
+// channel the agent's protocol carries the advisory text on).
+func assertHookGuidance(t *testing.T, stdout, stderr string, err error, expectedAdvice string) {
+	t.Helper()
+	assert.Equal(t, 0, hookExitCode(t, err), "expected exit code 0 for guidance (stdout=%q stderr=%q err=%v)", stdout, stderr, err)
+	if expectedAdvice == "" {
+		return
+	}
+	combined := stderr + stdout
+	assert.Contains(t, combined, expectedAdvice,
+		"expected guidance advice %q in stderr/stdout", expectedAdvice)
 }

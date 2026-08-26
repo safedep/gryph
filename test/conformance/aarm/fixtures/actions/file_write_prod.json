@@ -1,0 +1,12 @@
+{
+  "kind": "event",
+  "action_type": "file_write",
+  "agent_name": "conformance-suite",
+  "payload": {
+    "path": "/work/prod/deploy/release.yaml",
+    "size_bytes": 4096,
+    "lines_added": 250,
+    "lines_removed": 4,
+    "content_preview": "apiVersion: apps/v1\nkind: Deployment\n"
+  }
+}

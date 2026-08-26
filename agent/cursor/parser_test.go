@@ -424,3 +424,29 @@ func TestParseHookEvent_AfterFileEdit_NoDiff_StandardLevel(t *testing.T) {
 
 	assert.Empty(t, event.DiffContent, "DiffContent should be empty at standard logging level")
 }
+
+func TestNewGuidanceResponse(t *testing.T) {
+	resp := NewGuidanceResponse("advisory text")
+	assert.Equal(t, HookAllow, resp.Decision)
+	assert.Equal(t, "advisory text", resp.Reason)
+}
+
+func TestGeneratePermissionResponse_AllowWithMessage(t *testing.T) {
+	resp := NewGuidanceResponse("be careful with .env")
+	data := GeneratePermissionResponse(resp)
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &result))
+	assert.Equal(t, "allow", result["permission"])
+	assert.Equal(t, "be careful with .env", result["user_message"])
+}
+
+func TestGenerateContinueResponse_GuidanceCarriesMessage(t *testing.T) {
+	resp := NewGuidanceResponse("note this")
+	data := GenerateContinueResponse(true, resp.Reason)
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &result))
+	assert.Equal(t, true, result["continue"])
+	assert.Equal(t, "note this", result["user_message"])
+}

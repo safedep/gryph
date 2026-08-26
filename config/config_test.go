@@ -43,6 +43,19 @@ func TestDefault(t *testing.T) {
 	assert.Equal(t, ColorAuto, cfg.Display.Colors)
 	assert.Equal(t, TimezoneLocal, cfg.Display.Timezone)
 
+	// Verify policy defaults
+	assert.False(t, cfg.Policy.Enabled)
+	assert.Equal(t, "closed", cfg.Policy.FailMode)
+	assert.Equal(t, 90, cfg.Policy.ContextRetentionDays)
+	assert.Equal(t, 365, cfg.Policy.ReceiptRetentionDays)
+	assert.False(t, cfg.Policy.LogAllEvaluations)
+	assert.Equal(t, SignModeAuto, cfg.Policy.Receipts.SignMode)
+	assert.Equal(t, ApprovalModeNop, cfg.Policy.Approval.Mode)
+	assert.Equal(t, 60, cfg.Policy.Approval.TimeoutSeconds)
+	assert.False(t, cfg.Policy.Approval.RequireNote)
+	assert.True(t, cfg.Policy.Classify.Enabled)
+	assert.True(t, cfg.Policy.InjectionScore.Enabled)
+
 	// Verify streams defaults
 	require.Len(t, cfg.Streams.Targets, 1)
 	assert.Equal(t, "nop", cfg.Streams.Targets[0].Name)
@@ -74,6 +87,9 @@ agents:
 display:
   colors: always
   timezone: utc
+policy:
+  enabled: true
+  fail_mode: open
 `
 
 	tmpDir := t.TempDir()
@@ -97,6 +113,9 @@ display:
 	assert.True(t, cfg.Agents.Cursor.Enabled)
 	assert.Equal(t, ColorAlways, cfg.Display.Colors)
 	assert.Equal(t, TimezoneUTC, cfg.Display.Timezone)
+	assert.True(t, cfg.Policy.Enabled)
+	assert.Equal(t, "open", cfg.Policy.FailMode)
+	assert.Equal(t, cfg.Policy, cfg.EffectivePolicy())
 }
 
 func TestLoad_InvalidLoggingLevel(t *testing.T) {
@@ -200,6 +219,48 @@ logging:
 	assert.Error(t, err)
 	assert.Nil(t, cfg)
 	assert.Contains(t, err.Error(), "logging.stdout_max_chars must be non-negative")
+}
+
+func TestLoad_InvalidApprovalMode(t *testing.T) {
+	configContent := `
+policy:
+  enabled: true
+  fail_mode: closed
+  approval:
+    mode: bogus
+    timeout_seconds: 30
+`
+
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yaml")
+	err := os.WriteFile(configFile, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	cfg, err := Load(configFile)
+	assert.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.Contains(t, err.Error(), "policy.approval.mode")
+}
+
+func TestLoad_InvalidApprovalTimeout(t *testing.T) {
+	configContent := `
+policy:
+  enabled: true
+  fail_mode: closed
+  approval:
+    mode: cli
+    timeout_seconds: 0
+`
+
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yaml")
+	err := os.WriteFile(configFile, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	cfg, err := Load(configFile)
+	assert.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.Contains(t, err.Error(), "policy.approval.timeout_seconds")
 }
 
 func TestLoad_InvalidAgentLoggingLevel(t *testing.T) {

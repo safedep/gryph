@@ -1,0 +1,11 @@
+# Defer-trigger policy: every network_request defers until the session has
+# executed at least one command, allowing tests to exercise the defer path
+# in isolation from the reference policy's other rules.
+version: "1"
+rules:
+  - id: defer-cold-session
+    action: defer
+    reason: "wait_for_context"
+    match:
+      action_types: [network_request]
+    condition: "context.commands_executed == 0"
