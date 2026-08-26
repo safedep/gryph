@@ -166,10 +166,10 @@ by the `${ConfigDir}/**` self-protection glob. No other location is resolved.
   `gryph-builtin-` ID prefix, and are never removed by a `disabled` list. A user
   rule may not use the reserved prefix.
 
-The monotone precedence (block over allow) plus the same-file `disabled` scope
-make the policies directory additive: a file merged there can add rules but
-cannot lower the built-in floor or remove another file's rules. `gryph policy
-install` relies on this. See
+A block always beats an allow. `disabled` acts only on one file. So the policies
+directory is additive. A file merged there can add rules. It cannot lower the
+built-in floor. It cannot remove another file's rules. `gryph policy install`
+relies on this. See
 [security-policy-threat-model.md](./security-policy-threat-model.md).
 
 Self-protection blocks agent writes to Gryph's own control surfaces (policy,

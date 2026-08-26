@@ -16,7 +16,7 @@ Do not change the AARM layer from memory. The layer spans about 15 packages unde
 3. Add a Mediator dependency through a `MediatorOption` in `aarm/check.go`, then wire it in `loadPolicyMediator` in `cli/policy.go`.
 4. Run `make test` and `make lint` before you finish. Run `make generate-schema` after any change to the policy schema or a payload type.
 
-## Load-bearing invariants
+## Invariants
 
 Three invariants break silently if you miss them. The doc explains all three.
 
