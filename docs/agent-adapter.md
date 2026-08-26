@@ -128,7 +128,7 @@ An adapter can be fully wired but not active. To keep an adapter out of the regi
 
 See `agent/gemini/parser_test.go`.
 
-**E2E tests** (`test/cli/e2e_hook_test.go`): Add a `TestHook_YourAgent` function that exercises the full hook pipeline (stdin → parse → store → query). Each test case sends a fixture through `env.runHook("youragent", hookType, payload)` and verifies the event was stored with the correct action type and payload. Also add a deterministic session ID test that sends two events with the same session identifier and asserts they share the same UUID. See `TestHook_Windsurf` or `TestHook_Gemini` for the pattern.
+**E2E tests** (`test/cli/e2e_hook_test.go`): Add a `TestHook_YourAgent` function that exercises the full hook pipeline (stdin -> parse -> store -> query). Each test case sends a fixture through `env.runHook("youragent", hookType, payload)` and verifies the event was stored with the correct action type and payload. Also add a deterministic session ID test that sends two events with the same session identifier and asserts they share the same UUID. See `TestHook_Windsurf` or `TestHook_Gemini` for the pattern.
 
 ### 8. Verify
 

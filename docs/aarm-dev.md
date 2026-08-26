@@ -75,8 +75,11 @@ and accumulator read it. Key fields:
 - `Type` (`ActionType`): `file_read`, `file_write`, `file_delete`,
   `command_exec`, `network_request`, `tool_use`, session and subagent types.
 - `Parameters`: normalized `Path`, `Command`, `Args`, `URL`, `Content`.
-  `ContentFull` holds untruncated content for `content_patterns` matching only.
-  It is never persisted and is cleared after evaluation.
+  `ContentFull` holds content for `content_patterns` matching only. It is
+  capped at 1 MiB. For content over the cap, the PDP matches the first 1 MiB
+  and sets `ContentTruncated`. A policy that needs full inspection must handle
+  `content_truncated`. `ContentFull` is never persisted and is cleared after
+  evaluation.
 - Identity: `HumanPrincipal`, `ServiceIdentity`, `RoleScope`.
 - Risk signals: `DataClassifications`, `InjectionScore`.
 - `Phase` (`pre` / `post` / `unknown`): pre-execution hooks are enforceable;

@@ -27,7 +27,12 @@ agent's `parseHookEvent` dispatch.
 | Windsurf | `pre_read_code`, `pre_write_code`, `pre_run_command`, `pre_mcp_tool_use`, `pre_user_prompt` | `post_read_code`, `post_write_code`, `post_run_command`, `post_mcp_tool_use`, `post_cascade_response`, `post_setup_worktree` | (none) |
 | Pi Agent | `tool_call` | `tool_result` | `session_start`, `session_shutdown` |
 | Codex | `PreToolUse` | `PostToolUse` | `SessionStart`, `UserPromptSubmit`, `Stop` |
-| OpenClaw | `before_tool_call` | `after_tool_call` | `session_start`, `session_end` |
+| OpenClaw (inactive) | `before_tool_call` | `after_tool_call` | `session_start`, `session_end` |
+
+The OpenClaw adapter is not registered (`cli/root.go`), because it is
+non-functional. Installation cannot select it, and `runHook` returns
+`unknown agent` for it. Gryph enforces no OpenClaw hook until the adapter is
+registered. The row above records the planned mapping only.
 
 ## What this means for enforcement
 
