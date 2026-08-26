@@ -28,16 +28,22 @@ Once enabled, every supported agent hook runs through the engine.
 
 ## Where policy files live
 
-Gryph loads policy from exactly two sources, in this order:
+Gryph loads policy from three sources, in this order:
 
-1. **Global policy file** (`${ConfigDir}/policy.yaml`, optional). The single operator-owned file. On macOS this is `~/Library/Application Support/gryph/policy.yaml`; on Linux `~/.config/gryph/policy.yaml`. A missing file is not an error: with `policy.enabled: true` and no `policy.yaml` on disk, the merged policy contains built-in self-protection rules only.
-2. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, and agent hook configs from agent self-modification.
+1. **Global policy file** (`${ConfigDir}/policy.yaml`, optional). The single operator-owned file. On macOS this is `~/Library/Application Support/gryph/policy.yaml`; on Linux `~/.config/gryph/policy.yaml`. A missing file is not an error.
+2. **Policies directory** (`${ConfigDir}/policies/*.yaml` and `*.yml`, optional). Each file is a separate policy document. Files load in sorted name order and merge after the global file. A missing directory is not an error. This lets you author policy as many small, self-contained files instead of one large file.
+3. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, and agent hook configs from agent self-modification.
 
-Write the global file with `gryph policy init` (non-interactive, honors `--force` to overwrite) or open it in your editor with `gryph policy edit` (scaffolds from the built-in example when the file is missing, then runs validation after save). Per-project policy overlays are a planned future iteration; today, one host-global policy governs every project and agent on the host.
+With `policy.enabled: true` and no user files on disk, the merged policy contains built-in self-protection rules only.
 
-Use `disabled:` in the global file to suppress a built-in rule by ID. Rule IDs must be unique within the file; user rules may not use the `gryph-builtin-` prefix.
+Both the global file and the policies directory sit inside `${ConfigDir}`, so both are protected by the built-in self-protection rules. Gryph resolves no other location. A file at any other path is never loaded as policy.
+
+Write a file with `gryph policy init [name|path]` or open one with `gryph policy edit [name|path]`. See [Commands](#commands). Run `gryph policy list` to see every active source. Per-host managed policy is a planned future iteration; today, one host governs its own policy.
+
+Use `disabled:` to suppress a rule by ID. `disabled:` is scoped to the file that declares it. It removes only rules defined in the same file. A file cannot disable a rule from another file, and no user file can disable a built-in rule. Rule IDs must be unique across all files; user rules may not use the `gryph-builtin-` prefix. Namespace your rule IDs by the file's purpose to avoid collisions.
 
 ```yaml
+# in the same file that defines block-rm-rf-root
 disabled:
   - block-rm-rf-root
 ```
@@ -160,13 +166,26 @@ block > escalate > defer > guidance > warn > allow
 
 | Command | Purpose |
 |---|---|
-| `gryph policy init` | Write the fully documented example policy to `${ConfigDir}/policy.yaml`. Use `--force` to overwrite an existing file. |
-| `gryph policy edit` | Open the global policy in `$EDITOR`. Scaffolds from the built-in example when the file is missing. Runs validation after save. |
+| `gryph policy init [name\|path]` | Write the fully documented example policy to a target. No argument targets `${ConfigDir}/policy.yaml`. A bare name targets `<name>.yaml` in the policies directory. A path targets that literal file, a candidate for review and install. Use `--force` to overwrite. |
+| `gryph policy edit [name\|path]` | Open a policy file in `$EDITOR`. Same target rules as `init`. Scaffolds from the example when the file is missing. A name or the global file validates the merged policy after save. A path validates that file alone. |
+| `gryph policy list` (alias `ls`) | List every active source (global file, each policies file, built-ins) with its rule count. A broken file shows an error marker and does not hide the rest. The last line reports the merged total or a conflict. |
+| `gryph policy install <path> [--name N] [--force] [--dry-run]` | Validate a candidate file, then copy it into the policies directory so it becomes active. The destination name is the source basename, or `<name>.yaml` with `--name`. Refuses to overwrite without `--force`. `--dry-run` validates and shows the destination without copying. |
 | `gryph policy schema` | Print the JSON Schema. Pipe into editor tooling or an AI agent. |
-| `gryph policy validate` | Parse and compile the global policy. Reports rule count and the resolved file path. |
+| `gryph policy validate [--file PATH]` | Parse and compile the merged policy, reporting the rule count and sources. With `--file`, validate one file in isolation, without merging the active policy. Use `--file` to lint a candidate before install. |
 | `gryph policy test ...` | Dry-run a synthetic action through the merged policy. See `--help` for flags. |
 
 `gryph policy test` accepts `--format json` for machine-readable output.
+
+An agent authors a candidate, then a human promotes it:
+
+```
+agent$ gryph policy init ./candidate.yml           # write to an unprotected path
+agent$ $EDITOR ./candidate.yml                      # edit the candidate
+agent$ gryph policy validate --file ./candidate.yml # lint it
+human$ gryph policy install ./candidate.yml         # the human review gate
+```
+
+An agent cannot write into `${ConfigDir}/policies/` with its file tools, because the self-protection rules block it. Only a human-run `install` (or a plain copy) places a file there. See the [threat model](./security-policy-threat-model.md) for the limits of this control.
 
 ### Runtime inspection
 

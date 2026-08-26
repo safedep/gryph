@@ -53,7 +53,7 @@ write the execution outcome to the accumulator row and the receipt row.
 | `aarm/mediation` | `Adapter` interface plus `HookAdapter` and `MCPAdapter`. Normalizes agent events into `model.Action` and enriches with classify / injectscore / identity. |
 | `aarm/pdp` | Policy Decision Point. `Policy` / `Rule` schema, YAML parse, rule compile, `Evaluate`, CEL conditions, message templates, policy hash. |
 | `aarm/pep` | Policy Enforcement boundary. Maps `model.EvaluationResult` to `core/security.CheckResult`. |
-| `aarm/loader` | `Loader` merges policy `Source` values. `FileSource` and `BuiltinSource` (self-protection rules). |
+| `aarm/loader` | `Loader` merges policy `Source` values. `FileSource`, `DirSource` (the policies directory), and `BuiltinSource` (self-protection rules). |
 | `aarm/accumulator` | Context Accumulator interface. Per-session action memory feeding `context.*` CEL variables. `Nop` and SQLite implementations. |
 | `aarm/accumulator/contextchain` | Per-session hash chain over context-action rows. |
 | `aarm/receipt` | Append-only, hash-chained receipt log. Hashing, Ed25519 signing, chain verify, JSONL export, log verify. |
@@ -147,19 +147,42 @@ Conditions run under a 100 ms timeout and a CEL cost limit. `message` is a Go
 
 ## Loader and self-protection
 
+`buildPolicyLoader` in `cli/policy.go` resolves three sources in order: the
+global file `${ConfigDir}/policy.yaml` (`FileSource`), the directory
+`${ConfigDir}/policies/*.yaml` (`DirSource`, one document per file, sorted by
+name), and the built-in source. `policyLoaderSources` is the single definition
+of this order. Both user sources sit inside `${ConfigDir}`, so both are covered
+by the `${ConfigDir}/**` self-protection glob. No other location is resolved.
+
 `Loader.Load` merges sources in order. Rules:
 
 - Duplicate rule IDs across sources are a load error.
-- A user source's `disabled` list removes matching user rule IDs.
+- A document's `disabled` list removes only rules defined in the same document.
+  The scope is uniform for every source. A file cannot disable a rule from
+  another file. A `disabled` entry that names no rule in the same file logs a
+  warning and has no effect. A disabled rule does not reserve its ID, so another
+  file may define it.
 - `BuiltinSource` rules (self-protection) load last, use the reserved
-  `gryph-builtin-` ID prefix, and are never removed by a user `disabled` list.
-  A user rule may not use the reserved prefix.
+  `gryph-builtin-` ID prefix, and are never removed by a `disabled` list. A user
+  rule may not use the reserved prefix.
+
+The monotone precedence (block over allow) plus the same-file `disabled` scope
+make the policies directory additive: a file merged there can add rules but
+cannot lower the built-in floor or remove another file's rules. `gryph policy
+install` relies on this. See
+[security-policy-threat-model.md](./security-policy-threat-model.md).
 
 Self-protection blocks agent writes to Gryph's own control surfaces (policy,
 config, database, signing keys, agent hook configs). The operator toggles it
 only through `policy.self_protection.enabled`. Inspect the rules with
 `gryph policy builtin`. `selfProtectionGlobs` in `cli/policy.go` builds the
 globs.
+
+`gryph policy list` enumerates the sources with rule counts. `gryph policy
+install` promotes a reviewed candidate file into the policies directory. It
+validates the candidate alone, then validates the merged result, excluding the
+file it replaces. `gryph policy validate --file` and `edit <path>` validate one
+off-tree file in isolation.
 
 ## Receipts
 
@@ -215,8 +238,10 @@ counters.
 ## CLI surface
 
 `NewPolicyCmd` in `cli/policy.go` assembles the `gryph policy` tree: `init`,
-`edit`, `schema`, `builtin`, `validate`, `test`, `context`, `receipts`
-(`export`, `verify-log`), `approve`, `keys`, `deferrals`. Use
+`edit`, `list` (alias `ls`), `install`, `schema`, `builtin`, `validate`,
+`test`, `context`, `receipts` (`export`, `verify-log`), `approve`, `keys`,
+`deferrals`. `init` and `edit` take an optional name-or-path argument
+(`cli/policy.go`). `list` and `install` live in `cli/policy_authoring.go`. Use
 `gryph policy test` to dry-run a synthetic action through the merged policy
 without an agent event.
 

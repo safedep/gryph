@@ -415,6 +415,16 @@ func DefaultPolicyFilePath(paths *Paths) string {
 	return filepath.Join(paths.ConfigDir, "policy.yaml")
 }
 
+// DefaultPolicyDirPath returns the on-disk default for the policies directory.
+// Files in this directory merge after the global file and before the built-in
+// rules. The name is a fixed convention, not a settable path.
+func DefaultPolicyDirPath(paths *Paths) string {
+	if paths == nil {
+		paths = ResolvePaths()
+	}
+	return filepath.Join(paths.ConfigDir, "policies")
+}
+
 // ResolveReceiptKeyPath returns the configured signing-key path or the
 // platform default.
 func (c *Config) ResolveReceiptKeyPath(paths *Paths) string {
