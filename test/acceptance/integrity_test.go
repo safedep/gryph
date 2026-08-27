@@ -19,8 +19,19 @@ func TestCatalogIntegrity(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, scriptIDs)
 
+	covered := make(map[string]bool, len(scriptIDs))
 	for _, id := range scriptIDs {
+		covered[id] = true
 		assert.Truef(t, cat.Has(id),
 			"script %q.txtar has no catalog.yaml entry. Add one so it cannot become a phantom guarantee", id)
+	}
+
+	// A catalog row with no script is a gap. Report it so a renamed or
+	// deleted script cannot silently keep its coverage claim, but never fail
+	// the build for it.
+	for _, id := range cat.IDs() {
+		if !covered[id] {
+			t.Logf("gap: catalog entry %q has no script under scripts/", id)
+		}
 	}
 }
