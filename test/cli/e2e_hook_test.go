@@ -928,7 +928,7 @@ func TestHook_Devin(t *testing.T) {
 			name:       "Stop",
 			hookType:   "Stop",
 			fixture:    "stop.json",
-			actionType: events.ActionSessionEnd,
+			actionType: events.ActionNotification,
 		},
 		{
 			name:       "SessionEnd",

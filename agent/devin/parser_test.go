@@ -130,11 +130,12 @@ func TestParseHookEvent_Stop(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
-	assert.Equal(t, events.ActionSessionEnd, event.ActionType)
+	assert.Equal(t, events.ActionNotification, event.ActionType)
 
-	payload := events.SessionEndPayload{}
+	payload := events.NotificationPayload{}
 	require.NoError(t, json.Unmarshal(event.Payload, &payload))
-	assert.Equal(t, "All tests are now passing.", payload.Reason)
+	assert.Equal(t, "All tests are now passing.", payload.Message)
+	assert.Equal(t, "stop", payload.Type)
 }
 
 func TestParseHookEvent_SessionEnd(t *testing.T) {
@@ -171,6 +172,36 @@ func TestParseHookEvent_DeterministicSessionID(t *testing.T) {
 
 	expected := uuid.NewSHA1(uuid.NameSpaceOID, []byte("devin-session-abc"))
 	assert.Equal(t, expected, event1.SessionID)
+}
+
+func TestParseHookEvent_EnvSessionIDOverride(t *testing.T) {
+	t.Setenv("DEVIN_SESSION_ID", "env-session-xyz")
+
+	ctx := context.Background()
+	data := loadFixture(t, "pre_tool_use_bash.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
+	require.NoError(t, err)
+
+	assert.Equal(t, "env-session-xyz", event.AgentSessionID)
+	expected := uuid.NewSHA1(uuid.NameSpaceOID, []byte("env-session-xyz"))
+	assert.Equal(t, expected, event.SessionID)
+}
+
+func TestParseHookEvent_ProjectDirFallback(t *testing.T) {
+	t.Setenv("DEVIN_PROJECT_DIR", "/home/user/fallback-project")
+
+	ctx := context.Background()
+	data := []byte(`{"session_id": "devin-session-abc", "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "ls"}}`)
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
+	require.NoError(t, err)
+	assert.Equal(t, "/home/user/fallback-project", event.WorkingDirectory)
+
+	withCwd := loadFixture(t, "pre_tool_use_bash.json")
+	event, err = testAdapter(t).ParseEvent(ctx, "PreToolUse", withCwd)
+	require.NoError(t, err)
+	assert.Equal(t, "/home/user/project", event.WorkingDirectory)
 }
 
 func TestParseHookEvent_InvalidJSON(t *testing.T) {

@@ -23,7 +23,7 @@ func TestRenderResponse(t *testing.T) {
 		{"allow other hook", "PostToolUse", agent.DecisionAllow, "", nil, "", 0},
 		{"block blocking hook", "PreToolUse", agent.DecisionBlock, "reason", NewBlockResponse("reason").JSON(), "reason", 2},
 		{"block other hook", "PostToolUse", agent.DecisionBlock, "reason", nil, "reason", 2},
-		{"guidance blocking hook", "PreToolUse", agent.DecisionGuidance, "advisory", NewGuidanceResponse("advisory").JSON(), "", 0},
+		{"guidance blocking hook", "PreToolUse", agent.DecisionGuidance, "advisory", NewGuidanceResponse("advisory").JSON(), "advisory", 0},
 		{"guidance other hook", "PostToolUse", agent.DecisionGuidance, "advisory", nil, "advisory", 0},
 	}
 

@@ -75,7 +75,9 @@ func (a *Adapter) RenderResponse(hookType string, decision agent.HookDecision, d
 	case agent.DecisionGuidance:
 		r := NewGuidanceResponse(detail)
 		if jsonHook {
-			return agent.RenderedResponse{Out: r.JSON()}
+			// Devin documents no advisory field on the PreToolUse JSON
+			// channel, so the text also goes to stderr at exit 0.
+			return agent.RenderedResponse{Out: r.JSON(), Err: r.Stderr()}
 		}
 		return agent.RenderedResponse{Err: r.Stderr()}
 	default:

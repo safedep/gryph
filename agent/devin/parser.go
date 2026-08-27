@@ -89,8 +89,8 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 		eventName = baseInput.HookEventName
 	}
 
-	sessionID := resolveSessionID(baseInput.SessionID)
-	agentSessionID := baseInput.SessionID
+	agentSessionID := effectiveAgentSessionID(baseInput.SessionID)
+	sessionID := resolveSessionID(agentSessionID)
 
 	var event *events.Event
 	var err error
@@ -121,15 +121,27 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	}
 	if event != nil {
 		event.HookType = eventName
+		// The documented stdin payload has no cwd field. Devin sets
+		// DEVIN_PROJECT_DIR for hook processes, so use it when cwd is
+		// absent.
+		if event.WorkingDirectory == "" {
+			event.WorkingDirectory = os.Getenv("DEVIN_PROJECT_DIR")
+		}
 	}
 	return event, nil
 }
 
-func resolveSessionID(rawSessionID string) uuid.UUID {
+// effectiveAgentSessionID returns the one session identifier both the
+// internal UUID and the stored AgentSessionID derive from, so events stay
+// correlatable with Devin's own session storage.
+func effectiveAgentSessionID(rawSessionID string) string {
 	if envID := os.Getenv("DEVIN_SESSION_ID"); envID != "" {
-		rawSessionID = envID
+		return envID
 	}
+	return rawSessionID
+}
 
+func resolveSessionID(rawSessionID string) uuid.UUID {
 	if rawSessionID != "" {
 		if parsed, err := uuid.Parse(rawSessionID); err == nil {
 			return parsed
@@ -253,20 +265,24 @@ func parseUserPromptSubmit(sessionID uuid.UUID, agentSessionID string, rawData [
 	return event, nil
 }
 
+// parseStop records the end of one assistant response. Devin fires Stop per
+// response and fires SessionEnd once when the session ends, so only
+// SessionEnd maps to the session-end action.
 func parseStop(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {
 	var input StopInput
 	if err := json.Unmarshal(rawData, &input); err != nil {
 		return nil, fmt.Errorf("failed to parse Stop input: %w", err)
 	}
 
-	event := events.NewEvent(sessionID, AgentName, events.ActionSessionEnd)
+	event := events.NewEvent(sessionID, AgentName, events.ActionNotification)
 	event.AgentSessionID = agentSessionID
 	event.WorkingDirectory = input.Cwd
 	event.TranscriptPath = input.TranscriptPath
 	event.RawEvent = rawData
 
-	payload := events.SessionEndPayload{
-		Reason: input.LastAssistantMessage,
+	payload := events.NotificationPayload{
+		Message: input.LastAssistantMessage,
+		Type:    "stop",
 	}
 
 	if err := event.SetPayload(payload); err != nil {

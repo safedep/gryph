@@ -34,10 +34,13 @@ type HookCommand struct {
 	Timeout int    `json:"timeout,omitempty"`
 }
 
+// hookMatcher returns the tool matcher for a hook type. Devin documents the
+// matcher as a regex on tool_name, so the match-all form is ".*" and not the
+// Claude Code "*" wildcard.
 func hookMatcher(hookType string) string {
 	switch hookType {
 	case "PreToolUse", "PostToolUse":
-		return "*"
+		return ".*"
 	default:
 		return ""
 	}
@@ -119,17 +122,28 @@ func generateGryphHooks() map[string][]HookMatcher {
 	return hooks
 }
 
-func hasGryphHooks(hooks map[string][]HookMatcher) bool {
+// hasAllGryphHooks reports whether every expected hook type carries the
+// gryph command. A partial set means a repair install must still merge, so
+// any-present is not enough.
+func hasAllGryphHooks(hooks map[string][]HookMatcher) bool {
 	for _, hookType := range HookTypes {
+		found := false
 		for _, m := range hooks[hookType] {
 			for _, h := range m.Hooks {
-				if utils.IsGryphCommand(h.Command) {
-					return true
+				if h.Command == gryphHookCommand(hookType) {
+					found = true
+					break
 				}
 			}
+			if found {
+				break
+			}
+		}
+		if !found {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func mergeGryphHooks(existing map[string][]HookMatcher) map[string][]HookMatcher {
@@ -185,8 +199,10 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	if os.IsNotExist(err) {
 		raw = make(map[string]json.RawMessage)
 	} else if err != nil {
-		result.Warnings = append(result.Warnings, fmt.Sprintf("config.json is malformed, hooks section will be replaced: %v", err))
-		raw = make(map[string]json.RawMessage)
+		// config.json holds unrelated Devin settings, so a rewrite from an
+		// unparsed state would erase them. Refuse instead.
+		result.Error = fmt.Errorf("refusing to modify unreadable config.json: %w", err)
+		return result, result.Error
 	}
 
 	existingHooks, err := readHooksFromConfig(raw)
@@ -196,7 +212,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	if existingHooks != nil {
-		if !opts.Force && !opts.DryRun && hasGryphHooks(existingHooks) {
+		if !opts.Force && !opts.DryRun && hasAllGryphHooks(existingHooks) {
 			result.Warnings = append(result.Warnings, "gryph hooks already installed (use --force to overwrite)")
 			result.Success = true
 			return result, nil

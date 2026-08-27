@@ -111,6 +111,8 @@ Pre-built binaries for macOS, Linux, and Windows are available on the [GitHub Re
 > codex_hooks = true
 > ```
 
+> **Note:** Devin CLI also loads Claude Code hooks from `~/.claude/settings.json` by default (`read_config_from.claude`). When gryph hooks are installed for both agents, one Devin session emits devin events and claude-code events. Disable `read_config_from.claude` in the Devin user config to keep one stream.
+
 One command installs hooks for all detected agents. No per-agent setup required.
 
 ## See It in Action
