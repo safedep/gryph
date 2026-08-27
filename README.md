@@ -98,6 +98,7 @@ Pre-built binaries for macOS, Linux, and Windows are available on the [GitHub Re
 | **Claude Code** | Full (PreToolUse, PostToolUse, Notification) |
 | **Codex** | Full (PreToolUse, PostToolUse, SessionStart, UserPromptSubmit, Stop) |
 | **Cursor** | Full (file read/write, shell execution, MCP tools) |
+| **Devin CLI** | Full (PreToolUse, PostToolUse, SessionStart, UserPromptSubmit, Stop, SessionEnd) |
 | **Gemini CLI** | Full (BeforeTool, AfterTool, Notification) |
 | **OpenCode** | Full (tool.execute, session events) |
 | **Pi Agent** | Full (tool_call, tool_result, session events) |
@@ -284,6 +285,7 @@ For transparency, these are the files Gryph modifies during `gryph install`:
 | Claude Code | `~/.claude/settings.json` | Adds hook entries to the `hooks` section |
 | Codex | `~/.codex/hooks.json` | Creates or updates hooks configuration |
 | Cursor | `~/.cursor/hooks.json` | Creates or updates hooks configuration |
+| Devin CLI | `~/.config/devin/config.json` | Adds hook entries to the `hooks` section |
 | Gemini CLI | `~/.gemini/settings.json` | Adds hook entries to the `hooks` section |
 | OpenCode | `~/.config/opencode/plugins/gryph.mjs` | Installs JS plugin that bridges to gryph |
 | Windsurf | `~/.codeium/windsurf/hooks.json` | Creates or updates hooks configuration |

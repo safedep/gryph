@@ -1,6 +1,6 @@
 # Adding a New Agent Adapter
 
-This guide shows how to add support for a new AI coding agent to Gryph. The adapter pattern is in `agent/`. Use an existing adapter for reference. The current adapters are `claudecode/`, `codex/`, `cursor/`, `gemini/`, `openclaw/`, `opencode/`, `piagent/`, and `windsurf/`. The `gemini/` package is the recommended reference for the `settings.json` pattern.
+This guide shows how to add support for a new AI coding agent to Gryph. The adapter pattern is in `agent/`. Use an existing adapter for reference. The current adapters are `claudecode/`, `codex/`, `cursor/`, `devin/`, `gemini/`, `openclaw/`, `opencode/`, `piagent/`, and `windsurf/`. The `gemini/` package is the recommended reference for the `settings.json` pattern.
 
 ## Overview
 

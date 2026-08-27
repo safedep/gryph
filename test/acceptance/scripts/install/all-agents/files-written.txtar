@@ -10,6 +10,7 @@ mkdir $HOME/.claude
 mkdir $HOME/.cursor
 mkdir $HOME/.gemini
 mkdir $HOME/.codex
+mkdir $HOME/.config/devin
 mkdir $HOME/.config/opencode
 mkdir $HOME/.codeium/windsurf
 mkdir $HOME/.pi/agent
@@ -21,6 +22,7 @@ exec gryph install
 grep 'gryph _hook claude-code' $HOME/.claude/settings.json
 grep 'gryph _hook gemini' $HOME/.gemini/settings.json
 grep 'gryph _hook codex' $HOME/.codex/hooks.json
+grep 'gryph _hook devin' $HOME/.config/devin/config.json
 grep 'gryph _hook windsurf' $HOME/.codeium/windsurf/hooks.json
 grep '"_hook", "opencode"' $HOME/.config/opencode/plugins/gryph.js
 grep '"_hook", "pi-agent"' $HOME/.pi/agent/extensions/gryph-hooks.ts
@@ -30,6 +32,7 @@ exec gryph uninstall
 
 ! grep 'gryph _hook' $HOME/.claude/settings.json
 ! grep 'gryph _hook' $HOME/.gemini/settings.json
+! grep 'gryph _hook' $HOME/.config/devin/config.json
 ! exists $HOME/.config/opencode/plugins/gryph.js
 ! exists $HOME/.pi/agent/extensions/gryph-hooks.ts
 

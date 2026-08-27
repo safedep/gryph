@@ -57,8 +57,13 @@ exec gryph _hook codex PostToolUse
 exec gryph query --agent codex --format json --no-color
 stdout '"ActionType": "command_exec"'
 
+stdin devin_bash.json
+exec gryph _hook devin PostToolUse
+exec gryph query --agent devin --format json --no-color
+stdout '"ActionType": "command_exec"'
+
 exec gryph sessions --format json --no-color
-stdout -count=7 '"ID"'
+stdout -count=8 '"ID"'
 
 -- claude_read.json --
 {
@@ -215,6 +220,21 @@ stdout -count=7 '"ID"'
   "cwd": "/home/user/project",
   "hook_event_name": "PostToolUse",
   "model": "o4-mini",
+  "turn_id": "turn-001",
+  "tool_name": "Bash",
+  "tool_use_id": "tool-001",
+  "tool_input": {
+    "command": "npm install"
+  },
+  "tool_response": "added 150 packages in 12s"
+}
+-- devin_bash.json --
+{
+  "session_id": "devin-session-abc",
+  "transcript_path": "/home/user/.config/devin/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PostToolUse",
+  "model": "claude-sonnet-4-6",
   "turn_id": "turn-001",
   "tool_name": "Bash",
   "tool_use_id": "tool-001",

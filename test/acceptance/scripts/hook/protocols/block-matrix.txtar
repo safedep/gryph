@@ -26,8 +26,12 @@ stdin codex.json
 execexit 2 gryph _hook codex PreToolUse
 stdout '"permissionDecision":"deny"'
 
+stdin devin.json
+execexit 2 gryph _hook devin PreToolUse
+stdout '"permissionDecision":"deny"'
+
 exec gryph query --status blocked --format json --no-color
-stdout -count=5 '"ResultStatus": "blocked"'
+stdout -count=6 '"ResultStatus": "blocked"'
 
 -- home/.config/safedep/gryph/config.yml --
 policy:
@@ -98,6 +102,20 @@ rules:
   "cwd": "/home/user/project",
   "hook_event_name": "PreToolUse",
   "model": "o4-mini",
+  "turn_id": "turn-001",
+  "tool_name": "Bash",
+  "tool_use_id": "tool-001",
+  "tool_input": {
+    "command": "npm install"
+  }
+}
+-- devin.json --
+{
+  "session_id": "devin-session-abc",
+  "transcript_path": "/home/user/.config/devin/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "model": "claude-sonnet-4-6",
   "turn_id": "turn-001",
   "tool_name": "Bash",
   "tool_use_id": "tool-001",

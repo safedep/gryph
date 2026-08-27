@@ -17,6 +17,7 @@ var (
 	colorPink   = lipgloss.Color("#E91E63")
 	colorWhite  = lipgloss.Color("#ECF0F1")
 	colorYellow = lipgloss.Color("#F1C40F")
+	colorCyan   = lipgloss.Color("#00B4D8")
 	colorDim    = lipgloss.Color("#7F8C8D")
 	colorBg     = lipgloss.Color("#1E1E2E")
 
@@ -120,6 +121,7 @@ func statusStyleFor(status events.ResultStatus) lipgloss.Style {
 var agentBadgeColors = map[string]lipgloss.Color{
 	"claude-code": colorOrange,
 	"codex":       colorYellow,
+	"devin":       colorCyan,
 	"cursor":      colorViolet,
 	"gemini":      colorBlue,
 	"opencode":    colorTeal,
