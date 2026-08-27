@@ -1,0 +1,46 @@
+# An escalate decision with no approval frontend must deny, never allow.
+# The default approval mode is nop. The denial is recorded in the approval
+# history and in the self-audit trail.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin bash_npm.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'Denied by nop: no approval frontend configured'
+
+exec gryph policy approve history --no-color
+stdout 'denied'
+stdout 'no approval frontend configured'
+
+exec gryph self-log --format json --no-color
+stdout '"Action": "approval_requested"'
+stdout '"Action": "approval_denied"'
+
+-- home/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-escalate-npm
+    action: escalate
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+    message: "escalate-acceptance: npm install needs approval"
+-- bash_npm.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  },
+  "tool_use_id": "tool-use-001"
+}

@@ -1,0 +1,68 @@
+# The context action chain stays verifiable over a real session. This is the
+# class of check that caught the receipt hash regression: an insert-time
+# versus recompute mismatch shows up here without any tampering. Tamper
+# detection itself is covered by unit tests in cli/policy_context_test.go.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin read1.json
+exec gryph _hook claude-code PreToolUse
+stdin write1.json
+exec gryph _hook claude-code PostToolUse
+stdin bash_npm.json
+execexit 2 gryph _hook claude-code PreToolUse
+
+exec gryph policy context --verify --all-sessions --no-color
+stdout 'Context chain verification: OK'
+stdout 'ok=3 broken=0 unchained=0'
+
+-- home/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+  log_all_evaluations: true
+-- home/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-block-npm-install
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+    message: "blocked-by-acceptance"
+-- read1.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/home/user/project/README.md"
+  },
+  "tool_use_id": "tu-r1"
+}
+-- write1.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": { "file_path": "/home/user/project/f1.txt", "content": "x" },
+  "tool_response": { "success": true },
+  "tool_use_id": "tu-w1"
+}
+-- bash_npm.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  },
+  "tool_use_id": "tu-b1"
+}
