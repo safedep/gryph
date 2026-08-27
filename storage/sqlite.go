@@ -31,18 +31,14 @@ type SQLiteStore struct {
 	db     *sql.DB
 	path   string
 
-	// receiptWriteMu serializes the receipt insert path. SQLite's WAL mode
-	// allows concurrent readers but a SELECT-then-INSERT transaction can fail
-	// with SQLITE_BUSY when two goroutines both acquire a read snapshot
-	// before one of them upgrades to a writer. An in-process mutex is
-	// cheaper and clearer than _txlock=immediate at the driver level since
-	// only the receipt path needs this guarantee.
+	// receiptWriteMu serializes the receipt insert path inside one process.
+	// Cross-process contention on the SELECT-then-INSERT chain transactions
+	// is handled by _txlock=immediate in the DSN. The mutex keeps
+	// goroutines in one process from queueing on the database lock.
 	receiptWriteMu sync.Mutex
 
 	// contextWriteMu serializes the context-action insert path. Same
-	// rationale as receiptWriteMu: the chain insert is a SELECT-last-row
-	// then INSERT transaction and an in-process mutex avoids SQLITE_BUSY
-	// from concurrent writers that both acquired a read snapshot.
+	// rationale as receiptWriteMu.
 	contextWriteMu sync.Mutex
 }
 
@@ -55,7 +51,15 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 
 	// Open database with modernc.org/sqlite driver
 	// Use _pragma=foreign_keys(1) for modernc.org/sqlite
-	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&_pragma=journal_mode(wal)&_pragma=busy_timeout(5000)", path))
+	//
+	// _txlock=immediate makes every transaction take the write lock at
+	// BEGIN. The chain inserts are SELECT-then-INSERT transactions, and a
+	// deferred transaction that upgrades read to write fails immediately
+	// with SQLITE_BUSY_SNAPSHOT when another process wrote in between.
+	// busy_timeout never applies to that failure. With immediate
+	// transactions, cross-process contention becomes a busy_timeout wait.
+	// Concurrent hook processes with policy enabled hit this daily.
+	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?_txlock=immediate&_pragma=foreign_keys(1)&_pragma=journal_mode(wal)&_pragma=busy_timeout(5000)", path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
