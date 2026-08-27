@@ -22,7 +22,7 @@ Three invariants break silently if you miss them. The doc explains all three.
 
 1. The receipt and context hashes are consensus formats. A change to field order or canonicalization breaks every existing chain. Update the verifier and the property tests in the same change.
 2. The `aarm` package stays decoupled from `storage` and `cli`. Carry CLI-shaped side effects through the hooks (`DeferralHook`, `ApprovalAuditHook`, `IdentityAuditHook`). Do not add a `storage` or `cli` import to `aarm`.
-3. Policy resolution is additive and same-user safe. `disabled:` is scoped to the file that declares the rule, block always beats allow, and no user file can disable a built-in. Keep these when you touch `Loader.Load` or the merge, so an installed policy file can never weaken the built-in floor or another file's rules. See `docs/security-policy-threat-model.md`.
+3. Policy resolution is additive and same-user safe. `disabled:` is scoped to the file that declares the rule, block always beats allow, and no user file can disable a built-in. Keep these when you touch `Loader.Load` or the merge, so an installed policy file can never remove the built-in rules or another file's rules. See `docs/security-policy-threat-model.md`.
 
 ## Keep the doc correct
 

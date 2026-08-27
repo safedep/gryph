@@ -167,8 +167,8 @@ by the `${ConfigDir}/**` self-protection glob. No other location is resolved.
   rule may not use the reserved prefix.
 
 A block always beats an allow. `disabled` acts only on one file. So the policies
-directory is additive. A file merged there can add rules. It cannot lower the
-built-in floor. It cannot remove another file's rules. `gryph policy install`
+directory is additive. A file merged there can add rules. It cannot remove the
+built-in rules or another file's rules. `gryph policy install`
 relies on this. See
 [security-policy-threat-model.md](./security-policy-threat-model.md).
 

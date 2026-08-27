@@ -105,10 +105,10 @@ does not touch the database and does not run an agent, so run it as often as you
 
 `test --file` shows your rules and the built-ins. It does not include other installed
 files, because your draft is not yet merged with them. So the decision reflects your file
-against the built-in floor. The full test, with every active file, happens after the human
+against the built-in rules. The full test, with every active file, happens after the human
 installs the draft and runs plain `gryph policy test` and `gryph policy receipts`.
 It is safe for the human to install a draft and try it. A new file can only add rules. It
-cannot weaken the built-in floor or remove another file's rules. To roll back, the human
+cannot remove the built-in rules or another file's rules. To roll back, the human
 removes the file from `policies/`.
 
 Set context counters with flags like `--context-files-written 25` to exercise rules that
