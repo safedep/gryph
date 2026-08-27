@@ -63,6 +63,22 @@ func (a *Adapter) ParseEvent(ctx context.Context, hookType string, rawData []byt
 	return a.parseHookEvent(hookType, rawData)
 }
 
+// RenderResponse maps a decision to the Claude Code wire response. Claude
+// Code has no JSON channel. Block is exit 2 with the reason on stderr,
+// shown to Claude. Guidance is exit 0 with advisory text on stderr.
+func (a *Adapter) RenderResponse(hookType string, decision agent.HookDecision, detail string) agent.HookResponse {
+	var r *HookResponse
+	switch decision {
+	case agent.DecisionBlock:
+		r = NewBlockResponse(detail)
+	case agent.DecisionGuidance:
+		r = NewGuidanceResponse(detail)
+	default:
+		r = NewAllowResponse()
+	}
+	return agent.RenderedResponse{Err: r.Stderr(), Code: r.ExitCode()}
+}
+
 // Register adds this adapter to the given registry.
 func Register(registry *agent.Registry, privacyChecker *events.PrivacyChecker, loggingLevel config.LoggingLevel, contentHash bool) {
 	registry.Register(New(privacyChecker, loggingLevel, contentHash))

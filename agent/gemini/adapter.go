@@ -56,3 +56,34 @@ func Register(registry *agent.Registry, privacyChecker *events.PrivacyChecker, l
 }
 
 var _ agent.Adapter = (*Adapter)(nil)
+
+// blockingHookType is the one Gemini CLI hook with a JSON decision channel.
+const blockingHookType = "BeforeTool"
+
+// RenderResponse maps a decision to the Gemini CLI wire response. BeforeTool
+// carries a JSON decision on stdout. Other hooks receive an empty JSON
+// object on allow and advisory text on stderr for guidance. Block is exit 2
+// with the reason on stderr.
+func (a *Adapter) RenderResponse(hookType string, decision agent.HookDecision, detail string) agent.HookResponse {
+	jsonHook := hookType == blockingHookType
+	switch decision {
+	case agent.DecisionBlock:
+		r := NewBlockResponse(detail)
+		resp := agent.RenderedResponse{Err: r.Stderr(), Code: r.ExitCode()}
+		if jsonHook {
+			resp.Out = r.JSON()
+		}
+		return resp
+	case agent.DecisionGuidance:
+		r := NewGuidanceResponse(detail)
+		if jsonHook {
+			return agent.RenderedResponse{Out: r.JSON()}
+		}
+		return agent.RenderedResponse{Err: r.Stderr()}
+	default:
+		if jsonHook {
+			return agent.RenderedResponse{Out: NewAllowResponse().JSON()}
+		}
+		return agent.RenderedResponse{Out: []byte("{}")}
+	}
+}
