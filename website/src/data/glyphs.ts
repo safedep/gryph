@@ -1,0 +1,11 @@
+// Unicode glyphs kept as escape sequences so source files stay ASCII-only.
+export const CHECK = '\u2713'
+export const CROSS = '\u2717'
+export const STAR = '\u2605'
+export const ARROW_NEXT = '\u25b8'
+export const ARROW_BACK = '\u25c2'
+export const ARROW_EXTERNAL = '\u2197'
+export const MIDDOT = '\u00b7'
+export const EMDASH = '\u2014'
+export const ELLIPSIS = '\u2026'
+export const NBSP = '\u00a0'
