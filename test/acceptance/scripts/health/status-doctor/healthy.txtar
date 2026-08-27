@@ -1,0 +1,21 @@
+# After install, status shows the agent as installed and doctor passes its
+# checks. Both commands may call the GitHub API for the update check. The
+# check fails soft, so no network never fails this script.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+
+exec gryph status --no-color
+stdout 'claude-code\s+installed'
+stdout 'hooks: 8 active'
+stdout 'Database'
+stdout 'audit.db'
+
+exec gryph doctor --no-color
+stdout '\[ok\]\s+Database file'
+stdout '\[ok\]\s+Claude Code hooks'
+stdout 'All hooks installed and valid'
+stdout 'Schema is up to date'

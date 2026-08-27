@@ -1,0 +1,60 @@
+# A block rule stops a matching command through each agent's protocol.
+# Claude Code blocks with exit 2 and the reason on stderr. Cursor blocks with
+# exit 0 and a deny JSON on stdout. Both events persist as blocked.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin claude_bash_npm.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'blocked-by-acceptance'
+
+stdin cursor_shell_npm.json
+exec gryph _hook cursor beforeShellExecution
+stdout '"permission":"deny"'
+stdout 'blocked-by-acceptance'
+
+exec gryph query --status blocked --format json --no-color
+stdout -count=2 '"ResultStatus": "blocked"'
+
+-- home/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+  log_all_evaluations: true
+-- home/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-block-npm-install
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+    message: "blocked-by-acceptance: npm install is not allowed"
+-- claude_bash_npm.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  },
+  "tool_use_id": "tool-use-001"
+}
+-- cursor_shell_npm.json --
+{
+  "conversation_id": "conv-test-123",
+  "generation_id": "gen-005",
+  "model": "claude-3-opus",
+  "hook_event_name": "beforeShellExecution",
+  "cursor_version": "0.44.0",
+  "workspace_roots": ["/home/user/project"],
+  "user_email": "user@example.com",
+  "command": "npm install",
+  "cwd": "/home/user/project",
+  "timeout": 30000
+}

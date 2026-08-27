@@ -1,0 +1,47 @@
+# A write to a sensitive path is flagged. Its content never reaches storage,
+# even at logging level full. Export excludes the event unless --sensitive is
+# set, and even then never carries the content.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+expandenv write_env.json
+
+stdin write_env.json
+exec gryph _hook claude-code PostToolUse
+
+exec gryph query --sensitive --format json --no-color
+stdout '"IsSensitive": true'
+stdout '\.env'
+! stdout 'SUPERSECRET123VALUE'
+! stdout 'hunter2'
+
+# The only event is sensitive, so a default export is empty.
+exec gryph export --since 1h
+stderr 'No events to export.'
+
+# --sensitive includes the event but never its content.
+exec gryph export --since 1h --sensitive
+stdout '"is_sensitive":true'
+! stdout 'SUPERSECRET123VALUE'
+! stdout 'hunter2'
+stderr 'Exported 1 events'
+
+-- home/.config/gryph/config.yaml --
+logging:
+  level: full
+-- write_env.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "${WORK}/home/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "${WORK}/home/project/.env",
+    "content": "api_key=SUPERSECRET123VALUE\npassword=hunter2"
+  },
+  "tool_response": {
+    "success": true
+  },
+  "tool_use_id": "tool-use-sens"
+}

@@ -50,6 +50,21 @@ jobs:
       - name: Verify JSON Schema is up-to-date
         run: make verify-schema
 
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run Acceptance Suite
+        run: go test -tags acceptance -v ./test/acceptance/
+
   goreleaser-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15

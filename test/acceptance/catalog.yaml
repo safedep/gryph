@@ -1,0 +1,77 @@
+# Guarantee inventory for the gryph acceptance suite. One entry per guarantee.
+# Coverage is derived: a script whose path id matches means covered. Never
+# author a coverage field.
+#
+# The category is the first path segment of the script id.
+# The tier is P0 (incident) | P1 (important) | P2 (tracked).
+# Labels are free-form tags. A run can filter by category and by labels.
+
+- id: install/claude-code/hooks-written
+  title: "gryph install writes Claude Code hooks and keeps foreign entries"
+  category: install
+  tier: P0
+  guarantee: "gryph install --agent claude-code adds gryph hook entries to ~/.claude/settings.json and keeps pre-existing hooks and settings."
+  labels: [install, claude-code]
+
+- id: install/uninstall/round-trip
+  title: "gryph uninstall removes only gryph hooks and restores backups"
+  category: install
+  tier: P0
+  guarantee: "gryph uninstall removes gryph hook entries, keeps foreign hooks, writes a backup on install, and --restore-backup brings the original file back."
+  labels: [install, uninstall, backup, claude-code]
+
+- id: hook/ingest/event-persisted
+  title: "a hook payload becomes a queryable event in one session"
+  category: hook
+  tier: P0
+  guarantee: "gryph _hook parses a real agent payload from stdin, exits zero, persists the event, and maps repeated payloads of one agent session to one gryph session."
+  labels: [hook, ingest, claude-code]
+
+- id: policy/block/dangerous-command
+  title: "a policy block rule stops the action with the agent's protocol"
+  category: policy
+  tier: P0
+  guarantee: "A matching block rule makes the Claude Code hook exit 2 with the reason, makes the Cursor hook exit 0 with a deny JSON on stdout, and persists the event as blocked."
+  labels: [policy, block, claude-code, cursor]
+
+- id: policy/self-protection/config-write-blocked
+  title: "builtin self-protection blocks writes to gryph and hook config"
+  category: policy
+  tier: P0
+  guarantee: "With policy enabled, an agent write to the gryph config directory or an agent hook config file is blocked by the builtin rules."
+  labels: [policy, self-protection]
+
+- id: privacy/sensitive/content-never-stored
+  title: "sensitive file content never reaches storage or export"
+  category: privacy
+  tier: P0
+  guarantee: "A write to a sensitive path is flagged, its content is not stored at any logging level, and export excludes the event unless --sensitive is set."
+  labels: [privacy, sensitive, redaction, export]
+
+- id: receipts/verify-log/tamper-fails
+  title: "receipt log verification detects tampering"
+  category: receipts
+  tier: P1
+  guarantee: "gryph policy receipts verify-log exits zero on an untampered export and exits non-zero after one field changes."
+  labels: [policy, receipts, aarm]
+
+- id: export/schema/jsonl-stable
+  title: "export emits schema-tagged JSONL with a clean stdout"
+  category: export
+  tier: P1
+  guarantee: "gryph export writes one JSON object per line with a $schema field and prints the summary to stderr only."
+  labels: [export, jsonl, automation]
+
+- id: errors/exit-codes/contract
+  title: "documented exit codes hold on the real binary"
+  category: errors
+  tier: P1
+  guarantee: "An unknown agent exits 4 and an invalid configuration exits 2, with the error on stderr."
+  labels: [errors, exit-codes]
+
+- id: health/status-doctor/healthy
+  title: "status and doctor report a healthy installation"
+  category: health
+  tier: P1
+  guarantee: "After install, gryph status shows the agent as installed and gryph doctor exits zero with passing checks."
+  labels: [status, doctor]

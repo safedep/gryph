@@ -1,0 +1,31 @@
+# gryph uninstall removes only gryph entries. A backup from install restores
+# the original file.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph install --agent claude-code
+grep 'gryph _hook' $HOME/.claude/settings.json
+exists $XDG_DATA_HOME/gryph/backups/claude-code
+
+exec gryph uninstall --agent claude-code
+! grep 'gryph _hook' $HOME/.claude/settings.json
+grep 'echo pre-existing-hook' $HOME/.claude/settings.json
+grep '"theme": *"dark"' $HOME/.claude/settings.json
+
+# Install again, then restore the backup taken before that install.
+exec gryph install --agent claude-code
+grep 'gryph _hook' $HOME/.claude/settings.json
+exec gryph uninstall --agent claude-code --restore-backup
+! grep 'gryph _hook' $HOME/.claude/settings.json
+grep 'echo pre-existing-hook' $HOME/.claude/settings.json
+
+-- home/.claude/settings.json --
+{
+  "theme": "dark",
+  "hooks": {
+    "PreToolUse": [
+      {"matcher": "*", "hooks": [{"type": "command", "command": "echo pre-existing-hook"}]}
+    ]
+  }
+}

@@ -1,0 +1,50 @@
+# Export emits one JSON object per line with a $schema field. The summary
+# line goes to stderr, so stdout stays clean for pipes.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin pre_tool_use_bash.json
+exec gryph _hook claude-code PreToolUse
+stdin post_tool_use_read.json
+exec gryph _hook claude-code PostToolUse
+
+exec gryph export --since 1h --output out.jsonl
+stderr 'Exported 2 events'
+grep '"\$schema":"https://raw.githubusercontent.com/safedep/gryph/main/schema/event.schema.json"' out.jsonl
+grep '"action_type":"command_exec"' out.jsonl
+grep '"action_type":"file_read"' out.jsonl
+
+# Without --output the events go to stdout and the summary stays on stderr.
+exec gryph export --since 1h
+stdout '"action_type":"command_exec"'
+! stdout 'Exported'
+stderr 'Exported 2 events'
+
+-- pre_tool_use_bash.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  },
+  "tool_use_id": "tool-use-001"
+}
+-- post_tool_use_read.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/home/user/project/README.md"
+  },
+  "tool_response": {
+    "content": "# Project README",
+    "success": true
+  },
+  "tool_use_id": "tool-use-003"
+}

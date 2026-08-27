@@ -1,0 +1,28 @@
+# gryph install writes Claude Code hook entries and keeps what was there.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph install --agent claude-code
+
+# gryph hook entries are present for the pre and post phases.
+grep 'gryph _hook claude-code PreToolUse' $HOME/.claude/settings.json
+grep 'gryph _hook claude-code PostToolUse' $HOME/.claude/settings.json
+grep 'gryph _hook claude-code SessionStart' $HOME/.claude/settings.json
+
+# The pre-existing hook and the unrelated setting survive the merge.
+grep 'echo pre-existing-hook' $HOME/.claude/settings.json
+grep '"theme": *"dark"' $HOME/.claude/settings.json
+
+# The database and config directories exist inside the sandbox.
+exists $XDG_DATA_HOME/gryph/audit.db
+
+-- home/.claude/settings.json --
+{
+  "theme": "dark",
+  "hooks": {
+    "PreToolUse": [
+      {"matcher": "*", "hooks": [{"type": "command", "command": "echo pre-existing-hook"}]}
+    ]
+  }
+}
