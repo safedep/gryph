@@ -60,6 +60,18 @@ tui/            Output formatters (table, json, csv)
 - Sessions are created on first event and updated on subsequent events
 - Session end detected from `SessionEnd` (Claude Code) or `stop` (Cursor) hook types
 
+## Acceptance Suite
+
+- `test/acceptance/` runs the real `gryph` binary through `testscript` txtar scripts in a
+  sandboxed HOME. It gates CI on every PR and push. It owns the real-binary contracts: exit
+  codes, on-disk file shapes, stdout and stderr formats, hook protocol responses.
+- A user-facing guarantee needs a `<category>/.../<name>.txtar` script AND a matching
+  `catalog.yaml` row (with a `tier`, and optional `labels`). `TestCatalogIntegrity` (runs
+  under `go test ./...`) fails when a script has no catalog row. Do not add scaffolding.
+  See `test/acceptance/README.md`.
+- `test/cli/` (in-process pipeline tests) and `test/conformance/aarm/` (AARM spec) stay
+  separate and do not overlap with the acceptance suite.
+
 ## Dev Docs
 
 - `docs/e2e.md` - Writing and running E2E tests (`test/cli/`)

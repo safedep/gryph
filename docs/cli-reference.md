@@ -89,6 +89,7 @@ gryph logs --format json
 | Flag         | Short | Type     | Default | Description                                        |
 | ------------ | ----- | -------- | ------- | -------------------------------------------------- |
 | `--follow`   | `-f`  | bool     | false   | Stream new events                                  |
+| `--live`     |       | bool     | false   | Interactive full-screen TUI monitor                |
 | `--interval` |       | duration | 2s      | Poll interval for follow mode                      |
 | `--since`    |       | string   |         | Show events since (e.g., `1h`, `2d`, `2025-01-15`) |
 | `--until`    |       | string   |         | Show events until                                  |
@@ -97,6 +98,7 @@ gryph logs --format json
 | `--session`  |       | string   |         | Filter by session ID                               |
 | `--agent`    |       | string   |         | Filter by agent                                    |
 | `--format`   |       | string   | table   | Output format: `table`, `json`, `jsonl`            |
+| `--sort`     |       | string   | desc    | Sort order: `asc`, `desc`                          |
 
 ### query
 
@@ -107,27 +109,29 @@ gryph query --file "src/**/*.ts"
 gryph query --since "1w" --agent claude-code
 gryph query --action file_write --today
 gryph query --command "npm *"
-gryph query --action file_write --show-diff
 gryph query --action file_write --today --count
+gryph query --interactive
 ```
 
-| Flag          | Type                | Default | Description                                    |
-| ------------- | ------------------- | ------- | ---------------------------------------------- |
-| `--since`     | string              |         | Start time                                     |
-| `--until`     | string              |         | End time                                       |
-| `--today`     | bool                | false   | Filter to today                                |
-| `--yesterday` | bool                | false   | Filter to yesterday                            |
-| `--agent`     | string (repeatable) |         | Filter by agent                                |
-| `--session`   | string              |         | Filter by session ID (prefix match)            |
-| `--action`    | string (repeatable) |         | Filter by action type                          |
-| `--file`      | string              |         | Filter by file path (glob)                     |
-| `--command`   | string              |         | Filter by command (glob)                       |
-| `--status`    | string              |         | Filter by result status                        |
-| `--show-diff` | bool                | false   | Include diff content in output                 |
-| `--format`    | string              | table   | Output format: `table`, `json`, `jsonl`, `csv` |
-| `--limit`     | int                 | 100     | Maximum results                                |
-| `--offset`    | int                 | 0       | Skip first n results                           |
-| `--count`     | bool                | false   | Show count only                                |
+| Flag            | Short | Type                | Default | Description                                    |
+| --------------- | ----- | ------------------- | ------- | ---------------------------------------------- |
+| `--since`       |       | string              |         | Start time                                     |
+| `--until`       |       | string              |         | End time                                       |
+| `--today`       |       | bool                | false   | Filter to today                                |
+| `--yesterday`   |       | bool                | false   | Filter to yesterday                            |
+| `--agent`       |       | string (repeatable) |         | Filter by agent                                |
+| `--session`     |       | string              |         | Filter by session ID (prefix match)            |
+| `--action`      |       | string (repeatable) |         | Filter by action type                          |
+| `--file`        |       | string              |         | Filter by file path (glob)                     |
+| `--command`     |       | string              |         | Filter by command (glob)                       |
+| `--status`      |       | string              |         | Filter by result status                        |
+| `--sensitive`   |       | bool                | false   | Filter to events with sensitive file access    |
+| `--interactive` | `-i`  | bool                | false   | Launch interactive TUI browser                 |
+| `--format`      |       | string              | table   | Output format: `table`, `json`, `jsonl`, `csv` |
+| `--limit`       |       | int                 | 100     | Maximum results                                |
+| `--offset`      |       | int                 | 0       | Skip first n results                           |
+| `--count`       |       | bool                | false   | Show count only                                |
+| `--sort`        |       | string              | asc     | Sort order: `asc`, `desc`                      |
 
 ### sessions
 
@@ -177,23 +181,80 @@ The `<event-id>` argument supports full UUID or prefix match.
 | ---------- | ------ | ------- | -------------------------------- |
 | `--format` | string | unified | Output format: `unified`, `json` |
 
-### export
+### cat
 
-Export audit data for external analysis.
+Show the full detail of one or more events: payload, diff, raw event, and conversation context, subject to the configured logging level.
 
 ```bash
-gryph export --format json -o events.json
-gryph export --since "1w" --format csv
-gryph export --agent claude-code --format jsonl
+gryph cat <event-id>
+gryph cat a1b2c3d4 e5f6a7b8 --format json
 ```
 
-| Flag       | Short | Type   | Default | Description                           |
-| ---------- | ----- | ------ | ------- | ------------------------------------- |
-| `--since`  |       | string |         | Export events since                   |
-| `--until`  |       | string |         | Export events until                   |
-| `--agent`  |       | string |         | Filter by agent                       |
-| `--format` |       | string | jsonl   | Output format: `json`, `jsonl`, `csv` |
-| `--output` | `-o`  | string | stdout  | Write to file                         |
+Each `<event-id>` argument supports full UUID or prefix match.
+
+| Flag       | Type   | Default | Description                                    |
+| ---------- | ------ | ------- | ---------------------------------------------- |
+| `--format` | string | table   | Output format: `table`, `json`, `jsonl`, `csv` |
+
+### export
+
+Export raw events as JSON Lines for external analysis. Each line is one complete event object with a `$schema` field. The summary line goes to stderr, so stdout stays clean for pipes. Sensitive events are excluded by default.
+
+```bash
+gryph export
+gryph export --since "1w" -o audit.jsonl
+gryph export --agent claude-code --sensitive
+```
+
+| Flag          | Short | Type   | Default | Description                         |
+| ------------- | ----- | ------ | ------- | ----------------------------------- |
+| `--since`     |       | string | 1h      | Export events since                 |
+| `--until`     |       | string |         | Export events until                 |
+| `--agent`     |       | string |         | Filter by agent                     |
+| `--session`   |       | string |         | Filter by session ID (prefix match) |
+| `--sensitive` |       | bool   | false   | Include sensitive events            |
+| `--output`    | `-o`  | string | stdout  | Write to file                       |
+
+### cost
+
+Show per-session token usage and estimated cost across models and agents. See [docs/cost.md](cost.md) for how cost data is collected.
+
+```bash
+gryph cost
+gryph cost --since 7d --by model
+gryph cost --agent claude-code --sync
+```
+
+| Flag          | Type   | Default | Description                                 |
+| ------------- | ------ | ------- | ------------------------------------------- |
+| `--since`     | string |         | Show costs since (e.g., `1h`, `2d`)         |
+| `--until`     | string |         | Show costs until                            |
+| `--today`     | bool   | false   | Shorthand for since midnight                |
+| `--yesterday` | bool   | false   | Filter to yesterday                         |
+| `--agent`     | string |         | Filter by agent                             |
+| `--model`     | string |         | Filter by model name                        |
+| `--session`   | string |         | Filter by session ID (prefix match)         |
+| `--by`        | string | session | Group by: `session`, `model`, `agent`, `day` |
+| `--sync`      | bool   | false   | Collect or refresh cost data before display |
+| `--force`     | bool   | false   | With `--sync`: recompute even if computed   |
+| `--limit`     | int    | 100     | Maximum sessions                            |
+| `--format`    | string | table   | Output format: `table`, `json`              |
+
+### stats
+
+Open an interactive full-screen statistics dashboard.
+
+```bash
+gryph stats
+gryph stats --since 7d
+gryph stats --since 30d --agent claude-code
+```
+
+| Flag      | Type   | Default | Description                                            |
+| --------- | ------ | ------- | ------------------------------------------------------ |
+| `--since` | string | today   | Time range: `today`, `7d`, `30d`, `all`, or a duration |
+| `--until` | string |         | End of time window (same syntax as `--since`)          |
+| `--agent` | string |         | Filter by agent name                                   |
 
 ### config
 

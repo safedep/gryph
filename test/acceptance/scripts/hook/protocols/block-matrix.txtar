@@ -1,0 +1,107 @@
+# One block rule, five agent protocols. Every agent must refuse the action
+# through its own wire convention. A wrong exit code or channel silently
+# turns a block into an allow for that agent.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin gemini.json
+execexit 2 gryph _hook gemini BeforeTool
+stdout '"decision":"block"'
+stderr 'blocked-by-acceptance'
+
+stdin opencode.json
+execexit 2 gryph _hook opencode tool.execute.before
+stdout '"decision":"block"'
+
+stdin windsurf.json
+execexit 2 gryph _hook windsurf pre_run_command
+stderr 'blocked-by-acceptance'
+
+stdin piagent.json
+execexit 2 gryph _hook pi-agent tool_call
+stdout '"decision":"block"'
+
+stdin codex.json
+execexit 2 gryph _hook codex PreToolUse
+stdout '"permissionDecision":"deny"'
+
+exec gryph query --status blocked --format json --no-color
+stdout -count=5 '"ResultStatus": "blocked"'
+
+-- home/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+  log_all_evaluations: true
+-- home/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-block-npm-install
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+    message: "blocked-by-acceptance: npm install is not allowed"
+-- gemini.json --
+{
+  "session_id": "gemini-session-abc",
+  "transcript_path": "/home/user/.gemini/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "BeforeTool",
+  "tool_name": "run_shell_command",
+  "tool_input": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  }
+}
+-- opencode.json --
+{
+  "hook_type": "tool.execute.before",
+  "session_id": "opencode-session-abc123",
+  "tool": "bash",
+  "args": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  },
+  "cwd": "/home/user/project"
+}
+-- windsurf.json --
+{
+  "agent_action_name": "pre_run_command",
+  "trajectory_id": "traj-test-123",
+  "execution_id": "exec-003",
+  "timestamp": "2025-01-15T10:32:00Z",
+  "tool_info": {
+    "command_line": "npm install",
+    "cwd": "/home/user/project"
+  }
+}
+-- piagent.json --
+{
+  "session_id": "pi-session-abc",
+  "cwd": "/home/user/project",
+  "hook_event_name": "tool_call",
+  "tool_name": "bash",
+  "tool_call_id": "call-789",
+  "input": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  }
+}
+-- codex.json --
+{
+  "session_id": "codex-session-abc",
+  "transcript_path": "/home/user/.codex/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "model": "o4-mini",
+  "turn_id": "turn-001",
+  "tool_name": "Bash",
+  "tool_use_id": "tool-001",
+  "tool_input": {
+    "command": "npm install"
+  }
+}

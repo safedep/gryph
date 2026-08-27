@@ -1,0 +1,24 @@
+# The documented exit codes hold on the real binary:
+# 0 success, 2 config, 3 database, 4 agent not found (see cli/errors.go).
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+# 4: unknown agent.
+execexit 4 gryph install --agent doesnotexist
+stderr 'agent not found: doesnotexist'
+
+# 2: a required input is missing.
+execexit 2 gryph policy receipts verify-log
+stderr 'input is required'
+
+# 3: the database cannot open. A directory at the database path forces it.
+rm $XDG_DATA_HOME/gryph/audit.db
+mkdir $XDG_DATA_HOME/gryph/audit.db
+execexit 3 gryph logs
+stderr 'failed to open database'
+
+# 0: a healthy command.
+rm $XDG_DATA_HOME/gryph/audit.db
+exec gryph version
+stdout 'gryph'

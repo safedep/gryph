@@ -30,7 +30,7 @@
 //  11. decision           (utf-8 bytes)
 //  12. severity           (utf-8 bytes)
 //  13. message            (utf-8 bytes)
-//  14. matched_rule_ids   (canonical JSON of []string, "null" when empty)
+//  14. matched_rule_ids   (canonical JSON of []string, "null" when nil or empty; NewHashInput normalizes)
 //  15. result_status      (utf-8 bytes)
 //  16. duration_ms        (int64, 8 bytes BE; 0 when unset)
 //  17. error_message      (utf-8 bytes)
@@ -203,6 +203,15 @@ type HashInputFields struct {
 // emptied. Single source of truth for the as-recorded hash input shape.
 func NewHashInput(f HashInputFields) *HashInput {
 	insertDecision := DeriveInsertDecision(f.Decision)
+	// The consensus format hashes matched_rule_ids as "null" when the list is
+	// empty. The PDP hands an empty non-nil slice for a no-match decision,
+	// which would serialize as "[]", while storage persists it as NULL and a
+	// re-read hands back nil. Normalizing here keeps insert-time and
+	// verify-time hash inputs identical for every path.
+	ruleIDs := f.MatchedRuleIDs
+	if len(ruleIDs) == 0 {
+		ruleIDs = nil
+	}
 	return &HashInput{
 		Sequence:           f.Sequence,
 		PrevHash:           f.PrevHash,
@@ -217,7 +226,7 @@ func NewHashInput(f HashInputFields) *HashInput {
 		Decision:           insertDecision,
 		Severity:           f.Severity,
 		Message:            f.Message,
-		MatchedRuleIDs:     f.MatchedRuleIDs,
+		MatchedRuleIDs:     ruleIDs,
 		ResultStatus:       DeriveInsertResultStatus(insertDecision),
 		DurationMS:         0,
 		ErrorMessage:       "",

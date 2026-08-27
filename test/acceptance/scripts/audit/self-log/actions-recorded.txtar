@@ -1,0 +1,20 @@
+# Gryph audits itself. Install, config change, and uninstall each leave a
+# self-log row. Retention cleanup never deletes self-audit rows.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+exec gryph config set logging.level full
+exec gryph uninstall --agent claude-code
+
+exec gryph self-log --format json --no-color
+stdout '"Action": "install"'
+stdout '"Action": "config_change"'
+stdout '"Action": "uninstall"'
+
+exec gryph retention cleanup
+exec gryph self-log --format json --no-color
+stdout '"Action": "install"'
+stdout '"Action": "uninstall"'

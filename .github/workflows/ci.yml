@@ -50,6 +50,44 @@ jobs:
       - name: Verify JSON Schema is up-to-date
         run: make verify-schema
 
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@v1.13.0
+
+      - name: Run Acceptance Suite
+        run: |
+          gotestsum --junitfile "${RUNNER_TEMP}/acceptance.xml" --format testname \
+            -- -tags acceptance -timeout 10m ./test/acceptance
+
+      - name: Render Report
+        if: always()
+        run: |
+          go run ./test/acceptance/report \
+            -junit "${RUNNER_TEMP}/acceptance.xml" \
+            -catalog test/acceptance/catalog.yaml \
+            -scripts test/acceptance/scripts \
+            | tee "${RUNNER_TEMP}/acceptance-report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: acceptance-report
+          path: |
+            ${{ runner.temp }}/acceptance-report.md
+            ${{ runner.temp }}/acceptance.xml
+
   goreleaser-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15

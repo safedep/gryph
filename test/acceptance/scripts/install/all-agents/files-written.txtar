@@ -1,0 +1,38 @@
+# One gryph install covers every detected agent and writes each agent's
+# documented file. Uninstall removes every gryph entry and generated file.
+# Cursor detection on Linux needs a cursor binary on PATH, so the script
+# provides a stub. The Cursor assertions run on Linux only.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+mkdir $HOME/.cursor
+mkdir $HOME/.gemini
+mkdir $HOME/.codex
+mkdir $HOME/.config/opencode
+mkdir $HOME/.codeium/windsurf
+mkdir $HOME/.pi/agent
+chmod 755 bin/cursor
+env PATH=$WORK/bin${:}$PATH
+
+exec gryph install
+
+grep 'gryph _hook claude-code' $HOME/.claude/settings.json
+grep 'gryph _hook gemini' $HOME/.gemini/settings.json
+grep 'gryph _hook codex' $HOME/.codex/hooks.json
+grep 'gryph _hook windsurf' $HOME/.codeium/windsurf/hooks.json
+grep '"_hook", "opencode"' $HOME/.config/opencode/plugins/gryph.js
+grep '"_hook", "pi-agent"' $HOME/.pi/agent/extensions/gryph-hooks.ts
+[linux] grep 'gryph _hook cursor' $HOME/.cursor/hooks.json
+
+exec gryph uninstall
+
+! grep 'gryph _hook' $HOME/.claude/settings.json
+! grep 'gryph _hook' $HOME/.gemini/settings.json
+! exists $HOME/.config/opencode/plugins/gryph.js
+! exists $HOME/.pi/agent/extensions/gryph-hooks.ts
+
+-- bin/cursor --
+#!/bin/sh
+echo "1.0.0"

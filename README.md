@@ -189,7 +189,6 @@ gryph query --action exec --since "1w"           # Commands run in the last week
 gryph query --session abc123                             # Activity from a specific session
 gryph query --action file_write --today --count          # Count matching events
 gryph query --command "npm *" --since "1w"               # Filter by command pattern
-gryph query --action file_write --show-diff              # Include file diffs
 ```
 
 ### Sessions

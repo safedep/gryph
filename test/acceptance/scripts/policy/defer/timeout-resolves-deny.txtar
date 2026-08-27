@@ -1,0 +1,77 @@
+# A deferred action never rots into an allow. A human resolves it with a
+# decision, or the sweep resolves an expired one to deny.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+# Resolve path: long timeout, human denies.
+stdin bash_npm.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'Action deferred'
+stderr 'deferrals resolve'
+
+exec gryph policy deferrals --format json --no-color
+stdout '"status": "pending"'
+capture DEFER_ID '"id": "([0-9a-f-]+)"'
+exec gryph policy deferrals resolve --id $DEFER_ID --decision deny --note acceptance
+exec gryph policy deferrals --status resolved_deny --format json --no-color
+stdout '"status": "resolved_deny"'
+
+# Sweep path: one-second timeout, the sweep resolves the expired row to
+# timeout, which is a deny.
+env XDG_CONFIG_HOME=$WORK/home2/.config
+env XDG_DATA_HOME=$WORK/home2/.local/share
+stdin bash_npm.json
+execexit 2 gryph _hook claude-code PreToolUse
+exec sleep 2
+exec gryph policy deferrals sweep --no-color
+stdout 'Swept 1 expired'
+exec gryph policy deferrals --status resolved_timeout --format json --no-color
+stdout '"status": "resolved_timeout"'
+
+-- home/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+  defer:
+    enabled: true
+    timeout_seconds: 600
+-- home/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-defer-npm
+    action: defer
+    reason: "needs human review"
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+-- home2/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+  defer:
+    enabled: true
+    timeout_seconds: 1
+-- home2/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-defer-npm
+    action: defer
+    reason: "needs human review"
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+-- bash_npm.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  },
+  "tool_use_id": "tool-use-001"
+}

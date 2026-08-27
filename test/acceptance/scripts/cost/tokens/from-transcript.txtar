@@ -1,0 +1,27 @@
+# Session end triggers cost collection from the agent transcript. The cost
+# command reports the tokens and the model.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+expandenv session_end.json
+
+stdin session_end.json
+exec gryph _hook claude-code SessionEnd
+
+exec gryph cost --format json --no-color
+stdout '"TotalTokens": 2800'
+stdout 'claude-sonnet-4-20250514'
+stdout '"InputTokens": 1500'
+stdout '"OutputTokens": 700'
+
+-- home/transcript.jsonl --
+{"type":"assistant","message":{"model":"claude-sonnet-4-20250514","usage":{"input_tokens":1500,"output_tokens":700,"cache_read_input_tokens":400,"cache_creation_input_tokens":200}}}
+-- session_end.json --
+{
+  "session_id": "test-session-123",
+  "transcript_path": "${WORK}/home/transcript.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "SessionEnd",
+  "reason": "user_exit"
+}

@@ -1,0 +1,31 @@
+# The purge path removes the database and config. The dry-run previews and
+# changes nothing. Foreign hook entries survive both.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph install --agent claude-code
+exec gryph config set logging.level full
+exists $XDG_DATA_HOME/gryph/audit.db
+exists $XDG_CONFIG_HOME/gryph/config.yaml
+
+exec gryph uninstall --purge --dry-run
+exists $XDG_DATA_HOME/gryph/audit.db
+exists $XDG_CONFIG_HOME/gryph/config.yaml
+grep 'gryph _hook' $HOME/.claude/settings.json
+
+exec gryph uninstall --purge
+stdout 'Database and config files have been removed.'
+! exists $XDG_DATA_HOME/gryph/audit.db
+! exists $XDG_CONFIG_HOME/gryph/config.yaml
+! grep 'gryph _hook' $HOME/.claude/settings.json
+grep 'echo pre-existing-hook' $HOME/.claude/settings.json
+
+-- home/.claude/settings.json --
+{
+  "hooks": {
+    "PreToolUse": [
+      {"matcher": "*", "hooks": [{"type": "command", "command": "echo pre-existing-hook"}]}
+    ]
+  }
+}
