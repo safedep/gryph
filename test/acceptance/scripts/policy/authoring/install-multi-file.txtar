@@ -10,7 +10,7 @@ stdout 'File valid: 1 rules'
 
 exec gryph policy install draft.yaml --no-color
 stdout 'Installed to'
-exists $XDG_CONFIG_HOME/gryph/policies/draft.yaml
+exists $XDG_CONFIG_HOME/safedep/gryph/policies/draft.yaml
 
 exec gryph policy list --no-color
 stdout 'policies\s+draft.yaml\s+1'
@@ -21,7 +21,7 @@ stdin bash_curl.json
 execexit 2 gryph _hook claude-code PreToolUse
 stderr 'blocked-by-draft'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed

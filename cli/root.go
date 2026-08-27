@@ -131,7 +131,29 @@ func (a *App) InitStore(ctx context.Context) error {
 		return err
 	}
 	a.Store = store
+	a.recordPathMigration(ctx)
 	return nil
+}
+
+// recordPathMigration writes the self-audit entry for a completed layout
+// migration. The migration runs in the config package before any store
+// exists, so the record arrives through a marker file that the first
+// store-opening command consumes.
+func (a *App) recordPathMigration(ctx context.Context) {
+	record := config.ConsumeMigrationMarker()
+	if record == nil {
+		return
+	}
+
+	details := map[string]interface{}{"moves": record.Moves}
+	if len(record.Warnings) > 0 {
+		details["warnings"] = record.Warnings
+	}
+
+	if err := logSelfAudit(ctx, a.Store, SelfAuditActionPathMigration, "", details,
+		SelfAuditResultSuccess, ""); err != nil {
+		log.Warnf("failed to log path migration self-audit: %v", err)
+	}
 }
 
 // Close closes the application resources.

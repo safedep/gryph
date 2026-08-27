@@ -25,7 +25,7 @@ env GRYPH_STORAGE_RETENTION_DAYS=7
 exec gryph retention status --no-color
 stdout 'Events Retention Days:\s+7'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 logging:
   level: full
 storage:

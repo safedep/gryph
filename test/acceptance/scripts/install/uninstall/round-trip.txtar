@@ -6,7 +6,7 @@ env XDG_DATA_HOME=$WORK/home/.local/share
 
 exec gryph install --agent claude-code
 grep 'gryph _hook' $HOME/.claude/settings.json
-exists $XDG_DATA_HOME/gryph/backups/claude-code
+exists $XDG_DATA_HOME/safedep/gryph/backups/claude-code
 
 exec gryph uninstall --agent claude-code
 ! grep 'gryph _hook' $HOME/.claude/settings.json

@@ -35,7 +35,7 @@ tui/            Output formatters (table, json, csv)
 ## Notes
 
 - SQLite driver: `modernc.org/sqlite` (pure Go, uses `sqlite` not `sqlite3`)
-- Config paths: macOS `~/Library/Application Support/gryph/`, Linux `~/.config/gryph/`
+- Config paths: macOS `~/Library/Application Support/safedep/gryph/`, Linux `~/.config/safedep/gryph/`. Overrides: `GRYPH_CONFIG_DIR`, `GRYPH_DATA_DIR`, `GRYPH_CACHE_DIR`
 - Storage layer fully implemented with ent ORM
 - Self-audit logs tool actions (install, uninstall, config changes)
 

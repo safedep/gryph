@@ -14,7 +14,7 @@ This prints all unsynced events and audit entries as JSON to stdout.
 
 ## Configuration
 
-Targets live under `streams.targets` in `~/.config/gryph/config.yaml` (Linux) or `~/Library/Application Support/gryph/config.yaml` (macOS):
+Targets live under `streams.targets` in `~/.config/safedep/gryph/config.yml` (Linux) or `~/Library/Application Support/safedep/gryph/config.yml` (macOS):
 
 ```yaml
 streams:

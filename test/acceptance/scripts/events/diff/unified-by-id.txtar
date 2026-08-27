@@ -22,7 +22,7 @@ stdout 'file_write'
 stdout 'a.txt'
 stdout 'Status\s+success'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 logging:
   level: full
 -- home/project/a.txt --

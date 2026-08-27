@@ -18,20 +18,20 @@ env XDG_DATA_HOME=$WORK/home2/.local/share
 stdin bash_npm.json
 exec gryph _hook claude-code PreToolUse
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed
--- home/.config/gryph/policy.yaml --
+-- home/.config/safedep/gryph/policy.yaml --
 version: "1"
 rules:
   - id: broken-rule
     action: nosuchdecision
--- home2/.config/gryph/config.yaml --
+-- home2/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: open
--- home2/.config/gryph/policy.yaml --
+-- home2/.config/safedep/gryph/policy.yaml --
 version: "1"
 rules:
   - id: broken-rule

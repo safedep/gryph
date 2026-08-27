@@ -29,14 +29,14 @@ stdout 'Swept 1 expired'
 exec gryph policy deferrals --status resolved_timeout --format json --no-color
 stdout '"status": "resolved_timeout"'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed
   defer:
     enabled: true
     timeout_seconds: 600
--- home/.config/gryph/policy.yaml --
+-- home/.config/safedep/gryph/policy.yaml --
 version: "1"
 rules:
   - id: acceptance-defer-npm
@@ -46,14 +46,14 @@ rules:
       action_types: [command_exec]
       command_patterns:
         - "(?i)\\bnpm\\s+install\\b"
--- home2/.config/gryph/config.yaml --
+-- home2/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed
   defer:
     enabled: true
     timeout_seconds: 1
--- home2/.config/gryph/policy.yaml --
+-- home2/.config/safedep/gryph/policy.yaml --
 version: "1"
 rules:
   - id: acceptance-defer-npm

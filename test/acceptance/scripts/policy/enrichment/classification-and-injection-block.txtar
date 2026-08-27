@@ -28,11 +28,11 @@ stdin mcp_injected.json
 execexit 2 gryph _hook claude-code PreToolUse
 stderr 'blocked-by-injection-score'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed
--- home/.config/gryph/policy.yaml --
+-- home/.config/safedep/gryph/policy.yaml --
 version: "1"
 rules:
   - id: block-cmd-after-secret-read

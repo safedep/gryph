@@ -7,8 +7,8 @@ env XDG_DATA_HOME=$WORK/home/.local/share
 
 exec gryph policy keys generate --no-color
 stdout 'Generated key'
-exists $XDG_CONFIG_HOME/gryph/keys/receipt.key
-exists $XDG_CONFIG_HOME/gryph/keys/receipt-pub.json
+exists $XDG_CONFIG_HOME/safedep/gryph/keys/receipt.key
+exists $XDG_CONFIG_HOME/safedep/gryph/keys/receipt-pub.json
 
 stdin read_allow.json
 exec gryph _hook claude-code PreToolUse
@@ -27,12 +27,12 @@ execexit 2 gryph policy receipts verify-log --input signed.jsonl --no-color
 stdout 'signed_invalid\s+1'
 stderr 'invalid signature'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed
   log_all_evaluations: true
--- home/.config/gryph/policy.yaml --
+-- home/.config/safedep/gryph/policy.yaml --
 version: "1"
 rules:
   - id: acceptance-block-npm-install

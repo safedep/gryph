@@ -1,0 +1,16 @@
+# GRYPH_CONFIG_DIR names the final config directory with no safedep/gryph
+# leaf appended. The directory never moves, and a config.yaml inside it is
+# still renamed to config.yml.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+env GRYPH_CONFIG_DIR=$WORK/cfg
+
+exec gryph config get logging.level
+stdout 'full'
+exists $WORK/cfg/config.yml
+! exists $WORK/cfg/config.yaml
+
+-- cfg/config.yaml --
+logging:
+  level: full

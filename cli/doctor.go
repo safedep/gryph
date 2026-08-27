@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/internal/selfupdate"
 	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/tui"
@@ -64,7 +65,10 @@ Performs various health checks:
 					Name:        "Config file",
 					Description: "Check if config file exists and is valid",
 				}
-				if _, err := os.Stat(app.Paths.ConfigFile); os.IsNotExist(err) {
+				if managed := config.ManagedConfigFile(); managed != "" {
+					configCheck.Status = tui.CheckOK
+					configCheck.Message = managed + " (managed by the system)"
+				} else if _, err := os.Stat(app.Paths.ConfigFile); os.IsNotExist(err) {
 					configCheck.Status = tui.CheckWarn
 					configCheck.Message = "Config file not found (using defaults)"
 					configCheck.Suggestion = "Run 'gryph config set' to create"

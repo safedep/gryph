@@ -20,6 +20,22 @@ func resolveConfigPath(app *App) string {
 	return app.Paths.ConfigFile
 }
 
+// refuseWhenManaged blocks per-user config writes while the system managed
+// config file is active, because the per-user file is ignored at load time
+// and the write would silently do nothing. An explicit --config path still
+// wins, so a write to a named file stays possible.
+func refuseWhenManaged() error {
+	if globalFlags.ConfigPath != "" {
+		return nil
+	}
+
+	if managed := config.ManagedConfigFile(); managed != "" {
+		return fmt.Errorf("configuration is managed by %s: contact your administrator to change it", managed)
+	}
+
+	return nil
+}
+
 func NewConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
@@ -120,6 +136,10 @@ func newConfigSetCmd() *cobra.Command {
 			key := args[0]
 			value := args[1]
 
+			if err := refuseWhenManaged(); err != nil {
+				return err
+			}
+
 			app, err := loadApp()
 			if err != nil {
 				return err
@@ -175,6 +195,10 @@ func newConfigResetCmd() *cobra.Command {
 		Short: "Reset to default configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
+			if err := refuseWhenManaged(); err != nil {
+				return err
+			}
 
 			app, err := loadApp()
 			if err != nil {

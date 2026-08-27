@@ -21,12 +21,12 @@ replace receipts.jsonl '"decision":"block"' '"decision":"allow"'
 execexit 2 gryph policy receipts verify-log --input receipts.jsonl
 stderr 'chain break'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed
   log_all_evaluations: true
--- home/.config/gryph/policy.yaml --
+-- home/.config/safedep/gryph/policy.yaml --
 version: "1"
 rules:
   - id: acceptance-block-npm-install

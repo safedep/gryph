@@ -17,12 +17,12 @@ exec gryph policy context --verify --all-sessions --no-color
 stdout 'Context chain verification: OK'
 stdout 'ok=3 broken=0 unchained=0'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed
   log_all_evaluations: true
--- home/.config/gryph/policy.yaml --
+-- home/.config/safedep/gryph/policy.yaml --
 version: "1"
 rules:
   - id: acceptance-block-npm-install

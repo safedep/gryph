@@ -48,7 +48,7 @@ func newTestEnvWithPolicy(t *testing.T, policyYAML string) *testEnv {
 	// config directory at a temp location via XDG_CONFIG_HOME and seed the
 	// policy there.
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
-	configDir := filepath.Join(tmpDir, "gryph")
+	configDir := filepath.Join(tmpDir, "safedep", "gryph")
 	require.NoError(t, os.MkdirAll(configDir, 0o755))
 	policyPath := filepath.Join(configDir, "policy.yaml")
 	require.NoError(t, os.WriteFile(policyPath, []byte(policyYAML), 0o600))

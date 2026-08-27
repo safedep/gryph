@@ -18,7 +18,7 @@ stderr 'self-protection'
 exec gryph query --status blocked --format json --no-color
 stdout -count=2 '"ResultStatus": "blocked"'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed
@@ -29,7 +29,7 @@ policy:
   "hook_event_name": "PreToolUse",
   "tool_name": "Write",
   "tool_input": {
-    "file_path": "${XDG_CONFIG_HOME}/gryph/policy.yaml",
+    "file_path": "${XDG_CONFIG_HOME}/safedep/gryph/policy.yaml",
     "content": "version: \"1\"\nrules: []\n"
   },
   "tool_use_id": "tool-use-sp1"

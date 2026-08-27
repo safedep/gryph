@@ -30,7 +30,7 @@ func writePolicyFile(t *testing.T, path, body string) {
 	require.NoError(t, os.WriteFile(path, []byte(body), 0o644))
 }
 
-func gryphConfigDir(root string) string { return filepath.Join(root, "gryph") }
+func gryphConfigDir(root string) string { return filepath.Join(root, "safedep", "gryph") }
 
 func TestResolvePolicyTarget(t *testing.T) {
 	paths := &config.Paths{ConfigDir: "/cfg"}
