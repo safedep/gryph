@@ -34,10 +34,10 @@ func TestDefault(t *testing.T) {
 	assert.False(t, cfg.Filters.Enabled)
 
 	// Verify agent defaults
-	assert.True(t, cfg.Agents.ClaudeCode.Enabled)
-	assert.True(t, cfg.Agents.Cursor.Enabled)
-	assert.Empty(t, cfg.Agents.ClaudeCode.LoggingLevel)
-	assert.Empty(t, cfg.Agents.Cursor.LoggingLevel)
+	assert.True(t, cfg.Agents["claude-code"].Enabled)
+	assert.True(t, cfg.Agents["cursor"].Enabled)
+	assert.Empty(t, cfg.Agents["claude-code"].LoggingLevel)
+	assert.Empty(t, cfg.Agents["cursor"].LoggingLevel)
 
 	// Verify display defaults
 	assert.Equal(t, ColorAuto, cfg.Display.Colors)
@@ -108,9 +108,9 @@ policy:
 	assert.Equal(t, 30, cfg.Storage.RetentionDays)
 	assert.False(t, cfg.Logging.ContentHash)
 	assert.Equal(t, []string{"**/.env"}, cfg.Privacy.SensitivePaths)
-	assert.False(t, cfg.Agents.ClaudeCode.Enabled)
-	assert.Equal(t, LoggingFull, cfg.Agents.ClaudeCode.LoggingLevel)
-	assert.True(t, cfg.Agents.Cursor.Enabled)
+	assert.False(t, cfg.Agents["claude-code"].Enabled)
+	assert.Equal(t, LoggingFull, cfg.Agents["claude-code"].LoggingLevel)
+	assert.True(t, cfg.Agents["cursor"].Enabled)
 	assert.Equal(t, ColorAlways, cfg.Display.Colors)
 	assert.Equal(t, TimezoneUTC, cfg.Display.Timezone)
 	assert.True(t, cfg.Policy.Enabled)
@@ -281,6 +281,31 @@ agents:
 	assert.Contains(t, err.Error(), "invalid agents.claude-code.logging_level")
 }
 
+func TestLoad_AgentWithoutDefaultBindsIntoMap(t *testing.T) {
+	configContent := `
+agents:
+  future-agent:
+    enabled: false
+    logging_level: minimal
+`
+
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yaml")
+	err := os.WriteFile(configFile, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	cfg, err := Load(configFile)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	ac, ok := cfg.Agents["future-agent"]
+	require.True(t, ok)
+	assert.False(t, ac.Enabled)
+	assert.Equal(t, LoggingMinimal, ac.LoggingLevel)
+	assert.False(t, cfg.IsAgentEnabled("future-agent"))
+	assert.Equal(t, LoggingMinimal, cfg.GetAgentLoggingLevel("future-agent"))
+}
+
 func TestLoad_NonExistentFile_ReturnsError(t *testing.T) {
 	tmpDir := t.TempDir()
 	nonExistentFile := filepath.Join(tmpDir, "nonexistent.yaml")
@@ -353,8 +378,8 @@ func TestConfig_GetAgentLoggingLevel_Default(t *testing.T) {
 func TestConfig_GetAgentLoggingLevel_PerAgent(t *testing.T) {
 	cfg := Default()
 	cfg.Logging.Level = LoggingMinimal
-	cfg.Agents.ClaudeCode.LoggingLevel = LoggingFull
-	cfg.Agents.Cursor.LoggingLevel = LoggingStandard
+	cfg.Agents["claude-code"] = AgentConfig{Enabled: true, LoggingLevel: LoggingFull}
+	cfg.Agents["cursor"] = AgentConfig{Enabled: true, LoggingLevel: LoggingStandard}
 
 	assert.Equal(t, LoggingFull, cfg.GetAgentLoggingLevel("claude-code"))
 	assert.Equal(t, LoggingStandard, cfg.GetAgentLoggingLevel("cursor"))
@@ -370,8 +395,8 @@ func TestConfig_IsAgentEnabled_Defaults(t *testing.T) {
 
 func TestConfig_IsAgentEnabled_Disabled(t *testing.T) {
 	cfg := Default()
-	cfg.Agents.ClaudeCode.Enabled = false
-	cfg.Agents.Cursor.Enabled = false
+	cfg.Agents["claude-code"] = AgentConfig{Enabled: false}
+	cfg.Agents["cursor"] = AgentConfig{Enabled: false}
 
 	assert.False(t, cfg.IsAgentEnabled("claude-code"))
 	assert.False(t, cfg.IsAgentEnabled("cursor"))
@@ -508,7 +533,7 @@ logging:
 	// Default values
 	assert.Equal(t, 1000, cfg.Logging.StdoutMaxChars)
 	assert.Equal(t, 90, cfg.Storage.RetentionDays)
-	assert.True(t, cfg.Agents.ClaudeCode.Enabled)
+	assert.True(t, cfg.Agents["claude-code"].Enabled)
 	assert.Equal(t, ColorAuto, cfg.Display.Colors)
 }
 
@@ -586,5 +611,5 @@ storage:
 
 	assert.Equal(t, LoggingMinimal, cfg.Logging.Level)
 	assert.Equal(t, 7, cfg.Storage.RetentionDays)
-	assert.Equal(t, LoggingMinimal, cfg.Agents.Cursor.LoggingLevel)
+	assert.Equal(t, LoggingMinimal, cfg.Agents["cursor"].LoggingLevel)
 }

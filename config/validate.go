@@ -58,29 +58,10 @@ func validate(cfg *Config) error {
 	}
 
 	// Validate agent logging levels if set
-	if cfg.Agents.ClaudeCode.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.ClaudeCode.LoggingLevel) {
-		return fmt.Errorf("invalid agents.claude-code.logging_level: %s", cfg.Agents.ClaudeCode.LoggingLevel)
-	}
-	if cfg.Agents.Cursor.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.Cursor.LoggingLevel) {
-		return fmt.Errorf("invalid agents.cursor.logging_level: %s", cfg.Agents.Cursor.LoggingLevel)
-	}
-	if cfg.Agents.Gemini.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.Gemini.LoggingLevel) {
-		return fmt.Errorf("invalid agents.gemini.logging_level: %s", cfg.Agents.Gemini.LoggingLevel)
-	}
-	if cfg.Agents.OpenCode.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.OpenCode.LoggingLevel) {
-		return fmt.Errorf("invalid agents.opencode.logging_level: %s", cfg.Agents.OpenCode.LoggingLevel)
-	}
-	if cfg.Agents.OpenClaw.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.OpenClaw.LoggingLevel) {
-		return fmt.Errorf("invalid agents.openclaw.logging_level: %s", cfg.Agents.OpenClaw.LoggingLevel)
-	}
-	if cfg.Agents.Windsurf.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.Windsurf.LoggingLevel) {
-		return fmt.Errorf("invalid agents.windsurf.logging_level: %s", cfg.Agents.Windsurf.LoggingLevel)
-	}
-	if cfg.Agents.PiAgent.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.PiAgent.LoggingLevel) {
-		return fmt.Errorf("invalid agents.pi-agent.logging_level: %s", cfg.Agents.PiAgent.LoggingLevel)
-	}
-	if cfg.Agents.Codex.LoggingLevel != "" && !isValidLoggingLevel(cfg.Agents.Codex.LoggingLevel) {
-		return fmt.Errorf("invalid agents.codex.logging_level: %s", cfg.Agents.Codex.LoggingLevel)
+	for name, ac := range cfg.Agents {
+		if ac.LoggingLevel != "" && !isValidLoggingLevel(ac.LoggingLevel) {
+			return fmt.Errorf("invalid agents.%s.logging_level: %s", name, ac.LoggingLevel)
+		}
 	}
 
 	return nil
