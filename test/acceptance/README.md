@@ -23,6 +23,7 @@ test/acceptance/
   catalog.go            # catalog schema, loader, id derivation, selector
   integrity_test.go     # TestCatalogIntegrity: guards catalog and script drift (normal CI)
   acceptance_test.go    # TestAcceptance: real-binary harness (//go:build acceptance)
+  report/               # joins JUnit results with the catalog into a Markdown report
   scripts/
     <category>/<capability>/<name>.txtar
 ```
@@ -105,4 +106,14 @@ GRYPH_BIN=$PWD/bin/gryph go test -tags acceptance ./test/acceptance/
 # Filter by category or labels:
 ACCEPTANCE_CATEGORY=policy go test -tags acceptance ./test/acceptance/
 ACCEPTANCE_LABELS=block,receipts go test -tags acceptance ./test/acceptance/
+
+# Render the per-guarantee report from a JUnit file (what CI does):
+gotestsum --junitfile acceptance.xml -- -tags acceptance ./test/acceptance
+go run ./test/acceptance/report -junit acceptance.xml \
+  -catalog test/acceptance/catalog.yaml -scripts test/acceptance/scripts
 ```
+
+The report groups guarantees by category, then tier: pass, fail, skip,
+unknown, gap. It shows the guarantee text and, for a failure, the captured
+line. It exits zero for normal results. A missing or broken JUnit file is an
+error, not zero coverage.
