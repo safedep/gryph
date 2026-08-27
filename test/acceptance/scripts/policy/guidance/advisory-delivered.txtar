@@ -1,0 +1,57 @@
+# A guidance rule advises without blocking. Claude Code gets the advisory on
+# stderr at exit 0. Cursor gets an allow with a user_message. The event
+# persists as success, not blocked.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin claude_read.json
+exec gryph _hook claude-code PreToolUse
+stderr 'guidance-advisory'
+
+stdin cursor_read.json
+exec gryph _hook cursor beforeReadFile
+stdout '"permission":"allow"'
+stdout 'guidance-advisory'
+
+exec gryph query --format json --no-color
+stdout -count=2 '"ResultStatus": "success"'
+! stdout '"ResultStatus": "blocked"'
+
+-- home/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-guide-readme
+    action: guidance
+    severity: medium
+    match:
+      action_types: [file_read]
+      file_patterns:
+        - "**/README.md"
+    message: "guidance-advisory: read the docs index first"
+-- claude_read.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/home/user/project/README.md"
+  },
+  "tool_use_id": "tool-use-004"
+}
+-- cursor_read.json --
+{
+  "conversation_id": "conv-test-123",
+  "generation_id": "gen-006",
+  "model": "claude-3-opus",
+  "hook_event_name": "beforeReadFile",
+  "cursor_version": "0.44.0",
+  "workspace_roots": ["/home/user/project"],
+  "user_email": "user@example.com",
+  "file_path": "/home/user/project/README.md"
+}

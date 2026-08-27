@@ -1,0 +1,68 @@
+# With a generated key, receipts come out signed and the offline verifier
+# validates them against the trust store. A tampered signature is detected
+# and fails verification.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph policy keys generate --no-color
+stdout 'Generated key'
+exists $XDG_CONFIG_HOME/gryph/keys/receipt.key
+exists $XDG_CONFIG_HOME/gryph/keys/receipt-pub.json
+
+stdin read_allow.json
+exec gryph _hook claude-code PreToolUse
+stdin bash_npm.json
+execexit 2 gryph _hook claude-code PreToolUse
+
+exec gryph policy receipts export --format jsonl --include-signatures --output signed.jsonl
+exec gryph policy receipts verify-log --input signed.jsonl --no-color
+stdout 'signed_ok\s+2'
+stdout 'signed_invalid\s+0'
+stdout 'chain_breaks\s+0'
+
+capture SIG '"signature":"([A-Za-z0-9+/=]+)"' signed.jsonl
+replace signed.jsonl $SIG AAAA$SIG
+execexit 2 gryph policy receipts verify-log --input signed.jsonl --no-color
+stdout 'signed_invalid\s+1'
+stderr 'invalid signature'
+
+-- home/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+  log_all_evaluations: true
+-- home/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-block-npm-install
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+    message: "blocked-by-acceptance"
+-- read_allow.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/home/user/project/main.go"
+  },
+  "tool_use_id": "tool-use-r1"
+}
+-- bash_npm.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  },
+  "tool_use_id": "tool-use-r2"
+}

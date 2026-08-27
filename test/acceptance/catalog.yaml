@@ -75,3 +75,89 @@
   tier: P1
   guarantee: "After install, gryph status shows the agent as installed and gryph doctor exits zero with passing checks."
   labels: [status, doctor]
+
+- id: policy/fail-mode/closed-on-broken-policy
+  title: "a broken policy fails closed, never silently off"
+  category: policy
+  tier: P0
+  guarantee: "With fail_mode closed, a policy that does not load blocks the action and records a policy_load_error self-audit. With fail_mode open the action passes."
+  labels: [policy, fail-mode, self-audit]
+
+- id: policy/authoring/install-multi-file
+  title: "policy validate, install, and list work end to end"
+  category: policy
+  tier: P0
+  guarantee: "gryph policy validate --file checks a draft, policy install copies it into policies/, policy list shows the merged sources, and the installed rule enforces."
+  labels: [policy, authoring]
+
+- id: install/all-agents/files-written
+  title: "one install covers every detected agent's documented file"
+  category: install
+  tier: P0
+  guarantee: "gryph install writes each detected agent's hook file as documented, and gryph uninstall removes every gryph entry and generated file."
+  labels: [install, all-agents]
+
+- id: hook/protocols/block-matrix
+  title: "every agent protocol refuses a blocked action"
+  category: hook
+  tier: P0
+  guarantee: "A block decision reaches gemini, opencode, windsurf, pi-agent, and codex through each protocol's exit code and response channel, and every event persists as blocked."
+  labels: [policy, block, protocols]
+
+- id: policy/defer/timeout-resolves-deny
+  title: "a deferred action resolves by decision or times out to deny"
+  category: policy
+  tier: P0
+  guarantee: "A defer decision blocks the action and queues it. A human resolves it with a decision. The sweep resolves an expired deferral to timeout, which denies."
+  labels: [policy, defer]
+
+- id: policy/guidance/advisory-delivered
+  title: "a guidance rule advises without blocking"
+  category: policy
+  tier: P1
+  guarantee: "A guidance decision exits zero, delivers the advisory on the agent's channel, and persists the event as success."
+  labels: [policy, guidance, claude-code, cursor]
+
+- id: receipts/signing/key-round-trip
+  title: "signed receipts verify and a tampered signature fails"
+  category: receipts
+  tier: P1
+  guarantee: "After keys generate, receipts are signed, verify-log validates them against the trust store, and a tampered signature fails verification with a non-zero exit."
+  labels: [policy, receipts, signing]
+
+- id: cost/tokens/from-transcript
+  title: "session end collects token usage from the transcript"
+  category: cost
+  tier: P1
+  guarantee: "A session end hook with a transcript path makes gryph cost report the session's tokens and model."
+  labels: [cost, tokens]
+
+- id: install/purge/data-removed
+  title: "purge removes the database and config, dry-run changes nothing"
+  category: install
+  tier: P1
+  guarantee: "gryph uninstall --purge deletes the database and config and keeps foreign hooks. The --dry-run form previews without changing anything."
+  labels: [install, uninstall, purge]
+
+- id: audit/self-log/actions-recorded
+  title: "gryph records its own actions and keeps them through cleanup"
+  category: audit
+  tier: P1
+  guarantee: "Install, config change, and uninstall each leave a self-log row, and retention cleanup never deletes self-audit rows."
+  labels: [self-audit, retention]
+
+# --- gaps: tracked guarantees with no script yet ---
+
+- id: events/diff/unified-by-id
+  title: "diff and cat show event detail by id or prefix"
+  category: events
+  tier: P2
+  guarantee: "gryph diff <event-id> prints a unified diff for a file_write event and gryph cat <event-id> shows the event detail, with prefix match."
+  labels: [diff, cat]
+
+- id: retention/cleanup/old-events-deleted
+  title: "retention cleanup deletes events past the cutoff"
+  category: retention
+  tier: P2
+  guarantee: "gryph retention cleanup deletes events older than the configured retention and reports the count, and --dry-run only previews."
+  labels: [retention]

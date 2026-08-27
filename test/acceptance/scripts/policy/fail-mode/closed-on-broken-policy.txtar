@@ -1,0 +1,50 @@
+# A broken policy must never silently turn Gryph off. With fail_mode closed
+# the hook blocks and a policy_load_error self-audit row exists. With
+# fail_mode open the same broken policy lets the action through.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin bash_npm.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'policy load failed'
+
+exec gryph self-log --format json --no-color
+stdout '"Action": "policy_load_error"'
+
+# The same broken policy under fail_mode open allows the action.
+env XDG_CONFIG_HOME=$WORK/home2/.config
+env XDG_DATA_HOME=$WORK/home2/.local/share
+stdin bash_npm.json
+exec gryph _hook claude-code PreToolUse
+
+-- home/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: broken-rule
+    action: nosuchdecision
+-- home2/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: open
+-- home2/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: broken-rule
+    action: nosuchdecision
+-- bash_npm.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  },
+  "tool_use_id": "tool-use-001"
+}

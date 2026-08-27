@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -82,6 +83,7 @@ func TestAcceptance(t *testing.T) {
 					"execexit":  cmdExecExit,
 					"expandenv": cmdExpandEnv,
 					"replace":   cmdReplace,
+					"capture":   cmdCapture,
 				},
 			})
 		})
@@ -162,6 +164,38 @@ func cmdReplace(ts *testscript.TestScript, neg bool, args []string) {
 		ts.Fatalf("replace: %s does not contain %q", args[0], args[1])
 	}
 	ts.Check(os.WriteFile(path, []byte(strings.ReplaceAll(string(data), args[1], args[2])), 0o600))
+}
+
+// cmdCapture extracts one regexp capture group into a script environment
+// variable. Dynamic values (a deferral id, a signature) are not known when a
+// script is authored, so scripts capture them from output:
+//
+//	capture DEFER_ID '"id": "([0-9a-f-]+)"'
+//	capture SIG '"signature":"([A-Za-z0-9+/=]+)"' signed.jsonl
+//
+// The source is the stdout of the last exec, or the named file.
+func cmdCapture(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("capture does not support negation")
+	}
+	if len(args) < 2 || len(args) > 3 {
+		ts.Fatalf("usage: capture <var> <pattern-with-one-group> [file]")
+	}
+	src := ""
+	if len(args) == 3 {
+		data, err := os.ReadFile(ts.MkAbs(args[2]))
+		ts.Check(err)
+		src = string(data)
+	} else {
+		src = ts.ReadFile("stdout")
+	}
+	re, err := regexp.Compile(args[1])
+	ts.Check(err)
+	m := re.FindStringSubmatch(src)
+	if len(m) < 2 {
+		ts.Fatalf("capture: pattern %q did not match or has no capture group", args[1])
+	}
+	ts.Setenv(args[0], m[1])
 }
 
 type scriptFile struct {

@@ -90,6 +90,10 @@ The harness adds three commands to the testscript builtins:
   sandbox-absolute path.
 - `replace <file> <old> <new>` substitutes a literal string in a file. Tamper
   cases use it.
+- `capture <var> <pattern> [file]` extracts one regexp capture group into a
+  script environment variable, from the last exec's stdout or from a file.
+  Use it for values not known when the script is authored, such as a deferral
+  id or a signature.
 
 ## Run it
 
