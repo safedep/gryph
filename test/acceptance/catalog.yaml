@@ -202,6 +202,62 @@
   guarantee: "gryph diff <event-id> prints a unified diff for a file_write event and gryph cat <event-id> shows the event detail, with prefix match."
   labels: [diff, cat]
 
+- id: hook/robustness/malformed-input-never-blocks
+  title: "malformed hook input never blocks the agent"
+  category: hook
+  tier: P0
+  guarantee: "Malformed hook input exits 1, never 2, with or without policy, and leaves a hook_error self-audit row. Unknown hook types are ignored at exit 0."
+  labels: [hook, robustness]
+
+- id: hook/robustness/concurrent-writes
+  title: "concurrent hooks lose no events"
+  category: hook
+  tier: P0
+  guarantee: "Twelve concurrent hook processes against one fresh database all succeed and every event persists."
+  labels: [hook, robustness, concurrency]
+
+- id: policy/precedence/block-beats-allow
+  title: "an installed allow cannot defeat a block"
+  category: policy
+  tier: P0
+  guarantee: "An installed file with a broad allow rule cannot override a block from another file, and disabled: cannot reach a rule declared in a different file."
+  labels: [policy, precedence, threat-model]
+
+- id: storage/upgrade/previous-release-db-opens
+  title: "a previous release's database survives the upgrade"
+  category: storage
+  tier: P0
+  guarantee: "A database written by the previous release opens under the current binary, events stay queryable, the schema migrates, and new events append."
+  labels: [storage, upgrade]
+
+- id: install/idempotent/reinstall-no-duplicates
+  title: "reinstall keeps exactly one gryph entry per hook type"
+  category: install
+  tier: P1
+  guarantee: "Repeated gryph install, with or without --force, keeps one gryph entry per hook type and keeps foreign hooks."
+  labels: [install, idempotent]
+
+- id: policy/dry-run/matches-enforcement
+  title: "the policy dry run predicts enforcement"
+  category: policy
+  tier: P1
+  guarantee: "For one policy, gryph policy test and the real hook return the same decision for the same action."
+  labels: [policy, dry-run]
+
+- id: policy/authoring/duplicate-rule-id-refused
+  title: "policy install refuses a duplicate rule id"
+  category: policy
+  tier: P1
+  guarantee: "A candidate file whose rule id collides with the active policy is refused with a clear error and is not copied into policies/."
+  labels: [policy, authoring]
+
+- id: policy/enrichment/classification-and-injection-block
+  title: "classification and injection enrichers drive CEL conditions"
+  category: policy
+  tier: P1
+  guarantee: "A command is blocked after the session reads a secret-classified path, and a tool call with prompt injection markers is blocked while a benign one passes."
+  labels: [policy, classify, injection]
+
 # --- gaps: tracked guarantees with no script yet ---
 
 - id: retention/cleanup/old-events-deleted

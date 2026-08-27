@@ -1,0 +1,59 @@
+# The authoring loop tells users to trust the dry run. For one policy,
+# gryph policy test and real hook enforcement return the same decision.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph policy test --action command_exec --command 'npm install' --no-color
+stdout 'BLOCK'
+stdout 'acceptance-block-npm-install'
+
+stdin bash_npm.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'blocked-by-acceptance'
+
+exec gryph policy test --action command_exec --command 'go test ./...' --no-color
+stdout 'ALLOW'
+
+stdin bash_gotest.json
+exec gryph _hook claude-code PreToolUse
+
+-- home/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-block-npm-install
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+    message: "blocked-by-acceptance"
+-- bash_npm.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  },
+  "tool_use_id": "t1"
+}
+-- bash_gotest.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "go test ./...",
+    "description": "Run tests"
+  },
+  "tool_use_id": "t2"
+}

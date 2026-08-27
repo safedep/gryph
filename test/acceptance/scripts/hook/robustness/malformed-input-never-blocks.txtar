@@ -1,0 +1,44 @@
+# Gryph must never break the agent it monitors. Malformed hook input exits 1
+# (a soft hook error), never 2 (a block), with or without policy. Unknown
+# hook types are ignored at exit 0. Every parse failure leaves a hook_error
+# self-audit row.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin empty.json
+execexit 1 gryph _hook claude-code PreToolUse
+stderr 'failed to parse event'
+
+stdin garbage.json
+execexit 1 gryph _hook claude-code PreToolUse
+stderr 'failed to parse event'
+
+stdin unknown_type.json
+exec gryph _hook claude-code NoSuchHookType
+
+stdin garbage.json
+execexit 1 gryph _hook nosuchagent PreToolUse
+stderr 'unknown agent'
+
+# Three soft failures: two parse errors and one unknown agent.
+exec gryph self-log --format json --no-color
+stdout -count=3 '"Action": "hook_error"'
+
+# A parse failure under an enabled fail-closed policy is still a soft error,
+# not a block. The failure happens before policy evaluation.
+env XDG_CONFIG_HOME=$WORK/home2/.config
+env XDG_DATA_HOME=$WORK/home2/.local/share
+stdin garbage.json
+execexit 1 gryph _hook claude-code PreToolUse
+stderr 'failed to parse event'
+
+-- empty.json --
+-- garbage.json --
+this is not json {{{
+-- unknown_type.json --
+{"session_id":"s1","hook_event_name":"NoSuchHookType"}
+-- home2/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed

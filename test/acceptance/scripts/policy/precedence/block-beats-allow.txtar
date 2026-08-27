@@ -1,0 +1,53 @@
+# Policy resolution is additive. An installed file with a broad allow rule
+# cannot override a block from another file, and disabled: cannot reach a
+# rule declared in a different file. This is the move a compromised agent
+# would try through policy install.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph policy list --no-color
+stdout 'global\s+policy.yaml\s+1'
+stdout 'policies\s+permissive.yaml\s+1'
+stdout '4 rules merged'
+
+stdin bash_npm.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'blocked-by-global'
+
+-- home/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: global-block-npm
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+    message: "blocked-by-global"
+-- home/.config/gryph/policies/permissive.yaml --
+version: "1"
+rules:
+  - id: permissive-allow-all
+    action: allow
+    match:
+      action_types: [command_exec]
+disabled:
+  - global-block-npm
+-- bash_npm.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "npm install",
+    "description": "Install dependencies"
+  },
+  "tool_use_id": "tool-use-001"
+}

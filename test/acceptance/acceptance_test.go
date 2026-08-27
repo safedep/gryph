@@ -38,6 +38,12 @@ func TestAcceptance(t *testing.T) {
 	require.NoError(t, err)
 	sel := selectorFromEnv()
 
+	// Committed fixtures (e.g. a database written by a previous release)
+	// live outside the txtar sandbox. Scripts reach them through this
+	// variable: cp $ACCEPTANCE_TESTDATA/upgrade/... $WORK/...
+	testdata, err := filepath.Abs("testdata")
+	require.NoError(t, err)
+
 	const root = "scripts"
 	files, err := discoverScriptFiles(root)
 	require.NoError(t, err)
@@ -69,6 +75,7 @@ func TestAcceptance(t *testing.T) {
 				Files: scripts,
 				Setup: func(env *testscript.Env) error {
 					env.Setenv("PATH", binDir+string(os.PathListSeparator)+env.Getenv("PATH"))
+					env.Setenv("ACCEPTANCE_TESTDATA", testdata)
 					// The status and doctor commands run an async update check
 					// against the GitHub API. Forward proxy and TLS settings so
 					// the check works in proxied environments. The check fails

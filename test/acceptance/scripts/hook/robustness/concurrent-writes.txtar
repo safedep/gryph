@@ -1,0 +1,149 @@
+# Agents fire hooks concurrently: parallel tool calls, subagents. Twelve
+# hook processes race against one fresh database. Every event persists and
+# no hook fails. Events are the durable ground truth. Session counters are
+# best-effort under concurrent writers and are not asserted exactly.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin w1.json
+exec gryph _hook claude-code PreToolUse &
+stdin w2.json
+exec gryph _hook claude-code PreToolUse &
+stdin w3.json
+exec gryph _hook claude-code PreToolUse &
+stdin w4.json
+exec gryph _hook claude-code PreToolUse &
+stdin w5.json
+exec gryph _hook claude-code PreToolUse &
+stdin w6.json
+exec gryph _hook claude-code PreToolUse &
+stdin w7.json
+exec gryph _hook claude-code PreToolUse &
+stdin w8.json
+exec gryph _hook claude-code PreToolUse &
+stdin w9.json
+exec gryph _hook claude-code PreToolUse &
+stdin w10.json
+exec gryph _hook claude-code PreToolUse &
+stdin w11.json
+exec gryph _hook claude-code PreToolUse &
+stdin w12.json
+exec gryph _hook claude-code PreToolUse &
+
+wait
+
+exec gryph query --format json --no-color --limit 50
+stdout -count=12 '"ActionType": "file_read"'
+
+exec gryph sessions --format json --no-color
+stdout -count=3 '"AgentName": "claude-code"'
+
+-- w1.json --
+{
+  "session_id": "concurrent-session-1",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f1.txt" },
+  "tool_use_id": "tu-1"
+}
+-- w2.json --
+{
+  "session_id": "concurrent-session-2",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f2.txt" },
+  "tool_use_id": "tu-2"
+}
+-- w3.json --
+{
+  "session_id": "concurrent-session-0",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f3.txt" },
+  "tool_use_id": "tu-3"
+}
+-- w4.json --
+{
+  "session_id": "concurrent-session-1",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f4.txt" },
+  "tool_use_id": "tu-4"
+}
+-- w5.json --
+{
+  "session_id": "concurrent-session-2",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f5.txt" },
+  "tool_use_id": "tu-5"
+}
+-- w6.json --
+{
+  "session_id": "concurrent-session-0",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f6.txt" },
+  "tool_use_id": "tu-6"
+}
+-- w7.json --
+{
+  "session_id": "concurrent-session-1",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f7.txt" },
+  "tool_use_id": "tu-7"
+}
+-- w8.json --
+{
+  "session_id": "concurrent-session-2",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f8.txt" },
+  "tool_use_id": "tu-8"
+}
+-- w9.json --
+{
+  "session_id": "concurrent-session-0",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f9.txt" },
+  "tool_use_id": "tu-9"
+}
+-- w10.json --
+{
+  "session_id": "concurrent-session-1",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f10.txt" },
+  "tool_use_id": "tu-10"
+}
+-- w11.json --
+{
+  "session_id": "concurrent-session-2",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f11.txt" },
+  "tool_use_id": "tu-11"
+}
+-- w12.json --
+{
+  "session_id": "concurrent-session-0",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f12.txt" },
+  "tool_use_id": "tu-12"
+}
