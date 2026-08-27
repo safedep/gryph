@@ -1,0 +1,276 @@
+# Agents fire hooks concurrently: parallel tool calls, subagents. A shell
+# runner forks 24 hook processes at once against one seeded database with
+# policy enabled, so every hook also writes a receipt and a context chain
+# row. testscript's own background commands start too far apart to overlap.
+# Every hook succeeds, every event and receipt persists, and both chains
+# verify. Session counters are best-effort under concurrent writers and are
+# not asserted exactly.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+# Seed the database first. On a fresh database the schema-creation retries
+# stagger the processes, which hides insert contention.
+stdin seed.json
+exec gryph _hook claude-code PreToolUse
+
+exec sh run.sh
+! stdout 'HOOKFAIL'
+
+exec gryph query --format json --no-color --limit 60
+stdout -count=25 '"ActionType": "file_read"'
+! stdout '"ResultStatus": "blocked"'
+
+exec gryph sessions --format json --no-color
+stdout -count=5 '"AgentName": "claude-code"'
+
+exec gryph policy receipts export --format jsonl --output receipts.jsonl
+exec gryph policy receipts verify-log --input receipts.jsonl --no-color
+stdout 'total\s+25'
+stdout 'chain_breaks\s+0'
+
+exec gryph policy context --verify --all-sessions --no-color
+stdout 'Context chain verification: OK'
+
+-- seed.json --
+{
+  "session_id": "concurrent-seed",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/seed.txt" },
+  "tool_use_id": "tu-seed"
+}
+-- run.sh --
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do
+  gryph _hook claude-code PreToolUse < w$i.json > out$i 2> err$i &
+done
+wait
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do
+  if [ -s err$i ]; then
+    echo "HOOKFAIL $i:"
+    cat err$i
+  fi
+done
+exit 0
+-- home/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+  log_all_evaluations: true
+-- w1.json --
+{
+  "session_id": "concurrent-session-1",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f1.txt" },
+  "tool_use_id": "tu-1"
+}
+-- w2.json --
+{
+  "session_id": "concurrent-session-2",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f2.txt" },
+  "tool_use_id": "tu-2"
+}
+-- w3.json --
+{
+  "session_id": "concurrent-session-3",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f3.txt" },
+  "tool_use_id": "tu-3"
+}
+-- w4.json --
+{
+  "session_id": "concurrent-session-0",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f4.txt" },
+  "tool_use_id": "tu-4"
+}
+-- w5.json --
+{
+  "session_id": "concurrent-session-1",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f5.txt" },
+  "tool_use_id": "tu-5"
+}
+-- w6.json --
+{
+  "session_id": "concurrent-session-2",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f6.txt" },
+  "tool_use_id": "tu-6"
+}
+-- w7.json --
+{
+  "session_id": "concurrent-session-3",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f7.txt" },
+  "tool_use_id": "tu-7"
+}
+-- w8.json --
+{
+  "session_id": "concurrent-session-0",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f8.txt" },
+  "tool_use_id": "tu-8"
+}
+-- w9.json --
+{
+  "session_id": "concurrent-session-1",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f9.txt" },
+  "tool_use_id": "tu-9"
+}
+-- w10.json --
+{
+  "session_id": "concurrent-session-2",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f10.txt" },
+  "tool_use_id": "tu-10"
+}
+-- w11.json --
+{
+  "session_id": "concurrent-session-3",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f11.txt" },
+  "tool_use_id": "tu-11"
+}
+-- w12.json --
+{
+  "session_id": "concurrent-session-0",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f12.txt" },
+  "tool_use_id": "tu-12"
+}
+-- w13.json --
+{
+  "session_id": "concurrent-session-1",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f13.txt" },
+  "tool_use_id": "tu-13"
+}
+-- w14.json --
+{
+  "session_id": "concurrent-session-2",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f14.txt" },
+  "tool_use_id": "tu-14"
+}
+-- w15.json --
+{
+  "session_id": "concurrent-session-3",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f15.txt" },
+  "tool_use_id": "tu-15"
+}
+-- w16.json --
+{
+  "session_id": "concurrent-session-0",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f16.txt" },
+  "tool_use_id": "tu-16"
+}
+-- w17.json --
+{
+  "session_id": "concurrent-session-1",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f17.txt" },
+  "tool_use_id": "tu-17"
+}
+-- w18.json --
+{
+  "session_id": "concurrent-session-2",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f18.txt" },
+  "tool_use_id": "tu-18"
+}
+-- w19.json --
+{
+  "session_id": "concurrent-session-3",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f19.txt" },
+  "tool_use_id": "tu-19"
+}
+-- w20.json --
+{
+  "session_id": "concurrent-session-0",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f20.txt" },
+  "tool_use_id": "tu-20"
+}
+-- w21.json --
+{
+  "session_id": "concurrent-session-1",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f21.txt" },
+  "tool_use_id": "tu-21"
+}
+-- w22.json --
+{
+  "session_id": "concurrent-session-2",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f22.txt" },
+  "tool_use_id": "tu-22"
+}
+-- w23.json --
+{
+  "session_id": "concurrent-session-3",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f23.txt" },
+  "tool_use_id": "tu-23"
+}
+-- w24.json --
+{
+  "session_id": "concurrent-session-0",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/home/user/project/f24.txt" },
+  "tool_use_id": "tu-24"
+}

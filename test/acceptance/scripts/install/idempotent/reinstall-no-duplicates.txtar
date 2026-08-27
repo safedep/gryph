@@ -1,0 +1,30 @@
+# Reinstall is a routine path: every upgrade runs gryph install again. A
+# plain reinstall is a no-op that keeps one gryph entry per hook type and
+# keeps foreign hooks. A --force reinstall replaces the hook types gryph
+# owns, and settings outside the hooks section survive.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph install --agent claude-code
+grep -count=1 'gryph _hook claude-code PreToolUse' $HOME/.claude/settings.json
+grep 'echo pre-existing-hook' $HOME/.claude/settings.json
+
+exec gryph install --agent claude-code
+grep -count=1 'gryph _hook claude-code PreToolUse' $HOME/.claude/settings.json
+grep -count=1 'gryph _hook claude-code PostToolUse"' $HOME/.claude/settings.json
+grep 'echo pre-existing-hook' $HOME/.claude/settings.json
+
+exec gryph install --agent claude-code --force
+grep -count=1 'gryph _hook claude-code PreToolUse' $HOME/.claude/settings.json
+grep '"theme": *"dark"' $HOME/.claude/settings.json
+
+-- home/.claude/settings.json --
+{
+  "theme": "dark",
+  "hooks": {
+    "PreToolUse": [
+      {"matcher": "*", "hooks": [{"type": "command", "command": "echo pre-existing-hook"}]}
+    ]
+  }
+}

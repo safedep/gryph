@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,18 +31,14 @@ type SQLiteStore struct {
 	db     *sql.DB
 	path   string
 
-	// receiptWriteMu serializes the receipt insert path. SQLite's WAL mode
-	// allows concurrent readers but a SELECT-then-INSERT transaction can fail
-	// with SQLITE_BUSY when two goroutines both acquire a read snapshot
-	// before one of them upgrades to a writer. An in-process mutex is
-	// cheaper and clearer than _txlock=immediate at the driver level since
-	// only the receipt path needs this guarantee.
+	// receiptWriteMu serializes the receipt insert path inside one process.
+	// Cross-process contention on the SELECT-then-INSERT chain transactions
+	// is handled by _txlock=immediate in the DSN. The mutex keeps
+	// goroutines in one process from queueing on the database lock.
 	receiptWriteMu sync.Mutex
 
 	// contextWriteMu serializes the context-action insert path. Same
-	// rationale as receiptWriteMu: the chain insert is a SELECT-last-row
-	// then INSERT transaction and an in-process mutex avoids SQLITE_BUSY
-	// from concurrent writers that both acquired a read snapshot.
+	// rationale as receiptWriteMu.
 	contextWriteMu sync.Mutex
 }
 
@@ -54,7 +51,15 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 
 	// Open database with modernc.org/sqlite driver
 	// Use _pragma=foreign_keys(1) for modernc.org/sqlite
-	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&_pragma=journal_mode(wal)&_pragma=busy_timeout(5000)", path))
+	//
+	// _txlock=immediate makes every transaction take the write lock at
+	// BEGIN. The chain inserts are SELECT-then-INSERT transactions, and a
+	// deferred transaction that upgrades read to write fails immediately
+	// with SQLITE_BUSY_SNAPSHOT when another process wrote in between.
+	// busy_timeout never applies to that failure. With immediate
+	// transactions, cross-process contention becomes a busy_timeout wait.
+	// Concurrent hook processes with policy enabled hit this daily.
+	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?_txlock=immediate&_pragma=foreign_keys(1)&_pragma=journal_mode(wal)&_pragma=busy_timeout(5000)", path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -72,13 +77,37 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 
 // Init initializes the database schema.
 func (s *SQLiteStore) Init(ctx context.Context) error {
-	if err := s.client.Schema.Create(ctx); err != nil {
+	if err := s.createSchema(ctx); err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
 	if err := s.InitFTS(ctx); err != nil {
 		return fmt.Errorf("failed to initialize FTS: %w", err)
 	}
 	return nil
+}
+
+// createSchema runs the ent migration with retries. Concurrent hook
+// processes race on a fresh database: both diff an empty schema and both
+// issue CREATE TABLE, and the loser fails with "already exists". A retry
+// re-diffs against the schema the winner created and no-ops. Losing the
+// race must never lose an audit event.
+func (s *SQLiteStore) createSchema(ctx context.Context) error {
+	const attempts = 5
+	var err error
+	for i := 0; i < attempts; i++ {
+		if err = s.client.Schema.Create(ctx); err == nil {
+			return nil
+		}
+		if !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(i+1) * 50 * time.Millisecond):
+		}
+	}
+	return err
 }
 
 // DB returns the underlying database connection.

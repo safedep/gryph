@@ -1,0 +1,40 @@
+# policy install refuses a candidate whose rule id collides with the active
+# policy, with a clear error, and does not copy the file. This is the merge
+# safety half of the multi-file authoring contract.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+# The candidate is valid in isolation.
+exec gryph policy validate --file dup.yaml --no-color
+stdout 'File valid'
+
+# The merge check refuses it.
+execexit 2 gryph policy install dup.yaml --no-color
+stderr 'duplicate rule id'
+! exists $XDG_CONFIG_HOME/gryph/policies/dup.yaml
+
+-- home/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: global-block-npm
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+    message: "blocked-by-global"
+-- dup.yaml --
+version: "1"
+rules:
+  - id: global-block-npm
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+    message: "duplicate"
