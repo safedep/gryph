@@ -1,0 +1,10 @@
+{
+  "session_id": "devin-session-abc",
+  "prompt_id": "prompt-001",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "exec",
+  "tool_input": {
+    "command": "npm install",
+    "shell_id": "main"
+  }
+}

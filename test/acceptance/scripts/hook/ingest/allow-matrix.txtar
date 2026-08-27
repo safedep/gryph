@@ -57,8 +57,13 @@ exec gryph _hook codex PostToolUse
 exec gryph query --agent codex --format json --no-color
 stdout '"ActionType": "command_exec"'
 
+stdin devin_bash.json
+exec gryph _hook devin PostToolUse
+exec gryph query --agent devin --format json --no-color
+stdout '"ActionType": "command_exec"'
+
 exec gryph sessions --format json --no-color
-stdout -count=7 '"ID"'
+stdout -count=8 '"ID"'
 
 -- claude_read.json --
 {
@@ -222,4 +227,20 @@ stdout -count=7 '"ID"'
     "command": "npm install"
   },
   "tool_response": "added 150 packages in 12s"
+}
+-- devin_bash.json --
+{
+  "session_id": "devin-session-abc",
+  "prompt_id": "prompt-001",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "exec",
+  "tool_input": {
+    "command": "npm install",
+    "shell_id": "main"
+  },
+  "tool_response": {
+    "success": true,
+    "output": "added 150 packages in 12s",
+    "error": null
+  }
 }

@@ -1,0 +1,554 @@
+package devin
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+
+	"github.com/google/uuid"
+	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/core/events"
+)
+
+type HookInput struct {
+	SessionID      string `json:"session_id"`
+	TranscriptPath string `json:"transcript_path"`
+	Cwd            string `json:"cwd"`
+	HookEventName  string `json:"hook_event_name"`
+	Model          string `json:"model"`
+}
+
+type PreToolUseInput struct {
+	HookInput
+	PromptID  string                 `json:"prompt_id"`
+	ToolName  string                 `json:"tool_name"`
+	ToolUseID string                 `json:"tool_use_id"`
+	ToolInput map[string]interface{} `json:"tool_input"`
+}
+
+type PostToolUseInput struct {
+	HookInput
+	PromptID     string                 `json:"prompt_id"`
+	ToolName     string                 `json:"tool_name"`
+	ToolUseID    string                 `json:"tool_use_id"`
+	ToolInput    map[string]interface{} `json:"tool_input"`
+	ToolResponse json.RawMessage        `json:"tool_response"`
+}
+
+type SessionStartInput struct {
+	HookInput
+	Source string `json:"source"`
+}
+
+type UserPromptSubmitInput struct {
+	HookInput
+	PromptID string `json:"prompt_id"`
+	Prompt   string `json:"prompt"`
+}
+
+type StopInput struct {
+	HookInput
+	PromptID       string `json:"prompt_id"`
+	StopHookActive bool   `json:"stop_hook_active"`
+}
+
+type SessionEndInput struct {
+	HookInput
+	Reason string `json:"reason"`
+}
+
+// ToolNameMapping maps Devin's externally-visible tool names to action
+// types. The names come from the lifecycle hooks doc and are lowercase,
+// unlike the Claude Code style names Codex uses.
+var ToolNameMapping = map[string]events.ActionType{
+	"read":          events.ActionFileRead,
+	"notebook_read": events.ActionFileRead,
+	"grep":          events.ActionFileRead,
+	"glob":          events.ActionFileRead,
+	"write":         events.ActionFileWrite,
+	"edit":          events.ActionFileWrite,
+	"apply_patch":   events.ActionFileWrite,
+	"notebook_edit": events.ActionFileWrite,
+	"exec":          events.ActionCommandExec,
+	"webfetch":      events.ActionToolUse,
+}
+
+func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event, error) {
+	var baseInput HookInput
+	if err := json.Unmarshal(rawData, &baseInput); err != nil {
+		return nil, fmt.Errorf("failed to parse hook input: %w", err)
+	}
+
+	eventName := hookType
+	if eventName == "" {
+		eventName = baseInput.HookEventName
+	}
+
+	agentSessionID := effectiveAgentSessionID(baseInput.SessionID)
+	sessionID := resolveSessionID(agentSessionID)
+
+	var event *events.Event
+	var err error
+
+	switch eventName {
+	case "SessionStart":
+		event, err = parseSessionStart(sessionID, agentSessionID, rawData)
+	case "PreToolUse":
+		event, err = a.parsePreToolUse(sessionID, agentSessionID, rawData)
+	case "PostToolUse":
+		event, err = a.parsePostToolUse(sessionID, agentSessionID, rawData)
+	case "UserPromptSubmit":
+		event, err = parseUserPromptSubmit(sessionID, agentSessionID, rawData)
+	case "Stop":
+		event, err = parseStop(sessionID, agentSessionID, rawData)
+	case "SessionEnd":
+		event, err = parseSessionEnd(sessionID, agentSessionID, rawData)
+	default:
+		event = events.NewEvent(sessionID, AgentName, events.ActionUnknown)
+		event.AgentSessionID = agentSessionID
+		event.WorkingDirectory = baseInput.Cwd
+		event.TranscriptPath = baseInput.TranscriptPath
+		event.RawEvent = rawData
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	if event != nil {
+		event.HookType = eventName
+		// The documented stdin payload has no cwd field. Devin sets
+		// DEVIN_PROJECT_DIR for hook processes, so use it when cwd is
+		// absent.
+		if event.WorkingDirectory == "" {
+			event.WorkingDirectory = os.Getenv("DEVIN_PROJECT_DIR")
+		}
+	}
+	return event, nil
+}
+
+// effectiveAgentSessionID returns the one session identifier both the
+// internal UUID and the stored AgentSessionID derive from, so events stay
+// correlatable with Devin's own session storage.
+func effectiveAgentSessionID(rawSessionID string) string {
+	if envID := os.Getenv("DEVIN_SESSION_ID"); envID != "" {
+		return envID
+	}
+	return rawSessionID
+}
+
+func resolveSessionID(rawSessionID string) uuid.UUID {
+	if rawSessionID != "" {
+		if parsed, err := uuid.Parse(rawSessionID); err == nil {
+			return parsed
+		}
+		return uuid.NewSHA1(uuid.NameSpaceOID, []byte(rawSessionID))
+	}
+
+	return uuid.New()
+}
+
+func parseSessionStart(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {
+	var input SessionStartInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse SessionStart input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionSessionStart)
+	event.AgentSessionID = agentSessionID
+	event.WorkingDirectory = input.Cwd
+	event.TranscriptPath = input.TranscriptPath
+	event.RawEvent = rawData
+
+	payload := events.SessionPayload{
+		Source: input.Source,
+		Model:  input.Model,
+	}
+
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+
+	return event, nil
+}
+
+func (a *Adapter) parsePreToolUse(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {
+	var input PreToolUseInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse PreToolUse input: %w", err)
+	}
+
+	actionType := getActionType(input.ToolName)
+	event := events.NewEvent(sessionID, AgentName, actionType)
+	event.AgentSessionID = agentSessionID
+	event.ToolName = input.ToolName
+	event.WorkingDirectory = input.Cwd
+	event.TranscriptPath = input.TranscriptPath
+	event.RawEvent = rawData
+
+	if err := a.buildToolPayload(event, actionType, input.ToolInput, nil); err != nil {
+		return nil, fmt.Errorf("failed to build payload: %w", err)
+	}
+
+	a.markSensitivePaths(event, actionType, input.ToolInput)
+
+	return event, nil
+}
+
+func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {
+	var input PostToolUseInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse PostToolUse input: %w", err)
+	}
+
+	actionType := getActionType(input.ToolName)
+	event := events.NewEvent(sessionID, AgentName, actionType)
+	event.AgentSessionID = agentSessionID
+	event.ToolName = input.ToolName
+	event.WorkingDirectory = input.Cwd
+	event.TranscriptPath = input.TranscriptPath
+	event.RawEvent = rawData
+	event.ResultStatus = events.ResultSuccess
+
+	toolResponse := parseToolResponse(input.ToolResponse, event)
+
+	if err := a.buildToolPayload(event, actionType, input.ToolInput, toolResponse); err != nil {
+		return nil, fmt.Errorf("failed to build payload: %w", err)
+	}
+
+	a.markSensitivePaths(event, actionType, input.ToolInput)
+
+	return event, nil
+}
+
+// toolResponseObject is the documented PostToolUse tool_response shape.
+type toolResponseObject struct {
+	Success *bool   `json:"success"`
+	Output  string  `json:"output"`
+	Error   *string `json:"error"`
+}
+
+// parseToolResponse extracts the output text from the tool_response object
+// and records a failed tool run on the event. A plain string response is
+// tolerated for forward compatibility.
+func parseToolResponse(raw json.RawMessage, event *events.Event) interface{} {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	var structured toolResponseObject
+	if err := json.Unmarshal(raw, &structured); err == nil && structured.Success != nil {
+		if !*structured.Success {
+			event.ResultStatus = events.ResultError
+			if structured.Error != nil {
+				event.ErrorMessage = *structured.Error
+			}
+		}
+		return structured.Output
+	}
+
+	var responseStr string
+	if err := json.Unmarshal(raw, &responseStr); err == nil {
+		return responseStr
+	}
+
+	var generic interface{}
+	if err := json.Unmarshal(raw, &generic); err == nil {
+		return generic
+	}
+	return nil
+}
+
+func parseUserPromptSubmit(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {
+	var input UserPromptSubmitInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse UserPromptSubmit input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionToolUse)
+	event.AgentSessionID = agentSessionID
+	event.ToolName = "UserPromptSubmit"
+	event.WorkingDirectory = input.Cwd
+	event.TranscriptPath = input.TranscriptPath
+	event.RawEvent = rawData
+
+	payload := events.ToolUsePayload{
+		ToolName: "UserPromptSubmit",
+	}
+
+	promptInput := map[string]string{"prompt": input.Prompt}
+	if data, err := json.Marshal(promptInput); err == nil {
+		payload.Input = data
+	}
+
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+
+	return event, nil
+}
+
+// parseStop records the end of one assistant response. Devin fires Stop per
+// response and fires SessionEnd once when the session ends, so only
+// SessionEnd maps to the session-end action.
+func parseStop(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {
+	var input StopInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse Stop input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionNotification)
+	event.AgentSessionID = agentSessionID
+	event.WorkingDirectory = input.Cwd
+	event.TranscriptPath = input.TranscriptPath
+	event.RawEvent = rawData
+
+	payload := events.NotificationPayload{
+		Message: "agent stopped",
+		Type:    "stop",
+	}
+
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+
+	return event, nil
+}
+
+func parseSessionEnd(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {
+	var input SessionEndInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse SessionEnd input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionSessionEnd)
+	event.AgentSessionID = agentSessionID
+	event.WorkingDirectory = input.Cwd
+	event.TranscriptPath = input.TranscriptPath
+	event.RawEvent = rawData
+
+	payload := events.SessionEndPayload{
+		Reason: input.Reason,
+	}
+
+	if err := event.SetPayload(payload); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+
+	return event, nil
+}
+
+func getActionType(toolName string) events.ActionType {
+	if at, ok := ToolNameMapping[toolName]; ok {
+		return at
+	}
+	return events.ActionToolUse
+}
+
+func (a *Adapter) buildToolPayload(event *events.Event, actionType events.ActionType, toolInput map[string]interface{}, toolResponse interface{}) error {
+	switch actionType {
+	case events.ActionFileRead:
+		payload := events.FileReadPayload{}
+		if path, ok := toolInput["file_path"].(string); ok {
+			payload.Path = path
+		} else if path, ok := toolInput["path"].(string); ok {
+			payload.Path = path
+		}
+		if pattern, ok := toolInput["pattern"].(string); ok {
+			payload.Pattern = pattern
+		}
+		return event.SetPayload(payload)
+
+	case events.ActionFileWrite:
+		payload := events.FileWritePayload{}
+		filePath := ""
+		if path, ok := toolInput["file_path"].(string); ok {
+			payload.Path = path
+			filePath = path
+		}
+
+		fullOldStr, _ := toolInput["old_string"].(string)
+		fullNewStr, _ := toolInput["new_string"].(string)
+		fullContent, _ := toolInput["content"].(string)
+
+		if a.contentHash {
+			if fullContent != "" {
+				payload.ContentHash = utils.HashContent(fullContent)
+			} else if fullOldStr != "" || fullNewStr != "" {
+				payload.ContentHash = utils.HashContent(fullOldStr + fullNewStr)
+			}
+		}
+
+		if fullOldStr != "" || fullNewStr != "" {
+			payload.LinesAdded, payload.LinesRemoved = utils.CountDiffLines(fullOldStr, fullNewStr)
+		} else if fullContent != "" {
+			payload.LinesAdded = utils.CountNewFileLines(fullContent)
+		}
+
+		if fullContent != "" {
+			payload.ContentPreview = truncateString(fullContent, 200)
+		}
+		if fullOldStr != "" {
+			payload.OldString = truncateString(fullOldStr, 200)
+		}
+		if fullNewStr != "" {
+			payload.NewString = truncateString(fullNewStr, 200)
+		}
+
+		if err := event.SetPayload(payload); err != nil {
+			return err
+		}
+
+		if a.loggingLevel.IsAtLeast(config.LoggingFull) {
+			if fullOldStr != "" || fullNewStr != "" {
+				event.DiffContent = utils.GenerateDiff(filePath, fullOldStr, fullNewStr)
+			} else if fullContent != "" {
+				event.DiffContent = utils.GenerateDiff(filePath, "", fullContent)
+			}
+		}
+		return nil
+
+	case events.ActionCommandExec:
+		payload := events.CommandExecPayload{}
+		if cmd, ok := toolInput["command"].(string); ok {
+			payload.Command = cmd
+		}
+		if responseStr, ok := toolResponse.(string); ok {
+			payload.Output = truncateString(responseStr, 500)
+		}
+		return event.SetPayload(payload)
+
+	default:
+		payload := events.ToolUsePayload{
+			ToolName: event.ToolName,
+		}
+		if input, err := json.Marshal(toolInput); err == nil {
+			payload.Input = input
+		}
+		if toolResponse != nil {
+			if resp, err := json.Marshal(toolResponse); err == nil {
+				payload.Output = resp
+			}
+		}
+		return event.SetPayload(payload)
+	}
+}
+
+func (a *Adapter) markSensitivePaths(event *events.Event, actionType events.ActionType, toolInput map[string]interface{}) {
+	if a.privacyChecker == nil {
+		return
+	}
+
+	switch actionType {
+	case events.ActionFileRead, events.ActionFileWrite:
+		if path, ok := toolInput["file_path"].(string); ok {
+			event.IsSensitive = a.privacyChecker.IsSensitivePath(path)
+		} else if path, ok := toolInput["path"].(string); ok {
+			event.IsSensitive = a.privacyChecker.IsSensitivePath(path)
+		}
+	case events.ActionCommandExec:
+		if cmd, ok := toolInput["command"].(string); ok {
+			event.IsSensitive = a.privacyChecker.IsSensitivePath(cmd)
+		}
+	}
+}
+
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+type HookResponse struct {
+	Decision HookDecision
+	Message  string
+}
+
+type HookDecision int
+
+const (
+	HookAllow HookDecision = iota
+	HookBlock
+	HookError
+	HookGuidance
+)
+
+func (r *HookResponse) ExitCode() int {
+	switch r.Decision {
+	case HookBlock:
+		return 2
+	case HookError:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func (r *HookResponse) Stderr() string {
+	switch r.Decision {
+	case HookBlock, HookError, HookGuidance:
+		return r.Message
+	}
+	return ""
+}
+
+// preToolUseOutput carries the block decision in both response forms the
+// Claude Code compatible protocol accepts. The Devin CLI hooks doc shows the
+// top-level decision and reason fields. The hookSpecificOutput form is the
+// newer permissionDecision channel Codex uses. Emitting both keeps the
+// stdout channel effective whichever form Devin parses. The exit code 2
+// path blocks independently of either.
+type preToolUseOutput struct {
+	Decision           string             `json:"decision,omitempty"`
+	Reason             string             `json:"reason,omitempty"`
+	HookSpecificOutput preToolUseDecision `json:"hookSpecificOutput"`
+}
+
+type preToolUseDecision struct {
+	HookEventName            string `json:"hookEventName"`
+	PermissionDecision       string `json:"permissionDecision"`
+	PermissionDecisionReason string `json:"permissionDecisionReason,omitempty"`
+}
+
+func (r *HookResponse) JSON() []byte {
+	output := preToolUseOutput{
+		HookSpecificOutput: preToolUseDecision{
+			HookEventName: "PreToolUse",
+		},
+	}
+
+	switch r.Decision {
+	case HookBlock:
+		output.Decision = "block"
+		output.Reason = r.Message
+		output.HookSpecificOutput.PermissionDecision = "deny"
+		output.HookSpecificOutput.PermissionDecisionReason = r.Message
+	case HookGuidance:
+		output.HookSpecificOutput.PermissionDecision = "allow"
+		output.HookSpecificOutput.PermissionDecisionReason = r.Message
+	default:
+		output.HookSpecificOutput.PermissionDecision = "allow"
+	}
+
+	data, _ := json.Marshal(output)
+	return data
+}
+
+func NewAllowResponse() *HookResponse {
+	return &HookResponse{Decision: HookAllow}
+}
+
+func NewBlockResponse(message string) *HookResponse {
+	return &HookResponse{Decision: HookBlock, Message: message}
+}
+
+func NewErrorResponse(message string) *HookResponse {
+	return &HookResponse{Decision: HookError, Message: message}
+}
+
+// NewGuidanceResponse creates a non-blocking advisory response.
+// PreToolUse carries the reason inline; other hooks fall back to stderr.
+func NewGuidanceResponse(message string) *HookResponse {
+	return &HookResponse{Decision: HookGuidance, Message: message}
+}

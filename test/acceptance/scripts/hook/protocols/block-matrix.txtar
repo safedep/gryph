@@ -26,8 +26,13 @@ stdin codex.json
 execexit 2 gryph _hook codex PreToolUse
 stdout '"permissionDecision":"deny"'
 
+stdin devin.json
+execexit 2 gryph _hook devin PreToolUse
+stdout '"decision":"block"'
+stdout '"permissionDecision":"deny"'
+
 exec gryph query --status blocked --format json --no-color
-stdout -count=5 '"ResultStatus": "blocked"'
+stdout -count=6 '"ResultStatus": "blocked"'
 
 -- home/.config/safedep/gryph/config.yml --
 policy:
@@ -103,5 +108,16 @@ rules:
   "tool_use_id": "tool-001",
   "tool_input": {
     "command": "npm install"
+  }
+}
+-- devin.json --
+{
+  "session_id": "devin-session-abc",
+  "prompt_id": "prompt-001",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "exec",
+  "tool_input": {
+    "command": "npm install",
+    "shell_id": "main"
   }
 }

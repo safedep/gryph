@@ -1,0 +1,9 @@
+{
+  "session_id": "devin-session-abc",
+  "prompt_id": "prompt-001",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "read",
+  "tool_input": {
+    "file_path": "/home/user/project/main.go"
+  }
+}

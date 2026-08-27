@@ -17,7 +17,7 @@ import (
 
 // Cross-agent compatibility matrix.
 //
-// TestPolicyMatrix drives the seven registered hook-shipping agents through
+// TestPolicyMatrix drives the eight registered hook-shipping agents through
 // the same scenario set (allow, block, guidance, escalate, defer) using a
 // minimal per-scenario policy and asserts on three observables:
 //
@@ -132,6 +132,14 @@ var matrixAgents = []matrixAgent{
 		readHookType:    "",
 		readPayloadPath: "",
 		blockExitCode:   2,
+	},
+	{
+		name:               agent.AgentDevin,
+		commandHookType:    "PreToolUse",
+		commandPayloadPath: "../../agent/devin/testdata/pre_tool_use_exec.json",
+		readHookType:       "PreToolUse",
+		readPayloadPath:    "../../agent/devin/testdata/pre_tool_use_read.json",
+		blockExitCode:      2,
 	},
 }
 

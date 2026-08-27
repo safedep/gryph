@@ -1,0 +1,6 @@
+{
+  "session_id": "devin-session-abc",
+  "prompt_id": "prompt-003",
+  "hook_event_name": "Stop",
+  "stop_hook_active": false
+}

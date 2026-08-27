@@ -1,0 +1,6 @@
+{
+  "session_id": "devin-session-abc",
+  "prompt_id": "prompt-002",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Fix the failing test in main_test.go"
+}

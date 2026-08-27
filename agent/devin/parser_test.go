@@ -1,0 +1,277 @@
+package devin
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/core/events"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func loadFixture(t *testing.T, name string) []byte {
+	t.Helper()
+	path := filepath.Join("testdata", name)
+	data, err := os.ReadFile(path)
+	require.NoError(t, err, "Failed to read fixture: %s", name)
+	return data
+}
+
+func testPrivacyChecker(t *testing.T) *events.PrivacyChecker {
+	t.Helper()
+	pc, err := events.NewPrivacyChecker(events.DefaultSensitivePatterns(), nil)
+	require.NoError(t, err)
+	return pc
+}
+
+func testAdapter(t *testing.T) *Adapter {
+	t.Helper()
+	return New(testPrivacyChecker(t), config.LoggingStandard, true)
+}
+
+func TestParseHookEvent_SessionStart(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "session_start.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "SessionStart", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionSessionStart, event.ActionType)
+	assert.Equal(t, AgentName, event.AgentName)
+	assert.Equal(t, "SessionStart", event.HookType)
+	assert.Equal(t, "devin-session-abc", event.AgentSessionID)
+
+	payload := events.SessionPayload{}
+	require.NoError(t, json.Unmarshal(event.Payload, &payload))
+	assert.Equal(t, "startup", payload.Source)
+}
+
+func TestParseHookEvent_PreToolUse_Exec(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "pre_tool_use_exec.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionCommandExec, event.ActionType)
+	assert.Equal(t, "exec", event.ToolName)
+	assert.Equal(t, AgentName, event.AgentName)
+
+	payload, err := event.GetCommandExecPayload()
+	require.NoError(t, err)
+	assert.Equal(t, "npm install", payload.Command)
+}
+
+func TestParseHookEvent_PreToolUse_Read(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "pre_tool_use_read.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionFileRead, event.ActionType)
+	assert.Equal(t, "read", event.ToolName)
+
+	payload, err := event.GetFileReadPayload()
+	require.NoError(t, err)
+	assert.Equal(t, "/home/user/project/main.go", payload.Path)
+}
+
+func TestParseHookEvent_PostToolUse_Exec(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "post_tool_use_exec.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PostToolUse", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionCommandExec, event.ActionType)
+	assert.Equal(t, "exec", event.ToolName)
+	assert.Equal(t, events.ResultSuccess, event.ResultStatus)
+
+	payload, err := event.GetCommandExecPayload()
+	require.NoError(t, err)
+	assert.Equal(t, "npm install", payload.Command)
+	assert.Contains(t, payload.Output, "added 150 packages")
+}
+
+func TestParseHookEvent_PostToolUse_Failure(t *testing.T) {
+	ctx := context.Background()
+	data := []byte(`{
+		"session_id": "devin-session-abc",
+		"hook_event_name": "PostToolUse",
+		"tool_name": "exec",
+		"tool_input": {"command": "npm test"},
+		"tool_response": {"success": false, "output": "", "error": "exit status 1"}
+	}`)
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PostToolUse", data)
+	require.NoError(t, err)
+
+	assert.Equal(t, events.ResultError, event.ResultStatus)
+	assert.Equal(t, "exit status 1", event.ErrorMessage)
+}
+
+func TestParseHookEvent_UserPromptSubmit(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "user_prompt_submit.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "UserPromptSubmit", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionToolUse, event.ActionType)
+	assert.Equal(t, "UserPromptSubmit", event.ToolName)
+
+	payload, err := event.GetToolUsePayload()
+	require.NoError(t, err)
+	assert.Equal(t, "UserPromptSubmit", payload.ToolName)
+}
+
+func TestParseHookEvent_Stop(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "stop.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "Stop", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionNotification, event.ActionType)
+
+	payload := events.NotificationPayload{}
+	require.NoError(t, json.Unmarshal(event.Payload, &payload))
+	assert.Equal(t, "stop", payload.Type)
+}
+
+func TestParseHookEvent_SessionEnd(t *testing.T) {
+	ctx := context.Background()
+	data := loadFixture(t, "session_end.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "SessionEnd", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionSessionEnd, event.ActionType)
+	assert.Equal(t, AgentName, event.AgentName)
+
+	payload := events.SessionEndPayload{}
+	require.NoError(t, json.Unmarshal(event.Payload, &payload))
+	assert.Equal(t, "user_exit", payload.Reason)
+}
+
+func TestParseHookEvent_DeterministicSessionID(t *testing.T) {
+	ctx := context.Background()
+	adapter := testAdapter(t)
+
+	data1 := loadFixture(t, "pre_tool_use_exec.json")
+	data2 := loadFixture(t, "post_tool_use_exec.json")
+
+	event1, err := adapter.ParseEvent(ctx, "PreToolUse", data1)
+	require.NoError(t, err)
+
+	event2, err := adapter.ParseEvent(ctx, "PostToolUse", data2)
+	require.NoError(t, err)
+
+	assert.Equal(t, event1.SessionID, event2.SessionID)
+
+	expected := uuid.NewSHA1(uuid.NameSpaceOID, []byte("devin-session-abc"))
+	assert.Equal(t, expected, event1.SessionID)
+}
+
+func TestParseHookEvent_EnvSessionIDOverride(t *testing.T) {
+	t.Setenv("DEVIN_SESSION_ID", "env-session-xyz")
+
+	ctx := context.Background()
+	data := loadFixture(t, "pre_tool_use_exec.json")
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
+	require.NoError(t, err)
+
+	assert.Equal(t, "env-session-xyz", event.AgentSessionID)
+	expected := uuid.NewSHA1(uuid.NameSpaceOID, []byte("env-session-xyz"))
+	assert.Equal(t, expected, event.SessionID)
+}
+
+func TestParseHookEvent_ProjectDirFallback(t *testing.T) {
+	t.Setenv("DEVIN_PROJECT_DIR", "/home/user/fallback-project")
+
+	ctx := context.Background()
+	data := []byte(`{"session_id": "devin-session-abc", "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "ls"}}`)
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
+	require.NoError(t, err)
+	assert.Equal(t, "/home/user/fallback-project", event.WorkingDirectory)
+
+	withCwd := []byte(`{"session_id": "devin-session-abc", "hook_event_name": "PreToolUse", "cwd": "/home/user/project", "tool_name": "exec", "tool_input": {"command": "ls"}}`)
+	event, err = testAdapter(t).ParseEvent(ctx, "PreToolUse", withCwd)
+	require.NoError(t, err)
+	assert.Equal(t, "/home/user/project", event.WorkingDirectory)
+}
+
+func TestParseHookEvent_InvalidJSON(t *testing.T) {
+	ctx := context.Background()
+	adapter := testAdapter(t)
+
+	_, err := adapter.ParseEvent(ctx, "SessionStart", []byte("not-json"))
+	assert.Error(t, err)
+}
+
+func TestHookResponse_Allow(t *testing.T) {
+	resp := NewAllowResponse()
+	data := resp.JSON()
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &parsed))
+
+	hookOutput, ok := parsed["hookSpecificOutput"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "allow", hookOutput["permissionDecision"])
+}
+
+func TestHookResponse_Block(t *testing.T) {
+	resp := NewBlockResponse("dangerous command")
+	data := resp.JSON()
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &parsed))
+
+	hookOutput, ok := parsed["hookSpecificOutput"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "deny", hookOutput["permissionDecision"])
+	assert.Equal(t, "dangerous command", hookOutput["permissionDecisionReason"])
+
+	assert.Equal(t, "block", parsed["decision"])
+	assert.Equal(t, "dangerous command", parsed["reason"])
+}
+
+func TestHookResponse_Guidance(t *testing.T) {
+	resp := NewGuidanceResponse("security advisory")
+	data := resp.JSON()
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &parsed))
+
+	hookOutput, ok := parsed["hookSpecificOutput"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "allow", hookOutput["permissionDecision"])
+	assert.Equal(t, "security advisory", hookOutput["permissionDecisionReason"])
+	assert.Equal(t, "security advisory", resp.Stderr())
+
+	_, hasDecision := parsed["decision"]
+	assert.False(t, hasDecision, "guidance must not carry a top-level decision")
+}
+
+func TestHookResponse_ExitCodes(t *testing.T) {
+	assert.Equal(t, 0, NewAllowResponse().ExitCode())
+	assert.Equal(t, 2, NewBlockResponse("reason").ExitCode())
+	assert.Equal(t, 1, NewErrorResponse("error").ExitCode())
+	assert.Equal(t, 0, NewGuidanceResponse("advisory").ExitCode())
+}

@@ -886,3 +886,104 @@ func TestHook_Codex_DeterministicSessionID(t *testing.T) {
 
 	assert.Equal(t, evts[0].SessionID, evts[1].SessionID, "same session_id should produce same UUID")
 }
+
+func TestHook_Devin(t *testing.T) {
+	tests := []struct {
+		name       string
+		hookType   string
+		fixture    string
+		actionType events.ActionType
+	}{
+		{
+			name:       "PreToolUse_Exec",
+			hookType:   "PreToolUse",
+			fixture:    "pre_tool_use_exec.json",
+			actionType: events.ActionCommandExec,
+		},
+		{
+			name:       "PreToolUse_Read",
+			hookType:   "PreToolUse",
+			fixture:    "pre_tool_use_read.json",
+			actionType: events.ActionFileRead,
+		},
+		{
+			name:       "PostToolUse_Exec",
+			hookType:   "PostToolUse",
+			fixture:    "post_tool_use_exec.json",
+			actionType: events.ActionCommandExec,
+		},
+		{
+			name:       "SessionStart",
+			hookType:   "SessionStart",
+			fixture:    "session_start.json",
+			actionType: events.ActionSessionStart,
+		},
+		{
+			name:       "UserPromptSubmit",
+			hookType:   "UserPromptSubmit",
+			fixture:    "user_prompt_submit.json",
+			actionType: events.ActionToolUse,
+		},
+		{
+			name:       "Stop",
+			hookType:   "Stop",
+			fixture:    "stop.json",
+			actionType: events.ActionNotification,
+		},
+		{
+			name:       "SessionEnd",
+			hookType:   "SessionEnd",
+			fixture:    "session_end.json",
+			actionType: events.ActionSessionEnd,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newTestEnv(t)
+			ctx := context.Background()
+
+			payload, err := os.ReadFile("../../agent/devin/testdata/" + tt.fixture)
+			require.NoError(t, err)
+
+			_, _, runErr := env.runHook("devin", tt.hookType, payload)
+			require.NoError(t, runErr)
+
+			store, cleanup := env.openStore()
+			defer cleanup()
+
+			evts, err := store.QueryEvents(ctx, events.NewEventFilter())
+			require.NoError(t, err)
+			require.Len(t, evts, 1)
+
+			assert.Equal(t, tt.actionType, evts[0].ActionType)
+			assert.Equal(t, "devin", evts[0].AgentName)
+		})
+	}
+}
+
+func TestHook_Devin_DeterministicSessionID(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	payload1, err := os.ReadFile("../../agent/devin/testdata/pre_tool_use_exec.json")
+	require.NoError(t, err)
+
+	payload2, err := os.ReadFile("../../agent/devin/testdata/post_tool_use_exec.json")
+	require.NoError(t, err)
+
+	_, _, err = env.runHook("devin", "PreToolUse", payload1)
+	require.NoError(t, err)
+
+	_, _, err = env.runHook("devin", "PostToolUse", payload2)
+	require.NoError(t, err)
+
+	store, cleanup := env.openStore()
+	defer cleanup()
+
+	evts, err := store.QueryEvents(ctx, events.NewEventFilter())
+	require.NoError(t, err)
+	require.Len(t, evts, 2)
+
+	assert.Equal(t, evts[0].SessionID, evts[1].SessionID, "same session_id should produce same UUID")
+}

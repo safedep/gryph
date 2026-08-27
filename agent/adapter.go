@@ -17,6 +17,7 @@ const (
 	AgentWindsurf   = "windsurf"
 	AgentPiAgent    = "pi-agent"
 	AgentCodex      = "codex"
+	AgentDevin      = "devin"
 )
 
 // DetectionResult contains information about a detected agent.
