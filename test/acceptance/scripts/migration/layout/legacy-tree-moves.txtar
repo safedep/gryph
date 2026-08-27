@@ -1,0 +1,30 @@
+# An install from a release before the safedep/gryph layout moves to the
+# new location on first run. The config keeps loading, the stored state
+# stays intact, and the move leaves a path_migration self-log row.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+# The seeded legacy config sets a non-default logging level. Reading it back
+# proves the moved config loads from the new location.
+exec gryph config get logging.level
+stdout 'full'
+exists $XDG_CONFIG_HOME/safedep/gryph/config.yml
+! exists $XDG_CONFIG_HOME/safedep/gryph/config.yaml
+exists $XDG_CONFIG_HOME/safedep/gryph/policy.yaml
+exists $XDG_DATA_HOME/safedep/gryph/keep.txt
+! exists $XDG_CONFIG_HOME/gryph
+! exists $XDG_DATA_HOME/gryph
+
+# The first command that opens the store records the migration.
+exec gryph self-log --format json --no-color
+stdout '"Action": "path_migration"'
+
+-- home/.config/gryph/config.yaml --
+logging:
+  level: full
+-- home/.config/gryph/policy.yaml --
+version: 1
+rules: []
+-- home/.local/share/gryph/keep.txt --
+audit data placeholder

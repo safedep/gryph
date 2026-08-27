@@ -282,7 +282,14 @@ type Paths struct {
 }
 
 // Load loads configuration from the given path or default locations.
+//
+// Precedence: the system managed file is authoritative when present. It
+// wins over an explicit configPath and over the per-user config file, so a
+// user cannot bypass it with --config. Without a managed file, an explicit
+// configPath wins over the per-user file.
 func Load(configPath string) (*Config, error) {
+	MigrateLegacyLayout()
+
 	v := viper.New()
 
 	// Set defaults
@@ -292,7 +299,10 @@ func Load(configPath string) (*Config, error) {
 	v.SetConfigType("yaml")
 
 	// Determine config file path
-	if configPath != "" {
+	managed := ""
+	if managed = ManagedConfigFile(); managed != "" {
+		v.SetConfigFile(managed)
+	} else if configPath != "" {
 		v.SetConfigFile(configPath)
 	} else {
 		paths := ResolvePaths()
@@ -309,6 +319,11 @@ func Load(configPath string) (*Config, error) {
 	// Read config file
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			// A broken managed file makes the caller fall back to defaults.
+			// Name the file so the administrator can find it.
+			if managed != "" {
+				log.Warnf("failed to read managed config %s: %v", managed, err)
+			}
 			return nil, fmt.Errorf("error reading config file: %w", err)
 		}
 	}
@@ -405,7 +420,7 @@ func ResolvePaths() *Paths {
 	cacheDir := getCacheDir()
 
 	return &Paths{
-		ConfigFile:   filepath.Join(configDir, "config.yaml"),
+		ConfigFile:   filepath.Join(configDir, configFileName),
 		ConfigDir:    configDir,
 		DataDir:      dataDir,
 		DatabaseFile: filepath.Join(dataDir, "audit.db"),

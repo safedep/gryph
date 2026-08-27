@@ -12,13 +12,13 @@ stdout 'File valid'
 # The merge check refuses it.
 execexit 2 gryph policy install dup.yaml --no-color
 stderr 'duplicate rule id'
-! exists $XDG_CONFIG_HOME/gryph/policies/dup.yaml
+! exists $XDG_CONFIG_HOME/safedep/gryph/policies/dup.yaml
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed
--- home/.config/gryph/policy.yaml --
+-- home/.config/safedep/gryph/policy.yaml --
 version: "1"
 rules:
   - id: global-block-npm

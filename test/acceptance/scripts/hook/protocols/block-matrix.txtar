@@ -29,12 +29,12 @@ stdout '"permissionDecision":"deny"'
 exec gryph query --status blocked --format json --no-color
 stdout -count=5 '"ResultStatus": "blocked"'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed
   log_all_evaluations: true
--- home/.config/gryph/policy.yaml --
+-- home/.config/safedep/gryph/policy.yaml --
 version: "1"
 rules:
   - id: acceptance-block-npm-install

@@ -38,7 +38,7 @@ stderr 'failed to parse event'
 this is not json {{{
 -- unknown_type.json --
 {"session_id":"s1","hook_event_name":"NoSuchHookType"}
--- home2/.config/gryph/config.yaml --
+-- home2/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed

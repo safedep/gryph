@@ -1,0 +1,18 @@
+# When the legacy and the new config directory both exist, gryph reads the
+# new one and leaves the legacy directory in place for manual
+# reconciliation. Nothing is merged and nothing is deleted.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph config get logging.level
+stdout 'minimal'
+exists $XDG_CONFIG_HOME/gryph/config.yaml
+exists $XDG_CONFIG_HOME/safedep/gryph/config.yml
+
+-- home/.config/gryph/config.yaml --
+logging:
+  level: full
+-- home/.config/safedep/gryph/config.yml --
+logging:
+  level: minimal

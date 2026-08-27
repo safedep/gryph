@@ -22,11 +22,11 @@ stderr 'blocked-by-counter'
 exec gryph query --status blocked --format json --no-color
 stdout -count=2 '"ResultStatus": "blocked"'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed
--- home/.config/gryph/policy.yaml --
+-- home/.config/safedep/gryph/policy.yaml --
 version: "1"
 rules:
   - id: acceptance-cap-writes

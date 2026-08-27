@@ -6,8 +6,8 @@ env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
 env XDG_DATA_HOME=$WORK/home/.local/share
 
-mkdir $XDG_DATA_HOME/gryph
-cp $ACCEPTANCE_TESTDATA/upgrade/audit-v0.7.0.db $XDG_DATA_HOME/gryph/audit.db
+mkdir $XDG_DATA_HOME/safedep/gryph
+cp $ACCEPTANCE_TESTDATA/upgrade/audit-v0.7.0.db $XDG_DATA_HOME/safedep/gryph/audit.db
 
 exec gryph query --format json --no-color
 stdout -count=4 '"ActionType"'

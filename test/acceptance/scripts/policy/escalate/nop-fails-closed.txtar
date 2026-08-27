@@ -17,11 +17,11 @@ exec gryph self-log --format json --no-color
 stdout '"Action": "approval_requested"'
 stdout '"Action": "approval_denied"'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed
--- home/.config/gryph/policy.yaml --
+-- home/.config/safedep/gryph/policy.yaml --
 version: "1"
 rules:
   - id: acceptance-escalate-npm

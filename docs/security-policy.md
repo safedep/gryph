@@ -30,7 +30,7 @@ Once enabled, every supported agent hook runs through the engine.
 
 Gryph loads policy from three sources, in this order:
 
-1. **Global policy file** (`${ConfigDir}/policy.yaml`, optional). The single operator-owned file. On macOS this is `~/Library/Application Support/gryph/policy.yaml`; on Linux `~/.config/gryph/policy.yaml`. A missing file is not an error.
+1. **Global policy file** (`${ConfigDir}/policy.yaml`, optional). The single operator-owned file. On macOS this is `~/Library/Application Support/safedep/gryph/policy.yaml`; on Linux `~/.config/safedep/gryph/policy.yaml`. A missing file is not an error.
 2. **Policies directory** (`${ConfigDir}/policies/*.yaml` and `*.yml`, optional). Each file is a separate policy document. Files load in sorted name order and merge after the global file. A missing directory is not an error. This lets you author policy as many small, self-contained files instead of one large file.
 3. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, and agent hook configs from agent self-modification.
 
@@ -548,7 +548,7 @@ Read this before relying on receipt signatures as evidence outside your own host
 
 - **Tamper detection on exported receipts.** A third party with the pubkey can verify a JSONL export came from your host and was not modified in transit.
 - **Per-host attribution.** Aggregating receipts from many hosts at one SIEM, each host's signature ties its rows back to that host's key.
-- **In-DB tamper by something that does not have key access.** Rare on a single-user host since the key sits in `~/.config/gryph/keys/` at the operator's UID.
+- **In-DB tamper by something that does not have key access.** Rare on a single-user host since the key sits in `~/.config/safedep/gryph/keys/` at the operator's UID.
 
 ### What signing does not protect
 

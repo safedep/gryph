@@ -15,7 +15,7 @@ grep 'echo pre-existing-hook' $HOME/.claude/settings.json
 grep '"theme": *"dark"' $HOME/.claude/settings.json
 
 # The database and config directories exist inside the sandbox.
-exists $XDG_DATA_HOME/gryph/audit.db
+exists $XDG_DATA_HOME/safedep/gryph/audit.db
 
 -- home/.claude/settings.json --
 {

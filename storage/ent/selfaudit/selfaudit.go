@@ -98,6 +98,7 @@ const (
 	ActionDeferralSweep           Action = "deferral_sweep"
 	ActionDeferralCleanup         Action = "deferral_cleanup"
 	ActionIdentityMissing         Action = "identity_missing"
+	ActionPathMigration           Action = "path_migration"
 )
 
 func (a Action) String() string {
@@ -107,7 +108,7 @@ func (a Action) String() string {
 // ActionValidator is a validator for the "action" field enum values. It is called by the builders before save.
 func ActionValidator(a Action) error {
 	switch a {
-	case ActionInstall, ActionUninstall, ActionConfigChange, ActionExport, ActionPurge, ActionUpgrade, ActionDatabaseInit, ActionRetentionCleanup, ActionHookError, ActionPolicyLoadError, ActionContextCleanup, ActionContextSnapshotError, ActionContextChainBroken, ActionReceiptCleanup, ActionReceiptInsertError, ActionReceiptChainBroken, ActionReceiptSigned, ActionReceiptSignatureInvalid, ActionReceiptKeyRotated, ActionApprovalRequested, ActionApprovalGranted, ActionApprovalDenied, ActionApprovalTimeout, ActionDeferralRequested, ActionDeferralResolved, ActionDeferralTimeout, ActionDeferralSweep, ActionDeferralCleanup, ActionIdentityMissing:
+	case ActionInstall, ActionUninstall, ActionConfigChange, ActionExport, ActionPurge, ActionUpgrade, ActionDatabaseInit, ActionRetentionCleanup, ActionHookError, ActionPolicyLoadError, ActionContextCleanup, ActionContextSnapshotError, ActionContextChainBroken, ActionReceiptCleanup, ActionReceiptInsertError, ActionReceiptChainBroken, ActionReceiptSigned, ActionReceiptSignatureInvalid, ActionReceiptKeyRotated, ActionApprovalRequested, ActionApprovalGranted, ActionApprovalDenied, ActionApprovalTimeout, ActionDeferralRequested, ActionDeferralResolved, ActionDeferralTimeout, ActionDeferralSweep, ActionDeferralCleanup, ActionIdentityMissing, ActionPathMigration:
 		return nil
 	default:
 		return fmt.Errorf("selfaudit: invalid enum value for action field: %q", a)

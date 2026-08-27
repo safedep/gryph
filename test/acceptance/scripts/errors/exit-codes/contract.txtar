@@ -13,12 +13,12 @@ execexit 2 gryph policy receipts verify-log
 stderr 'input is required'
 
 # 3: the database cannot open. A directory at the database path forces it.
-rm $XDG_DATA_HOME/gryph/audit.db
-mkdir $XDG_DATA_HOME/gryph/audit.db
+rm $XDG_DATA_HOME/safedep/gryph/audit.db
+mkdir $XDG_DATA_HOME/safedep/gryph/audit.db
 execexit 3 gryph logs
 stderr 'failed to open database'
 
 # 0: a healthy command.
-rm $XDG_DATA_HOME/gryph/audit.db
+rm $XDG_DATA_HOME/safedep/gryph/audit.db
 exec gryph version
 stdout 'gryph'

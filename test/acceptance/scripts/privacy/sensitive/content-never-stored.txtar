@@ -27,7 +27,7 @@ stdout '"is_sensitive":true'
 ! stdout 'hunter2'
 stderr 'Exported 1 events'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 logging:
   level: full
 -- write_env.json --

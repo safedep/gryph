@@ -6,18 +6,18 @@ env XDG_DATA_HOME=$WORK/home/.local/share
 
 exec gryph install --agent claude-code
 exec gryph config set logging.level full
-exists $XDG_DATA_HOME/gryph/audit.db
-exists $XDG_CONFIG_HOME/gryph/config.yaml
+exists $XDG_DATA_HOME/safedep/gryph/audit.db
+exists $XDG_CONFIG_HOME/safedep/gryph/config.yml
 
 exec gryph uninstall --purge --dry-run
-exists $XDG_DATA_HOME/gryph/audit.db
-exists $XDG_CONFIG_HOME/gryph/config.yaml
+exists $XDG_DATA_HOME/safedep/gryph/audit.db
+exists $XDG_CONFIG_HOME/safedep/gryph/config.yml
 grep 'gryph _hook' $HOME/.claude/settings.json
 
 exec gryph uninstall --purge
 stdout 'Database and config files have been removed.'
-! exists $XDG_DATA_HOME/gryph/audit.db
-! exists $XDG_CONFIG_HOME/gryph/config.yaml
+! exists $XDG_DATA_HOME/safedep/gryph/audit.db
+! exists $XDG_CONFIG_HOME/safedep/gryph/config.yml
 ! grep 'gryph _hook' $HOME/.claude/settings.json
 grep 'echo pre-existing-hook' $HOME/.claude/settings.json
 

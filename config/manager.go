@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/safedep/dry/log"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
@@ -67,7 +68,23 @@ func (m *Manager) Set(key string, value interface{}) error {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
+	m.removeStaleLegacyConfig()
+
 	return nil
+}
+
+// removeStaleLegacyConfig deletes a config.yaml sibling after a write to
+// config.yml. Viper prefers the yaml extension, so a stale sibling would
+// shadow every later read of the written file.
+func (m *Manager) removeStaleLegacyConfig() {
+	if filepath.Base(m.configPath) != configFileName {
+		return
+	}
+
+	stale := filepath.Join(filepath.Dir(m.configPath), legacyConfigFileName)
+	if err := os.Remove(stale); err != nil && !os.IsNotExist(err) {
+		log.Warnf("failed to remove stale %s: %v", stale, err)
+	}
 }
 
 // Reset removes the config file, effectively resetting to defaults.

@@ -294,9 +294,9 @@ Existing files are automatically backed up before modification. Backups are stor
 
 | Platform | Backup Location |
 | --- | --- |
-| macOS | `~/Library/Application Support/gryph/backups/` |
-| Linux | `~/.local/share/gryph/backups/` |
-| Windows | `%LOCALAPPDATA%\gryph\backups\` |
+| macOS | `~/Library/Application Support/safedep/gryph/backups/` |
+| Linux | `~/.local/share/safedep/gryph/backups/` |
+| Windows | `%LOCALAPPDATA%\safedep\gryph\backups\` |
 
 Backup files are named with timestamps (e.g., `settings.json.backup.20250131120000`).
 

@@ -258,6 +258,27 @@
   guarantee: "A command is blocked after the session reads a secret-classified path, and a tool call with prompt injection markers is blocked while a benign one passes."
   labels: [policy, classify, injection]
 
+- id: migration/layout/legacy-tree-moves
+  title: "a pre safedep/gryph install moves to the new layout on first run"
+  category: migration
+  tier: P0
+  guarantee: "The first run moves the legacy gryph config and data directories to the safedep/gryph layout, renames config.yaml to config.yml, keeps the stored state intact, and records a path_migration self-audit entry."
+  labels: [migration, config, storage]
+
+- id: migration/layout/env-override-normalizes
+  title: "GRYPH_CONFIG_DIR is used as-is and its config name is normalized"
+  category: migration
+  tier: P1
+  guarantee: "GRYPH_CONFIG_DIR names the final config directory with no leaf appended. The directory is not moved, and a config.yaml inside it is renamed to config.yml."
+  labels: [migration, config, env]
+
+- id: migration/layout/both-exist-new-wins
+  title: "when legacy and new directories both exist, the new one wins"
+  category: migration
+  tier: P1
+  guarantee: "When the legacy and the new config directory both exist, gryph reads the new directory, merges nothing, and leaves the legacy directory in place."
+  labels: [migration, config]
+
 # --- gaps: tracked guarantees with no script yet ---
 
 - id: retention/cleanup/old-events-deleted

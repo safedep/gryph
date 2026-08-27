@@ -15,11 +15,11 @@ stdin bash_npm.json
 execexit 2 gryph _hook claude-code PreToolUse
 stderr 'blocked-by-global'
 
--- home/.config/gryph/config.yaml --
+-- home/.config/safedep/gryph/config.yml --
 policy:
   enabled: true
   fail_mode: closed
--- home/.config/gryph/policy.yaml --
+-- home/.config/safedep/gryph/policy.yaml --
 version: "1"
 rules:
   - id: global-block-npm
@@ -30,7 +30,7 @@ rules:
       command_patterns:
         - "(?i)\\bnpm\\s+install\\b"
     message: "blocked-by-global"
--- home/.config/gryph/policies/permissive.yaml --
+-- home/.config/safedep/gryph/policies/permissive.yaml --
 version: "1"
 rules:
   - id: permissive-allow-all

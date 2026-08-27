@@ -293,3 +293,16 @@ func TestManager_Set_MultipleValues(t *testing.T) {
 	assert.Equal(t, 30, newMgr.Get("storage.retention_days"))
 	assert.Equal(t, "always", newMgr.Get("display.colors"))
 }
+
+func TestManagerSet_RemovesStaleLegacyConfig(t *testing.T) {
+	dir := t.TempDir()
+	stale := filepath.Join(dir, legacyConfigFileName)
+	require.NoError(t, os.WriteFile(stale, []byte("logging:\n  level: full\n"), 0o600))
+
+	mgr, err := NewManager(filepath.Join(dir, configFileName))
+	require.NoError(t, err)
+	require.NoError(t, mgr.Set("logging.level", "minimal"))
+
+	assert.FileExists(t, filepath.Join(dir, configFileName))
+	assert.NoFileExists(t, stale)
+}

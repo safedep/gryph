@@ -10,14 +10,31 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// resolveConfigPath returns the config file path, preferring the --config flag
-// over the platform default.
+// resolveConfigPath returns the config file path for the config commands:
+// the active managed file, then the --config flag, then the per-user file.
+// This keeps config show and config get on the effective file. The write
+// commands refuse before they reach the managed file.
 func resolveConfigPath(app *App) string {
+	if managed := config.ManagedConfigFile(); managed != "" {
+		return managed
+	}
+
 	if globalFlags.ConfigPath != "" {
 		return globalFlags.ConfigPath
 	}
 
 	return app.Paths.ConfigFile
+}
+
+// refuseWhenManaged blocks config writes while the system managed config
+// file is active. The managed file is authoritative over --config and the
+// per-user file, so any other write would silently do nothing.
+func refuseWhenManaged() error {
+	if managed := config.ManagedConfigFile(); managed != "" {
+		return fmt.Errorf("configuration is managed by %s: contact your administrator to change it", managed)
+	}
+
+	return nil
 }
 
 func NewConfigCmd() *cobra.Command {
@@ -120,6 +137,10 @@ func newConfigSetCmd() *cobra.Command {
 			key := args[0]
 			value := args[1]
 
+			if err := refuseWhenManaged(); err != nil {
+				return err
+			}
+
 			app, err := loadApp()
 			if err != nil {
 				return err
@@ -175,6 +196,10 @@ func newConfigResetCmd() *cobra.Command {
 		Short: "Reset to default configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
+			if err := refuseWhenManaged(); err != nil {
+				return err
+			}
 
 			app, err := loadApp()
 			if err != nil {
