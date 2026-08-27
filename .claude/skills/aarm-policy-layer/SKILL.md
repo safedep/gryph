@@ -16,13 +16,26 @@ Do not change the AARM layer from memory. The layer spans about 15 packages unde
 3. Add a Mediator dependency through a `MediatorOption` in `aarm/check.go`, then wire it in `loadPolicyMediator` in `cli/policy.go`.
 4. Run `make test` and `make lint` before you finish. Run `make generate-schema` after any change to the policy schema or a payload type.
 
-## Load-bearing invariants
+## Invariants
 
-Two invariants break silently if you miss them. The doc explains both.
+Three invariants break silently if you miss them. The doc explains all three.
 
 1. The receipt and context hashes are consensus formats. A change to field order or canonicalization breaks every existing chain. Update the verifier and the property tests in the same change.
 2. The `aarm` package stays decoupled from `storage` and `cli`. Carry CLI-shaped side effects through the hooks (`DeferralHook`, `ApprovalAuditHook`, `IdentityAuditHook`). Do not add a `storage` or `cli` import to `aarm`.
+3. Policy resolution is additive and same-user safe. `disabled:` is scoped to the file that declares the rule, block always beats allow, and no user file can disable a built-in. Keep these when you touch `Loader.Load` or the merge, so an installed policy file can never remove the built-in rules or another file's rules. See `docs/security-policy-threat-model.md`.
 
 ## Keep the doc correct
 
 The doc is the source of truth, so keep it accurate. If you find the code no longer matches the doc, update `docs/aarm-dev.md` in the same change. Do not fork the guidance into this skill.
+
+## Keep the user-facing policy doc fresh
+
+`docs/security-policy.md` is the user-facing guide for policy authors. Whenever you make a UX-related change in the policy layer, update it in the same change. UX-related changes include:
+
+- New, renamed, or removed `gryph policy ...` commands or flags (init, edit, list, install, validate, test, receipts, context, deferrals, approve, keys).
+- Changes to the policy YAML surface: rule fields, match criteria, CEL variables, decisions, or the `disabled:` mechanism.
+- Changes to configuration keys under `policy:` in the config file, or to their defaults.
+- Changes to default behavior a user can observe: sign modes, fail modes, retention, auto-defer triggers, approval prompts, block or guidance message format.
+- Changes to file locations the user interacts with: `policy.yaml`, the `policies/` directory, the keys directory, the trust store.
+
+Keep `docs/aarm-dev.md` for internals and `docs/security-policy.md` for the user surface. A change that touches both layers updates both docs.

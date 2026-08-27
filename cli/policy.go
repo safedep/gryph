@@ -55,6 +55,8 @@ func NewPolicyCmd() *cobra.Command {
 	cmd.AddCommand(
 		newPolicyInitCmd(),
 		newPolicyEditCmd(),
+		newPolicyListCmd(),
+		newPolicyInstallCmd(),
 		newPolicySchemaCmd(),
 		newPolicyBuiltinCmd(),
 		newPolicyValidateCmd(),
@@ -109,6 +111,108 @@ func writeExamplePolicy(path string, force bool) error {
 	return nil
 }
 
+// policyTargetKind classifies the resolved target of init and edit.
+type policyTargetKind int
+
+const (
+	policyTargetGlobal policyTargetKind = iota // the global policy.yaml
+	policyTargetNamed                          // a named file in the policies directory
+	policyTargetPath                           // a literal off-tree candidate path
+)
+
+type policyTarget struct {
+	path string
+	kind policyTargetKind
+}
+
+// managed reports whether the target lives in the config directory, so an
+// author change to it is a live policy change worth a self-audit row.
+func (t policyTarget) managed() bool {
+	return t.kind == policyTargetGlobal || t.kind == policyTargetNamed
+}
+
+// resolvePolicyTarget maps the optional init/edit argument to a filesystem
+// target. A bare name resolves into the policies directory with a normalized
+// .yaml extension. A path (a separator, or a leading ., ~, or /) resolves
+// literally with ~ expanded. No argument targets the global policy file.
+func resolvePolicyTarget(paths *config.Paths, args []string) (policyTarget, error) {
+	if len(args) == 0 || args[0] == "" {
+		return policyTarget{path: config.DefaultPolicyFilePath(paths), kind: policyTargetGlobal}, nil
+	}
+	arg := args[0]
+	if isPolicyPathArg(arg) {
+		p, err := expandUserPath(arg)
+		if err != nil {
+			return policyTarget{}, err
+		}
+		return policyTarget{path: p, kind: policyTargetPath}, nil
+	}
+	name := loader.NormalizePolicyFileName(arg)
+	return policyTarget{path: filepath.Join(config.DefaultPolicyDirPath(paths), name), kind: policyTargetNamed}, nil
+}
+
+// isPolicyPathArg reports whether the argument is a path rather than a bare
+// name. A path holds a separator or starts with ., ~, or /.
+func isPolicyPathArg(arg string) bool {
+	if strings.HasPrefix(arg, ".") || strings.HasPrefix(arg, "~") || strings.HasPrefix(arg, "/") {
+		return true
+	}
+	return strings.ContainsRune(arg, '/') || strings.ContainsRune(arg, filepath.Separator)
+}
+
+// expandUserPath expands a leading ~ to the user home directory.
+func expandUserPath(p string) (string, error) {
+	if p != "~" && !strings.HasPrefix(p, "~/") {
+		return p, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", ErrConfig("resolve home directory", err)
+	}
+	if p == "~" {
+		return home, nil
+	}
+	return filepath.Join(home, p[2:]), nil
+}
+
+// auditPolicyChange records a policy authoring action in the self-audit log so
+// every live policy change leaves a trail. It reuses the config_change action
+// and best-effort store, so a missing database never blocks authoring.
+func auditPolicyChange(ctx context.Context, app *App, operation, path string) {
+	if app == nil {
+		return
+	}
+	closeStore := openAuditStore(ctx, app)
+	defer closeStore()
+	if app.Store == nil {
+		return
+	}
+	details := map[string]interface{}{"operation": operation, "path": path}
+	if err := logSelfAudit(ctx, app.Store, SelfAuditActionConfigChange, "", details, SelfAuditResultSuccess, ""); err != nil {
+		log.Warnf("failed to record %s self-audit: %v", operation, err)
+	}
+}
+
+// openAuditStore opens the store on the App best-effort and returns a closer.
+// It mirrors the config-command pattern so authoring commands can audit
+// without a hard database dependency.
+func openAuditStore(ctx context.Context, app *App) func() {
+	if app == nil || app.Store != nil {
+		return func() {}
+	}
+	if err := config.EnsureDirectories(); err != nil {
+		return func() {}
+	}
+	if err := app.InitStore(ctx); err != nil {
+		return func() {}
+	}
+	return func() {
+		if err := app.Close(); err != nil {
+			log.Errorf("failed to close app: %v", err)
+		}
+	}
+}
+
 func resolveEditor() string {
 	if v := os.Getenv("VISUAL"); v != "" {
 		return v
@@ -136,58 +240,103 @@ func newPolicyInitCmd() *cobra.Command {
 	var force bool
 
 	cmd := &cobra.Command{
-		Use:   "init",
-		Short: "Write the example policy to the global policy file",
-		Long: "Writes the embedded, fully commented example policy to the global " +
-			"Gryph policy file (policy.yaml in Gryph's config directory). Use this " +
-			"as the starting point for authoring your own rules, then edit it with " +
-			"`gryph policy edit`.",
-		Args: cobra.NoArgs,
+		Use:   "init [name|path]",
+		Short: "Write the example policy to a policy file",
+		Long: "Writes the embedded, fully commented example policy to a target. " +
+			"No argument targets the global policy.yaml. A bare name targets " +
+			"<name>.yaml in the policies directory. A path (with a separator or a " +
+			"leading ., ~, or /) targets that literal file, which is a candidate " +
+			"for a human to review and `gryph policy install`.",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app, err := loadApp()
 			if err != nil {
 				log.Warnf("loadApp failed during policy init, using resolved defaults: %v", err)
 			}
-			target := config.DefaultPolicyFilePath(appPaths(app))
-			if err := writeExamplePolicy(target, force); err != nil {
+			target, err := resolvePolicyTarget(appPaths(app), args)
+			if err != nil {
 				return err
+			}
+			if err := writeExamplePolicy(target.path, force); err != nil {
+				return err
+			}
+			if target.managed() {
+				auditPolicyChange(cmd.Context(), app, "policy_init", target.path)
 			}
 
 			c := policyColorizer(app)
 			out := cmd.OutOrStdout()
-			_, _ = fmt.Fprintf(out, "%s Wrote example policy to %s\n", c.StatusOK(), c.Path(target))
-			_, _ = fmt.Fprintf(out, "  %s\n", c.Dim("Next: `gryph policy edit` to customize, then `gryph policy validate`"))
-			return nil
+			if _, err := fmt.Fprintf(out, "%s Wrote example policy to %s\n", c.StatusOK(), c.Path(target.path)); err != nil {
+				return err
+			}
+			if target.managed() {
+				warnMergedPolicyConflict(cmd, app)
+			}
+			return printInitNextStep(out, c, target)
 		},
 	}
 
-	cmd.Flags().BoolVar(&force, "force", false, "overwrite the global policy file if it already exists")
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite the target file if it already exists")
 	return cmd
+}
+
+// warnMergedPolicyConflict warns when the merged policy no longer loads after a
+// scaffold write into the config directory, for example because the example
+// reuses rule IDs that another file already defines. It does not fail. The file
+// is written, and the author edits the IDs to make them unique.
+func warnMergedPolicyConflict(cmd *cobra.Command, app *App) {
+	if _, err := buildPolicyLoader(appConfig(app), appPaths(app)).Load(cmd.Context()); err != nil {
+		c := policyColorizer(app)
+		out := cmd.OutOrStdout()
+		_, _ = fmt.Fprintf(out, "  %s %s\n", c.Warning("Warning:"), firstLine(err.Error()))
+		_, _ = fmt.Fprintf(out, "  %s\n", c.Dim("Edit the file so every rule ID is unique across your policy files."))
+	}
+}
+
+func printInitNextStep(out io.Writer, c *tui.Colorizer, target policyTarget) error {
+	hint := "Next: `gryph policy edit` to customize, then `gryph policy validate`"
+	if target.kind == policyTargetPath {
+		hint = "This is a candidate. Ask a human to review and `gryph policy install " + target.path + "`."
+	}
+	_, err := fmt.Fprintf(out, "  %s\n", c.Dim(hint))
+	return err
 }
 
 func newPolicyEditCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "edit",
-		Short: "Open the global Gryph policy in your editor",
-		Long: "Opens the global Gryph policy (policy.yaml in Gryph's config " +
-			"directory) in $VISUAL or $EDITOR, falling back to vi. If the file " +
-			"does not exist it is first scaffolded from the documented example. " +
-			"After the editor exits the policy is validated and the result printed; " +
-			"a validation failure exits non-zero and leaves the file as written.",
-		Args: cobra.NoArgs,
+		Use:   "edit [name|path]",
+		Short: "Open a Gryph policy file in your editor",
+		Long: "Opens a policy file in $VISUAL or $EDITOR, falling back to vi. No " +
+			"argument targets the global policy.yaml. A bare name targets " +
+			"<name>.yaml in the policies directory. A path targets that literal " +
+			"file. A missing file is scaffolded from the example first. After the " +
+			"editor exits Gryph validates the result and prints it. A name or the " +
+			"global file validates the merged policy. A path validates that file " +
+			"alone. A validation failure exits non-zero and leaves the file as " +
+			"written.",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app, err := loadApp()
 			if err != nil {
 				log.Warnf("loadApp failed during policy edit, using resolved defaults: %v", err)
 			}
-			target := config.DefaultPolicyFilePath(appPaths(app))
-			if _, statErr := os.Stat(target); os.IsNotExist(statErr) {
-				if werr := writeExamplePolicy(target, false); werr != nil {
+			target, err := resolvePolicyTarget(appPaths(app), args)
+			if err != nil {
+				return err
+			}
+			if _, statErr := os.Stat(target.path); os.IsNotExist(statErr) {
+				if werr := writeExamplePolicy(target.path, false); werr != nil {
 					return werr
 				}
 			}
-			if err := runEditor(resolveEditor(), target); err != nil {
+			if err := runEditor(resolveEditor(), target.path); err != nil {
 				return ErrConfig("run editor", err)
+			}
+			if target.managed() {
+				auditPolicyChange(cmd.Context(), app, "policy_edit", target.path)
+			}
+			if target.kind == policyTargetPath {
+				return reportFileValidation(cmd, app, target.path)
 			}
 			return reportPolicyValidation(cmd, app)
 		},
@@ -282,6 +431,9 @@ func sourceToRow(src loader.Source) sourceRow {
 	case *loader.FileSource:
 		status, problem := fileSourceStatus(s.Path, s.Optional)
 		return sourceRow{Kind: "file", Path: s.Path, Optional: s.Optional, Status: status, Problem: problem}
+	case *loader.DirSource:
+		status, problem := dirSourceStatus(s.Path, s.Optional)
+		return sourceRow{Kind: "dir", Path: s.Path, Optional: s.Optional, Status: status, Problem: problem}
 	case *loader.BuiltinSource:
 		return sourceRow{
 			Kind:     "builtin",
@@ -306,6 +458,17 @@ func fileSourceStatus(path string, optional bool) (string, bool) {
 	}
 	if info.IsDir() {
 		return sourceStatusIsDirectory, true
+	}
+	return sourceStatusFound, false
+}
+
+func dirSourceStatus(path string, optional bool) (string, bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return missingStatus(err, optional)
+	}
+	if !info.IsDir() {
+		return "not a directory", true
 	}
 	return sourceStatusFound, false
 }
@@ -387,23 +550,55 @@ func reportPolicyValidation(cmd *cobra.Command, app *App) error {
 	return nil
 }
 
+// reportFileValidation validates one policy file in isolation, without
+// resolving or merging the active policy. It is the shared check behind
+// `validate --file`, `edit <path>`, and the candidate step of `install`.
+func reportFileValidation(cmd *cobra.Command, app *App, path string) error {
+	policy, err := pdp.LoadPolicyFile(path)
+	if err != nil {
+		return ErrConfig("failed to validate policy file", err)
+	}
+	c := policyColorizer(app)
+	_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n",
+		c.StatusOK(),
+		c.Success(fmt.Sprintf("File valid: %d rules in %s", len(policy.Rules), path)))
+	return err
+}
+
 func newPolicyValidateCmd() *cobra.Command {
-	return &cobra.Command{
+	var file string
+
+	cmd := &cobra.Command{
 		Use:   "validate",
-		Short: "Validate the global Gryph policy",
+		Short: "Validate the merged Gryph policy, or one file with --file",
+		Long: "Validates the merged active policy (global file, policies directory, " +
+			"and built-ins). With --file, validates one policy file in isolation, " +
+			"without resolving or merging the active policy. Use --file to lint a " +
+			"candidate before install.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app, err := loadApp()
 			if err != nil {
 				return err
 			}
+			if file != "" {
+				path, err := expandUserPath(file)
+				if err != nil {
+					return err
+				}
+				return reportFileValidation(cmd, app, path)
+			}
 			return reportPolicyValidation(cmd, app)
 		},
 	}
+
+	cmd.Flags().StringVar(&file, "file", "", "validate a single policy file in isolation")
+	return cmd
 }
 
 func newPolicyTestCmd() *cobra.Command {
 	var (
 		format       string
+		file         string
 		actionType   string
 		tool         string
 		path         string
@@ -421,14 +616,21 @@ func newPolicyTestCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "test",
-		Short: "Dry-run a synthetic action through the merged policy",
+		Short: "Dry-run a synthetic action through the merged policy, or one file with --file",
+		Long: "Dry-runs a synthetic action through the active merged policy. With " +
+			"--file, dry-runs against one policy file plus the built-in rules, " +
+			"instead of the active policy. Use --file to check a draft in a " +
+			"workspace directory before you install it.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app, err := loadApp()
 			if err != nil {
 				return err
 			}
 
-			ldr := buildPolicyLoader(app.Config, app.Paths)
+			ldr, err := testPolicyLoader(app, file)
+			if err != nil {
+				return err
+			}
 
 			policy, err := ldr.Load(cmd.Context())
 			if err != nil {
@@ -495,6 +697,7 @@ func newPolicyTestCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json")
+	cmd.Flags().StringVar(&file, "file", "", "dry-run against one policy file plus the built-in rules, instead of the active policy")
 	cmd.Flags().StringVar(&actionType, "action", string(model.ActionToolUse), "action type")
 	cmd.Flags().StringVar(&tool, "tool", "", "tool name")
 	cmd.Flags().StringVar(&path, "path", "", "file path")
@@ -1032,21 +1235,53 @@ func (l *lazyPolicyCheck) recordAarmFailure(event *events.Event, action, label s
 var _ coresecurity.Check = (*lazyPolicyCheck)(nil)
 
 func buildPolicyLoader(cfg *config.Config, paths *config.Paths) *loader.Loader {
-	var policyCfg config.PolicyConfig
-	if cfg != nil {
-		policyCfg = cfg.EffectivePolicy()
-	}
+	return loader.New(policyLoaderSources(cfg, paths)...)
+}
+
+// policyLoaderSources returns the ordered policy sources: the global file, the
+// policies directory, and (when self-protection is on) the built-in source.
+// It is the single definition of the resolution order shared by the loader and
+// the inspection commands.
+func policyLoaderSources(cfg *config.Config, paths *config.Paths) []loader.Source {
 	if paths == nil {
 		paths = config.ResolvePaths()
 	}
-
 	sources := []loader.Source{
 		loader.NewOptionalFileSource(config.DefaultPolicyFilePath(paths)),
+		loader.NewOptionalDirSource(config.DefaultPolicyDirPath(paths)),
 	}
-	if policyCfg.SelfProtection.Enabled {
+	return appendBuiltinSource(sources, cfg, paths)
+}
+
+// appendBuiltinSource adds the self-protection source when it is enabled.
+func appendBuiltinSource(sources []loader.Source, cfg *config.Config, paths *config.Paths) []loader.Source {
+	if selfProtectionEnabled(cfg) {
 		sources = append(sources, loader.NewBuiltinSource(selfProtectionGlobs(cfg, paths)...))
 	}
-	return loader.New(sources...)
+	return sources
+}
+
+func selfProtectionEnabled(cfg *config.Config) bool {
+	if cfg == nil {
+		return false
+	}
+	return cfg.EffectivePolicy().SelfProtection.Enabled
+}
+
+// testPolicyLoader builds the loader for `policy test`. With no file, it returns
+// the active merged policy. With a file, it returns that one file plus the
+// built-in rules, so an author can dry-run a workspace draft with faithful
+// precedence, without resolving the active policy.
+func testPolicyLoader(app *App, file string) (*loader.Loader, error) {
+	if file == "" {
+		return buildPolicyLoader(appConfig(app), appPaths(app)), nil
+	}
+	p, err := expandUserPath(file)
+	if err != nil {
+		return nil, err
+	}
+	sources := appendBuiltinSource([]loader.Source{loader.NewFileSource(p)}, appConfig(app), appPaths(app))
+	return loader.New(sources...), nil
 }
 
 func selfProtectionGlobs(cfg *config.Config, paths *config.Paths) []string {

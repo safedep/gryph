@@ -17,20 +17,23 @@
 #     `block` with a placeholder message.
 #
 # Policy assembly:
-#   Gryph loads a single global policy from policy.yaml in its config directory.
-#   Write it there with `gryph policy init` and edit it with `gryph policy edit`.
-#   Built-in self-protection rules always load last and cannot be disabled by
-#   this file. To suppress one of your own rules without deleting it, list its
-#   ID under `disabled:`.
+#   Gryph merges three sources, in order: the global policy.yaml, every file in
+#   the policies/ directory, and the built-in rules. Write a file with
+#   `gryph policy init [name|path]` and edit it with `gryph policy edit`. List
+#   the active sources with `gryph policy list`. Rule IDs must be unique across
+#   all files, so namespace your IDs by the file's purpose. Built-in
+#   self-protection rules always load last and cannot be disabled by a policy
+#   file. To suppress one of your own rules without deleting it, list its ID
+#   under `disabled:`.
 
 version: "1"
 
 # `disabled:` is a list of rule IDs to remove from the merged policy. It is
-# the supported way for a project-local policy to neutralize a rule shipped by
-# a global policy without forking the global file.
+# scoped to this file. It removes only a rule that this same file defines. It
+# cannot disable a rule from another file or a built-in rule.
 #
 # disabled:
-#   - example-rule-id-from-some-other-file
+#   - a-rule-id-defined-in-this-file
 
 rules:
   # ---------------------------------------------------------------------------
