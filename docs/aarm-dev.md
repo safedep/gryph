@@ -182,7 +182,8 @@ globs.
 install` promotes a reviewed candidate file into the policies directory. It
 validates the candidate alone, then validates the merged result, excluding the
 file it replaces. `gryph policy validate --file` and `edit <path>` validate one
-off-tree file in isolation.
+off-tree file in isolation. `gryph policy test --file` dry-runs one off-tree file
+plus the built-in rules, so an author can check a draft before install.
 
 ## Receipts
 

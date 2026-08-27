@@ -598,6 +598,7 @@ func newPolicyValidateCmd() *cobra.Command {
 func newPolicyTestCmd() *cobra.Command {
 	var (
 		format       string
+		file         string
 		actionType   string
 		tool         string
 		path         string
@@ -615,14 +616,21 @@ func newPolicyTestCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "test",
-		Short: "Dry-run a synthetic action through the merged policy",
+		Short: "Dry-run a synthetic action through the merged policy, or one file with --file",
+		Long: "Dry-runs a synthetic action through the active merged policy. With " +
+			"--file, dry-runs against one policy file plus the built-in rules, " +
+			"instead of the active policy. Use --file to check a draft in a " +
+			"workspace directory before you install it.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app, err := loadApp()
 			if err != nil {
 				return err
 			}
 
-			ldr := buildPolicyLoader(app.Config, app.Paths)
+			ldr, err := testPolicyLoader(app, file)
+			if err != nil {
+				return err
+			}
 
 			policy, err := ldr.Load(cmd.Context())
 			if err != nil {
@@ -689,6 +697,7 @@ func newPolicyTestCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json")
+	cmd.Flags().StringVar(&file, "file", "", "dry-run against one policy file plus the built-in rules, instead of the active policy")
 	cmd.Flags().StringVar(&actionType, "action", string(model.ActionToolUse), "action type")
 	cmd.Flags().StringVar(&tool, "tool", "", "tool name")
 	cmd.Flags().StringVar(&path, "path", "", "file path")
@@ -1252,6 +1261,25 @@ func selfProtectionEnabled(cfg *config.Config) bool {
 		return false
 	}
 	return cfg.EffectivePolicy().SelfProtection.Enabled
+}
+
+// testPolicyLoader builds the loader for `policy test`. With no file, it returns
+// the active merged policy. With a file, it returns that one file plus the
+// built-in rules, so an author can dry-run a workspace draft with faithful
+// precedence, without resolving the active policy.
+func testPolicyLoader(app *App, file string) (*loader.Loader, error) {
+	if file == "" {
+		return buildPolicyLoader(appConfig(app), appPaths(app)), nil
+	}
+	p, err := expandUserPath(file)
+	if err != nil {
+		return nil, err
+	}
+	sources := []loader.Source{loader.NewFileSource(p)}
+	if selfProtectionEnabled(appConfig(app)) {
+		sources = append(sources, loader.NewBuiltinSource(selfProtectionGlobs(appConfig(app), appPaths(app))...))
+	}
+	return loader.New(sources...), nil
 }
 
 func selfProtectionGlobs(cfg *config.Config, paths *config.Paths) []string {

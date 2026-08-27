@@ -72,9 +72,22 @@ there.
    ```
 
    This compiles the one file without touching the active policy. Fix every error before
-   you hand it off.
+   you continue.
 
-6. Hand the human an install command. Print the exact command and let the human run it.
+6. Dry-run the draft. `gryph policy test --file` evaluates a synthetic action against your
+   draft file plus the built-in rules, without resolving the active policy. Test three
+   cases per rule: an action that must match, an action that must not match, and an action
+   near the boundary.
+
+   ```bash
+   gryph policy test --file ./gryph-policy/<name>.yaml --action command_exec --command "rm -rf /"
+   gryph policy test --file ./gryph-policy/<name>.yaml --action file_write --path /app/prod/config.yaml
+   gryph policy test --file ./gryph-policy/<name>.yaml --action tool_use --tool WebFetch --url https://example.com
+   ```
+
+   Iterate: fix the rule, then repeat from step 5 until the decisions match intent.
+
+7. Hand the human an install command. Print the exact command and let the human run it.
 
    ```bash
    gryph policy install ./gryph-policy/<name>.yaml
@@ -86,22 +99,17 @@ there.
 
 ## Testing
 
-`gryph policy validate --file` checks that a draft compiles. It does not run the rule.
+`gryph policy validate --file <path>` checks that a draft compiles. `gryph policy test
+--file <path>` dry-runs a synthetic action against that draft plus the built-in rules. It
+does not touch the database and does not run an agent, so run it as often as you like.
 
-`gryph policy test` dry-runs a synthetic action, but it runs against the active merged
-policy, not against your draft file. So it reflects your rule only after the human
-installs it. Tell the human this. The full test is: the human installs the draft, then
-runs `gryph policy test` and checks receipts.
-
+`test --file` shows your rules and the built-ins. It does not include other installed
+files, because your draft is not yet merged with them. So the decision reflects your file
+against the built-in floor. The full test, with every active file, happens after the human
+installs the draft and runs plain `gryph policy test` and `gryph policy receipts`.
 Installing a draft to try it is safe. A new file can only add rules. It cannot weaken the
 built-in floor or remove another file's rules. To roll back, the human removes the file
-from `policies/`. After install, the human tests like this:
-
-```bash
-gryph policy test --action command_exec --command "rm -rf /"
-gryph policy test --action file_write --path /app/prod/config.yaml
-gryph policy receipts --decision block
-```
+from `policies/`.
 
 Set context counters with flags like `--context-files-written 25` to exercise rules that
 read `context.*` variables. Run `gryph policy test --help` for the full flag list.

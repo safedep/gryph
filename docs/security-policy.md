@@ -172,7 +172,7 @@ block > escalate > defer > guidance > warn > allow
 | `gryph policy install <path> [--name N] [--force] [--dry-run]` | Validate a candidate file, then copy it into the policies directory so it becomes active. The destination name is the source basename, or `<name>.yaml` with `--name`. Refuses to overwrite without `--force`. `--dry-run` validates and shows the destination without copying. |
 | `gryph policy schema` | Print the JSON Schema. Pipe into editor tooling or an AI agent. |
 | `gryph policy validate [--file PATH]` | Parse and compile the merged policy, reporting the rule count and sources. With `--file`, validate one file in isolation, without merging the active policy. Use `--file` to lint a candidate before install. |
-| `gryph policy test ...` | Dry-run a synthetic action through the merged policy. See `--help` for flags. |
+| `gryph policy test ...` | Dry-run a synthetic action through the merged policy. With `--file PATH`, dry-run against one file plus the built-in rules, to check a draft before install. See `--help` for flags. |
 
 `gryph policy test` accepts `--format json` for machine-readable output.
 
@@ -205,6 +205,8 @@ Do these steps each time you change a policy file.
    gryph policy test --action command_exec --command "rm -rf /"
    gryph policy test --action file_write --path /app/prod/config.yaml
    ```
+
+   Add `--file <path>` to dry-run a draft file plus the built-in rules, before you install it.
 
    Test three cases per rule: an action that must match, an action that must not match, and an action near the boundary of the rule.
 

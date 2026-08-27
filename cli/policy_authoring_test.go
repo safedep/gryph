@@ -236,6 +236,26 @@ func TestPolicyInit_WarnsOnMergedConflict(t *testing.T) {
 	assert.Contains(t, out, "duplicate rule id")
 }
 
+func TestPolicyTest_FileFlag(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+
+	draft := filepath.Join(t.TempDir(), "draft.yaml")
+	writePolicyFile(t, draft, "version: \"1\"\nrules:\n  - id: draft-no-prod\n    action: block\n    match:\n      action_types: [file_write]\n      file_patterns: [\"**/prod/**\"]\n")
+
+	out, err := runPolicyCmd(t, newPolicyTestCmd(), "--file", draft, "--action", "file_write", "--path", "/app/prod/config.yaml")
+	require.NoError(t, err)
+	assert.Contains(t, out, "BLOCK")
+	assert.Contains(t, out, "draft-no-prod")
+
+	out, err = runPolicyCmd(t, newPolicyTestCmd(), "--file", draft, "--action", "file_write", "--path", "/app/dev/config.yaml")
+	require.NoError(t, err)
+	assert.Contains(t, out, "ALLOW")
+
+	_, err = runPolicyCmd(t, newPolicyTestCmd(), "--file", filepath.Join(t.TempDir(), "absent.yaml"), "--action", "file_write", "--path", "/x")
+	require.Error(t, err)
+}
+
 func TestPolicyList_EmptyHostShowsBuiltinOnly(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", root)
