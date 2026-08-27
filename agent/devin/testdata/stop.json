@@ -4,7 +4,7 @@
   "cwd": "/home/user/project",
   "hook_event_name": "Stop",
   "model": "claude-sonnet-4-6",
-  "turn_id": "turn-003",
+  "prompt_id": "prompt-003",
   "stop_hook_active": true,
   "last_assistant_message": "All tests are now passing."
 }

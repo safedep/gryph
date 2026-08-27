@@ -4,7 +4,7 @@
   "cwd": "/home/user/project",
   "hook_event_name": "PreToolUse",
   "model": "claude-sonnet-4-6",
-  "turn_id": "turn-001",
+  "prompt_id": "prompt-001",
   "tool_name": "Read",
   "tool_use_id": "tool-002",
   "tool_input": {

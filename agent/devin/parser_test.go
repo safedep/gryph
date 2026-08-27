@@ -204,6 +204,9 @@ func TestHookResponse_Block(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "deny", hookOutput["permissionDecision"])
 	assert.Equal(t, "dangerous command", hookOutput["permissionDecisionReason"])
+
+	assert.Equal(t, "block", parsed["decision"])
+	assert.Equal(t, "dangerous command", parsed["reason"])
 }
 
 func TestHookResponse_Guidance(t *testing.T) {
@@ -218,6 +221,9 @@ func TestHookResponse_Guidance(t *testing.T) {
 	assert.Equal(t, "allow", hookOutput["permissionDecision"])
 	assert.Equal(t, "security advisory", hookOutput["permissionDecisionReason"])
 	assert.Equal(t, "security advisory", resp.Stderr())
+
+	_, hasDecision := parsed["decision"]
+	assert.False(t, hasDecision, "guidance must not carry a top-level decision")
 }
 
 func TestHookResponse_ExitCodes(t *testing.T) {

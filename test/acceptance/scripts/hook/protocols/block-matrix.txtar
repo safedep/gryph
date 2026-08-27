@@ -28,6 +28,7 @@ stdout '"permissionDecision":"deny"'
 
 stdin devin.json
 execexit 2 gryph _hook devin PreToolUse
+stdout '"decision":"block"'
 stdout '"permissionDecision":"deny"'
 
 exec gryph query --status blocked --format json --no-color

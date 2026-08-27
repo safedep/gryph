@@ -4,6 +4,6 @@
   "cwd": "/home/user/project",
   "hook_event_name": "UserPromptSubmit",
   "model": "claude-sonnet-4-6",
-  "turn_id": "turn-002",
+  "prompt_id": "prompt-002",
   "prompt": "Fix the failing test in main_test.go"
 }

@@ -21,7 +21,7 @@ type HookInput struct {
 
 type PreToolUseInput struct {
 	HookInput
-	TurnID    string                 `json:"turn_id"`
+	PromptID  string                 `json:"prompt_id"`
 	ToolName  string                 `json:"tool_name"`
 	ToolUseID string                 `json:"tool_use_id"`
 	ToolInput map[string]interface{} `json:"tool_input"`
@@ -29,7 +29,7 @@ type PreToolUseInput struct {
 
 type PostToolUseInput struct {
 	HookInput
-	TurnID       string                 `json:"turn_id"`
+	PromptID     string                 `json:"prompt_id"`
 	ToolName     string                 `json:"tool_name"`
 	ToolUseID    string                 `json:"tool_use_id"`
 	ToolInput    map[string]interface{} `json:"tool_input"`
@@ -43,13 +43,13 @@ type SessionStartInput struct {
 
 type UserPromptSubmitInput struct {
 	HookInput
-	TurnID string `json:"turn_id"`
-	Prompt string `json:"prompt"`
+	PromptID string `json:"prompt_id"`
+	Prompt   string `json:"prompt"`
 }
 
 type StopInput struct {
 	HookInput
-	TurnID               string `json:"turn_id"`
+	PromptID             string `json:"prompt_id"`
 	StopHookActive       bool   `json:"stop_hook_active"`
 	LastAssistantMessage string `json:"last_assistant_message"`
 }
@@ -454,7 +454,15 @@ func (r *HookResponse) Stderr() string {
 	return ""
 }
 
+// preToolUseOutput carries the block decision in both response forms the
+// Claude Code compatible protocol accepts. The Devin CLI hooks doc shows the
+// top-level decision and reason fields. The hookSpecificOutput form is the
+// newer permissionDecision channel Codex uses. Emitting both keeps the
+// stdout channel effective whichever form Devin parses. The exit code 2
+// path blocks independently of either.
 type preToolUseOutput struct {
+	Decision           string             `json:"decision,omitempty"`
+	Reason             string             `json:"reason,omitempty"`
 	HookSpecificOutput preToolUseDecision `json:"hookSpecificOutput"`
 }
 
@@ -473,6 +481,8 @@ func (r *HookResponse) JSON() []byte {
 
 	switch r.Decision {
 	case HookBlock:
+		output.Decision = "block"
+		output.Reason = r.Message
 		output.HookSpecificOutput.PermissionDecision = "deny"
 		output.HookSpecificOutput.PermissionDecisionReason = r.Message
 	case HookGuidance:
