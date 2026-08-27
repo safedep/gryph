@@ -312,6 +312,13 @@ func Load(configPath string) (*Config, error) {
 		}
 	}
 
+	// viper's Unmarshal does not consult environment variables, only Get does
+	// (spf13/viper#761). Materialize every known key through Get so a
+	// GRYPH_* variable reaches the struct.
+	for _, key := range v.AllKeys() {
+		v.Set(key, v.Get(key))
+	}
+
 	// Unmarshal into struct
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
