@@ -10,11 +10,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// resolveConfigPath returns the config file path, preferring the --config flag
-// over the platform default.
+// resolveConfigPath returns the config file path for the config commands:
+// the --config flag, then the active managed file, then the per-user file.
+// This keeps config show and config get on the effective file. The write
+// commands refuse before they reach the managed file.
 func resolveConfigPath(app *App) string {
 	if globalFlags.ConfigPath != "" {
 		return globalFlags.ConfigPath
+	}
+
+	if managed := config.ManagedConfigFile(); managed != "" {
+		return managed
 	}
 
 	return app.Paths.ConfigFile
