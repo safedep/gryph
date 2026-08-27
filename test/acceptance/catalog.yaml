@@ -210,11 +210,11 @@
   labels: [hook, robustness]
 
 - id: hook/robustness/concurrent-writes
-  title: "concurrent hooks lose no events"
+  title: "concurrent hooks lose no events or receipts"
   category: hook
   tier: P0
-  guarantee: "Twelve concurrent hook processes against one fresh database all succeed and every event persists."
-  labels: [hook, robustness, concurrency]
+  guarantee: "Twelve concurrent hook processes with policy enabled all succeed, every event and receipt persists, and the receipt and context chains verify."
+  labels: [hook, robustness, concurrency, policy]
 
 - id: policy/precedence/block-beats-allow
   title: "an installed allow cannot defeat a block"
