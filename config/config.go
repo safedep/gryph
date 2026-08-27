@@ -283,8 +283,10 @@ type Paths struct {
 
 // Load loads configuration from the given path or default locations.
 //
-// Precedence: an explicit configPath wins, then the system managed file,
-// then the per-user config file.
+// Precedence: the system managed file is authoritative when present. It
+// wins over an explicit configPath and over the per-user config file, so a
+// user cannot bypass it with --config. Without a managed file, an explicit
+// configPath wins over the per-user file.
 func Load(configPath string) (*Config, error) {
 	MigrateLegacyLayout()
 
@@ -298,10 +300,10 @@ func Load(configPath string) (*Config, error) {
 
 	// Determine config file path
 	managed := ""
-	if configPath != "" {
-		v.SetConfigFile(configPath)
-	} else if managed = ManagedConfigFile(); managed != "" {
+	if managed = ManagedConfigFile(); managed != "" {
 		v.SetConfigFile(managed)
+	} else if configPath != "" {
+		v.SetConfigFile(configPath)
 	} else {
 		paths := ResolvePaths()
 

@@ -11,30 +11,25 @@ import (
 )
 
 // resolveConfigPath returns the config file path for the config commands:
-// the --config flag, then the active managed file, then the per-user file.
+// the active managed file, then the --config flag, then the per-user file.
 // This keeps config show and config get on the effective file. The write
 // commands refuse before they reach the managed file.
 func resolveConfigPath(app *App) string {
-	if globalFlags.ConfigPath != "" {
-		return globalFlags.ConfigPath
-	}
-
 	if managed := config.ManagedConfigFile(); managed != "" {
 		return managed
+	}
+
+	if globalFlags.ConfigPath != "" {
+		return globalFlags.ConfigPath
 	}
 
 	return app.Paths.ConfigFile
 }
 
-// refuseWhenManaged blocks per-user config writes while the system managed
-// config file is active, because the per-user file is ignored at load time
-// and the write would silently do nothing. An explicit --config path still
-// wins, so a write to a named file stays possible.
+// refuseWhenManaged blocks config writes while the system managed config
+// file is active. The managed file is authoritative over --config and the
+// per-user file, so any other write would silently do nothing.
 func refuseWhenManaged() error {
-	if globalFlags.ConfigPath != "" {
-		return nil
-	}
-
 	if managed := config.ManagedConfigFile(); managed != "" {
 		return fmt.Errorf("configuration is managed by %s: contact your administrator to change it", managed)
 	}

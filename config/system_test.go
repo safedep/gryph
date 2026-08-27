@@ -47,7 +47,7 @@ func TestManagedConfigFile_UntrustedFileIgnored(t *testing.T) {
 	assert.Empty(t, ManagedConfigFile())
 }
 
-func TestLoad_ManagedConfigWinsOverUserConfig(t *testing.T) {
+func TestLoad_ManagedConfigIsAuthoritative(t *testing.T) {
 	clearPathEnv(t)
 
 	userBase := t.TempDir()
@@ -64,12 +64,25 @@ func TestLoad_ManagedConfigWinsOverUserConfig(t *testing.T) {
 
 	cfg, err := Load("")
 	require.NoError(t, err)
-	assert.Equal(t, LoggingFull, cfg.Logging.Level)
+	assert.Equal(t, LoggingFull, cfg.Logging.Level, "the managed file wins over the per-user file")
 
 	explicit := filepath.Join(t.TempDir(), "explicit.yml")
 	require.NoError(t, os.WriteFile(explicit, []byte("logging:\n  level: standard\n"), 0o600))
 
 	cfg, err = Load(explicit)
+	require.NoError(t, err)
+	assert.Equal(t, LoggingFull, cfg.Logging.Level, "the managed file wins over an explicit --config path")
+}
+
+func TestLoad_ExplicitPathWinsWithoutManagedFile(t *testing.T) {
+	clearPathEnv(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	withManagedConfigDir(t, t.TempDir())
+
+	explicit := filepath.Join(t.TempDir(), "explicit.yml")
+	require.NoError(t, os.WriteFile(explicit, []byte("logging:\n  level: standard\n"), 0o600))
+
+	cfg, err := Load(explicit)
 	require.NoError(t, err)
 	assert.Equal(t, LoggingStandard, cfg.Logging.Level)
 }

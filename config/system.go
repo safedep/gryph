@@ -28,15 +28,15 @@ func systemConfigDir() string {
 
 	switch runtime.GOOS {
 	case "darwin":
-		return "/Library/Application Support/safedep/gryph"
+		return filepath.Join("/Library/Application Support", defaultHomeRelativePath)
 	case "linux":
-		return "/etc/safedep/gryph"
+		return filepath.Join("/etc", defaultHomeRelativePath)
 	case "windows":
 		programData := os.Getenv("PROGRAMDATA")
 		if programData == "" {
 			programData = `C:\ProgramData`
 		}
-		return filepath.Join(programData, "safedep", "gryph")
+		return filepath.Join(programData, defaultHomeRelativePath)
 	}
 
 	return ""
