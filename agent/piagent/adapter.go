@@ -10,7 +10,7 @@ import (
 
 const (
 	AgentName   = agent.AgentPiAgent
-	DisplayName = agent.DisplayPiAgent
+	DisplayName = "Pi Agent"
 )
 
 type Adapter struct {

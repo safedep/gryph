@@ -75,24 +75,3 @@ func (r *Registry) DetectAll(ctx context.Context) map[string]*DetectionResult {
 	}
 	return results
 }
-
-// SupportedAgents returns the list of supported agent names.
-func SupportedAgents() []string {
-	return []string{
-		"claude-code",
-		"codex",
-		"cursor",
-		"gemini",
-		"opencode",
-		"openclaw",
-		"windsurf",
-		"pi-agent",
-	}
-}
-
-// DefaultRegistry returns a registry with all default adapters registered.
-func DefaultRegistry() *Registry {
-	registry := NewRegistry()
-	// Adapters are registered in their respective packages
-	return registry
-}

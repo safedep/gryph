@@ -10,7 +10,7 @@ import (
 
 const (
 	AgentName   = agent.AgentGemini
-	DisplayName = agent.DisplayGemini
+	DisplayName = "Gemini CLI"
 )
 
 type Adapter struct {

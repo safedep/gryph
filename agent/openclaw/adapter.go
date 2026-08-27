@@ -10,7 +10,7 @@ import (
 
 const (
 	AgentName   = agent.AgentOpenClaw
-	DisplayName = agent.DisplayOpenClaw
+	DisplayName = "OpenClaw"
 )
 
 type Adapter struct {

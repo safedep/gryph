@@ -13,7 +13,7 @@ const (
 	// AgentName is the machine identifier for Cursor.
 	AgentName = agent.AgentCursor
 	// DisplayName is the human-readable name for Cursor.
-	DisplayName = agent.DisplayCursor
+	DisplayName = "Cursor"
 )
 
 // Adapter implements the agent.Adapter interface for Cursor.

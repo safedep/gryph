@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/tui"
 	"github.com/safedep/gryph/tui/component/livelog"
@@ -124,10 +125,14 @@ func runLiveLogs(app *App, p logParams) error {
 		sinceTime = time.Now().UTC().Add(-1 * time.Hour)
 	}
 
+	agentNames := app.Registry.List()
+	slices.Sort(agentNames)
+
 	opts := livelog.Options{
 		Store:        app.Store,
 		PollInterval: p.interval,
 		AgentFilter:  p.agent,
+		AgentNames:   agentNames,
 		InitialLimit: p.limit,
 		Since:        sinceTime,
 	}
@@ -220,7 +225,7 @@ func runListLogs(ctx context.Context, app *App, p logParams) error {
 
 	eventViews := make([]*tui.EventView, len(evts))
 	for i, e := range evts {
-		eventViews[i] = eventToView(e)
+		eventViews[i] = eventToView(app.Registry, e)
 	}
 
 	return app.Presenter.RenderEvents(eventViews)
@@ -246,7 +251,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 		slices.Reverse(evts)
 		eventViews := make([]*tui.EventView, len(evts))
 		for i, e := range evts {
-			eventViews[i] = eventToView(e)
+			eventViews[i] = eventToView(app.Registry, e)
 		}
 		if err := app.Presenter.RenderEvents(eventViews); err != nil {
 			return err
@@ -283,7 +288,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 			if len(newEvts) > 0 {
 				eventViews := make([]*tui.EventView, len(newEvts))
 				for i, e := range newEvts {
-					eventViews[i] = eventToView(e)
+					eventViews[i] = eventToView(app.Registry, e)
 				}
 				if err := app.Presenter.RenderEvents(eventViews); err != nil {
 					return err
@@ -343,7 +348,7 @@ func parseDuration(s string) (time.Time, error) {
 }
 
 // eventToView converts an event to a view model.
-func eventToView(e *events.Event) *tui.EventView {
+func eventToView(reg *agent.Registry, e *events.Event) *tui.EventView {
 	view := &tui.EventView{
 		ID:               e.ID.String(),
 		ShortID:          tui.FormatShortID(e.ID.String()),
@@ -352,7 +357,7 @@ func eventToView(e *events.Event) *tui.EventView {
 		Sequence:         e.Sequence,
 		Timestamp:        e.Timestamp,
 		AgentName:        e.AgentName,
-		AgentDisplayName: getAgentDisplayName(e.AgentName),
+		AgentDisplayName: getAgentDisplayName(reg, e.AgentName),
 		ActionType:       string(e.ActionType),
 		ActionDisplay:    e.ActionType.DisplayName(),
 		ToolName:         e.ToolName,

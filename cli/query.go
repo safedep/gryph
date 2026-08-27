@@ -181,7 +181,7 @@ through the audit history.`,
 			// Convert to view models
 			eventViews := make([]*tui.EventView, len(evts))
 			for i, e := range evts {
-				eventViews[i] = eventToView(e)
+				eventViews[i] = eventToView(app.Registry, e)
 			}
 
 			return app.Presenter.RenderEvents(eventViews)

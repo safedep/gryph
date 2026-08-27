@@ -19,42 +19,6 @@ const (
 	AgentCodex      = "codex"
 )
 
-// Standard agent display names.
-const (
-	DisplayClaudeCode = "Claude Code"
-	DisplayCursor     = "Cursor"
-	DisplayGemini     = "Gemini CLI"
-	DisplayOpenCode   = "OpenCode"
-	DisplayOpenClaw   = "OpenClaw"
-	DisplayWindsurf   = "Windsurf"
-	DisplayPiAgent    = "Pi Agent"
-	DisplayCodex      = "Codex"
-)
-
-// AgentDisplayName returns the display name for an agent identifier.
-func AgentDisplayName(name string) string {
-	switch name {
-	case AgentClaudeCode:
-		return DisplayClaudeCode
-	case AgentCursor:
-		return DisplayCursor
-	case AgentGemini:
-		return DisplayGemini
-	case AgentOpenCode:
-		return DisplayOpenCode
-	case AgentOpenClaw:
-		return DisplayOpenClaw
-	case AgentWindsurf:
-		return DisplayWindsurf
-	case AgentPiAgent:
-		return DisplayPiAgent
-	case AgentCodex:
-		return DisplayCodex
-	default:
-		return name
-	}
-}
-
 // DetectionResult contains information about a detected agent.
 type DetectionResult struct {
 	// Installed indicates if the agent is installed.

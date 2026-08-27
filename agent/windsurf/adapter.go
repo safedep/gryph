@@ -10,7 +10,7 @@ import (
 
 const (
 	AgentName   = agent.AgentWindsurf
-	DisplayName = agent.DisplayWindsurf
+	DisplayName = "Windsurf"
 )
 
 type Adapter struct {

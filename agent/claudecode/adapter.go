@@ -13,7 +13,7 @@ const (
 	// AgentName is the machine identifier for Claude Code.
 	AgentName = agent.AgentClaudeCode
 	// DisplayName is the human-readable name for Claude Code.
-	DisplayName = agent.DisplayClaudeCode
+	DisplayName = "Claude Code"
 )
 
 // Adapter implements the agent.Adapter interface for Claude Code.

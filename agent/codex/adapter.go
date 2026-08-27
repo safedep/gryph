@@ -10,7 +10,7 @@ import (
 
 const (
 	AgentName   = agent.AgentCodex
-	DisplayName = agent.DisplayCodex
+	DisplayName = "Codex"
 )
 
 var _ agent.Adapter = (*Adapter)(nil)
