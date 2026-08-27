@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -312,6 +313,18 @@ func Load(configPath string) (*Config, error) {
 		}
 	}
 
+	// viper's Unmarshal does not consult environment variables, only Get does
+	// (spf13/viper#761). AllKeys only reports keys with a default, a file
+	// entry, or an explicit binding, so bind every Config key first. Then
+	// materialize each key through Get so a GRYPH_* variable reaches the
+	// struct, including optional keys absent from defaults and file.
+	if err := bindStructEnvKeys(v, reflect.TypeOf(Config{}), ""); err != nil {
+		return nil, fmt.Errorf("bind config env keys: %w", err)
+	}
+	for _, key := range v.AllKeys() {
+		v.Set(key, v.Get(key))
+	}
+
 	// Unmarshal into struct
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
@@ -341,6 +354,37 @@ func signModeFromLegacyBool(b bool) string {
 		return SignModeAlways
 	}
 	return SignModeNever
+}
+
+// bindStructEnvKeys walks the mapstructure tags of t and binds each leaf key
+// with viper, so the key shows up in AllKeys even without a default or a
+// file entry.
+func bindStructEnvKeys(v *viper.Viper, t reflect.Type, prefix string) error {
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		tag, _, _ := strings.Cut(field.Tag.Get("mapstructure"), ",")
+		if tag == "" || tag == "-" {
+			continue
+		}
+		key := tag
+		if prefix != "" {
+			key = prefix + "." + tag
+		}
+		fieldType := field.Type
+		if fieldType.Kind() == reflect.Pointer {
+			fieldType = fieldType.Elem()
+		}
+		if fieldType.Kind() == reflect.Struct {
+			if err := bindStructEnvKeys(v, fieldType, key); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := v.BindEnv(key); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Default returns a Config with all default values.

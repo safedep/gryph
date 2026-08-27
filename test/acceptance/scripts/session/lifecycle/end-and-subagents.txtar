@@ -1,0 +1,69 @@
+# Session end closes the session and subagent events keep their attribution.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin subagent_start.json
+exec gryph _hook claude-code SubagentStart
+stdin subagent_bash.json
+exec gryph _hook claude-code PreToolUse
+stdin subagent_stop.json
+exec gryph _hook claude-code SubagentStop
+stdin session_end.json
+exec gryph _hook claude-code SessionEnd
+
+# One session, closed, with every action counted.
+exec gryph sessions --format json --no-color
+stdout -count=1 '"AgentName": "claude-code"'
+! stdout '"EndedAt": "0001-01-01'
+
+# Subagent attribution survives to the export.
+exec gryph export --since 1h
+stdout '"action_type":"subagent_start"'
+stdout '"action_type":"subagent_stop"'
+stdout '"subagent_type":"Explore"'
+
+-- subagent_start.json --
+{
+  "session_id": "dfcbddda-c9e3-4ac1-821d-5a6f0b1c1db3",
+  "transcript_path": "/Users/test/.claude/projects/test-project/dfcbddda.jsonl",
+  "cwd": "/home/user/project",
+  "agent_id": "aeaa22c674a7c3c34",
+  "agent_type": "Explore",
+  "hook_event_name": "SubagentStart"
+}
+-- subagent_bash.json --
+{
+  "session_id": "dfcbddda-c9e3-4ac1-821d-5a6f0b1c1db3",
+  "transcript_path": "/Users/test/.claude/projects/test-project/dfcbddda.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_use_id": "toolu_01JuMhbMZFZvQyMBos3QozHF",
+  "tool_input": {
+    "command": "grep -r 'TODO' src/",
+    "description": "Search for TODO comments"
+  },
+  "agent_id": "ae2409b562560f364",
+  "agent_type": "Explore"
+}
+-- subagent_stop.json --
+{
+  "session_id": "dfcbddda-c9e3-4ac1-821d-5a6f0b1c1db3",
+  "transcript_path": "/Users/test/.claude/projects/test-project/dfcbddda.jsonl",
+  "cwd": "/home/user/project",
+  "permission_mode": "acceptEdits",
+  "agent_id": "aeaa22c674a7c3c34",
+  "agent_type": "Explore",
+  "hook_event_name": "SubagentStop",
+  "stop_hook_active": false,
+  "agent_transcript_path": "/Users/test/.claude/projects/test-project/dfcbddda/subagents/agent-aeaa22c674a7c3c34.jsonl",
+  "last_assistant_message": "Done. Found 3 matching files in src/."
+}
+-- session_end.json --
+{
+  "session_id": "dfcbddda-c9e3-4ac1-821d-5a6f0b1c1db3",
+  "cwd": "/home/user/project",
+  "hook_event_name": "SessionEnd",
+  "reason": "user_exit"
+}

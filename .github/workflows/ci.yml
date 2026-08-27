@@ -51,7 +51,11 @@ jobs:
         run: make verify-schema
 
   acceptance:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - name: Checkout Source
@@ -83,7 +87,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: acceptance-report
+          name: acceptance-report-${{ matrix.os }}
           path: |
             ${{ runner.temp }}/acceptance-report.md
             ${{ runner.temp }}/acceptance.xml
@@ -106,3 +110,9 @@ jobs:
           distribution: goreleaser
           version: "~> v2"
           args: build --clean --snapshot
+
+      - name: Run Acceptance Suite Against Release Binary
+        run: |
+          BIN="$(find dist -type f -name gryph -path '*linux_amd64*' | head -n1)"
+          test -n "$BIN"
+          GRYPH_BIN="$PWD/$BIN" go test -tags acceptance -timeout 10m ./test/acceptance

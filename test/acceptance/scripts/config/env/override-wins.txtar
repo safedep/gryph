@@ -1,0 +1,52 @@
+# A GRYPH_ environment variable overrides the config file at runtime. The
+# file sets logging level full and retention 90 days. The environment turns
+# the level down and the retention window shorter, and runtime behavior
+# follows the environment.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+# File value: full level captures a diff.
+stdin write_a.json
+exec gryph _hook claude-code PostToolUse
+exec gryph query --file '**/a.txt' --format json --no-color
+stdout '"HasDiff": true'
+
+# Environment value: minimal level stores no diff for the same kind of event.
+env GRYPH_LOGGING_LEVEL=minimal
+stdin write_b.json
+exec gryph _hook claude-code PostToolUse
+exec gryph query --file '**/b.txt' --format json --no-color
+stdout '"HasDiff": false'
+env GRYPH_LOGGING_LEVEL=
+
+# Environment retention beats the file's 90 days.
+env GRYPH_STORAGE_RETENTION_DAYS=7
+exec gryph retention status --no-color
+stdout 'Events Retention Days:\s+7'
+
+-- home/.config/gryph/config.yaml --
+logging:
+  level: full
+storage:
+  retention_days: 90
+-- write_a.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": { "file_path": "/home/user/project/a.txt", "content": "hello v2\nline2\n" },
+  "tool_response": { "success": true },
+  "tool_use_id": "tu-a"
+}
+-- write_b.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": { "file_path": "/home/user/project/b.txt", "content": "hello v2\nline2\n" },
+  "tool_response": { "success": true },
+  "tool_use_id": "tu-b"
+}

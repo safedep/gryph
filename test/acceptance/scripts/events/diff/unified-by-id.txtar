@@ -1,0 +1,39 @@
+# A write event's id resolves to its unified diff and its full detail, with
+# prefix match.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+expandenv write_a.json
+
+stdin write_a.json
+exec gryph _hook claude-code PostToolUse
+
+exec gryph query --format json --no-color
+stdout '"HasDiff": true'
+capture EVENT_ID '"ShortID": "([0-9a-f]+)"'
+
+exec gryph diff $EVENT_ID --no-color
+stdout '@@'
+stdout '\+hello world v2'
+
+exec gryph cat $EVENT_ID --no-color
+stdout 'file_write'
+stdout 'a.txt'
+stdout 'Status\s+success'
+
+-- home/.config/gryph/config.yaml --
+logging:
+  level: full
+-- home/project/a.txt --
+hello world v1
+-- write_a.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "${WORK}/home/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": { "file_path": "${WORK}/home/project/a.txt", "content": "hello world v2\nline2\n" },
+  "tool_response": { "success": true },
+  "tool_use_id": "tu-a"
+}

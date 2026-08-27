@@ -146,7 +146,54 @@
   guarantee: "Install, config change, and uninstall each leave a self-log row, and retention cleanup never deletes self-audit rows."
   labels: [self-audit, retention]
 
-# --- gaps: tracked guarantees with no script yet ---
+- id: policy/escalate/nop-fails-closed
+  title: "an escalate with no approval frontend denies"
+  category: policy
+  tier: P0
+  guarantee: "An escalate decision under approval mode nop denies the action, records the denial in the approval history, and leaves approval self-audit rows."
+  labels: [policy, escalate, approval]
+
+- id: policy/context/counter-condition-fires
+  title: "a CEL counter condition fires at the threshold"
+  category: policy
+  tier: P0
+  guarantee: "A rule with a context counter condition stays quiet below the threshold and blocks once the session counter crosses it."
+  labels: [policy, cel, context]
+
+- id: policy/context/chain-verifies-clean
+  title: "the context chain verifies over a real session"
+  category: policy
+  tier: P1
+  guarantee: "gryph policy context --verify passes with zero breaks after a real mixed session. An insert versus recompute mismatch fails here without tampering."
+  labels: [policy, context, chain]
+
+- id: session/lifecycle/end-and-subagents
+  title: "session end closes the session and subagent attribution persists"
+  category: session
+  tier: P1
+  guarantee: "A session end hook sets the session end time, and subagent events keep their subagent id and type through to the export."
+  labels: [session, subagent]
+
+- id: hook/ingest/allow-matrix
+  title: "every agent's read and write events persist correctly"
+  category: hook
+  tier: P1
+  guarantee: "A read and a write payload for each supported agent parse and persist with the correct action type."
+  labels: [hook, ingest, protocols]
+
+- id: health/doctor/unhealthy-flagged
+  title: "doctor flags a missing database and invalid hooks"
+  category: health
+  tier: P1
+  guarantee: "gryph doctor warns with a suggestion when the database is missing and when an agent's hook set is invalid."
+  labels: [doctor]
+
+- id: config/env/override-wins
+  title: "a GRYPH_ environment variable overrides the config file"
+  category: config
+  tier: P2
+  guarantee: "A GRYPH_ prefixed environment variable overrides the file value at runtime for logging level and retention."
+  labels: [config, env]
 
 - id: events/diff/unified-by-id
   title: "diff and cat show event detail by id or prefix"
@@ -154,6 +201,8 @@
   tier: P2
   guarantee: "gryph diff <event-id> prints a unified diff for a file_write event and gryph cat <event-id> shows the event detail, with prefix match."
   labels: [diff, cat]
+
+# --- gaps: tracked guarantees with no script yet ---
 
 - id: retention/cleanup/old-events-deleted
   title: "retention cleanup deletes events past the cutoff"

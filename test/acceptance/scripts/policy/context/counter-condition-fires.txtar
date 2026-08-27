@@ -1,0 +1,78 @@
+# A CEL condition over session counters fires only when the counter crosses
+# the threshold. The context accumulator feeds the PDP: the first two writes
+# pass, every write after that is blocked.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin write1.json
+exec gryph _hook claude-code PostToolUse
+
+stdin write2.json
+exec gryph _hook claude-code PostToolUse
+
+stdin write3.json
+execexit 2 gryph _hook claude-code PostToolUse
+stderr 'blocked-by-counter'
+
+stdin write4.json
+execexit 2 gryph _hook claude-code PostToolUse
+stderr 'blocked-by-counter'
+
+exec gryph query --status blocked --format json --no-color
+stdout -count=2 '"ResultStatus": "blocked"'
+
+-- home/.config/gryph/config.yaml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-cap-writes
+    action: block
+    severity: high
+    match:
+      action_types: [file_write]
+    condition: "context.files_written > 2"
+    message: "blocked-by-counter: too many writes this session"
+-- write1.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": { "file_path": "/home/user/project/f1.txt", "content": "x" },
+  "tool_response": { "success": true },
+  "tool_use_id": "tu-1"
+}
+-- write2.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": { "file_path": "/home/user/project/f2.txt", "content": "x" },
+  "tool_response": { "success": true },
+  "tool_use_id": "tu-2"
+}
+-- write3.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": { "file_path": "/home/user/project/f3.txt", "content": "x" },
+  "tool_response": { "success": true },
+  "tool_use_id": "tu-3"
+}
+-- write4.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": { "file_path": "/home/user/project/f4.txt", "content": "x" },
+  "tool_response": { "success": true },
+  "tool_use_id": "tu-4"
+}

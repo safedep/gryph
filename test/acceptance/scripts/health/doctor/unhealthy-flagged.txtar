@@ -1,0 +1,22 @@
+# Doctor flags problems with a suggestion. A missing database and an invalid
+# hook set each produce a visible warning.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph doctor --no-color
+stdout '\[!!\]\s+Database file'
+stdout 'Database file not found'
+stdout 'Run .gryph install. to initialize'
+
+exec gryph install --agent claude-code
+exec gryph doctor --no-color
+stdout '\[ok\]\s+Claude Code hooks'
+
+# Break one hook entry. Doctor must flag the invalid set and suggest a fix.
+replace $HOME/.claude/settings.json PreToolUse XPreToolUse
+exec gryph doctor --no-color
+stdout '\[!!\]\s+Claude Code hooks'
+stdout 'Hooks are invalid'
+stdout 'gryph install --force --agent claude-code'

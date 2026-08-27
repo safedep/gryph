@@ -1,0 +1,225 @@
+# Every agent's everyday read and write events parse and persist with the
+# right action type. A parser regression here silently drops audit data.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin claude_read.json
+exec gryph _hook claude-code PostToolUse
+stdin claude_write.json
+exec gryph _hook claude-code PreToolUse
+exec gryph query --agent claude-code --format json --no-color
+stdout '"ActionType": "file_read"'
+stdout '"ActionType": "file_write"'
+
+stdin cursor_read.json
+exec gryph _hook cursor beforeReadFile
+stdin cursor_edit.json
+exec gryph _hook cursor afterFileEdit
+exec gryph query --agent cursor --format json --no-color
+stdout '"ActionType": "file_read"'
+stdout '"ActionType": "file_write"'
+
+stdin gemini_read.json
+exec gryph _hook gemini BeforeTool
+stdin gemini_write.json
+exec gryph _hook gemini BeforeTool
+exec gryph query --agent gemini --format json --no-color
+stdout '"ActionType": "file_read"'
+stdout '"ActionType": "file_write"'
+
+stdin opencode_read.json
+exec gryph _hook opencode tool.execute.before
+stdin opencode_write.json
+exec gryph _hook opencode tool.execute.before
+exec gryph query --agent opencode --format json --no-color
+stdout '"ActionType": "file_read"'
+stdout '"ActionType": "file_write"'
+
+stdin windsurf_read.json
+exec gryph _hook windsurf pre_read_code
+stdin windsurf_write.json
+exec gryph _hook windsurf pre_write_code
+exec gryph query --agent windsurf --format json --no-color
+stdout '"ActionType": "file_read"'
+stdout '"ActionType": "file_write"'
+
+stdin piagent_read.json
+exec gryph _hook pi-agent tool_call
+stdin piagent_write.json
+exec gryph _hook pi-agent tool_call
+exec gryph query --agent pi-agent --format json --no-color
+stdout '"ActionType": "file_read"'
+stdout '"ActionType": "file_write"'
+
+stdin codex_bash.json
+exec gryph _hook codex PostToolUse
+exec gryph query --agent codex --format json --no-color
+stdout '"ActionType": "command_exec"'
+
+exec gryph sessions --format json --no-color
+stdout -count=7 '"ID"'
+
+-- claude_read.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/home/user/project/README.md"
+  },
+  "tool_response": {
+    "content": "# Project README",
+    "success": true
+  },
+  "tool_use_id": "tool-use-003"
+}
+-- claude_write.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "/home/user/project/src/main.go",
+    "content": "package main"
+  },
+  "tool_use_id": "tool-use-002"
+}
+-- cursor_read.json --
+{
+  "conversation_id": "conv-test-123",
+  "generation_id": "gen-006",
+  "model": "claude-3-opus",
+  "hook_event_name": "beforeReadFile",
+  "cursor_version": "0.44.0",
+  "workspace_roots": ["/home/user/project"],
+  "user_email": "user@example.com",
+  "file_path": "/home/user/project/README.md"
+}
+-- cursor_edit.json --
+{
+  "conversation_id": "conv-test-123",
+  "generation_id": "gen-007",
+  "model": "claude-3-opus",
+  "hook_event_name": "afterFileEdit",
+  "cursor_version": "0.44.0",
+  "workspace_roots": ["/home/user/project"],
+  "user_email": "user@example.com",
+  "file_path": "/home/user/project/src/main.go",
+  "edits": [
+    {
+      "old_string": "fmt.Println(\"hello\")",
+      "new_string": "fmt.Println(\"world\")"
+    }
+  ]
+}
+-- gemini_read.json --
+{
+  "session_id": "gemini-session-abc",
+  "transcript_path": "/home/user/.gemini/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "BeforeTool",
+  "tool_name": "read_file",
+  "tool_input": {
+    "file_path": "/home/user/project/README.md"
+  }
+}
+-- gemini_write.json --
+{
+  "session_id": "gemini-session-abc",
+  "transcript_path": "/home/user/.gemini/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "BeforeTool",
+  "tool_name": "write_file",
+  "tool_input": {
+    "file_path": "/home/user/project/src/main.go",
+    "content": "package main"
+  }
+}
+-- opencode_read.json --
+{
+  "hook_type": "tool.execute.before",
+  "session_id": "opencode-session-abc123",
+  "tool": "read",
+  "args": {
+    "filePath": "/home/user/project/README.md"
+  },
+  "cwd": "/home/user/project"
+}
+-- opencode_write.json --
+{
+  "hook_type": "tool.execute.before",
+  "session_id": "opencode-session-abc123",
+  "tool": "write",
+  "args": {
+    "filePath": "/home/user/project/src/main.go",
+    "content": "package main"
+  },
+  "cwd": "/home/user/project"
+}
+-- windsurf_read.json --
+{
+  "agent_action_name": "pre_read_code",
+  "trajectory_id": "traj-test-123",
+  "execution_id": "exec-001",
+  "timestamp": "2025-01-15T10:30:00Z",
+  "tool_info": {
+    "file_path": "/home/user/project/notes.txt"
+  }
+}
+-- windsurf_write.json --
+{
+  "agent_action_name": "pre_write_code",
+  "trajectory_id": "traj-test-123",
+  "execution_id": "exec-002",
+  "timestamp": "2025-01-15T10:31:00Z",
+  "tool_info": {
+    "file_path": "/home/user/project/src/main.go",
+    "edits": [
+      {
+        "old_string": "fmt.Println(\"hello\")",
+        "new_string": "fmt.Println(\"world\")"
+      }
+    ]
+  }
+}
+-- piagent_read.json --
+{
+  "session_id": "pi-session-abc",
+  "cwd": "/home/user/project",
+  "hook_event_name": "tool_call",
+  "tool_name": "read",
+  "tool_call_id": "call-123",
+  "input": {
+    "path": "/home/user/project/README.md"
+  }
+}
+-- piagent_write.json --
+{
+  "session_id": "pi-session-abc",
+  "cwd": "/home/user/project",
+  "hook_event_name": "tool_call",
+  "tool_name": "write",
+  "tool_call_id": "call-456",
+  "input": {
+    "path": "/home/user/project/src/main.go",
+    "content": "package main"
+  }
+}
+-- codex_bash.json --
+{
+  "session_id": "codex-session-abc",
+  "transcript_path": "/home/user/.codex/transcripts/test.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PostToolUse",
+  "model": "o4-mini",
+  "turn_id": "turn-001",
+  "tool_name": "Bash",
+  "tool_use_id": "tool-001",
+  "tool_input": {
+    "command": "npm install"
+  },
+  "tool_response": "added 150 packages in 12s"
+}

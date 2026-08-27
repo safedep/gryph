@@ -615,3 +615,28 @@ privacy:
 	require.NotNil(t, cfg)
 	assert.Empty(t, cfg.Privacy.RedactPatterns)
 }
+
+func TestLoad_EnvOverridesFile(t *testing.T) {
+	configContent := `
+logging:
+  level: full
+storage:
+  retention_days: 90
+`
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yaml")
+	require.NoError(t, os.WriteFile(configFile, []byte(configContent), 0644))
+
+	t.Setenv("GRYPH_LOGGING_LEVEL", "minimal")
+	t.Setenv("GRYPH_STORAGE_RETENTION_DAYS", "7")
+	// A key with no default and no file entry must still honor the
+	// environment (agents.cursor.logging_level is absent from both).
+	t.Setenv("GRYPH_AGENTS_CURSOR_LOGGING_LEVEL", "minimal")
+
+	cfg, err := Load(configFile)
+	require.NoError(t, err)
+
+	assert.Equal(t, LoggingMinimal, cfg.Logging.Level)
+	assert.Equal(t, 7, cfg.Storage.RetentionDays)
+	assert.Equal(t, LoggingMinimal, cfg.Agents.Cursor.LoggingLevel)
+}
