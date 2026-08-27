@@ -46,26 +46,23 @@ func TestParseHookEvent_SessionStart(t *testing.T) {
 	assert.Equal(t, AgentName, event.AgentName)
 	assert.Equal(t, "SessionStart", event.HookType)
 	assert.Equal(t, "devin-session-abc", event.AgentSessionID)
-	assert.Equal(t, "/home/user/project", event.WorkingDirectory)
 
 	payload := events.SessionPayload{}
 	require.NoError(t, json.Unmarshal(event.Payload, &payload))
 	assert.Equal(t, "startup", payload.Source)
-	assert.Equal(t, "claude-sonnet-4-6", payload.Model)
 }
 
-func TestParseHookEvent_PreToolUse_Bash(t *testing.T) {
+func TestParseHookEvent_PreToolUse_Exec(t *testing.T) {
 	ctx := context.Background()
-	data := loadFixture(t, "pre_tool_use_bash.json")
+	data := loadFixture(t, "pre_tool_use_exec.json")
 
 	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
 	assert.Equal(t, events.ActionCommandExec, event.ActionType)
-	assert.Equal(t, "Bash", event.ToolName)
+	assert.Equal(t, "exec", event.ToolName)
 	assert.Equal(t, AgentName, event.AgentName)
-	assert.Equal(t, "/home/user/project", event.WorkingDirectory)
 
 	payload, err := event.GetCommandExecPayload()
 	require.NoError(t, err)
@@ -81,29 +78,46 @@ func TestParseHookEvent_PreToolUse_Read(t *testing.T) {
 	require.NotNil(t, event)
 
 	assert.Equal(t, events.ActionFileRead, event.ActionType)
-	assert.Equal(t, "Read", event.ToolName)
+	assert.Equal(t, "read", event.ToolName)
 
 	payload, err := event.GetFileReadPayload()
 	require.NoError(t, err)
 	assert.Equal(t, "/home/user/project/main.go", payload.Path)
 }
 
-func TestParseHookEvent_PostToolUse_Bash(t *testing.T) {
+func TestParseHookEvent_PostToolUse_Exec(t *testing.T) {
 	ctx := context.Background()
-	data := loadFixture(t, "post_tool_use_bash.json")
+	data := loadFixture(t, "post_tool_use_exec.json")
 
 	event, err := testAdapter(t).ParseEvent(ctx, "PostToolUse", data)
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
 	assert.Equal(t, events.ActionCommandExec, event.ActionType)
-	assert.Equal(t, "Bash", event.ToolName)
+	assert.Equal(t, "exec", event.ToolName)
 	assert.Equal(t, events.ResultSuccess, event.ResultStatus)
 
 	payload, err := event.GetCommandExecPayload()
 	require.NoError(t, err)
 	assert.Equal(t, "npm install", payload.Command)
 	assert.Contains(t, payload.Output, "added 150 packages")
+}
+
+func TestParseHookEvent_PostToolUse_Failure(t *testing.T) {
+	ctx := context.Background()
+	data := []byte(`{
+		"session_id": "devin-session-abc",
+		"hook_event_name": "PostToolUse",
+		"tool_name": "exec",
+		"tool_input": {"command": "npm test"},
+		"tool_response": {"success": false, "output": "", "error": "exit status 1"}
+	}`)
+
+	event, err := testAdapter(t).ParseEvent(ctx, "PostToolUse", data)
+	require.NoError(t, err)
+
+	assert.Equal(t, events.ResultError, event.ResultStatus)
+	assert.Equal(t, "exit status 1", event.ErrorMessage)
 }
 
 func TestParseHookEvent_UserPromptSubmit(t *testing.T) {
@@ -134,7 +148,6 @@ func TestParseHookEvent_Stop(t *testing.T) {
 
 	payload := events.NotificationPayload{}
 	require.NoError(t, json.Unmarshal(event.Payload, &payload))
-	assert.Equal(t, "All tests are now passing.", payload.Message)
 	assert.Equal(t, "stop", payload.Type)
 }
 
@@ -148,7 +161,6 @@ func TestParseHookEvent_SessionEnd(t *testing.T) {
 
 	assert.Equal(t, events.ActionSessionEnd, event.ActionType)
 	assert.Equal(t, AgentName, event.AgentName)
-	assert.Equal(t, "/home/user/project", event.WorkingDirectory)
 
 	payload := events.SessionEndPayload{}
 	require.NoError(t, json.Unmarshal(event.Payload, &payload))
@@ -159,8 +171,8 @@ func TestParseHookEvent_DeterministicSessionID(t *testing.T) {
 	ctx := context.Background()
 	adapter := testAdapter(t)
 
-	data1 := loadFixture(t, "pre_tool_use_bash.json")
-	data2 := loadFixture(t, "post_tool_use_bash.json")
+	data1 := loadFixture(t, "pre_tool_use_exec.json")
+	data2 := loadFixture(t, "post_tool_use_exec.json")
 
 	event1, err := adapter.ParseEvent(ctx, "PreToolUse", data1)
 	require.NoError(t, err)
@@ -178,7 +190,7 @@ func TestParseHookEvent_EnvSessionIDOverride(t *testing.T) {
 	t.Setenv("DEVIN_SESSION_ID", "env-session-xyz")
 
 	ctx := context.Background()
-	data := loadFixture(t, "pre_tool_use_bash.json")
+	data := loadFixture(t, "pre_tool_use_exec.json")
 
 	event, err := testAdapter(t).ParseEvent(ctx, "PreToolUse", data)
 	require.NoError(t, err)
@@ -198,7 +210,7 @@ func TestParseHookEvent_ProjectDirFallback(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "/home/user/fallback-project", event.WorkingDirectory)
 
-	withCwd := loadFixture(t, "pre_tool_use_bash.json")
+	withCwd := []byte(`{"session_id": "devin-session-abc", "hook_event_name": "PreToolUse", "cwd": "/home/user/project", "tool_name": "exec", "tool_input": {"command": "ls"}}`)
 	event, err = testAdapter(t).ParseEvent(ctx, "PreToolUse", withCwd)
 	require.NoError(t, err)
 	assert.Equal(t, "/home/user/project", event.WorkingDirectory)

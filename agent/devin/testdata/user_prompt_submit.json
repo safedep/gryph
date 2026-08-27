@@ -1,9 +1,6 @@
 {
   "session_id": "devin-session-abc",
-  "transcript_path": "/home/user/.config/devin/transcripts/test.jsonl",
-  "cwd": "/home/user/project",
-  "hook_event_name": "UserPromptSubmit",
-  "model": "claude-sonnet-4-6",
   "prompt_id": "prompt-002",
+  "hook_event_name": "UserPromptSubmit",
   "prompt": "Fix the failing test in main_test.go"
 }

@@ -895,9 +895,9 @@ func TestHook_Devin(t *testing.T) {
 		actionType events.ActionType
 	}{
 		{
-			name:       "PreToolUse_Bash",
+			name:       "PreToolUse_Exec",
 			hookType:   "PreToolUse",
-			fixture:    "pre_tool_use_bash.json",
+			fixture:    "pre_tool_use_exec.json",
 			actionType: events.ActionCommandExec,
 		},
 		{
@@ -907,9 +907,9 @@ func TestHook_Devin(t *testing.T) {
 			actionType: events.ActionFileRead,
 		},
 		{
-			name:       "PostToolUse_Bash",
+			name:       "PostToolUse_Exec",
 			hookType:   "PostToolUse",
-			fixture:    "post_tool_use_bash.json",
+			fixture:    "post_tool_use_exec.json",
 			actionType: events.ActionCommandExec,
 		},
 		{
@@ -966,10 +966,10 @@ func TestHook_Devin_DeterministicSessionID(t *testing.T) {
 	env := newTestEnv(t)
 	ctx := context.Background()
 
-	payload1, err := os.ReadFile("../../agent/devin/testdata/pre_tool_use_bash.json")
+	payload1, err := os.ReadFile("../../agent/devin/testdata/pre_tool_use_exec.json")
 	require.NoError(t, err)
 
-	payload2, err := os.ReadFile("../../agent/devin/testdata/post_tool_use_bash.json")
+	payload2, err := os.ReadFile("../../agent/devin/testdata/post_tool_use_exec.json")
 	require.NoError(t, err)
 
 	_, _, err = env.runHook("devin", "PreToolUse", payload1)

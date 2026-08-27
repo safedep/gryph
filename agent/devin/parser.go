@@ -49,9 +49,8 @@ type UserPromptSubmitInput struct {
 
 type StopInput struct {
 	HookInput
-	PromptID             string `json:"prompt_id"`
-	StopHookActive       bool   `json:"stop_hook_active"`
-	LastAssistantMessage string `json:"last_assistant_message"`
+	PromptID       string `json:"prompt_id"`
+	StopHookActive bool   `json:"stop_hook_active"`
 }
 
 type SessionEndInput struct {
@@ -59,23 +58,20 @@ type SessionEndInput struct {
 	Reason string `json:"reason"`
 }
 
+// ToolNameMapping maps Devin's externally-visible tool names to action
+// types. The names come from the lifecycle hooks doc and are lowercase,
+// unlike the Claude Code style names Codex uses.
 var ToolNameMapping = map[string]events.ActionType{
-	"Read":         events.ActionFileRead,
-	"View":         events.ActionFileRead,
-	"Write":        events.ActionFileWrite,
-	"Edit":         events.ActionFileWrite,
-	"NotebookEdit": events.ActionFileWrite,
-	"Bash":         events.ActionCommandExec,
-	"Execute":      events.ActionCommandExec,
-	"WebSearch":    events.ActionToolUse,
-	"WebFetch":     events.ActionToolUse,
-	"Grep":         events.ActionFileRead,
-	"Glob":         events.ActionFileRead,
-	"LS":           events.ActionFileRead,
-	"Task":         events.ActionToolUse,
-	"TodoRead":     events.ActionToolUse,
-	"TodoWrite":    events.ActionToolUse,
-	"AskUser":      events.ActionToolUse,
+	"read":          events.ActionFileRead,
+	"notebook_read": events.ActionFileRead,
+	"grep":          events.ActionFileRead,
+	"glob":          events.ActionFileRead,
+	"write":         events.ActionFileWrite,
+	"edit":          events.ActionFileWrite,
+	"apply_patch":   events.ActionFileWrite,
+	"notebook_edit": events.ActionFileWrite,
+	"exec":          events.ActionCommandExec,
+	"webfetch":      events.ActionToolUse,
 }
 
 func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event, error) {
@@ -214,18 +210,7 @@ func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, r
 	event.RawEvent = rawData
 	event.ResultStatus = events.ResultSuccess
 
-	var toolResponse interface{}
-	if len(input.ToolResponse) > 0 {
-		var responseStr string
-		if err := json.Unmarshal(input.ToolResponse, &responseStr); err == nil {
-			toolResponse = responseStr
-		} else {
-			var structured interface{}
-			if err := json.Unmarshal(input.ToolResponse, &structured); err == nil {
-				toolResponse = structured
-			}
-		}
-	}
+	toolResponse := parseToolResponse(input.ToolResponse, event)
 
 	if err := a.buildToolPayload(event, actionType, input.ToolInput, toolResponse); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
@@ -234,6 +219,44 @@ func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, r
 	a.markSensitivePaths(event, actionType, input.ToolInput)
 
 	return event, nil
+}
+
+// toolResponseObject is the documented PostToolUse tool_response shape.
+type toolResponseObject struct {
+	Success *bool   `json:"success"`
+	Output  string  `json:"output"`
+	Error   *string `json:"error"`
+}
+
+// parseToolResponse extracts the output text from the tool_response object
+// and records a failed tool run on the event. A plain string response is
+// tolerated for forward compatibility.
+func parseToolResponse(raw json.RawMessage, event *events.Event) interface{} {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	var structured toolResponseObject
+	if err := json.Unmarshal(raw, &structured); err == nil && structured.Success != nil {
+		if !*structured.Success {
+			event.ResultStatus = events.ResultError
+			if structured.Error != nil {
+				event.ErrorMessage = *structured.Error
+			}
+		}
+		return structured.Output
+	}
+
+	var responseStr string
+	if err := json.Unmarshal(raw, &responseStr); err == nil {
+		return responseStr
+	}
+
+	var generic interface{}
+	if err := json.Unmarshal(raw, &generic); err == nil {
+		return generic
+	}
+	return nil
 }
 
 func parseUserPromptSubmit(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {
@@ -281,7 +304,7 @@ func parseStop(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*eve
 	event.RawEvent = rawData
 
 	payload := events.NotificationPayload{
-		Message: input.LastAssistantMessage,
+		Message: "agent stopped",
 		Type:    "stop",
 	}
 

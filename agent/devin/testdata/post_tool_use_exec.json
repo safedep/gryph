@@ -1,0 +1,15 @@
+{
+  "session_id": "devin-session-abc",
+  "prompt_id": "prompt-001",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "exec",
+  "tool_input": {
+    "command": "npm install",
+    "shell_id": "main"
+  },
+  "tool_response": {
+    "success": true,
+    "output": "added 150 packages in 12s",
+    "error": null
+  }
+}

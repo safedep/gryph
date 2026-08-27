@@ -136,7 +136,7 @@ var matrixAgents = []matrixAgent{
 	{
 		name:               agent.AgentDevin,
 		commandHookType:    "PreToolUse",
-		commandPayloadPath: "../../agent/devin/testdata/pre_tool_use_bash.json",
+		commandPayloadPath: "../../agent/devin/testdata/pre_tool_use_exec.json",
 		readHookType:       "PreToolUse",
 		readPayloadPath:    "../../agent/devin/testdata/pre_tool_use_read.json",
 		blockExitCode:      2,
