@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -72,13 +73,37 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 
 // Init initializes the database schema.
 func (s *SQLiteStore) Init(ctx context.Context) error {
-	if err := s.client.Schema.Create(ctx); err != nil {
+	if err := s.createSchema(ctx); err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
 	if err := s.InitFTS(ctx); err != nil {
 		return fmt.Errorf("failed to initialize FTS: %w", err)
 	}
 	return nil
+}
+
+// createSchema runs the ent migration with retries. Concurrent hook
+// processes race on a fresh database: both diff an empty schema and both
+// issue CREATE TABLE, and the loser fails with "already exists". A retry
+// re-diffs against the schema the winner created and no-ops. Losing the
+// race must never lose an audit event.
+func (s *SQLiteStore) createSchema(ctx context.Context) error {
+	const attempts = 5
+	var err error
+	for i := 0; i < attempts; i++ {
+		if err = s.client.Schema.Create(ctx); err == nil {
+			return nil
+		}
+		if !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(i+1) * 50 * time.Millisecond):
+		}
+	}
+	return err
 }
 
 // DB returns the underlying database connection.
