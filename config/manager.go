@@ -60,14 +60,17 @@ var ErrUnknownKey = fmt.Errorf("unknown config key")
 
 // knownKey reports whether key names a writable configuration path. Beyond
 // the defaults it accepts per-agent overrides (agents.<name>.enabled and
-// agents.<name>.logging_level) and the deprecated policy.receipts.sign bool.
+// agents.<name>.logging_level, one name segment only) and the deprecated
+// policy.receipts.sign bool. Viper splits on every dot, so extra segments
+// would write a nested map the AgentsConfig model cannot populate.
 func knownKey(key string) bool {
 	if knownKeys[key] {
 		return true
 	}
 	if rest, ok := strings.CutPrefix(key, "agents."); ok {
-		if idx := strings.LastIndex(rest, "."); idx > 0 {
-			if leaf := rest[idx+1:]; leaf == "enabled" || leaf == "logging_level" {
+		name, leaf, found := strings.Cut(rest, ".")
+		if found && name != "" && !strings.Contains(leaf, ".") {
+			if leaf == "enabled" || leaf == "logging_level" {
 				return true
 			}
 		}

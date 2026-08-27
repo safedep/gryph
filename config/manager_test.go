@@ -245,6 +245,7 @@ func TestKnownKey(t *testing.T) {
 		{"optional per-agent logging level", "agents.claude-code.logging_level", true},
 		{"arbitrary agent name override", "agents.some-agent.logging_level", true},
 		{"deprecated receipts sign alias", "policy.receipts.sign", true},
+		{"agent extra path segment", "agents.foo.bar.enabled", false},
 		{"unknown top level key", "hello.world", false},
 		{"unknown deep key", "x.y.z", false},
 		{"typo in known section", "loggin.level", false},
