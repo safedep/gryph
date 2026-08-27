@@ -79,7 +79,27 @@ func policyFileRow(source, path string) policyListRow {
 	if err != nil {
 		return policyListRow{source: source, file: filepath.Base(path), err: firstLine(err.Error())}
 	}
-	return policyListRow{source: source, file: filepath.Base(path), rules: len(policy.Rules)}
+	return policyListRow{source: source, file: filepath.Base(path), rules: activeRuleCount(policy)}
+}
+
+// activeRuleCount counts the rules a file contributes to the merge. It drops the
+// rules the same file removes with its own disabled: list, so per-file counts
+// match what the file adds.
+func activeRuleCount(p *pdp.Policy) int {
+	if len(p.Disabled) == 0 {
+		return len(p.Rules)
+	}
+	disabled := make(map[string]struct{}, len(p.Disabled))
+	for _, id := range p.Disabled {
+		disabled[id] = struct{}{}
+	}
+	count := 0
+	for _, r := range p.Rules {
+		if _, off := disabled[r.ID]; !off {
+			count++
+		}
+	}
+	return count
 }
 
 func builtinListRow(cfg *config.Config, paths *config.Paths) policyListRow {
@@ -166,7 +186,11 @@ func newPolicyInstallCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			candidate, err := pdp.LoadPolicyFile(src)
+			data, err := os.ReadFile(src)
+			if err != nil {
+				return ErrConfig("read candidate file", err)
+			}
+			candidate, err := pdp.ParsePolicy(data)
 			if err != nil {
 				return ErrConfig("candidate policy is not valid", err)
 			}
@@ -181,7 +205,7 @@ func newPolicyInstallCmd() *cobra.Command {
 			out := cmd.OutOrStdout()
 			_, _ = fmt.Fprintf(out, "%s Validated %s (%d rules)\n", c.StatusOK(), c.Path(src), len(candidate.Rules))
 
-			if err := checkMergedWithCandidate(cfg, paths, dest, src); err != nil {
+			if err := checkMergedWithCandidate(cfg, paths, dest, "file:"+src, candidate); err != nil {
 				return err
 			}
 
@@ -196,7 +220,7 @@ func newPolicyInstallCmd() *cobra.Command {
 			if fileExists(dest) && !force {
 				return ErrConfig(fmt.Sprintf("refusing to overwrite %s (use --force to replace)", dest), fmt.Errorf("%s exists", dest))
 			}
-			if err := copyPolicyFile(src, dest); err != nil {
+			if err := writeInstalledPolicy(dest, data); err != nil {
 				return err
 			}
 			auditPolicyChange(cmd.Context(), app, "policy_install", dest)
@@ -230,10 +254,12 @@ func installDestName(src, name string) (string, error) {
 
 // checkMergedWithCandidate loads the policy that would result after install, so
 // a candidate that is valid alone but breaks the merge (a duplicate rule ID
-// across files, a reserved prefix) is refused before it is copied. It excludes
-// the file the candidate would replace, so a force re-install of an updated
-// file does not collide with the version it replaces.
-func checkMergedWithCandidate(cfg *config.Config, paths *config.Paths, dest, candidatePath string) error {
+// across files, a reserved prefix) is refused before it is written. It validates
+// the parsed candidate, not a re-read of the file, so the merge check and the
+// write see the same content. It excludes the file the candidate would replace,
+// so a force re-install of an updated file does not collide with the version it
+// replaces.
+func checkMergedWithCandidate(cfg *config.Config, paths *config.Paths, dest, candidateName string, candidate *pdp.Policy) error {
 	if paths == nil {
 		paths = config.ResolvePaths()
 	}
@@ -244,26 +270,29 @@ func checkMergedWithCandidate(cfg *config.Config, paths *config.Paths, dest, can
 	if err != nil {
 		return ErrConfig("scan policies directory", err)
 	}
+	destInfo, destErr := os.Stat(dest)
 	for _, f := range files {
-		if filepath.Clean(f) == filepath.Clean(dest) {
-			continue
+		if destErr == nil {
+			if info, statErr := os.Stat(f); statErr == nil && os.SameFile(info, destInfo) {
+				continue
+			}
 		}
 		sources = append(sources, loader.NewFileSource(f))
 	}
-	sources = append(sources, loader.NewFileSource(candidatePath))
-	if selfProtectionEnabled(cfg) {
-		sources = append(sources, loader.NewBuiltinSource(selfProtectionGlobs(cfg, paths)...))
-	}
+	sources = append(sources, loader.NewStaticSource(candidateName, candidate))
+	sources = appendBuiltinSource(sources, cfg, paths)
 	if _, err := loader.New(sources...).Load(context.Background()); err != nil {
 		return ErrConfig("candidate conflicts with the active policy", err)
 	}
 	return nil
 }
 
-func copyPolicyFile(src, dest string) error {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return ErrConfig("read candidate file", err)
+// writeInstalledPolicy writes the validated candidate bytes to dest. It refuses
+// a symlink at dest, so a planted link cannot redirect the write out of the
+// policies directory.
+func writeInstalledPolicy(dest string, data []byte) error {
+	if info, err := os.Lstat(dest); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return ErrConfig("refusing to write through a symlink", fmt.Errorf("%s is a symlink", dest))
 	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return ErrConfig("create policies directory", err)

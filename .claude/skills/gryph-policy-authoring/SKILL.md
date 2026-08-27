@@ -107,9 +107,9 @@ does not touch the database and does not run an agent, so run it as often as you
 files, because your draft is not yet merged with them. So the decision reflects your file
 against the built-in floor. The full test, with every active file, happens after the human
 installs the draft and runs plain `gryph policy test` and `gryph policy receipts`.
-Installing a draft to try it is safe. A new file can only add rules. It cannot weaken the
-built-in floor or remove another file's rules. To roll back, the human removes the file
-from `policies/`.
+It is safe for the human to install a draft and try it. A new file can only add rules. It
+cannot weaken the built-in floor or remove another file's rules. To roll back, the human
+removes the file from `policies/`.
 
 Set context counters with flags like `--context-files-written 25` to exercise rules that
 read `context.*` variables. Run `gryph policy test --help` for the full flag list.

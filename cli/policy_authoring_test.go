@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/config"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -211,6 +212,55 @@ func TestInstallDestName(t *testing.T) {
 			assert.Equal(t, tc.want, got)
 		})
 	}
+}
+
+func TestPolicyInstall_WritesValidatedBytes(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+	cand := filepath.Join(t.TempDir(), "cand.yaml")
+	content := "version: \"1\"\nrules:\n  - id: team-rule\n    action: block\n"
+	writePolicyFile(t, cand, content)
+
+	_, err := runPolicyCmd(t, newPolicyInstallCmd(), cand, "--name", "team")
+	require.NoError(t, err)
+
+	got, err := os.ReadFile(filepath.Join(gryphConfigDir(root), "policies", "team.yaml"))
+	require.NoError(t, err)
+	assert.Equal(t, content, string(got))
+}
+
+func TestPolicyInstall_RefusesSymlinkDest(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+	pdir := filepath.Join(gryphConfigDir(root), "policies")
+	require.NoError(t, os.MkdirAll(pdir, 0o755))
+
+	target := filepath.Join(t.TempDir(), "outside.yaml")
+	targetContent := "version: \"1\"\nrules: []\n"
+	writePolicyFile(t, target, targetContent)
+	require.NoError(t, os.Symlink(target, filepath.Join(pdir, "evil.yaml")))
+
+	cand := filepath.Join(t.TempDir(), "cand.yaml")
+	writePolicyFile(t, cand, "version: \"1\"\nrules:\n  - id: r\n    action: allow\n")
+
+	_, err := runPolicyCmd(t, newPolicyInstallCmd(), cand, "--name", "evil", "--force")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "symlink")
+
+	got, err := os.ReadFile(target)
+	require.NoError(t, err)
+	assert.Equal(t, targetContent, string(got))
+}
+
+func TestActiveRuleCount(t *testing.T) {
+	withDisabled := &pdp.Policy{
+		Rules:    []pdp.Rule{{ID: "a"}, {ID: "b"}, {ID: "c"}},
+		Disabled: []string{"b"},
+	}
+	assert.Equal(t, 2, activeRuleCount(withDisabled))
+
+	plain := &pdp.Policy{Rules: []pdp.Rule{{ID: "a"}}}
+	assert.Equal(t, 1, activeRuleCount(plain))
 }
 
 func TestPolicyInstall_RejectsPathName(t *testing.T) {

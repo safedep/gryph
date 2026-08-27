@@ -42,6 +42,23 @@ func (s *FileSource) Load(_ context.Context) ([]*pdp.Policy, error) {
 	return []*pdp.Policy{policy}, nil
 }
 
+// StaticSource yields policy documents the caller already parsed. It lets a
+// caller include in-memory content in a merge, without a re-read from disk.
+type StaticSource struct {
+	SourceName string
+	Docs       []*pdp.Policy
+}
+
+func NewStaticSource(name string, docs ...*pdp.Policy) *StaticSource {
+	return &StaticSource{SourceName: name, Docs: docs}
+}
+
+func (s *StaticSource) Name() string { return s.SourceName }
+
+func (s *StaticSource) Load(_ context.Context) ([]*pdp.Policy, error) {
+	return s.Docs, nil
+}
+
 // DirSource loads every YAML policy file in one directory as a separate policy
 // document. It reads a single fixed, operator-owned directory. It is not a
 // configurable or repo-reaching source. Files load in sorted name order so the

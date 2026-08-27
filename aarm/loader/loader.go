@@ -33,8 +33,8 @@ func (l *Loader) Sources() []Source {
 // Load merges all sources in order. Duplicate rule IDs across sources are an
 // error. A document's disabled: removes only the rules that the same document
 // defines. This scope is uniform for every source, so the file that declares a
-// rule is the only file that can disable it. It matches the visible unit an
-// author or agent edits and keeps one file from reaching into another.
+// rule is the only file that can disable it. It matches the file an author or
+// agent edits. It stops one file from changing another file's rules.
 //
 // Built-in rules (from a *BuiltinSource) are isolated from user sources: they
 // are appended after user rules and are never removed by a disabled: entry, so

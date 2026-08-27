@@ -1250,6 +1250,11 @@ func policyLoaderSources(cfg *config.Config, paths *config.Paths) []loader.Sourc
 		loader.NewOptionalFileSource(config.DefaultPolicyFilePath(paths)),
 		loader.NewOptionalDirSource(config.DefaultPolicyDirPath(paths)),
 	}
+	return appendBuiltinSource(sources, cfg, paths)
+}
+
+// appendBuiltinSource adds the self-protection source when it is enabled.
+func appendBuiltinSource(sources []loader.Source, cfg *config.Config, paths *config.Paths) []loader.Source {
 	if selfProtectionEnabled(cfg) {
 		sources = append(sources, loader.NewBuiltinSource(selfProtectionGlobs(cfg, paths)...))
 	}
@@ -1275,10 +1280,7 @@ func testPolicyLoader(app *App, file string) (*loader.Loader, error) {
 	if err != nil {
 		return nil, err
 	}
-	sources := []loader.Source{loader.NewFileSource(p)}
-	if selfProtectionEnabled(appConfig(app)) {
-		sources = append(sources, loader.NewBuiltinSource(selfProtectionGlobs(appConfig(app), appPaths(app))...))
-	}
+	sources := appendBuiltinSource([]loader.Source{loader.NewFileSource(p)}, appConfig(app), appPaths(app))
 	return loader.New(sources...), nil
 }
 

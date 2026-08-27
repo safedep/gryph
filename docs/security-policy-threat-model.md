@@ -88,8 +88,7 @@ switch. The config file sits inside the protected config directory.
 `disabled:` acts only on the file that declares the rule. This matches the file
 an author or an agent edits. One installed file cannot remove a rule from another
 file. It cannot remove a rule from the operator's global file. An installed file
-only adds rules. This keeps the review step below simple. An installed file only
-adds.
+only adds rules. This keeps the review step below simple.
 
 ## The review step for candidate files
 
