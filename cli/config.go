@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/safedep/dry/log"
@@ -166,6 +167,9 @@ func newConfigSetCmd() *cobra.Command {
 			parsedValue := config.ParseValue(value)
 
 			if err := mgr.Set(key, parsedValue); err != nil {
+				if errors.Is(err, config.ErrUnknownKey) {
+					return ErrConfig(fmt.Sprintf("unknown config key: %s", key), nil)
+				}
 				return err
 			}
 

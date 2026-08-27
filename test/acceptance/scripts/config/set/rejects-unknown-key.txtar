@@ -1,0 +1,18 @@
+# A known key writes. An unknown key exits 2, names the unknown key on
+# stderr, leaves the file unchanged, and skips the self-audit entry.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph config set logging.level minimal
+stdout 'Set logging.level'
+
+execexit 2 gryph config set x.y.z true
+stderr 'unknown config key'
+
+exec gryph config get logging.level
+stdout 'minimal'
+
+-- home/.config/safedep/gryph/config.yml --
+logging:
+  level: standard

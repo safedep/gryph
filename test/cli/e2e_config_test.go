@@ -56,6 +56,22 @@ func TestConfig(t *testing.T) {
 				assert.Contains(t, stdout, "Set logging.level")
 			},
 		},
+		{
+			name: "set_unknown_key",
+			args: []string{"config", "set", "x.y.z", "true"},
+			assert: func(t *testing.T, stdout string, err error) {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "unknown config key")
+			},
+		},
+		{
+			name: "set_optional_agent_key",
+			args: []string{"config", "set", "agents.claude-code.logging_level", "full"},
+			assert: func(t *testing.T, stdout string, err error) {
+				assert.NoError(t, err)
+				assert.Contains(t, stdout, "Set agents.claude-code.logging_level")
+			},
+		},
 	}
 
 	for _, tt := range tests {

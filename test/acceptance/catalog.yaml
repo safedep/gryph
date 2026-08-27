@@ -188,6 +188,13 @@
   guarantee: "gryph doctor warns with a suggestion when the database is missing and when an agent's hook set is invalid."
   labels: [doctor]
 
+- id: config/set/rejects-unknown-key
+  title: "config set rejects an unknown key and leaves the file unchanged"
+  category: config
+  tier: P1
+  guarantee: "gryph config set on a known key writes the file. On an unknown key it exits 2, names the unknown key on stderr, and leaves the file unchanged."
+  labels: [config]
+
 - id: config/env/override-wins
   title: "a GRYPH_ environment variable overrides the config file"
   category: config

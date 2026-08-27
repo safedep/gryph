@@ -42,6 +42,39 @@ func NewManager(configPath string) (*Manager, error) {
 	}, nil
 }
 
+// knownKeys is the allowlist of writable config keys, computed once from
+// the registered defaults. The viper instance in a Manager also contains
+// file entries, so it cannot serve as the allowlist on its own.
+var knownKeys = func() map[string]bool {
+	v := viper.New()
+	setDefaults(v)
+	keys := make(map[string]bool, len(v.AllKeys()))
+	for _, k := range v.AllKeys() {
+		keys[k] = true
+	}
+	return keys
+}()
+
+// ErrUnknownKey is returned by Set when key is not a known writable path.
+var ErrUnknownKey = fmt.Errorf("unknown config key")
+
+// knownKey reports whether key names a writable configuration path. Beyond
+// the defaults it accepts per-agent overrides (agents.<name>.enabled and
+// agents.<name>.logging_level) and the deprecated policy.receipts.sign bool.
+func knownKey(key string) bool {
+	if knownKeys[key] {
+		return true
+	}
+	if rest, ok := strings.CutPrefix(key, "agents."); ok {
+		if idx := strings.LastIndex(rest, "."); idx > 0 {
+			if leaf := rest[idx+1:]; leaf == "enabled" || leaf == "logging_level" {
+				return true
+			}
+		}
+	}
+	return key == "policy.receipts.sign"
+}
+
 // Get returns the value for a given key.
 // Returns nil if the key does not exist.
 func (m *Manager) Get(key string) interface{} {
@@ -49,8 +82,12 @@ func (m *Manager) Get(key string) interface{} {
 }
 
 // Set sets a configuration value and persists it to the config file.
-// It ensures the config directory exists and writes a complete config file.
+// It rejects unknown keys so a typo cannot land in the config file.
 func (m *Manager) Set(key string, value interface{}) error {
+	if !knownKey(key) {
+		return ErrUnknownKey
+	}
+
 	configDir := filepath.Dir(m.configPath)
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)

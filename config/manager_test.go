@@ -232,6 +232,48 @@ func TestManager_HasKey(t *testing.T) {
 	assert.False(t, mgr.HasKey("nonexistent.key"))
 }
 
+func TestKnownKey(t *testing.T) {
+	tests := []struct {
+		name string
+		key  string
+		want bool
+	}{
+		{"default scalar key", "logging.level", true},
+		{"default nested key", "policy.defer.timeout_seconds", true},
+		{"default list key", "privacy.sensitive_paths", true},
+		{"default agent toggle", "agents.claude-code.enabled", true},
+		{"optional per-agent logging level", "agents.claude-code.logging_level", true},
+		{"arbitrary agent name override", "agents.some-agent.logging_level", true},
+		{"deprecated receipts sign alias", "policy.receipts.sign", true},
+		{"unknown top level key", "hello.world", false},
+		{"unknown deep key", "x.y.z", false},
+		{"typo in known section", "loggin.level", false},
+		{"agents leaf missing", "agents", false},
+		{"agents unknown leaf", "agents.claude-code.noise", false},
+		{"agents empty name", "agents..enabled", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, knownKey(tt.key))
+		})
+	}
+}
+
+func TestManager_Set_RejectsUnknownKey(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yaml")
+
+	mgr, err := NewManager(configFile)
+	require.NoError(t, err)
+
+	err = mgr.Set("x.y.z", true)
+	assert.ErrorIs(t, err, ErrUnknownKey)
+
+	_, statErr := os.Stat(configFile)
+	assert.True(t, os.IsNotExist(statErr))
+}
+
 func TestParseValue(t *testing.T) {
 	tests := []struct {
 		name     string
