@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -56,7 +57,7 @@ and conversation context. Accepts full UUIDs or ID prefixes.`,
 				if err != nil {
 					return err
 				}
-				views = append(views, eventToDetailView(event))
+				views = append(views, eventToDetailView(app.Registry, event))
 			}
 
 			return app.Presenter.RenderEventDetails(views)
@@ -91,7 +92,7 @@ func resolveEvent(ctx context.Context, app *App, idArg string) (*events.Event, e
 	return event, nil
 }
 
-func eventToDetailView(e *events.Event) *tui.EventDetailView {
+func eventToDetailView(reg *agent.Registry, e *events.Event) *tui.EventDetailView {
 	view := &tui.EventDetailView{
 		ID:               e.ID.String(),
 		SessionID:        e.SessionID.String(),
@@ -100,7 +101,7 @@ func eventToDetailView(e *events.Event) *tui.EventDetailView {
 		Timestamp:        e.Timestamp,
 		DurationMs:       e.DurationMs,
 		AgentName:        e.AgentName,
-		AgentDisplayName: getAgentDisplayName(e.AgentName),
+		AgentDisplayName: getAgentDisplayName(reg, e.AgentName),
 		AgentVersion:     e.AgentVersion,
 		WorkingDirectory: e.WorkingDirectory,
 		ActionType:       string(e.ActionType),

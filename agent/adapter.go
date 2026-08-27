@@ -19,42 +19,6 @@ const (
 	AgentCodex      = "codex"
 )
 
-// Standard agent display names.
-const (
-	DisplayClaudeCode = "Claude Code"
-	DisplayCursor     = "Cursor"
-	DisplayGemini     = "Gemini CLI"
-	DisplayOpenCode   = "OpenCode"
-	DisplayOpenClaw   = "OpenClaw"
-	DisplayWindsurf   = "Windsurf"
-	DisplayPiAgent    = "Pi Agent"
-	DisplayCodex      = "Codex"
-)
-
-// AgentDisplayName returns the display name for an agent identifier.
-func AgentDisplayName(name string) string {
-	switch name {
-	case AgentClaudeCode:
-		return DisplayClaudeCode
-	case AgentCursor:
-		return DisplayCursor
-	case AgentGemini:
-		return DisplayGemini
-	case AgentOpenCode:
-		return DisplayOpenCode
-	case AgentOpenClaw:
-		return DisplayOpenClaw
-	case AgentWindsurf:
-		return DisplayWindsurf
-	case AgentPiAgent:
-		return DisplayPiAgent
-	case AgentCodex:
-		return DisplayCodex
-	default:
-		return name
-	}
-}
-
 // DetectionResult contains information about a detected agent.
 type DetectionResult struct {
 	// Installed indicates if the agent is installed.
@@ -131,6 +95,46 @@ type HookStatus struct {
 	Issues []string
 }
 
+// HookDecision is the three-valued outcome the CLI maps from the security
+// evaluator before it renders a response.
+type HookDecision int
+
+const (
+	// DecisionAllow lets the action proceed.
+	DecisionAllow HookDecision = iota
+	// DecisionBlock stops the action with a reason.
+	DecisionBlock
+	// DecisionGuidance lets the action proceed with advisory text.
+	DecisionGuidance
+)
+
+// HookResponse is the transport-neutral result of a hook decision. The CLI
+// performs the IO: it writes Stdout, and it routes Stderr on one channel
+// only. A non-zero exit carries the text in the exit error, which main
+// writes. A zero exit writes the text directly.
+type HookResponse interface {
+	// Stdout returns the bytes to write to stdout, or nil.
+	Stdout() []byte
+	// Stderr returns the block reason or advisory text, or "".
+	Stderr() string
+	// ExitCode returns 0 for allow, 1 for a non-blocking error, 2 for block.
+	ExitCode() int
+}
+
+// RenderedResponse is a plain HookResponse value adapters return from
+// RenderResponse.
+type RenderedResponse struct {
+	Out  []byte
+	Err  string
+	Code int
+}
+
+func (r RenderedResponse) Stdout() []byte { return r.Out }
+
+func (r RenderedResponse) Stderr() string { return r.Err }
+
+func (r RenderedResponse) ExitCode() int { return r.Code }
+
 // Adapter defines the interface for agent integrations.
 type Adapter interface {
 	// Name returns the machine identifier (e.g., "claude-code").
@@ -153,4 +157,10 @@ type Adapter interface {
 
 	// ParseEvent converts an agent-specific event to the common format.
 	ParseEvent(ctx context.Context, hookType string, rawData []byte) (*events.Event, error)
+
+	// RenderResponse maps a decision to this agent's wire response for the
+	// given hook type. The adapter owns the per-hook-type knowledge: whether
+	// stdout carries JSON, what the exit code is, and when text routes to
+	// stderr.
+	RenderResponse(hookType string, decision HookDecision, detail string) HookResponse
 }

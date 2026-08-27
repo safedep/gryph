@@ -114,25 +114,23 @@ func statusStyleFor(status events.ResultStatus) lipgloss.Style {
 	}
 }
 
+// agentBadgeColors maps an agent name to its badge color. Color is a
+// presentation concern, so the map stays in the tui layer. An agent
+// without an entry renders in the default dim color.
+var agentBadgeColors = map[string]lipgloss.Color{
+	"claude-code": colorOrange,
+	"codex":       colorYellow,
+	"cursor":      colorViolet,
+	"gemini":      colorBlue,
+	"opencode":    colorTeal,
+	"openclaw":    colorPink,
+	"windsurf":    colorGreen,
+	"pi-agent":    colorIndigo,
+}
+
 func agentBadge(agentName string) string {
-	switch agentName {
-	case "claude-code":
-		return lipgloss.NewStyle().Foreground(colorOrange).Bold(true).Render("claude-code")
-	case "codex":
-		return lipgloss.NewStyle().Foreground(colorYellow).Bold(true).Render("codex")
-	case "cursor":
-		return lipgloss.NewStyle().Foreground(colorViolet).Bold(true).Render("cursor")
-	case "gemini":
-		return lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("gemini")
-	case "opencode":
-		return lipgloss.NewStyle().Foreground(colorTeal).Bold(true).Render("opencode")
-	case "openclaw":
-		return lipgloss.NewStyle().Foreground(colorPink).Bold(true).Render("openclaw")
-	case "windsurf":
-		return lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("windsurf")
-	case "pi-agent":
-		return lipgloss.NewStyle().Foreground(colorIndigo).Bold(true).Render("pi-agent")
-	default:
-		return lipgloss.NewStyle().Foreground(colorDim).Render(agentName)
+	if color, ok := agentBadgeColors[agentName]; ok {
+		return lipgloss.NewStyle().Foreground(color).Bold(true).Render(agentName)
 	}
+	return lipgloss.NewStyle().Foreground(colorDim).Render(agentName)
 }

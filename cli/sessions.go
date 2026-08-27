@@ -80,7 +80,7 @@ Shows all recorded agent sessions with summary statistics.`,
 			// Convert to view models
 			sessionViews := make([]*tui.SessionView, len(sessions))
 			for i, s := range sessions {
-				sessionViews[i] = sessionToView(s)
+				sessionViews[i] = sessionToView(app.Registry, s)
 			}
 
 			return app.Presenter.RenderSessions(sessionViews)
@@ -96,12 +96,12 @@ Shows all recorded agent sessions with summary statistics.`,
 }
 
 // sessionToView converts a session to a view model.
-func sessionToView(s *session.Session) *tui.SessionView {
+func sessionToView(reg *agent.Registry, s *session.Session) *tui.SessionView {
 	view := &tui.SessionView{
 		ID:               s.ID.String(),
 		ShortID:          tui.FormatShortID(s.ID.String()),
 		AgentName:        s.AgentName,
-		AgentDisplayName: getAgentDisplayName(s.AgentName),
+		AgentDisplayName: getAgentDisplayName(reg, s.AgentName),
 		AgentVersion:     s.AgentVersion,
 		StartedAt:        s.StartedAt,
 		EndedAt:          s.EndedAt,
@@ -137,7 +137,11 @@ func sessionToView(s *session.Session) *tui.SessionView {
 	return view
 }
 
-// getAgentDisplayName returns the display name for an agent.
-func getAgentDisplayName(name string) string {
-	return agent.AgentDisplayName(name)
+// getAgentDisplayName returns the display name from the registered adapter.
+// An unknown agent renders as its raw name.
+func getAgentDisplayName(reg *agent.Registry, name string) string {
+	if a, ok := reg.Get(name); ok {
+		return a.DisplayName()
+	}
+	return name
 }

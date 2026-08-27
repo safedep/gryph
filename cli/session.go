@@ -86,10 +86,10 @@ chronological order with full metadata.`,
 			}
 
 			// Convert to view models
-			sessionView := sessionToView(session)
+			sessionView := sessionToView(app.Registry, session)
 			eventViews := make([]*tui.EventView, len(evts))
 			for i, e := range evts {
-				eventViews[i] = eventToView(e)
+				eventViews[i] = eventToView(app.Registry, e)
 			}
 
 			return app.Presenter.RenderSession(sessionView, eventViews)

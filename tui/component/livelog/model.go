@@ -8,8 +8,6 @@ import (
 	"github.com/safedep/gryph/core/events"
 )
 
-var agentCycle = []string{"", "claude-code", "codex", "cursor", "gemini", "opencode", "openclaw", "windsurf", "pi-agent"}
-
 type Model struct {
 	opts   Options
 	width  int
@@ -176,10 +174,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) cycleAgentFilter() {
+	cycle := m.opts.agentCycle()
 	current := m.agentFilter
-	for i, a := range agentCycle {
+	for i, a := range cycle {
 		if a == current {
-			m.agentFilter = agentCycle[(i+1)%len(agentCycle)]
+			m.agentFilter = cycle[(i+1)%len(cycle)]
 			return
 		}
 	}

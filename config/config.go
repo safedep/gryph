@@ -13,18 +13,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Agent names as constants. Must be in sync with agent/adapter.go.
-// We cannot depend on agent/adapter.go because it would create a circular dependency.
 const (
-	agentNameClaudeCode = "claude-code"
-	agentNameCursor     = "cursor"
-	agentNameGemini     = "gemini"
-	agentNameOpenCode   = "opencode"
-	agentNameOpenClaw   = "openclaw"
-	agentNameWindsurf   = "windsurf"
-	agentNamePiAgent    = "pi-agent"
-	agentNameCodex      = "codex"
-
 	streamTargetTypeStdout = "stdout"
 	streamTargetTypeNop    = "nop"
 )
@@ -240,17 +229,9 @@ type AgentConfig struct {
 	LoggingLevel LoggingLevel `mapstructure:"logging_level,omitempty"`
 }
 
-// AgentsConfig holds per-agent settings.
-type AgentsConfig struct {
-	ClaudeCode AgentConfig `mapstructure:"claude-code"`
-	Cursor     AgentConfig `mapstructure:"cursor"`
-	Gemini     AgentConfig `mapstructure:"gemini"`
-	OpenCode   AgentConfig `mapstructure:"opencode"`
-	OpenClaw   AgentConfig `mapstructure:"openclaw"`
-	Windsurf   AgentConfig `mapstructure:"windsurf"`
-	PiAgent    AgentConfig `mapstructure:"pi-agent"`
-	Codex      AgentConfig `mapstructure:"codex"`
-}
+// AgentsConfig holds per-agent settings keyed by agent name. The keys match
+// the adapter names from agent registration, e.g. "claude-code".
+type AgentsConfig map[string]AgentConfig
 
 // DisplayConfig holds display-related settings.
 type DisplayConfig struct {
@@ -395,11 +376,49 @@ func bindStructEnvKeys(v *viper.Viper, t reflect.Type, prefix string) error {
 			}
 			continue
 		}
+		// A map field has no static keys to walk. Bind the value-struct
+		// leaves under each key viper already knows from defaults or the
+		// config file, so env overrides keep working for those entries.
+		if fieldType.Kind() == reflect.Map {
+			elem := fieldType.Elem()
+			if elem.Kind() == reflect.Pointer {
+				elem = elem.Elem()
+			}
+			if elem.Kind() != reflect.Struct {
+				continue
+			}
+			for _, name := range knownMapKeys(v, key) {
+				if err := bindStructEnvKeys(v, elem, key+"."+name); err != nil {
+					return err
+				}
+			}
+			continue
+		}
 		if err := v.BindEnv(key); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// knownMapKeys returns the child key names viper knows under prefix, from
+// defaults and the config file.
+func knownMapKeys(v *viper.Viper, prefix string) []string {
+	seen := make(map[string]bool)
+	var keys []string
+	p := prefix + "."
+	for _, k := range v.AllKeys() {
+		rest, ok := strings.CutPrefix(k, p)
+		if !ok {
+			continue
+		}
+		name, _, _ := strings.Cut(rest, ".")
+		if !seen[name] {
+			seen[name] = true
+			keys = append(keys, name)
+		}
+	}
+	return keys
 }
 
 // Default returns a Config with all default values.
@@ -519,64 +538,17 @@ func (c *Config) ShouldUseColors() bool {
 // GetAgentLoggingLevel returns the logging level for a specific agent.
 // Falls back to global level if not set.
 func (c *Config) GetAgentLoggingLevel(agentName string) LoggingLevel {
-	switch agentName {
-	case agentNameClaudeCode:
-		if c.Agents.ClaudeCode.LoggingLevel != "" {
-			return c.Agents.ClaudeCode.LoggingLevel
-		}
-	case agentNameCursor:
-		if c.Agents.Cursor.LoggingLevel != "" {
-			return c.Agents.Cursor.LoggingLevel
-		}
-	case agentNameGemini:
-		if c.Agents.Gemini.LoggingLevel != "" {
-			return c.Agents.Gemini.LoggingLevel
-		}
-	case agentNameOpenCode:
-		if c.Agents.OpenCode.LoggingLevel != "" {
-			return c.Agents.OpenCode.LoggingLevel
-		}
-	case agentNameOpenClaw:
-		if c.Agents.OpenClaw.LoggingLevel != "" {
-			return c.Agents.OpenClaw.LoggingLevel
-		}
-	case agentNameWindsurf:
-		if c.Agents.Windsurf.LoggingLevel != "" {
-			return c.Agents.Windsurf.LoggingLevel
-		}
-	case agentNamePiAgent:
-		if c.Agents.PiAgent.LoggingLevel != "" {
-			return c.Agents.PiAgent.LoggingLevel
-		}
-	case agentNameCodex:
-		if c.Agents.Codex.LoggingLevel != "" {
-			return c.Agents.Codex.LoggingLevel
-		}
+	if ac, ok := c.Agents[agentName]; ok && ac.LoggingLevel != "" {
+		return ac.LoggingLevel
 	}
-
 	return c.Logging.Level
 }
 
 // IsAgentEnabled returns true if the given agent is enabled.
+// An agent without a config entry is enabled.
 func (c *Config) IsAgentEnabled(agentName string) bool {
-	switch agentName {
-	case agentNameClaudeCode:
-		return c.Agents.ClaudeCode.Enabled
-	case agentNameCursor:
-		return c.Agents.Cursor.Enabled
-	case agentNameGemini:
-		return c.Agents.Gemini.Enabled
-	case agentNameOpenCode:
-		return c.Agents.OpenCode.Enabled
-	case agentNameOpenClaw:
-		return c.Agents.OpenClaw.Enabled
-	case agentNameWindsurf:
-		return c.Agents.Windsurf.Enabled
-	case agentNamePiAgent:
-		return c.Agents.PiAgent.Enabled
-	case agentNameCodex:
-		return c.Agents.Codex.Enabled
-	default:
-		return true
+	if ac, ok := c.Agents[agentName]; ok {
+		return ac.Enabled
 	}
+	return true
 }

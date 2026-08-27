@@ -13,7 +13,7 @@ const (
 	// AgentName is the machine identifier for Cursor.
 	AgentName = agent.AgentCursor
 	// DisplayName is the human-readable name for Cursor.
-	DisplayName = agent.DisplayCursor
+	DisplayName = "Cursor"
 )
 
 // Adapter implements the agent.Adapter interface for Cursor.
@@ -61,6 +61,71 @@ func (a *Adapter) Status(ctx context.Context) (*agent.HookStatus, error) {
 // ParseEvent converts a Cursor event to the common format.
 func (a *Adapter) ParseEvent(ctx context.Context, hookType string, rawData []byte) (*events.Event, error) {
 	return a.parseHookEvent(hookType, rawData)
+}
+
+// RenderResponse maps a decision to the Cursor wire response. Cursor reads
+// JSON on stdout for every hook and never uses exit codes. Each hook type
+// has its own response schema.
+func (a *Adapter) RenderResponse(hookType string, decision agent.HookDecision, detail string) agent.HookResponse {
+	switch decision {
+	case agent.DecisionBlock:
+		return agent.RenderedResponse{
+			Out: renderDecisionResponse(hookType, NewDenyResponse(detail), false),
+		}
+	case agent.DecisionGuidance:
+		r := NewGuidanceResponse(detail)
+		resp := agent.RenderedResponse{
+			Out: renderDecisionResponse(hookType, r, true),
+		}
+		// preToolUse JSON carries decision=allow with no reason field, so
+		// the advisory text routes to stderr.
+		if hookType == "preToolUse" && r.Reason != "" {
+			resp.Err = r.Reason
+		}
+		return resp
+	default:
+		return agent.RenderedResponse{Out: renderAllowResponse(hookType)}
+	}
+}
+
+// renderDecisionResponse builds the JSON response for a hook type carrying
+// an explicit deny (cont=false) or allow-with-advisory (cont=true) decision.
+func renderDecisionResponse(hookType string, response *HookResponse, cont bool) []byte {
+	switch hookType {
+	case "preToolUse":
+		return GeneratePreToolUseResponse(response)
+
+	case "beforeShellExecution", "beforeMCPExecution", "beforeReadFile", "beforeTabFileRead":
+		return GeneratePermissionResponse(response)
+
+	case "beforeSubmitPrompt", "sessionStart":
+		return GenerateContinueResponse(cont, response.Reason)
+
+	default:
+		return []byte("{}")
+	}
+}
+
+// renderAllowResponse builds the JSON response for the plain allow path.
+func renderAllowResponse(hookType string) []byte {
+	allowResponse := NewAllowResponse()
+
+	switch hookType {
+	case "preToolUse":
+		return GeneratePreToolUseResponse(allowResponse)
+
+	case "beforeShellExecution", "beforeMCPExecution", "beforeReadFile", "beforeTabFileRead":
+		return GeneratePermissionResponse(allowResponse)
+
+	case "beforeSubmitPrompt", "sessionStart":
+		return GenerateContinueResponse(true, "")
+
+	case "stop", "subagentStop":
+		return GenerateStopResponse("")
+
+	default:
+		return []byte("{}")
+	}
 }
 
 // Register adds this adapter to the given registry.
