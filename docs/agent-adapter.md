@@ -15,8 +15,13 @@ type Adapter interface {
     Uninstall(ctx context.Context, opts UninstallOptions) (*UninstallResult, error)
     Status(ctx context.Context) (*HookStatus, error)
     ParseEvent(ctx context.Context, hookType string, rawData []byte) (*events.Event, error)
+    RenderResponse(hookType string, decision HookDecision, detail string) HookResponse
 }
 ```
+
+The registry (`agent/registry.go`) is the single source of truth for which
+agents exist. Per-agent knowledge lives inside the adapter package. The CLI,
+config, and tui layers do not enumerate agents.
 
 ## Step-by-step
 
@@ -93,27 +98,44 @@ This is where hook stdin JSON gets converted to `events.Event` objects.
 - **Block** - `NewBlockResponse(reason)`. The engine blocks the action.
 - **Guidance** - `NewGuidanceResponse(guidance)`. The engine sends an advisory but does not block.
 
-The guidance response must satisfy the `guidanceResponse` interface in `cli/hook.go` (`JSON() []byte` and `Stderr() string`). Use the exit code semantics your agent expects. The common pattern is exit 0 for allow and exit 2 for block.
-
 See `agent/gemini/parser.go` for a complete example.
+
+**RenderResponse** - Implement `RenderResponse` on the adapter. It maps a
+`agent.HookDecision` (allow, block, guidance) and a hook type to an
+`agent.HookResponse` value: the stdout bytes, the stderr text, and the exit
+code. The adapter owns the per-hook-type wire knowledge. The CLI performs
+the IO through one generic `sendResponse` routine in `cli/hook.go`. Return
+an `agent.RenderedResponse` built from your response constructors. The
+common pattern is exit 0 for allow and guidance, and exit 2 with the reason
+on stderr for block. See `agent/gemini/adapter.go` for the JSON-channel
+pattern and `agent/cursor/adapter.go` for a per-hook schema switch.
+
+Add a `render_test.go` table test over the hook type and decision matrix.
+Assert `Stdout()`, `Stderr()`, and `ExitCode()`.
 
 ### 6. Register the adapter
 
-Modify these files to wire everything up:
+Required edits outside the adapter package:
 
 | File | Change |
 |---|---|
-| `agent/adapter.go` | Add `AgentYourAgent` and `DisplayYourAgent` constants, add case to `AgentDisplayName()` |
-| `agent/registry.go` | Add agent name to `SupportedAgents()` slice |
-| `config/config.go` | Add agent name constant, `AgentConfig` field in `AgentsConfig`, cases in `GetAgentLoggingLevel()` and `IsAgentEnabled()` |
+| `agent/adapter.go` | Add the `AgentYourAgent` name constant |
+| `cli/root.go` | Import the package and call `Register()` |
 | `config/defaults.go` | Add `v.SetDefault("agents.youragent.enabled", true)` |
-| `config/validate.go` | Add logging level validation |
-| `cli/root.go` | Import package and call `Register()` |
-| `cli/hook.go` | Add cases in `sendHookResponse()`, `sendSecurityBlockedResponse()`, and `sendSecurityGuidanceResponse()`, add `handleYourAgentResponse()` |
-| `tui/component/livelog/model.go` | Add agent name to `agentCycle` slice |
-| `tui/component/livelog/styles.go` | Add agent badge color case in `agentBadge()` |
 
-An adapter can be fully wired but not active. To keep an adapter out of the registry, comment out its `Register()` call in `cli/root.go`. See the `openclaw` adapter for this pattern. All other wiring stays in place.
+Optional:
+
+| File | Change |
+|---|---|
+| `tui/component/livelog/styles.go` | Add an entry to `agentBadgeColors`. Without it, the agent badge renders in the default dim color |
+
+Everything else derives from registration. The config map accepts any agent
+key. The display name comes from the adapter through the registry. The
+livelog filter cycle comes from `Registry.List()`.
+
+An adapter can exist in code but stay out of the registry. To deactivate an
+adapter, comment out its `Register()` call in `cli/root.go`. See the
+`openclaw` adapter for this pattern.
 
 ### 7. Write tests
 
