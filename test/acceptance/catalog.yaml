@@ -234,7 +234,7 @@
   title: "reinstall keeps exactly one gryph entry per hook type"
   category: install
   tier: P1
-  guarantee: "Repeated gryph install, with or without --force, keeps one gryph entry per hook type and keeps foreign hooks."
+  guarantee: "A plain reinstall is a no-op that keeps one gryph entry per hook type and keeps foreign hooks. A --force reinstall replaces the hook types gryph owns and keeps settings outside the hooks section."
   labels: [install, idempotent]
 
 - id: policy/dry-run/matches-enforcement
