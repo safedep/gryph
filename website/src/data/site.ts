@@ -20,7 +20,7 @@ export const RAIL_TITLES = [
   'Capture session',
   'Query and export',
   'Privacy and config',
-  'Enforce policy',
+  'Control policy',
   'Receipts',
   'Cost and stats',
   'Housekeeping',
@@ -29,11 +29,11 @@ export const RAIL_TITLES = [
 export const PLANES = [
   {
     name: 'Observe',
-    desc: 'Gryph records every read, write, and command in a local SQLite database.',
+    desc: 'Gryph records every read, write, and command in a local database.',
     entry: 'logs \u00b7 query \u00b7 sessions \u00b7 export \u00b7 stats',
   },
   {
-    name: 'Enforce',
+    name: 'Control',
     desc: 'A YAML policy controls actions before they run.',
     entry: 'policy \u00b7 receipts \u00b7 keys',
   },
@@ -42,22 +42,23 @@ export const PLANES = [
 export const FEATURES = [
   {
     name: 'Observe',
-    desc: 'Gryph records each read, write, and command in a local SQLite file.',
+    desc: 'Gryph records each read, write, and command in a local database.',
   },
-  { name: 'Enforce', desc: 'YAML rules control actions before they run.' },
+  { name: 'Control', desc: 'YAML rules and CEL expressions control actions before they run.' },
   {
     name: 'Verify',
     desc: 'Gryph signs a receipt for each session and links them in a chain.',
   },
-  { name: 'Local', desc: 'No cloud. No telemetry.' },
+  { name: 'Integrate', desc: 'JSON Lines exports pipe into your dashboards and internal tools.' },
 ]
 
-export const SHOWCASE_TABS = ['Enforce', 'Observe', 'Verify']
+export const SHOWCASE_TABS = ['Observe', 'Control', 'Verify', 'Integrate']
 
 export const SHOWCASE_SUBS = [
-  'one policy, four decisions',
   'a full session, reconstructed',
+  'one policy, four decisions',
   'signed receipts, hash-chained',
+  'json lines to anything',
 ]
 
 export const MILESTONES = [

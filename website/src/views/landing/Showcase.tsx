@@ -25,15 +25,16 @@ export function Showcase() {
           </button>
         ))}
       </div>
-      {tab === 0 && <EnforcePanels />}
-      {tab === 1 && <ObservePanels />}
+      {tab === 0 && <ObservePanels />}
+      {tab === 1 && <ControlPanels />}
       {tab === 2 && <VerifyPanels />}
+      {tab === 3 && <IntegratePanels />}
       <FeatureGrid />
     </section>
   )
 }
 
-function EnforcePanels() {
+function ControlPanels() {
   return (
     <div className="showcase-grid">
       <Card title="gryph logs --live">
@@ -154,6 +155,40 @@ function VerifyPanels() {
         <div className="term-gap">Chain verification: OK</div>
         <div className="term-gap">
           <span className="badge badge-warn">{`SIGNATURES OK ${CHECK}`}</span>
+          <BlinkCursor />
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function IntegratePanels() {
+  return (
+    <div className="showcase-grid">
+      <Card title="gryph export --since 1w">
+        <div>
+          <span className="term-dim">$</span> gryph export --since 1w
+        </div>
+        <div className="term-indent">{'{"event":"file_read","agent":"claude-code"}'}</div>
+        <div className="term-indent">{'{"event":"command_exec","agent":"cursor"}'}</div>
+        <div className="term-indent">{'{"event":"file_write","agent":"pi-agent"}'}</div>
+        <div className="term-gap">
+          <span className="term-dim">one JSON object per line</span>
+          <BlinkCursor />
+        </div>
+      </Card>
+      <Card title="your pipeline">
+        <div>
+          <span className="term-dim">$</span> gryph export --since 1w | jq .event
+        </div>
+        <div className="term-indent">"file_read"</div>
+        <div className="term-indent">"command_exec"</div>
+        <div className="term-gap">
+          <span className="term-dim">$</span> gryph export --since 1w | soc-ingest
+        </div>
+        <div className="term-indent">...elastic ...splunk ...dashboard</div>
+        <div className="term-gap">
+          <span className="term-dim">pipe to any ingestion or export tool</span>
           <BlinkCursor />
         </div>
       </Card>
