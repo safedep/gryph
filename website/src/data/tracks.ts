@@ -98,7 +98,7 @@ export const TRACKS: Track[] = [
     steps: [
       {
         label: 'Make a temporary test project.',
-        cmd: 'mkdir -p ~/gryph-sandbox && cd ~/gryph-sandbox',
+        cmd: 'mkdir -p /tmp/gryph-sandbox && cd /tmp/gryph-sandbox',
         expected: 'Use a clean directory for practice. Do not use a real project.',
       },
       {
@@ -226,23 +226,23 @@ export const TRACKS: Track[] = [
     goal: 'Write a YAML policy. Test it. Then apply it.',
     steps: [
       {
-        label: 'Make an example policy with comments.',
-        cmd: 'gryph policy init',
-        expected: 'Gryph writes policy.yaml to your protected configuration directory.',
+        label: 'Write a candidate rule file in your sandbox directory.',
+        cmd: 'gryph policy init /tmp/gryph-sandbox/candidate.yml',
+        expected: 'Gryph writes the example policy to that path. The file is a candidate. It is not active yet.',
       },
       {
         label: 'Check one rule file. Do not merge it yet.',
-        cmd: 'gryph policy validate --file ~/gryph-sandbox/candidate.yml',
+        cmd: 'gryph policy validate --file /tmp/gryph-sandbox/candidate.yml',
         expected: 'Gryph checks the one file and reports errors.',
       },
       {
         label: 'Test the rule before you install it.',
-        cmd: 'gryph policy test --file candidate.yml --action command_exec --command "rm -rf /"',
+        cmd: 'gryph policy test --file /tmp/gryph-sandbox/candidate.yml --action command_exec --command "rm -rf /"',
         expected: 'The result is block. Gryph shows the message.',
       },
       {
         label: 'Install the rule. Then turn on enforcement.',
-        cmd: 'gryph policy install candidate.yml && gryph config set policy.enabled true',
+        cmd: 'gryph policy install /tmp/gryph-sandbox/candidate.yml && gryph config set policy.enabled true',
         expected: 'Now every agent action passes through the policy.',
       },
     ],
@@ -350,9 +350,14 @@ export const TRACKS: Track[] = [
     goal: 'Control data retention. View the Gryph audit trail. See the advanced functions.',
     steps: [
       {
-        label: 'Check the retention. Then remove old event rows.',
+        label: 'Preview the retention cleanup. No data changes.',
         cmd: 'gryph retention cleanup --dry-run',
-        expected: 'Gryph removes old events. It keeps the audit rows and the receipts.',
+        expected: 'Gryph reports the old rows it would remove. Each data type has its own retention period.',
+      },
+      {
+        label: 'Run the cleanup to remove old rows.',
+        cmd: 'gryph retention cleanup',
+        expected: 'Gryph removes old events. Receipts follow their own retention period, 365 days by default.',
       },
       {
         label: 'Review every action that Gryph made on itself.',
@@ -370,14 +375,15 @@ export const TRACKS: Track[] = [
       prompt: 'You can say how to remove the hooks. You can say how to delete the data with --purge.',
     },
     quiz: {
-      q: 'After retention cleanup, what does Gryph keep?',
+      q: 'What does the retention cleanup keep?',
       opts: [
-        { text: 'Gryph deletes everything.', correct: false },
-        { text: 'The audit rows and the receipts.', correct: true },
+        { text: 'Every receipt forever.', correct: false },
+        { text: 'Receipts for their own retention period, 365 days by default.', correct: true },
       ],
       explain:
-        'Retention removes only old event rows. Gryph keeps the audit trail and the receipts.',
+        'Events, receipts, and deferred actions each have their own retention period. Gryph always keeps the self-audit trail.',
     },
-    takeaway: 'Retention removes old events. Gryph always keeps the audit trail and the receipts.',
+    takeaway:
+      'Retention removes old rows per data type. Receipts use their own period, 365 days by default.',
   },
 ]

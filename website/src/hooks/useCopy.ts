@@ -7,16 +7,17 @@ export function useCopy(): { copied: string | null; copy: (text: string) => void
   useEffect(() => () => window.clearTimeout(timer.current), [])
 
   const copy = useCallback((text: string) => {
-    try {
-      navigator.clipboard?.writeText(text)
-    } catch {
-      // Clipboard access can fail without permission. The label still flips.
-    }
-    setCopied(text)
-    window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => {
-      setCopied((current) => (current === text ? null : current))
-    }, 1200)
+    if (!navigator.clipboard) return
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(text)
+        window.clearTimeout(timer.current)
+        timer.current = window.setTimeout(() => {
+          setCopied((current) => (current === text ? null : current))
+        }, 1200)
+      })
+      .catch(() => {})
   }, [])
 
   return { copied, copy }

@@ -469,3 +469,9 @@
   border: 2px solid var(--ink);
   box-shadow: 3px 3px 0 -1px var(--ink);
 }
+
+.nav-next:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}

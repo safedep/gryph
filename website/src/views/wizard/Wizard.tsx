@@ -28,6 +28,7 @@ export function Wizard({ stars, ti, onHome, onSelectTrack, onBack, onNext }: Wiz
   const [installMethod, setInstallMethod] = useState('curl')
 
   const track = ti > 0 ? TRACKS[ti - 1] : undefined
+  const checkpointDone = ti === 0 || !!confirmed[ti]
   const headerLabel =
     ti === 0 ? `orientation ${MIDDOT} 3 min` : `track ${ti} / ${TOTAL} ${MIDDOT} ${track?.title}`
   const docsLabel = track?.docs ?? 'security-policy.md'
@@ -85,7 +86,13 @@ export function Wizard({ stars, ti, onHome, onSelectTrack, onBack, onNext }: Wiz
               <button type="button" className="nav-back" onClick={onBack}>
                 {ARROW_BACK} {ti === 0 ? 'home' : 'back'}
               </button>
-              <button type="button" className="nav-next" onClick={onNext}>
+              <button
+                type="button"
+                className="nav-next"
+                onClick={onNext}
+                disabled={!checkpointDone}
+                title={checkpointDone ? undefined : 'complete the checkpoint to continue'}
+              >
                 {nextLabel}
               </button>
             </div>
