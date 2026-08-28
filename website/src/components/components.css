@@ -1,0 +1,169 @@
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo-clickable {
+  cursor: pointer;
+}
+
+.logo-ring {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--red);
+  border-radius: 50%;
+}
+
+.logo-word {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 20px;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.logo-sm {
+  gap: 10px;
+}
+
+.logo-sm .logo-ring {
+  width: 14px;
+  height: 14px;
+}
+
+.logo-sm .logo-dot {
+  width: 4px;
+  height: 4px;
+}
+
+.logo-sm .logo-word {
+  font-size: 15px;
+}
+
+.star-button {
+  display: inline-flex;
+  align-items: center;
+  border: 2px solid var(--ink);
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--ink);
+}
+
+.star-button:hover {
+  color: var(--ink);
+}
+
+.star-button-label {
+  padding: 8px 11px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.star-button-count {
+  padding: 8px 11px;
+  background: var(--ink);
+  color: var(--light);
+  white-space: nowrap;
+}
+
+.star-button-sm .star-button-label {
+  padding: 6px 10px;
+}
+
+.star-button-sm .star-button-count {
+  padding: 6px 10px;
+}
+
+.card {
+  border: 2px solid var(--ink);
+  background: var(--card);
+  box-shadow: 6px 6px 0 -1px var(--ink);
+}
+
+.card-header {
+  display: flex;
+  gap: 8px;
+  padding: 11px 15px;
+  border-bottom: 2px solid var(--ink);
+  align-items: center;
+}
+
+.card-dot {
+  width: 10px;
+  height: 10px;
+  background: var(--ink);
+}
+
+.card-dot-red {
+  background: var(--red);
+}
+
+.card-title {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.card-body {
+  padding: 15px 17px;
+  font-size: 12px;
+  line-height: 2.05;
+}
+
+.copy-command {
+  cursor: pointer;
+  border: 2px solid var(--ink);
+  background: var(--ink);
+  color: var(--dark-line);
+  padding: 12px 15px;
+  font-weight: 500;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+
+.copy-command-text {
+  flex: 1;
+  word-break: break-all;
+}
+
+.copy-command-prompt {
+  color: var(--red);
+}
+
+.copy-command-chip {
+  flex: none;
+  padding: 3px 10px;
+  border: 1px solid var(--dark-chip-border);
+  font-size: 10px;
+  color: var(--dark-chip);
+}
+
+.copy-command-sm {
+  padding: 9px 12px;
+  font-size: 11.5px;
+  gap: 10px;
+}
+
+.copy-command-sm .copy-command-chip {
+  padding: 2px 8px;
+  font-size: 9.5px;
+}

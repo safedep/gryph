@@ -1,0 +1,156 @@
+.completion {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+}
+
+.completion-card {
+  width: 560px;
+  max-width: 100%;
+  background: var(--card);
+  border: 2px solid var(--ink);
+  box-shadow: 10px 10px 0 -1px var(--ink);
+}
+
+.completion-receipt {
+  background: var(--ink);
+  color: var(--dark-line);
+  padding: 22px 28px;
+  border-bottom: 2px solid var(--red);
+}
+
+.completion-receipt-label {
+  font-size: 11px;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+}
+
+.completion-receipt-lines {
+  font-size: 12.5px;
+  line-height: 2;
+}
+
+.receipt-accent {
+  color: var(--red);
+}
+
+.receipt-ok {
+  color: var(--green);
+}
+
+.completion-body {
+  padding: 32px 34px 34px;
+  text-align: center;
+}
+
+.completion-kicker {
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--red);
+  letter-spacing: 0.16em;
+  margin-bottom: 12px;
+}
+
+.completion-title {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 32px;
+  line-height: 0.98;
+  text-transform: uppercase;
+  letter-spacing: -0.03em;
+  margin-bottom: 8px;
+}
+
+.completion-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+.milestones {
+  display: grid;
+  text-align: left;
+  margin-bottom: 28px;
+  border: 2px solid var(--ink);
+}
+
+.milestone {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  padding: 11px 15px;
+  border-bottom: 2px solid var(--ink);
+  font-weight: 500;
+  font-size: 12.5px;
+}
+
+.milestone:last-child {
+  border-bottom: 0;
+}
+
+.milestone-check {
+  color: var(--red);
+  font-weight: 700;
+}
+
+.milestone-name {
+  font-weight: 700;
+}
+
+.milestone-desc {
+  color: var(--faint);
+}
+
+.completion-star {
+  display: inline-block;
+  background: var(--red);
+  color: #fff;
+  border: 2px solid var(--ink);
+  box-shadow: 5px 5px 0 -1px var(--ink);
+  padding: 16px 30px;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.completion-star:hover {
+  color: #fff;
+}
+
+.completion-hint {
+  margin-top: 16px;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.completion-links {
+  margin-top: 22px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.completion-docs {
+  padding: 9px 16px;
+  border: 2px solid var(--ink);
+  color: var(--ink);
+}
+
+.completion-docs:hover {
+  color: var(--red);
+}
+
+.completion-home {
+  border: 2px solid var(--ink);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 9px 16px;
+  background: var(--card);
+  color: var(--ink);
+}
