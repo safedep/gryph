@@ -144,15 +144,16 @@ function VerifyPanels() {
         <div className="term-indent">{`prev:${NBSP.repeat(3)} 0x1a08${ELLIPSIS}`}</div>
         <div className="term-indent">{`sig:${NBSP.repeat(4)} ed25519 ${CHECK}`}</div>
       </Card>
-      <Card title="gryph verify">
+      <Card title="gryph policy receipts --verify">
         <div>
-          <span className="term-dim">$</span> gryph verify --session a91f
+          <span className="term-dim">$</span> gryph policy receipts --verify
         </div>
-        <div className="term-indent">{`chain:${NBSP.repeat(6)} 128 events`}</div>
-        <div className="term-indent">{`hashes:${NBSP.repeat(4)} intact ${CHECK}`}</div>
-        <div className="term-indent">{`signatures: 128/128 ${CHECK}`}</div>
+        <div className="term-indent">36{NBSP.repeat(2)}fa4f6dd3{NBSP.repeat(2)}pi-agent{NBSP.repeat(2)}edit{NBSP.repeat(2)}allow{NBSP.repeat(2)}success</div>
+        <div className="term-indent">35{NBSP.repeat(2)}fa4f6dd3{NBSP.repeat(2)}pi-agent{NBSP.repeat(2)}write{NBSP.repeat(2)}allow{NBSP.repeat(2)}success</div>
+        <div className="term-indent">34{NBSP.repeat(2)}fa4f6dd3{NBSP.repeat(2)}pi-agent{NBSP.repeat(2)}exec{NBSP.repeat(2)}block{NBSP.repeat(2)}success</div>
+        <div className="term-gap">Chain verification: OK</div>
         <div className="term-gap">
-          <span className="badge badge-warn">{`VERIFIED ${CHECK}`}</span>
+          <span className="badge badge-warn">{`SIGNATURES OK ${CHECK}`}</span>
           <BlinkCursor />
         </div>
       </Card>

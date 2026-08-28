@@ -68,6 +68,8 @@
 
 .star-button-label {
   padding: 8px 11px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .star-button-count {
