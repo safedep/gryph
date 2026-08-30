@@ -21,6 +21,7 @@ export const RAIL_TITLES = [
   'Query and export',
   'Privacy and config',
   'Control policy',
+  'Agent authoring',
   'Receipts',
   'Cost and stats',
   'Housekeeping',
@@ -52,13 +53,14 @@ export const FEATURES = [
   { name: 'Integrate', desc: 'JSON Lines exports pipe into your dashboards and internal tools.' },
 ]
 
-export const SHOWCASE_TABS = ['Observe', 'Control', 'Verify', 'Integrate']
+export const SHOWCASE_TABS = ['Observe', 'Control', 'Verify', 'Integrate', 'Author']
 
 export const SHOWCASE_SUBS = [
   'a full session, reconstructed',
   'one policy, four decisions',
   'signed receipts, hash-chained',
   'json lines to anything',
+  'your agent drafts, you install',
 ]
 
 export const MILESTONES = [
@@ -67,6 +69,7 @@ export const MILESTONES = [
   { name: 'Queried', desc: 'audit trail rebuilt' },
   { name: 'Guarded', desc: 'rm -rf blocked in a test' },
   { name: 'Enforced', desc: 'block receipt recorded' },
+  { name: 'Authored', desc: 'agent drafted, you installed' },
   { name: 'Verified', desc: 'receipt chain correct' },
 ]
 
@@ -76,7 +79,7 @@ export interface ReceiptLine {
 }
 
 export const RECEIPT_LINES: ReceiptLine[] = [
-  { text: 'milestones ......... 6/6 \u2713', tone: 'normal' },
+  { text: 'milestones ......... 7/7 \u2713', tone: 'normal' },
   { text: 'agents hooked ...... 1', tone: 'normal' },
   { text: 'events captured .... 128', tone: 'normal' },
   { text: 'policy ............. enforcing', tone: 'normal' },

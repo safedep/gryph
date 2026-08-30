@@ -35,7 +35,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
         protect your agents {ARROW_NEXT}
       </button>
       <div className="hero-meta">
-        30 minutes {MIDDOT} 8 tracks {MIDDOT} runs on your machine
+        9 tracks {MIDDOT} self-paced {MIDDOT} runs on your machine
       </div>
     </section>
   )
