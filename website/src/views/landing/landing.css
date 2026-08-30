@@ -39,7 +39,7 @@
   margin: 0 auto 28px;
   font-family: var(--font-sans);
   font-weight: 800;
-  font-size: 58px;
+  font-size: clamp(36px, 11vw, 58px);
   line-height: 0.94;
   letter-spacing: -0.035em;
   text-transform: capitalize;
@@ -347,4 +347,72 @@
 
 .landing-footer a:hover {
   color: var(--ink);
+}
+
+@media (max-width: 720px) {
+  .landing {
+    padding: 0 18px;
+  }
+
+  .hero {
+    padding: 44px 0 8px;
+  }
+
+  .hero-desc {
+    text-align: left;
+  }
+
+  .showcase {
+    padding: 48px 0 32px;
+  }
+
+  .showcase-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .showcase-tab + .showcase-tab {
+    border-left: 0;
+  }
+
+  .showcase-tab:nth-child(2n) {
+    border-left: 2px solid var(--ink);
+  }
+
+  .showcase-tab:nth-child(n + 3) {
+    border-top: 2px solid var(--ink);
+  }
+
+  .showcase-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .term-note {
+    padding-left: 14px;
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .feature-cell + .feature-cell {
+    border-left: 0;
+  }
+
+  .feature-cell:nth-child(2n) {
+    border-left: 2px solid var(--ink);
+  }
+
+  .feature-cell:nth-child(n + 3) {
+    border-top: 2px solid var(--ink);
+  }
+
+  .local-callout {
+    padding: 20px;
+  }
+
+  .local-title {
+    font-size: 21px;
+  }
 }
