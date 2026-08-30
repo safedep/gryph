@@ -47,42 +47,25 @@
   text-wrap: balance;
 }
 
+.hero-title .blink-cursor {
+  width: 0.2em;
+  height: 0.68em;
+  vertical-align: -0.03em;
+  margin-left: 0.08em;
+}
+
 .hero-desc {
   margin: 0 auto 30px;
   font-size: 13.5px;
   line-height: 1.65;
   color: var(--muted);
   max-width: 470px;
-  text-align: justify;
 }
 
-.hero-planes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+.hero-term {
   max-width: 520px;
-  margin: 0 auto 30px;
+  margin: 0 auto 34px;
   text-align: left;
-}
-
-.hero-plane {
-  padding: 14px 16px;
-  border: 2px solid var(--ink);
-  background: var(--card);
-}
-
-.hero-plane-name {
-  font-family: var(--font-sans);
-  font-weight: 800;
-  font-size: 13px;
-  text-transform: uppercase;
-  margin-bottom: 5px;
-}
-
-.hero-plane-desc {
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--muted);
 }
 
 .hero-cta {
@@ -356,10 +339,6 @@
 
   .hero {
     padding: 44px 0 8px;
-  }
-
-  .hero-desc {
-    text-align: left;
   }
 
   .showcase {
