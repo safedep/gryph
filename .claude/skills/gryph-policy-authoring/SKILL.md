@@ -1,6 +1,6 @@
 ---
 name: gryph-policy-authoring
-description: Use when a human wants help to author or change a Gryph security policy that governs what an AI coding agent may do, often with an agent's help. Trigger whenever the user wants Gryph to block, allow, warn on, or require approval for an agent action, wants to write or change a policy rule, asks how to match a tool, command, file path, or URL, works with CEL conditions or context counters, wants to split policy into many files, or wants to dry-run a rule. Also trigger on phrases like "write a gryph policy", "add a policy rule", "make gryph block X", "help me write a policy", or "policy for my agent", even when the user does not name a file. This skill drafts a policy in a workspace directory and hands the user an install command. It never installs the policy and never writes into Gryph's config directory. It is not for changing the policy engine code (use aarm-policy-layer for engine work under aarm/ or cli/policy.go).
+description: Use when a human wants help to author or change a Gryph security policy that governs what an AI coding agent may do, often with an agent's help. Trigger whenever the user wants Gryph to block, allow, warn on, or require approval for an agent action, wants to write or change a policy rule, asks how to match a tool, command, file path, or URL, works with CEL conditions or context counters, wants to split policy into many files, or wants to dry-run a rule. Also trigger on phrases like "write a gryph policy", "add a policy rule", "make gryph block X", "help me write a policy", or "policy for my agent", even when the user does not name a file. This skill drafts a policy in a workspace directory and hands the user an install command. It never installs the policy and never writes into Gryph's config directory. It is not for changing the policy engine code.
 ---
 
 # Authoring Gryph Policies
@@ -34,10 +34,11 @@ the existing policy from it. Do not author fields from memory.
   to imitate, and to see what already fires so your rule does not collide with them.
 - `gryph policy list` shows every active source and its rule count.
 
-`docs/security-policy.md` in this repo is a concept guide. It explains match criteria,
-scope, CEL conditions, decisions, messages, receipts, and has worked examples. Read the
-section you need for concepts. When the doc and the binary disagree, trust the binary and
-tell the user.
+The security policy guide at
+https://github.com/safedep/gryph/blob/main/docs/security-policy.md is a concept guide.
+It explains match criteria, scope, CEL conditions, decisions, messages, receipts, and has
+worked examples. Read the section you need for concepts. When the doc and the binary
+disagree, trust the binary and tell the user.
 
 You may read the active policy for context: read the resolved `policy.yaml` (its path is
 printed by `gryph policy validate`) and the files in `policies/`. Read only. Never write

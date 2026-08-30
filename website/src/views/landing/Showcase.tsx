@@ -29,8 +29,61 @@ export function Showcase() {
       {tab === 1 && <ControlPanels />}
       {tab === 2 && <VerifyPanels />}
       {tab === 3 && <IntegratePanels />}
+      {tab === 4 && <AuthorPanels />}
       <FeatureGrid />
     </section>
+  )
+}
+
+function AuthorPanels() {
+  return (
+    <div className="showcase-grid">
+      <Card title="your agent drafts">
+        <div>
+          <span className="term-dim">&gt;</span> make gryph block force pushes
+        </div>
+        <div className="term-gap term-dim">drafting gryph-policy/force-push.yaml</div>
+        <div>
+          <span className="term-dim">$</span> gryph policy validate --file {ELLIPSIS}
+        </div>
+        <div className="term-indent">
+          valid <span className="term-red">{CHECK}</span>
+        </div>
+        <div>
+          <span className="term-dim">$</span> gryph policy test {ELLIPSIS} "git push --force"
+        </div>
+        <div className="term-indent">
+          <span className="badge badge-block">BLOCK</span> no-force-push
+        </div>
+        <div className="term-gap">
+          run: <span className="term-bold">gryph policy install</span>
+        </div>
+      </Card>
+      <Card title="you install">
+        <div>
+          <span className="term-dim">$</span> gryph policy install \
+        </div>
+        <div className="term-indent-2">gryph-policy/force-push.yaml</div>
+        <div className="term-indent">
+          installed to policies <span className="term-red">{CHECK}</span>
+        </div>
+        <div className="term-gap">
+          <span className="term-dim">$</span> gryph policy list
+        </div>
+        <div className="term-indent">
+          {`builtin${NBSP.repeat(9)} `}
+          <span className="term-dim">12 rules</span>
+        </div>
+        <div className="term-indent">
+          {`force-push.yaml${NBSP} `}
+          <span className="term-dim">1 rule</span>
+        </div>
+        <div className="term-gap term-dim">
+          roll back: remove the file
+          <BlinkCursor />
+        </div>
+      </Card>
+    </div>
   )
 }
 

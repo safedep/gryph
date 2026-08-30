@@ -475,3 +475,77 @@
   cursor: not-allowed;
   box-shadow: none;
 }
+
+@media (max-width: 720px) {
+  .wizard-header-row {
+    padding: 0 14px;
+    gap: 10px;
+  }
+
+  .wizard-header-label {
+    flex: 0 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .wizard-body {
+    grid-template-columns: 1fr;
+  }
+
+  .rail {
+    border-right: 0;
+    border-bottom: 2px solid var(--ink);
+    padding: 10px 14px;
+    overflow-x: auto;
+  }
+
+  .rail-label {
+    display: none;
+  }
+
+  .rail-items {
+    display: flex;
+    gap: 6px;
+  }
+
+  .rail-item {
+    width: auto;
+    flex: none;
+    padding: 5px 6px;
+  }
+
+  .rail-title {
+    display: none;
+  }
+
+  .rail-item-current .rail-title {
+    display: block;
+    color: var(--ink);
+  }
+
+  .wizard-main {
+    padding: 22px 16px 30px;
+  }
+
+  .track-title {
+    font-size: 25px;
+  }
+
+  .steptrack .track-title {
+    font-size: 23px;
+  }
+
+  .orientation-planes {
+    grid-template-columns: 1fr;
+  }
+
+  .checkpoint-takeaway {
+    grid-template-columns: 1fr;
+  }
+
+  .quiz-options {
+    grid-template-columns: 1fr;
+  }
+}

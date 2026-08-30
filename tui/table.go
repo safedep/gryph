@@ -752,6 +752,14 @@ func (p *TablePresenter) renderPayloadDetail(tw *tableWriter, payload any) {
 	}
 }
 
+// Cost table widths equal the sum of the printf column widths plus the
+// separating spaces in RenderCostSummary. Update them together.
+const (
+	costSessionTableWidth = 86
+	costModelTableWidth   = 96
+	costGroupTableWidth   = 47
+)
+
 // RenderCostSummary renders the cost summary.
 func (p *TablePresenter) RenderCostSummary(summary *CostSummaryView) error {
 	tw := &tableWriter{w: p.w}
@@ -764,12 +772,12 @@ func (p *TablePresenter) RenderCostSummary(summary *CostSummaryView) error {
 
 		tw.printf("%-10s %-14s %-10s %-21s %7s %8s %10s\n",
 			"SESSION", "AGENT", "PROJECT", "STARTED", "MODELS", "TOKENS", "COST")
-		tw.println(HorizontalLine(p.termWidth))
+		tw.println(HorizontalLine(costSessionTableWidth))
 
 		for _, s := range summary.Sessions {
-			tw.printf("%-10s %-14s %-10s %-21s %7d %8s %10s\n",
+			tw.printf("%-10s %s %-10s %-21s %7d %8s %10s\n",
 				s.ShortID,
-				p.color.Agent(s.AgentName),
+				PadRightVisible(p.color.Agent(s.AgentName), 14),
 				TruncateString(s.ProjectName, 10),
 				FormatTime(s.StartedAt),
 				s.ModelCount,
@@ -777,7 +785,7 @@ func (p *TablePresenter) RenderCostSummary(summary *CostSummaryView) error {
 				FormatCost(s.TotalCost))
 		}
 
-		tw.println(HorizontalLine(p.termWidth))
+		tw.println(HorizontalLine(costSessionTableWidth))
 		tw.printf("Total (%d sessions) %43s %10s\n",
 			summary.TotalSessions,
 			FormatTokens(summary.TotalTokens),
@@ -787,7 +795,7 @@ func (p *TablePresenter) RenderCostSummary(summary *CostSummaryView) error {
 		case "model":
 			tw.printf("%-30s %10s %10s %10s %10s %10s %10s\n",
 				"MODEL", "SESSIONS", "INPUT", "OUTPUT", "CACHE_R", "CACHE_W", "COST")
-			tw.println(HorizontalLine(p.termWidth))
+			tw.println(HorizontalLine(costModelTableWidth))
 			for _, g := range summary.Groups {
 				tw.printf("%-30s %10d %10s %10s %10s %10s %10s\n",
 					TruncateString(g.Label, 30),
@@ -798,7 +806,7 @@ func (p *TablePresenter) RenderCostSummary(summary *CostSummaryView) error {
 					FormatNumber64(g.CacheWrite),
 					FormatCost(g.TotalCost))
 			}
-			tw.println(HorizontalLine(p.termWidth))
+			tw.println(HorizontalLine(costModelTableWidth))
 			tw.printf("%-30s %10d %10s %10s %10s %10s %10s\n",
 				"Total",
 				summary.TotalSessions,
@@ -810,15 +818,15 @@ func (p *TablePresenter) RenderCostSummary(summary *CostSummaryView) error {
 
 		case "agent":
 			tw.printf("%-14s %10s %10s %10s\n", "AGENT", "SESSIONS", "TOKENS", "COST")
-			tw.println(HorizontalLine(p.termWidth))
+			tw.println(HorizontalLine(costGroupTableWidth))
 			for _, g := range summary.Groups {
-				tw.printf("%-14s %10d %10s %10s\n",
-					p.color.Agent(g.Label),
+				tw.printf("%s %10d %10s %10s\n",
+					PadRightVisible(p.color.Agent(g.Label), 14),
 					g.SessionCount,
 					FormatTokens(g.TotalTokens),
 					FormatCost(g.TotalCost))
 			}
-			tw.println(HorizontalLine(p.termWidth))
+			tw.println(HorizontalLine(costGroupTableWidth))
 			tw.printf("%-14s %10d %10s %10s\n",
 				"Total",
 				summary.TotalSessions,
@@ -827,7 +835,7 @@ func (p *TablePresenter) RenderCostSummary(summary *CostSummaryView) error {
 
 		case "day":
 			tw.printf("%-14s %10s %10s %10s\n", "DATE", "SESSIONS", "TOKENS", "COST")
-			tw.println(HorizontalLine(p.termWidth))
+			tw.println(HorizontalLine(costGroupTableWidth))
 			for _, g := range summary.Groups {
 				tw.printf("%-14s %10d %10s %10s\n",
 					g.Label,
@@ -835,7 +843,7 @@ func (p *TablePresenter) RenderCostSummary(summary *CostSummaryView) error {
 					FormatTokens(g.TotalTokens),
 					FormatCost(g.TotalCost))
 			}
-			tw.println(HorizontalLine(p.termWidth))
+			tw.println(HorizontalLine(costGroupTableWidth))
 			tw.printf("%-14s %10d %10s %10s\n",
 				"Total",
 				summary.TotalSessions,

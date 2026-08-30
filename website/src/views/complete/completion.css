@@ -154,3 +154,30 @@
   background: var(--card);
   color: var(--ink);
 }
+
+@media (max-width: 720px) {
+  .completion {
+    padding: 24px 14px;
+  }
+
+  .completion-receipt {
+    padding: 18px 16px;
+  }
+
+  .completion-body {
+    padding: 26px 18px 28px;
+  }
+
+  .completion-title {
+    font-size: 26px;
+  }
+
+  .milestone {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .completion-links {
+    flex-wrap: wrap;
+  }
+}

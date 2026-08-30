@@ -94,7 +94,7 @@ export const TRACKS: Track[] = [
     title: 'Capture your first session',
     time: '15 min',
     docs: 'cli-reference.md',
-    goal: 'Record the actions of an agent. Then view them with logs and sessions.',
+    goal: 'Watch the actions of an agent live. Then view the stored records.',
     steps: [
       {
         label: 'Make a temporary test project.',
@@ -102,20 +102,23 @@ export const TRACKS: Track[] = [
         expected: 'Use a clean directory for practice. Do not use a real project.',
       },
       {
-        label: 'Start your agent in that directory. Give it a small task.',
-        cmd: 'echo "hello gryph" > readme.txt',
-        expected: 'The agent reads, writes, and runs commands. Gryph records each action.',
-      },
-      {
-        label: 'View recent actions by session.',
-        cmd: 'gryph logs --today',
-        expected: 'Gryph shows read, write, and command actions for each session.',
-      },
-      {
-        label: 'Open one session. Then watch new actions as they happen.',
-        cmd: 'gryph sessions && gryph logs --follow',
+        label: 'Start the live monitor.',
+        cmd: 'gryph logs --live',
         expected:
-          'The command shows the full session. Use --follow to see new actions. Use --live for a full screen view.',
+          'Gryph opens a full screen monitor. Use --follow for plain stream output that you can pipe.',
+      },
+      {
+        label:
+          'Open a second terminal. Start your agent in the sandbox directory. Ask the agent to do this task.',
+        cmd: 'echo "hello gryph" > readme.txt',
+        expected:
+          'The agent reads, writes, and runs commands. Each action shows in the monitor as it happens. Gryph records agent actions, not your own shell commands.',
+      },
+      {
+        label: 'Exit the monitor. Then view the stored records by session.',
+        cmd: 'gryph sessions && gryph logs --today',
+        expected:
+          'Gryph keeps each action in the local database. The output shows read, write, and command actions for each session.',
       },
     ],
     checkpoint: {
@@ -221,9 +224,9 @@ export const TRACKS: Track[] = [
   },
   {
     title: 'Enforce a security policy',
-    time: '30 min',
+    time: '35 min',
     docs: 'security-policy.md',
-    goal: 'Write a YAML policy. Test it. Then apply it.',
+    goal: 'Write a YAML policy. Test a CEL condition. Then apply the policy.',
     steps: [
       {
         label: 'Write a candidate rule file in your sandbox directory.',
@@ -241,6 +244,13 @@ export const TRACKS: Track[] = [
         expected: 'The result is block. Gryph shows the message.',
       },
       {
+        label:
+          'Test a CEL rule. The example policy warns when a session writes 25 files or more.',
+        cmd: 'gryph policy test --file /tmp/gryph-sandbox/candidate.yml --action file_write --path src/app.go --context-files-written 30',
+        expected:
+          'The result is warn from the rule warn-session-write-volume. Its condition is the CEL expression context.files_written >= 25. A condition can also read action fields such as action.injection_score.',
+      },
+      {
         label: 'Install the rule. Then turn on enforcement.',
         cmd: 'gryph policy install /tmp/gryph-sandbox/candidate.yml && gryph config set policy.enabled true',
         expected: 'Now every agent action passes through the policy.',
@@ -251,15 +261,62 @@ export const TRACKS: Track[] = [
       prompt: 'You see one block receipt or more. Gryph keeps the decision record.',
     },
     quiz: {
-      q: 'Which effect is the safe way to start?',
+      q: 'What can a CEL condition read?',
       opts: [
-        { text: 'Block every action at once.', correct: false },
-        { text: 'Warn first. Change to block after you trust the rule.', correct: true },
+        { text: 'Only the fields of the current action.', correct: false },
+        { text: 'The action fields and the session context counters.', correct: true },
       ],
       explain:
-        'Rules can allow, warn, guide, block, escalate, or defer. Start with warn. Change to block later.',
+        'A condition reads action fields such as action.injection_score. It also reads session counters such as context.files_written. Start with warn. Change to block after you trust the rule.',
     },
     takeaway: 'Start with warn. Change to block after you trust the rule.',
+  },
+  {
+    title: 'Author policy with your agent',
+    time: '20 min',
+    docs: 'security-policy.md',
+    goal: 'Install the authoring skill. Ask your agent for a rule. Review it. Then install it yourself.',
+    steps: [
+      {
+        label: 'Install the policy authoring skill for your agent.',
+        cmd: 'npx skills add safedep/gryph --skill gryph-policy-authoring',
+        expected:
+          'The skill installs for Claude Code, Cursor, and other agents. It teaches your agent the safe authoring workflow.',
+      },
+      {
+        label: 'Ask your agent for a rule. Paste this task.',
+        cmd: 'Write a gryph policy that blocks git push --force',
+        expected:
+          'The agent drafts in a workspace directory such as ./gryph-policy/. Gryph blocks agent writes to its own config directory by design.',
+      },
+      {
+        label: 'Check the draft yourself. Run the same test the agent ran. Use the file name your agent chose.',
+        cmd: 'gryph policy test --file ./gryph-policy/no-force-push.yaml --action command_exec --command "git push --force"',
+        expected:
+          'The result is block. The agent tests a match, a non-match, and a boundary case before it hands you the draft.',
+      },
+      {
+        label: 'Review the draft. Then install it yourself. The agent never installs.',
+        cmd: 'gryph policy install ./gryph-policy/no-force-push.yaml',
+        expected:
+          'Install checks the file against the merged policy. To roll back, remove the file from the policies directory.',
+      },
+    ],
+    checkpoint: {
+      cmd: 'gryph policy list',
+      prompt:
+        'The list shows your new file as an active policy source. You stayed in control of the install.',
+    },
+    quiz: {
+      q: 'Who installs the policy?',
+      opts: [
+        { text: 'The agent installs it after its tests pass.', correct: false },
+        { text: 'You install it. The agent drafts and tests.', correct: true },
+      ],
+      explain:
+        'The skill drafts in a workspace and hands you the install command. Gryph blocks agent writes to its config directory.',
+    },
+    takeaway: 'Your agent drafts and tests the policy. You review and install it.',
   },
   {
     title: 'Audit integrity and receipts',
