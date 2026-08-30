@@ -50,7 +50,7 @@ function AuthorPanels() {
           valid <span className="term-red">{CHECK}</span>
         </div>
         <div>
-          <span className="term-dim">$</span> gryph policy test {ELLIPSIS} --force
+          <span className="term-dim">$</span> gryph policy test {ELLIPSIS} "git push --force"
         </div>
         <div className="term-indent">
           <span className="badge badge-block">BLOCK</span> no-force-push
@@ -61,8 +61,9 @@ function AuthorPanels() {
       </Card>
       <Card title="you install">
         <div>
-          <span className="term-dim">$</span> gryph policy install force-push.yaml
+          <span className="term-dim">$</span> gryph policy install \
         </div>
+        <div className="term-indent-2">gryph-policy/force-push.yaml</div>
         <div className="term-indent">
           installed to policies <span className="term-red">{CHECK}</span>
         </div>
