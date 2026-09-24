@@ -1,0 +1,8 @@
+{
+  "session_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "transcript_path": "/tmp/cc-session.jsonl",
+  "cwd": "/home/dev/project",
+  "hook_event_name": "Stop",
+  "permission_mode": "bypass",
+  "stop_hook_active": false
+}

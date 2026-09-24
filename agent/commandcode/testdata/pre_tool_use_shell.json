@@ -1,0 +1,15 @@
+{
+  "session_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "transcript_path": "/tmp/cc-session.jsonl",
+  "cwd": "/home/dev/project",
+  "hook_event_name": "PreToolUse",
+  "permission_mode": "bypass",
+  "tool_use_id": "toolu_01",
+  "tool_name": "shell_command",
+  "tool_display_name": "SHELL",
+  "tool_input": {
+    "command": "go test ./...",
+    "args": ["-run", "TestParse"],
+    "timeout": 120
+  }
+}

@@ -9,15 +9,16 @@ import (
 
 // Standard agent identifiers.
 const (
-	AgentClaudeCode = "claude-code"
-	AgentCursor     = "cursor"
-	AgentGemini     = "gemini"
-	AgentOpenCode   = "opencode"
-	AgentOpenClaw   = "openclaw"
-	AgentWindsurf   = "windsurf"
-	AgentPiAgent    = "pi-agent"
-	AgentCodex      = "codex"
-	AgentDevin      = "devin"
+	AgentClaudeCode  = "claude-code"
+	AgentCursor      = "cursor"
+	AgentGemini      = "gemini"
+	AgentOpenCode    = "opencode"
+	AgentOpenClaw    = "openclaw"
+	AgentWindsurf    = "windsurf"
+	AgentPiAgent     = "pi-agent"
+	AgentCodex       = "codex"
+	AgentDevin       = "devin"
+	AgentCommandCode = "command-code"
 )
 
 // DetectionResult contains information about a detected agent.

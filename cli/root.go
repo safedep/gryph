@@ -10,6 +10,7 @@ import (
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/codex"
+	"github.com/safedep/gryph/agent/commandcode"
 	"github.com/safedep/gryph/agent/cursor"
 	"github.com/safedep/gryph/agent/devin"
 	"github.com/safedep/gryph/agent/gemini"
@@ -75,6 +76,7 @@ func NewApp(cfg *config.Config) (*App, error) {
 	piagent.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentPiAgent), cfg.Logging.ContentHash)
 	codex.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCodex), cfg.Logging.ContentHash)
 	devin.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentDevin), cfg.Logging.ContentHash)
+	commandcode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCommandCode), cfg.Logging.ContentHash)
 
 	// For now, let us keep openclaw agent disabled because it is non-functional
 	// openclaw.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentOpenClaw), cfg.Logging.ContentHash)

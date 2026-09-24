@@ -1,0 +1,16 @@
+{
+  "session_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "transcript_path": "/tmp/cc-session.jsonl",
+  "cwd": "/home/dev/project",
+  "hook_event_name": "PostToolUse",
+  "permission_mode": "auto-accept",
+  "tool_use_id": "toolu_04",
+  "tool_name": "edit_file",
+  "tool_display_name": "EDIT",
+  "tool_input": {
+    "file_path": "/home/dev/project/main.go",
+    "old_value": "func main() {}",
+    "new_value": "func main() {\n\tprintln(\"hi\")\n}"
+  },
+  "tool_response": "OK"
+}

@@ -97,6 +97,7 @@ Pre-built binaries for macOS, Linux, and Windows are available on the [GitHub Re
 | --- | --- |
 | **Claude Code** | Full (PreToolUse, PostToolUse, Notification) |
 | **Codex** | Full (PreToolUse, PostToolUse, SessionStart, UserPromptSubmit, Stop) |
+| **Command Code** | Full (PreToolUse, PostToolUse, Stop, SessionStart) |
 | **Cursor** | Full (file read/write, shell execution, MCP tools) |
 | **Devin CLI** | Full (PreToolUse, PostToolUse, SessionStart, UserPromptSubmit, Stop, SessionEnd) |
 | **Gemini CLI** | Full (BeforeTool, AfterTool, Notification) |
