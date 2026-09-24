@@ -105,6 +105,10 @@ func TestBuiltinCommandPatterns(t *testing.T) {
 	}{
 		{"rm -f /home/u/.commandcode/settings.json", true},
 		{"cp /tmp/x /home/u/.commandcode/settings.json", true},
+		{"unlink /home/u/.commandcode/settings.json", true},
+		{"unlink ~/.claude/settings.json", true},
+		{"unlink ~/.config/safedep/gryph/gryph.db", true},
+		{"unlink /tmp/scratch.json", false},
 		{"rm -rf /home/u/.commandcode", true},
 		{"rm -rf ~/.commandcode/", true},
 		{"rm -rf ~/.commandcode/*", true},

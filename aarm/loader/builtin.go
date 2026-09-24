@@ -26,8 +26,8 @@ const (
 // the file_write / file_delete rule is the real boundary because it matches
 // the normalized action target rather than a command string.
 var builtinCommandPatterns = []string{
-	`(^|[\s;&|])(rm|mv|cp|tee|truncate|chmod|chown)\s+[^\n]*/gryph/(keys/|[^\s]*\.db|[^\s]*receipt)`,
-	`(^|[\s;&|])(rm|mv|cp|tee|truncate)\s+[^\n]*\.(claude/settings|cursor/hooks|codex/hooks|codeium/windsurf/hooks|commandcode/settings)\.json`,
+	`(^|[\s;&|])(rm|mv|cp|tee|truncate|unlink|chmod|chown)\s+[^\n]*/gryph/(keys/|[^\s]*\.db|[^\s]*receipt)`,
+	`(^|[\s;&|])(rm|mv|cp|tee|truncate|unlink)\s+[^\n]*\.(claude/settings|cursor/hooks|codex/hooks|codeium/windsurf/hooks|commandcode/settings)\.json`,
 	`(^|[\s;&|])(rm|mv)\s+[^\n;&|]*\.(claude|cursor|codex|codeium/windsurf|commandcode)(/\*?)?["']?($|[\s;&|])`,
 }
 
