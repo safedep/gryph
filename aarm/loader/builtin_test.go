@@ -3,6 +3,7 @@ package loader
 import (
 	"context"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -82,4 +83,44 @@ func TestLoader_BuiltinAppendedLast(t *testing.T) {
 	assert.Equal(t, "user-rule", merged.Rules[0].ID, "user rules precede builtin rules")
 	last := merged.Rules[len(merged.Rules)-1]
 	assert.True(t, strings.HasPrefix(last.ID, BuiltinRuleIDPrefix), "builtin rules come last")
+}
+
+func TestBuiltinCommandPatterns(t *testing.T) {
+	compiled := make([]*regexp.Regexp, 0, len(builtinCommandPatterns))
+	for _, p := range builtinCommandPatterns {
+		compiled = append(compiled, regexp.MustCompile(p))
+	}
+	matches := func(cmd string) bool {
+		for _, re := range compiled {
+			if re.MatchString(cmd) {
+				return true
+			}
+		}
+		return false
+	}
+
+	cases := []struct {
+		cmd     string
+		blocked bool
+	}{
+		{"rm -f /home/u/.commandcode/settings.json", true},
+		{"cp /tmp/x /home/u/.commandcode/settings.json", true},
+		{"rm -rf /home/u/.commandcode", true},
+		{"rm -rf ~/.commandcode/", true},
+		{"rm -rf ~/.commandcode/*", true},
+		{"mv ~/.commandcode /tmp/cc && echo done", true},
+		{"rm -rf ~/.claude", true},
+		{"rm -rf ~/.codeium/windsurf", true},
+		{"rm -rf ~/.cursor; ls", true},
+		{"ls ~/.commandcode", false},
+		{"cat ~/.commandcode/settings.json", false},
+		{"rm -rf ~/.commandcode-notes", false},
+		{"rm -rf ~/.commandcode/cache", false},
+		{"rm -rf ./.claude-backup", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.cmd, func(t *testing.T) {
+			assert.Equal(t, tc.blocked, matches(tc.cmd))
+		})
+	}
 }

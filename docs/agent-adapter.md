@@ -123,7 +123,7 @@ Required edits outside the adapter package:
 | `cli/root.go` | Import the package and call `Register()` |
 | `config/defaults.go` | Add `v.SetDefault("agents.youragent.enabled", true)` |
 | `agent/protected.go` | Add the hook config path to `HookConfigGlobs()`. Without it, the agent can change its own hooks and turn off Gryph |
-| `aarm/loader/builtin.go` | Add the hook config file name to the hook config pattern in `builtinCommandPatterns` |
+| `aarm/loader/builtin.go` | Add the hook config file name and its directory to the hook config patterns in `builtinCommandPatterns` |
 
 Optional:
 

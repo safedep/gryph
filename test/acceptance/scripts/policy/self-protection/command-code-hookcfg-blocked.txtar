@@ -1,11 +1,12 @@
 # The builtin self-protection rules block a Command Code agent that tries to
 # change its own hook config. The file write, the file edit, and the shell
-# command with split args must all be blocked.
+# command with split args must all be blocked. A removal of the whole config
+# directory must also be blocked.
 env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
 env XDG_DATA_HOME=$WORK/home/.local/share
 
-expandenv write.json edit.json shell.json
+expandenv write.json edit.json shell.json rmdir.json
 
 stdin write.json
 execexit 2 gryph _hook command-code PreToolUse
@@ -19,8 +20,12 @@ stdin shell.json
 execexit 2 gryph _hook command-code PreToolUse
 stderr 'self-protection'
 
+stdin rmdir.json
+execexit 2 gryph _hook command-code PreToolUse
+stderr 'self-protection'
+
 exec gryph query --status blocked --format json --no-color
-stdout -count=3 '"ResultStatus": "blocked"'
+stdout -count=4 '"ResultStatus": "blocked"'
 
 -- home/.config/safedep/gryph/config.yml --
 policy:
@@ -62,4 +67,16 @@ policy:
     "args": ["-f", "${HOME}/.commandcode/settings.json"]
   },
   "tool_use_id": "cc-sp3"
+}
+-- rmdir.json --
+{
+  "session_id": "cc-session-1",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "shell_command",
+  "tool_input": {
+    "command": "rm",
+    "args": ["-rf", "${HOME}/.commandcode"]
+  },
+  "tool_use_id": "cc-sp4"
 }

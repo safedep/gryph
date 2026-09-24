@@ -45,7 +45,7 @@
   title: "builtin self-protection blocks Command Code hook config changes"
   category: policy
   tier: P0
-  guarantee: "With policy enabled, a Command Code write, edit, or rm of ~/.commandcode/settings.json is blocked by the builtin rules."
+  guarantee: "With policy enabled, a Command Code write, edit, or rm of ~/.commandcode/settings.json, or an rm of ~/.commandcode, is blocked by the builtin rules."
   labels: [policy, self-protection, command-code]
 
 - id: privacy/sensitive/content-never-stored
