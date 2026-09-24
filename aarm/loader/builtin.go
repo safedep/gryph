@@ -27,7 +27,7 @@ const (
 // the normalized action target rather than a command string.
 var builtinCommandPatterns = []string{
 	`(^|[\s;&|])(rm|mv|cp|tee|truncate|chmod|chown)\s+[^\n]*/gryph/(keys/|[^\s]*\.db|[^\s]*receipt)`,
-	`(^|[\s;&|])(rm|mv|cp|tee|truncate)\s+[^\n]*\.(claude/settings|cursor/hooks|codex/hooks|codeium/windsurf/hooks)\.json`,
+	`(^|[\s;&|])(rm|mv|cp|tee|truncate)\s+[^\n]*\.(claude/settings|cursor/hooks|codex/hooks|codeium/windsurf/hooks|commandcode/settings)\.json`,
 }
 
 // BuiltinSource emits the embedded self-protection rules. It is constructed by

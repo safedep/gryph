@@ -19,5 +19,6 @@ func HookConfigGlobs() []string {
 		"**/.openclaw/extensions/**",
 		"**/.codeium/windsurf/hooks.json",
 		"**/.pi/agent/extensions/**",
+		"**/.commandcode/settings.json",
 	}
 }
