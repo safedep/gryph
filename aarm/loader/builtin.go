@@ -28,7 +28,7 @@ const (
 var builtinCommandPatterns = []string{
 	`(^|[\s;&|])(rm|mv|cp|tee|truncate|chmod|chown)\s+[^\n]*/gryph/(keys/|[^\s]*\.db|[^\s]*receipt)`,
 	`(^|[\s;&|])(rm|mv|cp|tee|truncate)\s+[^\n]*\.(claude/settings|cursor/hooks|codex/hooks|codeium/windsurf/hooks|commandcode/settings)\.json`,
-	`(^|[\s;&|])(rm|mv)\s+[^\n]*\.(claude|cursor|codex|codeium/windsurf|commandcode)(/\*?)?($|[\s;&|])`,
+	`(^|[\s;&|])(rm|mv)\s+[^\n;&|]*\.(claude|cursor|codex|codeium/windsurf|commandcode)(/\*?)?["']?($|[\s;&|])`,
 }
 
 // BuiltinSource emits the embedded self-protection rules. It is constructed by

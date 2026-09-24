@@ -112,11 +112,17 @@ func TestBuiltinCommandPatterns(t *testing.T) {
 		{"rm -rf ~/.claude", true},
 		{"rm -rf ~/.codeium/windsurf", true},
 		{"rm -rf ~/.cursor; ls", true},
+		{`rm -rf "$HOME/.commandcode"`, true},
+		{`rm -rf '$HOME/.commandcode/'`, true},
+		{"ls && rm -rf ~/.commandcode", true},
 		{"ls ~/.commandcode", false},
 		{"cat ~/.commandcode/settings.json", false},
 		{"rm -rf ~/.commandcode-notes", false},
 		{"rm -rf ~/.commandcode/cache", false},
 		{"rm -rf ./.claude-backup", false},
+		{"rm -rf /tmp/build && ls ~/.commandcode", false},
+		{"rm -rf /tmp/build; cat ~/.claude", false},
+		{"mv a b | grep .cursor", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.cmd, func(t *testing.T) {
