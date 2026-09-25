@@ -51,9 +51,10 @@ const UnknownHost = "?"
 
 // Analysis is what a command does to paths and hosts.
 type Analysis struct {
-	// Parsed is false when the parser rejected the command. Targets then
-	// holds every word as a read and a removal, so that a caller fails
-	// closed, and Hosts holds UnknownHost.
+	// Parsed is false when the parser rejected the command or a script
+	// nested in it, such as the script of "bash -c". Targets then holds
+	// every word of the rejected script as a read and a removal, so that a
+	// caller fails closed, and Hosts holds UnknownHost.
 	Parsed  bool
 	Targets []Target
 	// Hosts are the lower-case host names the command contacts, without the
@@ -82,12 +83,10 @@ type Env struct {
 func Analyze(command string, env Env) Analysis {
 	w := &walker{env: env}
 	start := dirs{env.WorkingDir}
-	parsed := true
 	if _, err := w.script(command, start); err != nil {
-		parsed = false
 		w.fallback(command, start)
 	}
-	return Analysis{Parsed: parsed, Targets: w.targets, Hosts: w.hosts}
+	return Analysis{Parsed: !w.failed, Targets: w.targets, Hosts: w.hosts}
 }
 
 // AnalyzeCommand analyzes a command given as a command string plus split
@@ -155,6 +154,7 @@ type walker struct {
 	depth   int
 	targets []Target
 	hosts   []string
+	failed  bool
 }
 
 func (w *walker) script(src string, cwds dirs) (dirs, error) {
@@ -320,22 +320,12 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 		return w.nested(strings.Join(rest, " "), cwds)
 	case "rm", "unlink", "rmdir", "shred":
 		w.addAll(operands(rest), AccessRemove, cwds)
-	case "mv":
-		dest, sources := copyOperands(rest)
-		w.addAll(sources, AccessRead, cwds)
-		w.addAll(sources, AccessRemove, cwds)
-		w.addDest(dest, sources, cwds)
-	case "cp", "install":
-		dest, sources := copyOperands(rest)
-		w.addAll(sources, AccessRead, cwds)
-		w.addDest(dest, sources, cwds)
-	case "ln":
-		dest, sources := copyOperands(rest)
-		w.addDest(dest, sources, cwds)
+	case "cp", "install", "mv", "ln":
+		w.localCopy(copyTools[name], rest, cwds)
 	case "rsync":
-		w.remoteCopy(parseArgs(rest, rsyncValueFlags), cwds)
+		w.remoteCopy(parseArgs(rest, rsyncOptions), []string{"-r", "-a", "--recursive", "--archive"}, cwds)
 	case "scp":
-		w.remoteCopy(parseArgs(rest, scpValueFlags), cwds)
+		w.remoteCopy(parseArgs(rest, scpOptions), []string{"-r"}, cwds)
 	case "tee", "truncate":
 		w.addAll(operands(rest), AccessWrite, cwds)
 	case "chmod", "chown", "chgrp":
@@ -350,7 +340,7 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 			w.addAll(ops[1:], AccessRead, cwds)
 		}
 	case "awk", "gawk", "mawk":
-		w.scriptTool(parseArgs(rest, awkValueFlags), []string{"-f", "--file"}, nil, cwds)
+		w.scriptTool(parseArgs(rest, awkOptions), []string{"-f", "--file"}, nil, cwds)
 	case "dd":
 		for _, a := range rest {
 			if v, ok := strings.CutPrefix(a, "of="); ok {
@@ -363,23 +353,29 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	case "find":
 		w.find(rest, cwds)
 	case "grep", "egrep", "fgrep", "rg":
-		w.scriptTool(parseArgs(rest, grepValueFlags), []string{"-f", "--file"}, []string{"-e", "--regexp"}, cwds)
+		w.scriptTool(parseArgs(rest, grepOptions), []string{"-f", "--file"}, []string{"-e", "--regexp"}, cwds)
 	case "jq":
-		w.scriptTool(parseArgs(rest, jqValueFlags), []string{"-f", "--from-file"}, nil, cwds)
+		w.scriptTool(parseArgs(rest, jqOptions), []string{"-f", "--from-file"}, nil, cwds)
 	case "tar":
 		w.tar(rest, cwds)
-	case "zip", "7z":
+	case "zip":
+		w.zip(parseArgs(rest, zipOptions), cwds)
+	case "7z":
 		w.addAll(operands(rest), AccessRead, cwds)
+	case "gzip", "gunzip":
+		w.gzip(parseArgs(rest, gzipOptions), name == "gunzip", cwds)
+	case "sort":
+		w.sort(parseArgs(rest, sortOptions), cwds)
 	case "sqlite3", "source", ".":
 		if ops := operands(rest); len(ops) > 0 {
 			w.add(ops[0], AccessRead, cwds)
 		}
 	case "curl":
-		w.curl(parseArgs(rest, curlValueFlags), cwds)
+		w.curl(parseArgs(rest, curlOptions), cwds)
 	case "wget":
-		w.wget(parseArgs(rest, wgetValueFlags), cwds)
+		w.wget(parseArgs(rest, wgetOptions), cwds)
 	case "ssh", "sftp", "telnet", "ftp":
-		w.remoteShell(parseArgs(rest, sshValueFlags))
+		w.remoteShell(parseArgs(rest, remoteShellOptions[name]))
 	case "nc", "ncat", "netcat":
 		w.netcat(rest)
 	case "git":
@@ -387,8 +383,10 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	case "openssl":
 		w.openssl(rest, cwds)
 	default:
-		if flags, ok := readCommands[name]; ok {
-			w.addAll(parseArgs(rest, flags).operands, AccessRead, cwds)
+		if opts, ok := readCommands[name]; ok {
+			w.addAll(parseArgs(rest, opts).operands, AccessRead, cwds)
+		} else if opts, ok := editCommands[name]; ok {
+			w.addAll(parseArgs(rest, opts).operands, AccessWrite, cwds)
 		}
 	}
 	return cwds
@@ -523,8 +521,9 @@ func (w *walker) execdir(root string, cmd []string, cwds dirs) {
 		}
 	}
 	for _, h := range sub.hosts {
-		w.addHost(h)
+		w.addHostName(h)
 	}
+	w.failed = w.failed || sub.failed
 }
 
 func findActionEnd(args []string, start int) int {
@@ -581,38 +580,14 @@ func skipOptions(args []string) []string {
 	return nil
 }
 
-// copyOperands splits the operands of a copy or move into the destination
-// and the sources. The destination is the value of -t or the last operand.
-func copyOperands(args []string) (string, []string) {
-	ops := operands(args)
-	for i, a := range args {
-		dest := ""
-		if (a == "-t" || a == "--target-directory") && i+1 < len(args) {
-			dest = args[i+1]
-		} else if v, ok := strings.CutPrefix(a, "--target-directory="); ok {
-			dest = v
-		}
-		if dest != "" {
-			if j := slices.Index(ops, dest); j >= 0 {
-				ops = slices.Delete(slices.Clone(ops), j, j+1)
-			}
-			return dest, ops
-		}
-	}
-	if len(ops) < 2 {
-		return "", nil
-	}
-	return ops[len(ops)-1], ops[:len(ops)-1]
-}
-
-// addDest adds the destination of a copy or move as a write. When the
-// destination is a directory, the command writes each source name into it,
-// so that path is added too.
-func (w *walker) addDest(dest string, sources []string, cwds dirs) {
+// addDest adds the destination of a copy or move with the given access.
+// When the destination is a directory, the command writes each source name
+// into it, so that path is added as a write too.
+func (w *walker) addDest(dest string, sources []string, access Access, cwds dirs) {
 	if dest == "" {
 		return
 	}
-	w.add(dest, AccessWrite, cwds)
+	w.add(dest, access, cwds)
 	for _, src := range sources {
 		if _, p, remote := splitRemote(src); remote {
 			src = p
@@ -776,12 +751,11 @@ func hasInPlaceFlag(args []string) bool {
 // removal target, so a parse failure blocks rather than allows. The command
 // can contact any host.
 func (w *walker) fallback(command string, cwds dirs) {
+	w.failed = true
 	for _, field := range strings.Fields(command) {
 		word := strings.Trim(field, `"'`)
 		w.add(word, AccessRead, cwds)
 		w.add(word, AccessRemove, cwds)
 	}
-	if !slices.Contains(w.hosts, UnknownHost) {
-		w.hosts = append(w.hosts, UnknownHost)
-	}
+	w.addHostName(UnknownHost)
 }

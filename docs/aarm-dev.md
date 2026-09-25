@@ -201,8 +201,9 @@ run (after `&&` or `||`, or in an `if` or loop body) adds a directory to the
 set. For a wrapper such as `sudo`, it tries each word after the wrapper as the
 start of the command, because it does not know every wrapper option that takes
 a value. The walk over-approximates. It prefers a false block to a missed
-change. When the parser rejects a command, `Analysis.Parsed` is false, every
-word is a read and a removal target, and the host list is `?`.
+change. When the parser rejects a command, or a script nested in it such as
+the script of `bash -c`, `Analysis.Parsed` is false, every word of the
+rejected script is a read and a removal target, and the host list has `?`.
 
 The mediator parses a command once, in `mediation.HookAdapter`, and stores the
 result on `model.Action.Shell`. The PDP and later context work read that
@@ -212,14 +213,33 @@ analysis.
 
 A read target comes from an input redirect, the source of a copy or a move,
 the file operands of a fixed list of read commands (`cat`, `head`, `grep`,
-`sed` without `-i`, `tar`, `sqlite3`, and others), and the files that
+`sed` without `-i`, `sort`, `tar`, `sqlite3`, and others), and the files that
 `curl` and `wget` upload. A host comes from a URL anywhere in a word, from
-the operands of `curl`, `wget`, `ssh`, `nc`, and similar tools, from an
+the operands of `curl`, `wget`, `ssh`, `sftp`, `nc`, and similar tools, from an
 scp-style `host:path` in `scp`, `rsync`, and the remote of a `git` command,
 from `openssl -connect`, and from a `/dev/tcp/host/port` redirect. Hosts are
-lower case, without the port. `parseArgs` in `aarm/shellcmd/tools.go`
-splits options the way getopt does, with one table of value options for
-each tool. The lists are best effort.
+lower case, without the port.
+
+A write or remove target also comes from the file operands of an editor
+(`vim`, `vi`, `nano`), `sort -o`, the archive of `zip` and of a `tar` create,
+append, update, concatenate, or delete, and the output files of `curl` and
+`wget`. A command that can write any path in a directory is a removal of
+that directory: a recursive copy (`cp -r`, `rsync -a`, `scp -r`), a copy of
+directory contents (a source that ends in `/` or `/.`), a copy with `-T`, a
+`tar` extract (the `-C` directory or the working directory), `curl
+--output-dir`, and `wget -P` or a recursive `wget`. `gzip` removes each
+operand and writes the compressed or decompressed file, unless `-c` or `-k`
+is set. `zip -m`, `tar --remove-files`, and `rsync --remove-source-files`
+remove the sources.
+
+`parseArgs` in `aarm/shellcmd/tools.go` splits options the way getopt does,
+with one `options` table for each tool. For a tool that parses with
+getopt_long, such as `tar`, `curl`, `wget`, `sort`, `gzip`, and `cp`, a long
+option also matches by a unique prefix, so `--cr` is `--create`. A prefix
+match is only correct when the table lists every real option that is a
+prefix of a listed value option, such as `curl --head` for `--header`. The
+lists are best effort. A plain `mv` or `ln` onto a directory that does not
+exist yet, and a `wget` or `curl` config file, are not seen.
 Self-protection matches write and remove targets only.
 
 The operator toggles self-protection only through
