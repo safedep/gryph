@@ -34,6 +34,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("agents.pi-agent.enabled", true)
 	v.SetDefault("agents.codex.enabled", true)
 	v.SetDefault("agents.devin.enabled", true)
+	v.SetDefault("agents.command-code.enabled", true)
 
 	// Display defaults
 	v.SetDefault("display.colors", "auto")

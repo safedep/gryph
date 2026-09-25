@@ -69,15 +69,9 @@ func TestSQLiteStore_GetContextStateByPrefix_Ambiguous(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Millisecond)
 
-	var a, b uuid.UUID
-	for i := 0; i < 64; i++ {
-		a = uuid.New()
-		b = uuid.New()
-		if a.String()[0] == b.String()[0] && a != b {
-			break
-		}
-	}
-	require.Equal(t, a.String()[0], b.String()[0], "could not synthesize two UUIDs sharing a leading hex char")
+	a := uuid.New()
+	b := a
+	b[15] ^= 0xff
 
 	for _, id := range []uuid.UUID{a, b} {
 		require.NoError(t, store.AppendContextAction(ctx, &ContextActionRow{

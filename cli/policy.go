@@ -27,7 +27,6 @@ import (
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/receipt"
-	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	coresecurity "github.com/safedep/gryph/core/security"
@@ -1298,6 +1297,6 @@ func selfProtectionGlobs(cfg *config.Config, paths *config.Paths) []string {
 			filepath.ToSlash(cfg.ResolveReceiptTrustStorePath(paths)),
 		)
 	}
-	globs = append(globs, agent.HookConfigGlobs()...)
+	globs = append(globs, hookConfigGlobs()...)
 	return globs
 }

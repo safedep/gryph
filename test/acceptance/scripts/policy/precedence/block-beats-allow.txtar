@@ -9,7 +9,7 @@ env XDG_DATA_HOME=$WORK/home/.local/share
 exec gryph policy list --no-color
 stdout 'global\s+policy.yaml\s+1'
 stdout 'policies\s+permissive.yaml\s+1'
-stdout '4 rules merged'
+stdout '3 rules merged'
 
 stdin bash_npm.json
 execexit 2 gryph _hook claude-code PreToolUse

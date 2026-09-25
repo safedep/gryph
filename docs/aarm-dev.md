@@ -52,6 +52,7 @@ write the execution outcome to the accumulator row and the receipt row.
 | `aarm/model` | Shared data model: `Action`, `Parameters`, `Decision`, `EvaluationResult`, `ContextSnapshot`, `Result`, `Severity`. No dependencies on other aarm packages. |
 | `aarm/mediation` | `Adapter` interface plus `HookAdapter` and `MCPAdapter`. Normalizes agent events into `model.Action` and enriches with classify / injectscore / identity. |
 | `aarm/pdp` | Policy Decision Point. `Policy` / `Rule` schema, YAML parse, rule compile, `Evaluate`, CEL conditions, message templates, policy hash. |
+| `aarm/shellcmd` | Parses a shell command with `mvdan.cc/sh` and returns the paths it writes, moves, or deletes. The PDP matches `file_patterns` against them for `command_exec` actions. |
 | `aarm/pep` | Policy Enforcement boundary. Maps `model.EvaluationResult` to `core/security.CheckResult`. |
 | `aarm/loader` | `Loader` merges policy `Source` values. `FileSource`, `DirSource` (the policies directory), and `BuiltinSource` (self-protection rules). |
 | `aarm/accumulator` | Context Accumulator interface. Per-session action memory feeding `context.*` CEL variables. `Nop` and SQLite implementations. |
@@ -98,7 +99,8 @@ A `pdp.Rule` has:
 
 - `id` (unique, required), `description`, `action` (the decision), `severity`,
   `enabled`, `tags`, `message`.
-- `match`: `action_types`, `file_patterns` (doublestar globs),
+- `match`: `action_types`, `file_patterns` (doublestar globs; for
+  `command_exec`, also the paths from `aarm/shellcmd`),
   `command_patterns` (regexp), `tool_names`, `content_patterns` (regexp),
   `working_directory_patterns` (globs).
 - `scope`: `agents`, `projects`, `tools`. Narrows which actions the rule sees.
@@ -172,11 +174,35 @@ built-in rules or another file's rules. `gryph policy install`
 relies on this. See
 [security-policy-threat-model.md](./security-policy-threat-model.md).
 
-Self-protection blocks agent writes to Gryph's own control surfaces (policy,
-config, database, signing keys, agent hook configs). The operator toggles it
-only through `policy.self_protection.enabled`. Inspect the rules with
-`gryph policy builtin`. `selfProtectionGlobs` in `cli/policy.go` builds the
-globs.
+Self-protection blocks agent changes to Gryph's own control surfaces (policy,
+config, database, signing keys, agent hook configs). It is one rule,
+`gryph-builtin-protected-files`, over `file_write`, `file_delete`, and
+`command_exec`. For a command, the PDP matches the paths that `aarm/shellcmd`
+parses from the command line. A delete or move of a directory also matches when
+the directory contains a protected path, for a shell command or a
+`file_delete`. The rule has no agent names and no command regexes.
+
+`aarm/shellcmd` walks the parsed command tree. It tracks the set of working
+directories a command can run in: a `cd` in a subshell, a pipe, a
+substitution, or a background job does not carry over, and a `cd` that may not
+run (after `&&` or `||`, or in an `if` or loop body) adds a directory to the
+set. For a wrapper such as `sudo`, it tries each word after the wrapper as the
+start of the command, because it does not know every wrapper option that takes
+a value. The walk over-approximates. It prefers a false block to a missed
+change. The operator toggles it only through
+`policy.self_protection.enabled`. Inspect it with `gryph policy builtin`.
+
+`selfProtectionGlobs` in `cli/policy.go` builds the globs. The Gryph paths come
+from the config. The hook config paths come from each adapter's
+`HookConfigPaths()`, collected by `Registry.HookConfigGlobs()` over the adapters
+that `registerAdapters` in `cli/root.go` registers. To protect a new agent,
+implement `HookConfigPaths()` in its adapter. Do not edit the loader.
+
+Self-protection is best effort. The shell parse cannot resolve unknown
+variables, command substitutions, encoded payloads, script files, or
+interpreters, and a process outside the hook path is never seen. Kernel-based
+self-protection is on the roadmap. See
+[security-policy-threat-model.md](./security-policy-threat-model.md).
 
 `gryph policy list` enumerates the sources with rule counts. `gryph policy
 install` promotes a reviewed candidate file into the policies directory. It

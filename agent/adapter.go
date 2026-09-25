@@ -3,6 +3,7 @@ package agent
 
 import (
 	"context"
+	"path"
 
 	"github.com/safedep/gryph/core/events"
 )
@@ -165,4 +166,15 @@ type Adapter interface {
 	// stdout carries JSON, what the exit code is, and when text routes to
 	// stderr.
 	RenderResponse(hookType string, decision HookDecision, detail string) HookResponse
+
+	// HookConfigPaths returns doublestar globs for the files that hold this
+	// agent's Gryph hook configuration. Self-protection blocks agent changes
+	// to these files, so a governed agent cannot remove its own hooks.
+	HookConfigPaths() []string
+}
+
+// HomeConfigGlob returns a glob for a path under the user's home directory.
+// The "**/" anchor matches any home location and forward-slash paths.
+func HomeConfigGlob(elem ...string) string {
+	return "**/" + path.Join(elem...)
 }

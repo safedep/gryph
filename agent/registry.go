@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 )
 
@@ -54,6 +55,18 @@ func (r *Registry) All() []Adapter {
 		adapters = append(adapters, adapter)
 	}
 	return adapters
+}
+
+// HookConfigGlobs returns the hook config globs of all registered adapters,
+// sorted and without duplicates. The order is stable because the policy hash
+// includes it.
+func (r *Registry) HookConfigGlobs() []string {
+	var globs []string
+	for _, adapter := range r.All() {
+		globs = append(globs, adapter.HookConfigPaths()...)
+	}
+	slices.Sort(globs)
+	return slices.Compact(globs)
 }
 
 // DetectAll runs detection on all registered adapters.

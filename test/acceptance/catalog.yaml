@@ -41,6 +41,13 @@
   guarantee: "With policy enabled, an agent write to the gryph config directory or an agent hook config file is blocked by the builtin rules."
   labels: [policy, self-protection]
 
+- id: policy/self-protection/command-code-hookcfg-blocked
+  title: "builtin self-protection blocks Command Code hook config changes"
+  category: policy
+  tier: P0
+  guarantee: "With policy enabled, a Command Code write or edit of ~/.commandcode/settings.json, and a shell command that removes, redirects into, or edits it in place, is blocked by the builtin rules."
+  labels: [policy, self-protection, command-code]
+
 - id: privacy/sensitive/content-never-stored
   title: "sensitive file content never reaches storage or export"
   category: privacy

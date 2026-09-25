@@ -66,20 +66,8 @@ func NewApp(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
-	// Create registry and register adapters
 	registry := agent.NewRegistry()
-	claudecode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentClaudeCode), cfg.Logging.ContentHash)
-	cursor.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCursor), cfg.Logging.ContentHash)
-	gemini.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentGemini), cfg.Logging.ContentHash)
-	opencode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentOpenCode), cfg.Logging.ContentHash)
-	windsurf.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentWindsurf), cfg.Logging.ContentHash)
-	piagent.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentPiAgent), cfg.Logging.ContentHash)
-	codex.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCodex), cfg.Logging.ContentHash)
-	devin.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentDevin), cfg.Logging.ContentHash)
-	commandcode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCommandCode), cfg.Logging.ContentHash)
-
-	// For now, let us keep openclaw agent disabled because it is non-functional
-	// openclaw.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentOpenClaw), cfg.Logging.ContentHash)
+	registerAdapters(registry, privacyChecker, cfg)
 
 	// Create presenter based on config
 	presenter := tui.NewPresenter(tui.FormatTable, tui.PresenterOptions{
@@ -307,4 +295,30 @@ func getFormat(format string) tui.Format {
 	default:
 		return tui.FormatTable
 	}
+}
+
+// registerAdapters registers every supported agent adapter. It is the single
+// list of adapters, so the self-protection globs come from the same source.
+func registerAdapters(registry *agent.Registry, privacyChecker *events.PrivacyChecker, cfg *config.Config) {
+	claudecode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentClaudeCode), cfg.Logging.ContentHash)
+	cursor.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCursor), cfg.Logging.ContentHash)
+	gemini.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentGemini), cfg.Logging.ContentHash)
+	opencode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentOpenCode), cfg.Logging.ContentHash)
+	windsurf.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentWindsurf), cfg.Logging.ContentHash)
+	piagent.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentPiAgent), cfg.Logging.ContentHash)
+	codex.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCodex), cfg.Logging.ContentHash)
+	devin.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentDevin), cfg.Logging.ContentHash)
+	commandcode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCommandCode), cfg.Logging.ContentHash)
+
+	// For now, let us keep openclaw agent disabled because it is non-functional
+	// openclaw.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentOpenClaw), cfg.Logging.ContentHash)
+}
+
+// hookConfigGlobs returns the hook config globs of every supported adapter.
+// It does not need a loaded App, so `gryph policy list` works when the app
+// fails to load.
+func hookConfigGlobs() []string {
+	registry := agent.NewRegistry()
+	registerAdapters(registry, nil, config.Default())
+	return registry.HookConfigGlobs()
 }

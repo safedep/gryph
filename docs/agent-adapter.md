@@ -57,6 +57,34 @@ func Register(registry *agent.Registry, pc *events.PrivacyChecker, level config.
 
 See `agent/gemini/adapter.go` for the full pattern.
 
+#### Declare the hook config paths
+
+`HookConfigPaths()` returns doublestar globs for every file your install step
+writes. Use `agent.HomeConfigGlob` to build them:
+
+```go
+func (a *Adapter) HookConfigPaths() []string {
+    return []string{agent.HomeConfigGlob(".youragent", "settings.json")}
+}
+```
+
+The built-in self-protection rule blocks agent writes, deletes, and shell
+commands that change these paths. Without them, a governed agent can remove its
+own hooks and turn off Gryph. When hooks live in a directory of plugins or
+extensions, protect the whole directory (`agent.HomeConfigGlob(".youragent",
+"plugins", "**")`). Any file there can hook the agent.
+
+Do not add agent paths or command regexes to `aarm/loader`. The loader takes
+the globs from the registry and derives the shell-command check from the same
+paths. `TestAdapters_InstallWritesOnlyDeclaredHookConfig` in
+`cli/hookconfig_test.go` installs every registered adapter into an empty home
+directory. It fails when the install writes a file that no glob covers.
+
+Self-protection is best effort. It parses shell commands for the paths they
+change, so it cannot see a path built at run time, a script file, or an
+interpreter. Kernel-based self-protection is on the roadmap. See
+`docs/security-policy.md`.
+
 ### 3. Implement detection (`detect.go`)
 
 Check whether the agent is installed (config directory exists, binary in PATH) and return a `DetectionResult` with version, config path, and hooks path.
@@ -120,7 +148,7 @@ Required edits outside the adapter package:
 | File | Change |
 |---|---|
 | `agent/adapter.go` | Add the `AgentYourAgent` name constant |
-| `cli/root.go` | Import the package and call `Register()` |
+| `cli/root.go` | Import the package and call `Register()` in `registerAdapters` |
 | `config/defaults.go` | Add `v.SetDefault("agents.youragent.enabled", true)` |
 
 Optional:
@@ -131,10 +159,12 @@ Optional:
 
 Everything else derives from registration. The config map accepts any agent
 key. The display name comes from the adapter through the registry. The
-livelog filter cycle comes from `Registry.List()`.
+livelog filter cycle comes from `Registry.List()`. The self-protection globs
+come from `Registry.HookConfigGlobs()`.
 
 An adapter can exist in code but stay out of the registry. To deactivate an
-adapter, comment out its `Register()` call in `cli/root.go`. See the
+adapter, comment out its `Register()` call in `registerAdapters` in
+`cli/root.go`. See the
 `openclaw` adapter for this pattern.
 
 ### 7. Write tests

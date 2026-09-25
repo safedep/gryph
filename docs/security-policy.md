@@ -32,11 +32,22 @@ Gryph loads policy from three sources, in this order:
 
 1. **Global policy file** (`${ConfigDir}/policy.yaml`, optional). The single operator-owned file. On macOS this is `~/Library/Application Support/safedep/gryph/policy.yaml`; on Linux `~/.config/safedep/gryph/policy.yaml`. A missing file is not an error.
 2. **Policies directory** (`${ConfigDir}/policies/*.yaml` and `*.yml`, optional). Each file is a separate policy document. Files load in sorted name order and merge after the global file. A missing directory is not an error. This lets you author policy as many small, self-contained files instead of one large file.
-3. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, and agent hook configs from agent self-modification.
+3. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, and agent hook configs from agent self-modification. Self-protection is best effort. See [Self-protection limits](#self-protection-limits).
 
 With `policy.enabled: true` and no user files on disk, the merged policy contains built-in self-protection rules only.
 
 Both the global file and the policies directory sit inside `${ConfigDir}`, so both are protected by the built-in self-protection rules. Gryph resolves no other location. A file at any other path is never loaded as policy.
+
+### Self-protection limits
+
+Self-protection is best effort. It blocks file writes and deletes to protected paths, and shell commands that Gryph can parse as a change to a protected path. It does not stop every bypass. A human or an agent can get past it in many ways, for example:
+
+- A command that builds the path at run time, such as a variable, a command substitution, or a base64 payload.
+- A script file or an interpreter (`python -c`, `node -e`) that writes the file.
+- A process that runs outside the agent's hook path, as the same operating-system user.
+- A human who edits the file or turns off `policy.self_protection.enabled`.
+
+Kernel-based self-protection is on the roadmap. Until then, treat self-protection as a guard against mistakes and simple attempts, not as a security boundary. The [threat model](./security-policy-threat-model.md) lists the lower-level controls for a hardened deployment.
 
 Write a file with `gryph policy init [name|path]` or open one with `gryph policy edit [name|path]`. See [Commands](#commands). Run `gryph policy list` to see every active source. Per-host managed policy is a planned future iteration. Today, one host governs its own policy.
 
@@ -74,13 +85,17 @@ Run `gryph policy test --action file_write --path /repo/prod/config.yaml` to see
 | Field | Type | Notes |
 |---|---|---|
 | `action_types` | list | `file_read`, `file_write`, `file_delete`, `command_exec`, `network_request`, `tool_use`, `session_start`, `session_end`, `notification`, `subagent_start`, `subagent_stop` |
-| `file_patterns` | list | Doublestar globs (`**`) over the action path |
+| `file_patterns` | list | Doublestar globs (`**`) over the action path. For `command_exec`, also over the paths the shell command writes, moves, or deletes (see below) |
 | `command_patterns` | list | Go regexps over the shell command |
 | `tool_names` | list | Exact tool names like `Bash`, `Write`, `WebFetch` |
 | `content_patterns` | list | Go regexps over the captured content preview |
 | `working_directory_patterns` | list | Doublestar globs over the agent's cwd |
 
 An empty `match` block matches every action. Combine with `scope` to narrow further.
+
+For a `command_exec` action, Gryph parses the shell command and finds the paths it changes: redirect targets (`>`, `>>`), `tee`, `cp` / `mv` / `install` / `ln` destinations, `rm` / `unlink`, `truncate`, `chmod` / `chown`, `sed -i` / `perl -i`, and `dd of=`. For `find`, `-delete` changes the search roots, and `-exec` runs its command on any path under the roots. `-execdir` runs its command from any directory under the roots, so a relative path it changes counts as a change to the roots. Gryph looks inside wrappers such as `sudo`, `env`, `nice`, and `timeout`, inside `bash -c` (also `bash -lc`) and `eval`, and follows a literal `cd`, also through `eval`, `command cd`, and `builtin cd`. A `cd` inside a subshell, a pipe, or `bash -c` does not carry over. A command after `&&`, `||`, or in an `if` or loop body may not run, so Gryph checks the paths from every working directory it could have. `file_patterns` matches these paths. A delete or move of a directory also matches every pattern under that directory. The same is true for a `file_delete` action. A read, such as `cat` or `find -exec cat`, does not match. A command that does not parse matches every word as a delete target, so it fails closed.
+
+The parse is best effort. It can match more than the command changes, and it can miss a change. Gryph does not run the command, so it cannot resolve an unknown variable, a command substitution, a script file, input to `xargs`, or an encoded payload.
 
 ### Scope
 

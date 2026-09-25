@@ -170,7 +170,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	if !detection.Installed {
-		result.Error = fmt.Errorf("Command Code is not installed: %s", detection.Message)
+		result.Error = fmt.Errorf("command code is not installed: %s", detection.Message)
 		return result, result.Error
 	}
 

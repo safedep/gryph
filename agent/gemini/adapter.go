@@ -64,6 +64,13 @@ const blockingHookType = "BeforeTool"
 // carries a JSON decision on stdout. Other hooks receive an empty JSON
 // object on allow and advisory text on stderr for guidance. Block is exit 2
 // with the reason on stderr.
+// HookConfigPaths returns the globs for the files that hold the Gryph hook configuration.
+func (a *Adapter) HookConfigPaths() []string {
+	return []string{
+		agent.HomeConfigGlob(".gemini", "settings.json"),
+	}
+}
+
 func (a *Adapter) RenderResponse(hookType string, decision agent.HookDecision, detail string) agent.HookResponse {
 	jsonHook := hookType == blockingHookType
 	switch decision {

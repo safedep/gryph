@@ -85,7 +85,7 @@ func TestBuildPolicyLoader_SingleGlobalFilePlusBuiltins(t *testing.T) {
 
 	ids := ruleIDs(policy)
 	assert.Contains(t, ids, "user-rule")
-	assert.Contains(t, ids, "gryph-builtin-protected-commands")
+	assert.Contains(t, ids, "gryph-builtin-protected-files")
 }
 
 func TestBuildPolicyLoader_MissingFileBuiltinsOnly(t *testing.T) {
@@ -101,7 +101,7 @@ func TestBuildPolicyLoader_MissingFileBuiltinsOnly(t *testing.T) {
 
 	ids := ruleIDs(policy)
 	assert.NotContains(t, ids, "user-rule")
-	assert.Contains(t, ids, "gryph-builtin-protected-commands")
+	assert.Contains(t, ids, "gryph-builtin-protected-files")
 }
 
 func TestSelfProtectionGlobs_StaticSetNoRepoLocal(t *testing.T) {

@@ -18,9 +18,13 @@ runtime. Gryph does not defend against:
   outside the mediated tool path.
 
 The built-in self-protection rules make tampering harder, but they are a
-same-user control. A determined same-user adversary can defeat them. The
+best-effort, same-user control. They match file actions by path and parse shell
+commands for the paths they change. A human or an agent can bypass them in many
+ways, for example with a path built at run time, a script file, an interpreter,
+or a process outside the hook path. A determined same-user adversary can defeat
+them. Kernel-based self-protection is on the roadmap. The
 [gaps](#gaps-and-hardened-deployment) section lists the lower-level controls that
-close this.
+close this today.
 
 ## How policy resolves and combines
 

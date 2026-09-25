@@ -231,7 +231,7 @@ func generatePolicySchema() jsonSchema {
 			},
 			"file_patterns": {
 				Type:        "array",
-				Description: "Doublestar glob patterns matched against the action's file path. Forward-slash normalized.",
+				Description: "Doublestar glob patterns matched against the action's file path. For command_exec actions, also matched against the paths the shell command writes, moves, or deletes. Forward-slash normalized.",
 				Items:       &items{Type: "string"},
 			},
 			"command_patterns": {
