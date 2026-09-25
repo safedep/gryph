@@ -786,6 +786,7 @@ func actionActivation(action *model.Action, paths *actionPaths) map[string]any {
 		"kind":                 string(action.Kind),
 		"origin":               string(action.Origin),
 		"source":               action.Source,
+		"sources":              nonNil(action.Sources),
 		"params": map[string]any{
 			"path":          action.Parameters.Path,
 			"command":       action.Parameters.Command,

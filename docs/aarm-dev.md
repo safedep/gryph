@@ -72,7 +72,7 @@ write the execution outcome to the accumulator row and the receipt row.
 | `aarm/approval` | Approval Service for `escalate`. `Nop` (deny) and `CLIPrompt`. |
 | `aarm/identity` | Captures human principal, service identity, role scope at the mediation boundary. |
 | `aarm/classify` | Heuristic data classifier. It returns `privacy.Class` values (secret, pii, source_code, ...). Fail-safe wrapper defaults to `unknown_sensitive`. The decision service uses the heuristic without the wrapper for content labels. |
-| `aarm/injectscore` | Heuristic prompt-injection score for tool-use actions. |
+| `aarm/injectscore` | Heuristic prompt-injection score for tool calls, post events and intents. |
 | `aarm/canonical` | Deterministic JSON with recursively sorted keys. Shared by every hash. |
 | `aarm/testchain` | Property-test scaffolding shared by receipt and context chain tests. Not production code. |
 | `aarm/conformance` | Test-only helpers that attribute conformance tests to AARM requirements. |
@@ -89,8 +89,10 @@ and accumulator read it. Key fields:
 - `Parameters`: normalized `Path`, `Command`, `Args`, `URL`, `Content`.
   `ContentFull` holds content for `content_patterns` matching only. It is
   capped at 1 MiB. For content over the cap, the PDP matches the first 1 MiB
-  and sets `ContentTruncated`. A policy that needs full inspection must handle
-  `content_truncated`. `ContentFull` is never persisted and is cleared after
+  and sets `ContentTruncated`. `Event.ObserveOutput` cuts a tool response to
+  the same cap, gives each value a fair share, and sets
+  `Event.OutputTruncated`. Mediation copies it to `ContentTruncated`. A policy
+  that needs full inspection must handle `content_truncated`. `ContentFull` is never persisted and is cleared after
   evaluation.
 - Identity: `HumanPrincipal`, `ServiceIdentity`, `RoleScope`.
 - Risk signals: `DataClassifications`, `InjectionScore`.
@@ -163,7 +165,10 @@ resets the count, and a pending action adds one. The pending origin joins
 all rules in one pass. `contextFieldEmpty` never reports an intent, tag or
 origin field as empty, so the fresh-session defer does not hide these facts.
 
-`action.kind`, `action.origin` and `action.source` come from the event.
+`action.kind`, `action.origin`, `action.source` and `action.sources` come
+from the event. `events.OriginSources` gives `sources`: the adapter claim, or
+every server reading of an ambiguous `mcp__` tool name. The accumulator adds
+`mcp:<server>` to `origins_seen` for each one.
 `events.Event.ClaimOrigin` fills the origin from the tool name, the action
 type and the path when the adapter did not set it. The decision service calls
 it before the label step, and `mediation.Normalize` calls it again for a

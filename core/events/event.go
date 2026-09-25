@@ -58,6 +58,9 @@ type Event struct {
 	// In-memory only (excluded from JSON, storage, logs); only the short
 	// ContentPreview is persisted. Empty for sensitive paths.
 	FullContent string `json:"-"`
+	// OutputTruncated is true when ObserveOutput cut the tool response to
+	// fit FullContent. Mediation copies it to action.content_truncated.
+	OutputTruncated bool `json:"-"`
 	// IsSensitive is true if path matched sensitive_paths pattern.
 	IsSensitive bool `json:"is_sensitive"`
 	// SubagentID is set when this event was performed by a subagent (empty for main agent).

@@ -449,6 +449,13 @@
   guarantee: "A web tool gives the origin web, an mcp__<server>__ tool gives mcp with the server, and a read outside the working directory gives file_external. The entry, origins_seen, action.origin, action.source and the output label carry it."
   labels: [context, observation, origin]
 
+- id: context/observation/ambiguous-mcp-server
+  title: "a rule that denies an MCP server matches an ambiguous tool name"
+  category: context
+  tier: P1
+  guarantee: "An mcp__ tool name with __ in the tool part leaves action.source empty, puts every server reading in action.sources, and adds mcp:<server> to origins_seen for each reading."
+  labels: [context, observation, origin]
+
 - id: policy/validate/tag-name-format
   title: "policy validation rejects a bad tag name"
   category: policy

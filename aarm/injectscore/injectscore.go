@@ -19,6 +19,11 @@ const (
 	PerMatchWeight float32 = 0.15
 	// MaxScore is the cap returned by Heuristic.Score.
 	MaxScore float32 = 1.0
+	// MaxHitsPerIndicator caps the matches that one indicator adds. Four
+	// hits of one phrase pass the documented threshold of 0.5, and only a
+	// second phrase takes the score higher. So a long file that names one
+	// indicator often does not reach MaxScore.
+	MaxHitsPerIndicator = 4
 )
 
 // Scorer returns an injection-likelihood score in the range [0.0, 1.0] for an
@@ -28,10 +33,11 @@ type Scorer interface {
 	Score(action *model.Action) float32
 }
 
-// Heuristic matches a fixed indicator list as whole words. Each indicator
-// that occurs contributes PerMatchWeight once, capped at MaxScore. A repeat
-// adds nothing, so a long file that names an indicator often does not reach
-// the cap.
+// Heuristic matches a fixed indicator list. A phrase starts and ends at a
+// word boundary, "_" and white space separate its words, and its last word
+// can take a common suffix (s, es, d, ed, ly). Each match contributes
+// PerMatchWeight, up to MaxHitsPerIndicator for one indicator, capped at
+// MaxScore.
 type Heuristic struct {
 	indicators []*regexp.Regexp
 }
@@ -48,7 +54,12 @@ func NewHeuristic() *Heuristic {
 	}
 	h := &Heuristic{}
 	for _, p := range phrases {
-		h.indicators = append(h.indicators, regexp.MustCompile(`\b`+regexp.QuoteMeta(p)+`\b`))
+		words := strings.Fields(p)
+		for i, w := range words {
+			words[i] = regexp.QuoteMeta(w)
+		}
+		pattern := `\b` + strings.Join(words, `\s+`) + `(?:s|es|d|ed|ly)?\b`
+		h.indicators = append(h.indicators, regexp.MustCompile(pattern))
 	}
 	return h
 }
@@ -76,13 +87,12 @@ func (h *Heuristic) Score(action *model.Action) float32 {
 	if content == "" {
 		return 0
 	}
+	content = strings.ReplaceAll(content, "_", " ")
 
 	var score float32
 	for _, ind := range h.indicators {
-		if !ind.MatchString(content) {
-			continue
-		}
-		score += PerMatchWeight
+		hits := len(ind.FindAllStringIndex(content, MaxHitsPerIndicator))
+		score += PerMatchWeight * float32(hits)
 		if score >= MaxScore {
 			return MaxScore
 		}
@@ -91,10 +101,14 @@ func (h *Heuristic) Score(action *model.Action) float32 {
 }
 
 // scored reports whether the scorer reads the action. It reads a tool call,
-// the content that the agent received (an observation), and the text of an
-// intent.
+// the content that the agent received, and the text of an intent. A post
+// event with no linked pre event has the kind action, but it still holds
+// what the agent received, so the phase post also counts.
 func scored(action *model.Action) bool {
-	return action.Type == model.ActionToolUse || action.Kind == events.KindObservation || action.Kind == events.KindIntent
+	return action.Type == model.ActionToolUse ||
+		action.Kind == events.KindObservation ||
+		action.Kind == events.KindIntent ||
+		action.Phase == model.PhasePost
 }
 
 // Nop is a Scorer that always returns 0. Used when scoring is disabled in

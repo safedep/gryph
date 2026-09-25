@@ -44,6 +44,7 @@ func fullRequest() *HookRequest {
 	event.TranscriptPath = "/tmp/transcript.jsonl"
 	event.HookType = "PreToolUse"
 	event.FullContent = "full content"
+	event.OutputTruncated = true
 
 	return NewHookRequest(event)
 }
@@ -69,6 +70,7 @@ func TestHookRequest_CarriesInMemoryEventFields(t *testing.T) {
 	assert.Equal(t, "/tmp/transcript.jsonl", event.TranscriptPath)
 	assert.Equal(t, events.HookType("PreToolUse"), event.HookType)
 	assert.Equal(t, "full content", event.FullContent)
+	assert.True(t, event.OutputTruncated)
 	assert.Equal(t, privacy.OriginMCP, event.Origin)
 	assert.Equal(t, "github", event.OriginSource)
 

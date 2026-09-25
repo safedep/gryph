@@ -57,6 +57,7 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 		Kind:           entryKind(event),
 		Origin:         event.Origin,
 		Source:         event.OriginSource,
+		Sources:        events.OriginSources(event.Origin, event.OriginSource, event.ToolName),
 	}
 
 	if sess != nil {
@@ -82,7 +83,7 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 	if action.Phase == "" {
 		action.Phase = model.PhaseUnknown
 	}
-	applyContentMatch(action, event.FullContent)
+	applyContentMatch(action, event.FullContent, event.OutputTruncated)
 
 	h.applyEnrichment(ctx, action, nil)
 
@@ -128,7 +129,7 @@ func entryTarget(action *model.Action) model.DerivedTarget {
 		return model.DerivedTarget{}
 	}
 	target := model.DerivedTarget{MCPServer: action.Source, MCPTool: action.Tool}
-	if server, tool, ok := events.SplitMCPTool(action.Tool); ok {
+	if server, tool, ok := events.SplitMCPTool(action.Tool); ok && server != "" {
 		target.MCPServer, target.MCPTool = server, tool
 	}
 	return target

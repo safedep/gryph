@@ -32,8 +32,10 @@ type HookRequest struct {
 	Event          events.Event    `json:"event"`
 	TranscriptPath string          `json:"transcript_path,omitempty"`
 	FullContent    string          `json:"full_content,omitempty"`
-	Origin         privacy.Origin  `json:"origin,omitempty"`
-	OriginSource   string          `json:"origin_source,omitempty"`
+	// OutputTruncated is true when the hook side cut FullContent.
+	OutputTruncated bool           `json:"output_truncated,omitempty"`
+	Origin          privacy.Origin `json:"origin,omitempty"`
+	OriginSource    string         `json:"origin_source,omitempty"`
 }
 
 // HookResponse is the decision the hook side renders for the agent.
@@ -63,12 +65,13 @@ func (v Verdict) Decision() (security.Decision, bool) {
 // NewHookRequest builds a request from a parsed event.
 func NewHookRequest(event *events.Event) *HookRequest {
 	req := &HookRequest{
-		HookType:       event.HookType,
-		Event:          *event,
-		TranscriptPath: event.TranscriptPath,
-		FullContent:    event.FullContent,
-		Origin:         event.Origin,
-		OriginSource:   event.OriginSource,
+		HookType:        event.HookType,
+		Event:           *event,
+		TranscriptPath:  event.TranscriptPath,
+		FullContent:     event.FullContent,
+		OutputTruncated: event.OutputTruncated,
+		Origin:          event.Origin,
+		OriginSource:    event.OriginSource,
 	}
 	req.Event.TranscriptPath = ""
 	req.Event.HookType = ""
@@ -81,6 +84,7 @@ func (r *HookRequest) event() *events.Event {
 	event.TranscriptPath = r.TranscriptPath
 	event.HookType = r.HookType
 	event.FullContent = r.FullContent
+	event.OutputTruncated = r.OutputTruncated
 	event.Origin = r.Origin
 	event.OriginSource = r.OriginSource
 	return &event

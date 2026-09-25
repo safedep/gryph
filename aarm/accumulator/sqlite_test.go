@@ -285,3 +285,26 @@ func TestSQLiteAccumulator_TagsAndOrigins(t *testing.T) {
 	assert.Equal(t, map[string]int64{"secret_read": 1, "untrusted_input": 2}, snap.TagsSeen, "each tag keeps the sequence of its first entry")
 	assert.Equal(t, []string{"file_project", "mcp:github", "command"}, snap.OriginsSeen, "the pending origin counts")
 }
+
+func TestSQLiteAccumulator_AmbiguousMCPServerOrigins(t *testing.T) {
+	acc, _ := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	evil := newEntry(sessionID, events.KindAction, model.ActionToolUse, "mcp__evil__read__file")
+	evil.Origin = privacy.OriginMCP
+	evil.Target = model.DerivedTarget{MCPTool: "mcp__evil__read__file"}
+	require.NoError(t, acc.Append(ctx, evil))
+
+	claimed := newEntry(sessionID, events.KindAction, model.ActionToolUse, "server/tool")
+	claimed.Origin = privacy.OriginMCP
+	claimed.Target = model.DerivedTarget{MCPServer: "server", MCPTool: "server/tool"}
+	require.NoError(t, acc.Append(ctx, claimed))
+
+	unnamed := newEntry(sessionID, events.KindAction, model.ActionToolUse, "remote")
+	unnamed.Origin = privacy.OriginMCP
+	snap, err := acc.Snapshot(ctx, sessionID, unnamed)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"mcp:evil", "mcp:evil__read", "mcp:server", "mcp"}, snap.OriginsSeen,
+		"an ambiguous tool name adds every server that it can name")
+}

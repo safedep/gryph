@@ -3,6 +3,7 @@ package events
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/privacy"
@@ -27,6 +28,7 @@ func TestClaimOrigin(t *testing.T) {
 		wantSource string
 	}{
 		{"mcp tool", event(ActionToolUse, "mcp__github__create_issue", nil), privacy.OriginMCP, "github"},
+		{"mcp tool with __ in the tool part", event(ActionToolUse, "mcp__evil__read__file", nil), privacy.OriginMCP, ""},
 		{"web fetch", event(ActionToolUse, "WebFetch", nil), privacy.OriginWeb, ""},
 		{"gemini web search", event(ActionToolUse, "google_web_search", nil), privacy.OriginWeb, ""},
 		{"browser tool", event(ActionToolUse, "browser_navigate", nil), privacy.OriginWeb, ""},
@@ -75,37 +77,101 @@ func TestClaimOrigin(t *testing.T) {
 }
 
 func TestSplitMCPTool(t *testing.T) {
-	server, tool, ok := SplitMCPTool("mcp__linear__save_issue")
-	assert.True(t, ok)
-	assert.Equal(t, "linear", server)
-	assert.Equal(t, "save_issue", tool)
-
-	for _, name := range []string{"Read", "mcp__", "mcp____tool", "mcp__server"} {
-		_, _, ok := SplitMCPTool(name)
-		assert.False(t, ok, name)
+	cases := []struct {
+		name       string
+		wantServer string
+		wantTool   string
+		wantOK     bool
+	}{
+		{"mcp__linear__save_issue", "linear", "save_issue", true},
+		{"mcp__evil__read__file", "", "evil__read__file", true},
+		{"Read", "", "", false},
+		{"mcp__", "", "", false},
+		{"mcp____tool", "", "", false},
+		{"mcp__server", "", "", false},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server, tool, ok := SplitMCPTool(tc.name)
+			assert.Equal(t, tc.wantOK, ok)
+			assert.Equal(t, tc.wantServer, server)
+			assert.Equal(t, tc.wantTool, tool)
+		})
+	}
+}
+
+func TestMCPServers(t *testing.T) {
+	cases := []struct {
+		name string
+		want []string
+	}{
+		{"mcp__github__create_issue", []string{"github"}},
+		{"mcp__evil__read__file", []string{"evil", "evil__read"}},
+		{"mcp__a___b", []string{"a", "a_"}},
+		{"mcp__server", nil},
+		{"mcp____tool", nil},
+		{"Read", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, MCPServers(tc.name))
+		})
+	}
+}
+
+func TestOriginSources(t *testing.T) {
+	assert.Equal(t, []string{"evil", "evil__read"}, OriginSources(privacy.OriginMCP, "", "mcp__evil__read__file"))
+	assert.Equal(t, []string{"github"}, OriginSources(privacy.OriginMCP, "github", "mcp__evil__read__file"), "the adapter claim wins")
+	assert.Nil(t, OriginSources(privacy.OriginWeb, "", "mcp__evil__read__file"))
 }
 
 func TestObserveOutput(t *testing.T) {
 	cases := []struct {
-		name     string
-		existing string
-		response any
-		want     string
+		name          string
+		existing      string
+		response      any
+		want          string
+		wantTruncated bool
 	}{
-		{"string", "", "AKIA0000", "AKIA0000"},
-		{"map in key order", "", map[string]any{"stdout": "b", "stderr": "a", "code": 1.0}, "a\nb"},
-		{"nested", "", map[string]any{"file": map[string]any{"content": "secret"}}, "secret"},
-		{"list", "", []any{"x", map[string]any{"text": "y"}}, "x\ny"},
-		{"keeps write content", "written", "ok", "written"},
-		{"nil", "", nil, ""},
-		{"capped", "", []any{strings.Repeat("a", MaxObservedBytes), "b"}, strings.Repeat("a", MaxObservedBytes)},
+		{"string", "", "AKIA0000", "AKIA0000", false},
+		{"map in key order", "", map[string]any{"stdout": "b", "stderr": "a", "code": 1.0}, "a\nb", false},
+		{"nested", "", map[string]any{"file": map[string]any{"content": "secret"}}, "secret", false},
+		{"list", "", []any{"x", map[string]any{"text": "y"}}, "x\ny", false},
+		{"keeps write content", "written", "ok", "written", false},
+		{"nil", "", nil, "", false},
+		{"exactly at the cap", "", strings.Repeat("a", MaxObservedBytes), strings.Repeat("a", MaxObservedBytes), false},
+		{"over the cap", "", strings.Repeat("a", MaxObservedBytes+1), strings.Repeat("a", MaxObservedBytes), true},
+		{
+			"a long value does not push out a short one", "",
+			[]any{strings.Repeat("a", MaxObservedBytes), "b"},
+			strings.Repeat("a", MaxObservedBytes-2) + "\nb", true,
+		},
+		{
+			"long values share the budget", "",
+			map[string]any{"stderr": strings.Repeat("e", MaxObservedBytes), "stdout": strings.Repeat("o", MaxObservedBytes)},
+			strings.Repeat("e", MaxObservedBytes/2-1) + "\n" + strings.Repeat("o", MaxObservedBytes/2), true,
+		},
+		{
+			"the cut falls on a rune boundary", "",
+			"a" + strings.Repeat("\u00e9", MaxObservedBytes/2),
+			"a" + strings.Repeat("\u00e9", MaxObservedBytes/2-1), true,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e := &Event{FullContent: tc.existing}
 			e.ObserveOutput(tc.response)
 			assert.Equal(t, tc.want, e.FullContent)
+			assert.Equal(t, tc.wantTruncated, e.OutputTruncated)
+			assert.LessOrEqual(t, len(e.FullContent), MaxObservedBytes)
+			assert.True(t, utf8.ValidString(e.FullContent))
 		})
 	}
+
+	t.Run("a secret after a long stderr stays", func(t *testing.T) {
+		e := &Event{}
+		e.ObserveOutput(map[string]any{"stderr": strings.Repeat("e", MaxObservedBytes), "stdout": "AKIAABCDEFGHIJKLMNOP"})
+		assert.Contains(t, e.FullContent, "AKIAABCDEFGHIJKLMNOP")
+		assert.True(t, e.OutputTruncated)
+	})
 }

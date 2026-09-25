@@ -161,11 +161,12 @@ Available variables:
 action.type / tool / operation / agent / working_dir / project
 action.params.{path, command, args, url, size_bytes, lines_added, lines_removed, content}
 action.data_classifications        list, set by the heuristic classifier
-action.injection_score             float 0..1, for tool calls, observations and intents.
-                                   Each indicator phrase counts once, as whole words.
+action.injection_score             float 0..1, for tool calls, post events and intents.
+                                   Each match adds 0.15, and one phrase adds at most 0.6.
 action.kind                        intent, action, or observation
 action.origin                      where the content came from, as the adapter claims it
 action.source                      the MCP server of an mcp origin
+action.sources                     every MCP server that the tool name can name
 action.human_principal             captured identity, see Identity capture
 action.service_identity            CI / service identity, see Identity capture
 action.role_scope                  OS uid/gid + asserted scopes
@@ -217,9 +218,19 @@ The session context records facts. Your policy decides what the facts mean.
 
 `action.origin` is one of `user`, `agent`, `file_project`, `file_external`, `command`, `web`, `mcp`, and `unknown`. A web tool (`WebFetch`, `WebSearch`, `browser_*`) or a network request gives `web`. An `mcp__<server>__<tool>` tool gives `mcp`, and `action.source` names the server. A read inside the working directory gives `file_project`, and any other read, including a `~` path, gives `file_external`. A read with no path or no working directory gives `unknown`. The origin is a claim about the path string, and Gryph does not resolve symbolic links. A shell command gives `command`, and a write gives `agent`. Gryph does not decide which origin is trusted.
 
-A server name can hold `__`, so a tool name such as `mcp__github__x__get` has no single reading. `action.source` is then empty, so a rule that trusts one server fails closed.
+A server name can hold `__`, so a tool name such as `mcp__github__x__get` has no single reading. `action.source` is then empty, so a rule that trusts one server fails closed. `action.sources` lists every reading (`github` and `github__x`), and `context.origins_seen` gets `mcp:<server>` for each one. A rule that denies one server must match `action.sources`, or `action.tool.startsWith("mcp__<server>__")`, not `action.source`:
 
-For a post event, `content_patterns` and the scorer read the tool output. So a rule on an observation matches what the agent received.
+```yaml
+- id: deny-evil-server
+  action: block
+  match:
+    action_types: [tool_use]
+  condition: '"evil" in action.sources'
+```
+
+For a post event, `content_patterns` and the scorer read the tool output. So a rule on a post event matches what the agent received. Gryph keeps at most 1 MiB of the output. Over the cap, each output value keeps a fair share, and `action.content_truncated` is true. A rule that needs the full output must handle `content_truncated`.
+
+`action.kind == "observation"` needs a linked pre event. The Gemini, Windsurf and OpenClaw adapters and the Cursor after hooks do not link a post event, so their post events have the kind `action`. To match what the agent received from every agent, use `action.phase == "post"`.
 
 A rule with `action: allow` and `tags` labels an event and does not change the decision, because `allow` has the lowest precedence. The context entry stores the tags of every rule that matched, at any decision. `context.tags_seen` lists the tags of earlier entries, and `context.tag_seq` maps each tag to the sequence of the first entry that has it. A rule cannot see the tags of the event under evaluation. `context.origins_seen` lists the origins of the session, with `mcp:<server>` for MCP. Tags do not make two rules conflict.
 
@@ -250,7 +261,7 @@ This policy tags a secret read by path or by content, and blocks a network comma
   match:
     action_types: [file_read, command_exec, tool_use]
     content_patterns: ['AKIA[0-9A-Z]{16}', '-----BEGIN [A-Z ]*PRIVATE KEY-----']
-  condition: 'action.kind == "observation"'
+  condition: 'action.phase == "post"'
 - id: tag-untrusted-input
   action: allow
   tags: [untrusted_input]
@@ -558,7 +569,7 @@ policy:
     enabled: true
 ```
 
-`classify` labels paths and URLs. An `extra_patterns` key that is not a built-in class, such as `customer_data`, is a custom label. A condition such as `'customer_data' in action.data_classifications` matches it. It does not become a content label. `injection_score` scans tool-use content for prompt-injection markers and returns a float between 0 and 1. Use them in conditions:
+`classify` labels paths and URLs. An `extra_patterns` key that is not a built-in class, such as `customer_data`, is a custom label. A condition such as `'customer_data' in action.data_classifications` matches it. It does not become a content label. `injection_score` scans tool calls, post events and prompts for prompt-injection phrases and returns a float between 0 and 1. Each match adds 0.15, up to four matches for one phrase, so four hits of one phrase give 0.6. A phrase matches at word boundaries, `_` separates words, and the last word can take a common suffix, such as `system prompts` or `disregard previously`. Use them in conditions:
 
 Defer fires automatically on insufficient context (fresh sessions whose
 counters have not filled in yet) and on conflicting policies (multiple rules

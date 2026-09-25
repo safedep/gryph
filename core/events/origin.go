@@ -2,9 +2,11 @@ package events
 
 import (
 	"encoding/json"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/safedep/gryph/core/privacy"
 )
@@ -49,22 +51,56 @@ func (e *Event) ClaimOrigin() {
 	}
 }
 
+const (
+	mcpPrefix    = "mcp__"
+	mcpSeparator = "__"
+)
+
 // SplitMCPTool splits a tool name of the form mcp__<server>__<tool>. A server
 // name can hold "__", so a name with more than one separator has no single
-// reading. The server is then empty, and a rule on the server fails closed.
+// reading. The server is then empty, and a rule that trusts one server fails
+// closed. MCPServers gives every reading for a rule that denies one server.
 func SplitMCPTool(name string) (server, tool string, ok bool) {
-	rest, found := strings.CutPrefix(name, "mcp__")
+	servers := MCPServers(name)
+	switch len(servers) {
+	case 0:
+		return "", "", false
+	case 1:
+		return servers[0], name[len(mcpPrefix)+len(servers[0])+len(mcpSeparator):], true
+	default:
+		return "", strings.TrimPrefix(name, mcpPrefix), true
+	}
+}
+
+// MCPServers returns every server name that an MCP tool name can hold, one
+// for each "__" that has text on both sides. The MCP server author chooses
+// the tool name, so mcp__evil__read__file gives "evil" and "evil__read".
+func MCPServers(name string) []string {
+	rest, found := strings.CutPrefix(name, mcpPrefix)
 	if !found {
-		return "", "", false
+		return nil
 	}
-	server, tool, found = strings.Cut(rest, "__")
-	if !found || server == "" {
-		return "", "", false
+	var servers []string
+	for i := 1; i+len(mcpSeparator) < len(rest); i++ {
+		if strings.HasPrefix(rest[i:], mcpSeparator) {
+			servers = append(servers, rest[:i])
+		}
 	}
-	if strings.Contains(tool, "__") {
-		return "", rest, true
+	return servers
+}
+
+// OriginSources returns every MCP server that an MCP origin can name. The
+// source that the adapter claims is the only one. Without a claim, each
+// reading of the tool name is a source.
+func OriginSources(origin privacy.Origin, source, tool string) []string {
+	switch {
+	case origin != privacy.OriginMCP:
+		return nil
+	case source != "":
+		return []string{source}
+	default:
+		return MCPServers(tool)
 	}
-	return server, tool, true
 }
 
 func isWebTool(name string) bool {
@@ -103,42 +139,73 @@ const MaxObservedBytes = 1 << 20
 // ObserveOutput sets FullContent from the tool response of a post event, so
 // content rules and the scorer see what the agent received. It keeps a
 // FullContent that the adapter already set, such as the content of a write.
-// A map response gives its string values, joined by new lines in key order,
-// up to MaxObservedBytes.
+// A map response gives its string values, joined by new lines in key order.
+// Over MaxObservedBytes, each value keeps a fair share of the budget, so one
+// long value cannot push out the others, and OutputTruncated is set.
 func (e *Event) ObserveOutput(response any) {
 	if e.FullContent != "" || response == nil {
 		return
 	}
-	var b strings.Builder
-	collectStrings(response, &b)
-	e.FullContent = b.String()
+	var values []string
+	collectStrings(response, &values)
+	e.FullContent, e.OutputTruncated = joinWithin(values, MaxObservedBytes)
 }
 
-func collectStrings(v any, b *strings.Builder) {
-	if b.Len() >= MaxObservedBytes {
-		return
-	}
+func collectStrings(v any, values *[]string) {
 	switch v := v.(type) {
 	case string:
-		if v == "" {
-			return
+		if v != "" {
+			*values = append(*values, v)
+		}
+	case map[string]any:
+		for _, k := range slices.Sorted(maps.Keys(v)) {
+			collectStrings(v[k], values)
+		}
+	case []any:
+		for _, item := range v {
+			collectStrings(item, values)
+		}
+	}
+}
+
+// joinWithin joins values by new lines in at most budget bytes. A short
+// value keeps all of its bytes, and the long values share the rest equally.
+// Each cut falls on a rune boundary.
+func joinWithin(values []string, budget int) (string, bool) {
+	total := len(values) - 1
+	for _, v := range values {
+		total += len(v)
+	}
+	if total <= budget {
+		return strings.Join(values, "\n"), false
+	}
+
+	keep := make([]int, len(values))
+	order := make([]int, len(values))
+	for i := range order {
+		order[i] = i
+	}
+	slices.SortStableFunc(order, func(a, b int) int { return len(values[a]) - len(values[b]) })
+	left := max(budget-(len(values)-1), 0)
+	for n, i := range order {
+		keep[i] = min(len(values[i]), left/(len(values)-n))
+		left -= keep[i]
+	}
+
+	var b strings.Builder
+	b.Grow(budget)
+	for i, v := range values {
+		n := keep[i]
+		for n > 0 && n < len(v) && !utf8.RuneStart(v[n]) {
+			n--
+		}
+		if n == 0 {
+			continue
 		}
 		if b.Len() > 0 {
 			b.WriteByte('\n')
 		}
-		b.WriteString(v[:min(len(v), MaxObservedBytes-b.Len())])
-	case map[string]any:
-		keys := make([]string, 0, len(v))
-		for k := range v {
-			keys = append(keys, k)
-		}
-		slices.Sort(keys)
-		for _, k := range keys {
-			collectStrings(v[k], b)
-		}
-	case []any:
-		for _, item := range v {
-			collectStrings(item, b)
-		}
+		b.WriteString(v[:n])
 	}
+	return b.String(), true
 }

@@ -186,3 +186,31 @@ rules:
 	assert.Equal(t, model.DecisionBlock, res.Decision)
 	assert.Equal(t, "seq 0", res.Message, "index on a missing tag gives zero")
 }
+
+func TestEvaluate_DenyRuleOnAmbiguousMCPServer(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: deny-evil
+    action: block
+    match:
+      action_types: [tool_use]
+    condition: '"evil" in action.sources'
+`)
+	cases := []struct {
+		name   string
+		action *model.Action
+		want   model.Decision
+	}{
+		{"ambiguous tool name", &model.Action{Type: model.ActionToolUse, Tool: "mcp__evil__read__file", Origin: privacy.OriginMCP, Sources: []string{"evil", "evil__read"}}, model.DecisionBlock},
+		{"other server", &model.Action{Type: model.ActionToolUse, Tool: "mcp__github__get", Origin: privacy.OriginMCP, Source: "github", Sources: []string{"github"}}, model.DecisionAllow},
+		{"no sources", &model.Action{Type: model.ActionToolUse, Tool: "Read"}, model.DecisionAllow},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := engine.Evaluate(context.Background(), tc.action, &model.ContextSnapshot{})
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, res.Decision)
+		})
+	}
+}

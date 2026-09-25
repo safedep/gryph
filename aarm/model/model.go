@@ -73,9 +73,12 @@ type Action struct {
 	// action.kind.
 	Kind EntryKind
 	// Origin is where the content of the event came from, as the adapter
-	// claims it. Source names the MCP server of an MCP origin.
-	Origin privacy.Origin
-	Source string
+	// claims it. Source names the MCP server of an MCP origin. Sources lists
+	// every server that the MCP tool name can name, so a deny rule matches
+	// when Source is empty.
+	Origin  privacy.Origin
+	Source  string
+	Sources []string
 
 	// Shell is the parsed shell command of a command_exec action. The
 	// mediator parses the command once, and the PDP reads the result. It is
