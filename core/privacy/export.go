@@ -136,6 +136,19 @@ func (p ExportProfile) IncludesAll() bool {
 	})
 }
 
+// Plain applies the treatment to a string that has no label of its own.
+// Digest and drop both empty it, because the string has no digest.
+func (t Treatment) Plain(v string) string {
+	switch {
+	case v == "" || t == TreatInclude:
+		return v
+	case t == TreatRedact:
+		return RedactedValue
+	default:
+		return ""
+	}
+}
+
 // Stricter returns the treatment that removes more of a value.
 func Stricter(a, b Treatment) Treatment {
 	if slices.Index(AllTreatments, b) > slices.Index(AllTreatments, a) {

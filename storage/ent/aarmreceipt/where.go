@@ -185,6 +185,26 @@ func RoleScope(v string) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldRoleScope, v))
 }
 
+// CommandDigest applies equality check predicate on the "command_digest" field. It's identical to CommandDigestEQ.
+func CommandDigest(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldCommandDigest, v))
+}
+
+// URLDigest applies equality check predicate on the "url_digest" field. It's identical to URLDigestEQ.
+func URLDigest(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldURLDigest, v))
+}
+
+// HashVersion applies equality check predicate on the "hash_version" field. It's identical to HashVersionEQ.
+func HashVersion(v int) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldHashVersion, v))
+}
+
+// ContentSalt applies equality check predicate on the "content_salt" field. It's identical to ContentSaltEQ.
+func ContentSalt(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldContentSalt, v))
+}
+
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
 func SessionIDEQ(v uuid.UUID) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldSessionID, v))
@@ -1848,6 +1868,256 @@ func RoleScopeEqualFold(v string) predicate.AarmReceipt {
 // RoleScopeContainsFold applies the ContainsFold predicate on the "role_scope" field.
 func RoleScopeContainsFold(v string) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldContainsFold(FieldRoleScope, v))
+}
+
+// CommandDigestEQ applies the EQ predicate on the "command_digest" field.
+func CommandDigestEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldCommandDigest, v))
+}
+
+// CommandDigestNEQ applies the NEQ predicate on the "command_digest" field.
+func CommandDigestNEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldCommandDigest, v))
+}
+
+// CommandDigestIn applies the In predicate on the "command_digest" field.
+func CommandDigestIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldCommandDigest, vs...))
+}
+
+// CommandDigestNotIn applies the NotIn predicate on the "command_digest" field.
+func CommandDigestNotIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldCommandDigest, vs...))
+}
+
+// CommandDigestGT applies the GT predicate on the "command_digest" field.
+func CommandDigestGT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldCommandDigest, v))
+}
+
+// CommandDigestGTE applies the GTE predicate on the "command_digest" field.
+func CommandDigestGTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldCommandDigest, v))
+}
+
+// CommandDigestLT applies the LT predicate on the "command_digest" field.
+func CommandDigestLT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldCommandDigest, v))
+}
+
+// CommandDigestLTE applies the LTE predicate on the "command_digest" field.
+func CommandDigestLTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldCommandDigest, v))
+}
+
+// CommandDigestContains applies the Contains predicate on the "command_digest" field.
+func CommandDigestContains(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContains(FieldCommandDigest, v))
+}
+
+// CommandDigestHasPrefix applies the HasPrefix predicate on the "command_digest" field.
+func CommandDigestHasPrefix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasPrefix(FieldCommandDigest, v))
+}
+
+// CommandDigestHasSuffix applies the HasSuffix predicate on the "command_digest" field.
+func CommandDigestHasSuffix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasSuffix(FieldCommandDigest, v))
+}
+
+// CommandDigestIsNil applies the IsNil predicate on the "command_digest" field.
+func CommandDigestIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldCommandDigest))
+}
+
+// CommandDigestNotNil applies the NotNil predicate on the "command_digest" field.
+func CommandDigestNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldCommandDigest))
+}
+
+// CommandDigestEqualFold applies the EqualFold predicate on the "command_digest" field.
+func CommandDigestEqualFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEqualFold(FieldCommandDigest, v))
+}
+
+// CommandDigestContainsFold applies the ContainsFold predicate on the "command_digest" field.
+func CommandDigestContainsFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContainsFold(FieldCommandDigest, v))
+}
+
+// URLDigestEQ applies the EQ predicate on the "url_digest" field.
+func URLDigestEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldURLDigest, v))
+}
+
+// URLDigestNEQ applies the NEQ predicate on the "url_digest" field.
+func URLDigestNEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldURLDigest, v))
+}
+
+// URLDigestIn applies the In predicate on the "url_digest" field.
+func URLDigestIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldURLDigest, vs...))
+}
+
+// URLDigestNotIn applies the NotIn predicate on the "url_digest" field.
+func URLDigestNotIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldURLDigest, vs...))
+}
+
+// URLDigestGT applies the GT predicate on the "url_digest" field.
+func URLDigestGT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldURLDigest, v))
+}
+
+// URLDigestGTE applies the GTE predicate on the "url_digest" field.
+func URLDigestGTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldURLDigest, v))
+}
+
+// URLDigestLT applies the LT predicate on the "url_digest" field.
+func URLDigestLT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldURLDigest, v))
+}
+
+// URLDigestLTE applies the LTE predicate on the "url_digest" field.
+func URLDigestLTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldURLDigest, v))
+}
+
+// URLDigestContains applies the Contains predicate on the "url_digest" field.
+func URLDigestContains(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContains(FieldURLDigest, v))
+}
+
+// URLDigestHasPrefix applies the HasPrefix predicate on the "url_digest" field.
+func URLDigestHasPrefix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasPrefix(FieldURLDigest, v))
+}
+
+// URLDigestHasSuffix applies the HasSuffix predicate on the "url_digest" field.
+func URLDigestHasSuffix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasSuffix(FieldURLDigest, v))
+}
+
+// URLDigestIsNil applies the IsNil predicate on the "url_digest" field.
+func URLDigestIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldURLDigest))
+}
+
+// URLDigestNotNil applies the NotNil predicate on the "url_digest" field.
+func URLDigestNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldURLDigest))
+}
+
+// URLDigestEqualFold applies the EqualFold predicate on the "url_digest" field.
+func URLDigestEqualFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEqualFold(FieldURLDigest, v))
+}
+
+// URLDigestContainsFold applies the ContainsFold predicate on the "url_digest" field.
+func URLDigestContainsFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContainsFold(FieldURLDigest, v))
+}
+
+// HashVersionEQ applies the EQ predicate on the "hash_version" field.
+func HashVersionEQ(v int) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldHashVersion, v))
+}
+
+// HashVersionNEQ applies the NEQ predicate on the "hash_version" field.
+func HashVersionNEQ(v int) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldHashVersion, v))
+}
+
+// HashVersionIn applies the In predicate on the "hash_version" field.
+func HashVersionIn(vs ...int) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldHashVersion, vs...))
+}
+
+// HashVersionNotIn applies the NotIn predicate on the "hash_version" field.
+func HashVersionNotIn(vs ...int) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldHashVersion, vs...))
+}
+
+// HashVersionGT applies the GT predicate on the "hash_version" field.
+func HashVersionGT(v int) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldHashVersion, v))
+}
+
+// HashVersionGTE applies the GTE predicate on the "hash_version" field.
+func HashVersionGTE(v int) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldHashVersion, v))
+}
+
+// HashVersionLT applies the LT predicate on the "hash_version" field.
+func HashVersionLT(v int) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldHashVersion, v))
+}
+
+// HashVersionLTE applies the LTE predicate on the "hash_version" field.
+func HashVersionLTE(v int) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldHashVersion, v))
+}
+
+// HashVersionIsNil applies the IsNil predicate on the "hash_version" field.
+func HashVersionIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldHashVersion))
+}
+
+// HashVersionNotNil applies the NotNil predicate on the "hash_version" field.
+func HashVersionNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldHashVersion))
+}
+
+// ContentSaltEQ applies the EQ predicate on the "content_salt" field.
+func ContentSaltEQ(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldContentSalt, v))
+}
+
+// ContentSaltNEQ applies the NEQ predicate on the "content_salt" field.
+func ContentSaltNEQ(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldContentSalt, v))
+}
+
+// ContentSaltIn applies the In predicate on the "content_salt" field.
+func ContentSaltIn(vs ...[]byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldContentSalt, vs...))
+}
+
+// ContentSaltNotIn applies the NotIn predicate on the "content_salt" field.
+func ContentSaltNotIn(vs ...[]byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldContentSalt, vs...))
+}
+
+// ContentSaltGT applies the GT predicate on the "content_salt" field.
+func ContentSaltGT(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldContentSalt, v))
+}
+
+// ContentSaltGTE applies the GTE predicate on the "content_salt" field.
+func ContentSaltGTE(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldContentSalt, v))
+}
+
+// ContentSaltLT applies the LT predicate on the "content_salt" field.
+func ContentSaltLT(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldContentSalt, v))
+}
+
+// ContentSaltLTE applies the LTE predicate on the "content_salt" field.
+func ContentSaltLTE(v []byte) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldContentSalt, v))
+}
+
+// ContentSaltIsNil applies the IsNil predicate on the "content_salt" field.
+func ContentSaltIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldContentSalt))
+}
+
+// ContentSaltNotNil applies the NotNil predicate on the "content_salt" field.
+func ContentSaltNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldContentSalt))
 }
 
 // And groups predicates with the AND operator between them.

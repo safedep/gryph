@@ -223,11 +223,13 @@ func TestR5_ShouldByteStableHashGivenFixedInputs(t *testing.T) {
 	aarm.Requires(t, aarm.R5, aarm.SHOULD, "Same input deterministically produces the same hash")
 
 	// Build one action and reuse it across two fresh mediator + store
-	// instances so the only varying input is the receipt generator's
-	// time.Now (pinned via RecordedAt) and the row uuid (regenerated per
-	// insert but not folded into the hash).
+	// instances so the only varying inputs are the receipt generator's
+	// time.Now (pinned via RecordedAt), the content salt (pinned via
+	// ContentSalt) and the row uuid (regenerated per insert but not folded
+	// into the hash).
 	action := loadActionFixture(t, "command_exec_safe")
 	pinned := zeroTime()
+	salt := bytes.Repeat([]byte{7}, 16)
 
 	ref1 := aarm.NewReferenceMediator(t)
 	dec1 := mustEvaluate(t, ref1, action, nil)
@@ -237,8 +239,9 @@ func TestR5_ShouldByteStableHashGivenFixedInputs(t *testing.T) {
 		EventID:    action.EventID,
 		Action:     action,
 		Decision:   dec1,
-		PolicyHash: ref1.PolicyHash,
-		RecordedAt: pinned,
+		PolicyHash:  ref1.PolicyHash,
+		RecordedAt:  pinned,
+		ContentSalt: salt,
 	})
 	require.NoError(t, err)
 
@@ -250,8 +253,9 @@ func TestR5_ShouldByteStableHashGivenFixedInputs(t *testing.T) {
 		EventID:    action.EventID,
 		Action:     action,
 		Decision:   dec2,
-		PolicyHash: ref2.PolicyHash,
-		RecordedAt: pinned,
+		PolicyHash:  ref2.PolicyHash,
+		RecordedAt:  pinned,
+		ContentSalt: salt,
 	})
 	require.NoError(t, err)
 

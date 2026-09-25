@@ -353,6 +353,54 @@ func (_c *AarmReceiptCreate) SetNillableRoleScope(v *string) *AarmReceiptCreate 
 	return _c
 }
 
+// SetCommandDigest sets the "command_digest" field.
+func (_c *AarmReceiptCreate) SetCommandDigest(v string) *AarmReceiptCreate {
+	_c.mutation.SetCommandDigest(v)
+	return _c
+}
+
+// SetNillableCommandDigest sets the "command_digest" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillableCommandDigest(v *string) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetCommandDigest(*v)
+	}
+	return _c
+}
+
+// SetURLDigest sets the "url_digest" field.
+func (_c *AarmReceiptCreate) SetURLDigest(v string) *AarmReceiptCreate {
+	_c.mutation.SetURLDigest(v)
+	return _c
+}
+
+// SetNillableURLDigest sets the "url_digest" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillableURLDigest(v *string) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetURLDigest(*v)
+	}
+	return _c
+}
+
+// SetHashVersion sets the "hash_version" field.
+func (_c *AarmReceiptCreate) SetHashVersion(v int) *AarmReceiptCreate {
+	_c.mutation.SetHashVersion(v)
+	return _c
+}
+
+// SetNillableHashVersion sets the "hash_version" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillableHashVersion(v *int) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetHashVersion(*v)
+	}
+	return _c
+}
+
+// SetContentSalt sets the "content_salt" field.
+func (_c *AarmReceiptCreate) SetContentSalt(v []byte) *AarmReceiptCreate {
+	_c.mutation.SetContentSalt(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AarmReceiptCreate) SetID(v uuid.UUID) *AarmReceiptCreate {
 	_c.mutation.SetID(v)
@@ -462,6 +510,11 @@ func (_c *AarmReceiptCreate) check() error {
 	if v, ok := _c.mutation.PolicyHash(); ok {
 		if err := aarmreceipt.PolicyHashValidator(v); err != nil {
 			return &ValidationError{Name: "policy_hash", err: fmt.Errorf(`ent: validator failed for field "AarmReceipt.policy_hash": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.ContentSalt(); ok {
+		if err := aarmreceipt.ContentSaltValidator(v); err != nil {
+			return &ValidationError{Name: "content_salt", err: fmt.Errorf(`ent: validator failed for field "AarmReceipt.content_salt": %w`, err)}
 		}
 	}
 	return nil
@@ -618,6 +671,22 @@ func (_c *AarmReceiptCreate) createSpec() (*AarmReceipt, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RoleScope(); ok {
 		_spec.SetField(aarmreceipt.FieldRoleScope, field.TypeString, value)
 		_node.RoleScope = value
+	}
+	if value, ok := _c.mutation.CommandDigest(); ok {
+		_spec.SetField(aarmreceipt.FieldCommandDigest, field.TypeString, value)
+		_node.CommandDigest = value
+	}
+	if value, ok := _c.mutation.URLDigest(); ok {
+		_spec.SetField(aarmreceipt.FieldURLDigest, field.TypeString, value)
+		_node.URLDigest = value
+	}
+	if value, ok := _c.mutation.HashVersion(); ok {
+		_spec.SetField(aarmreceipt.FieldHashVersion, field.TypeInt, value)
+		_node.HashVersion = value
+	}
+	if value, ok := _c.mutation.ContentSalt(); ok {
+		_spec.SetField(aarmreceipt.FieldContentSalt, field.TypeBytes, value)
+		_node.ContentSalt = value
 	}
 	return _node, _spec
 }

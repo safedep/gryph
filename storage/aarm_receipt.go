@@ -162,8 +162,9 @@ INSERT INTO aarm_receipts (
     subagent_id, subagent_type, policy_hash,
     signature, signer_key_id,
     defer_reason, deferral_of_sequence,
-    human_principal, service_identity, role_scope
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    human_principal, service_identity, role_scope,
+    command_digest, url_digest, hash_version, content_salt
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	var actionIDArg, eventIDArg, agentArg, toolArg, projectArg interface{}
 	if row.ActionID != uuid.Nil {
@@ -267,6 +268,20 @@ INSERT INTO aarm_receipts (
 		roleScopeArg = row.RoleScope
 	}
 
+	var commandDigestArg, urlDigestArg, hashVersionArg, contentSaltArg interface{}
+	if len(row.ContentSalt) > 0 {
+		contentSaltArg = row.ContentSalt
+	}
+	if row.CommandDigest != "" {
+		commandDigestArg = row.CommandDigest
+	}
+	if row.URLDigest != "" {
+		urlDigestArg = row.URLDigest
+	}
+	if row.HashVersion != 0 {
+		hashVersionArg = row.HashVersion
+	}
+
 	_, err := tx.ExecContext(ctx, stmt,
 		row.ID, row.SessionID, actionIDArg, eventIDArg, row.RecordedAt, row.Sequence,
 		agentArg, toolArg, row.ActionType, projectArg,
@@ -277,6 +292,7 @@ INSERT INTO aarm_receipts (
 		signatureArg, signerKeyIDArg,
 		deferReasonArg, deferralOfSequenceArg,
 		humanPrincipalArg, serviceIdentityArg, roleScopeArg,
+		commandDigestArg, urlDigestArg, hashVersionArg, contentSaltArg,
 	)
 	return err
 }
@@ -391,6 +407,18 @@ func receiptCreate(client *ent.AarmReceiptClient, row *ReceiptRow) *ent.AarmRece
 	}
 	if row.RoleScope != "" {
 		create.SetRoleScope(row.RoleScope)
+	}
+	if row.CommandDigest != "" {
+		create.SetCommandDigest(row.CommandDigest)
+	}
+	if row.URLDigest != "" {
+		create.SetURLDigest(row.URLDigest)
+	}
+	if row.HashVersion != 0 {
+		create.SetHashVersion(row.HashVersion)
+	}
+	if len(row.ContentSalt) > 0 {
+		create.SetContentSalt(row.ContentSalt)
 	}
 	return create
 }
@@ -747,6 +775,10 @@ func entToReceipt(e *ent.AarmReceipt) *ReceiptRow {
 		HumanPrincipal:  e.HumanPrincipal,
 		ServiceIdentity: e.ServiceIdentity,
 		RoleScope:       e.RoleScope,
+		CommandDigest:   e.CommandDigest,
+		URLDigest:       e.URLDigest,
+		HashVersion:     e.HashVersion,
+		ContentSalt:     e.ContentSalt,
 	}
 	if e.DurationMs != nil {
 		v := *e.DurationMs

@@ -113,6 +113,13 @@ func chainRowFromExported(row ExportedReceipt) (ChainRow, error) {
 			return ChainRow{}, fmt.Errorf("parse event_id: %w", err)
 		}
 	}
+	var saltBytes []byte
+	if row.ContentSalt != "" {
+		saltBytes, err = hex.DecodeString(row.ContentSalt)
+		if err != nil {
+			return ChainRow{}, fmt.Errorf("decode content_salt: %w", err)
+		}
+	}
 	var policyHashBytes []byte
 	if row.PolicyHash != "" {
 		policyHashBytes, err = hex.DecodeString(row.PolicyHash)
@@ -144,16 +151,21 @@ func chainRowFromExported(row ExportedReceipt) (ChainRow, error) {
 		HumanPrincipal:  row.HumanPrincipal,
 		ServiceIdentity: row.ServiceIdentity,
 		RoleScope:       row.RoleScope,
+		CommandDigest:   row.CommandDigest,
+		URLDigest:       row.URLDigest,
+		HashVersion:     row.HashVersion,
 	}
 	if row.DeferralOfSequence != nil {
 		fields.DeferralOfSequence = *row.DeferralOfSequence
 	}
 	return ChainRow{
-		SessionID: sessID,
-		Sequence:  row.Sequence,
-		PrevHash:  prevHashBytes,
-		Hash:      hashBytes,
-		Fields:    fields,
+		SessionID:   sessID,
+		Sequence:    row.Sequence,
+		PrevHash:    prevHashBytes,
+		Hash:        hashBytes,
+		Fields:      fields,
+		Projected:   row.Projected,
+		ContentSalt: saltBytes,
 	}, nil
 }
 

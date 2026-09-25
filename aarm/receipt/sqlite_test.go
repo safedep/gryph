@@ -9,7 +9,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/aarm/canonical"
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/core/privacy"
+	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/storage/storagetest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -353,6 +356,8 @@ func TestSnapshotMap_KeySet(t *testing.T) {
 		ToolsUsed:           []string{"Bash"},
 		ClassificationsSeen: []string{"secret"},
 		EntitiesSeen:        []string{"path:/a"},
+		TagsSeen:            map[string]int64{"secret-read": 2, "egress": 1},
+		OriginsSeen:         []string{"web"},
 		SessionStartedAt:    time.Now(),
 	})
 	keys := make([]string, 0, len(m))
@@ -363,18 +368,60 @@ func TestSnapshotMap_KeySet(t *testing.T) {
 		"total_actions", "files_read", "files_written", "commands_executed",
 		"network_requests", "errors", "session_duration",
 		"tools_used", "classifications_seen", "entities_seen", "egress_hosts",
+		"entries", "tags_seen", "origins_seen",
 	}, keys)
+	assert.Equal(t, []string{"egress", "secret-read"}, m["tags_seen"])
 }
 
 func TestSnapshotMap_HoldsNoPathOrHost(t *testing.T) {
 	m := snapshotMap(&model.ContextSnapshot{
 		EntitiesSeen: []string{"path:/work/secret-merger.txt", "host:evil.example"},
 		EgressHosts:  []string{"evil.example"},
+		Entries:      []model.EntryFacts{{Command: "curl evil.example"}},
 	})
 	assert.Equal(t, 2, m["entities_seen"])
 	assert.Equal(t, 1, m["egress_hosts"])
+	assert.Equal(t, 1, m["entries"])
 	data, err := json.Marshal(m)
 	require.NoError(t, err)
 	assert.NotContains(t, string(data), "secret-merger")
 	assert.NotContains(t, string(data), "evil.example")
+}
+
+func TestSQLiteGenerator_RecordWritesHashV2(t *testing.T) {
+	store := storagetest.NewStore(t)
+	g := NewSQLite(store)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	in := newInput(sessionID, model.DecisionAllow)
+	in.Action.Type = model.ActionCommandExec
+	in.Action.Parameters = model.Parameters{Command: "curl -H 'Authorization: Bearer [REDACTED]' https://api.example.com", URL: "https://api.example.com"}
+	_, err := g.Record(ctx, in)
+	require.NoError(t, err)
+
+	rows, err := store.QueryReceipts(ctx, &storage.ReceiptFilter{SessionID: &sessionID, Limit: -1})
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	r := rows[0]
+	assert.Equal(t, HashV2, r.HashVersion)
+	require.Len(t, r.ContentSalt, contentSaltSize)
+	command, err := canonical.MarshalJSON(map[string]interface{}{"command": in.Action.Parameters.Command})
+	require.NoError(t, err)
+	assert.Equal(t, commit(r.ContentSalt, command), r.CommandDigest, "the commitment covers the redacted value")
+	assert.Equal(t, commit(r.ContentSalt, []byte("https://api.example.com")), r.URLDigest)
+	assert.NotEqual(t, privacy.Digest(in.Action.Parameters.Command), r.CommandDigest, "a plain digest can be reversed")
+	assert.Empty(t, VerifyChain([]ChainRow{ChainRowFromReceipt(r)}))
+
+	r.ActionPayload["command"] = "rm -rf /"
+	breaks := VerifyChain([]ChainRow{ChainRowFromReceipt(r)})
+	require.Len(t, breaks, 1)
+	assert.Equal(t, "the command does not match command_digest", breaks[0].Reason)
+
+	_, err = g.Record(ctx, in)
+	require.NoError(t, err)
+	rows, err = store.QueryReceipts(ctx, &storage.ReceiptFilter{SessionID: &sessionID, Limit: -1})
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	assert.NotEqual(t, rows[0].CommandDigest, rows[1].CommandDigest, "each row has its own salt")
 }

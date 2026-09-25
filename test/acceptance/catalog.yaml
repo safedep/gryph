@@ -111,6 +111,20 @@
   guarantee: "gryph stream sync applies streams.targets[].export_profile to every event before it sends it. A target without export_profile gets the default profile."
   labels: [privacy, export, streams]
 
+- id: receipts/verify-log/redacted-export-verifies
+  title: "a receipt export under any profile verifies"
+  category: receipts
+  tier: P0
+  guarantee: "Gryph writes receipts with hash v2 and salted commitments of the command and the URL. An export with --export-profile metadata has no command, no token and no salt, and it verifies. A changed commitment, or a changed command next to its salt, fails verification."
+  labels: [receipts, privacy, export]
+
+- id: receipts/verify-log/v1-still-verifies
+  title: "a receipt export from before hash v2 verifies"
+  category: receipts
+  tier: P1
+  guarantee: "gryph policy receipts verify-log verifies a v1 export without hash_version. A v1 row whose command an export profile removed fails with a reason that names --export-profile full."
+  labels: [receipts, compatibility]
+
 - id: receipts/verify-log/tamper-fails
   title: "receipt log verification detects tampering"
   category: receipts

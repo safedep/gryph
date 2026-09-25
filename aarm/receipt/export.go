@@ -8,11 +8,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/storage"
 )
 
@@ -28,6 +32,32 @@ type ExportOptions struct {
 	// through the result set in batches of this size so a huge export does
 	// not load every row up front.
 	BatchSize int
+	// Profile, when set, applies to the command and the URL in the action
+	// payload of a JSONL row. The digest columns never change.
+	Profile *privacy.ExportProfile
+	// Events loads the audit event of each receipt, so Profile can read the
+	// labels of its content. A receipt without an audit event gets the
+	// treatment of an unknown_sensitive value.
+	Events EventLoader
+	// Stats, when set, receives counts of rows that need the attention of
+	// the caller.
+	Stats *ExportStats
+}
+
+// ExportStats counts the rows that an export profile could not fully
+// protect or that cannot verify after the export.
+type ExportStats struct {
+	// ProjectedV1 counts v1 rows whose content the profile removed. The v1
+	// hash covers the content, so these rows fail verification.
+	ProjectedV1 int
+	// MessageQuotes counts rows whose rule message quotes content that the
+	// profile removed. The hash covers the message, so the export keeps it.
+	MessageQuotes int
+}
+
+// EventLoader loads audit events by ID.
+type EventLoader interface {
+	QueryEventsByIDs(ctx context.Context, ids []uuid.UUID) ([]*events.Event, error)
 }
 
 const (
@@ -70,9 +100,27 @@ func (e *SQLiteExporter) Export(ctx context.Context, w io.Writer, opts ExportOpt
 		format = ExportFormatJSONL
 	}
 
-	rowFn, finishFn, err := exporterSink(w, format, opts.IncludeSignatures)
+	sink, finishFn, err := exporterSink(w, format, opts.IncludeSignatures)
 	if err != nil {
 		return err
+	}
+	emit := func(rows []*storage.ReceiptRow) error {
+		treatments, err := rowTreatments(ctx, rows, opts)
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			exp := ToExported(r, opts.IncludeSignatures)
+			if t, ok := treatments[r.ID]; ok {
+				projectRow(&exp, r, t, opts.Stats)
+			}
+			shown := *r
+			shown.ErrorMessage = exp.ErrorMessage
+			if err := sink(&shown, exp); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 
 	if opts.SessionID != nil {
@@ -85,8 +133,8 @@ func (e *SQLiteExporter) Export(ctx context.Context, w io.Writer, opts ExportOpt
 		if err != nil {
 			return fmt.Errorf("receipt: load session receipts for export: %w", err)
 		}
-		for _, r := range full {
-			if err := rowFn(r); err != nil {
+		for batch := range slices.Chunk(full, exportDefaultBatchSize) {
+			if err := emit(batch); err != nil {
 				return err
 			}
 		}
@@ -119,10 +167,8 @@ func (e *SQLiteExporter) Export(ctx context.Context, w io.Writer, opts ExportOpt
 		if len(rows) == 0 {
 			break
 		}
-		for _, r := range rows {
-			if err := rowFn(r); err != nil {
-				return err
-			}
+		if err := emit(rows); err != nil {
+			return err
 		}
 		last := rows[len(rows)-1]
 		nextTime := last.RecordedAt
@@ -169,6 +215,14 @@ type ExportedReceipt struct {
 	HumanPrincipal     string                 `json:"human_principal,omitempty"`
 	ServiceIdentity    string                 `json:"service_identity,omitempty"`
 	RoleScope          string                 `json:"role_scope,omitempty"`
+	CommandDigest      string                 `json:"command_digest,omitempty"`
+	URLDigest          string                 `json:"url_digest,omitempty"`
+	HashVersion        int                    `json:"hash_version,omitempty"`
+	ContentSalt        string                 `json:"content_salt,omitempty"`
+	// Projected is true when an export profile changed the command or the
+	// URL in ActionPayload. A v1 hash covers them, so such a v1 row cannot
+	// verify.
+	Projected bool `json:"projected,omitempty"`
 }
 
 // ToExported converts a storage.ReceiptRow into the export shape. When
@@ -225,15 +279,121 @@ func ToExported(r *storage.ReceiptRow, includeSig bool) ExportedReceipt {
 	out.HumanPrincipal = r.HumanPrincipal
 	out.ServiceIdentity = r.ServiceIdentity
 	out.RoleScope = r.RoleScope
+	out.CommandDigest = r.CommandDigest
+	out.URLDigest = r.URLDigest
+	out.HashVersion = r.HashVersion
+	if len(r.ContentSalt) > 0 {
+		out.ContentSalt = hex.EncodeToString(r.ContentSalt)
+	}
 	return out
 }
 
-func exporterSink(w io.Writer, format string, includeSig bool) (func(*storage.ReceiptRow) error, func() error, error) {
+// rowTreatments returns the treatment of the content of each row, when
+// opts has a profile. The content of a row is plain text relative to its
+// audit event, so it gets Event.PlainTreatment.
+func rowTreatments(ctx context.Context, rows []*storage.ReceiptRow, opts ExportOptions) (map[uuid.UUID]privacy.Treatment, error) {
+	if opts.Profile == nil {
+		return nil, nil
+	}
+	seen := map[uuid.UUID]bool{}
+	var ids []uuid.UUID
+	for _, r := range rows {
+		if r.EventID != uuid.Nil && !seen[r.EventID] {
+			seen[r.EventID] = true
+			ids = append(ids, r.EventID)
+		}
+	}
+	byID := map[uuid.UUID]*events.Event{}
+	if opts.Events != nil {
+		for chunk := range slices.Chunk(ids, exportDefaultBatchSize) {
+			evts, err := opts.Events.QueryEventsByIDs(ctx, chunk)
+			if err != nil {
+				return nil, fmt.Errorf("receipt: load audit events for export: %w", err)
+			}
+			for _, e := range evts {
+				byID[e.ID] = e
+			}
+		}
+	}
+	unknown := opts.Profile.Treatment(privacy.Label{Origin: privacy.OriginAgent, Classes: []privacy.Class{privacy.ClassUnknownSensitive}})
+	out := make(map[uuid.UUID]privacy.Treatment, len(rows))
+	for _, r := range rows {
+		out[r.ID] = unknown
+		if e, ok := byID[r.EventID]; ok {
+			out[r.ID] = e.PlainTreatment(*opts.Profile)
+		}
+	}
+	return out, nil
+}
+
+// projectRow applies the treatment to the content keys of the payload and
+// to the error message of an exported row. The row loses its content salt
+// with the content, so the commitments cannot be reversed.
+func projectRow(exp *ExportedReceipt, r *storage.ReceiptRow, t privacy.Treatment, stats *ExportStats) {
+	if t == privacy.TreatInclude {
+		return
+	}
+	exp.ErrorMessage = t.Plain(r.ErrorMessage)
+	removed := contentStrings(r.ActionPayload)
+	if len(removed) == 0 {
+		return
+	}
+	payload := maps.Clone(r.ActionPayload)
+	for _, key := range contentKeys {
+		if _, ok := payload[key]; !ok {
+			continue
+		}
+		if t == privacy.TreatRedact && key != payloadKeyArgs {
+			payload[key] = privacy.RedactedValue
+		} else {
+			delete(payload, key)
+		}
+	}
+	exp.ActionPayload = payload
+	exp.ContentSalt = ""
+	exp.Projected = true
+	if stats == nil {
+		return
+	}
+	if r.HashVersion != HashV2 {
+		stats.ProjectedV1++
+	}
+	if slices.ContainsFunc(removed, func(v string) bool { return strings.Contains(r.Message, v) }) {
+		stats.MessageQuotes++
+	}
+}
+
+// contentStrings returns the non-empty string values under the content keys.
+func contentStrings(payload map[string]interface{}) []string {
+	var out []string
+	add := func(v any) {
+		if s, ok := v.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	for _, key := range contentKeys {
+		switch v := payload[key].(type) {
+		case []string:
+			for _, s := range v {
+				add(s)
+			}
+		case []interface{}:
+			for _, s := range v {
+				add(s)
+			}
+		default:
+			add(v)
+		}
+	}
+	return out
+}
+
+func exporterSink(w io.Writer, format string, includeSig bool) (func(*storage.ReceiptRow, ExportedReceipt) error, func() error, error) {
 	switch format {
 	case ExportFormatJSONL:
 		enc := json.NewEncoder(w)
-		return func(r *storage.ReceiptRow) error {
-			return enc.Encode(ToExported(r, includeSig))
+		return func(_ *storage.ReceiptRow, exp ExportedReceipt) error {
+			return enc.Encode(exp)
 		}, func() error { return nil }, nil
 	case ExportFormatCSV:
 		cw := csv.NewWriter(w)
@@ -241,7 +401,7 @@ func exporterSink(w io.Writer, format string, includeSig bool) (func(*storage.Re
 		if err := cw.Write(headers); err != nil {
 			return nil, nil, err
 		}
-		return func(r *storage.ReceiptRow) error {
+		return func(r *storage.ReceiptRow, _ ExportedReceipt) error {
 				return cw.Write(csvRow(r, includeSig))
 			}, func() error {
 				cw.Flush()
@@ -263,6 +423,7 @@ func csvHeaders(includeSig bool) []string {
 		"subagent_id", "subagent_type", "policy_hash",
 		"defer_reason", "deferral_of_sequence",
 		"human_principal", "service_identity", "role_scope",
+		"command_digest", "url_digest", "hash_version",
 	}
 	if includeSig {
 		h = append(h, "signature", "signer_key_id")
@@ -321,6 +482,9 @@ func csvRow(r *storage.ReceiptRow, includeSig bool) []string {
 		r.HumanPrincipal,
 		r.ServiceIdentity,
 		r.RoleScope,
+		r.CommandDigest,
+		r.URLDigest,
+		strconv.Itoa(r.HashVersion),
 	}
 	if includeSig {
 		row = append(row, base64.StdEncoding.EncodeToString(r.Signature), r.SignerKeyID)

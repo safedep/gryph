@@ -58,6 +58,10 @@ func init() {
 	aarmreceiptDescPolicyHash := aarmreceiptFields[23].Descriptor()
 	// aarmreceipt.PolicyHashValidator is a validator for the "policy_hash" field. It is called by the builders before save.
 	aarmreceipt.PolicyHashValidator = aarmreceiptDescPolicyHash.Validators[0].(func([]byte) error)
+	// aarmreceiptDescContentSalt is the schema descriptor for content_salt field.
+	aarmreceiptDescContentSalt := aarmreceiptFields[34].Descriptor()
+	// aarmreceipt.ContentSaltValidator is a validator for the "content_salt" field. It is called by the builders before save.
+	aarmreceipt.ContentSaltValidator = aarmreceiptDescContentSalt.Validators[0].(func([]byte) error)
 	// aarmreceiptDescID is the schema descriptor for id field.
 	aarmreceiptDescID := aarmreceiptFields[0].Descriptor()
 	// aarmreceipt.DefaultID holds the default value on creation for the id field.

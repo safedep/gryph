@@ -49,6 +49,10 @@ type RecordInput struct {
 	// RecordedAt overrides the row's recorded_at. Default: time.Now().UTC().
 	RecordedAt time.Time
 
+	// ContentSalt overrides the salt of the content commitments. Default: a
+	// random salt of contentSaltSize bytes.
+	ContentSalt []byte
+
 	// PolicyHash is the SHA-256 over the policy document this action was
 	// evaluated under. Persisted on the row and folded into the receipt hash
 	// so a policy edit is visible at verify time.
