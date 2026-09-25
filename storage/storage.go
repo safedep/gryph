@@ -114,6 +114,7 @@ type StreamCursorStore interface {
 type ContextStore interface {
 	AppendContextEntry(ctx context.Context, row *ContextEntryRow, delta *ContextStateDelta) error
 	UpdateContextEntryResult(ctx context.Context, entryID uuid.UUID, status string, durationMS int64, errorMsg string) error
+	SetContextIntent(ctx context.Context, entryID uuid.UUID) error
 	GetContextState(ctx context.Context, sessionID uuid.UUID) (*ContextStateRow, error)
 	GetContextStateByPrefix(ctx context.Context, prefix string) (*ContextStateRow, error)
 	QueryAllContextStates(ctx context.Context, limit int) ([]*ContextStateRow, error)

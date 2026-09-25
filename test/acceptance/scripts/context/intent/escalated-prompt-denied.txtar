@@ -1,0 +1,57 @@
+# An escalated prompt that the approval denies never reaches the agent, so it
+# does not become the latest intent. The default nop approval denies. The
+# count of actions since the last intent keeps growing, and the runaway rule
+# still fires. The session ID 41fea824 derives from the agent session ID
+# s-escalate.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin prompt.json
+exec gryph _hook claude-code UserPromptSubmit
+
+stdin bash.json
+exec gryph _hook claude-code PreToolUse
+stdin bash.json
+exec gryph _hook claude-code PreToolUse
+
+stdin deploy.json
+execexit 2 gryph _hook claude-code UserPromptSubmit
+stderr 'Denied by nop'
+
+exec gryph policy context --session 41fea824 --format json --no-color
+stdout '"intent_available": true,'
+stdout '"actions_since_intent": 2'
+
+stdin bash.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'runaway'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-runaway
+    action: block
+    match:
+      action_types: [command_exec]
+    condition: "context.actions_since_intent > 2"
+    message: "runaway: too many actions since the last prompt"
+  - id: acceptance-review-deploy
+    action: escalate
+    match:
+      action_types: [user_prompt]
+      content_patterns: ["(?i)deploy"]
+    message: "deploy prompts need approval"
+-- prompt.json --
+{"session_id": "s-escalate", "cwd": "/home/user/project", "hook_event_name": "UserPromptSubmit",
+ "prompt": "Fix the flaky test"}
+-- deploy.json --
+{"session_id": "s-escalate", "cwd": "/home/user/project", "hook_event_name": "UserPromptSubmit",
+ "prompt": "Deploy to production"}
+-- bash.json --
+{"session_id": "s-escalate", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "ls"}}

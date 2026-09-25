@@ -79,6 +79,11 @@ type Analysis struct {
 	// Hosts are the lower-case host names the command contacts, without the
 	// port.
 	Hosts []string
+	// GryphHook is true when the command can run the Gryph hook entry point,
+	// "gryph _hook". A command that holds "_hook" and a word that the walker
+	// cannot resolve counts, because that word can run the hook. A command
+	// that the parser rejects counts when it holds "_hook".
+	GryphHook bool
 }
 
 // Changes returns the targets the command writes or removes.
@@ -103,9 +108,10 @@ func Analyze(command string, env Env) Analysis {
 	w := &walker{env: env}
 	start := dirs{env.WorkingDir}
 	if _, err := w.script(command, start); err != nil {
-		w.failed = true
+		w.reject(command)
 	}
-	return Analysis{Parsed: !w.failed, Targets: w.targets, Hosts: w.hosts}
+	gryphHook := w.gryphHook || (w.unresolved && strings.Contains(command, gryphHookCommand))
+	return Analysis{Parsed: !w.failed, Targets: w.targets, Hosts: w.hosts, GryphHook: gryphHook}
 }
 
 // AnalyzeCommand analyzes a command given as a command string plus split
@@ -190,13 +196,15 @@ func union(a, b dirs) dirs {
 }
 
 type walker struct {
-	env      Env
-	depth    int
-	calls    int
-	targets  []Target
-	hosts    []string
-	failed   bool
-	matchDot bool
+	env        Env
+	depth      int
+	calls      int
+	targets    []Target
+	hosts      []string
+	failed     bool
+	matchDot   bool
+	gryphHook  bool
+	unresolved bool
 }
 
 func (w *walker) script(src string, cwds dirs) (dirs, error) {
@@ -219,7 +227,7 @@ func (w *walker) nested(src string, cwds dirs) dirs {
 	defer func() { w.depth-- }()
 	after, err := w.script(src, cwds)
 	if err != nil {
-		w.failed = true
+		w.reject(src)
 		return cwds
 	}
 	return after
@@ -330,7 +338,10 @@ func (w *walker) words(args []*syntax.Word, cwds dirs) []string {
 	out := make([]string, 0, len(args))
 	for _, a := range args {
 		for _, word := range expandBraces(a) {
-			v, _ := w.word(word, cwds)
+			v, ok := w.word(word, cwds)
+			if !ok {
+				w.unresolved = true
+			}
 			out = append(out, v)
 		}
 	}
@@ -400,6 +411,9 @@ func braceWords(parts []syntax.WordPart) int {
 // call analyzes one simple command and returns the working directories
 // after it.
 func (w *walker) call(args []string, cwds dirs) dirs {
+	if runsGryphHook(args) {
+		w.gryphHook = true
+	}
 	if len(args) == 0 || args[0] == "" {
 		return cwds
 	}
@@ -527,6 +541,18 @@ func (w *walker) delegate(name string, rest []string, cwds dirs) (dirs, bool) {
 		return w.nested(strings.Join(rest, " "), cwds), true
 	}
 	return cwds, false
+}
+
+// gryphHookCommand is the hidden Gryph subcommand that agent hooks run.
+const gryphHookCommand = "_hook"
+
+// runsGryphHook reports whether a gryph call can run "_hook". An argument
+// that the walker cannot resolve can be "_hook", so it counts.
+func runsGryphHook(args []string) bool {
+	if len(args) < 2 || strings.TrimSuffix(path.Base(args[0]), ".exe") != "gryph" {
+		return false
+	}
+	return slices.Contains(args[1:], gryphHookCommand) || slices.Contains(args[1:], "")
 }
 
 func (w *walker) cd(args []string, cwds dirs) dirs {
@@ -1087,4 +1113,13 @@ func hasInPlaceFlag(args []string) bool {
 		}
 	}
 	return false
+}
+
+// reject marks a script that the parser rejects. The script adds no
+// targets. It counts as a hook call when it holds "_hook".
+func (w *walker) reject(src string) {
+	w.failed = true
+	if strings.Contains(src, gryphHookCommand) {
+		w.gryphHook = true
+	}
 }

@@ -126,7 +126,7 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 			}
 			if activations == nil {
 				activations = map[string]any{
-					"action":  actionActivation(action),
+					"action":  actionActivation(action, paths),
 					"context": contextActivation(snapshot),
 				}
 			}
@@ -686,7 +686,7 @@ func phaseOrUnknown(p model.ActionPhase) model.ActionPhase {
 	return p
 }
 
-func actionActivation(action *model.Action) map[string]any {
+func actionActivation(action *model.Action, paths *actionPaths) map[string]any {
 	if action == nil {
 		action = &model.Action{}
 	}
@@ -708,6 +708,7 @@ func actionActivation(action *model.Action) map[string]any {
 		"human_principal":      action.HumanPrincipal,
 		"service_identity":     action.ServiceIdentity,
 		"role_scope":           action.RoleScope,
+		"gryph_hook":           paths.runsGryphHook(),
 		"params": map[string]any{
 			"path":          action.Parameters.Path,
 			"command":       action.Parameters.Command,

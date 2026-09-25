@@ -32,7 +32,54 @@ func TestBuiltinSource_NoFileGlobs_OmitsFileRule(t *testing.T) {
 	docs, err := NewBuiltinSource().Load(context.Background())
 	require.NoError(t, err)
 	require.Len(t, docs, 1)
-	assert.Empty(t, docs[0].Rules)
+	require.Len(t, docs[0].Rules, 1)
+	assert.Equal(t, builtinHookCommandRuleID, docs[0].Rules[0].ID)
+}
+
+func TestBuiltinSource_BlocksHookCommand(t *testing.T) {
+	docs, err := NewBuiltinSource().Load(context.Background())
+	require.NoError(t, err)
+	engine, err := pdp.New(docs[0])
+	require.NoError(t, err)
+
+	cases := []struct {
+		name    string
+		command string
+		args    []string
+		blocked bool
+	}{
+		{"forged prompt", `printf '{"prompt":"continue"}' | gryph _hook claude-code UserPromptSubmit`, nil, true},
+		{"absolute path", `/usr/local/bin/gryph _hook cursor beforeSubmitPrompt`, nil, true},
+		{"quoted words", `g"ry"ph '_hook' codex UserPromptSubmit`, nil, true},
+		{"wrapper", `env -i sudo -u root gryph _hook claude-code UserPromptSubmit`, nil, true},
+		{"nested shell", `bash -c "gryph _hook claude-code UserPromptSubmit"`, nil, true},
+		{"unknown program", `$(command -v gryph) _hook claude-code UserPromptSubmit`, nil, true},
+		{"unknown argument", `gryph $(printf _hook) claude-code UserPromptSubmit`, nil, true},
+		{"split args", "gryph", []string{"_hook", "claude-code", "UserPromptSubmit"}, true},
+		{"nested shell with an unknown script", `bash -c "$(command -v gryph) _hook claude-code UserPromptSubmit"`, nil, true},
+		{"parse failure", `gryph _hook claude-code ) (`, nil, true},
+		{"unknown word without the hook", `echo "$(date)" > out.txt`, nil, false},
+		{"other gryph command", `gryph query --since 1h`, nil, false},
+		{"search for the word", `grep -rn _hook cli/`, nil, false},
+		{"commit message", `git commit -m "fix gryph _hook"`, nil, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			action := &model.Action{
+				Type:       model.ActionCommandExec,
+				WorkingDir: "/work",
+				Parameters: model.Parameters{Command: tc.command, Args: tc.args},
+			}
+			res, err := engine.Evaluate(context.Background(), action, nil)
+			require.NoError(t, err)
+			if tc.blocked {
+				assert.Equal(t, model.DecisionBlock, res.Decision)
+				assert.Equal(t, []string{builtinHookCommandRuleID}, res.MatchedRuleIDs)
+			} else {
+				assert.Equal(t, model.DecisionAllow, res.Decision)
+			}
+		})
+	}
 }
 
 func TestBuiltinSource_DedupesAndDropsEmpty(t *testing.T) {
@@ -302,7 +349,7 @@ func TestBuiltinSource_BlocksReadsOfProtectedPaths(t *testing.T) {
 		Load(context.Background())
 	require.NoError(t, err)
 	require.Len(t, docs, 1)
-	require.Len(t, docs[0].Rules, 2)
+	require.Len(t, docs[0].Rules, 3)
 	assert.Equal(t, builtinProtectedReadsRuleID, docs[0].Rules[1].ID)
 	engine, err := pdp.New(docs[0])
 	require.NoError(t, err)

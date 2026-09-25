@@ -20,6 +20,7 @@ import (
 	"github.com/safedep/gryph/core/privacy"
 	coresecurity "github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
+	"github.com/safedep/gryph/storage/storagetest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -97,6 +98,10 @@ func (s *spyAccumulator) Append(_ context.Context, e *model.ContextEntry) error 
 func (s *spyAccumulator) RecordResult(_ context.Context, _ uuid.UUID, r model.Result) error {
 	s.recordResultCalls++
 	s.lastResult = r
+	return nil
+}
+
+func (s *spyAccumulator) ConfirmIntent(_ context.Context, _ uuid.UUID) error {
 	return nil
 }
 
@@ -791,6 +796,68 @@ rules:
 				assert.Equal(t, "fetch "+rawURL, rec.records[0].Decision.Message)
 				assert.Equal(t, "fetch "+rawURL, res.StoredReason)
 			}
+		})
+	}
+}
+
+func TestMediator_EscalatedPromptBecomesIntentOnlyOnApprove(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: review-deploy-prompts
+    action: escalate
+    match:
+      action_types: [user_prompt]
+      content_patterns: ["deploy"]
+`))
+	require.NoError(t, err)
+
+	cases := []struct {
+		name     string
+		outcome  *approval.Outcome
+		decision coresecurity.Decision
+		want     int
+	}{
+		{"approved", &approval.Outcome{Decision: approval.DecisionApprove, Approver: "alice"}, coresecurity.DecisionAllow, 1},
+		{"denied", &approval.Outcome{Decision: approval.DecisionDeny, Approver: "alice"}, coresecurity.DecisionBlock, 3},
+		{"timed out", &approval.Outcome{Decision: approval.DecisionTimeout}, coresecurity.DecisionBlock, 3},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			acc := accumulator.NewSQLite(storagetest.NewStore(t))
+			med, err := NewMediator(policy, WithAccumulator(acc),
+				WithApprovalService(&fakeApprovalService{outcome: tc.outcome}))
+			require.NoError(t, err)
+
+			ctx := context.Background()
+			sessionID := uuid.New()
+			check := func(event *events.Event) coresecurity.Decision {
+				res, err := med.Check(ctx, event, nil)
+				require.NoError(t, err)
+				return res.Decision
+			}
+			prompt := func(text string) *events.Event {
+				e := events.NewEvent(sessionID, "claude-code", events.ActionUserPrompt)
+				e.Kind = events.KindIntent
+				require.NoError(t, e.SetPrompt(text))
+				return e
+			}
+			command := func() *events.Event {
+				e := events.NewEvent(sessionID, "claude-code", events.ActionCommandExec)
+				e.Payload = []byte(`{"command":"ls"}`)
+				return e
+			}
+
+			assert.Equal(t, coresecurity.DecisionAllow, check(prompt("fix the bug")))
+			check(command())
+			check(command())
+			assert.Equal(t, tc.decision, check(prompt("deploy to prod")))
+			check(command())
+
+			snap, err := acc.Snapshot(ctx, sessionID, nil)
+			require.NoError(t, err)
+			assert.True(t, snap.IntentAvailable)
+			assert.Equal(t, tc.want, snap.ActionsSinceIntent)
 		})
 	}
 }

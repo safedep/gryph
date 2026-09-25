@@ -82,13 +82,14 @@ func entryRow(e *model.ContextEntry) *storage.ContextEntryRow {
 }
 
 // stateDelta computes what the entry adds to the session state. Only an
-// action adds to tools_used, as with the counters. A blocked or deferred
-// intent never reached the agent, so it does not become the latest intent.
+// action adds to tools_used, as with the counters. An intent becomes the
+// latest intent only when it reaches the agent. An escalated intent waits
+// for the approval, and ConfirmIntent sets it on approve.
 func stateDelta(e *model.ContextEntry) *storage.ContextStateDelta {
 	delta := &storage.ContextStateDelta{
 		Classifications: privacy.Strings(e.Classifications),
 		Tags:            e.Tags,
-		Intent:          entryKind(e) == events.KindIntent && !stopped(e.Decision),
+		Intent:          entryKind(e) == events.KindIntent && reachesAgent(e.Decision),
 	}
 	if entryKind(e) == events.KindAction && e.Tool != "" {
 		delta.Tools = []string{e.Tool}
@@ -99,8 +100,13 @@ func stateDelta(e *model.ContextEntry) *storage.ContextStateDelta {
 	return delta
 }
 
-func stopped(d model.Decision) bool {
-	return d == model.DecisionBlock || d == model.DecisionDefer
+func reachesAgent(d model.Decision) bool {
+	switch d {
+	case model.DecisionBlock, model.DecisionDefer, model.DecisionEscalate:
+		return false
+	default:
+		return true
+	}
 }
 
 // originKey names an origin in origins_seen. An MCP origin carries its
@@ -129,6 +135,15 @@ func (a *SQLiteAccumulator) RecordResult(ctx context.Context, entryID uuid.UUID,
 		status = string(model.ResultSuccess)
 	}
 	return a.store.UpdateContextEntryResult(ctx, entryID, status, result.Duration.Milliseconds(), result.Error)
+}
+
+// ConfirmIntent makes an escalated intent the latest intent after an
+// approval lets it reach the agent.
+func (a *SQLiteAccumulator) ConfirmIntent(ctx context.Context, entryID uuid.UUID) error {
+	if a == nil || a.store == nil {
+		return fmt.Errorf("accumulator: store is not initialized")
+	}
+	return a.store.SetContextIntent(ctx, entryID)
 }
 
 // Snapshot returns the stored context of a session with the pending entry

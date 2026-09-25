@@ -196,7 +196,10 @@ Self-protection blocks agent changes to Gryph's own control surfaces (policy,
 config, database, signing keys, agent hook configs). The rule
 `gryph-builtin-protected-files` covers `file_write`, `file_delete`, and
 `command_exec`. The rule `gryph-builtin-protected-reads` covers `file_read`
-and `command_exec` with `file_access: [read]`. It protects the database, its
+and `command_exec` with `file_access: [read]`. The rule
+`gryph-builtin-hook-command` blocks a `command_exec` that can run
+`gryph _hook`, through `action.gryph_hook` (`shellcmd.Analysis.GryphHook`).
+The intent fields of the session context depend on it. It protects the database, its
 SQLite side files, and the receipt signing key. For a command, the PDP matches
 the paths that `aarm/shellcmd` parses from the command line. The PDP also
 resolves the action path (`~`, `..`, a relative path, a trailing slash)

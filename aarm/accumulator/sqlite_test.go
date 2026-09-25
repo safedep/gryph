@@ -218,7 +218,7 @@ func TestSQLiteAccumulator_BlockedIntentOnly(t *testing.T) {
 	ctx := context.Background()
 	sessionID := uuid.New()
 
-	for _, d := range []model.Decision{model.DecisionBlock, model.DecisionDefer} {
+	for _, d := range []model.Decision{model.DecisionBlock, model.DecisionDefer, model.DecisionEscalate} {
 		e := newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, "")
 		e.Decision = d
 		require.NoError(t, acc.Append(ctx, e))
@@ -226,4 +226,37 @@ func TestSQLiteAccumulator_BlockedIntentOnly(t *testing.T) {
 	snap, err := acc.Snapshot(ctx, sessionID, nil)
 	require.NoError(t, err)
 	assert.False(t, snap.IntentAvailable, "a session whose prompts were all stopped has no intent")
+}
+
+func TestSQLiteAccumulator_ConfirmIntent(t *testing.T) {
+	acc, _ := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	require.NoError(t, acc.Append(ctx, newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, "")))
+	require.NoError(t, acc.Append(ctx, newEntry(sessionID, events.KindAction, model.ActionFileRead, "Read")))
+	escalated := newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, "")
+	escalated.Decision = model.DecisionEscalate
+	require.NoError(t, acc.Append(ctx, escalated))
+	action := newEntry(sessionID, events.KindAction, model.ActionCommandExec, "Bash")
+	require.NoError(t, acc.Append(ctx, action))
+
+	snapshotCount := func() int {
+		snap, err := acc.Snapshot(ctx, sessionID, nil)
+		require.NoError(t, err)
+		return snap.ActionsSinceIntent
+	}
+	assert.Equal(t, 2, snapshotCount(), "an escalated intent waits for the approval")
+
+	require.NoError(t, acc.ConfirmIntent(ctx, action.ID))
+	assert.Equal(t, 2, snapshotCount(), "an action entry does not become the intent")
+
+	require.NoError(t, acc.ConfirmIntent(ctx, escalated.ID))
+	assert.Equal(t, 1, snapshotCount(), "only the action after the approved intent counts")
+
+	require.NoError(t, acc.Append(ctx, newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, "")))
+	require.NoError(t, acc.ConfirmIntent(ctx, escalated.ID))
+	assert.Zero(t, snapshotCount(), "a late approval does not move the intent back")
+
+	require.NoError(t, acc.ConfirmIntent(ctx, uuid.New()), "an unknown entry is not an error")
 }

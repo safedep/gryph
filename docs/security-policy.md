@@ -32,7 +32,7 @@ Gryph loads policy from three sources, in this order:
 
 1. **Global policy file** (`${ConfigDir}/policy.yaml`, optional). The single operator-owned file. On macOS this is `~/Library/Application Support/safedep/gryph/policy.yaml`; on Linux `~/.config/safedep/gryph/policy.yaml`. A missing file is not an error.
 2. **Policies directory** (`${ConfigDir}/policies/*.yaml` and `*.yml`, optional). Each file is a separate policy document. Files load in sorted name order and merge after the global file. A missing directory is not an error. This lets you author policy as many small, self-contained files instead of one large file.
-3. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, and agent hook configs from agent self-modification. A second rule, `gryph-builtin-protected-reads`, blocks agent reads of the database (with its `-wal`, `-shm`, and `-journal` files) and of the receipt signing key. An agent may read the policy files and the hook configs. Self-protection is best effort. See [Self-protection limits](#self-protection-limits).
+3. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, and agent hook configs from agent self-modification. A second rule, `gryph-builtin-protected-reads`, blocks agent reads of the database (with its `-wal`, `-shm`, and `-journal` files) and of the receipt signing key. A third rule, `gryph-builtin-hook-command`, blocks an agent shell command that runs `gryph _hook`. Such a command can record a forged event. An agent may read the policy files and the hook configs. Self-protection is best effort. See [Self-protection limits](#self-protection-limits).
 
 With `policy.enabled: true` and no user files on disk, the merged policy contains built-in self-protection rules only.
 
@@ -43,7 +43,8 @@ Both the global file and the policies directory sit inside `${ConfigDir}`, so bo
 Self-protection is best effort. It blocks file writes and deletes to protected paths, and shell commands that Gryph can parse as a change to a protected path. It blocks file reads of the database and the signing key, and shell commands that Gryph can parse as a read of them. It does not stop every bypass. A human or an agent can get past it in many ways, for example:
 
 - A command that builds the path at run time, such as a variable, a command substitution, or a base64 payload.
-- A script file or an interpreter (`python -c`, `node -e`) that writes the file.
+- A script file or an interpreter (`python -c`, `node -e`) that writes the file or runs `gryph _hook`.
+- A copy of the `gryph` binary under another name that runs `_hook`.
 - A process that runs outside the agent's hook path, as the same operating-system user.
 - A command that the shell parser rejects.
 - An archive with absolute member paths (`tar -P`, `7z -spf`, `unzip -:`), or a recursive copy into a parent of a protected directory, such as `cp -r evil/safedep ~/.config/`.
@@ -161,6 +162,7 @@ action.injection_score             float 0..1, set for tool_use actions only
 action.human_principal             captured identity, see Identity capture
 action.service_identity            CI / service identity, see Identity capture
 action.role_scope                  OS uid/gid + asserted scopes
+action.gryph_hook                  true when a shell command can run gryph _hook
 context.{total_actions, files_read, files_written, commands_executed,
          network_requests, errors, tools_used, session_duration_ms,
          classifications_seen, entities_seen, semantic_drift,
@@ -171,7 +173,7 @@ context.{total_actions, files_read, files_written, commands_executed,
 
 The counters count actions, and the current event is in them. A pre and post hook pair for one tool call is one action: the post event is an observation of the pre event, and it does not add to a counter. A post event with no recorded pre event is an action. A blocked action counts. `errors` counts actions and observations with an error result.
 
-A user prompt is an intent. It is not an action, and it does not add to a counter. `context.intent_available` is true when the session has at least one intent. An agent with no prompt hook never has one. `context.actions_since_intent` counts the actions after the latest intent. A new prompt resets it to zero. A blocked or deferred prompt never reached the agent, so it does not become the latest intent. A rule with no `action_types` does not apply to prompts, so a broad rule, such as a cap on `total_actions`, cannot stop the user from typing. A rule with `action_types: [user_prompt]` matches the prompt, and `content_patterns` read the prompt text:
+A user prompt is an intent. It is not an action, and it does not add to a counter. `context.intent_available` is true when the session has at least one intent. An agent with no prompt hook never has one. `context.actions_since_intent` counts the actions after the latest intent. A new prompt resets it to zero. A prompt becomes the latest intent only when it reaches the agent. A prompt that a rule blocks or defers does not. An escalated prompt becomes the latest intent only when the approver approves it. A denied or timed-out prompt does not. A rule with no `action_types` does not apply to prompts, so a broad rule, such as a cap on `total_actions`, cannot stop the user from typing. A rule with `action_types: [user_prompt]` matches the prompt, and `content_patterns` read the prompt text:
 
 ```yaml
 - id: prompt-injection
@@ -180,6 +182,16 @@ A user prompt is an intent. It is not an action, and it does not add to a counte
     action_types: [user_prompt]
     content_patterns: ["(?i)ignore (all )?previous instructions"]
 ```
+
+The intent fields trust the prompt events that reach `gryph _hook`. The hook input does not prove that the user typed the prompt. So an agent that can run `gryph _hook` can forge a prompt, and reset `context.actions_since_intent`. The built-in rule `gryph-builtin-hook-command` blocks a shell command that runs `gryph _hook`. The intent fields are only as strong as this block. The block is best effort, as the other self-protection rules are. See [Self-protection limits](#self-protection-limits). Privilege separation between the agent and the hook will remove this dependency.
+
+**Upgrade note.** Before this change, the Cursor `beforeSubmitPrompt` hook, the Windsurf `pre_user_prompt` hook, and the Codex and Devin `UserPromptSubmit` hook made `tool_use` events with that tool name. Now each prompt is a `user_prompt` action with no tool name. A rule that stopped prompts in one of these ways no longer matches them:
+
+- A rule on `tool_names` or `scope.tools` with one of these names.
+- A rule on `action_types: [tool_use]`.
+- A rule with no `action_types`.
+
+A rule that must stop prompts must list `user_prompt` in `action_types`. Gryph logs a warning at policy load, and `gryph policy validate` prints one, for a rule that names one of these tool names.
 
 `action.human_principal`, `action.service_identity`, and `action.role_scope` carry the AARM R6 identity fields. They are empty strings when capture is disabled or the resolver could not derive a value. See [Identity capture](#identity-capture).
 

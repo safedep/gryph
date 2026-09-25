@@ -593,9 +593,12 @@ func (m *Mediator) applyApprovalOutcome(ctx context.Context, action *model.Actio
 	}
 
 	// Approved actions proceed and are recorded on the allow path; record the
-	// terminal result here only for deny/timeout.
+	// terminal result here only for deny/timeout. An approved prompt reaches
+	// the agent, so only then does it become the latest intent.
 	if coreDecision == coresecurity.DecisionBlock {
 		m.recordContextResult(ctx, action.ID, model.ResultStatus(resultStatus))
+	} else {
+		m.confirmIntent(ctx, action.ID)
 	}
 
 	result := &coresecurity.CheckResult{
@@ -737,6 +740,17 @@ func (m *Mediator) recordContextResult(ctx context.Context, actionID uuid.UUID, 
 	}
 	if err := m.accum.RecordResult(ctx, actionID, model.Result{Status: status}); err != nil {
 		log.Warnf("aarm: accumulator record terminal result: %v", err)
+	}
+}
+
+// confirmIntent logs an error and does not propagate it, as
+// recordContextResult does.
+func (m *Mediator) confirmIntent(ctx context.Context, actionID uuid.UUID) {
+	if m == nil || m.accum == nil || actionID == uuid.Nil {
+		return
+	}
+	if err := m.accum.ConfirmIntent(ctx, actionID); err != nil {
+		log.Warnf("aarm: accumulator confirm intent: %v", err)
 	}
 }
 

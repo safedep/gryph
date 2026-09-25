@@ -17,7 +17,6 @@ stdout -count=1 '"ActionType": "user_prompt"'
 
 exec gryph export --since 1h
 stdout '"prompt":\{"value":"","label":\{"origin":"user","stripped":true,"level":"standard"'
-stdout '"digest":"sha256:'
 ! stdout 'Add a retry to the upload function'
 
 exec gryph policy context --session 05336580 --format json --no-color

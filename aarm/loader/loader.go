@@ -79,6 +79,9 @@ func (l *Loader) Load(ctx context.Context) (*pdp.Policy, error) {
 				userRules = append(userRules, rule)
 			}
 			warnUnmatchedDisabled(src.Name(), disabled, matchedDisabled)
+			for _, w := range doc.Warnings() {
+				log.Warnf("loader: source %s: %s", src.Name(), w)
+			}
 		}
 	}
 

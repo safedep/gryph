@@ -55,6 +55,13 @@
   guarantee: "With policy enabled, an agent read of the database, its WAL or SHM file, or the receipt signing key is blocked. A Grep of the data directory, of the config directory, or of the config parent directory is blocked. sqlite3, cat, cp, base64, and cd-then-read commands that read them are blocked. A read of a project file or an agent hook config, and a Grep of the home directory, pass."
   labels: [policy, self-protection]
 
+- id: policy/self-protection/hook-command-blocked
+  title: "builtin self-protection blocks agent shell commands that run gryph _hook"
+  category: policy
+  tier: P0
+  guarantee: "With policy enabled, an agent shell command that runs gryph _hook, directly or in a nested shell, is blocked at exit 2, so it cannot forge a user prompt. Another gryph command passes."
+  labels: [policy, self-protection, intent]
+
 - id: policy/file-access/read-rule-matches-shell-reads
   title: "file_access selects which shell targets a file rule matches"
   category: policy
@@ -364,6 +371,13 @@
   tier: P1
   guarantee: "A block rule with action_types [user_prompt] and content_patterns blocks a matching prompt at exit 2 with the rule message. A prompt that does not match passes."
   labels: [context, intent, prompt, policy]
+
+- id: context/intent/escalated-prompt-denied
+  title: "a denied escalated prompt does not become the latest intent"
+  category: context
+  tier: P1
+  guarantee: "A user_prompt escalate rule with the default nop approval denies the prompt at exit 2. The denied prompt does not reset actions_since_intent, and a rule on actions_since_intent still blocks the next command."
+  labels: [context, intent, prompt, policy, escalate]
 
 - id: context/intent/unavailable
   title: "an agent with no prompt hook has no intent"

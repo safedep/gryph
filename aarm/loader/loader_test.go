@@ -165,7 +165,7 @@ func TestLoader_MergesGlobalDirAndBuiltin(t *testing.T) {
 	for _, r := range policy.Rules {
 		ids = append(ids, r.ID)
 	}
-	assert.Equal(t, []string{"g", "p1", "p2", builtinProtectedFilesRuleID}, ids)
+	assert.Equal(t, []string{"g", "p1", "p2", builtinProtectedFilesRuleID, builtinHookCommandRuleID}, ids)
 }
 
 func TestLoader_DuplicateRuleIDAcrossDirFiles(t *testing.T) {

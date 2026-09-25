@@ -16,26 +16,39 @@ import (
 type actionPaths struct {
 	action       *model.Action
 	parsed       bool
-	targets      []shellcmd.Target
+	shell        *shellcmd.Analysis
 	resolvedOnce bool
 	path         []string
 }
 
-func (a *actionPaths) commandTargets() []shellcmd.Target {
+// shellAnalysis returns the analysis of the shell command, or nil when the
+// action is not a command.
+func (a *actionPaths) shellAnalysis() *shellcmd.Analysis {
 	if a.parsed {
-		return a.targets
+		return a.shell
 	}
 	a.parsed = true
 	if a.action.Type != model.ActionCommandExec {
 		return nil
 	}
-	analysis := a.action.Shell
-	if analysis == nil {
+	a.shell = a.action.Shell
+	if a.shell == nil {
 		parsed := shellcmd.AnalyzeCommand(a.action.Parameters.Command, a.action.Parameters.Args, a.action.WorkingDir)
-		analysis = &parsed
+		a.shell = &parsed
 	}
-	a.targets = analysis.Targets
-	return a.targets
+	return a.shell
+}
+
+func (a *actionPaths) commandTargets() []shellcmd.Target {
+	if s := a.shellAnalysis(); s != nil {
+		return s.Targets
+	}
+	return nil
+}
+
+func (a *actionPaths) runsGryphHook() bool {
+	s := a.shellAnalysis()
+	return s != nil && s.GryphHook
 }
 
 // actionPath returns the action path and its resolved form. An agent can
