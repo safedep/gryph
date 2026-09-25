@@ -35,9 +35,9 @@ func NewHookAdapter(opts ...CommonOption) *HookAdapter {
 }
 
 // Normalize implements Adapter.
-func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *session.Session) (*model.Action, error) {
+func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *session.Session) (*model.Action, *model.ContextEntry, error) {
 	if event == nil {
-		return nil, fmt.Errorf("mediation: event must not be nil")
+		return nil, nil, fmt.Errorf("mediation: event must not be nil")
 	}
 
 	action := &model.Action{
@@ -66,7 +66,7 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 
 	params, err := extractParameters(event)
 	if err != nil {
-		return nil, fmt.Errorf("mediation: extract parameters for %s: %w", event.ActionType, err)
+		return nil, nil, fmt.Errorf("mediation: extract parameters for %s: %w", event.ActionType, err)
 	}
 	action.Parameters = params
 	if action.Type == model.ActionCommandExec {
@@ -81,7 +81,42 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 
 	h.applyEnrichment(ctx, action, nil)
 
-	return action, nil
+	return action, newEntry(event, action), nil
+}
+
+// newEntry builds the context entry of an event from the normalized action.
+// The entry copies the kind, the phase, and the tool call link from the
+// event, and takes the content digest from the content labels.
+func newEntry(event *events.Event, action *model.Action) *model.ContextEntry {
+	kind := event.Kind
+	if kind == "" {
+		kind = events.KindAction
+	}
+	return &model.ContextEntry{
+		ID:              action.ID,
+		SessionID:       action.SessionID,
+		EventID:         action.EventID,
+		LinkedEventID:   event.LinkedEventID,
+		Kind:            kind,
+		Timestamp:       action.Timestamp,
+		ActionType:      action.Type,
+		Tool:            action.Tool,
+		ToolCallID:      event.ToolCallID,
+		Phase:           action.Phase,
+		Classifications: action.DataClassifications,
+		InjectionScore:  action.InjectionScore,
+		ContentDigest:   event.ContentDigest(),
+		Result:          entryEventResult(event),
+	}
+}
+
+// entryEventResult is the result that a post event reports. A pre event has
+// no result yet, so its entry stays pending.
+func entryEventResult(event *events.Event) model.ResultStatus {
+	if event.Phase != events.PhasePost {
+		return ""
+	}
+	return model.ResultStatus(event.ResultStatus)
 }
 
 func extractParameters(event *events.Event) (model.Parameters, error) {

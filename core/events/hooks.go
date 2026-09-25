@@ -29,6 +29,8 @@ type HookSpec struct {
 type Kind string
 
 const (
+	// KindIntent is what the user asked for.
+	KindIntent Kind = "intent"
 	// KindAction is what the agent tried to do.
 	KindAction Kind = "action"
 	// KindObservation is what the agent received back from an action that

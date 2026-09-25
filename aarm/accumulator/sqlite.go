@@ -8,14 +8,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/privacy"
+	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage"
 )
 
-// SQLiteAccumulator persists mediated actions to the storage layer and
-// produces ContextSnapshots from the denormalized per-session state row.
-// It depends only on storage.ContextStore; the concrete backing store is
-// the SQLite-backed ent implementation in production.
+// SQLiteAccumulator persists the session context through the storage layer.
+// It depends only on storage.ContextStore.
 type SQLiteAccumulator struct {
 	store storage.ContextStore
 	now   func() time.Time
@@ -29,43 +29,93 @@ func NewSQLite(store storage.ContextStore) *SQLiteAccumulator {
 
 var _ Accumulator = (*SQLiteAccumulator)(nil)
 
-// Append translates an Action into a ContextActionRow and persists it.
-func (a *SQLiteAccumulator) Append(ctx context.Context, action *model.Action) error {
+// Append writes the entry and its state delta.
+func (a *SQLiteAccumulator) Append(ctx context.Context, entry *model.ContextEntry) error {
 	if a == nil || a.store == nil {
 		return fmt.Errorf("accumulator: store is not initialized")
 	}
-	if action == nil {
-		return fmt.Errorf("accumulator: nil action")
+	if entry == nil {
+		return fmt.Errorf("accumulator: nil entry")
 	}
-	row := &storage.ContextActionRow{
-		ID:                  action.ID,
-		SessionID:           action.SessionID,
-		EventID:             action.EventID,
-		Timestamp:           action.Timestamp,
-		ActionType:          string(action.Type),
-		Tool:                action.Tool,
-		Agent:               action.Agent,
-		Project:             action.Project,
-		WorkingDir:          action.WorkingDir,
-		DataClassifications: privacy.Strings(action.DataClassifications),
+	if entry.ID == uuid.Nil {
+		entry.ID = uuid.New()
 	}
-	if row.ID == uuid.Nil {
-		row.ID = uuid.New()
-		action.ID = row.ID
+	if entry.Timestamp.IsZero() {
+		entry.Timestamp = a.now()
 	}
-	if row.Timestamp.IsZero() {
-		row.Timestamp = a.now()
+	row := entryRow(entry)
+	if err := a.store.AppendContextEntry(ctx, row, stateDelta(entry)); err != nil {
+		return err
 	}
-	if action.InjectionScore != 0 {
-		v := action.InjectionScore
-		row.InjectionScore = &v
-	}
-	return a.store.AppendContextAction(ctx, row)
+	entry.Sequence = row.Sequence
+	return nil
 }
 
-// RecordResult flips the action row's result_status and updates the
-// session-level errors counter when the new status is "error".
-func (a *SQLiteAccumulator) RecordResult(ctx context.Context, actionID uuid.UUID, result model.Result) error {
+func entryRow(e *model.ContextEntry) *storage.ContextEntryRow {
+	row := &storage.ContextEntryRow{
+		ID:              e.ID,
+		SessionID:       e.SessionID,
+		EventID:         e.EventID,
+		LinkedEventID:   e.LinkedEventID,
+		Kind:            string(entryKind(e)),
+		Timestamp:       e.Timestamp,
+		ActionType:      string(e.ActionType),
+		Tool:            e.Tool,
+		ToolCallID:      e.ToolCallID,
+		Phase:           string(e.Phase),
+		TargetHost:      e.Target.Host,
+		TargetMCPServer: e.Target.MCPServer,
+		TargetMCPTool:   e.Target.MCPTool,
+		Origin:          string(e.Origin),
+		Tags:            e.Tags,
+		Classifications: privacy.Strings(e.Classifications),
+		Decision:        string(e.Decision),
+		MatchedRuleIDs:  e.MatchedRuleIDs,
+		ContentDigest:   e.ContentDigest,
+		ResultStatus:    string(e.Result),
+	}
+	if e.InjectionScore != 0 {
+		v := e.InjectionScore
+		row.InjectionScore = &v
+	}
+	return row
+}
+
+// stateDelta computes what the entry adds to the session state. Only an
+// action adds to tools_used, as with the counters.
+func stateDelta(e *model.ContextEntry) *storage.ContextStateDelta {
+	delta := &storage.ContextStateDelta{
+		Classifications: privacy.Strings(e.Classifications),
+		Tags:            e.Tags,
+		Intent:          entryKind(e) == events.KindIntent,
+	}
+	if entryKind(e) == events.KindAction && e.Tool != "" {
+		delta.Tools = []string{e.Tool}
+	}
+	if origin := originKey(e); origin != "" {
+		delta.Origins = []string{origin}
+	}
+	return delta
+}
+
+// originKey names an origin in origins_seen. An MCP origin carries its
+// server, as "mcp:<server>".
+func originKey(e *model.ContextEntry) string {
+	if e.Origin == privacy.OriginMCP && e.Target.MCPServer != "" {
+		return "mcp:" + e.Target.MCPServer
+	}
+	return string(e.Origin)
+}
+
+func entryKind(e *model.ContextEntry) model.EntryKind {
+	if e.Kind == "" {
+		return events.KindAction
+	}
+	return e.Kind
+}
+
+// RecordResult sets the outcome of an entry.
+func (a *SQLiteAccumulator) RecordResult(ctx context.Context, entryID uuid.UUID, result model.Result) error {
 	if a == nil || a.store == nil {
 		return fmt.Errorf("accumulator: store is not initialized")
 	}
@@ -73,13 +123,13 @@ func (a *SQLiteAccumulator) RecordResult(ctx context.Context, actionID uuid.UUID
 	if status == "" {
 		status = string(model.ResultSuccess)
 	}
-	return a.store.UpdateContextActionResult(ctx, actionID, status, result.Duration.Milliseconds(), result.Error)
+	return a.store.UpdateContextEntryResult(ctx, entryID, status, result.Duration.Milliseconds(), result.Error)
 }
 
-// Snapshot returns the current ContextSnapshot for a session. When the
-// session has no state row yet, an empty snapshot is returned, matching
-// the Nop accumulator's shape.
-func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID) (*model.ContextSnapshot, error) {
+// Snapshot returns the stored context of a session with the pending entry
+// added in memory. The counters come from the session row. A session with
+// no stored state gives an empty snapshot plus the pending entry.
+func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID, pending *model.ContextEntry) (*model.ContextSnapshot, error) {
 	if a == nil || a.store == nil {
 		return nil, fmt.Errorf("accumulator: store is not initialized")
 	}
@@ -88,13 +138,10 @@ func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID) (
 		return nil, err
 	}
 	if state == nil {
-		return &model.ContextSnapshot{}, nil
+		state = &storage.ContextStateRow{SessionID: sessionID}
 	}
-	duration := a.now().Sub(state.FirstSeenAt)
-	if duration < 0 {
-		duration = 0
-	}
-	return &model.ContextSnapshot{
+
+	snap := &model.ContextSnapshot{
 		TotalActions:        state.TotalActions,
 		FilesRead:           state.FilesRead,
 		FilesWritten:        state.FilesWritten,
@@ -102,9 +149,37 @@ func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID) (
 		NetworkRequests:     state.NetworkRequests,
 		Errors:              state.Errors,
 		ToolsUsed:           slices.Clone(state.ToolsUsed),
-		SessionDuration:     duration,
 		ClassificationsSeen: slices.Clone(state.ClassificationsSeen),
 		EntitiesSeen:        slices.Clone(state.EntitiesSeen),
-		SemanticDrift:       state.SemanticDrift,
-	}, nil
+	}
+	if !state.StartedAt.IsZero() {
+		snap.SessionDuration = max(a.now().Sub(state.StartedAt), 0)
+	}
+
+	if pending != nil {
+		c := session.EventCounts(&events.Event{
+			Kind:         entryKind(pending),
+			ActionType:   events.ActionType(pending.ActionType),
+			ResultStatus: events.ResultStatus(pending.Result),
+		})
+		snap.TotalActions += c.TotalActions
+		snap.FilesRead += c.FilesRead
+		snap.FilesWritten += c.FilesWritten
+		snap.CommandsExecuted += c.CommandsExecuted
+		snap.NetworkRequests += c.NetworkRequests
+		snap.Errors += c.Errors
+		delta := stateDelta(pending)
+		snap.ToolsUsed = addNew(snap.ToolsUsed, delta.Tools)
+		snap.ClassificationsSeen = addNew(snap.ClassificationsSeen, delta.Classifications)
+	}
+	return snap, nil
+}
+
+func addNew(set, values []string) []string {
+	for _, v := range values {
+		if v != "" && !slices.Contains(set, v) {
+			set = append(set, v)
+		}
+	}
+	return set
 }

@@ -1,52 +1,57 @@
-// Package contextchain implements the per-session hash chain for AARM
-// context-action rows. It lives in a sub-package of aarm/accumulator
-// because aarm/accumulator already imports storage, and the storage layer
-// must in turn import the chain primitives to compute the per-row hash at
-// insert time. The sub-package boundary breaks the import cycle while
-// keeping the chain code adjacent to the accumulator it serves.
+// Package contextchain implements the per-session hash chain for context
+// entries. It lives in a sub-package of aarm/accumulator because
+// aarm/accumulator already imports storage, and the storage layer must in
+// turn import the chain primitives to compute the per-row hash at insert
+// time. The sub-package boundary breaks the import cycle while keeping the
+// chain code adjacent to the accumulator it serves.
 //
-// The Context Accumulator records every mediated action into
-// aarm_context_actions. Phase 5a layers a per-session hash chain on top so
-// the PDP-facing context log carries the same tamper-evidence guarantees as
-// the AARM receipt chain. Each row stores its (sequence, prev_hash, hash).
-// The hash is SHA-256 over the canonical serialization of the row's identity
-// and counter-feeding fields, length-prefixed in the order documented below.
+// Each context_entries row stores its (sequence, prev_hash, hash,
+// hash_version). The hash is SHA-256 over the canonical serialization of the
+// row's facts, length-prefixed in the order documented below.
 //
-// # Canonical hash input
+// # Canonical hash input, version 2
 //
 // ComputeHash builds the SHA-256 input by length-prefixing each field with
 // an 8-byte big-endian length, then concatenating in the exact order below.
 // String fields are UTF-8 bytes. Numbers are 8-byte big-endian. UUIDs use
-// their 16-byte binary form. JSON-ish payloads (data_classifications,
-// reserved future map fields) pass through canonical.MarshalJSON so the
-// serialization is order-stable. The final SHA-256 is the value stored in
-// the hash column. The prev_hash for the first row of a session is 32 zero
-// bytes.
+// their 16-byte binary form. Lists and the target pass through
+// canonical.MarshalJSON so the serialization is order-stable. The prev_hash
+// for the first row of a session is 32 zero bytes.
 //
-// Field order (canonical):
+// Field order:
 //  1. sequence            (int64, 8 bytes BE)
 //  2. prev_hash           (32 bytes, zero-padded for first row)
 //  3. timestamp_unix_ns   (int64, 8 bytes BE)
 //  4. session_id          (16 bytes)
 //  5. event_id            (16 bytes, all zero when unset)
-//  6. action_id           (16 bytes)
-//  7. action_type         (utf-8 bytes)
-//  8. tool                (utf-8 bytes)
-//  9. agent               (utf-8 bytes)
-//  10. project            (utf-8 bytes)
-//  11. working_dir        (utf-8 bytes)
-//  12. data_classifications (canonical JSON of []string, "null" when empty)
-//  13. injection_score    (int64 bits of the float32 widened to float64,
+//  6. entry_id            (16 bytes)
+//  7. kind                (utf-8 bytes)
+//  8. action_type         (utf-8 bytes)
+//  9. tool                (utf-8 bytes)
+//  10. tool_call_id       (utf-8 bytes)
+//  11. linked_event_id    (16 bytes, all zero when unset)
+//  12. phase              (utf-8 bytes)
+//  13. target             (canonical JSON of host, mcp_server, mcp_tool)
+//  14. origin             (utf-8 bytes)
+//  15. tags               (canonical JSON of []string, "null" when empty)
+//  16. classifications    (canonical JSON of []string, "null" when empty)
+//  17. injection_score    (int64 bits of the float32 widened to float64,
 //     8 bytes BE; 0 when unset)
+//  18. decision           (utf-8 bytes)
+//  19. matched_rule_ids   (canonical JSON of []string, "null" when empty)
+//  20. content_digest     (utf-8 bytes)
+//
+// Version 1 hashed the old aarm_context_actions rows. The migration to
+// context_entries drops those rows, so no version 1 row exists and the
+// verifier reports any other version as a break.
 //
 // # Stability contract
 //
 // result_status, duration_ms, and error_message are not part of the hash
-// input. They are populated post-hook by UpdateContextActionResult and
-// would otherwise force a re-hash on every result update. The chain
-// attests to the as-mediated row, not the post-hook outcome. This mirrors
-// the receipt chain's split between insert-time hash inputs and post-hook
-// mutations.
+// input. The post hook sets them after the insert, and they would otherwise
+// force a re-hash on every result update. The chain attests to the
+// as-mediated entry, not the post-hook outcome. This mirrors the receipt
+// chain's split between insert-time hash inputs and post-hook mutations.
 package contextchain
 
 import (
@@ -55,7 +60,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/canonical"
@@ -64,63 +68,52 @@ import (
 // HashSize is the byte length of a context chain hash (SHA-256).
 const HashSize = 32
 
-// Input collects every byte that participates in the context chain hash.
+// Version is the hash version that ComputeHash writes.
+const Version = 2
+
+// Target is the derived target of an entry.
+type Target struct {
+	Host      string
+	MCPServer string
+	MCPTool   string
+}
+
+// Input collects every value that participates in the context chain hash.
 // The storage layer constructs one per insert, hands it to ComputeHash, and
 // persists both the input fields and the resulting hash.
 type Input struct {
-	Sequence            int64
-	PrevHash            []byte
-	TimestampUnixNano   int64
-	SessionID           uuid.UUID
-	EventID             uuid.UUID
-	ActionID            uuid.UUID
-	ActionType          string
-	Tool                string
-	Agent               string
-	Project             string
-	WorkingDir          string
-	DataClassifications []string
-	InjectionScore      float32
+	Sequence          int64
+	PrevHash          []byte
+	TimestampUnixNano int64
+	SessionID         uuid.UUID
+	EventID           uuid.UUID
+	EntryID           uuid.UUID
+	Kind              string
+	ActionType        string
+	Tool              string
+	ToolCallID        string
+	LinkedEventID     uuid.UUID
+	Phase             string
+	Target            Target
+	Origin            string
+	Tags              []string
+	Classifications   []string
+	InjectionScore    float32
+	Decision          string
+	MatchedRuleIDs    []string
+	ContentDigest     string
 }
 
-// Row is the minimal subset of context-action fields needed to re-derive a
-// per-session hash chain. Verifiers convert their native representation (DB
-// rows today, exported rows tomorrow) to a slice of Row.
+// Row is the minimal subset of entry fields needed to re-derive a
+// per-session hash chain. Verifiers convert their native representation to
+// a slice of Row.
 type Row struct {
 	SessionID uuid.UUID
 	Sequence  int64
+	Version   int
 	PrevHash  []byte
 	Hash      []byte
 	Fields    Input
-}
-
-// InputFromRow builds an Input from a row's fields. Single source of truth
-// for the field-to-input mapping so the insert path and the verifier
-// always agree.
-func InputFromRow(
-	sequence int64,
-	prevHash []byte,
-	timestamp time.Time,
-	sessionID, eventID, actionID uuid.UUID,
-	actionType, tool, agent, project, workingDir string,
-	dataClassifications []string,
-	injectionScore float32,
-) Input {
-	return Input{
-		Sequence:            sequence,
-		PrevHash:            prevHash,
-		TimestampUnixNano:   timestamp.UnixNano(),
-		SessionID:           sessionID,
-		EventID:             eventID,
-		ActionID:            actionID,
-		ActionType:          actionType,
-		Tool:                tool,
-		Agent:               agent,
-		Project:             project,
-		WorkingDir:          workingDir,
-		DataClassifications: dataClassifications,
-		InjectionScore:      injectionScore,
-	}
 }
 
 // ComputeHash returns the SHA-256 of the canonical serialization of in. See
@@ -128,9 +121,7 @@ func InputFromRow(
 func ComputeHash(in Input) ([]byte, error) {
 	var buf bytes.Buffer
 
-	if err := writeInt64(&buf, in.Sequence); err != nil {
-		return nil, err
-	}
+	writeInt64(&buf, in.Sequence)
 
 	prev := in.PrevHash
 	if len(prev) == 0 {
@@ -139,34 +130,30 @@ func ComputeHash(in Input) ([]byte, error) {
 	if len(prev) != HashSize {
 		return nil, fmt.Errorf("contextchain: prev_hash must be %d bytes, got %d", HashSize, len(prev))
 	}
-	if err := writeBytes(&buf, prev); err != nil {
-		return nil, err
+	writeBytes(&buf, prev)
+	writeInt64(&buf, in.TimestampUnixNano)
+	writeUUID(&buf, in.SessionID)
+	writeUUID(&buf, in.EventID)
+	writeUUID(&buf, in.EntryID)
+	for _, s := range []string{in.Kind, in.ActionType, in.Tool, in.ToolCallID} {
+		writeString(&buf, s)
 	}
+	writeUUID(&buf, in.LinkedEventID)
+	writeString(&buf, in.Phase)
 
-	if err := writeInt64(&buf, in.TimestampUnixNano); err != nil {
-		return nil, err
-	}
-	if err := writeUUID(&buf, in.SessionID); err != nil {
-		return nil, err
-	}
-	if err := writeUUID(&buf, in.EventID); err != nil {
-		return nil, err
-	}
-	if err := writeUUID(&buf, in.ActionID); err != nil {
-		return nil, err
-	}
-
-	for _, s := range []string{in.ActionType, in.Tool, in.Agent, in.Project, in.WorkingDir} {
-		if err := writeString(&buf, s); err != nil {
-			return nil, err
-		}
-	}
-
-	cls, err := canonical.MarshalJSON(in.DataClassifications)
+	target, err := canonical.MarshalJSON(map[string]string{
+		"host": in.Target.Host, "mcp_server": in.Target.MCPServer, "mcp_tool": in.Target.MCPTool,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("contextchain: canonicalize data_classifications: %w", err)
+		return nil, fmt.Errorf("contextchain: canonicalize target: %w", err)
 	}
-	if err := writeBytes(&buf, cls); err != nil {
+	writeBytes(&buf, target)
+	writeString(&buf, in.Origin)
+
+	if err := writeJSON(&buf, "tags", in.Tags); err != nil {
+		return nil, err
+	}
+	if err := writeJSON(&buf, "classifications", in.Classifications); err != nil {
 		return nil, err
 	}
 
@@ -174,37 +161,46 @@ func ComputeHash(in Input) ([]byte, error) {
 	if in.InjectionScore != 0 {
 		scoreBits = int64(math.Float64bits(float64(in.InjectionScore)))
 	}
-	if err := writeInt64(&buf, scoreBits); err != nil {
+	writeInt64(&buf, scoreBits)
+	writeString(&buf, in.Decision)
+	if err := writeJSON(&buf, "matched_rule_ids", in.MatchedRuleIDs); err != nil {
 		return nil, err
 	}
+	writeString(&buf, in.ContentDigest)
 
 	sum := sha256.Sum256(buf.Bytes())
 	return sum[:], nil
 }
 
-func writeInt64(buf *bytes.Buffer, v int64) error {
+func writeJSON(buf *bytes.Buffer, name string, v []string) error {
+	b, err := canonical.MarshalJSON(v)
+	if err != nil {
+		return fmt.Errorf("contextchain: canonicalize %s: %w", name, err)
+	}
+	writeBytes(buf, b)
+	return nil
+}
+
+// The writers append to a bytes.Buffer, whose Write never returns an error.
+func writeInt64(buf *bytes.Buffer, v int64) {
 	var b [8]byte
 	binary.BigEndian.PutUint64(b[:], uint64(v))
-	_, err := buf.Write(b[:])
-	return err
+	buf.Write(b[:])
 }
 
-func writeBytes(buf *bytes.Buffer, b []byte) error {
+func writeBytes(buf *bytes.Buffer, b []byte) {
 	var l [8]byte
 	binary.BigEndian.PutUint64(l[:], uint64(len(b)))
-	if _, err := buf.Write(l[:]); err != nil {
-		return err
-	}
-	_, err := buf.Write(b)
-	return err
+	buf.Write(l[:])
+	buf.Write(b)
 }
 
-func writeString(buf *bytes.Buffer, s string) error {
-	return writeBytes(buf, []byte(s))
+func writeString(buf *bytes.Buffer, s string) {
+	writeBytes(buf, []byte(s))
 }
 
-func writeUUID(buf *bytes.Buffer, id uuid.UUID) error {
-	return writeBytes(buf, id[:])
+func writeUUID(buf *bytes.Buffer, id uuid.UUID) {
+	writeBytes(buf, id[:])
 }
 
 // Break is a single integrity failure surfaced by Verify. The
@@ -275,18 +271,11 @@ func Verify(rows []Row) (verified int, breaks []Break) {
 			})
 		}
 
-		expectedHash, err := ComputeHash(r.Fields)
-		if err != nil {
+		if reason := hashBreak(r); reason != "" {
 			breaks = append(breaks, Break{
 				SessionID: r.SessionID,
 				Sequence:  r.Sequence,
-				Reason:    fmt.Sprintf("recompute hash: %v", err),
-			})
-		} else if !bytes.Equal(expectedHash, r.Hash) {
-			breaks = append(breaks, Break{
-				SessionID: r.SessionID,
-				Sequence:  r.Sequence,
-				Reason:    "stored hash does not match recomputed hash",
+				Reason:    reason,
 			})
 		}
 
@@ -302,4 +291,20 @@ func Verify(rows []Row) (verified int, breaks []Break) {
 		}
 	}
 	return verified, breaks
+}
+
+// hashBreak checks the stored hash of a row. It checks the version first,
+// because a row of another version has fields that ComputeHash cannot read.
+func hashBreak(r Row) string {
+	if r.Version != Version {
+		return fmt.Sprintf("unknown hash version %d", r.Version)
+	}
+	expected, err := ComputeHash(r.Fields)
+	if err != nil {
+		return fmt.Sprintf("recompute hash: %v", err)
+	}
+	if !bytes.Equal(expected, r.Hash) {
+		return "stored hash does not match recomputed hash"
+	}
+	return ""
 }

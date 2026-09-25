@@ -716,12 +716,6 @@ func (p *TablePresenter) RenderEventDetails(events []*EventDetailView) error {
 				}
 			}
 		}
-
-		if e.ConvContext != "" {
-			tw.println()
-			tw.printf("%s\n", p.color.Header("Conversation Context"))
-			tw.printf("  %s\n", e.ConvContext)
-		}
 	}
 
 	return tw.Err()

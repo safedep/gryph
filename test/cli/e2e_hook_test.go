@@ -634,10 +634,8 @@ display:
 			if tt.expectContent {
 				assert.NotEmpty(t, evts[0].Payload, "payload should be present for level %s", tt.loggingLevel)
 			}
-			// For minimal, raw event and conversation context should be stripped
 			if tt.loggingLevel == "minimal" {
 				assert.Empty(t, evts[0].RawEvent)
-				assert.Empty(t, evts[0].ConversationContext)
 			}
 		})
 	}

@@ -11,68 +11,69 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/safedep/gryph/storage/ent/aarmcontextstate"
+	"github.com/google/uuid"
+	"github.com/safedep/gryph/storage/ent/contextentry"
 	"github.com/safedep/gryph/storage/ent/predicate"
 )
 
-// AarmContextStateQuery is the builder for querying AarmContextState entities.
-type AarmContextStateQuery struct {
+// ContextEntryQuery is the builder for querying ContextEntry entities.
+type ContextEntryQuery struct {
 	config
 	ctx        *QueryContext
-	order      []aarmcontextstate.OrderOption
+	order      []contextentry.OrderOption
 	inters     []Interceptor
-	predicates []predicate.AarmContextState
+	predicates []predicate.ContextEntry
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
 }
 
-// Where adds a new predicate for the AarmContextStateQuery builder.
-func (_q *AarmContextStateQuery) Where(ps ...predicate.AarmContextState) *AarmContextStateQuery {
+// Where adds a new predicate for the ContextEntryQuery builder.
+func (_q *ContextEntryQuery) Where(ps ...predicate.ContextEntry) *ContextEntryQuery {
 	_q.predicates = append(_q.predicates, ps...)
 	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *AarmContextStateQuery) Limit(limit int) *AarmContextStateQuery {
+func (_q *ContextEntryQuery) Limit(limit int) *ContextEntryQuery {
 	_q.ctx.Limit = &limit
 	return _q
 }
 
 // Offset to start from.
-func (_q *AarmContextStateQuery) Offset(offset int) *AarmContextStateQuery {
+func (_q *ContextEntryQuery) Offset(offset int) *ContextEntryQuery {
 	_q.ctx.Offset = &offset
 	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *AarmContextStateQuery) Unique(unique bool) *AarmContextStateQuery {
+func (_q *ContextEntryQuery) Unique(unique bool) *ContextEntryQuery {
 	_q.ctx.Unique = &unique
 	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (_q *AarmContextStateQuery) Order(o ...aarmcontextstate.OrderOption) *AarmContextStateQuery {
+func (_q *ContextEntryQuery) Order(o ...contextentry.OrderOption) *ContextEntryQuery {
 	_q.order = append(_q.order, o...)
 	return _q
 }
 
-// First returns the first AarmContextState entity from the query.
-// Returns a *NotFoundError when no AarmContextState was found.
-func (_q *AarmContextStateQuery) First(ctx context.Context) (*AarmContextState, error) {
+// First returns the first ContextEntry entity from the query.
+// Returns a *NotFoundError when no ContextEntry was found.
+func (_q *ContextEntryQuery) First(ctx context.Context) (*ContextEntry, error) {
 	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		return nil, &NotFoundError{aarmcontextstate.Label}
+		return nil, &NotFoundError{contextentry.Label}
 	}
 	return nodes[0], nil
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *AarmContextStateQuery) FirstX(ctx context.Context) *AarmContextState {
+func (_q *ContextEntryQuery) FirstX(ctx context.Context) *ContextEntry {
 	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -80,22 +81,22 @@ func (_q *AarmContextStateQuery) FirstX(ctx context.Context) *AarmContextState {
 	return node
 }
 
-// FirstID returns the first AarmContextState ID from the query.
-// Returns a *NotFoundError when no AarmContextState ID was found.
-func (_q *AarmContextStateQuery) FirstID(ctx context.Context) (id int, err error) {
-	var ids []int
+// FirstID returns the first ContextEntry ID from the query.
+// Returns a *NotFoundError when no ContextEntry ID was found.
+func (_q *ContextEntryQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
+	var ids []uuid.UUID
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
-		err = &NotFoundError{aarmcontextstate.Label}
+		err = &NotFoundError{contextentry.Label}
 		return
 	}
 	return ids[0], nil
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *AarmContextStateQuery) FirstIDX(ctx context.Context) int {
+func (_q *ContextEntryQuery) FirstIDX(ctx context.Context) uuid.UUID {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -103,10 +104,10 @@ func (_q *AarmContextStateQuery) FirstIDX(ctx context.Context) int {
 	return id
 }
 
-// Only returns a single AarmContextState entity found by the query, ensuring it only returns one.
-// Returns a *NotSingularError when more than one AarmContextState entity is found.
-// Returns a *NotFoundError when no AarmContextState entities are found.
-func (_q *AarmContextStateQuery) Only(ctx context.Context) (*AarmContextState, error) {
+// Only returns a single ContextEntry entity found by the query, ensuring it only returns one.
+// Returns a *NotSingularError when more than one ContextEntry entity is found.
+// Returns a *NotFoundError when no ContextEntry entities are found.
+func (_q *ContextEntryQuery) Only(ctx context.Context) (*ContextEntry, error) {
 	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
@@ -115,14 +116,14 @@ func (_q *AarmContextStateQuery) Only(ctx context.Context) (*AarmContextState, e
 	case 1:
 		return nodes[0], nil
 	case 0:
-		return nil, &NotFoundError{aarmcontextstate.Label}
+		return nil, &NotFoundError{contextentry.Label}
 	default:
-		return nil, &NotSingularError{aarmcontextstate.Label}
+		return nil, &NotSingularError{contextentry.Label}
 	}
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *AarmContextStateQuery) OnlyX(ctx context.Context) *AarmContextState {
+func (_q *ContextEntryQuery) OnlyX(ctx context.Context) *ContextEntry {
 	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
@@ -130,11 +131,11 @@ func (_q *AarmContextStateQuery) OnlyX(ctx context.Context) *AarmContextState {
 	return node
 }
 
-// OnlyID is like Only, but returns the only AarmContextState ID in the query.
-// Returns a *NotSingularError when more than one AarmContextState ID is found.
+// OnlyID is like Only, but returns the only ContextEntry ID in the query.
+// Returns a *NotSingularError when more than one ContextEntry ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *AarmContextStateQuery) OnlyID(ctx context.Context) (id int, err error) {
-	var ids []int
+func (_q *ContextEntryQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
+	var ids []uuid.UUID
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
@@ -142,15 +143,15 @@ func (_q *AarmContextStateQuery) OnlyID(ctx context.Context) (id int, err error)
 	case 1:
 		id = ids[0]
 	case 0:
-		err = &NotFoundError{aarmcontextstate.Label}
+		err = &NotFoundError{contextentry.Label}
 	default:
-		err = &NotSingularError{aarmcontextstate.Label}
+		err = &NotSingularError{contextentry.Label}
 	}
 	return
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *AarmContextStateQuery) OnlyIDX(ctx context.Context) int {
+func (_q *ContextEntryQuery) OnlyIDX(ctx context.Context) uuid.UUID {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -158,18 +159,18 @@ func (_q *AarmContextStateQuery) OnlyIDX(ctx context.Context) int {
 	return id
 }
 
-// All executes the query and returns a list of AarmContextStates.
-func (_q *AarmContextStateQuery) All(ctx context.Context) ([]*AarmContextState, error) {
+// All executes the query and returns a list of ContextEntries.
+func (_q *ContextEntryQuery) All(ctx context.Context) ([]*ContextEntry, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*AarmContextState, *AarmContextStateQuery]()
-	return withInterceptors[[]*AarmContextState](ctx, _q, qr, _q.inters)
+	qr := querierAll[[]*ContextEntry, *ContextEntryQuery]()
+	return withInterceptors[[]*ContextEntry](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *AarmContextStateQuery) AllX(ctx context.Context) []*AarmContextState {
+func (_q *ContextEntryQuery) AllX(ctx context.Context) []*ContextEntry {
 	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
@@ -177,20 +178,20 @@ func (_q *AarmContextStateQuery) AllX(ctx context.Context) []*AarmContextState {
 	return nodes
 }
 
-// IDs executes the query and returns a list of AarmContextState IDs.
-func (_q *AarmContextStateQuery) IDs(ctx context.Context) (ids []int, err error) {
+// IDs executes the query and returns a list of ContextEntry IDs.
+func (_q *ContextEntryQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(aarmcontextstate.FieldID).Scan(ctx, &ids); err != nil {
+	if err = _q.Select(contextentry.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *AarmContextStateQuery) IDsX(ctx context.Context) []int {
+func (_q *ContextEntryQuery) IDsX(ctx context.Context) []uuid.UUID {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -199,16 +200,16 @@ func (_q *AarmContextStateQuery) IDsX(ctx context.Context) []int {
 }
 
 // Count returns the count of the given query.
-func (_q *AarmContextStateQuery) Count(ctx context.Context) (int, error) {
+func (_q *ContextEntryQuery) Count(ctx context.Context) (int, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*AarmContextStateQuery](), _q.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*ContextEntryQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *AarmContextStateQuery) CountX(ctx context.Context) int {
+func (_q *ContextEntryQuery) CountX(ctx context.Context) int {
 	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
@@ -217,7 +218,7 @@ func (_q *AarmContextStateQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *AarmContextStateQuery) Exist(ctx context.Context) (bool, error) {
+func (_q *ContextEntryQuery) Exist(ctx context.Context) (bool, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
 	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
@@ -230,7 +231,7 @@ func (_q *AarmContextStateQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *AarmContextStateQuery) ExistX(ctx context.Context) bool {
+func (_q *ContextEntryQuery) ExistX(ctx context.Context) bool {
 	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
@@ -238,18 +239,18 @@ func (_q *AarmContextStateQuery) ExistX(ctx context.Context) bool {
 	return exist
 }
 
-// Clone returns a duplicate of the AarmContextStateQuery builder, including all associated steps. It can be
+// Clone returns a duplicate of the ContextEntryQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *AarmContextStateQuery) Clone() *AarmContextStateQuery {
+func (_q *ContextEntryQuery) Clone() *ContextEntryQuery {
 	if _q == nil {
 		return nil
 	}
-	return &AarmContextStateQuery{
+	return &ContextEntryQuery{
 		config:     _q.config,
 		ctx:        _q.ctx.Clone(),
-		order:      append([]aarmcontextstate.OrderOption{}, _q.order...),
+		order:      append([]contextentry.OrderOption{}, _q.order...),
 		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.AarmContextState{}, _q.predicates...),
+		predicates: append([]predicate.ContextEntry{}, _q.predicates...),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -266,15 +267,15 @@ func (_q *AarmContextStateQuery) Clone() *AarmContextStateQuery {
 //		Count int `json:"count,omitempty"`
 //	}
 //
-//	client.AarmContextState.Query().
-//		GroupBy(aarmcontextstate.FieldSessionID).
+//	client.ContextEntry.Query().
+//		GroupBy(contextentry.FieldSessionID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *AarmContextStateQuery) GroupBy(field string, fields ...string) *AarmContextStateGroupBy {
+func (_q *ContextEntryQuery) GroupBy(field string, fields ...string) *ContextEntryGroupBy {
 	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &AarmContextStateGroupBy{build: _q}
+	grbuild := &ContextEntryGroupBy{build: _q}
 	grbuild.flds = &_q.ctx.Fields
-	grbuild.label = aarmcontextstate.Label
+	grbuild.label = contextentry.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
 }
@@ -288,23 +289,23 @@ func (_q *AarmContextStateQuery) GroupBy(field string, fields ...string) *AarmCo
 //		SessionID uuid.UUID `json:"session_id,omitempty"`
 //	}
 //
-//	client.AarmContextState.Query().
-//		Select(aarmcontextstate.FieldSessionID).
+//	client.ContextEntry.Query().
+//		Select(contextentry.FieldSessionID).
 //		Scan(ctx, &v)
-func (_q *AarmContextStateQuery) Select(fields ...string) *AarmContextStateSelect {
+func (_q *ContextEntryQuery) Select(fields ...string) *ContextEntrySelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &AarmContextStateSelect{AarmContextStateQuery: _q}
-	sbuild.label = aarmcontextstate.Label
+	sbuild := &ContextEntrySelect{ContextEntryQuery: _q}
+	sbuild.label = contextentry.Label
 	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
-// Aggregate returns a AarmContextStateSelect configured with the given aggregations.
-func (_q *AarmContextStateQuery) Aggregate(fns ...AggregateFunc) *AarmContextStateSelect {
+// Aggregate returns a ContextEntrySelect configured with the given aggregations.
+func (_q *ContextEntryQuery) Aggregate(fns ...AggregateFunc) *ContextEntrySelect {
 	return _q.Select().Aggregate(fns...)
 }
 
-func (_q *AarmContextStateQuery) prepareQuery(ctx context.Context) error {
+func (_q *ContextEntryQuery) prepareQuery(ctx context.Context) error {
 	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
@@ -316,7 +317,7 @@ func (_q *AarmContextStateQuery) prepareQuery(ctx context.Context) error {
 		}
 	}
 	for _, f := range _q.ctx.Fields {
-		if !aarmcontextstate.ValidColumn(f) {
+		if !contextentry.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
@@ -330,16 +331,16 @@ func (_q *AarmContextStateQuery) prepareQuery(ctx context.Context) error {
 	return nil
 }
 
-func (_q *AarmContextStateQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*AarmContextState, error) {
+func (_q *ContextEntryQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*ContextEntry, error) {
 	var (
-		nodes = []*AarmContextState{}
+		nodes = []*ContextEntry{}
 		_spec = _q.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
-		return (*AarmContextState).scanValues(nil, columns)
+		return (*ContextEntry).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &AarmContextState{config: _q.config}
+		node := &ContextEntry{config: _q.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
@@ -355,7 +356,7 @@ func (_q *AarmContextStateQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 	return nodes, nil
 }
 
-func (_q *AarmContextStateQuery) sqlCount(ctx context.Context) (int, error) {
+func (_q *ContextEntryQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
 	_spec.Node.Columns = _q.ctx.Fields
 	if len(_q.ctx.Fields) > 0 {
@@ -364,8 +365,8 @@ func (_q *AarmContextStateQuery) sqlCount(ctx context.Context) (int, error) {
 	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (_q *AarmContextStateQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(aarmcontextstate.Table, aarmcontextstate.Columns, sqlgraph.NewFieldSpec(aarmcontextstate.FieldID, field.TypeInt))
+func (_q *ContextEntryQuery) querySpec() *sqlgraph.QuerySpec {
+	_spec := sqlgraph.NewQuerySpec(contextentry.Table, contextentry.Columns, sqlgraph.NewFieldSpec(contextentry.FieldID, field.TypeUUID))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -374,9 +375,9 @@ func (_q *AarmContextStateQuery) querySpec() *sqlgraph.QuerySpec {
 	}
 	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, aarmcontextstate.FieldID)
+		_spec.Node.Columns = append(_spec.Node.Columns, contextentry.FieldID)
 		for i := range fields {
-			if fields[i] != aarmcontextstate.FieldID {
+			if fields[i] != contextentry.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
@@ -404,12 +405,12 @@ func (_q *AarmContextStateQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *AarmContextStateQuery) sqlQuery(ctx context.Context) *sql.Selector {
+func (_q *ContextEntryQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(_q.driver.Dialect())
-	t1 := builder.Table(aarmcontextstate.Table)
+	t1 := builder.Table(contextentry.Table)
 	columns := _q.ctx.Fields
 	if len(columns) == 0 {
-		columns = aarmcontextstate.Columns
+		columns = contextentry.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
 	if _q.sql != nil {
@@ -436,28 +437,28 @@ func (_q *AarmContextStateQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	return selector
 }
 
-// AarmContextStateGroupBy is the group-by builder for AarmContextState entities.
-type AarmContextStateGroupBy struct {
+// ContextEntryGroupBy is the group-by builder for ContextEntry entities.
+type ContextEntryGroupBy struct {
 	selector
-	build *AarmContextStateQuery
+	build *ContextEntryQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *AarmContextStateGroupBy) Aggregate(fns ...AggregateFunc) *AarmContextStateGroupBy {
+func (_g *ContextEntryGroupBy) Aggregate(fns ...AggregateFunc) *ContextEntryGroupBy {
 	_g.fns = append(_g.fns, fns...)
 	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *AarmContextStateGroupBy) Scan(ctx context.Context, v any) error {
+func (_g *ContextEntryGroupBy) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*AarmContextStateQuery, *AarmContextStateGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*ContextEntryQuery, *ContextEntryGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (_g *AarmContextStateGroupBy) sqlScan(ctx context.Context, root *AarmContextStateQuery, v any) error {
+func (_g *ContextEntryGroupBy) sqlScan(ctx context.Context, root *ContextEntryQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
 	aggregation := make([]string, 0, len(_g.fns))
 	for _, fn := range _g.fns {
@@ -484,28 +485,28 @@ func (_g *AarmContextStateGroupBy) sqlScan(ctx context.Context, root *AarmContex
 	return sql.ScanSlice(rows, v)
 }
 
-// AarmContextStateSelect is the builder for selecting fields of AarmContextState entities.
-type AarmContextStateSelect struct {
-	*AarmContextStateQuery
+// ContextEntrySelect is the builder for selecting fields of ContextEntry entities.
+type ContextEntrySelect struct {
+	*ContextEntryQuery
 	selector
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *AarmContextStateSelect) Aggregate(fns ...AggregateFunc) *AarmContextStateSelect {
+func (_s *ContextEntrySelect) Aggregate(fns ...AggregateFunc) *ContextEntrySelect {
 	_s.fns = append(_s.fns, fns...)
 	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *AarmContextStateSelect) Scan(ctx context.Context, v any) error {
+func (_s *ContextEntrySelect) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*AarmContextStateQuery, *AarmContextStateSelect](ctx, _s.AarmContextStateQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*ContextEntryQuery, *ContextEntrySelect](ctx, _s.ContextEntryQuery, _s, _s.inters, v)
 }
 
-func (_s *AarmContextStateSelect) sqlScan(ctx context.Context, root *AarmContextStateQuery, v any) error {
+func (_s *ContextEntrySelect) sqlScan(ctx context.Context, root *ContextEntryQuery, v any) error {
 	selector := root.sqlQuery(ctx)
 	aggregation := make([]string, 0, len(_s.fns))
 	for _, fn := range _s.fns {

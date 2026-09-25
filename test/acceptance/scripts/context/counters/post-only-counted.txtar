@@ -1,0 +1,25 @@
+# A post hook with no recorded pre hook is an action. Agents with post-only
+# coverage for a tool still count it, in the session counters and in the
+# policy context.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin post.json
+exec gryph _hook claude-code PostToolUse
+
+exec gryph sessions --format json --no-color
+stdout '"TotalActions": 1,'
+stdout '"FilesWritten": 1,'
+
+exec gryph policy context --format json --no-color
+stdout '"total_actions": 1,'
+stdout '"files_written": 1,'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- post.json --
+{"session_id": "s-post", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "Write",
+ "tool_input": {"file_path": "/home/user/project/a.txt", "content": "x"}, "tool_response": {"success": true}, "tool_use_id": "tu-post"}

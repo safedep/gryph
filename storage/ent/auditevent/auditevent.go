@@ -46,8 +46,6 @@ const (
 	FieldDiffLabel = "diff_label"
 	// FieldRawEvent holds the string denoting the raw_event field in the database.
 	FieldRawEvent = "raw_event"
-	// FieldConversationContext holds the string denoting the conversation_context field in the database.
-	FieldConversationContext = "conversation_context"
 	// FieldIsSensitive holds the string denoting the is_sensitive field in the database.
 	FieldIsSensitive = "is_sensitive"
 	// FieldSubagentID holds the string denoting the subagent_id field in the database.
@@ -93,7 +91,6 @@ var Columns = []string{
 	FieldDiffContent,
 	FieldDiffLabel,
 	FieldRawEvent,
-	FieldConversationContext,
 	FieldIsSensitive,
 	FieldSubagentID,
 	FieldSubagentType,
@@ -253,11 +250,6 @@ func ByErrorMessage(opts ...sql.OrderTermOption) OrderOption {
 // ByDiffContent orders the results by the diff_content field.
 func ByDiffContent(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDiffContent, opts...).ToFunc()
-}
-
-// ByConversationContext orders the results by the conversation_context field.
-func ByConversationContext(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldConversationContext, opts...).ToFunc()
 }
 
 // ByIsSensitive orders the results by the is_sensitive field.

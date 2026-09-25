@@ -252,3 +252,42 @@ const (
 	// FailOpen allows the action on engine errors.
 	FailOpen FailMode = "open"
 )
+
+// EntryKind is the kind of a context entry: intent, action, or observation.
+type EntryKind = events.Kind
+
+// DerivedTarget holds the target values that Gryph computes for an entry.
+// Host is the lower-case host from a URL, a network command, or an MCP
+// server URL.
+type DerivedTarget struct {
+	Host      string
+	MCPServer string
+	MCPTool   string
+}
+
+// ContextEntry is one entry of the session context. It holds facts only.
+// The path, the command, and the content stay on the audit event.
+type ContextEntry struct {
+	ID              uuid.UUID
+	SessionID       uuid.UUID
+	EventID         uuid.UUID
+	LinkedEventID   uuid.UUID
+	Sequence        int64
+	Kind            EntryKind
+	Timestamp       time.Time
+	ActionType      ActionType
+	Tool            string
+	ToolCallID      string
+	Phase           ActionPhase
+	Target          DerivedTarget
+	Origin          privacy.Origin
+	Tags            []string
+	Classifications []privacy.Class
+	InjectionScore  float32
+	Decision        Decision
+	MatchedRuleIDs  []string
+	// ContentDigest is the SHA-256 of the event content before redaction.
+	// The entry never holds the content.
+	ContentDigest string
+	Result        ResultStatus
+}

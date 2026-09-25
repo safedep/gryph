@@ -9,30 +9,6 @@ import (
 	"github.com/safedep/gryph/storage/ent"
 )
 
-// The AarmContextActionFunc type is an adapter to allow the use of ordinary
-// function as AarmContextAction mutator.
-type AarmContextActionFunc func(context.Context, *ent.AarmContextActionMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f AarmContextActionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.AarmContextActionMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AarmContextActionMutation", m)
-}
-
-// The AarmContextStateFunc type is an adapter to allow the use of ordinary
-// function as AarmContextState mutator.
-type AarmContextStateFunc func(context.Context, *ent.AarmContextStateMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f AarmContextStateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.AarmContextStateMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AarmContextStateMutation", m)
-}
-
 // The AarmDeferredActionFunc type is an adapter to allow the use of ordinary
 // function as AarmDeferredAction mutator.
 type AarmDeferredActionFunc func(context.Context, *ent.AarmDeferredActionMutation) (ent.Value, error)
@@ -79,6 +55,30 @@ func (f AuditStreamCursorFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuditStreamCursorMutation", m)
+}
+
+// The ContextEntryFunc type is an adapter to allow the use of ordinary
+// function as ContextEntry mutator.
+type ContextEntryFunc func(context.Context, *ent.ContextEntryMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ContextEntryFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ContextEntryMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ContextEntryMutation", m)
+}
+
+// The ContextStateFunc type is an adapter to allow the use of ordinary
+// function as ContextState mutator.
+type ContextStateFunc func(context.Context, *ent.ContextStateMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ContextStateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ContextStateMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ContextStateMutation", m)
 }
 
 // The EventStreamCursorFunc type is an adapter to allow the use of ordinary

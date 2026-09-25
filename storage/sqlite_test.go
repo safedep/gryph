@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -494,6 +495,7 @@ func TestSQLiteStore_UpdateSession(t *testing.T) {
 	// Update session
 	sess.TotalActions = 5
 	sess.FilesWritten = 2
+	sess.ProjectName = "gryph"
 	sess.End()
 
 	err = store.UpdateSession(ctx, sess)
@@ -502,9 +504,98 @@ func TestSQLiteStore_UpdateSession(t *testing.T) {
 	// Retrieve and verify
 	retrieved, err := store.GetSession(ctx, sessionID)
 	require.NoError(t, err)
-	assert.Equal(t, 5, retrieved.TotalActions)
-	assert.Equal(t, 2, retrieved.FilesWritten)
+	assert.Zero(t, retrieved.TotalActions, "only RecordEvent changes the counters")
+	assert.Zero(t, retrieved.FilesWritten)
+	assert.Equal(t, "gryph", retrieved.ProjectName)
 	assert.False(t, retrieved.EndedAt.IsZero())
+}
+
+func TestSQLiteStore_RecordEvent(t *testing.T) {
+	cases := []struct {
+		name         string
+		eventCount   int
+		totalActions int
+		wantFirstSeq int
+	}{
+		{name: "new session", wantFirstSeq: 1},
+		{name: "session with events", eventCount: 7, totalActions: 3, wantFirstSeq: 8},
+		{name: "legacy session with no event count", totalActions: 5, wantFirstSeq: 6},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store, cleanup := setupTestStore(t)
+			defer cleanup()
+			ctx := context.Background()
+			sessionID := uuid.New()
+			require.NoError(t, store.SaveSession(ctx, &session.Session{
+				ID: sessionID, AgentName: "claude-code", StartedAt: time.Now().UTC(),
+				EventCount: tc.eventCount, TotalActions: tc.totalActions,
+			}))
+
+			event := events.NewEvent(sessionID, "claude-code", events.ActionCommandExec)
+			event.ResultStatus = events.ResultError
+			require.NoError(t, store.RecordEvent(ctx, event, session.EventCounts(event)))
+			assert.Equal(t, tc.wantFirstSeq, event.Sequence)
+
+			sess, err := store.GetSession(ctx, sessionID)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantFirstSeq, sess.EventCount)
+			assert.Equal(t, tc.totalActions+1, sess.TotalActions)
+			assert.Equal(t, 1, sess.CommandsExecuted)
+			assert.Equal(t, 1, sess.Errors)
+		})
+	}
+}
+
+func TestSQLiteStore_RecordEvent_ParallelStores(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.db")
+	ctx := context.Background()
+	const writers = 8
+	const perWriter = 5
+
+	stores := make([]*SQLiteStore, writers)
+	for i := range stores {
+		store, err := NewSQLiteStore(path)
+		require.NoError(t, err)
+		require.NoError(t, store.Init(ctx))
+		t.Cleanup(func() { require.NoError(t, store.Close()) })
+		stores[i] = store
+	}
+
+	sessionID := uuid.New()
+	require.NoError(t, stores[0].SaveSession(ctx, &session.Session{ID: sessionID, AgentName: "claude-code", StartedAt: time.Now().UTC()}))
+
+	var wg sync.WaitGroup
+	errs := make(chan error, writers*perWriter)
+	for _, store := range stores {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range perWriter {
+				event := events.NewEvent(sessionID, "claude-code", events.ActionCommandExec)
+				errs <- store.RecordEvent(ctx, event, session.EventCounts(event))
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+
+	sess, err := stores[0].GetSession(ctx, sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, writers*perWriter, sess.CommandsExecuted, "no counter update is lost")
+	assert.Equal(t, writers*perWriter, sess.EventCount)
+
+	evts, err := stores[0].QueryEvents(ctx, &events.EventFilter{SessionID: &sessionID, Limit: 1000})
+	require.NoError(t, err)
+	seen := map[int]bool{}
+	for _, e := range evts {
+		assert.False(t, seen[e.Sequence], "sequence %d is used twice", e.Sequence)
+		seen[e.Sequence] = true
+	}
+	assert.Len(t, seen, writers*perWriter)
 }
 
 func TestSQLiteStore_QuerySessions(t *testing.T) {

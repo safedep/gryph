@@ -8,7 +8,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/privacy"
+	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/storage/storagetest"
 	"github.com/stretchr/testify/assert"
@@ -21,249 +23,153 @@ func newTestSQLiteAccumulator(t *testing.T) (*SQLiteAccumulator, *storage.SQLite
 	return NewSQLite(store), store
 }
 
-func newAction(t *testing.T, sessionID uuid.UUID, at model.ActionType, tool string) *model.Action {
-	t.Helper()
-	return &model.Action{
-		ID:        uuid.New(),
-		SessionID: sessionID,
-		Timestamp: time.Now().UTC(),
-		Type:      at,
-		Tool:      tool,
+func newEntry(sessionID uuid.UUID, kind events.Kind, at model.ActionType, tool string) *model.ContextEntry {
+	return &model.ContextEntry{
+		ID:         uuid.New(),
+		SessionID:  sessionID,
+		Kind:       kind,
+		Timestamp:  time.Now().UTC(),
+		ActionType: at,
+		Tool:       tool,
+		Decision:   model.DecisionAllow,
 	}
 }
 
-func TestSQLiteAccumulator_AppendIncrementsCounters(t *testing.T) {
-	cases := []struct {
-		name        string
-		actionType  model.ActionType
-		expectField func(t *testing.T, s *model.ContextSnapshot)
-	}{
-		{
-			name:       "file_read",
-			actionType: model.ActionFileRead,
-			expectField: func(t *testing.T, s *model.ContextSnapshot) {
-				assert.Equal(t, 1, s.FilesRead)
-			},
-		},
-		{
-			name:       "file_write",
-			actionType: model.ActionFileWrite,
-			expectField: func(t *testing.T, s *model.ContextSnapshot) {
-				assert.Equal(t, 1, s.FilesWritten)
-			},
-		},
-		{
-			name:       "command_exec",
-			actionType: model.ActionCommandExec,
-			expectField: func(t *testing.T, s *model.ContextSnapshot) {
-				assert.Equal(t, 1, s.CommandsExecuted)
-			},
-		},
-		{
-			name:       "network_request",
-			actionType: model.ActionNetworkRequest,
-			expectField: func(t *testing.T, s *model.ContextSnapshot) {
-				assert.Equal(t, 1, s.NetworkRequests)
-			},
-		},
-		{
-			name:       "tool_use_no_counter",
-			actionType: model.ActionToolUse,
-			expectField: func(t *testing.T, s *model.ContextSnapshot) {
-				assert.Equal(t, 0, s.FilesRead)
-				assert.Equal(t, 0, s.FilesWritten)
-				assert.Equal(t, 0, s.CommandsExecuted)
-				assert.Equal(t, 0, s.NetworkRequests)
-			},
-		},
-	}
+func saveSession(t *testing.T, store *storage.SQLiteStore, sess *session.Session) {
+	t.Helper()
+	require.NoError(t, store.SaveSession(context.Background(), sess))
+}
 
+func TestSQLiteAccumulator_SnapshotAddsPendingAction(t *testing.T) {
+	acc, store := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	sess := session.NewSession("claude-code")
+	sess.TotalActions = 2
+	sess.CommandsExecuted = 1
+	sess.FilesRead = 1
+	sess.Errors = 1
+	saveSession(t, store, sess)
+	require.NoError(t, acc.Append(ctx, newEntry(sess.ID, events.KindAction, model.ActionFileRead, "Read")))
+
+	failedPost := newEntry(sess.ID, events.KindObservation, model.ActionCommandExec, "Bash")
+	failedPost.Result = model.ResultError
+
+	cases := []struct {
+		name         string
+		pending      *model.ContextEntry
+		wantTotal    int
+		wantCommands int
+		wantErrors   int
+		wantTools    []string
+	}{
+		{"no pending entry", nil, 2, 1, 1, []string{"Read"}},
+		{"pending action counts", newEntry(sess.ID, events.KindAction, model.ActionCommandExec, "Bash"), 3, 2, 1, []string{"Read", "Bash"}},
+		{"pending observation does not count", newEntry(sess.ID, events.KindObservation, model.ActionCommandExec, "Bash"), 2, 1, 1, []string{"Read"}},
+		{"pending failed observation counts an error", failedPost, 2, 1, 2, []string{"Read"}},
+	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			acc, _ := newTestSQLiteAccumulator(t)
-			sessionID := uuid.New()
-			ctx := context.Background()
-
-			action := newAction(t, sessionID, tc.actionType, "Read")
-			require.NoError(t, acc.Append(ctx, action))
-
-			snap, err := acc.Snapshot(ctx, sessionID)
+			snap, err := acc.Snapshot(ctx, sess.ID, tc.pending)
 			require.NoError(t, err)
-			require.NotNil(t, snap)
-			assert.Equal(t, 1, snap.TotalActions)
-			tc.expectField(t, snap)
+			assert.Equal(t, tc.wantTotal, snap.TotalActions)
+			assert.Equal(t, tc.wantCommands, snap.CommandsExecuted)
+			assert.Equal(t, 1, snap.FilesRead)
+			assert.Equal(t, tc.wantErrors, snap.Errors)
+			assert.Equal(t, tc.wantTools, snap.ToolsUsed)
 		})
 	}
 }
 
-func TestSQLiteAccumulator_DistinctToolsAccumulate(t *testing.T) {
+func TestSQLiteAccumulator_SnapshotNewSession(t *testing.T) {
 	acc, _ := newTestSQLiteAccumulator(t)
-	sessionID := uuid.New()
-	ctx := context.Background()
-
-	require.NoError(t, acc.Append(ctx, newAction(t, sessionID, model.ActionFileRead, "Read")))
-	require.NoError(t, acc.Append(ctx, newAction(t, sessionID, model.ActionFileRead, "Read")))
-	require.NoError(t, acc.Append(ctx, newAction(t, sessionID, model.ActionFileWrite, "Write")))
-	require.NoError(t, acc.Append(ctx, newAction(t, sessionID, model.ActionCommandExec, "Bash")))
-
-	snap, err := acc.Snapshot(ctx, sessionID)
+	snap, err := acc.Snapshot(context.Background(), uuid.New(), nil)
 	require.NoError(t, err)
-	require.NotNil(t, snap)
-	assert.Equal(t, 4, snap.TotalActions)
-	assert.Equal(t, 2, snap.FilesRead)
-	assert.Equal(t, 1, snap.FilesWritten)
-	assert.Equal(t, 1, snap.CommandsExecuted)
-	assert.ElementsMatch(t, []string{"Read", "Write", "Bash"}, snap.ToolsUsed)
-}
-
-func TestSQLiteAccumulator_NewSessionReturnsEmpty(t *testing.T) {
-	acc, _ := newTestSQLiteAccumulator(t)
-	snap, err := acc.Snapshot(context.Background(), uuid.New())
-	require.NoError(t, err)
-	require.NotNil(t, snap)
-	assert.Equal(t, 0, snap.TotalActions)
+	assert.Zero(t, snap.TotalActions)
 	assert.Empty(t, snap.ToolsUsed)
-	assert.Equal(t, time.Duration(0), snap.SessionDuration)
+	assert.Zero(t, snap.SessionDuration)
 }
 
-func TestSQLiteAccumulator_RecordResultFlipsStatus(t *testing.T) {
+func TestSQLiteAccumulator_SnapshotSessionDuration(t *testing.T) {
 	acc, store := newTestSQLiteAccumulator(t)
-	sessionID := uuid.New()
+	sess := session.NewSession("claude-code")
+	sess.StartedAt = time.Now().UTC().Add(-10 * time.Minute)
+	saveSession(t, store, sess)
+
+	snap, err := acc.Snapshot(context.Background(), sess.ID, nil)
+	require.NoError(t, err)
+	assert.InDelta(t, (10 * time.Minute).Seconds(), snap.SessionDuration.Seconds(), 5)
+}
+
+func TestSQLiteAccumulator_AppendWritesEntryAndState(t *testing.T) {
+	acc, store := newTestSQLiteAccumulator(t)
 	ctx := context.Background()
+	sessionID := uuid.New()
 
-	action := newAction(t, sessionID, model.ActionCommandExec, "Bash")
-	require.NoError(t, acc.Append(ctx, action))
+	first := newEntry(sessionID, events.KindAction, model.ActionFileRead, "Read")
+	first.Classifications = []privacy.Class{privacy.ClassSecret}
+	first.Decision = model.DecisionBlock
+	first.MatchedRuleIDs = []string{"r1"}
+	require.NoError(t, acc.Append(ctx, first))
+	assert.Equal(t, int64(1), first.Sequence)
 
-	require.NoError(t, acc.RecordResult(ctx, action.ID, model.Result{
-		Status:   model.ResultSuccess,
-		Duration: 250 * time.Millisecond,
-	}))
+	observation := newEntry(sessionID, events.KindObservation, model.ActionCommandExec, "Bash")
+	observation.Classifications = []privacy.Class{privacy.ClassConfig}
+	require.NoError(t, acc.Append(ctx, observation))
 
-	rows, err := store.QueryContextActions(ctx, sessionID, 0)
+	state, err := store.GetContextState(ctx, sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Read"}, state.ToolsUsed, "only an action adds a tool")
+	assert.Equal(t, []string{"secret", "config"}, state.ClassificationsSeen)
+
+	rows, err := store.QueryContextEntries(ctx, &storage.ContextEntryFilter{SessionID: &sessionID, Ascending: true})
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	assert.Equal(t, first.ID, rows[0].ID)
+	assert.Equal(t, "block", rows[0].Decision)
+	assert.Equal(t, []string{"r1"}, rows[0].MatchedRuleIDs)
+	assert.Equal(t, "observation", rows[1].Kind)
+}
+
+func TestSQLiteAccumulator_RecordResult(t *testing.T) {
+	acc, store := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+	entry := newEntry(sessionID, events.KindAction, model.ActionCommandExec, "Bash")
+	require.NoError(t, acc.Append(ctx, entry))
+
+	require.NoError(t, acc.RecordResult(ctx, entry.ID, model.Result{Status: model.ResultError, Error: "exit 1", Duration: 3 * time.Millisecond}))
+
+	rows, err := store.QueryContextEntries(ctx, &storage.ContextEntryFilter{SessionID: &sessionID})
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
-	assert.Equal(t, "success", rows[0].ResultStatus)
-	require.NotNil(t, rows[0].DurationMS)
-	assert.Equal(t, int64(250), *rows[0].DurationMS)
-
-	snap, err := acc.Snapshot(ctx, sessionID)
-	require.NoError(t, err)
-	assert.Equal(t, 0, snap.Errors, "success result must not bump errors")
-}
-
-func TestSQLiteAccumulator_RecordResultErrorBumpsErrorsCounter(t *testing.T) {
-	acc, _ := newTestSQLiteAccumulator(t)
-	sessionID := uuid.New()
-	ctx := context.Background()
-
-	action := newAction(t, sessionID, model.ActionCommandExec, "Bash")
-	require.NoError(t, acc.Append(ctx, action))
-
-	require.NoError(t, acc.RecordResult(ctx, action.ID, model.Result{
-		Status: model.ResultError,
-		Error:  "boom",
-	}))
-
-	snap, err := acc.Snapshot(ctx, sessionID)
-	require.NoError(t, err)
-	assert.Equal(t, 1, snap.Errors)
+	assert.Equal(t, "error", rows[0].ResultStatus)
+	assert.Equal(t, "exit 1", rows[0].ErrorMessage)
 }
 
 func TestSQLiteAccumulator_ConcurrentSessionsDoNotCorrupt(t *testing.T) {
-	acc, _ := newTestSQLiteAccumulator(t)
+	acc, store := newTestSQLiteAccumulator(t)
 	ctx := context.Background()
-
-	sessionA := uuid.New()
-	sessionB := uuid.New()
-	const perSession = 8
+	sessions := []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
+	const perSession = 10
 
 	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < perSession; i++ {
-			err := acc.Append(ctx, newAction(t, sessionA, model.ActionFileRead, "Read"))
-			assert.NoError(t, err)
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		for i := 0; i < perSession; i++ {
-			err := acc.Append(ctx, newAction(t, sessionB, model.ActionCommandExec, "Bash"))
-			assert.NoError(t, err)
-		}
-	}()
+	for _, sid := range sessions {
+		wg.Add(1)
+		go func(sid uuid.UUID) {
+			defer wg.Done()
+			for range perSession {
+				assert.NoError(t, acc.Append(ctx, newEntry(sid, events.KindAction, model.ActionFileRead, "Read")))
+			}
+		}(sid)
+	}
 	wg.Wait()
 
-	snapA, err := acc.Snapshot(ctx, sessionA)
-	require.NoError(t, err)
-	assert.Equal(t, perSession, snapA.TotalActions)
-	assert.Equal(t, perSession, snapA.FilesRead)
-	assert.Equal(t, 0, snapA.CommandsExecuted)
-
-	snapB, err := acc.Snapshot(ctx, sessionB)
-	require.NoError(t, err)
-	assert.Equal(t, perSession, snapB.TotalActions)
-	assert.Equal(t, perSession, snapB.CommandsExecuted)
-	assert.Equal(t, 0, snapB.FilesRead)
-}
-
-func TestSQLiteAccumulator_AppendUnionsClassificationsAndEntities(t *testing.T) {
-	acc, _ := newTestSQLiteAccumulator(t)
-	sessionID := uuid.New()
-	ctx := context.Background()
-
-	a1 := newAction(t, sessionID, model.ActionFileRead, "Read")
-	a1.DataClassifications = []privacy.Class{"secret"}
-	require.NoError(t, acc.Append(ctx, a1))
-
-	a2 := newAction(t, sessionID, model.ActionFileRead, "Read")
-	a2.DataClassifications = []privacy.Class{"secret", "config"}
-	require.NoError(t, acc.Append(ctx, a2))
-
-	a3 := newAction(t, sessionID, model.ActionCommandExec, "Bash")
-	a3.DataClassifications = []privacy.Class{"config"}
-	require.NoError(t, acc.Append(ctx, a3))
-
-	snap, err := acc.Snapshot(ctx, sessionID)
-	require.NoError(t, err)
-	require.NotNil(t, snap)
-	assert.ElementsMatch(t, []string{"secret", "config"}, snap.ClassificationsSeen)
-	assert.Empty(t, snap.EntitiesSeen, "entities_seen is reserved for Phase 4 and is not maintained today")
-	assert.ElementsMatch(t, []string{"Read", "Bash"}, snap.ToolsUsed)
-}
-
-func TestSQLiteAccumulator_AppendNoToolSkipsEntities(t *testing.T) {
-	acc, _ := newTestSQLiteAccumulator(t)
-	sessionID := uuid.New()
-	ctx := context.Background()
-
-	a := newAction(t, sessionID, model.ActionFileRead, "")
-	require.NoError(t, acc.Append(ctx, a))
-
-	snap, err := acc.Snapshot(ctx, sessionID)
-	require.NoError(t, err)
-	require.NotNil(t, snap)
-	assert.Empty(t, snap.EntitiesSeen)
-	assert.Empty(t, snap.ToolsUsed)
-}
-
-func TestSQLiteAccumulator_SnapshotComputesSessionDuration(t *testing.T) {
-	acc, _ := newTestSQLiteAccumulator(t)
-	sessionID := uuid.New()
-	ctx := context.Background()
-
-	past := time.Now().UTC().Add(-2 * time.Minute)
-	action := &model.Action{
-		ID:        uuid.New(),
-		SessionID: sessionID,
-		Timestamp: past,
-		Type:      model.ActionFileRead,
-		Tool:      "Read",
+	for _, sid := range sessions {
+		rows, err := store.QueryContextEntries(ctx, &storage.ContextEntryFilter{SessionID: &sid, Limit: -1, Ascending: true})
+		require.NoError(t, err)
+		require.Len(t, rows, perSession)
+		for i, r := range rows {
+			assert.Equal(t, int64(i+1), r.Sequence)
+		}
 	}
-	require.NoError(t, acc.Append(ctx, action))
-
-	snap, err := acc.Snapshot(ctx, sessionID)
-	require.NoError(t, err)
-	assert.GreaterOrEqual(t, snap.SessionDuration, time.Minute)
 }

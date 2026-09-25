@@ -278,26 +278,6 @@ func (_u *AuditEventUpdate) ClearRawEvent() *AuditEventUpdate {
 	return _u
 }
 
-// SetConversationContext sets the "conversation_context" field.
-func (_u *AuditEventUpdate) SetConversationContext(v string) *AuditEventUpdate {
-	_u.mutation.SetConversationContext(v)
-	return _u
-}
-
-// SetNillableConversationContext sets the "conversation_context" field if the given value is not nil.
-func (_u *AuditEventUpdate) SetNillableConversationContext(v *string) *AuditEventUpdate {
-	if v != nil {
-		_u.SetConversationContext(*v)
-	}
-	return _u
-}
-
-// ClearConversationContext clears the value of the "conversation_context" field.
-func (_u *AuditEventUpdate) ClearConversationContext() *AuditEventUpdate {
-	_u.mutation.ClearConversationContext()
-	return _u
-}
-
 // SetIsSensitive sets the "is_sensitive" field.
 func (_u *AuditEventUpdate) SetIsSensitive(v bool) *AuditEventUpdate {
 	_u.mutation.SetIsSensitive(v)
@@ -586,12 +566,6 @@ func (_u *AuditEventUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.RawEventCleared() {
 		_spec.ClearField(auditevent.FieldRawEvent, field.TypeJSON)
-	}
-	if value, ok := _u.mutation.ConversationContext(); ok {
-		_spec.SetField(auditevent.FieldConversationContext, field.TypeString, value)
-	}
-	if _u.mutation.ConversationContextCleared() {
-		_spec.ClearField(auditevent.FieldConversationContext, field.TypeString)
 	}
 	if value, ok := _u.mutation.IsSensitive(); ok {
 		_spec.SetField(auditevent.FieldIsSensitive, field.TypeBool, value)
@@ -929,26 +903,6 @@ func (_u *AuditEventUpdateOne) ClearRawEvent() *AuditEventUpdateOne {
 	return _u
 }
 
-// SetConversationContext sets the "conversation_context" field.
-func (_u *AuditEventUpdateOne) SetConversationContext(v string) *AuditEventUpdateOne {
-	_u.mutation.SetConversationContext(v)
-	return _u
-}
-
-// SetNillableConversationContext sets the "conversation_context" field if the given value is not nil.
-func (_u *AuditEventUpdateOne) SetNillableConversationContext(v *string) *AuditEventUpdateOne {
-	if v != nil {
-		_u.SetConversationContext(*v)
-	}
-	return _u
-}
-
-// ClearConversationContext clears the value of the "conversation_context" field.
-func (_u *AuditEventUpdateOne) ClearConversationContext() *AuditEventUpdateOne {
-	_u.mutation.ClearConversationContext()
-	return _u
-}
-
 // SetIsSensitive sets the "is_sensitive" field.
 func (_u *AuditEventUpdateOne) SetIsSensitive(v bool) *AuditEventUpdateOne {
 	_u.mutation.SetIsSensitive(v)
@@ -1267,12 +1221,6 @@ func (_u *AuditEventUpdateOne) sqlSave(ctx context.Context) (_node *AuditEvent, 
 	}
 	if _u.mutation.RawEventCleared() {
 		_spec.ClearField(auditevent.FieldRawEvent, field.TypeJSON)
-	}
-	if value, ok := _u.mutation.ConversationContext(); ok {
-		_spec.SetField(auditevent.FieldConversationContext, field.TypeString, value)
-	}
-	if _u.mutation.ConversationContextCleared() {
-		_spec.ClearField(auditevent.FieldConversationContext, field.TypeString)
 	}
 	if value, ok := _u.mutation.IsSensitive(); ok {
 		_spec.SetField(auditevent.FieldIsSensitive, field.TypeBool, value)

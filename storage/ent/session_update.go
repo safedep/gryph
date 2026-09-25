@@ -229,6 +229,48 @@ func (_u *SessionUpdate) AddCommandsExecuted(v int) *SessionUpdate {
 	return _u
 }
 
+// SetNetworkRequests sets the "network_requests" field.
+func (_u *SessionUpdate) SetNetworkRequests(v int) *SessionUpdate {
+	_u.mutation.ResetNetworkRequests()
+	_u.mutation.SetNetworkRequests(v)
+	return _u
+}
+
+// SetNillableNetworkRequests sets the "network_requests" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableNetworkRequests(v *int) *SessionUpdate {
+	if v != nil {
+		_u.SetNetworkRequests(*v)
+	}
+	return _u
+}
+
+// AddNetworkRequests adds value to the "network_requests" field.
+func (_u *SessionUpdate) AddNetworkRequests(v int) *SessionUpdate {
+	_u.mutation.AddNetworkRequests(v)
+	return _u
+}
+
+// SetEventCount sets the "event_count" field.
+func (_u *SessionUpdate) SetEventCount(v int) *SessionUpdate {
+	_u.mutation.ResetEventCount()
+	_u.mutation.SetEventCount(v)
+	return _u
+}
+
+// SetNillableEventCount sets the "event_count" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableEventCount(v *int) *SessionUpdate {
+	if v != nil {
+		_u.SetEventCount(*v)
+	}
+	return _u
+}
+
+// AddEventCount adds value to the "event_count" field.
+func (_u *SessionUpdate) AddEventCount(v int) *SessionUpdate {
+	_u.mutation.AddEventCount(v)
+	return _u
+}
+
 // SetErrors sets the "errors" field.
 func (_u *SessionUpdate) SetErrors(v int) *SessionUpdate {
 	_u.mutation.ResetErrors()
@@ -622,6 +664,18 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedCommandsExecuted(); ok {
 		_spec.AddField(session.FieldCommandsExecuted, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.NetworkRequests(); ok {
+		_spec.SetField(session.FieldNetworkRequests, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedNetworkRequests(); ok {
+		_spec.AddField(session.FieldNetworkRequests, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.EventCount(); ok {
+		_spec.SetField(session.FieldEventCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedEventCount(); ok {
+		_spec.AddField(session.FieldEventCount, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.Errors(); ok {
 		_spec.SetField(session.FieldErrors, field.TypeInt, value)
 	}
@@ -959,6 +1013,48 @@ func (_u *SessionUpdateOne) SetNillableCommandsExecuted(v *int) *SessionUpdateOn
 // AddCommandsExecuted adds value to the "commands_executed" field.
 func (_u *SessionUpdateOne) AddCommandsExecuted(v int) *SessionUpdateOne {
 	_u.mutation.AddCommandsExecuted(v)
+	return _u
+}
+
+// SetNetworkRequests sets the "network_requests" field.
+func (_u *SessionUpdateOne) SetNetworkRequests(v int) *SessionUpdateOne {
+	_u.mutation.ResetNetworkRequests()
+	_u.mutation.SetNetworkRequests(v)
+	return _u
+}
+
+// SetNillableNetworkRequests sets the "network_requests" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableNetworkRequests(v *int) *SessionUpdateOne {
+	if v != nil {
+		_u.SetNetworkRequests(*v)
+	}
+	return _u
+}
+
+// AddNetworkRequests adds value to the "network_requests" field.
+func (_u *SessionUpdateOne) AddNetworkRequests(v int) *SessionUpdateOne {
+	_u.mutation.AddNetworkRequests(v)
+	return _u
+}
+
+// SetEventCount sets the "event_count" field.
+func (_u *SessionUpdateOne) SetEventCount(v int) *SessionUpdateOne {
+	_u.mutation.ResetEventCount()
+	_u.mutation.SetEventCount(v)
+	return _u
+}
+
+// SetNillableEventCount sets the "event_count" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableEventCount(v *int) *SessionUpdateOne {
+	if v != nil {
+		_u.SetEventCount(*v)
+	}
+	return _u
+}
+
+// AddEventCount adds value to the "event_count" field.
+func (_u *SessionUpdateOne) AddEventCount(v int) *SessionUpdateOne {
+	_u.mutation.AddEventCount(v)
 	return _u
 }
 
@@ -1384,6 +1480,18 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 	}
 	if value, ok := _u.mutation.AddedCommandsExecuted(); ok {
 		_spec.AddField(session.FieldCommandsExecuted, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.NetworkRequests(); ok {
+		_spec.SetField(session.FieldNetworkRequests, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedNetworkRequests(); ok {
+		_spec.AddField(session.FieldNetworkRequests, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.EventCount(); ok {
+		_spec.SetField(session.FieldEventCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedEventCount(); ok {
+		_spec.AddField(session.FieldEventCount, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.Errors(); ok {
 		_spec.SetField(session.FieldErrors, field.TypeInt, value)

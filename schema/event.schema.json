@@ -37,9 +37,6 @@
     "agent_version": {
       "type": "string"
     },
-    "conversation_context": {
-      "type": "string"
-    },
     "diff_content": {
       "$ref": "#/$defs/text"
     },

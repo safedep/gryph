@@ -46,6 +46,11 @@ func (Session) Fields() []ent.Field {
 			Default(0),
 		field.Int("commands_executed").
 			Default(0),
+		field.Int("network_requests").
+			Default(0),
+		field.Int("event_count").
+			Default(0).
+			Comment("Events recorded in the session. The next event sequence is event_count + 1"),
 		field.Int("errors").
 			Default(0),
 		field.Int("sensitive_actions").Default(0),

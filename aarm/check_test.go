@@ -2,6 +2,7 @@ package aarm
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -73,19 +74,21 @@ rules:
 }
 
 type spyAccumulator struct {
+	appendErr         error
 	appendCalls       int
 	snapshotCalls     int
 	recordResultCalls int
-	lastAction        *model.Action
+	lastEntry         *model.ContextEntry
+	lastPending       *model.ContextEntry
 	lastSessionID     uuid.UUID
 	lastResult        model.Result
 	snapshot          *model.ContextSnapshot
 }
 
-func (s *spyAccumulator) Append(_ context.Context, a *model.Action) error {
+func (s *spyAccumulator) Append(_ context.Context, e *model.ContextEntry) error {
 	s.appendCalls++
-	s.lastAction = a
-	return nil
+	s.lastEntry = e
+	return s.appendErr
 }
 
 func (s *spyAccumulator) RecordResult(_ context.Context, _ uuid.UUID, r model.Result) error {
@@ -94,9 +97,10 @@ func (s *spyAccumulator) RecordResult(_ context.Context, _ uuid.UUID, r model.Re
 	return nil
 }
 
-func (s *spyAccumulator) Snapshot(_ context.Context, id uuid.UUID) (*model.ContextSnapshot, error) {
+func (s *spyAccumulator) Snapshot(_ context.Context, id uuid.UUID, pending *model.ContextEntry) (*model.ContextSnapshot, error) {
 	s.snapshotCalls++
 	s.lastSessionID = id
+	s.lastPending = pending
 	if s.snapshot != nil {
 		return s.snapshot, nil
 	}
@@ -134,7 +138,7 @@ rules:
 
 	assert.Equal(t, 1, spy.appendCalls)
 	assert.Equal(t, 1, spy.snapshotCalls)
-	require.NotNil(t, spy.lastAction)
+	require.NotNil(t, spy.lastEntry)
 	assert.Equal(t, sessID, spy.lastSessionID, "Snapshot must be queried by the action's session id")
 	assert.Equal(t, coresecurity.DecisionGuidance, res.Decision,
 		"PDP should observe the injected snapshot (files_written=15) and match the rule")
@@ -167,8 +171,15 @@ rules:
 	res, err := med.Check(context.Background(), event, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
-	assert.Equal(t, 1, spy.recordResultCalls, "a blocked action must record a terminal context result")
-	assert.Equal(t, model.ResultBlocked, spy.lastResult.Status)
+	require.Equal(t, 1, spy.appendCalls)
+	assert.Equal(t, model.ResultBlocked, spy.lastEntry.Result, "a blocked entry is written with its terminal result")
+	assert.Zero(t, spy.recordResultCalls, "the entry is written once")
+
+	spy.appendErr = errors.New("database is locked")
+	event.ID = uuid.New()
+	res, err = med.Check(context.Background(), event, nil)
+	require.NoError(t, err, "a failed append must not fail the check")
+	assert.Equal(t, coresecurity.DecisionBlock, res.Decision, "a failed append must not turn a block into an allow")
 }
 
 var _ accumulator.Accumulator = (*spyAccumulator)(nil)
@@ -453,7 +464,10 @@ rules: []
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
 	assert.Contains(t, res.Reason, "no verifiable human principal")
 	assert.Equal(t, 1, auditCalls, "identity audit hook must fire once")
-	assert.Equal(t, 0, accum.appendCalls, "denied action must not contribute to context.total_actions")
+	assert.Equal(t, 1, accum.appendCalls, "a denied action is an attempt, so it gets a context entry")
+	require.NotNil(t, accum.lastEntry)
+	assert.Equal(t, model.DecisionBlock, accum.lastEntry.Decision)
+	assert.Equal(t, model.ResultBlocked, accum.lastEntry.Result)
 	assert.Equal(t, 0, accum.snapshotCalls, "denied action must not query the accumulator")
 	require.Len(t, rec.records, 1, "block must still produce a receipt")
 	assert.Equal(t, model.DecisionBlock, rec.records[0].Decision.Decision)

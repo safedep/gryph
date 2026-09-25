@@ -3,8 +3,9 @@
 # policy enabled, so every hook also writes a receipt and a context chain
 # row. testscript's own background commands start too far apart to overlap.
 # Every hook succeeds, every event and receipt persists, and both chains
-# verify. Session counters are best-effort under concurrent writers and are
-# not asserted exactly.
+# verify. Each of the four sessions gets six events. The session counters and
+# the event sequences stay exact, because each event write adds to the
+# counters inside one writer transaction.
 env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
 env XDG_DATA_HOME=$WORK/home/.local/share
@@ -20,9 +21,13 @@ exec sh run.sh
 exec gryph query --format json --no-color --limit 60
 stdout -count=25 '"ActionType": "file_read"'
 ! stdout '"ResultStatus": "blocked"'
+stdout -count=4 '"Sequence": 6,'
+! stdout '"Sequence": 7,'
 
 exec gryph sessions --format json --no-color
 stdout -count=5 '"AgentName": "claude-code"'
+stdout -count=4 '"TotalActions": 6,'
+stdout -count=4 '"FilesRead": 6,'
 
 exec gryph policy receipts export --format jsonl --output receipts.jsonl
 exec gryph policy receipts verify-log --input receipts.jsonl --no-color

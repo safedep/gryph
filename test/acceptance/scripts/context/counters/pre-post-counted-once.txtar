@@ -1,0 +1,33 @@
+# A pre and post hook pair for one tool call counts as one action. The post
+# event links to the pre event by the tool call ID and is an observation, so
+# the session counters and context.total_actions count the command once.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin pre.json
+exec gryph _hook claude-code PreToolUse
+stdin post.json
+exec gryph _hook claude-code PostToolUse
+
+exec gryph query --format json --no-color
+stdout -count=2 '"ActionType": "command_exec"'
+
+exec gryph sessions --format json --no-color
+stdout '"TotalActions": 1,'
+stdout '"CommandsExecuted": 1,'
+
+exec gryph policy context --format json --no-color
+stdout '"total_actions": 1,'
+stdout '"commands_executed": 1,'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- pre.json --
+{"session_id": "s-pair", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "go test ./..."}, "tool_use_id": "tu-pair"}
+-- post.json --
+{"session_id": "s-pair", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "go test ./..."}, "tool_response": {"stdout": "ok", "exit_code": 0}, "tool_use_id": "tu-pair"}

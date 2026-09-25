@@ -20,7 +20,7 @@ import (
 //   1. Every row's prev_hash equals the previous row's hash and the first row's
 //      prev_hash is the 32-byte zero state.
 //   2. Sequence is strictly monotonic, starts at 1, no gaps.
-//   3. ComputeHash(InputFromRow(...)) == row.Hash for every row.
+//   3. ComputeHash(row.Fields) == row.Hash for every row.
 //   4. A tampered row produces at least one Break from Verify.
 //
 // Structural inputs (chain size, tamper case, field selectors) are
@@ -45,18 +45,33 @@ func buildPropertyChain(t *testing.T, sessionID uuid.UUID, n int) []Row {
 		if prevHash != nil {
 			rowPrev = append([]byte(nil), prevHash...)
 		}
-		fields := InputFromRow(
-			seq, rowPrev,
-			base.Add(time.Duration(i)*time.Millisecond),
-			sessionID, uuid.New(), uuid.New(),
-			"file_read", "Read", "claude-code", "proj", "/work",
-			[]string{"none"}, float32(i)*0.1,
-		)
+		fields := Input{
+			Sequence:          seq,
+			PrevHash:          rowPrev,
+			TimestampUnixNano: base.Add(time.Duration(i) * time.Millisecond).UnixNano(),
+			SessionID:         sessionID,
+			EventID:           uuid.New(),
+			EntryID:           uuid.New(),
+			Kind:              "action",
+			ActionType:        "file_read",
+			Tool:              "Read",
+			ToolCallID:        "call",
+			Phase:             "pre",
+			Target:            Target{Host: "example.com"},
+			Origin:            "file_project",
+			Tags:              []string{"tag"},
+			Classifications:   []string{"config"},
+			InjectionScore:    float32(i) * 0.1,
+			Decision:          "allow",
+			MatchedRuleIDs:    []string{"rule"},
+			ContentDigest:     "sha256:00",
+		}
 		hash, err := ComputeHash(fields)
 		require.NoError(t, err)
 		rows = append(rows, Row{
 			SessionID: sessionID,
 			Sequence:  seq,
+			Version:   Version,
 			PrevHash:  rowPrev,
 			Hash:      hash,
 			Fields:    fields,
@@ -106,30 +121,55 @@ func (tamperCase) Generate(rand *rand.Rand, _ int) reflect.Value {
 	return reflect.ValueOf(tamperCase{
 		Size:  size,
 		Row:   rand.Intn(size),
-		Field: rand.Intn(8),
+		Field: rand.Intn(tamperFields),
 	})
 }
 
-// tamperRow flips one of eight hash-input fields on r so Verify must report
-// a break.
+const tamperFields = 20
+
+// tamperRow changes one hash-input field on r so Verify must report a break.
 func tamperRow(r *Row, field int) {
-	switch field % 8 {
+	switch field % tamperFields {
 	case 0:
-		r.Fields.ActionType = r.Fields.ActionType + "-tampered"
+		r.Fields.ActionType += "-tampered"
 	case 1:
-		r.Fields.Tool = r.Fields.Tool + "-tampered"
+		r.Fields.Tool += "-tampered"
 	case 2:
-		r.Fields.Agent = r.Fields.Agent + "-tampered"
+		r.Fields.Kind = "observation"
 	case 3:
-		r.Fields.Project = r.Fields.Project + "-tampered"
+		r.Fields.ToolCallID += "-tampered"
 	case 4:
-		r.Fields.WorkingDir = r.Fields.WorkingDir + "-tampered"
+		r.Fields.Phase = "post"
 	case 5:
-		r.Fields.DataClassifications = append([]string{}, "tampered")
+		r.Fields.Classifications = []string{"secret"}
 	case 6:
-		r.Fields.InjectionScore = r.Fields.InjectionScore + 0.5
+		r.Fields.InjectionScore += 0.5
 	case 7:
 		r.Fields.TimestampUnixNano++
+	case 8:
+		r.Fields.Origin = "web"
+	case 9:
+		r.Fields.Tags = []string{"secret_read"}
+	case 10:
+		r.Fields.Decision = "block"
+	case 11:
+		r.Fields.MatchedRuleIDs = nil
+	case 12:
+		r.Fields.ContentDigest = "sha256:ff"
+	case 13:
+		r.Fields.Target.Host = "evil.example"
+	case 14:
+		r.Fields.LinkedEventID = uuid.New()
+	case 15:
+		r.Fields.EventID = uuid.New()
+	case 16:
+		r.Fields.Target.MCPServer += "-tampered"
+	case 17:
+		r.Fields.Target.MCPTool += "-tampered"
+	case 18:
+		r.Fields.EntryID = uuid.New()
+	case 19:
+		r.Fields.SessionID = uuid.New()
 	}
 }
 

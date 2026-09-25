@@ -1,6 +1,7 @@
 package contextchain
 
 import (
+	"encoding/hex"
 	"testing"
 	"time"
 
@@ -21,17 +22,22 @@ func buildChainedRows(t *testing.T, sessionID uuid.UUID, startSeq int64, n int) 
 	for i := 0; i < n; i++ {
 		seq := startSeq + int64(i)
 		actionID := uuid.New()
-		fields := InputFromRow(
-			seq, prevHash, base.Add(time.Duration(i)*time.Millisecond),
-			sessionID, uuid.Nil, actionID,
-			"file_read", "Read", "claude-code", "", "",
-			nil, 0,
-		)
+		fields := Input{
+			Sequence:          seq,
+			PrevHash:          prevHash,
+			TimestampUnixNano: base.Add(time.Duration(i) * time.Millisecond).UnixNano(),
+			SessionID:         sessionID,
+			EntryID:           actionID,
+			Kind:              "action",
+			ActionType:        "file_read",
+			Tool:              "Read",
+		}
 		hash, err := ComputeHash(fields)
 		require.NoError(t, err)
 		rows = append(rows, Row{
 			SessionID: sessionID,
 			Sequence:  seq,
+			Version:   Version,
 			PrevHash:  prevHash,
 			Hash:      hash,
 			Fields:    fields,
@@ -136,4 +142,41 @@ func TestVerify_SingleTamperedRowEmitsMultipleBreaksButCountsOnce(t *testing.T) 
 		assert.Equal(t, int64(2), b.Sequence,
 			"every diagnostic must point at the tampered row, got %+v", b)
 	}
+}
+
+func TestVerify_UnknownHashVersion(t *testing.T) {
+	rows := buildChainedRows(t, uuid.New(), 1, 2)
+	rows[1].Version = 1
+
+	verified, breaks := Verify(rows)
+	assert.Equal(t, 1, verified)
+	require.Len(t, breaks, 1)
+	assert.Contains(t, breaks[0].Reason, "unknown hash version 1")
+}
+
+// TestComputeHash_Golden pins the version 2 hash format. A change to the
+// field order or the encoding changes this value and breaks every stored
+// chain, so it must come with a new hash version.
+func TestComputeHash_Golden(t *testing.T) {
+	got, err := ComputeHash(Input{
+		Sequence:          1,
+		TimestampUnixNano: 1700000000000000000,
+		SessionID:         uuid.MustParse("11111111-1111-1111-1111-111111111111"),
+		EntryID:           uuid.MustParse("22222222-2222-2222-2222-222222222222"),
+		Kind:              "action",
+		ActionType:        "command_exec",
+		Tool:              "Bash",
+		ToolCallID:        "call-1",
+		Phase:             "pre",
+		Target:            Target{Host: "example.com"},
+		Origin:            "command",
+		Tags:              []string{"b", "a"},
+		Classifications:   []string{"secret"},
+		InjectionScore:    0.25,
+		Decision:          "block",
+		MatchedRuleIDs:    []string{"r1"},
+		ContentDigest:     "sha256:00",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "4800df1dc57cdc93f331c8f225e10a20a28b51480028e7e2fe4a78c7a2d8c172", hex.EncodeToString(got))
 }

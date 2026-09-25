@@ -2,9 +2,11 @@ package events
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/privacy"
 )
 
@@ -45,8 +47,6 @@ type Event struct {
 	DiffContent privacy.Text `json:"diff_content,omitzero"`
 	// RawEvent is the original event from agent (full logging only).
 	RawEvent json.RawMessage `json:"raw_event,omitempty"`
-	// ConversationContext is the prompt/conversation (full logging only).
-	ConversationContext string `json:"conversation_context,omitempty"`
 	// TranscriptPath is the path to the agent's transcript file (if provided by the agent).
 	// Excluded from JSON export as it is internal to the local machine.
 	TranscriptPath string `json:"-"`
@@ -339,6 +339,19 @@ func NewPayload(t ActionType) any {
 	}
 }
 
+// DecodePayload decodes the payload into the typed struct of the action type.
+// It returns nil when the payload is empty or the action type has no struct.
+func (e *Event) DecodePayload() (any, error) {
+	p := NewPayload(e.ActionType)
+	if p == nil || len(e.Payload) == 0 {
+		return nil, nil
+	}
+	if err := json.Unmarshal(e.Payload, p); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
 // toolTargetKeys are the tool input keys that name a file.
 var toolTargetKeys = []string{"file_path", "path", "notebook_path"}
 
@@ -370,4 +383,34 @@ func (e *Event) Targets() (paths []string, url string) {
 		url, _ = input["url"].(string)
 	}
 	return paths, url
+}
+
+// ContentDigest returns one digest for the content of the event. It is the
+// label digest of the single content value, or the digest of the list of
+// label digests when the event has more than one value. A label digest is
+// taken before redaction. It returns an empty string when no value has a
+// digest.
+func (e *Event) ContentDigest() string {
+	var digests []string
+	add := func(_ string, t *privacy.Text) {
+		if t.Label.Digest != "" {
+			digests = append(digests, t.Label.Digest)
+		}
+	}
+	add("diff_content", &e.DiffContent)
+	p, err := e.DecodePayload()
+	if err != nil {
+		log.Warnf("content digest: decode %s payload: %v", e.ActionType, err)
+	}
+	if p != nil {
+		privacy.Walk(p, add)
+	}
+	switch len(digests) {
+	case 0:
+		return ""
+	case 1:
+		return digests[0]
+	default:
+		return privacy.Digest(strings.Join(digests, "\n"))
+	}
 }

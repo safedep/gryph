@@ -168,6 +168,34 @@ func (_c *SessionCreate) SetNillableCommandsExecuted(v *int) *SessionCreate {
 	return _c
 }
 
+// SetNetworkRequests sets the "network_requests" field.
+func (_c *SessionCreate) SetNetworkRequests(v int) *SessionCreate {
+	_c.mutation.SetNetworkRequests(v)
+	return _c
+}
+
+// SetNillableNetworkRequests sets the "network_requests" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableNetworkRequests(v *int) *SessionCreate {
+	if v != nil {
+		_c.SetNetworkRequests(*v)
+	}
+	return _c
+}
+
+// SetEventCount sets the "event_count" field.
+func (_c *SessionCreate) SetEventCount(v int) *SessionCreate {
+	_c.mutation.SetEventCount(v)
+	return _c
+}
+
+// SetNillableEventCount sets the "event_count" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableEventCount(v *int) *SessionCreate {
+	if v != nil {
+		_c.SetEventCount(*v)
+	}
+	return _c
+}
+
 // SetErrors sets the "errors" field.
 func (_c *SessionCreate) SetErrors(v int) *SessionCreate {
 	_c.mutation.SetErrors(v)
@@ -412,6 +440,14 @@ func (_c *SessionCreate) defaults() {
 		v := session.DefaultCommandsExecuted
 		_c.mutation.SetCommandsExecuted(v)
 	}
+	if _, ok := _c.mutation.NetworkRequests(); !ok {
+		v := session.DefaultNetworkRequests
+		_c.mutation.SetNetworkRequests(v)
+	}
+	if _, ok := _c.mutation.EventCount(); !ok {
+		v := session.DefaultEventCount
+		_c.mutation.SetEventCount(v)
+	}
 	if _, ok := _c.mutation.Errors(); !ok {
 		v := session.DefaultErrors
 		_c.mutation.SetErrors(v)
@@ -474,6 +510,12 @@ func (_c *SessionCreate) check() error {
 	}
 	if _, ok := _c.mutation.CommandsExecuted(); !ok {
 		return &ValidationError{Name: "commands_executed", err: errors.New(`ent: missing required field "Session.commands_executed"`)}
+	}
+	if _, ok := _c.mutation.NetworkRequests(); !ok {
+		return &ValidationError{Name: "network_requests", err: errors.New(`ent: missing required field "Session.network_requests"`)}
+	}
+	if _, ok := _c.mutation.EventCount(); !ok {
+		return &ValidationError{Name: "event_count", err: errors.New(`ent: missing required field "Session.event_count"`)}
 	}
 	if _, ok := _c.mutation.Errors(); !ok {
 		return &ValidationError{Name: "errors", err: errors.New(`ent: missing required field "Session.errors"`)}
@@ -577,6 +619,14 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CommandsExecuted(); ok {
 		_spec.SetField(session.FieldCommandsExecuted, field.TypeInt, value)
 		_node.CommandsExecuted = value
+	}
+	if value, ok := _c.mutation.NetworkRequests(); ok {
+		_spec.SetField(session.FieldNetworkRequests, field.TypeInt, value)
+		_node.NetworkRequests = value
+	}
+	if value, ok := _c.mutation.EventCount(); ok {
+		_spec.SetField(session.FieldEventCount, field.TypeInt, value)
+		_node.EventCount = value
 	}
 	if value, ok := _c.mutation.Errors(); ok {
 		_spec.SetField(session.FieldErrors, field.TypeInt, value)

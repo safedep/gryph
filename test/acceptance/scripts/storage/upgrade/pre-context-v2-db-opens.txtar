@@ -1,0 +1,47 @@
+# A database from the last release, written with the policy layer on, opens
+# under the current binary. The migration drops the old context tables, and
+# their rows are lost. The audit events stay, and new context entries chain
+# from sequence 1. The old session fixture-session (1e44b9f7) continues its
+# event sequence after its four events.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $XDG_DATA_HOME/safedep/gryph
+cp $ACCEPTANCE_TESTDATA/upgrade/audit-v0.9.0.db $XDG_DATA_HOME/safedep/gryph/audit.db
+
+exec gryph policy context --format json --no-color
+stdout '^\[\]$'
+
+exec gryph query --format json --no-color
+stdout -count=4 '"ActionType"'
+
+stdin new_event.json
+exec gryph _hook claude-code PreToolUse
+
+exec gryph policy context --verify --all-sessions --no-color
+stdout 'Context chain verification: OK'
+stdout 'ok=1 broken=0'
+
+exec gryph query --format json --no-color
+stdout -count=5 '"ActionType"'
+
+stdin old_session_event.json
+exec gryph _hook claude-code PreToolUse
+exec gryph query --session 1e44b9f7 --format json --no-color
+stdout -count=5 '"ActionType"'
+stdout '"Sequence": 5,'
+
+exec gryph doctor --no-color
+stdout '\[ok\]\s+Database schema'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: open
+-- old_session_event.json --
+{"session_id": "fixture-session", "cwd": "/p", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "go test ./..."}, "tool_use_id": "post-upgrade-2"}
+-- new_event.json --
+{"session_id": "post-upgrade-session", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "/home/user/project/README.md"}, "tool_use_id": "post-upgrade-1"}

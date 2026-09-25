@@ -192,7 +192,7 @@ func TestHookAdapter_Normalize(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			action, err := adapter.Normalize(context.Background(), tc.event, tc.sess)
+			action, _, err := adapter.Normalize(context.Background(), tc.event, tc.sess)
 			require.NoError(t, err)
 			require.NotNil(t, action)
 
@@ -227,7 +227,7 @@ func TestHookAdapter_Normalize_AppliesClassifierAndScorer(t *testing.T) {
 	t.Run("file_read gets classifications, no score", func(t *testing.T) {
 		event := mustEvent(t, uuid.New(), uuid.New(), events.ActionFileRead, "Read", now,
 			events.FileReadPayload{Path: "/work/.env"})
-		action, err := adapter.Normalize(context.Background(), event, nil)
+		action, _, err := adapter.Normalize(context.Background(), event, nil)
 		require.NoError(t, err)
 		assert.Equal(t, []privacy.Class{privacy.ClassSecret}, action.DataClassifications)
 		assert.Equal(t, float32(0), action.InjectionScore, "score is gated to tool_use only")
@@ -236,7 +236,7 @@ func TestHookAdapter_Normalize_AppliesClassifierAndScorer(t *testing.T) {
 	t.Run("tool_use gets classifications and score", func(t *testing.T) {
 		event := mustEvent(t, uuid.New(), uuid.New(), events.ActionToolUse, "WebFetch", now,
 			events.ToolUsePayload{ToolName: "WebFetch", Input: privacy.NewText(`{"url":"https://example.com"}`)})
-		action, err := adapter.Normalize(context.Background(), event, nil)
+		action, _, err := adapter.Normalize(context.Background(), event, nil)
 		require.NoError(t, err)
 		assert.Equal(t, []privacy.Class{privacy.ClassSecret}, action.DataClassifications)
 		assert.Equal(t, float32(0.6), action.InjectionScore)
@@ -244,7 +244,7 @@ func TestHookAdapter_Normalize_AppliesClassifierAndScorer(t *testing.T) {
 }
 
 func TestHookAdapter_Normalize_NilEvent(t *testing.T) {
-	_, err := NewHookAdapter().Normalize(context.Background(), nil, nil)
+	_, _, err := NewHookAdapter().Normalize(context.Background(), nil, nil)
 	require.Error(t, err)
 }
 
@@ -254,9 +254,9 @@ func TestHookAdapter_Normalize_GeneratesUniqueIDs(t *testing.T) {
 		events.FileReadPayload{Path: "/x"})
 
 	adapter := NewHookAdapter()
-	a1, err := adapter.Normalize(context.Background(), evt, nil)
+	a1, _, err := adapter.Normalize(context.Background(), evt, nil)
 	require.NoError(t, err)
-	a2, err := adapter.Normalize(context.Background(), evt, nil)
+	a2, _, err := adapter.Normalize(context.Background(), evt, nil)
 	require.NoError(t, err)
 
 	assert.NotEqual(t, a1.ID, a2.ID, "each normalization gets its own Action ID")
@@ -272,7 +272,7 @@ func TestHookAdapter_Normalize_PopulatesIdentity(t *testing.T) {
 
 	event := mustEvent(t, uuid.New(), uuid.New(), events.ActionFileRead, "Read", time.Now(),
 		events.FileReadPayload{Path: "/x"})
-	action, err := adapter.Normalize(context.Background(), event, nil)
+	action, _, err := adapter.Normalize(context.Background(), event, nil)
 	require.NoError(t, err)
 	assert.Equal(t, got.HumanPrincipal, action.HumanPrincipal)
 	assert.Equal(t, got.ServiceIdentity, action.ServiceIdentity)
@@ -314,7 +314,7 @@ func TestHookAdapter_Normalize_Phase(t *testing.T) {
 			event := mustEvent(t, uuid.New(), uuid.New(), events.ActionFileRead, "Read", time.Now(),
 				events.FileReadPayload{Path: "/tmp/a"})
 			event.Phase = tc.phase
-			action, err := NewHookAdapter().Normalize(context.Background(), event, nil)
+			action, _, err := NewHookAdapter().Normalize(context.Background(), event, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, action.Phase)
 		})

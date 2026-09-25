@@ -52,8 +52,14 @@ type SessionStore interface {
 	// SaveSession persists a new session.
 	SaveSession(ctx context.Context, sess *session.Session) error
 
-	// UpdateSession updates an existing session.
+	// UpdateSession updates the metadata of an existing session. It does
+	// not write the counters. Only RecordEvent changes them.
 	UpdateSession(ctx context.Context, sess *session.Session) error
+
+	// RecordEvent saves an event of an existing session and adds counts to
+	// the session counters, in one writer transaction. It sets
+	// event.Sequence to the next sequence of the session.
+	RecordEvent(ctx context.Context, event *events.Event, counts session.Counts) error
 
 	// GetSession retrieves a session by ID.
 	GetSession(ctx context.Context, id uuid.UUID) (*session.Session, error)
@@ -93,36 +99,31 @@ type StreamCursorStore interface {
 	SaveAuditCursor(ctx context.Context, cursor *StreamCursor) error
 }
 
-// ContextStore defines the interface for the AARM Context Accumulator's
-// persistent storage. AppendContextAction is responsible for the atomic
-// per-session counter update on the state row. Implementations must keep
-// the counter UPSERT race-free across concurrent same-session writes.
+// ContextStore persists the session context: the entry log and the
+// per-session state row.
 //
-// AppendContextAction now chains rows per session with a SHA-256 hash of
-// the previous row, computed inside the same writer transaction that
-// inserts the row and upserts the per-session state. Implementations must
-// serialize same-session writes so two goroutines cannot observe the same
-// last (sequence, hash) before one upgrades to writer. The chain primitives
-// live in aarm/accumulator/contextchain so they can be shared with the
-// verifier.
+// AppendContextEntry inserts an entry, chains it to the previous entry of
+// the session with a SHA-256 hash, and applies the state delta, in one
+// writer transaction. Implementations must serialize same-session writes so
+// two writers cannot observe the same last (sequence, hash). The chain
+// primitives live in aarm/accumulator/contextchain so the verifier shares
+// them.
 //
-// ListContextSessionIDs returns the distinct session IDs that appear in the
-// context-action log. Intended for admin operations such as full-cluster
-// chain verification. Not for hot paths.
+// The activity counters live on sessions. GetContextState joins them with
+// the state row, so the accumulator reads both in one query.
 type ContextStore interface {
-	AppendContextAction(ctx context.Context, row *ContextActionRow) error
-	UpdateContextActionResult(ctx context.Context, actionID uuid.UUID, status string, durationMS int64, errorMsg string) error
+	AppendContextEntry(ctx context.Context, row *ContextEntryRow, delta *ContextStateDelta) error
+	UpdateContextEntryResult(ctx context.Context, entryID uuid.UUID, status string, durationMS int64, errorMsg string) error
 	GetContextState(ctx context.Context, sessionID uuid.UUID) (*ContextStateRow, error)
 	GetContextStateByPrefix(ctx context.Context, prefix string) (*ContextStateRow, error)
-	QueryContextActions(ctx context.Context, sessionID uuid.UUID, limit int) ([]*ContextActionRow, error)
-	QueryContextActionsFiltered(ctx context.Context, filter *ContextActionFilter) ([]*ContextActionRow, error)
 	QueryAllContextStates(ctx context.Context, limit int) ([]*ContextStateRow, error)
+	QueryContextEntries(ctx context.Context, filter *ContextEntryFilter) ([]*ContextEntryRow, error)
 	ListContextSessionIDs(ctx context.Context) ([]uuid.UUID, error)
 	DeleteContextBefore(ctx context.Context, before time.Time) (int, error)
 	CountContextBefore(ctx context.Context, before time.Time) (int, error)
 }
 
-// ContextActionFilter narrows QueryContextActionsFiltered.
+// ContextEntryFilter narrows QueryContextEntries.
 //
 // Limit semantics mirror ReceiptFilter:
 //   - Limit > 0: return up to Limit rows, capped at the storage-internal
@@ -130,43 +131,62 @@ type ContextStore interface {
 //   - Limit == 0 (or unset): treat as the default cap.
 //   - Limit == -1: unbounded. Intended for admin operations such as full
 //     chain verification.
-type ContextActionFilter struct {
+type ContextEntryFilter struct {
 	SessionID *uuid.UUID
 	Limit     int
-	// Ascending controls ordering when SessionID is set: true orders by
-	// (sequence ASC, timestamp ASC) so the full per-session chain is
-	// returned in chain order; false defaults to the existing
-	// (timestamp DESC, id DESC) ordering used by the table view.
+	// Ascending orders by sequence ASC so the per-session chain comes back
+	// in chain order. The default is the newest entries first.
 	Ascending bool
 }
 
-// ContextActionRow is the storage-layer representation of a single mediated
-// action recorded by the Context Accumulator. ResultStatus is "pending" at
-// append time and transitions to one of "success", "error", "blocked", or
-// "rejected" via UpdateContextActionResult.
-//
-// Sequence, PrevHash, and Hash are the per-session chain fields populated by
-// AppendContextAction. Rows pre-Phase-5a have a nil Sequence (and empty
-// PrevHash / Hash) and are reported as "unchained" by the verifier.
-type ContextActionRow struct {
-	ID                  uuid.UUID
-	SessionID           uuid.UUID
-	EventID             uuid.UUID
-	Timestamp           time.Time
-	ActionType          string
-	Tool                string
-	Agent               string
-	Project             string
-	WorkingDir          string
-	ResultStatus        string
-	DurationMS          *int64
-	ErrorMessage        string
-	DataClassifications []string
-	InjectionScore      *float32
+// ContextEntryRow is the storage form of a context entry. ResultStatus is
+// "pending" at append time and changes through UpdateContextEntryResult.
+// Sequence, PrevHash, Hash, and HashVersion are the chain fields that
+// AppendContextEntry sets.
+type ContextEntryRow struct {
+	ID              uuid.UUID
+	SessionID       uuid.UUID
+	EventID         uuid.UUID
+	LinkedEventID   uuid.UUID
+	Sequence        int64
+	Kind            string
+	Timestamp       time.Time
+	ActionType      string
+	Tool            string
+	ToolCallID      string
+	Phase           string
+	TargetHost      string
+	TargetMCPServer string
+	TargetMCPTool   string
+	Origin          string
+	Tags            []string
+	Classifications []string
+	InjectionScore  *float32
+	Decision        string
+	MatchedRuleIDs  []string
+	ContentDigest   string
+	ResultStatus    string
+	DurationMS      *int64
+	ErrorMessage    string
 
-	Sequence *int64
-	PrevHash []byte
-	Hash     []byte
+	HashVersion int
+	PrevHash    []byte
+	Hash        []byte
+}
+
+// ContextStateDelta is what one entry adds to the state row. The
+// accumulator computes it. The storage layer merges it into the row in the
+// same transaction as the entry insert, and caps each set.
+type ContextStateDelta struct {
+	Tools           []string
+	Classifications []string
+	Tags            []string
+	Origins         []string
+	Entities        []string
+	EgressHosts     []string
+	// Intent is true when the entry is an intent. The row then records the
+	// entry sequence and time as the latest intent.
+	Intent bool
 }
 
 // ReceiptStore defines the interface for the AARM receipt log: an
@@ -324,22 +344,27 @@ const (
 	DeferredActionStatusResolvedTimeout = "resolved_timeout"
 )
 
-// ContextStateRow is the storage-layer representation of the per-session
-// counter row used by the PDP to populate the context.* CEL surface.
+// ContextStateRow is the per-session context state joined with the
+// session counters.
 type ContextStateRow struct {
-	SessionID           uuid.UUID
-	FirstSeenAt         time.Time
-	LastActionAt        time.Time
-	TotalActions        int
-	FilesRead           int
-	FilesWritten        int
-	CommandsExecuted    int
-	NetworkRequests     int
-	Errors              int
+	SessionID        uuid.UUID
+	StartedAt        time.Time
+	LastEntryAt      time.Time
+	TotalActions     int
+	FilesRead        int
+	FilesWritten     int
+	CommandsExecuted int
+	NetworkRequests  int
+	Errors           int
+
 	ToolsUsed           []string
 	ClassificationsSeen []string
+	TagsSeen            map[string]int64
+	OriginsSeen         []string
 	EntitiesSeen        []string
-	SemanticDrift       float64
+	EgressHosts         []string
+	LastIntentSeq       *int64
+	LastIntentAt        *time.Time
 }
 
 // StreamCursor represents the sync cursor for a single collection (events or audits).

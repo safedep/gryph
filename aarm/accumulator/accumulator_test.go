@@ -10,36 +10,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNop_SatisfiesInterface(t *testing.T) {
-	var _ Accumulator = (*Nop)(nil)
-	var _ Accumulator = NewNop()
-}
+func TestNop(t *testing.T) {
+	var n Accumulator = NewNop()
+	ctx := context.Background()
+	require.NoError(t, n.Append(ctx, &model.ContextEntry{ID: uuid.New()}))
+	require.NoError(t, n.RecordResult(ctx, uuid.New(), model.Result{}))
 
-func TestNop_AppendReturnsNil(t *testing.T) {
-	n := NewNop()
-	require.NoError(t, n.Append(context.Background(), &model.Action{ID: uuid.New()}))
-	require.NoError(t, n.Append(context.Background(), nil))
-}
-
-func TestNop_RecordResultReturnsNil(t *testing.T) {
-	require.NoError(t, NewNop().RecordResult(context.Background(), uuid.New(), model.Result{}))
-}
-
-func TestNop_SnapshotReturnsEmpty(t *testing.T) {
-	snap, err := NewNop().Snapshot(context.Background(), uuid.New())
+	a, err := n.Snapshot(ctx, uuid.New(), &model.ContextEntry{ActionType: model.ActionFileRead})
 	require.NoError(t, err)
-	require.NotNil(t, snap)
-	assert.Equal(t, 0, snap.TotalActions)
-	assert.Equal(t, 0, snap.FilesRead)
-	assert.Empty(t, snap.ToolsUsed)
-}
-
-func TestNop_SnapshotsAreIndependent(t *testing.T) {
-	n := NewNop()
-	a, err := n.Snapshot(context.Background(), uuid.New())
-	require.NoError(t, err)
+	assert.Zero(t, a.TotalActions)
 	a.TotalActions = 99
-	b, err := n.Snapshot(context.Background(), uuid.New())
+
+	b, err := n.Snapshot(ctx, uuid.New(), nil)
 	require.NoError(t, err)
-	assert.Equal(t, 0, b.TotalActions, "subsequent snapshots must not see prior caller mutations")
+	assert.Zero(t, b.TotalActions, "a snapshot must not see an earlier caller mutation")
 }

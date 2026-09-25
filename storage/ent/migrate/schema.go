@@ -9,84 +9,6 @@ import (
 )
 
 var (
-	// AarmContextActionsColumns holds the columns for the "aarm_context_actions" table.
-	AarmContextActionsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeUUID},
-		{Name: "session_id", Type: field.TypeUUID},
-		{Name: "event_id", Type: field.TypeUUID, Nullable: true},
-		{Name: "timestamp", Type: field.TypeTime},
-		{Name: "action_type", Type: field.TypeEnum, Enums: []string{"file_read", "file_write", "file_delete", "command_exec", "network_request", "tool_use", "session_start", "session_end", "notification", "subagent_start", "subagent_stop", "unknown"}},
-		{Name: "tool", Type: field.TypeString, Nullable: true},
-		{Name: "agent", Type: field.TypeString, Nullable: true},
-		{Name: "project", Type: field.TypeString, Nullable: true},
-		{Name: "working_dir", Type: field.TypeString, Nullable: true},
-		{Name: "result_status", Type: field.TypeEnum, Enums: []string{"success", "error", "blocked", "rejected", "pending"}, Default: "pending"},
-		{Name: "duration_ms", Type: field.TypeInt64, Nullable: true},
-		{Name: "error_message", Type: field.TypeString, Nullable: true},
-		{Name: "data_classifications", Type: field.TypeJSON, Nullable: true},
-		{Name: "injection_score", Type: field.TypeFloat32, Nullable: true},
-		{Name: "sequence", Type: field.TypeInt64, Nullable: true},
-		{Name: "prev_hash", Type: field.TypeBytes, Nullable: true, Size: 32},
-		{Name: "hash", Type: field.TypeBytes, Nullable: true, Size: 32},
-	}
-	// AarmContextActionsTable holds the schema information for the "aarm_context_actions" table.
-	AarmContextActionsTable = &schema.Table{
-		Name:       "aarm_context_actions",
-		Columns:    AarmContextActionsColumns,
-		PrimaryKey: []*schema.Column{AarmContextActionsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "aarmcontextaction_session_id_timestamp",
-				Unique:  false,
-				Columns: []*schema.Column{AarmContextActionsColumns[1], AarmContextActionsColumns[3]},
-			},
-			{
-				Name:    "aarmcontextaction_timestamp",
-				Unique:  false,
-				Columns: []*schema.Column{AarmContextActionsColumns[3]},
-			},
-			{
-				Name:    "aarmcontextaction_session_id_action_type",
-				Unique:  false,
-				Columns: []*schema.Column{AarmContextActionsColumns[1], AarmContextActionsColumns[4]},
-			},
-			{
-				Name:    "aarmcontextaction_session_id_sequence",
-				Unique:  true,
-				Columns: []*schema.Column{AarmContextActionsColumns[1], AarmContextActionsColumns[14]},
-			},
-		},
-	}
-	// AarmContextStatesColumns holds the columns for the "aarm_context_states" table.
-	AarmContextStatesColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "session_id", Type: field.TypeUUID, Unique: true},
-		{Name: "first_seen_at", Type: field.TypeTime},
-		{Name: "last_action_at", Type: field.TypeTime},
-		{Name: "total_actions", Type: field.TypeInt, Default: 0},
-		{Name: "files_read", Type: field.TypeInt, Default: 0},
-		{Name: "files_written", Type: field.TypeInt, Default: 0},
-		{Name: "commands_executed", Type: field.TypeInt, Default: 0},
-		{Name: "network_requests", Type: field.TypeInt, Default: 0},
-		{Name: "errors", Type: field.TypeInt, Default: 0},
-		{Name: "tools_used", Type: field.TypeJSON, Nullable: true},
-		{Name: "classifications_seen", Type: field.TypeJSON, Nullable: true},
-		{Name: "entities_seen", Type: field.TypeJSON, Nullable: true},
-		{Name: "semantic_drift", Type: field.TypeFloat64, Default: 0},
-	}
-	// AarmContextStatesTable holds the schema information for the "aarm_context_states" table.
-	AarmContextStatesTable = &schema.Table{
-		Name:       "aarm_context_states",
-		Columns:    AarmContextStatesColumns,
-		PrimaryKey: []*schema.Column{AarmContextStatesColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "aarmcontextstate_last_action_at",
-				Unique:  false,
-				Columns: []*schema.Column{AarmContextStatesColumns[3]},
-			},
-		},
-	}
 	// AarmDeferredActionsColumns holds the columns for the "aarm_deferred_actions" table.
 	AarmDeferredActionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -221,7 +143,6 @@ var (
 		{Name: "diff_content", Type: field.TypeString, Nullable: true, Size: 2147483647, SchemaType: map[string]string{"sqlite3": "text"}},
 		{Name: "diff_label", Type: field.TypeJSON, Nullable: true},
 		{Name: "raw_event", Type: field.TypeJSON, Nullable: true},
-		{Name: "conversation_context", Type: field.TypeString, Nullable: true, Size: 2147483647, SchemaType: map[string]string{"sqlite3": "text"}},
 		{Name: "is_sensitive", Type: field.TypeBool, Default: false},
 		{Name: "subagent_id", Type: field.TypeString, Nullable: true},
 		{Name: "subagent_type", Type: field.TypeString, Nullable: true},
@@ -239,7 +160,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "audit_events_sessions_events",
-				Columns:    []*schema.Column{AuditEventsColumns[23]},
+				Columns:    []*schema.Column{AuditEventsColumns[22]},
 				RefColumns: []*schema.Column{SessionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -253,7 +174,7 @@ var (
 			{
 				Name:    "auditevent_session_id",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[23]},
+				Columns: []*schema.Column{AuditEventsColumns[22]},
 			},
 			{
 				Name:    "auditevent_agent_name",
@@ -273,7 +194,7 @@ var (
 			{
 				Name:    "auditevent_session_id_tool_call_id",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[23], AuditEventsColumns[21]},
+				Columns: []*schema.Column{AuditEventsColumns[22], AuditEventsColumns[20]},
 			},
 		},
 	}
@@ -288,6 +209,86 @@ var (
 		Name:       "audit_stream_cursors",
 		Columns:    AuditStreamCursorsColumns,
 		PrimaryKey: []*schema.Column{AuditStreamCursorsColumns[0]},
+	}
+	// ContextEntriesColumns holds the columns for the "context_entries" table.
+	ContextEntriesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "session_id", Type: field.TypeUUID},
+		{Name: "event_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "sequence", Type: field.TypeInt64},
+		{Name: "kind", Type: field.TypeString},
+		{Name: "timestamp", Type: field.TypeTime},
+		{Name: "action_type", Type: field.TypeString},
+		{Name: "tool", Type: field.TypeString, Nullable: true},
+		{Name: "tool_call_id", Type: field.TypeString, Nullable: true},
+		{Name: "linked_event_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "phase", Type: field.TypeString, Nullable: true},
+		{Name: "target_host", Type: field.TypeString, Nullable: true},
+		{Name: "target_mcp_server", Type: field.TypeString, Nullable: true},
+		{Name: "target_mcp_tool", Type: field.TypeString, Nullable: true},
+		{Name: "origin", Type: field.TypeString, Nullable: true},
+		{Name: "tags", Type: field.TypeJSON, Nullable: true},
+		{Name: "classifications", Type: field.TypeJSON, Nullable: true},
+		{Name: "injection_score", Type: field.TypeFloat32, Nullable: true},
+		{Name: "decision", Type: field.TypeString, Nullable: true},
+		{Name: "matched_rule_ids", Type: field.TypeJSON, Nullable: true},
+		{Name: "content_digest", Type: field.TypeString, Nullable: true},
+		{Name: "result_status", Type: field.TypeString, Default: "pending"},
+		{Name: "duration_ms", Type: field.TypeInt64, Nullable: true},
+		{Name: "error_message", Type: field.TypeString, Nullable: true},
+		{Name: "hash_version", Type: field.TypeInt},
+		{Name: "prev_hash", Type: field.TypeBytes, Nullable: true, Size: 32},
+		{Name: "hash", Type: field.TypeBytes, Size: 32},
+	}
+	// ContextEntriesTable holds the schema information for the "context_entries" table.
+	ContextEntriesTable = &schema.Table{
+		Name:       "context_entries",
+		Columns:    ContextEntriesColumns,
+		PrimaryKey: []*schema.Column{ContextEntriesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "contextentry_session_id_sequence",
+				Unique:  true,
+				Columns: []*schema.Column{ContextEntriesColumns[1], ContextEntriesColumns[3]},
+			},
+			{
+				Name:    "contextentry_session_id_tool_call_id",
+				Unique:  false,
+				Columns: []*schema.Column{ContextEntriesColumns[1], ContextEntriesColumns[8]},
+			},
+			{
+				Name:    "contextentry_timestamp",
+				Unique:  false,
+				Columns: []*schema.Column{ContextEntriesColumns[5]},
+			},
+		},
+	}
+	// ContextStatesColumns holds the columns for the "context_states" table.
+	ContextStatesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "session_id", Type: field.TypeUUID, Unique: true},
+		{Name: "last_entry_at", Type: field.TypeTime},
+		{Name: "tools_used", Type: field.TypeJSON, Nullable: true},
+		{Name: "classifications_seen", Type: field.TypeJSON, Nullable: true},
+		{Name: "tags_seen", Type: field.TypeJSON, Nullable: true},
+		{Name: "origins_seen", Type: field.TypeJSON, Nullable: true},
+		{Name: "entities_seen", Type: field.TypeJSON, Nullable: true},
+		{Name: "egress_hosts", Type: field.TypeJSON, Nullable: true},
+		{Name: "last_intent_seq", Type: field.TypeInt64, Nullable: true},
+		{Name: "last_intent_at", Type: field.TypeTime, Nullable: true},
+	}
+	// ContextStatesTable holds the schema information for the "context_states" table.
+	ContextStatesTable = &schema.Table{
+		Name:       "context_states",
+		Columns:    ContextStatesColumns,
+		PrimaryKey: []*schema.Column{ContextStatesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "contextstate_last_entry_at",
+				Unique:  false,
+				Columns: []*schema.Column{ContextStatesColumns[2]},
+			},
+		},
 	}
 	// EventStreamCursorsColumns holds the columns for the "event_stream_cursors" table.
 	EventStreamCursorsColumns = []*schema.Column{
@@ -344,6 +345,8 @@ var (
 		{Name: "files_read", Type: field.TypeInt, Default: 0},
 		{Name: "files_written", Type: field.TypeInt, Default: 0},
 		{Name: "commands_executed", Type: field.TypeInt, Default: 0},
+		{Name: "network_requests", Type: field.TypeInt, Default: 0},
+		{Name: "event_count", Type: field.TypeInt, Default: 0},
 		{Name: "errors", Type: field.TypeInt, Default: 0},
 		{Name: "sensitive_actions", Type: field.TypeInt, Default: 0},
 		{Name: "blocked_actions", Type: field.TypeInt, Default: 0},
@@ -382,12 +385,12 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
-		AarmContextActionsTable,
-		AarmContextStatesTable,
 		AarmDeferredActionsTable,
 		AarmReceiptsTable,
 		AuditEventsTable,
 		AuditStreamCursorsTable,
+		ContextEntriesTable,
+		ContextStatesTable,
 		EventStreamCursorsTable,
 		SelfAuditsTable,
 		SessionsTable,

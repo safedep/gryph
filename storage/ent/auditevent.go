@@ -51,8 +51,6 @@ type AuditEvent struct {
 	DiffLabel privacy.Label `json:"diff_label,omitempty"`
 	// RawEvent holds the value of the "raw_event" field.
 	RawEvent map[string]interface{} `json:"raw_event,omitempty"`
-	// ConversationContext holds the value of the "conversation_context" field.
-	ConversationContext string `json:"conversation_context,omitempty"`
 	// IsSensitive holds the value of the "is_sensitive" field.
 	IsSensitive bool `json:"is_sensitive,omitempty"`
 	// ID of the subagent that performed this action (empty for main agent)
@@ -106,7 +104,7 @@ func (*AuditEvent) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case auditevent.FieldSequence, auditevent.FieldDurationMs:
 			values[i] = new(sql.NullInt64)
-		case auditevent.FieldAgentName, auditevent.FieldAgentVersion, auditevent.FieldWorkingDirectory, auditevent.FieldActionType, auditevent.FieldToolName, auditevent.FieldResultStatus, auditevent.FieldErrorMessage, auditevent.FieldDiffContent, auditevent.FieldConversationContext, auditevent.FieldSubagentID, auditevent.FieldSubagentType, auditevent.FieldPhase, auditevent.FieldKind, auditevent.FieldToolCallID:
+		case auditevent.FieldAgentName, auditevent.FieldAgentVersion, auditevent.FieldWorkingDirectory, auditevent.FieldActionType, auditevent.FieldToolName, auditevent.FieldResultStatus, auditevent.FieldErrorMessage, auditevent.FieldDiffContent, auditevent.FieldSubagentID, auditevent.FieldSubagentType, auditevent.FieldPhase, auditevent.FieldKind, auditevent.FieldToolCallID:
 			values[i] = new(sql.NullString)
 		case auditevent.FieldTimestamp:
 			values[i] = new(sql.NullTime)
@@ -229,12 +227,6 @@ func (_m *AuditEvent) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.RawEvent); err != nil {
 					return fmt.Errorf("unmarshal field raw_event: %w", err)
 				}
-			}
-		case auditevent.FieldConversationContext:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field conversation_context", values[i])
-			} else if value.Valid {
-				_m.ConversationContext = value.String
 			}
 		case auditevent.FieldIsSensitive:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -366,9 +358,6 @@ func (_m *AuditEvent) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("raw_event=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RawEvent))
-	builder.WriteString(", ")
-	builder.WriteString("conversation_context=")
-	builder.WriteString(_m.ConversationContext)
 	builder.WriteString(", ")
 	builder.WriteString("is_sensitive=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsSensitive))

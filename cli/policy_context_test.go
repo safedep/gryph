@@ -33,13 +33,13 @@ func TestResolveAarmSessionID_PrefixFindsContextStateWithoutSession(t *testing.T
 	now := time.Now().UTC().Truncate(time.Millisecond)
 
 	sessionID := uuid.New()
-	require.NoError(t, store.AppendContextAction(ctx, &storage.ContextActionRow{
+	require.NoError(t, store.AppendContextEntry(ctx, &storage.ContextEntryRow{
 		SessionID:  sessionID,
+		Kind:       "action",
 		Timestamp:  now,
 		ActionType: "file_read",
 		Tool:       "Read",
-		Agent:      "claude-code",
-	}))
+	}, nil))
 
 	sess, err := store.GetSession(ctx, sessionID)
 	require.NoError(t, err)
@@ -76,13 +76,13 @@ func appendSampleContextActions(t *testing.T, store *storage.SQLiteStore, sessio
 	ctx := context.Background()
 	base := time.Now().UTC().Truncate(time.Millisecond)
 	for i := 0; i < n; i++ {
-		require.NoError(t, store.AppendContextAction(ctx, &storage.ContextActionRow{
+		require.NoError(t, store.AppendContextEntry(ctx, &storage.ContextEntryRow{
 			SessionID:  sessionID,
+			Kind:       "action",
 			Timestamp:  base.Add(time.Duration(i) * time.Millisecond),
 			ActionType: string(events.ActionFileRead),
 			Tool:       "Read",
-			Agent:      "claude-code",
-		}))
+		}, nil))
 	}
 }
 
@@ -108,7 +108,7 @@ func TestRunPolicyContextVerify_DetectsTamper(t *testing.T) {
 	appendSampleContextActions(t, store, sessionID, 3)
 
 	_, dbErr := store.DB().ExecContext(ctx,
-		`UPDATE aarm_context_actions SET tool = 'tampered' WHERE session_id = ? AND sequence = 2`,
+		`UPDATE context_entries SET tool = 'tampered' WHERE session_id = ? AND sequence = 2`,
 		sessionID,
 	)
 	require.NoError(t, dbErr)
@@ -132,7 +132,7 @@ func TestRunPolicyContextVerify_TamperedChainJSONReportsBroken(t *testing.T) {
 	appendSampleContextActions(t, store, sessionID, 3)
 
 	_, dbErr := store.DB().ExecContext(ctx,
-		`UPDATE aarm_context_actions SET tool = 'tampered' WHERE session_id = ? AND sequence = 2`,
+		`UPDATE context_entries SET tool = 'tampered' WHERE session_id = ? AND sequence = 2`,
 		sessionID,
 	)
 	require.NoError(t, dbErr)
@@ -170,21 +170,21 @@ func TestRunPolicyContextVerify_AllSessions(t *testing.T) {
 	require.NoError(t, err, "two clean sessions must verify successfully")
 
 	var payload struct {
-		Actions []contextVerifyActionView `json:"actions"`
-		Summary contextVerifySummary      `json:"summary"`
+		Entries []contextVerifyEntryView `json:"entries"`
+		Summary contextVerifySummary     `json:"summary"`
 	}
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &payload))
 	assert.Equal(t, 6, payload.Summary.OK,
 		"both chains must contribute to ok count, got %+v", payload.Summary)
 	seenSessions := map[string]struct{}{}
-	for _, a := range payload.Actions {
+	for _, a := range payload.Entries {
 		seenSessions[a.SessionID] = struct{}{}
 	}
 	assert.Contains(t, seenSessions, sessionA.String(), "sessionA must be walked")
 	assert.Contains(t, seenSessions, sessionB.String(), "sessionB must be walked")
 
 	_, dbErr := store.DB().ExecContext(ctx,
-		`UPDATE aarm_context_actions SET tool = 'tampered' WHERE session_id = ? AND sequence = 2`,
+		`UPDATE context_entries SET tool = 'tampered' WHERE session_id = ? AND sequence = 2`,
 		sessionA,
 	)
 	require.NoError(t, dbErr)
@@ -194,9 +194,9 @@ func TestRunPolicyContextVerify_AllSessions(t *testing.T) {
 	require.Error(t, err, "tampered chain under --all-sessions must surface a verification failure")
 
 	var tampered struct {
-		Actions []contextVerifyActionView `json:"actions"`
-		Breaks  []contextVerifyBreak      `json:"chain_breaks"`
-		Summary contextVerifySummary      `json:"summary"`
+		Entries []contextVerifyEntryView `json:"entries"`
+		Breaks  []contextVerifyBreak     `json:"chain_breaks"`
+		Summary contextVerifySummary     `json:"summary"`
 	}
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &tampered))
 	assert.NotEmpty(t, tampered.Breaks, "tamper on sessionA must produce at least one break")
@@ -204,7 +204,7 @@ func TestRunPolicyContextVerify_AllSessions(t *testing.T) {
 		assert.Equal(t, sessionA, b.SessionID, "only sessionA was tampered, got %+v", b)
 	}
 	tamperedSessions := map[string]struct{}{}
-	for _, a := range tampered.Actions {
+	for _, a := range tampered.Entries {
 		tamperedSessions[a.SessionID] = struct{}{}
 	}
 	assert.Contains(t, tamperedSessions, sessionA.String(),
@@ -213,22 +213,18 @@ func TestRunPolicyContextVerify_AllSessions(t *testing.T) {
 		"sessionB must still be walked even though sessionA broke")
 }
 
-func TestRunPolicyContextVerify_UnchainedRowsDoNotFail(t *testing.T) {
+func TestRunPolicyContextVerify_UnknownHashVersionFails(t *testing.T) {
 	store := storagetest.NewStore(t)
 	ctx := context.Background()
 	sessionID := uuid.New()
+	appendSampleContextActions(t, store, sessionID, 2)
 
-	now := time.Now().UTC().Truncate(time.Millisecond)
 	_, err := store.DB().ExecContext(ctx,
-		`INSERT INTO aarm_context_actions (id, session_id, timestamp, action_type, tool, agent, result_status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		uuid.New(), sessionID, now, string(events.ActionFileRead), "Read", "claude-code", "pending",
-	)
+		`UPDATE context_entries SET hash_version = 1 WHERE session_id = ? AND sequence = 2`, sessionID)
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	c := tui.NewColorizer(false)
-	err = runPolicyContextVerify(ctx, &buf, c, store, sessionID.String(), 50, false, "table")
-	require.NoError(t, err, "pre-Phase-5a unchained rows must not break verification")
-	assert.Contains(t, buf.String(), "Context chain verification: OK")
-	assert.Contains(t, buf.String(), "unchained=1")
+	err = runPolicyContextVerify(ctx, &buf, tui.NewColorizer(false), store, sessionID.String(), 50, false, "table")
+	require.Error(t, err)
+	assert.Contains(t, buf.String(), "unknown hash version 1")
 }

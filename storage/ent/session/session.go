@@ -37,6 +37,10 @@ const (
 	FieldFilesWritten = "files_written"
 	// FieldCommandsExecuted holds the string denoting the commands_executed field in the database.
 	FieldCommandsExecuted = "commands_executed"
+	// FieldNetworkRequests holds the string denoting the network_requests field in the database.
+	FieldNetworkRequests = "network_requests"
+	// FieldEventCount holds the string denoting the event_count field in the database.
+	FieldEventCount = "event_count"
 	// FieldErrors holds the string denoting the errors field in the database.
 	FieldErrors = "errors"
 	// FieldSensitiveActions holds the string denoting the sensitive_actions field in the database.
@@ -88,6 +92,8 @@ var Columns = []string{
 	FieldFilesRead,
 	FieldFilesWritten,
 	FieldCommandsExecuted,
+	FieldNetworkRequests,
+	FieldEventCount,
 	FieldErrors,
 	FieldSensitiveActions,
 	FieldBlockedActions,
@@ -125,6 +131,10 @@ var (
 	DefaultFilesWritten int
 	// DefaultCommandsExecuted holds the default value on creation for the "commands_executed" field.
 	DefaultCommandsExecuted int
+	// DefaultNetworkRequests holds the default value on creation for the "network_requests" field.
+	DefaultNetworkRequests int
+	// DefaultEventCount holds the default value on creation for the "event_count" field.
+	DefaultEventCount int
 	// DefaultErrors holds the default value on creation for the "errors" field.
 	DefaultErrors int
 	// DefaultSensitiveActions holds the default value on creation for the "sensitive_actions" field.
@@ -206,6 +216,16 @@ func ByFilesWritten(opts ...sql.OrderTermOption) OrderOption {
 // ByCommandsExecuted orders the results by the commands_executed field.
 func ByCommandsExecuted(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCommandsExecuted, opts...).ToFunc()
+}
+
+// ByNetworkRequests orders the results by the network_requests field.
+func ByNetworkRequests(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNetworkRequests, opts...).ToFunc()
+}
+
+// ByEventCount orders the results by the event_count field.
+func ByEventCount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEventCount, opts...).ToFunc()
 }
 
 // ByErrors orders the results by the errors field.

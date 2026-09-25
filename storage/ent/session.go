@@ -41,6 +41,10 @@ type Session struct {
 	FilesWritten int `json:"files_written,omitempty"`
 	// CommandsExecuted holds the value of the "commands_executed" field.
 	CommandsExecuted int `json:"commands_executed,omitempty"`
+	// NetworkRequests holds the value of the "network_requests" field.
+	NetworkRequests int `json:"network_requests,omitempty"`
+	// Events recorded in the session. The next event sequence is event_count + 1
+	EventCount int `json:"event_count,omitempty"`
 	// Errors holds the value of the "errors" field.
 	Errors int `json:"errors,omitempty"`
 	// SensitiveActions holds the value of the "sensitive_actions" field.
@@ -98,7 +102,7 @@ func (*Session) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case session.FieldEstimatedCostUsd:
 			values[i] = new(sql.NullFloat64)
-		case session.FieldTotalActions, session.FieldFilesRead, session.FieldFilesWritten, session.FieldCommandsExecuted, session.FieldErrors, session.FieldSensitiveActions, session.FieldBlockedActions, session.FieldInputTokens, session.FieldOutputTokens, session.FieldCacheReadTokens, session.FieldCacheWriteTokens:
+		case session.FieldTotalActions, session.FieldFilesRead, session.FieldFilesWritten, session.FieldCommandsExecuted, session.FieldNetworkRequests, session.FieldEventCount, session.FieldErrors, session.FieldSensitiveActions, session.FieldBlockedActions, session.FieldInputTokens, session.FieldOutputTokens, session.FieldCacheReadTokens, session.FieldCacheWriteTokens:
 			values[i] = new(sql.NullInt64)
 		case session.FieldAgentSessionID, session.FieldAgentName, session.FieldAgentVersion, session.FieldWorkingDirectory, session.FieldProjectName, session.FieldTranscriptPath, session.FieldCostSource:
 			values[i] = new(sql.NullString)
@@ -193,6 +197,18 @@ func (_m *Session) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field commands_executed", values[i])
 			} else if value.Valid {
 				_m.CommandsExecuted = int(value.Int64)
+			}
+		case session.FieldNetworkRequests:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field network_requests", values[i])
+			} else if value.Valid {
+				_m.NetworkRequests = int(value.Int64)
+			}
+		case session.FieldEventCount:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field event_count", values[i])
+			} else if value.Valid {
+				_m.EventCount = int(value.Int64)
 			}
 		case session.FieldErrors:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -344,6 +360,12 @@ func (_m *Session) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("commands_executed=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CommandsExecuted))
+	builder.WriteString(", ")
+	builder.WriteString("network_requests=")
+	builder.WriteString(fmt.Sprintf("%v", _m.NetworkRequests))
+	builder.WriteString(", ")
+	builder.WriteString("event_count=")
+	builder.WriteString(fmt.Sprintf("%v", _m.EventCount))
 	builder.WriteString(", ")
 	builder.WriteString("errors=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Errors))

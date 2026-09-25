@@ -15,7 +15,7 @@ execexit 2 gryph _hook claude-code PreToolUse
 
 exec gryph policy context --verify --all-sessions --no-color
 stdout 'Context chain verification: OK'
-stdout 'ok=3 broken=0 unchained=0'
+stdout 'ok=3 broken=0'
 
 -- home/.config/safedep/gryph/config.yml --
 policy:

@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/safedep/gryph/storage/ent/aarmcontextaction"
-	"github.com/safedep/gryph/storage/ent/aarmcontextstate"
 	"github.com/safedep/gryph/storage/ent/aarmdeferredaction"
 	"github.com/safedep/gryph/storage/ent/aarmreceipt"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
+	"github.com/safedep/gryph/storage/ent/contextentry"
+	"github.com/safedep/gryph/storage/ent/contextstate"
 	"github.com/safedep/gryph/storage/ent/eventstreamcursor"
 	"github.com/safedep/gryph/storage/ent/schema"
 	"github.com/safedep/gryph/storage/ent/selfaudit"
@@ -22,66 +22,6 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
-	aarmcontextactionFields := schema.AarmContextAction{}.Fields()
-	_ = aarmcontextactionFields
-	// aarmcontextactionDescTimestamp is the schema descriptor for timestamp field.
-	aarmcontextactionDescTimestamp := aarmcontextactionFields[3].Descriptor()
-	// aarmcontextaction.DefaultTimestamp holds the default value on creation for the timestamp field.
-	aarmcontextaction.DefaultTimestamp = aarmcontextactionDescTimestamp.Default.(func() time.Time)
-	// aarmcontextactionDescSequence is the schema descriptor for sequence field.
-	aarmcontextactionDescSequence := aarmcontextactionFields[14].Descriptor()
-	// aarmcontextaction.SequenceValidator is a validator for the "sequence" field. It is called by the builders before save.
-	aarmcontextaction.SequenceValidator = aarmcontextactionDescSequence.Validators[0].(func(int64) error)
-	// aarmcontextactionDescPrevHash is the schema descriptor for prev_hash field.
-	aarmcontextactionDescPrevHash := aarmcontextactionFields[15].Descriptor()
-	// aarmcontextaction.PrevHashValidator is a validator for the "prev_hash" field. It is called by the builders before save.
-	aarmcontextaction.PrevHashValidator = aarmcontextactionDescPrevHash.Validators[0].(func([]byte) error)
-	// aarmcontextactionDescHash is the schema descriptor for hash field.
-	aarmcontextactionDescHash := aarmcontextactionFields[16].Descriptor()
-	// aarmcontextaction.HashValidator is a validator for the "hash" field. It is called by the builders before save.
-	aarmcontextaction.HashValidator = aarmcontextactionDescHash.Validators[0].(func([]byte) error)
-	// aarmcontextactionDescID is the schema descriptor for id field.
-	aarmcontextactionDescID := aarmcontextactionFields[0].Descriptor()
-	// aarmcontextaction.DefaultID holds the default value on creation for the id field.
-	aarmcontextaction.DefaultID = aarmcontextactionDescID.Default.(func() uuid.UUID)
-	aarmcontextstateFields := schema.AarmContextState{}.Fields()
-	_ = aarmcontextstateFields
-	// aarmcontextstateDescFirstSeenAt is the schema descriptor for first_seen_at field.
-	aarmcontextstateDescFirstSeenAt := aarmcontextstateFields[1].Descriptor()
-	// aarmcontextstate.DefaultFirstSeenAt holds the default value on creation for the first_seen_at field.
-	aarmcontextstate.DefaultFirstSeenAt = aarmcontextstateDescFirstSeenAt.Default.(func() time.Time)
-	// aarmcontextstateDescLastActionAt is the schema descriptor for last_action_at field.
-	aarmcontextstateDescLastActionAt := aarmcontextstateFields[2].Descriptor()
-	// aarmcontextstate.DefaultLastActionAt holds the default value on creation for the last_action_at field.
-	aarmcontextstate.DefaultLastActionAt = aarmcontextstateDescLastActionAt.Default.(func() time.Time)
-	// aarmcontextstateDescTotalActions is the schema descriptor for total_actions field.
-	aarmcontextstateDescTotalActions := aarmcontextstateFields[3].Descriptor()
-	// aarmcontextstate.DefaultTotalActions holds the default value on creation for the total_actions field.
-	aarmcontextstate.DefaultTotalActions = aarmcontextstateDescTotalActions.Default.(int)
-	// aarmcontextstateDescFilesRead is the schema descriptor for files_read field.
-	aarmcontextstateDescFilesRead := aarmcontextstateFields[4].Descriptor()
-	// aarmcontextstate.DefaultFilesRead holds the default value on creation for the files_read field.
-	aarmcontextstate.DefaultFilesRead = aarmcontextstateDescFilesRead.Default.(int)
-	// aarmcontextstateDescFilesWritten is the schema descriptor for files_written field.
-	aarmcontextstateDescFilesWritten := aarmcontextstateFields[5].Descriptor()
-	// aarmcontextstate.DefaultFilesWritten holds the default value on creation for the files_written field.
-	aarmcontextstate.DefaultFilesWritten = aarmcontextstateDescFilesWritten.Default.(int)
-	// aarmcontextstateDescCommandsExecuted is the schema descriptor for commands_executed field.
-	aarmcontextstateDescCommandsExecuted := aarmcontextstateFields[6].Descriptor()
-	// aarmcontextstate.DefaultCommandsExecuted holds the default value on creation for the commands_executed field.
-	aarmcontextstate.DefaultCommandsExecuted = aarmcontextstateDescCommandsExecuted.Default.(int)
-	// aarmcontextstateDescNetworkRequests is the schema descriptor for network_requests field.
-	aarmcontextstateDescNetworkRequests := aarmcontextstateFields[7].Descriptor()
-	// aarmcontextstate.DefaultNetworkRequests holds the default value on creation for the network_requests field.
-	aarmcontextstate.DefaultNetworkRequests = aarmcontextstateDescNetworkRequests.Default.(int)
-	// aarmcontextstateDescErrors is the schema descriptor for errors field.
-	aarmcontextstateDescErrors := aarmcontextstateFields[8].Descriptor()
-	// aarmcontextstate.DefaultErrors holds the default value on creation for the errors field.
-	aarmcontextstate.DefaultErrors = aarmcontextstateDescErrors.Default.(int)
-	// aarmcontextstateDescSemanticDrift is the schema descriptor for semantic_drift field.
-	aarmcontextstateDescSemanticDrift := aarmcontextstateFields[12].Descriptor()
-	// aarmcontextstate.DefaultSemanticDrift holds the default value on creation for the semantic_drift field.
-	aarmcontextstate.DefaultSemanticDrift = aarmcontextstateDescSemanticDrift.Default.(float64)
 	aarmdeferredactionFields := schema.AarmDeferredAction{}.Fields()
 	_ = aarmdeferredactionFields
 	// aarmdeferredactionDescReceiptSequence is the schema descriptor for receipt_sequence field.
@@ -137,7 +77,7 @@ func init() {
 	// auditevent.AgentNameValidator is a validator for the "agent_name" field. It is called by the builders before save.
 	auditevent.AgentNameValidator = auditeventDescAgentName.Validators[0].(func(string) error)
 	// auditeventDescIsSensitive is the schema descriptor for is_sensitive field.
-	auditeventDescIsSensitive := auditeventFields[17].Descriptor()
+	auditeventDescIsSensitive := auditeventFields[16].Descriptor()
 	// auditevent.DefaultIsSensitive holds the default value on creation for the is_sensitive field.
 	auditevent.DefaultIsSensitive = auditeventDescIsSensitive.Default.(bool)
 	// auditeventDescID is the schema descriptor for id field.
@@ -150,6 +90,38 @@ func init() {
 	auditstreamcursorDescLastSyncedAt := auditstreamcursorFields[1].Descriptor()
 	// auditstreamcursor.DefaultLastSyncedAt holds the default value on creation for the last_synced_at field.
 	auditstreamcursor.DefaultLastSyncedAt = auditstreamcursorDescLastSyncedAt.Default.(func() time.Time)
+	contextentryFields := schema.ContextEntry{}.Fields()
+	_ = contextentryFields
+	// contextentryDescSequence is the schema descriptor for sequence field.
+	contextentryDescSequence := contextentryFields[3].Descriptor()
+	// contextentry.SequenceValidator is a validator for the "sequence" field. It is called by the builders before save.
+	contextentry.SequenceValidator = contextentryDescSequence.Validators[0].(func(int64) error)
+	// contextentryDescTimestamp is the schema descriptor for timestamp field.
+	contextentryDescTimestamp := contextentryFields[5].Descriptor()
+	// contextentry.DefaultTimestamp holds the default value on creation for the timestamp field.
+	contextentry.DefaultTimestamp = contextentryDescTimestamp.Default.(func() time.Time)
+	// contextentryDescResultStatus is the schema descriptor for result_status field.
+	contextentryDescResultStatus := contextentryFields[21].Descriptor()
+	// contextentry.DefaultResultStatus holds the default value on creation for the result_status field.
+	contextentry.DefaultResultStatus = contextentryDescResultStatus.Default.(string)
+	// contextentryDescPrevHash is the schema descriptor for prev_hash field.
+	contextentryDescPrevHash := contextentryFields[25].Descriptor()
+	// contextentry.PrevHashValidator is a validator for the "prev_hash" field. It is called by the builders before save.
+	contextentry.PrevHashValidator = contextentryDescPrevHash.Validators[0].(func([]byte) error)
+	// contextentryDescHash is the schema descriptor for hash field.
+	contextentryDescHash := contextentryFields[26].Descriptor()
+	// contextentry.HashValidator is a validator for the "hash" field. It is called by the builders before save.
+	contextentry.HashValidator = contextentryDescHash.Validators[0].(func([]byte) error)
+	// contextentryDescID is the schema descriptor for id field.
+	contextentryDescID := contextentryFields[0].Descriptor()
+	// contextentry.DefaultID holds the default value on creation for the id field.
+	contextentry.DefaultID = contextentryDescID.Default.(func() uuid.UUID)
+	contextstateFields := schema.ContextState{}.Fields()
+	_ = contextstateFields
+	// contextstateDescLastEntryAt is the schema descriptor for last_entry_at field.
+	contextstateDescLastEntryAt := contextstateFields[1].Descriptor()
+	// contextstate.DefaultLastEntryAt holds the default value on creation for the last_entry_at field.
+	contextstate.DefaultLastEntryAt = contextstateDescLastEntryAt.Default.(func() time.Time)
 	eventstreamcursorFields := schema.EventStreamCursor{}.Fields()
 	_ = eventstreamcursorFields
 	// eventstreamcursorDescLastSyncedAt is the schema descriptor for last_synced_at field.
@@ -196,36 +168,44 @@ func init() {
 	sessionDescCommandsExecuted := sessionFields[11].Descriptor()
 	// session.DefaultCommandsExecuted holds the default value on creation for the commands_executed field.
 	session.DefaultCommandsExecuted = sessionDescCommandsExecuted.Default.(int)
+	// sessionDescNetworkRequests is the schema descriptor for network_requests field.
+	sessionDescNetworkRequests := sessionFields[12].Descriptor()
+	// session.DefaultNetworkRequests holds the default value on creation for the network_requests field.
+	session.DefaultNetworkRequests = sessionDescNetworkRequests.Default.(int)
+	// sessionDescEventCount is the schema descriptor for event_count field.
+	sessionDescEventCount := sessionFields[13].Descriptor()
+	// session.DefaultEventCount holds the default value on creation for the event_count field.
+	session.DefaultEventCount = sessionDescEventCount.Default.(int)
 	// sessionDescErrors is the schema descriptor for errors field.
-	sessionDescErrors := sessionFields[12].Descriptor()
+	sessionDescErrors := sessionFields[14].Descriptor()
 	// session.DefaultErrors holds the default value on creation for the errors field.
 	session.DefaultErrors = sessionDescErrors.Default.(int)
 	// sessionDescSensitiveActions is the schema descriptor for sensitive_actions field.
-	sessionDescSensitiveActions := sessionFields[13].Descriptor()
+	sessionDescSensitiveActions := sessionFields[15].Descriptor()
 	// session.DefaultSensitiveActions holds the default value on creation for the sensitive_actions field.
 	session.DefaultSensitiveActions = sessionDescSensitiveActions.Default.(int)
 	// sessionDescBlockedActions is the schema descriptor for blocked_actions field.
-	sessionDescBlockedActions := sessionFields[14].Descriptor()
+	sessionDescBlockedActions := sessionFields[16].Descriptor()
 	// session.DefaultBlockedActions holds the default value on creation for the blocked_actions field.
 	session.DefaultBlockedActions = sessionDescBlockedActions.Default.(int)
 	// sessionDescInputTokens is the schema descriptor for input_tokens field.
-	sessionDescInputTokens := sessionFields[16].Descriptor()
+	sessionDescInputTokens := sessionFields[18].Descriptor()
 	// session.DefaultInputTokens holds the default value on creation for the input_tokens field.
 	session.DefaultInputTokens = sessionDescInputTokens.Default.(int64)
 	// sessionDescOutputTokens is the schema descriptor for output_tokens field.
-	sessionDescOutputTokens := sessionFields[17].Descriptor()
+	sessionDescOutputTokens := sessionFields[19].Descriptor()
 	// session.DefaultOutputTokens holds the default value on creation for the output_tokens field.
 	session.DefaultOutputTokens = sessionDescOutputTokens.Default.(int64)
 	// sessionDescCacheReadTokens is the schema descriptor for cache_read_tokens field.
-	sessionDescCacheReadTokens := sessionFields[18].Descriptor()
+	sessionDescCacheReadTokens := sessionFields[20].Descriptor()
 	// session.DefaultCacheReadTokens holds the default value on creation for the cache_read_tokens field.
 	session.DefaultCacheReadTokens = sessionDescCacheReadTokens.Default.(int64)
 	// sessionDescCacheWriteTokens is the schema descriptor for cache_write_tokens field.
-	sessionDescCacheWriteTokens := sessionFields[19].Descriptor()
+	sessionDescCacheWriteTokens := sessionFields[21].Descriptor()
 	// session.DefaultCacheWriteTokens holds the default value on creation for the cache_write_tokens field.
 	session.DefaultCacheWriteTokens = sessionDescCacheWriteTokens.Default.(int64)
 	// sessionDescEstimatedCostUsd is the schema descriptor for estimated_cost_usd field.
-	sessionDescEstimatedCostUsd := sessionFields[20].Descriptor()
+	sessionDescEstimatedCostUsd := sessionFields[22].Descriptor()
 	// session.DefaultEstimatedCostUsd holds the default value on creation for the estimated_cost_usd field.
 	session.DefaultEstimatedCostUsd = sessionDescEstimatedCostUsd.Default.(float64)
 	// sessionDescID is the schema descriptor for id field.

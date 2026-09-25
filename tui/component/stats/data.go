@@ -147,7 +147,7 @@ func computeStats(ctx context.Context, store storage.Store, since, until *time.T
 			agentMap[s.AgentName] = as
 		}
 		as.Sessions++
-		as.Events += s.TotalActions
+		as.Events += s.RecordedEvents()
 		as.FilesRead += s.FilesRead
 		as.FilesWritten += s.FilesWritten
 		as.Commands += s.CommandsExecuted

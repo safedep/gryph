@@ -39,10 +39,11 @@ which calls the check. The session is an explicit argument to `Evaluate` and
 
 ```
 hook event
-  -> mediation.Adapter.Normalize   (event -> model.Action, enrich)
+  -> mediation.Adapter.Normalize   (event -> model.Action + model.ContextEntry)
   -> Mediator.enforceIdentity      (pre-PDP block if no human principal)
-  -> accumulator.Append + Snapshot (per-session context memory)
+  -> accumulator.Snapshot          (stored context + the pending entry)
   -> pdp.PDP.Evaluate              (match rules -> EvaluationResult)
+  -> accumulator.Append            (the entry with the decision, once)
   -> Mediator branch on decision:
        escalate -> approval.Service -> outcome
        defer    -> deferral queue + block message
@@ -414,21 +415,48 @@ verifier, or every existing chain fails verification.
 
 ## Context accumulator
 
-The accumulator records each action and returns the point-in-time
+The accumulator records the session context and returns the point-in-time
 `ContextSnapshot` the PDP reads through `context.*`. The Mediator sets
 `SessionStartedAt` on its own copy from the session argument. CEL cannot read
-it. The `Nop` implementation
-returns an empty snapshot. The SQLite implementation persists to
-`aarm_context_*` tables and hash-chains rows via `contextchain`. `Append` runs
-before evaluation. `RecordResult` runs post-hook and updates the result-derived
-counters.
+it. The `Nop` implementation returns an empty snapshot.
+
+The session context is a log of `model.ContextEntry` values, one for each
+event. An entry has a kind: `intent`, `action`, or `observation`. It holds
+facts only: the kind, the phase, the tool call link, the classes, the
+decision, and the content digest. The path, the command, and the content stay
+on `audit_events`.
+
+- `Snapshot(sessionID, pending)` runs before the evaluation. It reads the
+  counters from `sessions` and the sets from `context_states`, and adds the
+  pending entry in memory. A rule therefore sees the current event in
+  `context.total_actions`.
+- `Append(entry, action)` runs once, after the evaluation. It writes the
+  entry with the decision and the matched rule IDs to `context_entries`,
+  chains it with `contextchain` (hash version 2), and merges the entry into
+  `context_states`, in one transaction.
+- `RecordResult` sets the outcome of an entry. The hash does not cover the
+  outcome.
+
+The decision service owns the activity counters on `sessions`
+(`session.EventCounts`). A counter counts events of kind `action` only, so a
+pre and post pair for one tool call counts once. A blocked action counts.
+`errors` counts actions and observations with an error result. The event
+sequence comes from `sessions.event_count`, because the counters no longer
+count every event. The context tables store no counters.
+
+`Store.RecordEvent` saves the event, takes the next sequence, and adds the
+counts in one writer transaction. Parallel hooks on one session get distinct
+sequences and lose no count. `UpdateSession` writes the session metadata only.
+
+The Mediator writes the entry after the evaluation. A block or defer entry
+goes in with its result. A failed append only logs, so the decision stands.
 
 ## Special decision paths
 
 - Identity enforcement: when `policy.identity.require_human_principal` is true
   and `Action.HumanPrincipal` is empty, `Mediator.enforceIdentity` blocks before
-  the PDP and before the accumulator append. A denied action does not count
-  toward `context.total_actions`.
+  the PDP. A denied action is an attempt. It gets a context entry with the
+  block decision, and it counts toward `context.total_actions`.
 - Escalate: `handleEscalate` calls the Approval Service. A nil outcome fails
   closed (treated as deny). The four `approval_*` audit actions fire through
   the `ApprovalAuditHook`.

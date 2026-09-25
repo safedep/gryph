@@ -185,20 +185,6 @@ func (_c *AuditEventCreate) SetRawEvent(v map[string]interface{}) *AuditEventCre
 	return _c
 }
 
-// SetConversationContext sets the "conversation_context" field.
-func (_c *AuditEventCreate) SetConversationContext(v string) *AuditEventCreate {
-	_c.mutation.SetConversationContext(v)
-	return _c
-}
-
-// SetNillableConversationContext sets the "conversation_context" field if the given value is not nil.
-func (_c *AuditEventCreate) SetNillableConversationContext(v *string) *AuditEventCreate {
-	if v != nil {
-		_c.SetConversationContext(*v)
-	}
-	return _c
-}
-
 // SetIsSensitive sets the "is_sensitive" field.
 func (_c *AuditEventCreate) SetIsSensitive(v bool) *AuditEventCreate {
 	_c.mutation.SetIsSensitive(v)
@@ -505,10 +491,6 @@ func (_c *AuditEventCreate) createSpec() (*AuditEvent, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RawEvent(); ok {
 		_spec.SetField(auditevent.FieldRawEvent, field.TypeJSON, value)
 		_node.RawEvent = value
-	}
-	if value, ok := _c.mutation.ConversationContext(); ok {
-		_spec.SetField(auditevent.FieldConversationContext, field.TypeString, value)
-		_node.ConversationContext = value
 	}
 	if value, ok := _c.mutation.IsSensitive(); ok {
 		_spec.SetField(auditevent.FieldIsSensitive, field.TypeBool, value)

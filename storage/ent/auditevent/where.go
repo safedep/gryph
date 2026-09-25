@@ -106,11 +106,6 @@ func DiffContent(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldDiffContent, v))
 }
 
-// ConversationContext applies equality check predicate on the "conversation_context" field. It's identical to ConversationContextEQ.
-func ConversationContext(v string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldEQ(FieldConversationContext, v))
-}
-
 // IsSensitive applies equality check predicate on the "is_sensitive" field. It's identical to IsSensitiveEQ.
 func IsSensitive(v bool) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldIsSensitive, v))
@@ -804,81 +799,6 @@ func RawEventIsNil() predicate.AuditEvent {
 // RawEventNotNil applies the NotNil predicate on the "raw_event" field.
 func RawEventNotNil() predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldNotNull(FieldRawEvent))
-}
-
-// ConversationContextEQ applies the EQ predicate on the "conversation_context" field.
-func ConversationContextEQ(v string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldEQ(FieldConversationContext, v))
-}
-
-// ConversationContextNEQ applies the NEQ predicate on the "conversation_context" field.
-func ConversationContextNEQ(v string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldNEQ(FieldConversationContext, v))
-}
-
-// ConversationContextIn applies the In predicate on the "conversation_context" field.
-func ConversationContextIn(vs ...string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldIn(FieldConversationContext, vs...))
-}
-
-// ConversationContextNotIn applies the NotIn predicate on the "conversation_context" field.
-func ConversationContextNotIn(vs ...string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldNotIn(FieldConversationContext, vs...))
-}
-
-// ConversationContextGT applies the GT predicate on the "conversation_context" field.
-func ConversationContextGT(v string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldGT(FieldConversationContext, v))
-}
-
-// ConversationContextGTE applies the GTE predicate on the "conversation_context" field.
-func ConversationContextGTE(v string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldGTE(FieldConversationContext, v))
-}
-
-// ConversationContextLT applies the LT predicate on the "conversation_context" field.
-func ConversationContextLT(v string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldLT(FieldConversationContext, v))
-}
-
-// ConversationContextLTE applies the LTE predicate on the "conversation_context" field.
-func ConversationContextLTE(v string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldLTE(FieldConversationContext, v))
-}
-
-// ConversationContextContains applies the Contains predicate on the "conversation_context" field.
-func ConversationContextContains(v string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldContains(FieldConversationContext, v))
-}
-
-// ConversationContextHasPrefix applies the HasPrefix predicate on the "conversation_context" field.
-func ConversationContextHasPrefix(v string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldHasPrefix(FieldConversationContext, v))
-}
-
-// ConversationContextHasSuffix applies the HasSuffix predicate on the "conversation_context" field.
-func ConversationContextHasSuffix(v string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldHasSuffix(FieldConversationContext, v))
-}
-
-// ConversationContextIsNil applies the IsNil predicate on the "conversation_context" field.
-func ConversationContextIsNil() predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldIsNull(FieldConversationContext))
-}
-
-// ConversationContextNotNil applies the NotNil predicate on the "conversation_context" field.
-func ConversationContextNotNil() predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldNotNull(FieldConversationContext))
-}
-
-// ConversationContextEqualFold applies the EqualFold predicate on the "conversation_context" field.
-func ConversationContextEqualFold(v string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldEqualFold(FieldConversationContext, v))
-}
-
-// ConversationContextContainsFold applies the ContainsFold predicate on the "conversation_context" field.
-func ConversationContextContainsFold(v string) predicate.AuditEvent {
-	return predicate.AuditEvent(sql.FieldContainsFold(FieldConversationContext, v))
 }
 
 // IsSensitiveEQ applies the EQ predicate on the "is_sensitive" field.

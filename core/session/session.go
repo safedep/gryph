@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/cost"
+	"github.com/safedep/gryph/core/events"
 )
 
 // Session represents a single agent working session.
@@ -28,7 +29,8 @@ type Session struct {
 	WorkingDirectory string `json:"working_directory,omitempty"`
 	// ProjectName is detected from package.json, Cargo.toml, etc.
 	ProjectName string `json:"project_name,omitempty"`
-	// TotalActions is the count of events (denormalized).
+	// TotalActions is the count of action events. An intent or an
+	// observation does not count, so a pre and post pair counts once.
 	TotalActions int `json:"total_actions"`
 	// FilesRead is the count of file_read actions.
 	FilesRead int `json:"files_read"`
@@ -36,7 +38,12 @@ type Session struct {
 	FilesWritten int `json:"files_written"`
 	// CommandsExecuted is the count of command_exec actions.
 	CommandsExecuted int `json:"commands_executed"`
-	// Errors is the count of events with error status.
+	// NetworkRequests is the count of network_request actions.
+	NetworkRequests int `json:"network_requests"`
+	// EventCount is the count of every recorded event, of any kind. The
+	// next event sequence comes from it.
+	EventCount int `json:"event_count"`
+	// Errors is the count of action and observation events with error status.
 	Errors           int `json:"errors"`
 	SensitiveActions int `json:"sensitive_actions"`
 	BlockedActions   int `json:"blocked_actions"`
@@ -95,6 +102,77 @@ func (s *Session) Duration() time.Duration {
 // End marks the session as ended with the current timestamp.
 func (s *Session) End() {
 	s.EndedAt = time.Now().UTC()
+}
+
+// RecordedEvents returns the count of recorded events of any kind. The next
+// event sequence follows it. A session from before EventCount existed has
+// EventCount zero, and its TotalActions counted every event, so the larger
+// of the two is the count.
+func (s *Session) RecordedEvents() int {
+	return max(s.EventCount, s.TotalActions)
+}
+
+// Counts holds what recorded events add to the session counters.
+type Counts struct {
+	TotalActions     int
+	FilesRead        int
+	FilesWritten     int
+	CommandsExecuted int
+	NetworkRequests  int
+	Errors           int
+	SensitiveActions int
+	BlockedActions   int
+}
+
+// EventCounts returns what one recorded event adds to the counters. Only an
+// event of kind action adds to the activity counters, so a pre and post pair
+// for one tool call counts once. An event with no kind counts as an action.
+// Errors count actions and observations, because the post event of a pair
+// carries the result.
+func EventCounts(e *events.Event) Counts {
+	var c Counts
+	if e.ResultStatus == events.ResultError && e.Kind != events.KindIntent {
+		c.Errors = 1
+	}
+	if e.Kind != "" && e.Kind != events.KindAction {
+		return c
+	}
+	c.TotalActions = 1
+	switch e.ActionType {
+	case events.ActionFileRead:
+		c.FilesRead = 1
+	case events.ActionFileWrite:
+		c.FilesWritten = 1
+	case events.ActionCommandExec:
+		c.CommandsExecuted = 1
+	case events.ActionNetworkRequest:
+		c.NetworkRequests = 1
+	}
+	if e.ResultStatus == events.ResultBlocked {
+		c.BlockedActions = 1
+	}
+	if e.IsSensitive {
+		c.SensitiveActions = 1
+	}
+	return c
+}
+
+// Add adds c to the counters.
+func (s *Session) Add(c Counts) {
+	s.TotalActions += c.TotalActions
+	s.FilesRead += c.FilesRead
+	s.FilesWritten += c.FilesWritten
+	s.CommandsExecuted += c.CommandsExecuted
+	s.NetworkRequests += c.NetworkRequests
+	s.Errors += c.Errors
+	s.SensitiveActions += c.SensitiveActions
+	s.BlockedActions += c.BlockedActions
+}
+
+// CountEvent updates the in-memory counters for one recorded event.
+func (s *Session) CountEvent(e *events.Event) {
+	s.EventCount = max(s.EventCount, e.Sequence)
+	s.Add(EventCounts(e))
 }
 
 // HasCostData returns true if cost data has been computed for this session.

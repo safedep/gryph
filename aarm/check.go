@@ -276,20 +276,16 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 		return nil, fmt.Errorf("aarm: mediator is not initialized")
 	}
 
-	action, err := m.adapter.Normalize(ctx, event, sess)
+	action, entry, err := m.adapter.Normalize(ctx, event, sess)
 	if err != nil {
 		return nil, err
 	}
 
-	if res, blocked := m.enforceIdentity(ctx, m.receiptAction(event, action)); blocked {
+	if res, blocked := m.enforceIdentity(ctx, m.receiptAction(event, action), entry); blocked {
 		return res, nil
 	}
 
-	if err := m.accum.Append(ctx, action); err != nil {
-		return nil, fmt.Errorf("aarm: accumulator append: %w", err)
-	}
-
-	snapshot, err := m.accum.Snapshot(ctx, action.SessionID)
+	snapshot, err := m.accum.Snapshot(ctx, action.SessionID, entry)
 	if err != nil {
 		return nil, fmt.Errorf("aarm: %w: %w", accumulator.ErrSnapshot, err)
 	}
@@ -304,6 +300,11 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 	if err != nil {
 		return nil, err
 	}
+
+	if r := entryResult(decision.Decision); r != "" {
+		entry.Result = r
+	}
+	m.appendEntry(ctx, entry, decision)
 
 	// Drop the full match buffer so no later serialization of the action can
 	// leak full content.
@@ -320,12 +321,6 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 	result := pep.Apply(decision)
 	result.AarmActionID = action.ID
 	result.AarmSessionID = action.SessionID
-
-	// The hook returns before the allow-path RecordResult, so record a blocked
-	// outcome here. Guidance and warn proceed and are recorded on the allow path.
-	if decision.Decision == model.DecisionBlock {
-		m.recordContextResult(ctx, action.ID, model.ResultBlocked)
-	}
 
 	if m.shouldRecordReceipt(decision) {
 		rec, rerr := m.receipt.Record(ctx, &receipt.RecordInput{
@@ -366,19 +361,44 @@ func (m *Mediator) receiptAction(event *events.Event, action *model.Action) *mod
 	return &stored
 }
 
+// appendEntry records the decision on the entry and writes it once, after
+// the evaluation. A failed append only logs. The decision stands, so an
+// append error never turns a block into an allow under fail_mode open.
+func (m *Mediator) appendEntry(ctx context.Context, entry *model.ContextEntry, decision *model.EvaluationResult) {
+	entry.Decision = decision.Decision
+	entry.MatchedRuleIDs = decision.MatchedRuleIDs
+	if err := m.accum.Append(ctx, entry); err != nil {
+		log.Warnf("aarm: accumulator append: %v", err)
+	}
+}
+
+// entryResult is the result that the first insert of an entry records. The
+// hook returns before the allow-path RecordResult on block and defer, so
+// those results go in with the entry. Other decisions keep the result of the
+// event, and the allow path records the outcome later.
+func entryResult(d model.Decision) model.ResultStatus {
+	switch d {
+	case model.DecisionBlock:
+		return model.ResultBlocked
+	case model.DecisionDefer:
+		return model.ResultDeferred
+	default:
+		return ""
+	}
+}
+
 // identityMissingReason is the operator-facing block message returned when
 // require_human_principal is true and no human principal was captured.
 const identityMissingReason = "Action denied: no verifiable human principal"
 
-// enforceIdentity blocks before PDP eval (and before the accumulator append)
-// when require_human_principal is true and the captured HumanPrincipal is
-// empty. Returns (result, true) when the action is denied. Records a block
-// receipt with error_message populated on the initial insert (one writer-lock
-// round trip) and fires the identity-missing audit hook so the CLI can emit
-// the identity_missing self-audit row. A denied action did not happen, so it
-// is recorded with a nil snapshot and does not contribute to
-// context.total_actions.
-func (m *Mediator) enforceIdentity(ctx context.Context, action *model.Action) (*coresecurity.CheckResult, bool) {
+// enforceIdentity blocks before PDP eval when require_human_principal is
+// true and the captured HumanPrincipal is empty. Returns (result, true) when
+// the action is denied. Records a block receipt with error_message populated
+// on the initial insert (one writer-lock round trip) and fires the
+// identity-missing audit hook so the CLI can emit the identity_missing
+// self-audit row. The receipt has a nil snapshot. The denied action is an
+// attempt, so it gets a context entry and counts in context.total_actions.
+func (m *Mediator) enforceIdentity(ctx context.Context, action *model.Action, entry *model.ContextEntry) (*coresecurity.CheckResult, bool) {
 	if !m.identityCfg.Enabled || !m.identityCfg.RequireHumanPrincipal {
 		return nil, false
 	}
@@ -392,6 +412,8 @@ func (m *Mediator) enforceIdentity(ctx context.Context, action *model.Action) (*
 		Message:        identityMissingReason,
 		Severity:       model.SeverityHigh,
 	}
+	entry.Result = model.ResultBlocked
+	m.appendEntry(ctx, entry, decision)
 	rec, rerr := m.receipt.Record(ctx, &receipt.RecordInput{
 		SessionID:    action.SessionID,
 		ActionID:     action.ID,
@@ -615,8 +637,6 @@ func (m *Mediator) handleDefer(ctx context.Context, action *model.Action, snapsh
 		}
 		operatorHint = hint
 	}
-
-	m.recordContextResult(ctx, action.ID, model.ResultDeferred)
 
 	message := fmt.Sprintf("Action deferred: %s.", reason)
 	if operatorHint != "" {

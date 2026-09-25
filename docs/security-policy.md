@@ -168,6 +168,8 @@ context.{total_actions, files_read, files_written, commands_executed,
 
 `action.data_classifications` carries labels like `secret`, `pii`, `source_code`, `config`, `git_internal`, `external_url`. `context.classifications_seen` is the running union across the session. `semantic_drift` is reserved and reads as `0.0` today.
 
+The counters count actions, and the current event is in them. A pre and post hook pair for one tool call is one action: the post event is an observation of the pre event, and it does not add to a counter. A post event with no recorded pre event is an action. A blocked action counts. `errors` counts actions and observations with an error result.
+
 `action.human_principal`, `action.service_identity`, and `action.role_scope` carry the AARM R6 identity fields. They are empty strings when capture is disabled or the resolver could not derive a value. See [Identity capture](#identity-capture).
 
 CEL evaluation runs sandboxed with a 100 ms timeout.
@@ -298,7 +300,7 @@ Do these steps each time you change a policy file.
 
 | Command | Purpose |
 |---|---|
-| `gryph policy context` | List per-session counters (action counts, tools used, classifications seen). `--session <id|prefix>` drills into one session and shows recent actions. |
+| `gryph policy context` | List per-session counters (action counts, tools used, classifications seen). `--session <id|prefix>` drills into one session and shows its recent entries. |
 | `gryph policy receipts` | List receipt rows for mediated actions. `--session`, `--decision`, `--since`, `--until` filter. Pass `--show-hash` to include the per-row hash. |
 | `gryph policy receipts --verify` | Recompute the hash chain and verify any signatures. `--session ID` verifies one chain in full; `--all-sessions` verifies every chain. Exits non-zero on break or invalid signature. |
 | `gryph policy receipts export` | Stream receipts as JSONL or CSV. `--include-signatures` adds the Ed25519 signature columns. |
@@ -340,7 +342,7 @@ The legacy `sign: true` / `sign: false` bool is still accepted as a deprecated a
 
 ### Context chain
 
-The Context Accumulator log (`aarm_context_actions`) carries a per-session hash chain of the same shape as the receipt chain: each row stores `sequence`, `prev_hash`, and `hash`. The chain attests to the as-mediated action (identity + counter-feeding fields), not the post-hook result, so a result_status update never invalidates the chain. Verify it with:
+The session context log (`context_entries`) carries a per-session hash chain of the same shape as the receipt chain: each entry stores `sequence`, `prev_hash`, `hash`, and `hash_version`. The chain attests to the facts of the entry at mediation time, including the decision, not the post-hook result, so a result update never invalidates the chain. Verify it with:
 
 ```
 gryph policy context --verify --session <id|prefix>     # one session, full chain
@@ -348,7 +350,9 @@ gryph policy context --verify                           # sessions touched by th
 gryph policy context --verify --all-sessions            # every session in the log
 ```
 
-`--verify` exits non-zero on any chain break and records a `context_chain_broken` self-audit row. Rows written before the chain was added show up as `unchained` in the summary and do not fail verification. `--format json` emits a machine-readable verdict (`actions`, `chain_breaks`, `summary`).
+`--verify` exits non-zero on any chain break and records a `context_chain_broken` self-audit row. `--format json` emits a machine-readable verdict (`entries`, `chain_breaks`, `summary`).
+
+The upgrade to `context_entries` drops the old `aarm_context_actions` and `aarm_context_states` tables and their rows. Receipts do not reference them, so the receipt chain stays verifiable. The migration never drops a column or an index, so the retired `audit_events.conversation_context` column stays in place, unused.
 
 The chain is not signed today. The receipt chain remains the authenticated audit log. The context chain is for the policy engine to read and for tamper-evidence within the same database.
 

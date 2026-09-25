@@ -6,12 +6,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
-// AarmContextAction is the predicate function for aarmcontextaction builders.
-type AarmContextAction func(*sql.Selector)
-
-// AarmContextState is the predicate function for aarmcontextstate builders.
-type AarmContextState func(*sql.Selector)
-
 // AarmDeferredAction is the predicate function for aarmdeferredaction builders.
 type AarmDeferredAction func(*sql.Selector)
 
@@ -23,6 +17,12 @@ type AuditEvent func(*sql.Selector)
 
 // AuditStreamCursor is the predicate function for auditstreamcursor builders.
 type AuditStreamCursor func(*sql.Selector)
+
+// ContextEntry is the predicate function for contextentry builders.
+type ContextEntry func(*sql.Selector)
+
+// ContextState is the predicate function for contextstate builders.
+type ContextState func(*sql.Selector)
 
 // EventStreamCursor is the predicate function for eventstreamcursor builders.
 type EventStreamCursor func(*sql.Selector)

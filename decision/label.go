@@ -56,7 +56,6 @@ func labelEvent(event *events.Event, redactor *privacy.Redactor, classes []priva
 		if len(event.RawEvent) > 0 {
 			event.RawEvent = redactor.RedactJSON(event.RawEvent)
 		}
-		event.ConversationContext = redactor.Redact(event.ConversationContext)
 		event.ErrorMessage = redactor.Redact(event.ErrorMessage)
 	}
 }
@@ -110,7 +109,6 @@ func applyLevel(event *events.Event, level config.LoggingLevel) {
 
 	if stripFull {
 		event.RawEvent = nil
-		event.ConversationContext = ""
 	}
 	if event.IsSensitive {
 		event.FullContent = ""
