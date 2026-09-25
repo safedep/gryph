@@ -31,8 +31,9 @@ which calls the check. `cli/hook.go` then renders the response.
   for an agent other than the event agent.
 - Known gap: `decision.Local` applies the logging level before it calls
   `Evaluate`. At `logging.level: minimal` the level strips the tool input and
-  the write content, so policy rules do not see them. PR #68 moves the strip
-  after the evaluation.
+  the write content, so policy rules do not see them. For a sensitive event
+  the level strips the payload content and `FullContent` at every level,
+  `full` included. PR #68 moves the strip after the evaluation.
 
 ## Request flow
 
