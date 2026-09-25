@@ -186,14 +186,25 @@ const (
 // typedPrompt removes the referenced files block that Gemini CLI appends.
 // A user can type the start line, so the text is cut only when the start
 // line is followed by a file block and the text ends with the end line.
+// A file can also hold the start line, so the cut is at the first block.
+// A fake block that the user types before the real block removes user text
+// from the intent. It never puts file content in the intent.
 func typedPrompt(prompt string) string {
 	trimmed := strings.TrimRight(prompt, "\n ")
-	i := strings.LastIndex(trimmed, referencedFilesStart)
-	if i < 0 || !strings.HasSuffix(trimmed, referencedFilesEnd) ||
-		!strings.HasPrefix(trimmed[i+len(referencedFilesStart):], "Content from @") {
+	if !strings.HasSuffix(trimmed, referencedFilesEnd) {
 		return trimmed
 	}
-	return strings.TrimRight(trimmed[:i], "\n ")
+	for offset := 0; ; {
+		i := strings.Index(trimmed[offset:], referencedFilesStart)
+		if i < 0 {
+			return trimmed
+		}
+		i += offset
+		offset = i + len(referencedFilesStart)
+		if strings.HasPrefix(trimmed[offset:], "Content from @") {
+			return strings.TrimRight(trimmed[:i], "\n ")
+		}
+	}
 }
 
 func parseBeforeAgent(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {

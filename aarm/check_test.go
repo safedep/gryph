@@ -888,7 +888,7 @@ rules:
 	prompt := func(text string) *events.Event {
 		e := events.NewEvent(sessionID, "claude-code", events.ActionUserPrompt)
 		e.Kind = events.KindIntent
-		require.NoError(t, e.SetPrompt(text))
+		require.NoError(t, e.SetPrompt(text, privacy.OriginUser))
 		return e
 	}
 	command := func() *events.Event {
