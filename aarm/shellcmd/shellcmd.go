@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/safedep/dry/log"
+	"mvdan.cc/sh/v3/expand"
 	"mvdan.cc/sh/v3/syntax"
 )
 
@@ -47,6 +48,10 @@ type Target struct {
 	// Glob is the resolved pattern when the command reads the path through
 	// a glob. Path is then the directory before the first glob character.
 	Glob string
+	// Guess marks a read by a command that the walker does not know. Such a
+	// command may read the path, but it may not read every file in a
+	// directory that the path names.
+	Guess bool
 }
 
 // Analysis is what a command does to paths and hosts.
@@ -286,31 +291,94 @@ func (w *walker) subshells(node syntax.Node, cwds dirs) {
 }
 
 func (w *walker) redirect(r *syntax.Redirect, cwds dirs) {
-	switch r.Op {
-	case syntax.RdrOut, syntax.AppOut, syntax.RdrInOut, syntax.RdrClob,
-		syntax.RdrAll, syntax.RdrAllClob, syntax.AppAll, syntax.AppAllClob:
-		if v, ok := w.word(r.Word, cwds); ok {
-			w.add(v, AccessWrite, cwds)
+	for _, word := range expandBraces(r.Word) {
+		v, ok := w.word(word, cwds)
+		if !ok {
+			continue
 		}
-	case syntax.RdrIn:
-		if v, ok := w.word(r.Word, cwds); ok {
+		switch r.Op {
+		case syntax.RdrOut, syntax.AppOut, syntax.RdrInOut, syntax.RdrClob,
+			syntax.RdrAll, syntax.RdrAllClob, syntax.AppAll, syntax.AppAllClob:
+			w.add(v, AccessWrite, cwds)
+		case syntax.RdrIn:
 			w.add(v, AccessRead, cwds)
 		}
-	}
-	if v, ok := w.word(r.Word, cwds); ok {
 		w.devSocket(v)
 	}
 }
 
-// words resolves each argument. An argument that cannot be resolved becomes
-// an empty string so that argument positions stay stable.
+// words resolves each argument after brace expansion. An argument that
+// cannot be resolved becomes an empty string so that argument positions
+// stay stable.
 func (w *walker) words(args []*syntax.Word, cwds dirs) []string {
 	out := make([]string, 0, len(args))
 	for _, a := range args {
-		v, _ := w.word(a, cwds)
-		out = append(out, v)
+		for _, word := range expandBraces(a) {
+			v, _ := w.word(word, cwds)
+			out = append(out, v)
+		}
 	}
 	return out
+}
+
+// maxBraceWords limits the words that one brace expansion makes.
+const maxBraceWords = 64
+
+// expandBraces splits a word such as "a.d{b,}" into the words the shell
+// makes from it. A sequence such as "{1..9}", and every brace of a word
+// that expands to more than maxBraceWords words, becomes the glob "*",
+// which covers each word the shell makes.
+func expandBraces(word *syntax.Word) []*syntax.Word {
+	if word == nil {
+		return nil
+	}
+	if !syntax.SplitBraces(word) {
+		return []*syntax.Word{word}
+	}
+	parts := globBraces(word.Parts, true)
+	if braceWords(parts) > maxBraceWords {
+		parts = globBraces(parts, false)
+	}
+	return expand.Braces(&syntax.Word{Parts: parts})
+}
+
+// globBraces replaces each brace expansion with "*". With onlySequences,
+// it replaces only the sequences, also inside the elements of a list.
+func globBraces(parts []syntax.WordPart, onlySequences bool) []syntax.WordPart {
+	out := make([]syntax.WordPart, 0, len(parts))
+	for _, part := range parts {
+		br, ok := part.(*syntax.BraceExp)
+		switch {
+		case !ok:
+			out = append(out, part)
+		case br.Sequence || !onlySequences:
+			out = append(out, &syntax.Lit{Value: "*"})
+		default:
+			for _, elem := range br.Elems {
+				elem.Parts = globBraces(elem.Parts, true)
+			}
+			out = append(out, br)
+		}
+	}
+	return out
+}
+
+// braceWords returns the number of words that the brace lists in parts
+// make, up to maxBraceWords+1.
+func braceWords(parts []syntax.WordPart) int {
+	n := 1
+	for _, part := range parts {
+		br, ok := part.(*syntax.BraceExp)
+		if !ok {
+			continue
+		}
+		elems := 0
+		for _, elem := range br.Elems {
+			elems = min(elems+braceWords(elem.Parts), maxBraceWords+1)
+		}
+		n = min(n*elems, maxBraceWords+1)
+	}
+	return n
 }
 
 // call analyzes one simple command and returns the working directories
@@ -408,6 +476,8 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 			w.addAll(parseArgs(rest, opts).operands, AccessRead, cwds)
 		} else if opts, ok := editCommands[name]; ok {
 			w.addAll(parseArgs(rest, opts).operands, AccessWrite, cwds)
+		} else if !nonReadCommands[name] {
+			w.guessReads(operands(rest), cwds)
 		}
 	}
 	return cwds
@@ -500,6 +570,8 @@ var wrappers = map[string]wrapperSpec{
 	"chrt": {values: flagSet("-T", "--sched-runtime", "-P", "--sched-period", "-D", "--sched-deadline"),
 		operands: 1},
 	"taskset": {operands: 1},
+	"busybox": {},
+	"toybox":  {},
 }
 
 // program returns the index of the program word in args and the working
@@ -762,8 +834,29 @@ func (w *walker) addAll(values []string, access Access, cwds dirs) {
 // glob is recorded as a tree write of the directory. A removal or a read
 // through a glob is recorded as a removal or a read of the directory.
 func (w *walker) add(value string, access Access, cwds dirs) {
+	for _, t := range w.targetsOf(value, access, cwds) {
+		w.addTarget(t)
+	}
+}
+
+// guessReads records each operand of a command that the walker does not
+// know as a read, because the command can read any file it names. A word
+// with white space is a script or a message, and a URL is not a file.
+func (w *walker) guessReads(values []string, cwds dirs) {
+	for _, v := range values {
+		if strings.ContainsAny(v, " \t\n") || strings.Contains(v, "://") {
+			continue
+		}
+		for _, t := range w.targetsOf(v, AccessRead, cwds) {
+			t.Guess = true
+			w.addTarget(t)
+		}
+	}
+}
+
+func (w *walker) targetsOf(value string, access Access, cwds dirs) []Target {
 	if value == "" || (value == "-" && access == AccessRead) {
-		return
+		return nil
 	}
 	glob := ""
 	if i := strings.IndexAny(value, "*?["); i >= 0 {
@@ -773,13 +866,15 @@ func (w *walker) add(value string, access Access, cwds dirs) {
 			access = AccessWriteTree
 		}
 	}
+	out := make([]Target, 0, len(cwds))
 	for _, cwd := range cwds {
 		t := Target{Path: resolve(value, cwd, w.env.Home), Access: access}
 		if glob != "" && access == AccessRead {
 			t.Glob = resolve(glob, cwd, w.env.Home)
 		}
-		w.addTarget(t)
+		out = append(out, t)
 	}
+	return out
 }
 
 func (w *walker) addTarget(t Target) {

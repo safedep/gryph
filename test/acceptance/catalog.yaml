@@ -52,7 +52,7 @@
   title: "builtin self-protection blocks reads of the gryph database and signing key"
   category: policy
   tier: P0
-  guarantee: "With policy enabled, an agent read of the database, its WAL or SHM file, or the receipt signing key is blocked. A Grep of the data directory, and sqlite3, cat, cp, base64, and cd-then-read commands that read them, are blocked. A read of a project file or an agent hook config passes."
+  guarantee: "With policy enabled, an agent read of the database, its WAL or SHM file, or the receipt signing key is blocked. A Grep of the data directory, of the config directory, or of the config parent directory is blocked. sqlite3, cat, cp, base64, and cd-then-read commands that read them are blocked. A read of a project file or an agent hook config, and a Grep of the home directory, pass."
   labels: [policy, self-protection]
 
 - id: policy/file-access/read-rule-matches-shell-reads

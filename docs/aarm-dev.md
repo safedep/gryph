@@ -198,9 +198,13 @@ before it matches. A delete or move of a directory also matches when the
 directory contains a protected path, for a shell command or a `file_delete`.
 A shell read of such a directory matches the read rule, because a copy or a
 recursive read reads every file in it. A shell read through a glob matches
-when the glob covers a protected path (`Target.Glob`). A `file_read` of the
-directory that directly holds a protected path also matches. The rules have
-no agent names and no command regexes.
+when the glob and a pattern, or the glob and a directory that holds a
+pattern, can match the same path (`Target.Glob`, `globsOverlap` in
+`aarm/pdp/paths.go`). `globsOverlap` compares the two globs one segment at a
+time, and one character at a time in a segment. A `file_read` of a directory
+that holds a protected path at any depth also matches, but a `file_read` of
+the home directory or one of its parents does not. The rules have no agent
+names and no command regexes.
 
 `aarm/shellcmd` walks the parsed command tree. It tracks the set of working
 directories a command can run in: a `cd` in a subshell, a pipe, a
@@ -236,8 +240,18 @@ analysis.
 
 A read target comes from an input redirect, the source of a copy or a move,
 the file operands of a fixed list of read commands (`cat`, `head`, `grep`,
-`sed` without `-i`, `sort`, `tar`, `sqlite3`, and others), and the files that
-`curl` and `wget` upload. A host comes from a URL anywhere in a word, from
+`sed` without `-i`, `sort`, `tar`, `sqlite3`, and others), the files that `curl`
+and `wget` upload, and a `file:` URL of `curl` or `sqlite3`. For `sqlite3`,
+the walker also reads the `-init` file and the files that `.open`, `.read`,
+`.import`, `.restore`, `.load`, or `ATTACH` names in an operand or a `-cmd`
+value. `tar` applies each `-C` to the members after it. For a command that
+the walker does not know, each operand without white space is a read with
+`Target.Guess` set. The PDP matches a guessed read against the file patterns
+only, not against a directory that holds a pattern. `nonReadCommands` lists
+the commands that read no file content, such as `ls` and `stat`. The walker
+expands a brace list such as `a.{db,x}` before it records a path. A sequence
+such as `{1..9}`, or a word that expands to more than 64 words, becomes the
+glob `*`. A host comes from a URL anywhere in a word, from
 the operands of `curl`, `wget`, `ssh`, `sftp`, `nc`, and similar tools, from an
 scp-style `host:path` in `scp`, `rsync`, and the remote of a `git` command,
 from `openssl -connect`, and from a `/dev/tcp/host/port` redirect. Hosts are
@@ -255,7 +269,7 @@ A command that writes paths in a directory with names that the command line
 does not show is a tree write (`AccessWriteTree`) of that directory: a
 recursive copy (`cp -r`, `rsync -a`, `scp -r`) of a source that can be a
 directory, a copy of directory contents (a source that ends in `/` or `/.`),
-a copy or link with `-T` or `ln -n`, a `tar`, `7z`, or `unzip` extract (the
+a copy or link with `-T` or `ln -n`, a `tar`, `7z`, or `unzip` extract (each
 target directory or the working directory), a recursive `wget`, a download
 that takes a name from the server (`curl -J`, `wget --content-disposition`),
 `gunzip -N`, and a write through a glob. The walker does not record the

@@ -317,6 +317,12 @@ rules:
     match:
       action_types: [command_exec]
       file_patterns: ["**/key.pem"]
+  - id: no-env-reads
+    action: block
+    match:
+      action_types: [command_exec]
+      file_patterns: ["**/.env"]
+      file_access: [read]
 `)
 	cases := []struct {
 		command string
@@ -328,6 +334,9 @@ rules:
 		{"rm secrets.txt", model.DecisionAllow},
 		{"echo x > key.pem", model.DecisionBlock},
 		{"cat key.pem", model.DecisionAllow},
+		{"cat .e*", model.DecisionBlock},
+		{"cat config/.[e]nv", model.DecisionBlock},
+		{"cat *.md", model.DecisionAllow},
 	}
 	for _, tc := range cases {
 		t.Run(tc.command, func(t *testing.T) {
@@ -387,6 +396,37 @@ rules:
 	assert.NotEqual(t, mustPDPPolicy(t, `{file_patterns: ["a"]}`).Hash(), withDefault.Hash())
 }
 
+func TestGlobsOverlap(t *testing.T) {
+	cases := []struct {
+		glob    string
+		pattern string
+		want    bool
+	}{
+		{"/w/.e*", "**/.env", true},
+		{"/w/*.md", "**/.env", false},
+		{"/w/*.env", "**/.e*", true},
+		{"/w/.[a-f]nv", "**/.env", true},
+		{"/w/.[x-z]nv", "**/.env", false},
+		{"/w/?env", "**/.env", true},
+		{"/w/*/x", "/w/a/**", true},
+		{"/other/**", "/data/audit.db", false},
+		{"/data/**", "/data/g/audit.db", true},
+		{"/data/*", "/data/g/audit.db", false},
+		{"/data/*", "/data/g", true},
+		{"/data/g/k*", "/data/g/keys", true},
+		{"/data/*/audit.db", "/data/g/audit.db", true},
+		{"/data/*.yaml", "/data/audit.db", false},
+		{"/w/a{b,c}", "/w/x", true},
+		{`/w/a\*`, "/w/a*", true},
+		{`/w/a\*`, "/w/ab", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.glob+" "+tc.pattern, func(t *testing.T) {
+			assert.Equal(t, tc.want, globsOverlap(tc.glob, []string{tc.pattern}))
+		})
+	}
+}
+
 func TestEvaluate_FileAccessPaths(t *testing.T) {
 	engine := mustPDP(t, `
 version: "1"
@@ -418,7 +458,9 @@ rules:
 		{"file read with parent segment", &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: "/data/other/../gryph/audit.db"}}, model.DecisionBlock},
 		{"file read relative to working dir", &model.Action{Type: model.ActionFileRead, WorkingDir: "/data/gryph", Parameters: model.Parameters{Path: "audit.db"}}, model.DecisionBlock},
 		{"file read of the directory", &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: "/data/gryph/"}}, model.DecisionBlock},
-		{"file read of an ancestor", &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: "/data"}}, model.DecisionAllow},
+		{"file read of an ancestor", &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: "/data"}}, model.DecisionBlock},
+		{"file read of the root", &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: "/"}}, model.DecisionAllow},
+		{"file read of a sibling", &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: "/data/other"}}, model.DecisionAllow},
 		{"default rule ignores a read of the parent", &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: "/keys"}}, model.DecisionAllow},
 		{"file write with dot segment", &model.Action{Type: model.ActionFileWrite, Parameters: model.Parameters{Path: "/keys/./receipt.key"}}, model.DecisionBlock},
 		{"shell copy of an ancestor", shellAction("cp -r /data /tmp/x"), model.DecisionBlock},

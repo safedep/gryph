@@ -63,9 +63,10 @@ func (a *actionPaths) actionPath() []string {
 // A file delete, or a shell removal of a directory that contains a matching
 // path, also matches. A shell read of such a directory also matches, because
 // a recursive read or a copy of the directory reads every file in it. A read
-// through a glob matches when the glob covers a matching path. A file_read
-// action of the directory that directly holds a matching path matches when
-// the rule selects reads.
+// through a glob matches when the glob can name a matching path. When the
+// rule selects reads, a file_read action of a directory that contains a
+// matching path also matches, unless the directory is the home directory or
+// one of its parents.
 //
 // A tree write matches the directory that holds a matching path. A tree
 // write into a parent of that directory does not match, because a copy or an
@@ -78,7 +79,7 @@ func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) boo
 		case action.Type == model.ActionFileDelete && matchesAnyPath(r.containerPatterns, p):
 			return true
 		case action.Type == model.ActionFileRead && slices.Contains(r.fileAccess, shellcmd.AccessRead) &&
-			matchesAnyPath(r.parentPatterns, p):
+			matchesAnyPath(r.containerPatterns, p) && !isHomeOrParent(p):
 			return true
 		}
 	}
@@ -100,33 +101,141 @@ func (r compiledRule) selects(access shellcmd.Access) bool {
 	return slices.Contains(r.fileAccess, access)
 }
 
+// matchesTarget matches a shell target. A guessed read matches only the
+// file patterns, because the walker does not know whether the command reads
+// a directory tree.
 func (r compiledRule) matchesTarget(t shellcmd.Target) bool {
 	if t.Access == shellcmd.AccessRead && t.Glob != "" {
-		return matchesAnyPath(r.filePatterns, t.Glob) || globCovers(t.Glob, r.filePatterns)
+		return globsOverlap(t.Glob, r.filePatterns) || (!t.Guess && globsOverlap(t.Glob, r.containerPatterns))
 	}
 	if matchesAnyPath(r.filePatterns, t.Path) {
 		return true
 	}
 	switch t.Access {
-	case shellcmd.AccessRemove, shellcmd.AccessRead:
+	case shellcmd.AccessRemove:
 		return matchesAnyPath(r.containerPatterns, t.Path)
+	case shellcmd.AccessRead:
+		return !t.Guess && matchesAnyPath(r.containerPatterns, t.Path)
 	case shellcmd.AccessWriteTree:
 		return matchesAnyPath(r.parentPatterns, t.Path)
 	}
 	return false
 }
 
-// globCovers reports whether a shell glob names a literal path pattern.
-func globCovers(glob string, patterns []string) bool {
+// isHomeOrParent reports whether p is the home directory or one of its
+// parents. A search of these directories is common, and a rule that blocks
+// it blocks too much.
+func isHomeOrParent(p string) bool {
+	p = shellcmd.ResolvePath(p, "")
+	home := shellcmd.ResolvePath("~", "")
+	return p == "/" || p == home || strings.HasPrefix(home, p+"/")
+}
+
+// globsOverlap reports whether a shell glob and one of the patterns can
+// match the same path. It compares the paths one segment at a time, and a
+// "**" segment matches any number of segments.
+func globsOverlap(glob string, patterns []string) bool {
+	globSegs := strings.Split(glob, "/")
 	for _, p := range patterns {
-		if strings.ContainsAny(p, "*?[{") {
-			continue
-		}
-		if ok, _ := doublestar.Match(glob, p); ok {
+		if intersects(globSegs, strings.Split(p, "/"), isDoubleStar, segmentsOverlap) {
 			return true
 		}
 	}
 	return false
+}
+
+func isDoubleStar(seg string) bool { return seg == "**" }
+
+// segmentsOverlap reports whether two glob segments can match the same
+// name. A segment with a brace can match anything, so the result is true.
+func segmentsOverlap(a, b string) bool {
+	if strings.Contains(a, "{") || strings.Contains(b, "{") {
+		return true
+	}
+	return intersects(globTokens(a), globTokens(b), isStarToken, tokensMeet)
+}
+
+// globToken is one element of a glob segment: "*", "?", a class such as
+// "[a-z]", or one literal character.
+type globToken string
+
+func isStarToken(t globToken) bool { return t == "*" }
+
+func globTokens(seg string) []globToken {
+	var out []globToken
+	for i := 0; i < len(seg); i++ {
+		switch seg[i] {
+		case '\\':
+			if i+1 < len(seg) {
+				i++
+			}
+			out = append(out, globToken(`\`+seg[i:i+1]))
+		case '[':
+			if end := strings.IndexByte(seg[i+1:], ']'); end > 0 {
+				out = append(out, globToken(seg[i:i+end+2]))
+				i += end + 1
+				continue
+			}
+			out = append(out, `\[`)
+		default:
+			out = append(out, globToken(seg[i:i+1]))
+		}
+	}
+	return out
+}
+
+// tokensMeet reports whether two tokens that each match one character can
+// match the same character. Two classes always meet, so the check can only
+// over-match.
+func tokensMeet(a, b globToken) bool {
+	if a == "?" || b == "?" {
+		return true
+	}
+	aClass, bClass := strings.HasPrefix(string(a), "["), strings.HasPrefix(string(b), "[")
+	switch {
+	case aClass && bClass:
+		return true
+	case aClass:
+		ok, _ := doublestar.Match(string(a), literal(b))
+		return ok
+	case bClass:
+		ok, _ := doublestar.Match(string(b), literal(a))
+		return ok
+	}
+	return literal(a) == literal(b)
+}
+
+func literal(t globToken) string {
+	return strings.TrimPrefix(string(t), `\`)
+}
+
+// intersects reports whether two token lists can match the same input. A
+// star token matches any run of input, and meet reports whether two other
+// tokens can match the same element.
+func intersects[T any](a, b []T, star func(T) bool, meet func(T, T) bool) bool {
+	seen := map[[2]int]bool{}
+	var visit func(i, j int) bool
+	visit = func(i, j int) bool {
+		if i == len(a) && j == len(b) {
+			return true
+		}
+		if seen[[2]int{i, j}] {
+			return false
+		}
+		seen[[2]int{i, j}] = true
+		aStar := i < len(a) && star(a[i])
+		bStar := j < len(b) && star(b[j])
+		switch {
+		case aStar && (visit(i+1, j) || (j < len(b) && visit(i, j+1))):
+			return true
+		case bStar && (visit(i, j+1) || (i < len(a) && visit(i+1, j))):
+			return true
+		case i < len(a) && j < len(b) && !aStar && !bStar:
+			return meet(a[i], b[j]) && visit(i+1, j+1)
+		}
+		return false
+	}
+	return visit(0, 0)
 }
 
 // containerPatterns returns the glob of each parent directory of each

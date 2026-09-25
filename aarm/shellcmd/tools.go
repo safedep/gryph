@@ -73,6 +73,26 @@ type parsedArgs struct {
 	// table does not know. The table must set guess. A guess that is
 	// the next word stays an operand too.
 	guesses []string
+	// seq holds the operands and the option values in command line order.
+	// An operand has an empty flag.
+	seq []flagValue
+}
+
+type flagValue struct {
+	flag  string
+	value string
+}
+
+func (p *parsedArgs) addOperands(values ...string) {
+	p.operands = append(p.operands, values...)
+	for _, v := range values {
+		p.seq = append(p.seq, flagValue{value: v})
+	}
+}
+
+func (p *parsedArgs) addValue(flag, value string) {
+	p.values[flag] = append(p.values[flag], value)
+	p.seq = append(p.seq, flagValue{flag: flag, value: value})
 }
 
 func (p parsedArgs) value(flags ...string) []string {
@@ -98,17 +118,17 @@ func parseArgs(args []string, o options) parsedArgs {
 		a := args[i]
 		switch {
 		case a == "--":
-			p.operands = append(p.operands, args[i+1:]...)
+			p.addOperands(args[i+1:]...)
 			return p
 		case strings.HasPrefix(a, "--"):
 			name, v, hasValue := strings.Cut(a, "=")
 			name = o.longName(name)
 			p.seen[name] = true
 			if hasValue {
-				p.values[name] = append(p.values[name], v)
+				p.addValue(name, v)
 			} else if o.values[name] && i+1 < len(args) {
 				i++
-				p.values[name] = append(p.values[name], args[i])
+				p.addValue(name, args[i])
 			}
 			if o.guess && !o.known(name) {
 				p.guess(v, args, i)
@@ -128,11 +148,11 @@ func parseArgs(args []string, o options) parsedArgs {
 					i++
 					v = args[i]
 				}
-				p.values[flag] = append(p.values[flag], v)
+				p.addValue(flag, v)
 				break
 			}
 		default:
-			p.operands = append(p.operands, a)
+			p.addOperands(a)
 		}
 	}
 	return p
@@ -203,6 +223,12 @@ type copyTool struct {
 }
 
 var noTargetDirectory = []string{"-T", "--no-target-directory"}
+
+// nonReadCommands do not read the content of their operands. The walker
+// does not guess reads for them.
+var nonReadCommands = flagSet("ls", "stat", "du", "df", "echo", "printf", "test", "[", "[[",
+	"mkdir", "touch", "which", "type", "basename", "dirname", "realpath", "readlink", "export",
+	"unset", "set", "declare", "local", "alias", "true", "false", "sleep", "kill", "popd")
 
 var (
 	copyOptions = options{
@@ -686,8 +712,9 @@ func (w *walker) extractInto(dirs []string, cwds dirs) {
 }
 
 // tar records the archive and the members. A create, append, update,
-// concatenate, or delete writes the archive. An extract writes into the -C
-// directory, or into the working directory. The walker does not record the
+// concatenate, or delete writes the archive. An extract writes into each -C
+// directory, or into the working directory. Each -C applies to the members
+// after it, relative to the previous -C. The walker does not record the
 // absolute member names of -P, because it cannot know them. Other modes read
 // the archive.
 func (w *walker) tar(args []string, cwds dirs) {
@@ -705,19 +732,28 @@ func (w *walker) tar(args []string, cwds dirs) {
 	}
 	w.addAll(p.value("-T", "--files-from", "-X", "--exclude-from"), AccessRead, cwds)
 	members := cwds
-	if dirs := p.value("-C", "--directory"); adds && len(dirs) > 0 {
-		members = w.cd([]string{dirs[len(dirs)-1]}, cwds)
+	extracts := p.has("-x", "--extract", "--get") && !p.has("-O", "--to-stdout")
+	if extracts && !p.has("-C", "--directory") {
+		w.add(".", AccessWriteTree, cwds)
 	}
-	switch {
-	case adds:
-		w.addAll(p.operands, AccessRead, members)
-		if p.has("--remove-files") {
-			w.addAll(p.operands, AccessRemove, members)
+	for _, a := range p.seq {
+		switch {
+		case a.flag == "-C" || a.flag == "--directory":
+			next := w.cd([]string{a.value}, members)
+			switch {
+			case !extracts:
+			case strings.ContainsAny(a.value, "*?["):
+				w.add(a.value, AccessWriteTree, members)
+			default:
+				w.add(".", AccessWriteTree, next)
+			}
+			members = next
+		case a.flag == "" && (adds || concatenates):
+			w.add(a.value, AccessRead, members)
+			if adds && p.has("--remove-files") {
+				w.add(a.value, AccessRemove, members)
+			}
 		}
-	case concatenates:
-		w.addAll(p.operands, AccessRead, cwds)
-	case p.has("-x", "--extract", "--get") && !p.has("-O", "--to-stdout"):
-		w.extractInto(p.value("-C", "--directory"), cwds)
 	}
 }
 
@@ -741,26 +777,105 @@ func tarOldStyle(args []string) []string {
 	return append(out, rest...)
 }
 
-var sqliteValueFlags = flagSet("-cmd", "-init", "-separator", "-newline", "-nullvalue",
+var sqliteOptions = valueOptions("-cmd", "-init", "-separator", "-newline", "-nullvalue",
 	"-vfs", "-maxsize", "-mmap", "-pagecache", "-lookaside", "-heap")
 
 // sqlite records every operand of sqlite3 as a read, because the database
-// can follow options that sqlite3 parses with a single dash. A "file:" URI
-// names the database file before its query string.
+// can follow options that sqlite3 parses with a single dash. It also records
+// the -init file, and each file that the SQL of an operand or of -cmd opens.
 func (w *walker) sqlite(args []string, cwds dirs) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
+		flag := "-" + strings.TrimLeft(a, "-")
 		switch {
-		case sqliteValueFlags[strings.TrimPrefix(a, "-")] || sqliteValueFlags[a]:
-			i++
+		case strings.HasPrefix(a, "-") && sqliteOptions.values[flag]:
+			if i+1 < len(args) {
+				i++
+				w.sqliteValue(flag, args[i], cwds)
+			}
 		case strings.HasPrefix(a, "-"):
 		default:
-			if uri, ok := strings.CutPrefix(a, "file:"); ok {
-				a, _, _ = strings.Cut(uri, "?")
-			}
-			w.add(a, AccessRead, cwds)
+			w.add(filePath(a), AccessRead, cwds)
+			w.sqliteText(a, cwds)
 		}
 	}
+}
+
+func (w *walker) sqliteValue(flag, value string, cwds dirs) {
+	switch flag {
+	case "-init":
+		w.add(value, AccessRead, cwds)
+	case "-cmd":
+		w.sqliteText(value, cwds)
+	}
+}
+
+var (
+	sqliteToken  = regexp.MustCompile(`'(?:[^']|'')*'|"[^"]*"|[^\s;]+`)
+	sqliteAttach = regexp.MustCompile(`(?i)\battach\s+(?:database\s+)?('(?:[^']|'')*'|"[^"]*"|[^\s;]+)`)
+)
+
+// sqliteFileCommands are the dot commands of sqlite3 that read a file
+// operand.
+var sqliteFileCommands = []string{"open", "read", "import", "restore", "load"}
+
+// isSqliteFileCommand reports whether a word is a dot command that reads a
+// file. sqlite3 accepts a short prefix of a dot command name.
+func isSqliteFileCommand(word string) bool {
+	name, ok := strings.CutPrefix(word, ".")
+	if !ok || len(name) < 2 {
+		return false
+	}
+	return slices.ContainsFunc(sqliteFileCommands, func(c string) bool { return strings.HasPrefix(c, name) })
+}
+
+// sqliteText records the files that SQL text or a dot command opens with
+// ATTACH, .open, .read, .import, .restore, or .load.
+func (w *walker) sqliteText(text string, cwds dirs) {
+	for _, line := range strings.Split(text, "\n") {
+		tokens := sqliteToken.FindAllString(strings.TrimSpace(line), -1)
+		if len(tokens) == 0 || !isSqliteFileCommand(tokens[0]) {
+			continue
+		}
+		for _, tok := range tokens[1:] {
+			if !strings.HasPrefix(tok, "-") {
+				w.add(filePath(sqliteUnquote(tok)), AccessRead, cwds)
+			}
+		}
+	}
+	for _, m := range sqliteAttach.FindAllStringSubmatch(text, -1) {
+		w.add(filePath(sqliteUnquote(m[1])), AccessRead, cwds)
+	}
+}
+
+func sqliteUnquote(s string) string {
+	if len(s) >= 2 && (s[0] == '\'' || s[0] == '"') && s[len(s)-1] == s[0] {
+		q := string(s[0])
+		return strings.ReplaceAll(s[1:len(s)-1], q+q, q)
+	}
+	return s
+}
+
+// filePath returns the local path of a "file:" URI, as SQLite and curl read
+// it: the percent-decoded path without the query, the fragment, and a
+// "localhost" or empty host. It returns any other value as it is. The scheme
+// is not case sensitive.
+func filePath(value string) string {
+	if len(value) < 5 || !strings.EqualFold(value[:5], "file:") {
+		return value
+	}
+	u, err := url.Parse(value)
+	if err != nil {
+		p, _, _ := strings.Cut(value[5:], "?")
+		return p
+	}
+	if u.Opaque == "" {
+		return u.Path
+	}
+	if p, err := url.PathUnescape(u.Opaque); err == nil {
+		return p
+	}
+	return u.Opaque
 }
 
 func isLetters(s string) bool {
@@ -769,12 +884,17 @@ func isLetters(s string) bool {
 	}) < 0
 }
 
-// curl records the hosts, the uploaded files, and the output files. -o
-// and -O write into the --output-dir directory when it is set. The value
-// of an option that the table does not know is a guessed write target.
+// curl records the hosts, the files of "file://" URLs, the uploaded files,
+// and the output files. -o and -O write into the --output-dir directory
+// when it is set. The value of an option that the table does not know is a
+// guessed write target.
 func (w *walker) curl(p parsedArgs, cwds dirs) {
 	urls := slices.Concat(p.operands, p.value("--url"))
 	for _, u := range urls {
+		if f := filePath(u); f != u {
+			w.add(f, AccessRead, cwds)
+			continue
+		}
 		w.addHost(u)
 	}
 	for _, v := range p.value("-d", "--data", "--data-binary", "--data-ascii", "--json") {
@@ -878,7 +998,7 @@ func withWgetrc(p parsedArgs) parsedArgs {
 		case !known:
 		case wgetOptions.values[opt]:
 			p.seen[opt] = true
-			p.values[opt] = append(p.values[opt], v)
+			p.addValue(opt, v)
 		case !strings.EqualFold(v, "off"):
 			p.seen[opt] = true
 		}

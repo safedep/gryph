@@ -90,6 +90,22 @@ func TestAnalyze_Reads(t *testing.T) {
 		{"ls is not a read", `ls ~/.ssh`, nil},
 		{"7z extract reads the archive", `7z x ~/a.7z -o/tmp`, []string{"/home/u/a.7z"}},
 		{"unzip list reads the archive", `unzip -l ~/a.zip`, []string{"/home/u/a.zip"}},
+		{"tar applies each -C to the members after it", `tar -cf /tmp/x.tar -C ~/.gryph audit.db -C /src main.go`, []string{"/home/u/.gryph/audit.db", "/src/main.go"}},
+		{"tar -C is relative to the previous -C", `tar -cf x.tar -C /a b -C c d`, []string{"/a/b", "/a/c/d"}},
+		{"sqlite3 localhost uri", `sqlite3 'file://localhost/home/u/.gryph/audit.db?mode=ro'`, []string{"/home/u/.gryph/audit.db"}},
+		{"sqlite3 percent escape", `sqlite3 file:audit%2Edb`, []string{"/work/audit.db"}},
+		{"sqlite3 init file", `sqlite3 -init x.sql :memory:`, []string{"/work/x.sql", "/work/:memory:"}},
+		{"sqlite3 open in -cmd", `sqlite3 -cmd '.open "/d/a b.db"' :memory:`, []string{"/d/a b.db", "/work/:memory:"}},
+		{"sqlite3 read and import", `sqlite3 x.db '.read q.sql' '.import in.csv t'`, []string{"/work/x.db", "/work/.read q.sql", "/work/q.sql", "/work/.import in.csv t", "/work/in.csv", "/work/t"}},
+		{"sqlite3 attach", `sqlite3 x.db "attach 'file:y%2Edb' as y"`, []string{"/work/x.db", "/work/attach 'file:y%2Edb' as y", "/work/y.db"}},
+		{"curl file url", `curl -s file:///etc/passwd`, []string{"/etc/passwd"}},
+		{"busybox", `busybox cat .env`, []string{"/work/.env"}},
+		{"unknown command", `paste .env https://x.example 'a b'`, []string{"/work/.env"}},
+		{"brace list", `cat .e{nv,x}`, []string{"/work/.env", "/work/.ex"}},
+		{"nested brace list", `cat {a,b{c,d}}`, []string{"/work/a", "/work/bc", "/work/bd"}},
+		{"quoted brace is literal", `cat '.e{nv,x}'`, []string{"/work/.e{nv,x}"}},
+		{"brace sequence is a glob", `cat log{1..3}`, []string{"/work"}},
+		{"large brace list is a glob", `cat {a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}`, []string{"/work"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -98,6 +114,18 @@ func TestAnalyze_Reads(t *testing.T) {
 			assert.Equal(t, tc.want, reads(a))
 		})
 	}
+}
+
+func TestAnalyze_GuessedReads(t *testing.T) {
+	env := Env{WorkingDir: "/work", Home: "/home/u"}
+	a := Analyze(`paste ~/.env && cat x && ls y`, env)
+	assert.Equal(t, []Target{
+		{Path: "/home/u/.env", Access: AccessRead, Guess: true},
+		{Path: "/work/x", Access: AccessRead},
+	}, a.Targets)
+
+	glob := Analyze(`paste .e*`, env)
+	assert.Equal(t, []Target{{Path: "/work", Access: AccessRead, Glob: "/work/.e*", Guess: true}}, glob.Targets)
 }
 
 func TestAnalyze_Hosts(t *testing.T) {
@@ -242,6 +270,7 @@ func TestAnalyze_NewWrites(t *testing.T) {
 		{`tar --extract --file=a.tar --directory /cfg`, []Target{{Path: "/cfg", Access: AccessWriteTree}}},
 		{`tar --get -f a.tar -C /cfg`, []Target{{Path: "/cfg", Access: AccessWriteTree}}},
 		{`tar --ext -f a.tar --dir /cfg`, []Target{{Path: "/cfg", Access: AccessWriteTree}}},
+		{`tar -xf a.tar -C /cfg -C sub`, []Target{{Path: "/cfg", Access: AccessWriteTree}, {Path: "/cfg/sub", Access: AccessWriteTree}}},
 		{`tar -xOf a.tar`, nil},
 		{`tar -tf a.tar`, nil},
 		{`tar -Af /cfg/a.tar b.tar`, []Target{{Path: "/cfg/a.tar", Access: AccessWrite}}},
