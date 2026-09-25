@@ -155,7 +155,11 @@ Conditions read two maps. `action.*` fields come from `actionActivation`:
 `context.*` fields come from `contextActivation`: `total_actions`,
 `files_read`, `files_written`, `commands_executed`, `network_requests`,
 `errors`, `tools_used`, `session_duration_ms`, `classifications_seen`,
-`entities_seen`, `semantic_drift`.
+`entities_seen`, `semantic_drift`, `intent_available`,
+`actions_since_intent`. `Snapshot` computes the intent fields with the pending
+entry: a pending intent sets `intent_available` and resets the count, and a
+pending action adds one. `contextFieldEmpty` never reports an intent field as
+empty, so the fresh-session defer does not hide a missing intent.
 
 Conditions run under a 100 ms timeout and a CEL cost limit. `message` is a Go
 `text/template` with `missingkey=error`. The template data is `.Action`,

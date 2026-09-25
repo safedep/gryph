@@ -214,7 +214,7 @@ func generatePolicySchema() jsonSchema {
 			},
 			"condition": {
 				Type:        "string",
-				Description: "CEL expression returning bool. Evaluated after `match` succeeds. Variables: action.{type,tool,operation,agent,working_dir,project,params.{path,command,args,url,size_bytes,lines_added,lines_removed,content}}, context.{total_actions,files_read,files_written,commands_executed,network_requests,errors,tools_used,session_duration_ms,classifications_seen,entities_seen,semantic_drift}. Sandboxed; 100ms timeout.",
+				Description: "CEL expression returning bool. Evaluated after `match` succeeds. Variables: action.{type,tool,operation,agent,working_dir,project,params.{path,command,args,url,size_bytes,lines_added,lines_removed,content}}, context.{total_actions,files_read,files_written,commands_executed,network_requests,errors,tools_used,session_duration_ms,classifications_seen,entities_seen,semantic_drift,intent_available,actions_since_intent}. Sandboxed; 100ms timeout.",
 			},
 			"reason": {
 				Type:        "string",
@@ -354,6 +354,7 @@ func actionTypeValues() []string {
 		string(events.ActionNotification),
 		string(events.ActionSubagentStart),
 		string(events.ActionSubagentStop),
+		string(events.ActionUserPrompt),
 		string(events.ActionUnknown),
 	}
 }
@@ -438,6 +439,10 @@ func addPayloadDefinitions(defs map[string]definition) {
 	defs["subagent_stop_payload"] = structToDefinition(
 		reflect.TypeOf(events.SubagentStopPayload{}),
 		"Payload for subagent stop actions.",
+	)
+	defs["user_prompt_payload"] = structToDefinition(
+		reflect.TypeOf(events.UserPromptPayload{}),
+		"Payload for user prompt events.",
 	)
 }
 

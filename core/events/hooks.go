@@ -38,12 +38,19 @@ const (
 	KindObservation Kind = "observation"
 )
 
-// KindOf returns the kind of an event. linked is true when the event is a
-// post event whose pre event Gryph recorded. A post event with no linked pre
-// event is an action, so agents with post-only coverage still count it.
+// KindOf returns the kind of an event. A user prompt is an intent. linked
+// is true when the event is a post event whose pre event Gryph recorded. A
+// post event with no linked pre event is an action, so agents with post-only
+// coverage still count it.
 func KindOf(e *Event, linked bool) Kind {
-	if e != nil && e.Phase == PhasePost && linked {
+	switch {
+	case e == nil:
+		return KindAction
+	case e.ActionType == ActionUserPrompt:
+		return KindIntent
+	case e.Phase == PhasePost && linked:
 		return KindObservation
+	default:
+		return KindAction
 	}
-	return KindAction
 }

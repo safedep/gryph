@@ -186,6 +186,19 @@ func HookTypeNames(specs []events.HookSpec) []string {
 	return names
 }
 
+// RequiredHookTypeNames returns the hook type names that a valid install must
+// hold. A prompt hook is not required. An install from before prompt capture
+// lacks it, and doctor reports that as a warning.
+func RequiredHookTypeNames(specs []events.HookSpec) []string {
+	names := make([]string, 0, len(specs))
+	for _, s := range specs {
+		if !s.Prompt {
+			names = append(names, string(s.Type))
+		}
+	}
+	return names
+}
+
 // HomeConfigGlob returns a glob for a path under the user's home directory.
 // The "**/" anchor matches any home location and forward-slash paths.
 func HomeConfigGlob(elem ...string) string {

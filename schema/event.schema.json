@@ -25,6 +25,7 @@
         "notification",
         "subagent_start",
         "subagent_stop",
+        "user_prompt",
         "unknown"
       ]
     },
@@ -418,6 +419,18 @@
       },
       "required": [
         "tool_name"
+      ]
+    },
+    "user_prompt_payload": {
+      "type": "object",
+      "description": "Payload for user prompt events.",
+      "properties": {
+        "prompt": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "required": [
+        "prompt"
       ]
     }
   }

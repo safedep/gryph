@@ -36,6 +36,8 @@ const (
 	ActionSubagentStart ActionType = "subagent_start"
 	// ActionSubagentStop indicates a subagent stop action.
 	ActionSubagentStop ActionType = "subagent_stop"
+	// ActionUserPrompt indicates a prompt that the user submitted.
+	ActionUserPrompt ActionType = "user_prompt"
 	// ActionUnknown indicates an unrecognized action.
 	ActionUnknown ActionType = "unknown"
 )
@@ -64,7 +66,6 @@ type Action struct {
 	ServiceIdentity string
 	RoleScope       string
 
-	OriginalRequest     string
 	DataClassifications []privacy.Class
 	InjectionScore      float32
 
@@ -234,6 +235,12 @@ type ContextSnapshot struct {
 	ClassificationsSeen []string
 	EntitiesSeen        []string
 	SemanticDrift       float64
+
+	// IntentAvailable is true when the session has at least one intent
+	// entry. An agent with no prompt hook never has one.
+	IntentAvailable bool
+	// ActionsSinceIntent counts the action entries after the latest intent.
+	ActionsSinceIntent int
 
 	// SessionStartedAt is the start time of the agent session. It is zero
 	// when the caller has no session. The fresh-session defer trigger reads

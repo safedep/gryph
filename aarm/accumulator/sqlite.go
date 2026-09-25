@@ -82,12 +82,13 @@ func entryRow(e *model.ContextEntry) *storage.ContextEntryRow {
 }
 
 // stateDelta computes what the entry adds to the session state. Only an
-// action adds to tools_used, as with the counters.
+// action adds to tools_used, as with the counters. A blocked or deferred
+// intent never reached the agent, so it does not become the latest intent.
 func stateDelta(e *model.ContextEntry) *storage.ContextStateDelta {
 	delta := &storage.ContextStateDelta{
 		Classifications: privacy.Strings(e.Classifications),
 		Tags:            e.Tags,
-		Intent:          entryKind(e) == events.KindIntent,
+		Intent:          entryKind(e) == events.KindIntent && !stopped(e.Decision),
 	}
 	if entryKind(e) == events.KindAction && e.Tool != "" {
 		delta.Tools = []string{e.Tool}
@@ -96,6 +97,10 @@ func stateDelta(e *model.ContextEntry) *storage.ContextStateDelta {
 		delta.Origins = []string{origin}
 	}
 	return delta
+}
+
+func stopped(d model.Decision) bool {
+	return d == model.DecisionBlock || d == model.DecisionDefer
 }
 
 // originKey names an origin in origins_seen. An MCP origin carries its
@@ -151,6 +156,8 @@ func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID, p
 		ToolsUsed:           slices.Clone(state.ToolsUsed),
 		ClassificationsSeen: slices.Clone(state.ClassificationsSeen),
 		EntitiesSeen:        slices.Clone(state.EntitiesSeen),
+		IntentAvailable:     state.LastIntentSeq != nil,
+		ActionsSinceIntent:  state.ActionsSinceIntent,
 	}
 	if !state.StartedAt.IsZero() {
 		snap.SessionDuration = max(a.now().Sub(state.StartedAt), 0)
@@ -171,6 +178,15 @@ func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID, p
 		delta := stateDelta(pending)
 		snap.ToolsUsed = addNew(snap.ToolsUsed, delta.Tools)
 		snap.ClassificationsSeen = addNew(snap.ClassificationsSeen, delta.Classifications)
+		switch entryKind(pending) {
+		case events.KindIntent:
+			snap.IntentAvailable = true
+			snap.ActionsSinceIntent = 0
+		case events.KindAction:
+			if snap.IntentAvailable {
+				snap.ActionsSinceIntent++
+			}
+		}
 	}
 	return snap, nil
 }

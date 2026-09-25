@@ -401,7 +401,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 	}
 
 	if status.Installed {
-		for _, hookType := range HookTypes {
+		for _, hookType := range agent.RequiredHookTypeNames(Hooks) {
 			found := false
 			for _, h := range status.Hooks {
 				if h == hookType {

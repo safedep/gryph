@@ -29,6 +29,8 @@ const (
 	ActionSubagentStart ActionType = "subagent_start"
 	// ActionSubagentStop indicates a subagent completed.
 	ActionSubagentStop ActionType = "subagent_stop"
+	// ActionUserPrompt indicates the user submitted a prompt to the agent.
+	ActionUserPrompt ActionType = "user_prompt"
 	// ActionUnknown indicates an unrecognized action type.
 	ActionUnknown ActionType = "unknown"
 )
@@ -48,6 +50,7 @@ var actionDisplayNames = map[ActionType]string{
 	ActionNotification:   "notification",
 	ActionSubagentStart:  "subagent_start",
 	ActionSubagentStop:   "subagent_stop",
+	ActionUserPrompt:     "prompt",
 	ActionUnknown:        "unknown",
 }
 

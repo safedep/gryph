@@ -180,7 +180,7 @@ var HookTypeMapping = map[string]events.ActionType{
 	"afterFileEdit":        events.ActionFileWrite,
 	"beforeTabFileRead":    events.ActionFileRead,
 	"afterTabFileEdit":     events.ActionFileWrite,
-	"beforeSubmitPrompt":   events.ActionToolUse,
+	"beforeSubmitPrompt":   events.ActionUserPrompt,
 	"afterAgentResponse":   events.ActionToolUse,
 	"subagentStart":        events.ActionToolUse,
 	"subagentStop":         events.ActionToolUse,
@@ -475,22 +475,15 @@ func parseBeforeSubmitPrompt(sessionID uuid.UUID, agentSessionID string, base Ho
 		return nil, fmt.Errorf("failed to parse beforeSubmitPrompt input: %w", err)
 	}
 
-	event := events.NewEvent(sessionID, AgentName, events.ActionToolUse)
+	event := events.NewEvent(sessionID, AgentName, events.ActionUserPrompt)
 	event.AgentSessionID = agentSessionID
-	event.ToolName = "beforeSubmitPrompt"
 	event.RawEvent = rawData
 	if len(base.WorkspaceRoots) > 0 {
 		event.WorkingDirectory = base.WorkspaceRoots[0]
 	}
-
-	payload := events.ToolUsePayload{
-		ToolName: "beforeSubmitPrompt",
-	}
-
-	if err := event.SetPayload(payload); err != nil {
+	if err := event.SetPrompt(input.Prompt); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
 	}
-
 	return event, nil
 }
 

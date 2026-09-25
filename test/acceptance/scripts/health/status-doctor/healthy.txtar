@@ -10,7 +10,7 @@ exec gryph install --agent claude-code
 
 exec gryph status --no-color
 stdout 'claude-code\s+installed'
-stdout 'hooks: 8 active'
+stdout 'hooks: 9 active'
 stdout 'Database'
 stdout 'audit.db'
 

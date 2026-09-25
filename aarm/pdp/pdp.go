@@ -306,6 +306,9 @@ func contextRefsEmpty(refs []string, snapshot *model.ContextSnapshot) bool {
 	return true
 }
 
+// contextFieldEmpty reports whether a context field has no data yet. The
+// intent fields are never empty. A session with no intent is a fact that a
+// rule can act on, and the fresh-session defer must not hide it.
 func contextFieldEmpty(field string, s *model.ContextSnapshot) bool {
 	switch field {
 	case "total_actions":
@@ -455,9 +458,20 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 	return cr, nil
 }
 
+// matchesActionType reports whether a rule selects the action type. A rule
+// with no action_types selects every action, but not a user prompt. A prompt
+// is not an action, and a broad rule, such as a cap on total_actions, must
+// not stop the user from typing. A rule selects prompts by name.
+func matchesActionType(types []string, t model.ActionType) bool {
+	if len(types) == 0 {
+		return t != model.ActionUserPrompt
+	}
+	return containsFold(types, string(t))
+}
+
 func (r compiledRule) matches(action *model.Action, paths *actionPaths) bool {
 	match := r.rule.Match
-	if len(match.ActionTypes) > 0 && !containsFold(match.ActionTypes, string(action.Type)) {
+	if !matchesActionType(match.ActionTypes, action.Type) {
 		return false
 	}
 	if len(match.ToolNames) > 0 && !containsFold(match.ToolNames, action.Tool) {
@@ -723,5 +737,7 @@ func contextActivation(snapshot *model.ContextSnapshot) map[string]any {
 		"classifications_seen": snapshot.ClassificationsSeen,
 		"entities_seen":        snapshot.EntitiesSeen,
 		"semantic_drift":       snapshot.SemanticDrift,
+		"intent_available":     snapshot.IntentAvailable,
+		"actions_since_intent": snapshot.ActionsSinceIntent,
 	}
 }

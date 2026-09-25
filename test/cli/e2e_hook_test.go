@@ -825,7 +825,7 @@ func TestHook_Codex(t *testing.T) {
 			name:       "UserPromptSubmit",
 			hookType:   "UserPromptSubmit",
 			fixture:    "user_prompt_submit.json",
-			actionType: events.ActionToolUse,
+			actionType: events.ActionUserPrompt,
 		},
 		{
 			name:       "Stop",
@@ -920,7 +920,7 @@ func TestHook_Devin(t *testing.T) {
 			name:       "UserPromptSubmit",
 			hookType:   "UserPromptSubmit",
 			fixture:    "user_prompt_submit.json",
-			actionType: events.ActionToolUse,
+			actionType: events.ActionUserPrompt,
 		},
 		{
 			name:       "Stop",

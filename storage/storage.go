@@ -365,6 +365,9 @@ type ContextStateRow struct {
 	EgressHosts         []string
 	LastIntentSeq       *int64
 	LastIntentAt        *time.Time
+	// ActionsSinceIntent counts the action entries after LastIntentSeq. It
+	// is zero when the session has no intent.
+	ActionsSinceIntent int
 }
 
 // StreamCursor represents the sync cursor for a single collection (events or audits).

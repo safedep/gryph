@@ -1,0 +1,48 @@
+# A Claude Code UserPromptSubmit hook records a user_prompt event and an
+# intent entry. The intent does not count as an action. The next action sees
+# the intent in the session context. The session ID 05336580 derives from the
+# agent session ID s-intent. The default standard level stores the label and
+# the digest of the prompt only. The full level stores the prompt.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin prompt.json
+exec gryph _hook claude-code UserPromptSubmit
+stdin pre.json
+exec gryph _hook claude-code PreToolUse
+
+exec gryph query --action prompt --format json --no-color
+stdout -count=1 '"ActionType": "user_prompt"'
+
+exec gryph export --since 1h
+stdout '"prompt":\{"value":"","label":\{"origin":"user","stripped":true,"level":"standard"'
+stdout '"digest":"sha256:'
+! stdout 'Add a retry to the upload function'
+
+exec gryph policy context --session 05336580 --format json --no-color
+stdout '"kind": "intent"'
+stdout '"action_type": "user_prompt"'
+stdout '"total_actions": 1,'
+stdout '"intent_available": true,'
+stdout '"actions_since_intent": 1'
+
+env GRYPH_LOGGING_LEVEL=full
+stdin prompt_full.json
+exec gryph _hook claude-code UserPromptSubmit
+exec gryph export --since 1h
+stdout '"prompt":\{"value":"Rename the config loader","label":\{[^}]*"origin":"user"[^}]*"level":"full"'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- prompt.json --
+{"session_id": "s-intent", "cwd": "/home/user/project", "hook_event_name": "UserPromptSubmit",
+ "prompt": "Add a retry to the upload function"}
+-- pre.json --
+{"session_id": "s-intent", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "go test ./..."}, "tool_use_id": "tu-1"}
+-- prompt_full.json --
+{"session_id": "s-intent-full", "cwd": "/home/user/project", "hook_event_name": "UserPromptSubmit",
+ "prompt": "Rename the config loader"}

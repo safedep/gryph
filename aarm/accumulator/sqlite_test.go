@@ -173,3 +173,57 @@ func TestSQLiteAccumulator_ConcurrentSessionsDoNotCorrupt(t *testing.T) {
 		}
 	}
 }
+
+func TestSQLiteAccumulator_Intent(t *testing.T) {
+	acc, _ := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	snap, err := acc.Snapshot(ctx, sessionID, newEntry(sessionID, events.KindAction, model.ActionFileRead, "Read"))
+	require.NoError(t, err)
+	assert.False(t, snap.IntentAvailable)
+	assert.Zero(t, snap.ActionsSinceIntent)
+
+	intent := newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, "")
+	snap, err = acc.Snapshot(ctx, sessionID, intent)
+	require.NoError(t, err)
+	assert.True(t, snap.IntentAvailable, "the pending intent counts")
+	assert.Zero(t, snap.TotalActions, "an intent is not an action")
+	require.NoError(t, acc.Append(ctx, intent))
+
+	for range 2 {
+		require.NoError(t, acc.Append(ctx, newEntry(sessionID, events.KindAction, model.ActionFileRead, "Read")))
+	}
+	require.NoError(t, acc.Append(ctx, newEntry(sessionID, events.KindObservation, model.ActionFileRead, "Read")))
+
+	snap, err = acc.Snapshot(ctx, sessionID, newEntry(sessionID, events.KindAction, model.ActionCommandExec, "Bash"))
+	require.NoError(t, err)
+	assert.True(t, snap.IntentAvailable)
+	assert.Equal(t, 3, snap.ActionsSinceIntent, "two stored actions and the pending one, not the observation")
+
+	snap, err = acc.Snapshot(ctx, sessionID, newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, ""))
+	require.NoError(t, err)
+	assert.Zero(t, snap.ActionsSinceIntent, "a new intent resets the count")
+
+	blocked := newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, "")
+	blocked.Decision = model.DecisionBlock
+	require.NoError(t, acc.Append(ctx, blocked))
+	snap, err = acc.Snapshot(ctx, sessionID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 2, snap.ActionsSinceIntent, "a blocked prompt never reached the agent, so it does not reset the count")
+}
+
+func TestSQLiteAccumulator_BlockedIntentOnly(t *testing.T) {
+	acc, _ := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	for _, d := range []model.Decision{model.DecisionBlock, model.DecisionDefer} {
+		e := newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, "")
+		e.Decision = d
+		require.NoError(t, acc.Append(ctx, e))
+	}
+	snap, err := acc.Snapshot(ctx, sessionID, nil)
+	require.NoError(t, err)
+	assert.False(t, snap.IntentAvailable, "a session whose prompts were all stopped has no intent")
+}

@@ -365,3 +365,31 @@ func TestInit_KeepsUnknownColumns(t *testing.T) {
 		`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'sessions_future_col'`).Scan(&n))
 	assert.Equal(t, 1, n)
 }
+
+func TestContextState_ActionsSinceIntent(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	appendRow := func(kind, actionType string, intent bool) {
+		require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+			SessionID: sessionID, Kind: kind, ActionType: actionType,
+		}, &ContextStateDelta{Intent: intent}))
+	}
+	appendRow("action", "file_read", false)
+	appendRow("intent", "user_prompt", true)
+	appendRow("action", "file_read", false)
+	appendRow("observation", "file_read", false)
+	appendRow("action", "command_exec", false)
+
+	state, err := store.GetContextState(ctx, sessionID)
+	require.NoError(t, err)
+	require.NotNil(t, state.LastIntentSeq)
+	assert.Equal(t, 2, state.ActionsSinceIntent)
+
+	all, err := store.QueryAllContextStates(ctx, 10)
+	require.NoError(t, err)
+	require.Len(t, all, 1)
+	assert.Equal(t, 2, all[0].ActionsSinceIntent, "the list view counts the same as the session view")
+}

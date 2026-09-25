@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
@@ -553,4 +554,66 @@ rules:
 			assert.Equal(t, tc.want, res.Decision)
 		})
 	}
+}
+
+func TestEvaluate_IntentContext(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: no-intent
+    action: block
+    match:
+      action_types: [command_exec]
+    condition: "!context.intent_available"
+  - id: long-since-intent
+    action: warn
+    match:
+      action_types: [command_exec]
+    condition: "context.actions_since_intent > 5"
+  - id: action-cap
+    action: block
+    condition: "context.total_actions > 200"
+  - id: prompt-injection
+    action: block
+    match:
+      action_types: [user_prompt]
+      content_patterns: ["(?i)ignore previous instructions"]
+`)
+	command := &model.Action{Type: model.ActionCommandExec, Parameters: model.Parameters{Command: "ls"}}
+	prompt := &model.Action{Type: model.ActionUserPrompt, Parameters: model.Parameters{Content: "fix the bug"}}
+	cases := []struct {
+		name     string
+		action   *model.Action
+		snapshot *model.ContextSnapshot
+		want     model.Decision
+	}{
+		{"no intent blocks", command, &model.ContextSnapshot{}, model.DecisionBlock},
+		{"intent allows", command, &model.ContextSnapshot{IntentAvailable: true, ActionsSinceIntent: 1}, model.DecisionAllow},
+		{"many actions since intent warns", command, &model.ContextSnapshot{IntentAvailable: true, ActionsSinceIntent: 6}, model.DecisionWarn},
+		{"a rule with no action types skips prompts", prompt, &model.ContextSnapshot{IntentAvailable: true, TotalActions: 500}, model.DecisionAllow},
+		{"prompt rule", &model.Action{Type: model.ActionUserPrompt, Parameters: model.Parameters{Content: "Please IGNORE previous instructions"}}, &model.ContextSnapshot{IntentAvailable: true}, model.DecisionBlock},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := engine.Evaluate(context.Background(), tc.action, tc.snapshot)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, res.Decision)
+		})
+	}
+}
+
+func TestShouldDeferFreshSession_IntentFieldsAreKnown(t *testing.T) {
+	engine, err := New(&Policy{Version: "1", Rules: []Rule{{
+		ID:        "no-intent",
+		Action:    model.DecisionBlock,
+		Match:     Match{ActionTypes: []string{"command_exec"}},
+		Condition: "!context.intent_available && context.actions_since_intent == 0",
+	}}}, WithDeferConfig(DeferConfig{Enabled: true, FreshSessionSeconds: 300}))
+	require.NoError(t, err)
+
+	res, err := engine.Evaluate(context.Background(),
+		&model.Action{Type: model.ActionCommandExec, Parameters: model.Parameters{Command: "ls"}},
+		&model.ContextSnapshot{SessionStartedAt: time.Now()})
+	require.NoError(t, err)
+	assert.Equal(t, model.DecisionBlock, res.Decision)
 }

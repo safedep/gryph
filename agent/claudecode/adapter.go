@@ -77,15 +77,23 @@ func (a *Adapter) HookConfigPaths() []string {
 	}
 }
 
+const promptHookType = "UserPromptSubmit"
+
 // RenderResponse maps a decision to the Claude Code wire response. Claude
 // Code has no JSON channel. Block is exit 2 with the reason on stderr,
-// shown to Claude. Guidance is exit 0 with advisory text on stderr.
+// shown to Claude. Guidance is exit 0 with advisory text on stderr, or on
+// stdout for UserPromptSubmit.
 func (a *Adapter) RenderResponse(hookType string, decision agent.HookDecision, detail string) agent.HookResponse {
 	var r *HookResponse
 	switch decision {
 	case agent.DecisionBlock:
 		r = NewBlockResponse(detail)
 	case agent.DecisionGuidance:
+		if hookType == promptHookType {
+			// Claude Code adds the stdout of a UserPromptSubmit hook to the
+			// model context. It shows stderr at exit 0 to no one.
+			return agent.RenderedResponse{Out: []byte(detail)}
+		}
 		r = NewGuidanceResponse(detail)
 	default:
 		r = NewAllowResponse()

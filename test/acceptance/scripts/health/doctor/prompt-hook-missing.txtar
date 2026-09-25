@@ -1,0 +1,20 @@
+# An install without the prompt hook stays valid. Doctor warns that prompts
+# are not recorded and suggests a reinstall. The suggested command adds the
+# hook.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+replace $HOME/.claude/settings.json UserPromptSubmit XUserPromptSubmit
+exec gryph doctor --no-color
+! stdout 'Hooks are invalid'
+stdout 'Prompt hook not installed: UserPromptSubmit'
+stdout 'gryph install --force --agent claude-code'
+
+exec gryph install --force --agent claude-code
+grep 'gryph _hook claude-code UserPromptSubmit' $HOME/.claude/settings.json
+exec gryph doctor --no-color
+! stdout 'Prompt hook not installed'
+stdout '\[ok\]\s+Claude Code hooks'

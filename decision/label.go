@@ -15,6 +15,11 @@ import (
 // command_exec event, and the redactor already removed its secrets.
 var keptAtMinimal = map[string]bool{"command": true}
 
+// keptAtFullOnly are the content values that only the full level keeps. A
+// prompt holds what the user typed, which can be a pasted secret or private
+// text, so the standard level keeps its label and digest only.
+var keptAtFullOnly = map[string]bool{"diff_content": true, "prompt": true}
+
 // labelEvent runs the first label steps on every content value, in the order
 // of docs/content-labels.md: digest and size of the raw value, classes, and
 // redaction. The policy then evaluates the redacted event. applyLevel strips
@@ -86,7 +91,7 @@ func applyLevel(event *events.Event, level config.LoggingLevel) {
 	}
 
 	if err := walkContent(event, func(path string, t *privacy.Text) {
-		if path == "diff_content" {
+		if keptAtFullOnly[path] {
 			strip(t, stripFull)
 			return
 		}

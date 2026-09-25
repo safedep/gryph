@@ -314,7 +314,7 @@ func hasGryphHooks(config *HooksConfig) bool {
 func ValidateHooksContent(config *HooksConfig) []string {
 	var issues []string
 
-	for _, hookType := range HookTypes {
+	for _, hookType := range agent.RequiredHookTypeNames(Hooks) {
 		expectedCmd := fmt.Sprintf("%s _hook cursor %s", utils.GryphCommand(), hookType)
 		found := false
 

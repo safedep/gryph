@@ -91,7 +91,7 @@ Run `gryph policy test --action file_write --path /repo/prod/config.yaml` to see
 
 | Field | Type | Notes |
 |---|---|---|
-| `action_types` | list | `file_read`, `file_write`, `file_delete`, `command_exec`, `network_request`, `tool_use`, `session_start`, `session_end`, `notification`, `subagent_start`, `subagent_stop` |
+| `action_types` | list | `file_read`, `file_write`, `file_delete`, `command_exec`, `network_request`, `tool_use`, `session_start`, `session_end`, `notification`, `subagent_start`, `subagent_stop`, `user_prompt` |
 | `file_patterns` | list | Doublestar globs (`**`) over the action path. For `command_exec`, also over the shell targets that `file_access` selects (see below) |
 | `file_access` | list | `read`, `write`, `remove`. The shell targets that `file_patterns` match. The default is `[write, remove]`. Requires `file_patterns` |
 | `command_patterns` | list | Go regexps over the shell command |
@@ -163,12 +163,23 @@ action.service_identity            CI / service identity, see Identity capture
 action.role_scope                  OS uid/gid + asserted scopes
 context.{total_actions, files_read, files_written, commands_executed,
          network_requests, errors, tools_used, session_duration_ms,
-         classifications_seen, entities_seen, semantic_drift}
+         classifications_seen, entities_seen, semantic_drift,
+         intent_available, actions_since_intent}
 ```
 
 `action.data_classifications` carries labels like `secret`, `pii`, `source_code`, `config`, `git_internal`, `external_url`. `context.classifications_seen` is the running union across the session. `semantic_drift` is reserved and reads as `0.0` today.
 
 The counters count actions, and the current event is in them. A pre and post hook pair for one tool call is one action: the post event is an observation of the pre event, and it does not add to a counter. A post event with no recorded pre event is an action. A blocked action counts. `errors` counts actions and observations with an error result.
+
+A user prompt is an intent. It is not an action, and it does not add to a counter. `context.intent_available` is true when the session has at least one intent. An agent with no prompt hook never has one. `context.actions_since_intent` counts the actions after the latest intent. A new prompt resets it to zero. A blocked or deferred prompt never reached the agent, so it does not become the latest intent. A rule with no `action_types` does not apply to prompts, so a broad rule, such as a cap on `total_actions`, cannot stop the user from typing. A rule with `action_types: [user_prompt]` matches the prompt, and `content_patterns` read the prompt text:
+
+```yaml
+- id: prompt-injection
+  action: block
+  match:
+    action_types: [user_prompt]
+    content_patterns: ["(?i)ignore (all )?previous instructions"]
+```
 
 `action.human_principal`, `action.service_identity`, and `action.role_scope` carry the AARM R6 identity fields. They are empty strings when capture is disabled or the resolver could not derive a value. See [Identity capture](#identity-capture).
 
@@ -388,7 +399,9 @@ Two trigger types produce a synthetic defer decision even without an explicit
 - `fresh_session_insufficient_context` fires when a rule's CEL condition
   references context fields that are still zero or empty AND the session is
   younger than `policy.defer.fresh_session_seconds` (default 60). The action
-  defers rather than evaluating against an unfilled snapshot.
+  defers rather than evaluating against an unfilled snapshot. The intent
+  fields never trigger it. A session with no intent is a fact, not missing
+  data.
 - `conflicting_policies` fires when multiple rules match at the winning
   severity tier with materially different rendered messages. Each decision
   lives at its own tier under the precedence scheme, so the practical case

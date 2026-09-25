@@ -3,8 +3,11 @@ package cli
 import (
 	"context"
 	"os"
+	"slices"
+	"strings"
 
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/internal/selfupdate"
 	"github.com/safedep/gryph/internal/version"
@@ -107,6 +110,10 @@ Performs various health checks:
 						}
 						hookCheck.Suggestion = "Run 'gryph install --force --agent " + adapter.Name() + "'"
 						v.AllOK = false
+					} else if missing := missingPromptHooks(adapter, hookStatus); len(missing) > 0 {
+						hookCheck.Status = tui.CheckWarn
+						hookCheck.Message = "Prompt hook not installed: " + strings.Join(missing, ", ")
+						hookCheck.Suggestion = "Run 'gryph install --force --agent " + adapter.Name() + "' to record prompts"
 					} else {
 						hookCheck.Status = tui.CheckOK
 						hookCheck.Message = "All hooks installed and valid"
@@ -153,4 +160,17 @@ Performs various health checks:
 	}
 
 	return cmd
+}
+
+// missingPromptHooks returns the prompt hooks that the adapter declares but
+// the agent config does not hold. An install from before prompt capture
+// lacks them, and the session context then has no intent.
+func missingPromptHooks(adapter agent.Adapter, status *agent.HookStatus) []string {
+	var missing []string
+	for _, h := range adapter.Hooks() {
+		if h.Prompt && !slices.Contains(status.Hooks, string(h.Type)) {
+			missing = append(missing, string(h.Type))
+		}
+	}
+	return missing
 }

@@ -98,6 +98,8 @@ type policyContextStateView struct {
 	Errors              int      `json:"errors"`
 	ToolsUsed           []string `json:"tools_used,omitempty"`
 	ClassificationsSeen []string `json:"classifications_seen,omitempty"`
+	IntentAvailable     bool     `json:"intent_available"`
+	ActionsSinceIntent  int      `json:"actions_since_intent"`
 }
 
 type policyContextEntryView struct {
@@ -198,6 +200,8 @@ func stateRowToView(s *storage.ContextStateRow) policyContextStateView {
 		Errors:              s.Errors,
 		ToolsUsed:           s.ToolsUsed,
 		ClassificationsSeen: s.ClassificationsSeen,
+		IntentAvailable:     s.LastIntentSeq != nil,
+		ActionsSinceIntent:  s.ActionsSinceIntent,
 	}
 }
 
@@ -236,6 +240,11 @@ func renderContextStateTable(w io.Writer, c *tui.Colorizer, v policyContextState
 	}
 	if len(v.ToolsUsed) > 0 {
 		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tools"), strings.Join(v.ToolsUsed, ", "))
+	}
+	if v.IntentAvailable {
+		_, _ = fmt.Fprintf(w, "  %-12s %d actions since the last prompt\n", c.Dim("intent"), v.ActionsSinceIntent)
+	} else {
+		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("intent"), "not available")
 	}
 }
 

@@ -34,6 +34,7 @@ These payload fields are `privacy.Text`:
 - `ToolUsePayload`: `Input`, `Output`, `OutputPreview`. `Input` and `Output`
   hold the tool JSON as a string. Parse `Value` to read the structure.
 - `SubagentStopPayload`: `LastAssistantMessage`
+- `UserPromptPayload`: `Prompt`. `Event.SetPrompt` sets the origin `user`.
 - `Event`: `DiffContent`. The `diff_label` column stores its label.
 
 Identifiers stay `string`: paths, URLs, tool names, and session IDs.
@@ -96,8 +97,12 @@ heuristic `pii` globs are coarse, and a sensitive event loses its content.
 | Level | Stored content |
 |---|---|
 | `full` | Every value, and the diff, the raw event, and the conversation context |
-| `standard` | The payload values. The diff, the raw event, and the context are removed |
+| `standard` | The payload values, except the prompt. The diff, the prompt, the raw event, and the context are removed |
 | `minimal` | Labels only, except the command of a `command_exec` event |
+
+A prompt holds what the user typed, which can be a pasted secret or private
+text. So only `full` keeps it. The policy still reads the whole prompt,
+because the level applies after the evaluation.
 
 A sensitive event keeps labels only, at every level, except the command. An
 event is sensitive when its path matches `privacy.sensitive_paths`, or when

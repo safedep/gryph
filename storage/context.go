@@ -363,7 +363,29 @@ func (s *SQLiteStore) GetContextState(ctx context.Context, sessionID uuid.UUID) 
 	if state == nil && sess == nil {
 		return nil, nil
 	}
-	return joinContextState(sessionID, state, sess), nil
+	row := joinContextState(sessionID, state, sess)
+	if err := s.countActionsSinceIntent(ctx, row); err != nil {
+		return nil, err
+	}
+	return row, nil
+}
+
+func (s *SQLiteStore) countActionsSinceIntent(ctx context.Context, row *ContextStateRow) error {
+	if row.LastIntentSeq == nil {
+		return nil
+	}
+	n, err := s.client.ContextEntry.Query().
+		Where(
+			contextentry.SessionIDEQ(row.SessionID),
+			contextentry.KindEQ("action"),
+			contextentry.SequenceGT(*row.LastIntentSeq),
+		).
+		Count(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: count actions since intent: %w", err)
+	}
+	row.ActionsSinceIntent = n
+	return nil
 }
 
 // GetContextStateByPrefix returns the state row whose session_id (as text)
@@ -416,6 +438,9 @@ func (s *SQLiteStore) QueryAllContextStates(ctx context.Context, limit int) ([]*
 	out := make([]*ContextStateRow, len(states))
 	for i, st := range states {
 		out[i] = joinContextState(st.SessionID, st, byID[st.SessionID])
+		if err := s.countActionsSinceIntent(ctx, out[i]); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }

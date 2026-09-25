@@ -59,7 +59,7 @@ var HookTypeMapping = map[string]events.ActionType{
 	"post_run_command":      events.ActionCommandExec,
 	"pre_mcp_tool_use":      events.ActionToolUse,
 	"post_mcp_tool_use":     events.ActionToolUse,
-	"pre_user_prompt":       events.ActionToolUse,
+	"pre_user_prompt":       events.ActionUserPrompt,
 	"post_cascade_response": events.ActionNotification,
 	"post_setup_worktree":   events.ActionToolUse,
 }
@@ -277,18 +277,11 @@ func parseUserPrompt(sessionID uuid.UUID, agentSessionID string, input HookInput
 		return nil, fmt.Errorf("failed to parse user_prompt tool_info: %w", err)
 	}
 
-	event := events.NewEvent(sessionID, AgentName, events.ActionToolUse)
+	event := events.NewEvent(sessionID, AgentName, events.ActionUserPrompt)
 	event.AgentSessionID = agentSessionID
-	event.ToolName = "pre_user_prompt"
-	event.RawEvent = nil
-
-	payload := events.ToolUsePayload{
-		ToolName: "pre_user_prompt",
-	}
-	if err := event.SetPayload(payload); err != nil {
+	if err := event.SetPrompt(info.UserPrompt); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
 	}
-
 	return event, nil
 }
 

@@ -268,26 +268,14 @@ func parseUserPromptSubmit(sessionID uuid.UUID, agentSessionID string, rawData [
 		return nil, fmt.Errorf("failed to parse UserPromptSubmit input: %w", err)
 	}
 
-	event := events.NewEvent(sessionID, AgentName, events.ActionToolUse)
+	event := events.NewEvent(sessionID, AgentName, events.ActionUserPrompt)
 	event.AgentSessionID = agentSessionID
-	event.ToolName = "UserPromptSubmit"
 	event.WorkingDirectory = input.Cwd
 	event.TranscriptPath = input.TranscriptPath
 	event.RawEvent = rawData
-
-	payload := events.ToolUsePayload{
-		ToolName: "UserPromptSubmit",
-	}
-
-	promptInput := map[string]string{"prompt": input.Prompt}
-	if data, err := json.Marshal(promptInput); err == nil {
-		payload.Input = privacy.NewText(string(data))
-	}
-
-	if err := event.SetPayload(payload); err != nil {
+	if err := event.SetPrompt(input.Prompt); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
 	}
-
 	return event, nil
 }
 

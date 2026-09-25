@@ -42,6 +42,12 @@ type PostToolUseInput struct {
 	AgentType    string                 `json:"agent_type,omitempty"`
 }
 
+// UserPromptSubmitInput represents the input for UserPromptSubmit hooks.
+type UserPromptSubmitInput struct {
+	HookInput
+	Prompt string `json:"prompt"`
+}
+
 // SessionStartInput represents the input for SessionStart hooks.
 type SessionStartInput struct {
 	HookInput
@@ -134,6 +140,8 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 		event, parseErr = a.parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, false)
 	case "PostToolUseFailure":
 		event, parseErr = a.parsePostToolUse(sessionID, agentSessionID, baseInput, rawData, true)
+	case "UserPromptSubmit":
+		event, parseErr = parseUserPromptSubmit(sessionID, agentSessionID, rawData)
 	case "SessionStart":
 		event, parseErr = parseSessionStart(sessionID, agentSessionID, baseInput, rawData)
 	case "SessionEnd":
@@ -157,6 +165,21 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	if event != nil {
 		event.TranscriptPath = baseInput.TranscriptPath
 		event.HookType = events.HookType(eventName)
+	}
+	return event, nil
+}
+
+func parseUserPromptSubmit(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {
+	var input UserPromptSubmitInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse UserPromptSubmit input: %w", err)
+	}
+	event := events.NewEvent(sessionID, AgentName, events.ActionUserPrompt)
+	event.AgentSessionID = agentSessionID
+	event.WorkingDirectory = input.Cwd
+	event.RawEvent = rawData
+	if err := event.SetPrompt(input.Prompt); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
 	}
 	return event, nil
 }
