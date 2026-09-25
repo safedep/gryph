@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/loader"
+	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
@@ -216,17 +217,23 @@ func TestResolveEditor_Precedence(t *testing.T) {
 	assert.Equal(t, "code -w", resolveEditor())
 }
 
-func TestNewClassifier_SkipsUnknownClass(t *testing.T) {
+func TestNewClassifier_KeepsCustomLabel(t *testing.T) {
 	cfg := config.Default()
 	cfg.Policy.Classify.ExtraPatterns = map[string][]string{
 		"secret":        {"**/*.vault"},
-		"customer_data": {"**/customers.csv"},
+		"customer_data": {"**/customers/**"},
 	}
 
 	h := newClassifier(cfg)
 	require.NotNil(t, h)
 	assert.Equal(t, []privacy.Class{privacy.ClassSecret}, h.ClassifyPaths([]string{"/work/a.vault"}, ""))
-	assert.Empty(t, h.ClassifyPaths([]string{"/work/customers.csv"}, ""))
+
+	action := &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: "/work/customers/list.txt"}}
+	assert.Contains(t, h.Classify(action), privacy.Class("customer_data"))
+
+	event := events.NewEvent(uuid.New(), "claude-code", events.ActionFileRead)
+	require.NoError(t, event.SetPayload(&events.FileReadPayload{Path: "/work/customers/list.txt"}))
+	assert.Equal(t, []privacy.Class{privacy.ClassPII}, h.ClassifyEvent(event))
 
 	cfg.Policy.Classify.Enabled = false
 	assert.Nil(t, newClassifier(cfg))

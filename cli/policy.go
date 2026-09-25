@@ -32,6 +32,7 @@ import (
 	"github.com/safedep/gryph/core/privacy"
 	coresecurity "github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
+	"github.com/safedep/gryph/decision"
 	"github.com/safedep/gryph/schema"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
@@ -906,6 +907,9 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 		adapterOpts = append(adapterOpts, mediation.WithIdentityCapturer(identityCapturer))
 
 		opts = append(opts, aarmsec.WithAdapter(mediation.NewHookAdapter(adapterOpts...)))
+		opts = append(opts, aarmsec.WithContentStrip(func(e *events.Event) bool {
+			return decision.StripsContent(e, cfg.GetAgentLoggingLevel(e.AgentName))
+		}))
 		opts = append(opts, aarmsec.WithIdentityConfig(aarmsec.IdentityConfig{
 			Enabled:               policyCfg.Identity.Enabled,
 			RequireHumanPrincipal: policyCfg.Identity.RequireHumanPrincipal,
@@ -1298,10 +1302,6 @@ func newClassifier(cfg *config.Config) *classify.Heuristic {
 	if len(policyCfg.Classify.ExtraPatterns) > 0 {
 		extra := make(map[privacy.Class][]string, len(policyCfg.Classify.ExtraPatterns))
 		for class, patterns := range policyCfg.Classify.ExtraPatterns {
-			if !privacy.Class(class).Valid() {
-				log.Warnf("policy.classify.extra_patterns: skip unknown class %q (must be one of %v)", class, privacy.AllClasses)
-				continue
-			}
 			extra[privacy.Class(class)] = patterns
 		}
 		opts = append(opts, classify.WithExtraPatterns(extra))

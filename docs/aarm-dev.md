@@ -393,6 +393,11 @@ verifier, or every existing chain fails verification.
   outcome but does not recompute the hash. The hash input collapses the outcome
   back to `escalate` via `DeriveInsertDecision` so the chain stays verifiable.
 - The row stores `error_message`, but the hash excludes it.
+- The receipt follows the logging level. `WithContentStrip` installs the rule
+  (`decision.StripsContent`). When the stored event loses its content,
+  `receiptAction` drops the URL, the line counts, and the tool-input
+  parameters from the receipt. The PDP and the approval prompt still see the
+  full action.
 - Export with `gryph policy receipts export`. Verify a chain with
   `gryph policy receipts verify-log`.
 

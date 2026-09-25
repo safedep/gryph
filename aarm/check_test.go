@@ -576,3 +576,62 @@ rules:
 		})
 	}
 }
+
+func TestMediator_ReceiptDropsStrippedParameters(t *testing.T) {
+	const rawURL = "https://example.com/invite/k7Qz9xWm"
+	cases := []struct {
+		name  string
+		rule  string
+		strip bool
+	}{
+		{"allow keeps", "allow", false},
+		{"allow strips", "allow", true},
+		{"block strips", "block", true},
+		{"escalate strips", "escalate", true},
+		{"defer strips", "defer\n    reason: wait", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: rule
+    action: ` + tc.rule + `
+    match: { action_types: [tool_use] }
+`))
+			require.NoError(t, err)
+
+			rec := &spyReceiptGenerator{}
+			var seen *events.Event
+			med, err := NewMediator(policy,
+				WithReceiptGenerator(rec),
+				WithMediatorConfig(MediatorConfig{LogAllEvaluations: true}),
+				WithDeferralConfig(DeferralConfig{Enabled: true}),
+				WithContentStrip(func(e *events.Event) bool {
+					seen = e
+					return tc.strip
+				}),
+			)
+			require.NoError(t, err)
+
+			event := &events.Event{
+				ID:         uuid.New(),
+				SessionID:  uuid.New(),
+				Timestamp:  time.Now(),
+				ActionType: events.ActionToolUse,
+				ToolName:   "WebFetch",
+				AgentName:  "claude-code",
+				Payload:    []byte(`{"tool_name":"WebFetch","input":{"value":"{\"url\":\"` + rawURL + `\"}","label":{}}}`),
+			}
+			_, err = med.Check(context.Background(), event, nil)
+			require.NoError(t, err)
+			assert.Same(t, event, seen)
+			require.Len(t, rec.records, 1)
+			if tc.strip {
+				assert.Empty(t, rec.records[0].Action.Parameters.URL)
+				return
+			}
+			assert.Equal(t, rawURL, rec.records[0].Action.Parameters.URL)
+		})
+	}
+}

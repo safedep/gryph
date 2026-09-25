@@ -42,7 +42,9 @@ type heuristicConfig struct {
 }
 
 // WithExtraPatterns merges additional glob patterns into the built-in pattern
-// map keyed by label.
+// map keyed by label. A key outside privacy.AllClasses is a custom policy
+// label. Classify returns it, so CEL reads it in action.data_classifications.
+// ClassifyEvent drops it, so it never becomes a content label.
 func WithExtraPatterns(extra map[privacy.Class][]string) HeuristicOption {
 	return func(c *heuristicConfig) {
 		if c.extraPatterns == nil {
@@ -99,7 +101,9 @@ func (h *Heuristic) Classify(action *model.Action) []privacy.Class {
 }
 
 // ClassifyEvent returns the classes of the paths and the URL that an event
-// acts on. The decision service uses it to label content.
+// acts on. The decision service uses it to label content, so it returns
+// only the closed set of privacy.Class. A custom extra_patterns key is a
+// policy label that only Classify returns.
 func (h *Heuristic) ClassifyEvent(event *events.Event) []privacy.Class {
 	if h == nil || event == nil {
 		return nil
@@ -111,7 +115,13 @@ func (h *Heuristic) ClassifyEvent(event *events.Event) []privacy.Class {
 	for i, p := range paths {
 		paths[i] = filepath.ToSlash(p)
 	}
-	return h.ClassifyPaths(paths, rawURL)
+	classes := slices.DeleteFunc(h.ClassifyPaths(paths, rawURL), func(c privacy.Class) bool {
+		return !c.Valid()
+	})
+	if len(classes) == 0 {
+		return nil
+	}
+	return classes
 }
 
 // ClassifyPaths returns the classes of paths and rawURL, sorted.

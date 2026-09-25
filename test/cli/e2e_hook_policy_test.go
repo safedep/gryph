@@ -366,3 +366,96 @@ rules:
 
 	assertSingleEventStatus(t, env, events.ResultSuccess)
 }
+
+func claudePreToolUse(t *testing.T, tool string, input map[string]any) []byte {
+	t.Helper()
+	payload, err := json.Marshal(map[string]any{
+		"session_id":      "receipt-level-session",
+		"cwd":             "/home/user/project",
+		"hook_event_name": "PreToolUse",
+		"tool_name":       tool,
+		"tool_input":      input,
+		"tool_use_id":     "tool-use-receipt",
+	})
+	require.NoError(t, err)
+	return payload
+}
+
+func TestPolicy_ReceiptFollowsLoggingLevel(t *testing.T) {
+	const tokenURL = "https://example.com/invite/k7Qz9xWm"
+	cases := []struct {
+		name     string
+		level    string
+		payload  []byte
+		wantKeep map[string]any
+		wantDrop []string
+	}{
+		{
+			name:     "full level keeps the url",
+			level:    "full",
+			payload:  claudePreToolUse(t, "WebFetch", map[string]any{"url": tokenURL, "prompt": "read"}),
+			wantKeep: map[string]any{"url": tokenURL},
+		},
+		{
+			name:     "minimal level drops the url",
+			level:    "minimal",
+			payload:  claudePreToolUse(t, "WebFetch", map[string]any{"url": tokenURL, "prompt": "read"}),
+			wantDrop: []string{"url"},
+		},
+		{
+			name:     "sensitive url drops the url",
+			level:    "full",
+			payload:  claudePreToolUse(t, "WebFetch", map[string]any{"url": "https://example.com/app/.env", "prompt": "read"}),
+			wantDrop: []string{"url"},
+		},
+		{
+			name:     "sensitive write drops the line counts",
+			level:    "full",
+			payload:  claudePreToolUse(t, "Write", map[string]any{"file_path": "/home/user/project/.env", "content": "A=1\nB=2\n"}),
+			wantKeep: map[string]any{"path": "/home/user/project/.env"},
+			wantDrop: []string{"lines_added", "lines_removed"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newTestEnvWithPolicy(t, blockCommandPolicy("block-npm-install", `\bnpm\s+install\b`, "blocked"))
+			_, _, err := env.run("config", "set", "logging.level", tc.level)
+			require.NoError(t, err)
+
+			_, _, err = env.runHookCapturingStd("claude-code", "PreToolUse", tc.payload)
+			require.NoError(t, err)
+
+			receipt := loadLatestMatchingReceipt(t, env, "allow")
+			require.NotNil(t, receipt)
+			for key, want := range tc.wantKeep {
+				assert.Equal(t, want, receipt.ActionPayload[key], key)
+			}
+			for _, key := range tc.wantDrop {
+				assert.NotContains(t, receipt.ActionPayload, key)
+			}
+		})
+	}
+}
+
+func TestPolicy_CustomClassifyLabel_Blocks(t *testing.T) {
+	env := newTestEnvWithPolicy(t, `version: "1"
+rules:
+  - id: block-customer-data
+    action: block
+    severity: high
+    match:
+      action_types: [file_read]
+    condition: "'customer_data' in action.data_classifications"
+    message: "blocked-by-policy: customer data"
+`)
+	f, err := os.OpenFile(env.configPath, os.O_APPEND|os.O_WRONLY, 0o600)
+	require.NoError(t, err)
+	_, err = f.WriteString("  classify:\n    extra_patterns:\n      customer_data: [\"**/customers/**\"]\n")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	payload := claudePreToolUse(t, "Read", map[string]any{"file_path": "/home/user/project/customers/list.csv"})
+	stdout, stderr, runErr := env.runHookCapturingStd("claude-code", "PreToolUse", payload)
+	assertHookBlocked(t, stdout, stderr, runErr, "blocked-by-policy")
+	assertSingleEventStatus(t, env, events.ResultBlocked)
+}

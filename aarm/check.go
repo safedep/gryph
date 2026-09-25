@@ -115,6 +115,8 @@ type Mediator struct {
 	identityCfg  IdentityConfig
 	cfg          MediatorConfig
 	policyHash   []byte
+
+	stripsContent func(event *events.Event) bool
 }
 
 var _ coresecurity.Check = (*Mediator)(nil)
@@ -205,6 +207,16 @@ func WithIdentityAuditHook(h IdentityAuditHook) MediatorOption {
 	}
 }
 
+// WithContentStrip installs the rule that tells whether the stored event
+// loses its content values. When the rule returns true, the receipt keeps
+// only the parameters that the stored event keeps. The PDP still sees every
+// parameter.
+func WithContentStrip(fn func(event *events.Event) bool) MediatorOption {
+	return func(m *Mediator) {
+		m.stripsContent = fn
+	}
+}
+
 // WithAdapter overrides the default mediation adapter. Callers that need to
 // wire a classifier or an injection scorer construct the adapter themselves
 // (with mediation.NewHookAdapter) and pass it in. Keeps adapter-shaped
@@ -269,7 +281,7 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 		return nil, err
 	}
 
-	if res, blocked := m.enforceIdentity(ctx, action); blocked {
+	if res, blocked := m.enforceIdentity(ctx, m.receiptAction(event, action)); blocked {
 		return res, nil
 	}
 
@@ -295,13 +307,14 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 	// Drop the full match buffer so no later serialization of the action can
 	// leak full content.
 	action.Parameters.ContentFull = ""
+	stored := m.receiptAction(event, action)
 
 	if decision.Decision == model.DecisionEscalate {
-		return m.handleEscalate(ctx, action, snapshot, decision)
+		return m.handleEscalate(ctx, action, stored, snapshot, decision)
 	}
 
 	if decision.Decision == model.DecisionDefer {
-		return m.handleDefer(ctx, action, snapshot, decision)
+		return m.handleDefer(ctx, stored, snapshot, decision)
 	}
 
 	result := pep.Apply(decision)
@@ -319,7 +332,7 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 			SessionID:  action.SessionID,
 			ActionID:   action.ID,
 			EventID:    action.EventID,
-			Action:     action,
+			Action:     stored,
 			Snapshot:   snapshot,
 			Decision:   decision,
 			PolicyHash: m.policyHash,
@@ -333,6 +346,24 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 	}
 
 	return result, nil
+}
+
+// receiptAction returns the action as the receipt records it. A stripped
+// event loses its line counts and its tool input. So the receipt drops the
+// line counts, the URL, and every parameter that a tool-use action takes
+// from the tool input.
+func (m *Mediator) receiptAction(event *events.Event, action *model.Action) *model.Action {
+	if m.stripsContent == nil || !m.stripsContent(event) {
+		return action
+	}
+	stored := *action
+	stored.Parameters = model.Parameters{SizeBytes: action.Parameters.SizeBytes}
+	if action.Type != model.ActionToolUse {
+		stored.Parameters.Path = action.Parameters.Path
+		stored.Parameters.Command = action.Parameters.Command
+		stored.Parameters.Args = action.Parameters.Args
+	}
+	return &stored
 }
 
 // identityMissingReason is the operator-facing block message returned when
@@ -393,13 +424,14 @@ func (m *Mediator) enforceIdentity(ctx context.Context, action *model.Action) (*
 }
 
 // handleEscalate routes an escalated decision through the Approval Service
-// and synthesizes a security.CheckResult from the outcome.
-func (m *Mediator) handleEscalate(ctx context.Context, action *model.Action, snapshot *model.ContextSnapshot, decision *model.EvaluationResult) (*coresecurity.CheckResult, error) {
+// and synthesizes a security.CheckResult from the outcome. The operator sees
+// the full action. The receipt records the stored action.
+func (m *Mediator) handleEscalate(ctx context.Context, action, stored *model.Action, snapshot *model.ContextSnapshot, decision *model.EvaluationResult) (*coresecurity.CheckResult, error) {
 	rec, rerr := m.receipt.Record(ctx, &receipt.RecordInput{
 		SessionID:  action.SessionID,
 		ActionID:   action.ID,
 		EventID:    action.EventID,
-		Action:     action,
+		Action:     stored,
 		Snapshot:   snapshot,
 		Decision:   decision,
 		PolicyHash: m.policyHash,

@@ -59,11 +59,18 @@ func labelEvent(event *events.Event, redactor *privacy.Redactor, classes []priva
 	}
 }
 
+// StripsContent reports whether the logging level or the sensitivity of the
+// event removes the content values from the stored event. The AARM receipt
+// uses the same rule, so a receipt never keeps what the event loses.
+func StripsContent(event *events.Event, level config.LoggingLevel) bool {
+	return event.IsSensitive || !level.IsAtLeast(config.LoggingStandard)
+}
+
 // applyLevel records the logging level on every label and removes the
 // values that the level or the sensitivity of the event does not keep. A
 // sensitive event keeps labels only, except the command.
 func applyLevel(event *events.Event, level config.LoggingLevel) {
-	stripContent := event.IsSensitive || !level.IsAtLeast(config.LoggingStandard)
+	stripContent := StripsContent(event, level)
 	stripFull := stripContent || !level.IsAtLeast(config.LoggingFull)
 
 	strip := func(t *privacy.Text, remove bool) {

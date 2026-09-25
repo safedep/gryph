@@ -443,7 +443,7 @@ policy:
     enabled: true
 ```
 
-`classify` labels paths and URLs. `injection_score` scans tool-use content for prompt-injection markers and returns a float between 0 and 1. Use them in conditions:
+`classify` labels paths and URLs. An `extra_patterns` key that is not a built-in class, such as `customer_data`, is a custom label. A condition such as `'customer_data' in action.data_classifications` matches it. It does not become a content label. `injection_score` scans tool-use content for prompt-injection markers and returns a float between 0 and 1. Use them in conditions:
 
 Defer fires automatically on insufficient context (fresh sessions whose
 counters have not filled in yet) and on conflicting policies (multiple rules

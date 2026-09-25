@@ -87,3 +87,31 @@ func TestClass_Valid(t *testing.T) {
 func TestDigest(t *testing.T) {
 	assert.Equal(t, "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", Digest("abc"))
 }
+
+func TestText_ForExport(t *testing.T) {
+	digest := Digest("token=abc123 and more")
+	cases := []struct {
+		name       string
+		label      Label
+		keepDigest bool
+	}{
+		{"whole value", Label{Size: 21, Digest: digest}, true},
+		{"redacted", Label{Redacted: true, Size: 21, Digest: digest}, false},
+		{"secret class", Label{Classes: []Class{ClassSecret}, Size: 21, Digest: digest}, false},
+		{"truncated preview", Label{Truncated: true, Size: 21, Digest: digest}, false},
+		{"stripped", Label{Stripped: true, Size: 21, Digest: digest}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Text{Value: "v", Label: tc.label}.ForExport()
+			assert.Equal(t, "v", got.Value)
+			if tc.keepDigest {
+				assert.Equal(t, digest, got.Label.Digest)
+				assert.Equal(t, 21, got.Label.Size)
+				return
+			}
+			assert.Empty(t, got.Label.Digest)
+			assert.Zero(t, got.Label.Size)
+		})
+	}
+}

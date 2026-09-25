@@ -19,10 +19,11 @@ the current config to know what the value is.
 
 A class is a fact from the built-in heuristic classifier (`aarm/classify`).
 It is not a config value. `policy.classify.extra_patterns` can add globs to
-a class. The classifier skips an unknown class key with a warning. It is not
-a config error, because a config error makes the CLI fall back to the
-default config. The admin's own names
-for events are rule tags, not classes.
+a class. A key that is not a class, such as `customer_data`, is a custom
+policy label. CEL reads it in `action.data_classifications` and
+`context.classifications_seen`, so a rule on it still matches. It never
+becomes a content label, and export never sends it. `ClassifyEvent` drops
+it. The admin's own names for events are rule tags, not classes.
 
 ## Fields
 
@@ -64,6 +65,10 @@ evaluation. `labelEvent` (`decision/label.go`) runs before the evaluation:
 
 The policy then evaluates the redacted event. It sees the content at every
 logging level, so a rule on a URL or on content still fires at `minimal`.
+The AARM receipt records the action with the rule of `decision.StripsContent`.
+When the stored event loses its content, the receipt drops the URL, the line
+counts, and every parameter that a tool-use action takes from the tool
+input. So a receipt never keeps what the stored event loses.
 
 `applyLevel` runs after the evaluation and before the save:
 
@@ -92,11 +97,16 @@ unclassified action.
 
 `Event.ForExport` makes the copy that leaves the machine. `gryph export` and
 stream sync use it. It decodes and encodes the payload again, so an old row
-has the same shape as a new row. It removes the digest and the size of a
-value that Gryph redacted or that has the `secret` class. A digest of a
-short secret can be reversed by brute force. The local store keeps the
-digest, so `gryph cat --format json` shows it. Export profiles replace this
-rule.
+has the same shape as a new row.
+
+Export keeps the digest and the size only when the exported value is the
+whole original value. It removes them when the label has `Redacted`,
+`Truncated`, or `Stripped`, or has the `secret` class. The digest and the
+size describe the whole original value. For a truncated or stripped value,
+that original can hold a secret that the export does not show. A digest of
+a short secret can be reversed by brute force. The local store keeps the
+digest, so `gryph cat --format json` shows it. Export profiles replace
+`Text.ForExport`. Every export profile must keep this rule.
 
 `gryph cat` shows each content value as its text, and a stripped value as
 `[stripped]`.
