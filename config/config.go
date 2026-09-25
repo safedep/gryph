@@ -96,15 +96,22 @@ type PolicyConfig struct {
 	Context        ContextConfig        `mapstructure:"context"`
 }
 
-// ContextConfig controls what the session context gives to policy.
-// CELEntries is the number of the latest entries in context.entries.
+// ContextConfig controls what the session context gives to policy and to a
+// window. CELEntries is the number of the latest entries in context.entries.
 type ContextConfig struct {
 	CELEntries int `mapstructure:"cel_entries"`
+	// WindowMaxEntries and WindowMaxBytes are the default size of a window
+	// of the session context.
+	WindowMaxEntries int `mapstructure:"window_max_entries"`
+	WindowMaxBytes   int `mapstructure:"window_max_bytes"`
 }
 
 // MaxCELEntries bounds context.entries, so one rule cannot load a whole
 // session into every evaluation.
 const MaxCELEntries = 1000
+
+// MaxWindowEntries bounds a window, so one call cannot load a whole session.
+const MaxWindowEntries = 1000
 
 // SelfProtectionConfig toggles the built-in rules that block agent writes to
 // Gryph's policy files, database, keys, and the agents' hook configs. Honored

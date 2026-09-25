@@ -53,6 +53,9 @@ type Accumulator interface {
 	// Entries returns the latest limit stored entries of a session, oldest
 	// first.
 	Entries(ctx context.Context, sessionID uuid.UUID, limit int) ([]model.EntryFacts, error)
+	// Window returns the latest entries of a session with their content. The
+	// PDP does not call it.
+	Window(ctx context.Context, sessionID uuid.UUID, spec model.WindowSpec) (*model.Window, error)
 	RecordResult(ctx context.Context, entryID uuid.UUID, result model.Result) error
 	ConfirmIntent(ctx context.Context, entryID uuid.UUID) error
 }
@@ -75,6 +78,11 @@ func (*Nop) Append(_ context.Context, _ *model.ContextEntry) error { return nil 
 
 // Entries implements Accumulator.
 func (*Nop) Entries(context.Context, uuid.UUID, int) ([]model.EntryFacts, error) { return nil, nil }
+
+// Window implements Accumulator.
+func (*Nop) Window(_ context.Context, sessionID uuid.UUID, _ model.WindowSpec) (*model.Window, error) {
+	return &model.Window{SessionID: sessionID, Entries: []model.WindowEntry{}}, nil
+}
 
 // RecordResult implements Accumulator.
 func (*Nop) RecordResult(_ context.Context, _ uuid.UUID, _ model.Result) error { return nil }

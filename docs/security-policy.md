@@ -230,6 +230,8 @@ names an unknown field, such as `{{.Context.Drift}}`, and a `glob()` call with a
 pattern, such as `"["`. An installed policy with either loads with a warning. When a message template
 fails to render for an action, the rule still decides, and the message is `rule <id>`.
 
+`gryph policy context --window --session <id> --content` prints the latest entries of a session with their content, and always the latest prompt. It prints a value only when Gryph stored it at the `full` logging level. For any other value it prints the digest. `policy.context.window_max_entries` (1 to 1000, default 50) sets the default entry count, and `--limit` overrides it. `policy.context.window_max_bytes` (default 65536, 0 for no limit) bounds the bytes of the content values. Labels and entries do not count.
+
 ### Facts and tags
 
 The session context records facts. Your policy decides what the facts mean.

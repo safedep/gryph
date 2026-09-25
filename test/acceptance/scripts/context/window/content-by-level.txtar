@@ -1,0 +1,42 @@
+# gryph policy context --window --content prints the content that Gryph
+# stored at the full logging level. For an event stored at standard, it
+# prints the digest only, also after the config changes to full. It never
+# prints the content of a sensitive path. The session ID 0082adb1 derives
+# from the agent session ID s-window.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+env GRYPH_LOGGING_LEVEL=full
+stdin write_full.json
+exec gryph _hook claude-code PreToolUse
+stdin write_env.json
+exec gryph _hook claude-code PreToolUse
+
+env GRYPH_LOGGING_LEVEL=standard
+stdin write_standard.json
+exec gryph _hook claude-code PreToolUse
+
+env GRYPH_LOGGING_LEVEL=full
+exec gryph policy context --window --session 0082adb1 --content --format json --no-color
+stdout 'alpha-content'
+! stdout 'bravo-content'
+! stdout 'secret-content'
+stdout '"label":\{"digest":"sha256:'
+
+exec gryph policy context --window --session 0082adb1 --format json --no-color
+! stdout 'alpha-content'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- write_full.json --
+{"session_id": "s-window", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Write",
+ "tool_input": {"file_path": "/home/user/project/a.txt", "content": "alpha-content"}, "tool_use_id": "tu-1"}
+-- write_env.json --
+{"session_id": "s-window", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Write",
+ "tool_input": {"file_path": "/home/user/project/.env", "content": "secret-content"}, "tool_use_id": "tu-2"}
+-- write_standard.json --
+{"session_id": "s-window", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Write",
+ "tool_input": {"file_path": "/home/user/project/b.txt", "content": "bravo-content"}, "tool_use_id": "tu-3"}

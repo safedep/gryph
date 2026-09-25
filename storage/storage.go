@@ -15,6 +15,10 @@ type EventStore interface {
 	// SaveEvent persists a new audit event.
 	SaveEvent(ctx context.Context, event *events.Event) error
 
+	// QueryEventsByIDs returns the events with these IDs, in one query. An
+	// ID with no event is left out.
+	QueryEventsByIDs(ctx context.Context, ids []uuid.UUID) ([]*events.Event, error)
+
 	// GetEvent retrieves an event by ID.
 	GetEvent(ctx context.Context, id uuid.UUID) (*events.Event, error)
 
@@ -156,7 +160,11 @@ type EntryFactsRow struct {
 //     chain verification.
 type ContextEntryFilter struct {
 	SessionID *uuid.UUID
-	Limit     int
+	// Kinds keeps the entries of these kinds. Empty keeps every kind.
+	Kinds []string
+	// Sequence keeps the one entry with this sequence.
+	Sequence *int64
+	Limit    int
 	// Ascending orders by sequence ASC so the per-session chain comes back
 	// in chain order. The default is the newest entries first.
 	Ascending bool

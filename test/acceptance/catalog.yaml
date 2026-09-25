@@ -497,3 +497,17 @@
   tier: P2
   guarantee: "context.semantic_drift is removed. Policy validation rejects a policy that reads it, also through an alias, with a message that names the field. An installed policy that reads it still loads, reads it as zero, and enforces."
   labels: [policy, validate]
+
+- id: context/window/content-by-level
+  title: "the window prints content stored at the full level only"
+  category: context
+  tier: P0
+  guarantee: "gryph policy context --window --content prints content stored at full. For an event stored at standard it prints the digest only, also after the config changes to full. It never prints the content of a sensitive path."
+  labels: [context, window, privacy]
+
+- id: context/window/keeps-latest-intent
+  title: "the window keeps the latest prompt"
+  category: context
+  tier: P2
+  guarantee: "With --limit 3 and ten actions after a prompt, the window still holds the prompt."
+  labels: [context, window, intent]

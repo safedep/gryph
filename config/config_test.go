@@ -639,3 +639,34 @@ func TestLoad_ClampsCELEntries(t *testing.T) {
 		})
 	}
 }
+
+func TestValidate_ContextWindow(t *testing.T) {
+	tests := []struct {
+		name       string
+		maxEntries int
+		maxBytes   int
+		wantErr    string
+	}{
+		{"defaults", 50, 65536, ""},
+		{"no byte limit", 1, 0, ""},
+		{"upper entry bound", MaxWindowEntries, 1, ""},
+		{"zero entries", 0, 1, "window_max_entries"},
+		{"too many entries", MaxWindowEntries + 1, 1, "window_max_entries"},
+		{"negative bytes", 50, -1, "window_max_bytes"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Policy.Enabled = true
+			cfg.Policy.Context.WindowMaxEntries = tt.maxEntries
+			cfg.Policy.Context.WindowMaxBytes = tt.maxBytes
+			err := validate(cfg)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}

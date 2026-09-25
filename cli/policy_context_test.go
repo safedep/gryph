@@ -12,6 +12,7 @@ import (
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/storage/storagetest"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/tui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -227,4 +228,22 @@ func TestRunPolicyContextVerify_UnknownHashVersionFails(t *testing.T) {
 	err = runPolicyContextVerify(ctx, &buf, tui.NewColorizer(false), store, sessionID.String(), 50, false, "table")
 	require.Error(t, err)
 	assert.Contains(t, buf.String(), "unknown hash version 1")
+}
+
+func TestWindowContentText(t *testing.T) {
+	c := tui.NewColorizer(false)
+	tests := []struct {
+		name string
+		text privacy.Text
+		want string
+	}{
+		{"indents every line", privacy.Text{Value: "one\ntwo"}, "         one\n         two"},
+		{"digest without a value", privacy.Text{Label: privacy.Label{Digest: "sha256:ab"}}, "         sha256:ab"},
+		{"no value and no digest", privacy.Text{}, "         (no content)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, windowContentText(c, tt.text))
+		})
+	}
 }

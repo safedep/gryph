@@ -18,13 +18,20 @@ import (
 // SQLiteAccumulator persists the session context through the storage layer.
 // It depends only on storage.ContextStore.
 type SQLiteAccumulator struct {
-	store storage.ContextStore
+	store Store
 	now   func() time.Time
 }
 
+// Store is the storage that the SQLite accumulator reads and writes. The
+// window reads the audit events for their content.
+type Store interface {
+	storage.ContextStore
+	QueryEventsByIDs(ctx context.Context, ids []uuid.UUID) ([]*events.Event, error)
+}
+
 // NewSQLite returns a new SQLite-backed accumulator. The store must be
-// non-nil; callers should fall back to Nop when no store is available.
-func NewSQLite(store storage.ContextStore) *SQLiteAccumulator {
+// non-nil. Callers fall back to Nop when no store is available.
+func NewSQLite(store Store) *SQLiteAccumulator {
 	return &SQLiteAccumulator{store: store, now: func() time.Time { return time.Now().UTC() }}
 }
 
