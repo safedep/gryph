@@ -23,9 +23,8 @@ type Service interface {
 // that runs outside the agent's process must treat every field as an
 // untrusted claim. The event fields that events.Event excludes from JSON
 // travel only as the explicit fields below, and NewHookRequest clears them on
-// Event so each value has one source.
+// Event so each value has one source. The agent is Event.AgentName only.
 type HookRequest struct {
-	Agent string `json:"agent"`
 	// HookType is the hook name the adapter recorded on the event. It can
 	// differ from the CLI argument, which only selects the response format.
 	HookType       string       `json:"hook_type"`
@@ -36,15 +35,31 @@ type HookRequest struct {
 
 // HookResponse is the decision the hook side renders for the agent.
 type HookResponse struct {
-	Decision security.Decision `json:"decision"`
-	Reason   string            `json:"reason,omitempty"`
-	Guidance string            `json:"guidance,omitempty"`
+	Decision Verdict `json:"decision"`
+	Reason   string  `json:"reason,omitempty"`
+	Guidance string  `json:"guidance,omitempty"`
+}
+
+// Verdict is the name of a decision on the wire. It keeps a name that this
+// binary does not know, and its zero value holds no decision. The hook side
+// blocks on both, so a newer service or a response with no decision fails
+// closed.
+type Verdict string
+
+// VerdictOf returns the wire name of d.
+func VerdictOf(d security.Decision) Verdict {
+	return Verdict(d.String())
+}
+
+// Decision returns the decision that v names. It reports false when v is
+// empty or names a decision that this binary does not know.
+func (v Verdict) Decision() (security.Decision, bool) {
+	return security.ParseDecision(string(v))
 }
 
 // NewHookRequest builds a request from a parsed event.
-func NewHookRequest(agent string, event *events.Event) *HookRequest {
+func NewHookRequest(event *events.Event) *HookRequest {
 	req := &HookRequest{
-		Agent:          agent,
 		HookType:       event.HookType,
 		Event:          *event,
 		TranscriptPath: event.TranscriptPath,

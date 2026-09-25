@@ -80,9 +80,9 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 	// Order matters: redact configured patterns before the level filter strips
 	// fields, so we never persist or log unredacted user content.
 	redactEvent(event, l.privacy)
-	applyLoggingLevel(event, l.loggingLevel(req.Agent))
+	applyLoggingLevel(event, l.loggingLevel(event.AgentName))
 
-	sess, err := l.loadSession(ctx, req.Agent, event)
+	sess, err := l.loadSession(ctx, event)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 	result := l.evaluator.Evaluate(session.WithSession(ctx, sess), event)
 	if !result.IsAllowed() {
 		l.recordBlocked(ctx, sess, event, result)
-		return &HookResponse{Decision: security.DecisionBlock, Reason: result.BlockReason}, nil
+		return &HookResponse{Decision: VerdictOf(security.DecisionBlock), Reason: result.BlockReason}, nil
 	}
 
 	if err := l.recordAllowed(ctx, sess, event); err != nil {
@@ -100,19 +100,19 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 	l.recordResult(ctx, result, event)
 
 	if result.FinalDecision == security.DecisionGuidance {
-		return &HookResponse{Decision: security.DecisionGuidance, Guidance: result.AggregatedGuidance()}, nil
+		return &HookResponse{Decision: VerdictOf(security.DecisionGuidance), Guidance: result.AggregatedGuidance()}, nil
 	}
-	return &HookResponse{Decision: security.DecisionAllow}, nil
+	return &HookResponse{Decision: VerdictOf(security.DecisionAllow)}, nil
 }
 
-func (l *Local) loadSession(ctx context.Context, agentName string, event *events.Event) (*session.Session, error) {
+func (l *Local) loadSession(ctx context.Context, event *events.Event) (*session.Session, error) {
 	sess, err := l.store.GetSession(ctx, event.SessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session: %w", err)
 	}
 
 	if sess == nil {
-		sess = session.NewSessionWithID(event.SessionID, agentName)
+		sess = session.NewSessionWithID(event.SessionID, event.AgentName)
 		sess.AgentSessionID = event.AgentSessionID
 		sess.WorkingDirectory = event.WorkingDirectory
 		sess.TranscriptPath = event.TranscriptPath

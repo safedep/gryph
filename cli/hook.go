@@ -48,7 +48,7 @@ func NewHookCmd() *cobra.Command {
 				return fmt.Errorf("failed to read stdin: %w", err)
 			}
 
-			hookErr := runHook(ctx, app, agentName, hookType, rawData)
+			hookErr := runHook(ctx, app.Registry, app.DecisionService(), agentName, hookType, rawData)
 			if hookErr != nil && !isExitError(hookErr) {
 				logHookError(ctx, app, agentName, hookType, len(rawData), rawData, hookErr)
 			}
@@ -62,8 +62,8 @@ func NewHookCmd() *cobra.Command {
 
 // runHook parses the agent payload, gets a decision from the decision
 // service, and renders the response.
-func runHook(ctx context.Context, app *App, agentName, hookType string, rawData []byte) error {
-	adapter, ok := app.Registry.Get(agentName)
+func runHook(ctx context.Context, registry *agent.Registry, svc decision.Service, agentName, hookType string, rawData []byte) error {
+	adapter, ok := registry.Get(agentName)
 	if !ok {
 		return fmt.Errorf("unknown agent: %s", agentName)
 	}
@@ -73,23 +73,34 @@ func runHook(ctx context.Context, app *App, agentName, hookType string, rawData 
 		return fmt.Errorf("failed to parse event: %w", err)
 	}
 
-	resp, err := app.DecisionService().Handle(ctx, decision.NewHookRequest(agentName, event))
+	resp, err := svc.Handle(ctx, decision.NewHookRequest(event))
 	if err != nil {
 		return err
 	}
 
-	switch resp.Decision {
+	hookDecision, detail := renderDecision(resp)
+	return sendResponse(adapter, hookType, hookDecision, detail)
+}
+
+// renderDecision maps a service response to the agent decision. A decision
+// that this binary does not know comes from a newer service, and a missing
+// decision comes from a broken one. Both block.
+func renderDecision(resp *decision.HookResponse) (agent.HookDecision, string) {
+	if resp.Decision == "" {
+		return agent.DecisionBlock, "gryph: the decision service returned no decision"
+	}
+	d, ok := resp.Decision.Decision()
+	if !ok {
+		return agent.DecisionBlock, fmt.Sprintf("gryph: unknown decision %q", string(resp.Decision))
+	}
+
+	switch d {
 	case security.DecisionAllow:
-		return sendResponse(adapter, hookType, agent.DecisionAllow, "")
-	case security.DecisionBlock:
-		return sendResponse(adapter, hookType, agent.DecisionBlock, resp.Reason)
+		return agent.DecisionAllow, ""
 	case security.DecisionGuidance:
-		return sendResponse(adapter, hookType, agent.DecisionGuidance, resp.Guidance)
+		return agent.DecisionGuidance, resp.Guidance
 	default:
-		// A decision this binary does not know comes from a newer service.
-		// Fail closed.
-		return sendResponse(adapter, hookType, agent.DecisionBlock,
-			fmt.Sprintf("gryph: unknown decision %q", resp.Decision.String()))
+		return agent.DecisionBlock, resp.Reason
 	}
 }
 

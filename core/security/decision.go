@@ -13,44 +13,60 @@ const (
 	DecisionBlock
 	// DecisionGuidance allows the action but provides advisory guidance.
 	DecisionGuidance
+
+	decisionCount
 )
+
+// decisionNames is the one source of decision names. The names travel on the
+// wire, so a decision does not depend on the order of the constants.
+var decisionNames = [decisionCount]string{
+	DecisionAllow:    "allow",
+	DecisionBlock:    "block",
+	DecisionGuidance: "guidance",
+}
+
+// ParseDecision returns the decision with the given name. It reports false
+// for a name that this binary does not know.
+func ParseDecision(name string) (Decision, bool) {
+	for d, n := range decisionNames {
+		if n != "" && n == name {
+			return Decision(d), true
+		}
+	}
+	return 0, false
+}
+
+func (d Decision) name() (string, bool) {
+	if d < 0 || d >= decisionCount {
+		return "", false
+	}
+	name := decisionNames[d]
+	return name, name != ""
+}
 
 // String returns the string representation of the decision.
 func (d Decision) String() string {
-	switch d {
-	case DecisionAllow:
-		return "allow"
-	case DecisionBlock:
-		return "block"
-	case DecisionGuidance:
-		return "guidance"
-	default:
-		return "unknown"
+	if name, ok := d.name(); ok {
+		return name
 	}
+	return "unknown"
 }
 
-// MarshalText encodes the decision as its name, so a decision on the wire
-// does not depend on the order of the constants.
+// MarshalText encodes the decision as its name.
 func (d Decision) MarshalText() ([]byte, error) {
-	switch d {
-	case DecisionAllow, DecisionBlock, DecisionGuidance:
-		return []byte(d.String()), nil
-	default:
+	name, ok := d.name()
+	if !ok {
 		return nil, fmt.Errorf("security: unknown decision %d", int(d))
 	}
+	return []byte(name), nil
 }
 
 // UnmarshalText decodes a decision name.
 func (d *Decision) UnmarshalText(text []byte) error {
-	switch string(text) {
-	case "allow":
-		*d = DecisionAllow
-	case "block":
-		*d = DecisionBlock
-	case "guidance":
-		*d = DecisionGuidance
-	default:
+	parsed, ok := ParseDecision(string(text))
+	if !ok {
 		return fmt.Errorf("security: unknown decision %q", string(text))
 	}
+	*d = parsed
 	return nil
 }

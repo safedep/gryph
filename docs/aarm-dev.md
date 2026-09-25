@@ -26,6 +26,13 @@ which calls the check. `cli/hook.go` then renders the response.
   `config.PolicyConfig`, opens sources, and installs every optional component
   through `MediatorOption` values.
 - The `Mediator` is the AARM implementation of `security.Check`.
+- `decision.Local` takes the agent name from `Event.AgentName` only. The
+  request has no second agent field, so a caller cannot select a logging level
+  for an agent other than the event agent.
+- Known gap: `decision.Local` applies the logging level before it calls
+  `Evaluate`. At `logging.level: minimal` the level strips the tool input and
+  the write content, so policy rules do not see them. PR #68 moves the strip
+  after the evaluation.
 
 ## Request flow
 

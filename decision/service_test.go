@@ -43,7 +43,7 @@ func fullRequest() *HookRequest {
 	event.HookType = "PreToolUse"
 	event.FullContent = "full content"
 
-	return NewHookRequest("claude-code", event)
+	return NewHookRequest(event)
 }
 
 func TestHookRequest_JSONRoundTrip(t *testing.T) {
@@ -56,7 +56,7 @@ func TestHookRequest_JSONRoundTrip(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &got))
 
 	assert.Equal(t, req.event(), got.event())
-	assert.Equal(t, req.Agent, got.Agent)
+	assert.Equal(t, "claude-code", got.Event.AgentName)
 	assert.Equal(t, req.HookType, got.HookType)
 }
 
@@ -74,7 +74,7 @@ func TestHookRequest_CarriesInMemoryEventFields(t *testing.T) {
 }
 
 func TestHookResponse_JSONRoundTrip(t *testing.T) {
-	resp := &HookResponse{Decision: security.DecisionGuidance, Reason: "r", Guidance: "g"}
+	resp := &HookResponse{Decision: VerdictOf(security.DecisionGuidance), Reason: "r", Guidance: "g"}
 
 	data, err := json.Marshal(resp)
 	require.NoError(t, err)
@@ -86,12 +86,62 @@ func TestHookResponse_JSONRoundTrip(t *testing.T) {
 	assert.Equal(t, resp, &got)
 }
 
-func TestHookResponse_UnknownDecisionFailsToEncode(t *testing.T) {
-	_, err := json.Marshal(&HookResponse{Decision: security.Decision(99)})
-	require.Error(t, err)
+func TestHookResponse_DecodeFailsClosed(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        string
+		wantVerdict Verdict
+	}{
+		{name: "missing decision", body: `{}`, wantVerdict: ""},
+		{name: "empty decision", body: `{"decision":""}`, wantVerdict: ""},
+		{name: "decision from a newer service", body: `{"decision":"defer"}`, wantVerdict: "defer"},
+	}
 
-	var got HookResponse
-	require.Error(t, json.Unmarshal([]byte(`{"decision":"defer"}`), &got))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got HookResponse
+			require.NoError(t, json.Unmarshal([]byte(tc.body), &got))
+			assert.Equal(t, tc.wantVerdict, got.Decision)
+
+			_, ok := got.Decision.Decision()
+			assert.False(t, ok)
+		})
+	}
+}
+
+func TestVerdict_RoundTrip(t *testing.T) {
+	for _, d := range []security.Decision{security.DecisionAllow, security.DecisionBlock, security.DecisionGuidance} {
+		got, ok := VerdictOf(d).Decision()
+		assert.True(t, ok, d.String())
+		assert.Equal(t, d, got)
+	}
+
+	_, ok := VerdictOf(security.Decision(99)).Decision()
+	assert.False(t, ok)
+}
+
+func TestLocal_Handle_AgentComesFromEvent(t *testing.T) {
+	var levelAgent string
+	level := func(agent string) config.LoggingLevel {
+		levelAgent = agent
+		return config.LoggingFull
+	}
+
+	ctx := context.Background()
+	store := storagetest.NewStore(t)
+	sessionID := uuid.New()
+	req := writeRequest(sessionID)
+	req.Event.AgentName = "cursor"
+
+	svc := NewLocal(store, security.New(&security.Config{FailOpen: true}), nil, level)
+	_, err := svc.Handle(ctx, req)
+	require.NoError(t, err)
+
+	assert.Equal(t, "cursor", levelAgent)
+	sess, err := store.GetSession(ctx, sessionID)
+	require.NoError(t, err)
+	require.NotNil(t, sess)
+	assert.Equal(t, "cursor", sess.AgentName)
 }
 
 // TestBoundaryTypes_DataOnly keeps the request and response serializable
@@ -167,14 +217,14 @@ func writeRequest(sessionID uuid.UUID) *HookRequest {
 	event := events.NewEvent(sessionID, "claude-code", events.ActionFileWrite)
 	event.WorkingDirectory = "/work/project"
 	event.Payload = json.RawMessage(`{"path":"/work/project/a.txt","content_preview":"password=hunter2"}`)
-	return NewHookRequest("claude-code", event)
+	return NewHookRequest(event)
 }
 
 func TestLocal_Handle(t *testing.T) {
 	cases := []struct {
 		name          string
 		checks        []security.Check
-		wantDecision  security.Decision
+		wantDecision  Verdict
 		wantReason    string
 		wantGuidance  string
 		wantStatus    events.ResultStatus
@@ -182,10 +232,10 @@ func TestLocal_Handle(t *testing.T) {
 		wantWritten   int
 		wantPersisted int
 	}{
-		{name: "allow", wantDecision: security.DecisionAllow, wantStatus: events.ResultSuccess, wantWritten: 1, wantPersisted: 1},
-		{name: "block", checks: []security.Check{blockCheck{}}, wantDecision: security.DecisionBlock,
+		{name: "allow", wantDecision: VerdictOf(security.DecisionAllow), wantStatus: events.ResultSuccess, wantWritten: 1, wantPersisted: 1},
+		{name: "block", checks: []security.Check{blockCheck{}}, wantDecision: VerdictOf(security.DecisionBlock),
 			wantReason: "blocked by test", wantStatus: events.ResultBlocked, wantBlocked: 1, wantPersisted: 1},
-		{name: "guidance", checks: []security.Check{guidanceCheck{}}, wantDecision: security.DecisionGuidance,
+		{name: "guidance", checks: []security.Check{guidanceCheck{}}, wantDecision: VerdictOf(security.DecisionGuidance),
 			wantGuidance: "be careful", wantStatus: events.ResultSuccess, wantWritten: 1, wantPersisted: 1},
 	}
 
@@ -297,7 +347,7 @@ func TestLocal_Handle_InMemoryFieldsReachEvaluator(t *testing.T) {
 	event.TranscriptPath = "/tmp/t.jsonl"
 
 	svc := NewLocal(storagetest.NewStore(t), evaluator, nil, fullLevel)
-	_, err := svc.Handle(context.Background(), NewHookRequest("claude-code", event))
+	_, err := svc.Handle(context.Background(), NewHookRequest(event))
 	require.NoError(t, err)
 
 	require.NotNil(t, capture.seen)
@@ -317,7 +367,7 @@ func TestLocal_Handle_SequenceAndTranscriptBackfill(t *testing.T) {
 
 	second := events.NewEvent(sessionID, "claude-code", events.ActionFileRead)
 	second.TranscriptPath = "/tmp/late.jsonl"
-	_, err = svc.Handle(ctx, NewHookRequest("claude-code", second))
+	_, err = svc.Handle(ctx, NewHookRequest(second))
 	require.NoError(t, err)
 
 	stored, err := store.QueryEvents(ctx, events.NewEventFilter().WithSession(sessionID))
@@ -363,13 +413,13 @@ func TestLocal_Handle_StoreFaults(t *testing.T) {
 		store        func(t *testing.T) *faultStore
 		checks       []security.Check
 		wantErr      string
-		wantDecision security.Decision
+		wantDecision Verdict
 	}{
 		{name: "session save race uses the existing session",
 			store: func(t *testing.T) *faultStore {
 				return &faultStore{Store: storagetest.NewStore(t), saveSessionRaces: true}
 			},
-			wantDecision: security.DecisionAllow},
+			wantDecision: VerdictOf(security.DecisionAllow)},
 		{name: "event save failure on allow is returned",
 			store: func(t *testing.T) *faultStore {
 				return &faultStore{Store: storagetest.NewStore(t), failSaveEvent: true}
@@ -380,7 +430,7 @@ func TestLocal_Handle_StoreFaults(t *testing.T) {
 				return &faultStore{Store: storagetest.NewStore(t), failSaveEvent: true}
 			},
 			checks:       []security.Check{blockCheck{}},
-			wantDecision: security.DecisionBlock},
+			wantDecision: VerdictOf(security.DecisionBlock)},
 	}
 
 	for _, tc := range cases {
@@ -417,7 +467,7 @@ func TestLocal_Handle_SessionEndRunsHook(t *testing.T) {
 
 	sessionID := uuid.New()
 	event := events.NewEvent(sessionID, "claude-code", events.ActionSessionEnd)
-	_, err := svc.Handle(ctx, NewHookRequest("claude-code", event))
+	_, err := svc.Handle(ctx, NewHookRequest(event))
 	require.NoError(t, err)
 
 	require.NotNil(t, ended)
