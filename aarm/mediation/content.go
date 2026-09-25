@@ -9,8 +9,9 @@ import (
 // action is flagged ContentTruncated. Bounds per-event matching cost.
 const contentMatchMaxBytes = 1 << 20 // 1 MiB
 
-// applyContentMatch sets the action's ContentFull match buffer from the event
-// content, capped at contentMatchMaxBytes; over the cap it sets ContentTruncated.
+// applyContentMatch sets the ContentFull match buffer of the action from the
+// event content, up to contentMatchMaxBytes. Over the cap it sets
+// ContentTruncated.
 func applyContentMatch(action *model.Action, fullContent string) {
 	if action == nil || fullContent == "" {
 		return
