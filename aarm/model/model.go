@@ -211,6 +211,13 @@ type ContextSnapshot struct {
 	ClassificationsSeen []string
 	EntitiesSeen        []string
 	SemanticDrift       float64
+
+	// SessionStartedAt is the start time of the agent session. It is zero
+	// when the caller has no session. The fresh-session defer trigger reads
+	// it. It is not part of the receipt snapshot, the CEL context or the
+	// message template context. Adding it to the receipt snapshot changes the
+	// receipt hash format.
+	SessionStartedAt time.Time
 }
 
 // FailMode controls behavior on internal evaluation errors.

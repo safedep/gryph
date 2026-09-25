@@ -16,7 +16,7 @@ func TestR3_ForbiddenActionsBlocked(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_destructive")
-	res, err := ref.Mediator.Check(context.Background(), ev)
+	res, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
 	assert.Contains(t, res.MatchedRuleIDs, "r1-block-rm-rf")

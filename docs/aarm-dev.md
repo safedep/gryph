@@ -17,7 +17,8 @@ registers `lazyPolicyCheck` (in `cli/policy.go`) with the security `Evaluator`.
 The hook side in `cli/hook.go` parses the agent payload and calls
 `decision.Service.Handle`. The in-process `decision.Local` redacts, applies
 the logging level, upserts the session, and calls `app.Security.Evaluate`,
-which calls the check. `cli/hook.go` then renders the response.
+which calls the check. The session is an explicit argument to `Evaluate` and
+`Check`, not a context value. `cli/hook.go` then renders the response.
 
 - `lazyPolicyCheck` defers policy load until the first hook event. A broken
   policy file must not lock the user out of `gryph policy validate` and `test`.
@@ -241,7 +242,9 @@ verifier, or every existing chain fails verification.
 ## Context accumulator
 
 The accumulator records each action and returns the point-in-time
-`ContextSnapshot` the PDP reads through `context.*`. The `Nop` implementation
+`ContextSnapshot` the PDP reads through `context.*`. The Mediator sets
+`SessionStartedAt` on its own copy from the session argument. CEL cannot read
+it. The `Nop` implementation
 returns an empty snapshot. The SQLite implementation persists to
 `aarm_context_*` tables and hash-chains rows via `contextchain`. `Append` runs
 before evaluation. `RecordResult` runs post-hook and updates the result-derived
@@ -259,6 +262,8 @@ counters.
 - Defer: `handleDefer` writes a defer receipt, then the `DeferralHook` persists
   the pending row and returns an operator hint spliced into the block message.
   Auto-defer triggers (fresh session, conflicting policies) live in the PDP.
+  The fresh-session trigger reads `ContextSnapshot.SessionStartedAt`, which the
+  Mediator sets from the session argument.
   `DeferConfig` gates them. Resolve with `gryph policy deferrals`.
 
 ## Extension points

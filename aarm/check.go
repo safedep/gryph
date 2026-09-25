@@ -239,13 +239,6 @@ func NewMediator(policy *pdp.Policy, opts ...MediatorOption) (*Mediator, error) 
 			FreshSessionSeconds:   m.deferralCfg.FreshSessionSeconds,
 			ConflictTriggersDefer: m.deferralCfg.ConflictTriggersDefer,
 		}),
-		pdp.WithSessionStartFn(func(ctx context.Context) (time.Time, bool) {
-			sess, ok := session.FromContext(ctx)
-			if !ok || sess == nil {
-				return time.Time{}, false
-			}
-			return sess.StartedAt, true
-		}),
 	}
 	engine, err := pdp.New(policy, pdpOpts...)
 	if err != nil {
@@ -266,12 +259,11 @@ func (m *Mediator) Enabled() bool {
 }
 
 // Check implements security.Check.
-func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurity.CheckResult, error) {
+func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session.Session) (*coresecurity.CheckResult, error) {
 	if m == nil || m.adapter == nil || m.pdp == nil || m.accum == nil || m.receipt == nil {
 		return nil, fmt.Errorf("aarm: mediator is not initialized")
 	}
 
-	sess, _ := session.FromContext(ctx)
 	action, err := m.adapter.Normalize(ctx, event, sess)
 	if err != nil {
 		return nil, err
@@ -288,6 +280,11 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event) (*coresecurit
 	snapshot, err := m.accum.Snapshot(ctx, action.SessionID)
 	if err != nil {
 		return nil, fmt.Errorf("aarm: %w: %w", accumulator.ErrSnapshot, err)
+	}
+	if sess != nil && snapshot != nil {
+		owned := *snapshot
+		owned.SessionStartedAt = sess.StartedAt
+		snapshot = &owned
 	}
 
 	decision, err := m.pdp.Evaluate(ctx, action, snapshot)

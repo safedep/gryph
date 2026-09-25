@@ -489,7 +489,7 @@ rules:
 	assert.Equal(t, []string{"defer-on-empty-classify"}, got.MatchedRuleIDs)
 }
 
-func TestPDP_FreshSessionTriggerFires(t *testing.T) {
+func TestPDP_FreshSessionTrigger(t *testing.T) {
 	policy := mustPolicy(t, `
 version: "1"
 rules:
@@ -500,71 +500,37 @@ rules:
     condition: "context.files_written > 5"
     message: blocked
 `)
-	start := time.Now().UTC()
-	engine, err := New(policy,
-		WithDeferConfig(DeferConfig{Enabled: true, FreshSessionSeconds: 60, ConflictTriggersDefer: true}),
-		WithSessionStartFn(func(_ context.Context) (time.Time, bool) { return start, true }),
-	)
-	require.NoError(t, err)
-
-	got, err := engine.Evaluate(context.Background(), &model.Action{
-		Type:       model.ActionFileWrite,
-		Parameters: model.Parameters{Path: "main.go"},
-	}, &model.ContextSnapshot{})
-	require.NoError(t, err)
-	assert.Equal(t, model.DecisionDefer, got.Decision)
-	assert.Equal(t, DeferReasonFreshSession, got.DeferReason)
-}
-
-func TestPDP_FreshSessionTriggerSkippedWhenContextPopulated(t *testing.T) {
-	policy := mustPolicy(t, `
-version: "1"
-rules:
-  - id: block-on-many-writes
-    action: block
-    match:
-      action_types: [file_write]
-    condition: "context.files_written > 5"
-    message: blocked
-`)
-	start := time.Now().UTC()
-	engine, err := New(policy,
-		WithDeferConfig(DeferConfig{Enabled: true, FreshSessionSeconds: 60, ConflictTriggersDefer: true}),
-		WithSessionStartFn(func(_ context.Context) (time.Time, bool) { return start, true }),
-	)
-	require.NoError(t, err)
-
-	got, err := engine.Evaluate(context.Background(), &model.Action{
-		Type:       model.ActionFileWrite,
-		Parameters: model.Parameters{Path: "main.go"},
-	}, &model.ContextSnapshot{FilesWritten: 6})
-	require.NoError(t, err)
-	assert.Equal(t, model.DecisionBlock, got.Decision)
-}
-
-func TestPDP_FreshSessionTriggerSkippedWhenSessionOld(t *testing.T) {
-	policy := mustPolicy(t, `
-version: "1"
-rules:
-  - id: block-on-many-writes
-    action: block
-    match:
-      action_types: [file_write]
-    condition: "context.files_written > 5"
-    message: blocked
-`)
-	old := time.Now().UTC().Add(-2 * time.Hour)
-	engine, err := New(policy,
-		WithDeferConfig(DeferConfig{Enabled: true, FreshSessionSeconds: 60, ConflictTriggersDefer: true}),
-		WithSessionStartFn(func(_ context.Context) (time.Time, bool) { return old, true }),
-	)
-	require.NoError(t, err)
-	got, err := engine.Evaluate(context.Background(), &model.Action{
-		Type:       model.ActionFileWrite,
-		Parameters: model.Parameters{Path: "main.go"},
-	}, &model.ContextSnapshot{})
-	require.NoError(t, err)
-	assert.Equal(t, model.DecisionAllow, got.Decision)
+	now := time.Now().UTC()
+	cases := []struct {
+		name         string
+		snapshot     *model.ContextSnapshot
+		wantDecision model.Decision
+		wantReason   string
+	}{
+		{name: "fresh session with empty context defers", snapshot: &model.ContextSnapshot{SessionStartedAt: now},
+			wantDecision: model.DecisionDefer, wantReason: DeferReasonFreshSession},
+		{name: "populated context evaluates the rule", snapshot: &model.ContextSnapshot{FilesWritten: 6, SessionStartedAt: now},
+			wantDecision: model.DecisionBlock},
+		{name: "old session evaluates the rule", snapshot: &model.ContextSnapshot{SessionStartedAt: now.Add(-2 * time.Hour)},
+			wantDecision: model.DecisionAllow},
+		{name: "no session evaluates the rule", snapshot: &model.ContextSnapshot{},
+			wantDecision: model.DecisionAllow},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine, err := New(policy,
+				WithDeferConfig(DeferConfig{Enabled: true, FreshSessionSeconds: 60, ConflictTriggersDefer: true}),
+			)
+			require.NoError(t, err)
+			got, err := engine.Evaluate(context.Background(), &model.Action{
+				Type:       model.ActionFileWrite,
+				Parameters: model.Parameters{Path: "main.go"},
+			}, tc.snapshot)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantDecision, got.Decision)
+			assert.Equal(t, tc.wantReason, got.DeferReason)
+		})
+	}
 }
 
 func TestPDP_ConflictTriggerDoesNotFireAcrossTiers(t *testing.T) {

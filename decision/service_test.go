@@ -177,7 +177,7 @@ type blockCheck struct{}
 
 func (blockCheck) Name() string  { return "test-block" }
 func (blockCheck) Enabled() bool { return true }
-func (blockCheck) Check(context.Context, *events.Event) (*security.CheckResult, error) {
+func (blockCheck) Check(context.Context, *events.Event, *session.Session) (*security.CheckResult, error) {
 	return &security.CheckResult{CheckName: "test-block", Decision: security.DecisionBlock, Reason: "blocked by test"}, nil
 }
 
@@ -185,7 +185,7 @@ type guidanceCheck struct{}
 
 func (guidanceCheck) Name() string  { return "test-guidance" }
 func (guidanceCheck) Enabled() bool { return true }
-func (guidanceCheck) Check(context.Context, *events.Event) (*security.CheckResult, error) {
+func (guidanceCheck) Check(context.Context, *events.Event, *session.Session) (*security.CheckResult, error) {
 	return &security.CheckResult{CheckName: "test-guidance", Decision: security.DecisionGuidance, Guidance: "be careful"}, nil
 }
 
@@ -193,7 +193,7 @@ type aarmRefCheck struct{ actionID, sessionID uuid.UUID }
 
 func (aarmRefCheck) Name() string  { return "test-aarm" }
 func (aarmRefCheck) Enabled() bool { return true }
-func (c aarmRefCheck) Check(context.Context, *events.Event) (*security.CheckResult, error) {
+func (c aarmRefCheck) Check(context.Context, *events.Event, *session.Session) (*security.CheckResult, error) {
 	return &security.CheckResult{CheckName: "test-aarm", Decision: security.DecisionAllow,
 		AarmActionID: c.actionID, AarmSessionID: c.sessionID, AarmSequence: 7}, nil
 }
@@ -330,7 +330,7 @@ type captureCheck struct{ seen *events.Event }
 
 func (*captureCheck) Name() string  { return "test-capture" }
 func (*captureCheck) Enabled() bool { return true }
-func (c *captureCheck) Check(_ context.Context, event *events.Event) (*security.CheckResult, error) {
+func (c *captureCheck) Check(_ context.Context, event *events.Event, _ *session.Session) (*security.CheckResult, error) {
 	copied := *event
 	c.seen = &copied
 	return &security.CheckResult{CheckName: "test-capture", Decision: security.DecisionAllow}, nil

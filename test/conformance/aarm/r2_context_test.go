@@ -19,12 +19,12 @@ func TestR2_PriorActionsAvailableInContext(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	first := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), first)
+	_, err := ref.Mediator.Check(context.Background(), first, nil)
 	require.NoError(t, err)
 
 	second := loadEventFixture(t, "command_exec_safe")
 	second.SessionID = first.SessionID
-	_, err = ref.Mediator.Check(context.Background(), second)
+	_, err = ref.Mediator.Check(context.Background(), second, nil)
 	require.NoError(t, err)
 
 	snap, err := ref.Accumulator.Snapshot(context.Background(), first.SessionID)
@@ -38,7 +38,7 @@ func TestR2_ClassificationsTracked(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "file_read_secret")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 
 	snap, err := ref.Accumulator.Snapshot(context.Background(), ev.SessionID)
@@ -56,7 +56,7 @@ func TestR2_FailSafeOnNoClassifier(t *testing.T) {
 	// classification fail safe rather than open.
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "notification")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 
 	snap, err := ref.Accumulator.Snapshot(context.Background(), ev.SessionID)

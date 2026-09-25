@@ -5,6 +5,7 @@ import (
 
 	"github.com/safedep/gryph/core/events"
 	coresecurity "github.com/safedep/gryph/core/security"
+	"github.com/safedep/gryph/core/session"
 )
 
 // PlaceholderCheck is a no-op check that always allows actions.
@@ -22,7 +23,7 @@ func (c *PlaceholderCheck) Name() string {
 }
 
 // Check always returns an Allow decision.
-func (c *PlaceholderCheck) Check(ctx context.Context, event *events.Event) (*coresecurity.CheckResult, error) {
+func (c *PlaceholderCheck) Check(ctx context.Context, event *events.Event, sess *session.Session) (*coresecurity.CheckResult, error) {
 	return &coresecurity.CheckResult{
 		Decision:  coresecurity.DecisionAllow,
 		CheckName: c.Name(),

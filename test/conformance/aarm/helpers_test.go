@@ -44,15 +44,15 @@ type fixtureEnvelope struct {
 
 	// action-shaped fields (mutually exclusive with the event-shaped fields
 	// above except action_type, which both use)
-	Agent          string                 `json:"agent,omitempty"`
-	Tool           string                 `json:"tool,omitempty"`
-	Operation      string                 `json:"operation,omitempty"`
-	Project        string                 `json:"project,omitempty"`
-	HumanPrincipal string                 `json:"human_principal,omitempty"`
-	RoleScope      string                 `json:"role_scope,omitempty"`
-	InjectionScore float32                `json:"injection_score,omitempty"`
-	Classifications []string              `json:"data_classifications,omitempty"`
-	Params         map[string]interface{} `json:"params,omitempty"`
+	Agent           string                 `json:"agent,omitempty"`
+	Tool            string                 `json:"tool,omitempty"`
+	Operation       string                 `json:"operation,omitempty"`
+	Project         string                 `json:"project,omitempty"`
+	HumanPrincipal  string                 `json:"human_principal,omitempty"`
+	RoleScope       string                 `json:"role_scope,omitempty"`
+	InjectionScore  float32                `json:"injection_score,omitempty"`
+	Classifications []string               `json:"data_classifications,omitempty"`
+	Params          map[string]interface{} `json:"params,omitempty"`
 }
 
 // fixturesRoot returns the absolute path to the suite's fixtures directory.

@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMediator_UsesSessionFromContext(t *testing.T) {
+func TestMediator_UsesSessionArgument(t *testing.T) {
 	policy, err := pdp.ParsePolicy([]byte(`
 version: "1"
 rules:
@@ -57,15 +57,14 @@ rules:
 		Payload:    []byte(`{"path":"/work/payments/app.go"}`),
 	}
 
-	t.Run("without session on ctx, scope misses", func(t *testing.T) {
-		res, err := med.Check(context.Background(), event)
+	t.Run("without session, scope misses", func(t *testing.T) {
+		res, err := med.Check(context.Background(), event, nil)
 		require.NoError(t, err)
 		assert.Equal(t, coresecurity.DecisionAllow, res.Decision)
 	})
 
-	t.Run("with session on ctx, project scope matches and blocks", func(t *testing.T) {
-		ctx := session.WithSession(context.Background(), sess)
-		res, err := med.Check(ctx, event)
+	t.Run("with session, project scope matches and blocks", func(t *testing.T) {
+		res, err := med.Check(context.Background(), event, sess)
 		require.NoError(t, err)
 		assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
 		assert.Contains(t, res.Reason, "payments")
@@ -130,7 +129,7 @@ rules:
 		Payload:    []byte(`{"path":"main.go"}`),
 	}
 
-	res, err := med.Check(context.Background(), event)
+	res, err := med.Check(context.Background(), event, nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, spy.appendCalls)
@@ -165,7 +164,7 @@ rules:
 		Payload:    []byte(`{"path":"main.go"}`),
 	}
 
-	res, err := med.Check(context.Background(), event)
+	res, err := med.Check(context.Background(), event, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
 	assert.Equal(t, 1, spy.recordResultCalls, "a blocked action must record a terminal context result")
@@ -255,7 +254,7 @@ rules:
 		AgentName:  "claude-code",
 		Payload:    []byte(`{"path":"/etc/hosts"}`),
 	}
-	res, err := med.Check(context.Background(), event)
+	res, err := med.Check(context.Background(), event, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionAllow, res.Decision)
 	assert.Contains(t, res.Guidance, "alice")
@@ -295,7 +294,7 @@ rules:
 		AgentName:  "claude-code",
 		Payload:    []byte(`{"path":"/etc/hosts"}`),
 	}
-	res, err := med.Check(context.Background(), event)
+	res, err := med.Check(context.Background(), event, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
 	assert.Contains(t, res.Reason, "nope")
@@ -332,7 +331,7 @@ rules:
 		AgentName:  "claude-code",
 		Payload:    []byte(`{"path":"/etc/hosts"}`),
 	}
-	res, err := med.Check(context.Background(), event)
+	res, err := med.Check(context.Background(), event, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
 	require.Len(t, rec.decisionCalls, 1)
@@ -376,7 +375,7 @@ rules:
 		AgentName:  "claude-code",
 		Payload:    []byte(`{"path":"/work/main.go"}`),
 	}
-	res, err := med.Check(context.Background(), event)
+	res, err := med.Check(context.Background(), event, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
 	assert.Contains(t, res.Reason, "Action deferred:")
@@ -411,7 +410,7 @@ rules:
 		AgentName:  "claude-code",
 		Payload:    []byte(`{"path":"/etc/hosts"}`),
 	}
-	res, err := med.Check(context.Background(), event)
+	res, err := med.Check(context.Background(), event, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision, "Nop approval service denies by default")
 }
@@ -449,7 +448,7 @@ rules: []
 		Payload:    []byte(`{"path":"/tmp/x"}`),
 	}
 
-	res, err := med.Check(context.Background(), event)
+	res, err := med.Check(context.Background(), event, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
 	assert.Contains(t, res.Reason, "no verifiable human principal")
@@ -492,7 +491,7 @@ rules: []
 		Payload:    []byte(`{"path":"/tmp/x"}`),
 	}
 
-	res, err := med.Check(context.Background(), event)
+	res, err := med.Check(context.Background(), event, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionAllow, res.Decision)
 }
@@ -522,8 +521,58 @@ rules: []
 		Payload:    []byte(`{"path":"/tmp/x"}`),
 	}
 
-	res, err := med.Check(context.Background(), event)
+	res, err := med.Check(context.Background(), event, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionAllow, res.Decision,
 		"require_human_principal is a silent no-op when identity.enabled=false")
+}
+
+func TestMediator_FreshSessionDeferUsesSessionArgument(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: block-on-many-writes
+    action: block
+    match:
+      action_types: [file_write]
+    condition: "context.files_written > 5"
+    message: blocked
+`))
+	require.NoError(t, err)
+
+	med, err := NewMediator(policy, WithDeferralConfig(DeferralConfig{
+		Enabled: true, FreshSessionSeconds: 60, TimeoutSeconds: 600,
+	}))
+	require.NoError(t, err)
+
+	newEvent := func() *events.Event {
+		return &events.Event{
+			ID:         uuid.New(),
+			SessionID:  uuid.New(),
+			Timestamp:  time.Now(),
+			ActionType: events.ActionFileWrite,
+			AgentName:  "claude-code",
+			Payload:    []byte(`{"path":"/work/main.go"}`),
+		}
+	}
+
+	cases := []struct {
+		name       string
+		sess       *session.Session
+		want       coresecurity.Decision
+		wantReason string
+	}{
+		{name: "fresh session defers", sess: &session.Session{StartedAt: time.Now().UTC()}, want: coresecurity.DecisionBlock,
+			wantReason: "Action deferred: " + pdp.DeferReasonFreshSession},
+		{name: "old session evaluates the rule", sess: &session.Session{StartedAt: time.Now().UTC().Add(-time.Hour)}, want: coresecurity.DecisionAllow},
+		{name: "no session evaluates the rule", want: coresecurity.DecisionAllow},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := med.Check(context.Background(), newEvent(), tc.sess)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, res.Decision)
+			assert.Contains(t, res.Reason, tc.wantReason)
+		})
+	}
 }

@@ -30,6 +30,7 @@ import (
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	coresecurity "github.com/safedep/gryph/core/security"
+	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/schema"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
@@ -1187,12 +1188,12 @@ func (l *lazyPolicyCheck) Enabled() bool {
 	return l.cfg.EffectivePolicy().Enabled
 }
 
-func (l *lazyPolicyCheck) Check(ctx context.Context, event *events.Event) (*coresecurity.CheckResult, error) {
+func (l *lazyPolicyCheck) Check(ctx context.Context, event *events.Event, sess *session.Session) (*coresecurity.CheckResult, error) {
 	med, err := l.load()
 	if err != nil {
 		return nil, fmt.Errorf("policy load failed: %w", err)
 	}
-	result, checkErr := med.Check(ctx, event)
+	result, checkErr := med.Check(ctx, event, sess)
 	if checkErr != nil {
 		if errors.Is(checkErr, accumulator.ErrSnapshot) {
 			l.recordAarmFailure(event, SelfAuditActionContextSnapshotError, "accumulator snapshot", checkErr)

@@ -15,7 +15,7 @@ func TestR4_AllowDecision(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	res, err := ref.Mediator.Check(context.Background(), ev)
+	res, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionAllow, res.Decision,
 		"benign command must allow; warn from role-scope rule is mapped to allow at the PEP boundary")
@@ -26,7 +26,7 @@ func TestR4_DenyDecision(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_destructive")
-	res, err := ref.Mediator.Check(context.Background(), ev)
+	res, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
 }
