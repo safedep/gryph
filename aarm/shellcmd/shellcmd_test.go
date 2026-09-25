@@ -60,6 +60,16 @@ func TestTargets(t *testing.T) {
 		{"find exec sed in place", `find ~/.cc -exec sed -i s/a/b/ {} +`, []Target{{"/work/s/a/b", false}, {"/home/u/.cc", true}}},
 		{"find exec read only", `find ~/.cc -exec cat {} \;`, nil},
 		{"find exec grep", `find . -name '*.go' -exec grep -l TODO {} +`, nil},
+		{"find -H root", `find -H ~/.cc -delete`, []Target{{"/home/u/.cc", true}}},
+		{"find -L root", `find -L ~/.cc -name x -delete`, []Target{{"/home/u/.cc", true}}},
+		{"find -P root", `find -P ~/.cc -delete`, []Target{{"/home/u/.cc", true}}},
+		{"find -D and -O roots", `find -D exec -O3 ~/.cc -delete`, []Target{{"/home/u/.cc", true}}},
+		{"find no root", `find -name x -delete`, []Target{{"/work", true}}},
+		{"find execdir rm", `find ~/.cc -execdir rm settings.json \;`, []Target{{"/home/u/.cc", true}}},
+		{"find execdir rm file", `find ~/.cc -name '*.json' -execdir rm {} +`, []Target{{"/home/u/.cc", true}}},
+		{"find execdir reads the root", `find ~/.cc -execdir cp {} /tmp/backup \;`, []Target{{"/tmp/backup", false}, {"/tmp/backup", true}}},
+		{"find execdir read only", `find ~/.cc -execdir cat {} \;`, nil},
+		{"find okdir", `find ~/.cc -okdir rm {} \;`, []Target{{"/home/u/.cc", true}}},
 		{"unknown variable", `rm -rf "$DIR/.cc"`, nil},
 		{"command substitution", `rm -rf $(echo ~/.cc)`, nil},
 		{"parse error fails closed", `rm ~/.cc/settings.json ) (`, []Target{
@@ -98,6 +108,10 @@ func TestTargets_WorkingDirectoryScope(t *testing.T) {
 			{"/tmp/settings.json", true}, {"/home/u/.cc/settings.json", true},
 		}},
 		{"cd with no argument goes home", `cd /tmp; cd; rm .cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"cd in eval applies", `cd /tmp; eval 'cd /home/u'; rm .cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"command cd applies", `cd /tmp; command cd /home/u; rm .cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"builtin cd applies", `cd /tmp; builtin cd /home/u; rm .cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"cd in bash -c does not leak", `bash -c 'cd /tmp'; rm .cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

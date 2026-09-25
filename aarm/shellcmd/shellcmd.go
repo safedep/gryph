@@ -84,17 +84,22 @@ func (w *walker) script(src string, cwds dirs) (dirs, error) {
 	return w.stmts(f.Stmts, cwds), nil
 }
 
-// nested runs a script inside a nested shell. A parse error falls back to
-// the word scan, so a bad nested script also fails closed.
-func (w *walker) nested(src string, cwds dirs) {
+// nested runs a script and returns the working directories after it. The
+// caller decides whether the directory change applies, because eval runs in
+// the current shell and "bash -c" does not. A parse error falls back to the
+// word scan, so a bad nested script also fails closed.
+func (w *walker) nested(src string, cwds dirs) dirs {
 	if w.depth >= maxDepth {
-		return
+		return cwds
 	}
 	w.depth++
 	defer func() { w.depth-- }()
-	if _, err := w.script(src, cwds); err != nil {
+	after, err := w.script(src, cwds)
+	if err != nil {
 		w.fallback(src, cwds)
+		return cwds
 	}
+	return after
 }
 
 func (w *walker) stmts(list []*syntax.Stmt, cwds dirs) dirs {
@@ -211,14 +216,18 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	switch name {
 	case "cd", "pushd":
 		return w.cd(rest, cwds)
-	case "sudo", "doas", "env", "nohup", "command", "exec", "time", "nice", "ionice", "stdbuf", "timeout", "xargs":
+	case "command", "builtin":
+		// These run a command in the current shell, so "command cd" changes
+		// the working directory.
+		return w.call(skipOptions(rest), cwds)
+	case "sudo", "doas", "env", "nohup", "exec", "time", "nice", "ionice", "stdbuf", "timeout", "xargs":
 		w.wrapper(name, rest, cwds)
 	case "sh", "bash", "zsh", "dash", "ksh":
 		if src, ok := shellScript(rest); ok {
 			w.nested(src, cwds)
 		}
 	case "eval":
-		w.nested(strings.Join(rest, " "), cwds)
+		return w.nested(strings.Join(rest, " "), cwds)
 	case "rm", "unlink", "rmdir", "shred":
 		w.addAll(operands(rest), true, cwds)
 	case "mv":
@@ -346,35 +355,90 @@ func (w *walker) find(args []string, cwds dirs) {
 		switch args[i] {
 		case "-delete":
 			w.addAll(roots, true, cwds)
-		case "-exec", "-execdir", "-ok", "-okdir":
-			end := i + 1
-			for end < len(args) && args[end] != ";" && args[end] != "+" {
-				end++
-			}
+		case "-exec", "-ok":
+			end := findActionEnd(args, i)
 			for _, root := range roots {
-				under := strings.TrimSuffix(root, "/") + "/*"
-				cmd := make([]string, 0, end-i)
-				for _, a := range args[i+1 : end] {
-					cmd = append(cmd, strings.ReplaceAll(a, "{}", under))
-				}
-				w.call(cmd, cwds)
+				w.call(substitute(args[i+1:end], strings.TrimSuffix(root, "/")+"/*"), cwds)
+			}
+			i = end
+		case "-execdir", "-okdir":
+			end := findActionEnd(args, i)
+			for _, root := range roots {
+				w.execdir(root, substitute(args[i+1:end], "./*"), cwds)
 			}
 			i = end
 		}
 	}
 }
 
-// findRoots returns the search roots of a find command. They are the
-// arguments before the first expression.
-func findRoots(args []string) []string {
-	var roots []string
+// execdir analyzes the command of -execdir. find runs it from the
+// directory of each file found, which can be any directory under the root.
+// So a relative target becomes a removal of the root, as for -delete. An
+// absolute target stays as it is.
+func (w *walker) execdir(root string, cmd []string, cwds dirs) {
+	sub := &walker{env: w.env, depth: w.depth}
+	sub.call(cmd, dirs{""})
+	for _, t := range sub.targets {
+		if path.IsAbs(t.Path) {
+			w.addTarget(t)
+		} else {
+			w.add(root, true, cwds)
+		}
+	}
+}
+
+func findActionEnd(args []string, start int) int {
+	end := start + 1
+	for end < len(args) && args[end] != ";" && args[end] != "+" {
+		end++
+	}
+	return end
+}
+
+func substitute(args []string, file string) []string {
+	out := make([]string, 0, len(args))
 	for _, a := range args {
+		out = append(out, strings.ReplaceAll(a, "{}", file))
+	}
+	return out
+}
+
+// findRoots returns the search roots of a find command. They are the
+// arguments after the leading options (-H, -L, -P, -D, -O) and before the
+// first expression.
+func findRoots(args []string) []string {
+	i := 0
+	for i < len(args) {
+		a := args[i]
+		if a == "-H" || a == "-L" || a == "-P" || strings.HasPrefix(a, "-O") {
+			i++
+		} else if a == "-D" {
+			i += 2
+		} else {
+			break
+		}
+	}
+	var roots []string
+	for _, a := range args[min(i, len(args)):] {
 		if strings.HasPrefix(a, "-") || a == "(" || a == "!" {
 			break
 		}
 		roots = append(roots, a)
 	}
 	return roots
+}
+
+// skipOptions drops the leading options of a command.
+func skipOptions(args []string) []string {
+	for i, a := range args {
+		if a == "--" {
+			return args[i+1:]
+		}
+		if !strings.HasPrefix(a, "-") {
+			return args[i:]
+		}
+	}
+	return nil
 }
 
 // copyOperands splits the operands of a copy or move into the destination
@@ -435,10 +499,13 @@ func (w *walker) add(value string, remove bool, cwds dirs) {
 		remove = true
 	}
 	for _, cwd := range cwds {
-		t := Target{Path: resolve(value, cwd, w.env.Home), Remove: remove}
-		if !slices.Contains(w.targets, t) {
-			w.targets = append(w.targets, t)
-		}
+		w.addTarget(Target{Path: resolve(value, cwd, w.env.Home), Remove: remove})
+	}
+}
+
+func (w *walker) addTarget(t Target) {
+	if !slices.Contains(w.targets, t) {
+		w.targets = append(w.targets, t)
 	}
 }
 
