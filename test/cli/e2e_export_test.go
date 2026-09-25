@@ -94,29 +94,56 @@ func TestExport(t *testing.T) {
 			},
 		},
 		{
-			name:  "sensitive_excluded",
+			name:  "sensitive_events_exported_with_default_profile",
 			args:  func(_ *testEnv) []string { return []string{"export"} },
 			setup: seedSensitiveEvents(3, 2),
 			assert: func(t *testing.T, _ *testEnv, stdout, stderr string, err error) {
 				assert.NoError(t, err)
 				lines := strings.Split(strings.TrimSpace(stdout), "\n")
-				assert.Len(t, lines, 3)
-				for _, line := range lines {
-					var evt events.Event
-					require.NoError(t, json.Unmarshal([]byte(line), &evt))
-					assert.False(t, evt.IsSensitive)
-				}
+				assert.Len(t, lines, 5, "the default profile drops content, not events")
+				assert.Contains(t, stderr, "Exported 5 events")
+				assert.NotContains(t, stdout, "SENSITIVE_MARKER")
+				assert.NotContains(t, stdout, `"raw_event"`)
 			},
 		},
 		{
-			name:  "sensitive_included",
-			args:  func(_ *testEnv) []string { return []string{"export", "--sensitive"} },
+			name:  "full_profile",
+			args:  func(_ *testEnv) []string { return []string{"export", "--export-profile", "full"} },
 			setup: seedSensitiveEvents(3, 2),
 			assert: func(t *testing.T, _ *testEnv, stdout, stderr string, err error) {
 				assert.NoError(t, err)
 				lines := strings.Split(strings.TrimSpace(stdout), "\n")
 				assert.Len(t, lines, 5)
 				assert.Contains(t, stderr, "Exported 5 events")
+				assert.Contains(t, stdout, "SENSITIVE_MARKER in the error")
+				assert.Contains(t, stdout, "SENSITIVE_MARKER in the raw event")
+			},
+		},
+		{
+			name:  "sensitive_means_full",
+			args:  func(_ *testEnv) []string { return []string{"export", "--sensitive"} },
+			setup: seedSensitiveEvents(1, 1),
+			assert: func(t *testing.T, _ *testEnv, stdout, _ string, err error) {
+				assert.NoError(t, err)
+				assert.Contains(t, stdout, "SENSITIVE_MARKER in the raw event")
+			},
+		},
+		{
+			name:  "sensitive_with_profile",
+			args:  func(_ *testEnv) []string { return []string{"export", "--sensitive", "--export-profile", "metadata"} },
+			setup: seedSensitiveEvents(1, 1),
+			assert: func(t *testing.T, _ *testEnv, _, _ string, err error) {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "--sensitive cannot be combined with --export-profile")
+			},
+		},
+		{
+			name:  "unknown_profile",
+			args:  func(_ *testEnv) []string { return []string{"export", "--export-profile", "nope"} },
+			setup: seedSensitiveEvents(1, 0),
+			assert: func(t *testing.T, _ *testEnv, _, _ string, err error) {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "unknown export profile")
 			},
 		},
 		{

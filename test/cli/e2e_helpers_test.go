@@ -537,6 +537,8 @@ func seedSensitiveEvents(normal, sensitive int) func(env *testEnv) {
 				evt.ToolName = "Read"
 				if i >= normal {
 					evt.IsSensitive = true
+					evt.ErrorMessage = "SENSITIVE_MARKER in the error"
+					evt.RawEvent = json.RawMessage(`{"tool_response":"SENSITIVE_MARKER in the raw event"}`)
 				}
 				payload := &events.FileReadPayload{Path: fmt.Sprintf("/tmp/project/file%d.go", i)}
 				require.NoError(env.t, evt.SetPayload(payload))

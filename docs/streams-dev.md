@@ -37,6 +37,9 @@ Each target has:
 | `type`    | yes      | Target type (must be registered)         |
 | `enabled` | yes      | Whether the syncer sends to this target  |
 | `config`  | no       | Arbitrary key-value map for the target   |
+| `export_profile` | no | Export profile of the target. Empty gives `default` |
+
+The syncer applies the export profile of a target to every event before it calls `Send`, so a target never receives an event without a profile. A target without `export_profile` gets the built-in `default` profile. It drops secret content and digests prompts. The profile also removes the hook input from a hook error self-audit. See [content labels](content-labels.md#export) for the treatments and for user profiles under `export.profiles`. Validation rejects an unknown profile name.
 
 Two targets can share a type but **must** have different names. Checkpoints are tracked per name, so renaming a target resets its sync position.
 
@@ -58,6 +61,7 @@ storage/                 Checkpoint persistence (ent/SQLite)
 2. For each enabled target the syncer:
    - Loads checkpoint (`last_synced_at` timestamp)
    - Queries events and self-audits newer than that timestamp (batch size: 500)
+   - Applies the export profile of the target to each event
    - Packs them into `[]StreamItem` and calls `target.Send()`
    - Saves a new checkpoint with the latest timestamp and IDs
 

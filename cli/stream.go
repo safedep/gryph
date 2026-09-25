@@ -86,6 +86,13 @@ func newStreamSyncCmd() *cobra.Command {
 			}
 
 			syncer := stream.NewSyncer(app.Store, registry)
+			for _, tc := range app.Config.Streams.Targets {
+				profile, err := app.Config.ExportProfile(tc.ExportProfile)
+				if err != nil {
+					return ErrConfig("invalid stream target", err)
+				}
+				syncer.SetProfile(tc.Name, profile)
+			}
 			result, err := syncer.Sync(ctx, syncOpts...)
 			if err != nil {
 				return err

@@ -300,6 +300,7 @@ func setupInternalLogger() {
 func loadApp() (*App, error) {
 	cfg, err := config.Load(globalFlags.ConfigPath)
 	if err != nil {
+		log.Warnf("config: %v. Gryph uses the default config.", err)
 		cfg = config.Default()
 	}
 

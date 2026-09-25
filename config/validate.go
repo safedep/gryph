@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/core/privacy"
 )
 
 // validate checks the configuration for errors.
@@ -50,6 +51,9 @@ func validate(cfg *Config) error {
 
 	// Validate stream targets
 	if err := validateStreamTargets(cfg.Streams.Targets); err != nil {
+		return err
+	}
+	if err := validateExportProfiles(cfg); err != nil {
 		return err
 	}
 
@@ -169,6 +173,24 @@ func validatePolicyDeferConfig(cfg DeferConfig) error {
 	}
 	if cfg.AutoResolveOnTimeout != "" && cfg.AutoResolveOnTimeout != DeferAutoResolveDeny {
 		return fmt.Errorf("policy.defer.auto_resolve_on_timeout must be %q (AARM R4 forbids implicit allow on timeout)", DeferAutoResolveDeny)
+	}
+	return nil
+}
+
+func validateExportProfiles(cfg *Config) error {
+	for name, pc := range cfg.Export.Profiles {
+		if _, builtin := privacy.BuiltinProfiles()[name]; builtin {
+			return fmt.Errorf("export.profiles.%s: the name is a built-in profile", name)
+		}
+		p := privacy.ExportProfile{Name: name, Default: privacy.Treatment(pc.Default), Rules: pc.Rules}
+		if err := p.Validate(); err != nil {
+			return err
+		}
+	}
+	for i, t := range cfg.Streams.Targets {
+		if _, err := cfg.ExportProfile(t.ExportProfile); err != nil {
+			return fmt.Errorf("streams.targets[%d]: %w", i, err)
+		}
 	}
 	return nil
 }

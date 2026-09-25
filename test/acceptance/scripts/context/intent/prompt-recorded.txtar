@@ -29,7 +29,7 @@ stdout '"actions_since_intent": 1'
 env GRYPH_LOGGING_LEVEL=full
 stdin prompt_full.json
 exec gryph _hook claude-code UserPromptSubmit
-exec gryph export --since 1h
+exec gryph export --since 1h --export-profile full
 stdout '"prompt":\{"value":"Rename the config loader","label":\{[^}]*"origin":"user"[^}]*"level":"full"'
 
 -- home/.config/safedep/gryph/config.yml --

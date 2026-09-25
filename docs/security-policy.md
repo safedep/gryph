@@ -745,6 +745,12 @@ The default (`fail_open: false`) keeps AARM conformance.
       - "**/docs/**"
 ```
 
+## Exported content
+
+`gryph export` and `gryph stream sync` apply an export profile to each content value that leaves the machine. The built-in `default` profile drops content with class `secret`, `pii` or `unknown_sensitive`, and exports a prompt as its digest only. Choose a profile with `gryph export --export-profile default|metadata|full|<name>` or with `streams.targets[].export_profile`. `--sensitive` is deprecated and means `--export-profile full`. See [content labels](content-labels.md#export) to write a profile.
+
+A policy never reads an export profile. The PDP sees the stored content, at the logging level that stored it.
+
 ## Troubleshooting
 
 | Problem | Cause | Solution |

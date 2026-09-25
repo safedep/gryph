@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/spf13/viper"
 )
 
@@ -76,6 +77,36 @@ type Config struct {
 	Display DisplayConfig `mapstructure:"display"`
 	Streams StreamsConfig `mapstructure:"streams"`
 	Policy  PolicyConfig  `mapstructure:"policy"`
+	Export  ExportConfig  `mapstructure:"export"`
+}
+
+// ExportConfig holds the user export profiles, by name.
+type ExportConfig struct {
+	Profiles map[string]ExportProfileConfig `mapstructure:"profiles"`
+}
+
+// ExportProfileConfig is one user export profile. See privacy.ExportProfile.
+type ExportProfileConfig struct {
+	Default string               `mapstructure:"default"`
+	Rules   []privacy.ExportRule `mapstructure:"rules"`
+}
+
+// ExportProfile returns the export profile with the name. An empty name
+// gives the built-in default profile. Names ignore case, because the config
+// loader stores every map key in lower case.
+func (c *Config) ExportProfile(name string) (privacy.ExportProfile, error) {
+	name = strings.ToLower(name)
+	if name == "" {
+		name = privacy.ProfileDefault
+	}
+	if p, ok := privacy.BuiltinProfiles()[name]; ok {
+		return p, nil
+	}
+	pc, ok := c.Export.Profiles[name]
+	if !ok {
+		return privacy.ExportProfile{}, fmt.Errorf("unknown export profile %q", name)
+	}
+	return privacy.ExportProfile{Name: name, Default: privacy.Treatment(pc.Default), Rules: pc.Rules}, nil
 }
 
 // PolicyConfig holds Gryph policy-layer settings.
@@ -276,6 +307,9 @@ type StreamTargetConfig struct {
 	Type    string         `mapstructure:"type"`
 	Enabled bool           `mapstructure:"enabled"`
 	Config  map[string]any `mapstructure:"config"`
+	// ExportProfile names the export profile of the target. Empty gives
+	// the built-in default profile.
+	ExportProfile string `mapstructure:"export_profile"`
 }
 
 // Paths holds resolved filesystem paths.
