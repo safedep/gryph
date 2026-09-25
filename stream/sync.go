@@ -69,10 +69,11 @@ func WithIterations(n int) SyncOption {
 
 // Syncer orchestrates syncing events and self-audits to stream targets.
 type Syncer struct {
-	store     storage.Store
-	registry  *Registry
-	batchSize int
-	profiles  map[string]privacy.ExportProfile
+	store       storage.Store
+	registry    *Registry
+	batchSize   int
+	profiles    map[string]privacy.ExportProfile
+	profileErrs map[string]error
 }
 
 // NewSyncer creates a new Syncer.
@@ -94,11 +95,24 @@ func (s *Syncer) SetProfile(target string, p privacy.ExportProfile) {
 	s.profiles[target] = p
 }
 
-func (s *Syncer) profile(target string) privacy.ExportProfile {
-	if p, ok := s.profiles[target]; ok {
-		return p
+// SetProfileError marks the export profile of a target as invalid. The
+// target then gets no item and reports err, so it never falls back to a
+// weaker profile.
+func (s *Syncer) SetProfileError(target string, err error) {
+	if s.profileErrs == nil {
+		s.profileErrs = map[string]error{}
 	}
-	return privacy.BuiltinProfiles()[privacy.ProfileDefault]
+	s.profileErrs[target] = err
+}
+
+func (s *Syncer) profile(target string) (privacy.ExportProfile, error) {
+	if err, ok := s.profileErrs[target]; ok {
+		return privacy.ExportProfile{}, err
+	}
+	if p, ok := s.profiles[target]; ok {
+		return p, nil
+	}
+	return privacy.BuiltinProfiles()[privacy.ProfileDefault], nil
 }
 
 // Sync sends unsent events and self-audits to all enabled targets.
@@ -128,7 +142,11 @@ func (s *Syncer) Sync(ctx context.Context, opts ...SyncOption) (*SyncResult, err
 
 func (s *Syncer) syncTarget(ctx context.Context, target corestream.Target, batchSize, maxIterations int, onProgress func(SyncProgress)) TargetSyncResult {
 	tr := TargetSyncResult{TargetName: target.Name()}
-	profile := s.profile(target.Name())
+	profile, err := s.profile(target.Name())
+	if err != nil {
+		tr.Error = err
+		return tr
+	}
 
 	reportProgress := func(complete bool) {
 		if onProgress != nil {

@@ -10,7 +10,8 @@ stdin write.json
 exec gryph _hook claude-code PostToolUse
 
 exec gryph stream sync -q
-stdout '"digest": "sha256:'
+stdout '"digest": "hmac-sha256:'
+! stdout '"digest": "sha256:'
 ! stdout 'Rename the config loader'
 ! stdout 'WRITE_MARKER_7Q'
 

@@ -38,8 +38,13 @@ func TestEvent_ForExport(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, p.Command.Value)
 		assert.Empty(t, p.Output.Value)
-		assert.Equal(t, privacy.Digest("notes"), p.Output.Label.Digest)
+		assert.Empty(t, p.Output.Label.Digest, "a profile without a key exports no digest")
 		assert.NotNil(t, in.RawEvent, "the source event does not change")
+
+		keyed := profiles[privacy.ProfileMetadata].WithDigestKey([]byte("k"))
+		p, err = in.ForExport(keyed).GetCommandExecPayload()
+		require.NoError(t, err)
+		assert.Equal(t, keyed.KeyedDigest(privacy.Digest("notes")), p.Output.Label.Digest)
 	})
 
 	t.Run("an untyped payload leaves only with a profile that includes all", func(t *testing.T) {
@@ -125,4 +130,66 @@ func TestEvent_ForExportLegacyRows(t *testing.T) {
 		assert.Nil(t, e.ForExport(profiles[privacy.ProfileDefault]).Payload)
 		assert.JSONEq(t, `{"exit_code":"x"}`, string(e.ForExport(profiles[privacy.ProfileFull]).Payload))
 	})
+}
+
+func TestEvent_ForExportContentHash(t *testing.T) {
+	const hash = "7074df07d9e2c3a5f1b0"
+	key := []byte("install-key")
+	profile := func(name string) privacy.ExportProfile {
+		return privacy.BuiltinProfiles()[name].WithDigestKey(key)
+	}
+	write := func(sensitive bool, preview privacy.Label) *Event {
+		e := NewEvent(uuid.New(), "claude-code", ActionFileWrite)
+		e.IsSensitive = sensitive
+		require.NoError(t, e.SetPayload(FileWritePayload{
+			Path:           "/p/main.go",
+			ContentHash:    hash,
+			ContentPreview: privacy.Text{Value: "package main", Label: preview},
+		}))
+		return e
+	}
+	read := func(sensitive bool) *Event {
+		e := NewEvent(uuid.New(), "claude-code", ActionFileRead)
+		e.IsSensitive = sensitive
+		require.NoError(t, e.SetPayload(FileReadPayload{Path: "/p/.env", ContentHash: hash}))
+		return e
+	}
+	agent := privacy.Label{Origin: privacy.OriginAgent}
+	secret := privacy.Label{Origin: privacy.OriginAgent, Classes: []privacy.Class{privacy.ClassSecret}}
+	redacted := privacy.Label{Origin: privacy.OriginAgent, Redacted: true}
+	truncated := privacy.Label{Origin: privacy.OriginAgent, Truncated: true}
+
+	cases := []struct {
+		name    string
+		event   *Event
+		profile string
+		keep    bool
+	}{
+		{"default keys the hash of a plain write", write(false, agent), privacy.ProfileDefault, true},
+		{"full keys the hash of a plain write", write(false, agent), privacy.ProfileFull, true},
+		{"metadata removes the hash", write(false, agent), privacy.ProfileMetadata, false},
+		{"default removes the hash of a sensitive write", write(true, agent), privacy.ProfileDefault, false},
+		{"full removes the hash of a sensitive write", write(true, agent), privacy.ProfileFull, false},
+		{"full removes the hash of a secret value", write(false, secret), privacy.ProfileFull, false},
+		{"full removes the hash of a redacted value", write(false, redacted), privacy.ProfileFull, false},
+		{"full removes the hash of a truncated value", write(false, truncated), privacy.ProfileFull, false},
+		{"default keys the hash of a plain read", read(false), privacy.ProfileDefault, true},
+		{"full removes the hash of a sensitive read", read(true), privacy.ProfileFull, false},
+		{"metadata removes the hash of a sensitive read", read(true), privacy.ProfileMetadata, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := tc.event.ForExport(profile(tc.profile))
+			assert.NotContains(t, string(out.Payload), hash)
+			var got struct {
+				ContentHash string `json:"content_hash"`
+			}
+			require.NoError(t, json.Unmarshal(out.Payload, &got))
+			if tc.keep {
+				assert.Equal(t, profile(tc.profile).KeyedDigest(hash), got.ContentHash)
+				return
+			}
+			assert.Empty(t, got.ContentHash)
+		})
+	}
 }

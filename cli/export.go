@@ -110,7 +110,7 @@ digests user prompts. It exports every event, and never drops a whole event.`,
 				}
 				profileName = privacy.ProfileFull
 			}
-			profile, err := app.Config.ExportProfile(profileName)
+			profile, err := app.ExportProfile(profileName)
 			if err != nil {
 				return ErrConfig("invalid export profile", err)
 			}

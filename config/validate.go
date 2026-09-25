@@ -2,11 +2,12 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"regexp"
+	"slices"
 
 	"github.com/safedep/gryph/aarm/model"
-	"github.com/safedep/gryph/core/privacy"
 )
 
 // validate checks the configuration for errors.
@@ -51,9 +52,6 @@ func validate(cfg *Config) error {
 
 	// Validate stream targets
 	if err := validateStreamTargets(cfg.Streams.Targets); err != nil {
-		return err
-	}
-	if err := validateExportProfiles(cfg); err != nil {
 		return err
 	}
 
@@ -177,22 +175,21 @@ func validatePolicyDeferConfig(cfg DeferConfig) error {
 	return nil
 }
 
-func validateExportProfiles(cfg *Config) error {
-	for name, pc := range cfg.Export.Profiles {
-		if _, builtin := privacy.BuiltinProfiles()[name]; builtin {
-			return fmt.Errorf("export.profiles.%s: the name is a built-in profile", name)
-		}
-		p := privacy.ExportProfile{Name: name, Default: privacy.Treatment(pc.Default), Rules: pc.Rules}
-		if err := p.Validate(); err != nil {
-			return err
+// exportProfileErrors returns an error for each invalid export profile and
+// for each stream target that names a profile that ExportProfile rejects.
+func exportProfileErrors(cfg *Config) []error {
+	var errs []error
+	for _, name := range slices.Sorted(maps.Keys(cfg.Export.Profiles)) {
+		if _, err := cfg.ExportProfile(name); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	for i, t := range cfg.Streams.Targets {
 		if _, err := cfg.ExportProfile(t.ExportProfile); err != nil {
-			return fmt.Errorf("streams.targets[%d]: %w", i, err)
+			errs = append(errs, fmt.Errorf("streams.targets[%d]: %w", i, err))
 		}
 	}
-	return nil
+	return errs
 }
 
 func validateStreamTargets(targets []StreamTargetConfig) error {

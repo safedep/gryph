@@ -3,7 +3,8 @@
 # profile digests every value. The full profile includes every value. The
 # raw event holds every value without a label, so only the full profile
 # exports it. An unknown profile name is a config error. Export never drops
-# a whole event.
+# a whole event. An exported digest is an HMAC with a key that stays in the
+# data directory, never a plain sha256 of the content.
 env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
 env XDG_DATA_HOME=$WORK/home/.local/share
@@ -18,7 +19,9 @@ exec gryph _hook claude-code PostToolUse
 # The default profile digests the prompt and drops the raw event of the
 # prompt, because the raw event holds the prompt unlabeled.
 exec gryph export --since 1h
-stdout '"prompt":\{"value":"","label":\{[^}]*"origin":"user"[^}]*"digest":"sha256:'
+stdout '"prompt":\{"value":"","label":\{[^}]*"origin":"user"[^}]*"digest":"hmac-sha256:'
+! stdout '"digest":"sha256:'
+exists home/.local/share/safedep/gryph/export.key
 ! stdout 'Rename the config loader'
 stdout 'WRITE_MARKER_7Q'
 ! stdout 'READ_MARKER_3K'
@@ -31,7 +34,8 @@ exec gryph export --since 1h --export-profile metadata
 ! stdout 'WRITE_MARKER_7Q'
 ! stdout 'READ_MARKER_3K'
 ! stdout '"raw_event"'
-stdout '"digest":"sha256:'
+stdout '"digest":"hmac-sha256:'
+! stdout '"digest":"sha256:'
 stderr 'Exported 3 events'
 
 # The full profile includes every value.

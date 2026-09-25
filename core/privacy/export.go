@@ -1,6 +1,9 @@
 package privacy
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"slices"
 )
@@ -13,7 +16,8 @@ const (
 	TreatInclude Treatment = "include"
 	// TreatRedact replaces the value with RedactedValue and keeps the label.
 	TreatRedact Treatment = "redact"
-	// TreatDigest empties the value and keeps the label, with its digest.
+	// TreatDigest empties the value and keeps the label, with its keyed
+	// digest.
 	TreatDigest Treatment = "digest"
 	// TreatDrop removes the value and the label, and keeps only the size.
 	TreatDrop Treatment = "drop"
@@ -40,6 +44,33 @@ type ExportProfile struct {
 	Name    string       `json:"name"`
 	Default Treatment    `json:"default"`
 	Rules   []ExportRule `json:"rules,omitempty"`
+	// DigestKey is the secret of the install that keys every exported
+	// digest. Without it, no digest leaves the machine.
+	DigestKey []byte `json:"-"`
+}
+
+// KeyedDigestPrefix starts every digest that an export holds. It tells a
+// reader that the value is not a plain sha256 of the content.
+const KeyedDigestPrefix = "hmac-sha256:"
+
+// WithDigestKey returns the profile with the key that keys exported digests.
+func (p ExportProfile) WithDigestKey(key []byte) ExportProfile {
+	p.DigestKey = key
+	return p
+}
+
+// KeyedDigest returns "hmac-sha256:<hex>" of a local digest, keyed with the
+// digest key. A plain sha256 of a short prompt or password can be reversed
+// with a dictionary. The keyed form cannot without the key, and one install
+// can still match its own events. It returns an empty string when the
+// digest is empty or the profile has no key.
+func (p ExportProfile) KeyedDigest(digest string) string {
+	if digest == "" || len(p.DigestKey) == 0 {
+		return ""
+	}
+	mac := hmac.New(sha256.New, p.DigestKey)
+	mac.Write([]byte(digest))
+	return KeyedDigestPrefix + hex.EncodeToString(mac.Sum(nil))
 }
 
 // Built-in export profile names. A user profile cannot reuse them.
@@ -120,17 +151,27 @@ func (p ExportProfile) Treatment(l Label) Treatment {
 	return p.Default
 }
 
-// Apply returns t with the treatment of the profile. The digest and the
-// size describe the whole original value. They leave the machine only when
-// the value is whole and holds no sensitive class. A truncated or stripped
-// value can hide a secret. A digest of a low-entropy value, such as a short
-// password or a phone number, can be reversed by brute force.
+// DigestExportable reports whether the digest and the size of the value can
+// leave the machine. A redacted, truncated or stripped value has a digest of
+// content that the export does not show, and that content can hold a secret
+// that the redactor did not see. A secret, pii or unknown_sensitive value
+// can be low-entropy, such as a short password or a phone number.
+func (l Label) DigestExportable() bool {
+	return !l.Redacted && !l.Truncated && !l.Stripped &&
+		!slices.ContainsFunc([]Class{ClassSecret, ClassPII, ClassUnknownSensitive}, l.HasClass)
+}
+
+// Apply returns t with the treatment of the profile. The digest leaves the
+// machine only when DigestExportable allows it, and then only in the keyed
+// form of KeyedDigest.
 func (p ExportProfile) Apply(t Text) (Text, Treatment) {
 	if t.IsZero() {
 		return t, TreatInclude
 	}
 	treatment := p.Treatment(t.Label)
-	if t.Label.Redacted || t.Label.Truncated || t.Label.Stripped || slices.ContainsFunc([]Class{ClassSecret, ClassPII, ClassUnknownSensitive}, t.Label.HasClass) {
+	if t.Label.DigestExportable() {
+		t.Label.Digest = p.KeyedDigest(t.Label.Digest)
+	} else {
 		t.Label.Digest = ""
 		t.Label.Size = 0
 	}

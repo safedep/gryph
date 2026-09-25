@@ -1,6 +1,9 @@
 package cli_test
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -147,6 +150,36 @@ func TestExport(t *testing.T) {
 			},
 		},
 		{
+			name:   "sensitive_write_hash_default_profile",
+			args:   func(_ *testEnv) []string { return []string{"export"} },
+			setup:  hookSensitiveWrite,
+			assert: assertNoPlainDigest(sensitiveWriteContent, true),
+		},
+		{
+			name:   "sensitive_write_hash_metadata_profile",
+			args:   func(_ *testEnv) []string { return []string{"export", "--export-profile", "metadata"} },
+			setup:  hookSensitiveWrite,
+			assert: assertNoPlainDigest(sensitiveWriteContent, true),
+		},
+		{
+			name:  "short_prompt_digest_default_profile",
+			args:  func(_ *testEnv) []string { return []string{"export"} },
+			setup: hookShortPrompt,
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assertNoPlainDigest(shortPrompt, false)(t, env, stdout, stderr, err)
+				assert.Contains(t, stdout, `"digest":"hmac-sha256:`)
+			},
+		},
+		{
+			name:  "short_prompt_digest_metadata_profile",
+			args:  func(_ *testEnv) []string { return []string{"export", "--export-profile", "metadata"} },
+			setup: hookShortPrompt,
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assertNoPlainDigest(shortPrompt, false)(t, env, stdout, stderr, err)
+				assert.Contains(t, stdout, `"digest":"hmac-sha256:`)
+			},
+		},
+		{
 			name:  "default_since",
 			args:  func(_ *testEnv) []string { return []string{"export"} },
 			setup: seedEventsOlderThan1h(5),
@@ -187,5 +220,57 @@ func TestExport(t *testing.T) {
 			stdout, stderr, err := env.run(args...)
 			tt.assert(t, env, stdout, stderr, err)
 		})
+	}
+}
+
+const (
+	sensitiveWriteContent = "TOKEN=hunter2"
+	shortPrompt           = "yes"
+)
+
+func hookSensitiveWrite(env *testEnv) {
+	payload, err := json.Marshal(map[string]any{
+		"session_id":      "s-export-hash",
+		"cwd":             env.tmpDir,
+		"hook_event_name": "PostToolUse",
+		"tool_name":       "Write",
+		"tool_input":      map[string]any{"file_path": filepath.Join(env.tmpDir, ".env"), "content": sensitiveWriteContent},
+		"tool_response":   map[string]any{"success": true},
+		"tool_use_id":     "tu-env",
+	})
+	require.NoError(env.t, err)
+	_, _, err = env.runHook("claude-code", "PostToolUse", payload)
+	require.NoError(env.t, err)
+}
+
+func hookShortPrompt(env *testEnv) {
+	payload, err := json.Marshal(map[string]any{
+		"session_id":      "s-export-prompt",
+		"cwd":             env.tmpDir,
+		"hook_event_name": "UserPromptSubmit",
+		"prompt":          shortPrompt,
+	})
+	require.NoError(env.t, err)
+	_, _, err = env.runHook("claude-code", "UserPromptSubmit", payload)
+	require.NoError(env.t, err)
+}
+
+// assertNoPlainDigest checks that the export holds no plain sha256 of the
+// content, in any field, and holds the event.
+func assertNoPlainDigest(content string, sensitive bool) func(*testing.T, *testEnv, string, string, error) {
+	return func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+		require.NoError(t, err)
+		assert.Contains(t, stderr, "Exported 1 events")
+		sum := sha256.Sum256([]byte(content))
+		assert.NotContains(t, stdout, hex.EncodeToString(sum[:]))
+		assert.NotContains(t, stdout, content)
+
+		store, cleanup := env.openStore()
+		defer cleanup()
+		evts, err := store.QueryEvents(context.Background(), events.NewEventFilter())
+		require.NoError(t, err)
+		require.Len(t, evts, 1)
+		assert.Equal(t, sensitive, evts[0].IsSensitive)
+		assert.Contains(t, string(evts[0].Payload), hex.EncodeToString(sum[:]), "the local store keeps the plain digest")
 	}
 }

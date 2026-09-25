@@ -94,19 +94,30 @@ type ExportProfileConfig struct {
 // ExportProfile returns the export profile with the name. An empty name
 // gives the built-in default profile. Names ignore case, because the config
 // loader stores every map key in lower case.
+//
+// An invalid user profile, or a user profile with a built-in name, returns
+// an error and never a weaker profile. Load only warns about such a
+// profile, so one bad export rule does not reset the hook config.
 func (c *Config) ExportProfile(name string) (privacy.ExportProfile, error) {
 	name = strings.ToLower(name)
 	if name == "" {
 		name = privacy.ProfileDefault
 	}
-	if p, ok := privacy.BuiltinProfiles()[name]; ok {
-		return p, nil
-	}
-	pc, ok := c.Export.Profiles[name]
-	if !ok {
+	builtin, isBuiltin := privacy.BuiltinProfiles()[name]
+	pc, isUser := c.Export.Profiles[name]
+	switch {
+	case isBuiltin && isUser:
+		return privacy.ExportProfile{}, fmt.Errorf("export.profiles.%s: the name is a built-in profile", name)
+	case isBuiltin:
+		return builtin, nil
+	case !isUser:
 		return privacy.ExportProfile{}, fmt.Errorf("unknown export profile %q", name)
 	}
-	return privacy.ExportProfile{Name: name, Default: privacy.Treatment(pc.Default), Rules: pc.Rules}, nil
+	p := privacy.ExportProfile{Name: name, Default: privacy.Treatment(pc.Default), Rules: pc.Rules}
+	if err := p.Validate(); err != nil {
+		return privacy.ExportProfile{}, err
+	}
+	return p, nil
 }
 
 // PolicyConfig holds Gryph policy-layer settings.
@@ -402,6 +413,9 @@ func Load(configPath string) (*Config, error) {
 	// Validate config
 	if err := validate(&cfg); err != nil {
 		return nil, err
+	}
+	for _, err := range exportProfileErrors(&cfg) {
+		log.Warnf("config: %v. Gryph does not export with this profile.", err)
 	}
 
 	return &cfg, nil

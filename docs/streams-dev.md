@@ -39,7 +39,7 @@ Each target has:
 | `config`  | no       | Arbitrary key-value map for the target   |
 | `export_profile` | no | Export profile of the target. Empty gives `default` |
 
-The syncer applies the export profile of a target to every event before it calls `Send`, so a target never receives an event without a profile. A target without `export_profile` gets the built-in `default` profile. It drops secret content and digests prompts. The profile also removes the hook input from a hook error self-audit. See [content labels](content-labels.md#export) for the treatments and for user profiles under `export.profiles`. Validation rejects an unknown profile name.
+The syncer applies the export profile of a target to every event before it calls `Send`, so a target never receives an event without a profile. A target without `export_profile` gets the built-in `default` profile. It drops secret content and digests prompts. The profile also removes the hook input from a hook error self-audit. See [content labels](content-labels.md#export) for the treatments and for user profiles under `export.profiles`. A target that names an unknown or invalid profile gets no events, and `gryph stream sync` exits with a config error after it syncs the other targets.
 
 Two targets can share a type but **must** have different names. Checkpoints are tracked per name, so renaming a target resets its sync position.
 

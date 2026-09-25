@@ -51,7 +51,8 @@ type Label struct {
 	// truncation.
 	Size int `json:"size,omitempty"`
 	// Digest is "sha256:<hex>" of the content before redaction and
-	// truncation.
+	// truncation. An export holds the keyed form "hmac-sha256:<hex>" of it,
+	// or no digest. See ExportProfile.KeyedDigest.
 	Digest string `json:"digest,omitempty"`
 }
 
