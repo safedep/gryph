@@ -14,22 +14,7 @@ import (
 // document's disabled: list, so a repo-local policy cannot weaken them.
 const BuiltinRuleIDPrefix = "gryph-builtin-"
 
-// Built-in rule IDs.
-const (
-	builtinProtectedFilesRuleID    = BuiltinRuleIDPrefix + "protected-files"
-	builtinProtectedCommandsRuleID = BuiltinRuleIDPrefix + "protected-commands"
-)
-
-// builtinCommandPatterns is the best-effort command_exec guard. It matches
-// common mutation commands that reference Gryph's own control surfaces by
-// name. Shell obfuscation (eval, variable indirection, base64) can evade it;
-// the file_write / file_delete rule is the real boundary because it matches
-// the normalized action target rather than a command string.
-var builtinCommandPatterns = []string{
-	`(^|[\s;&|])(rm|mv|cp|tee|truncate|unlink|chmod|chown)\s+[^\n]*/gryph/(keys/|[^\s]*\.db|[^\s]*receipt)`,
-	`(^|[\s;&|])(rm|mv|cp|tee|truncate|unlink)\s+[^\n]*\.(claude/settings|cursor/hooks|codex/hooks|codeium/windsurf/hooks|commandcode/settings)\.json`,
-	`(^|[\s;&|])(rm|mv)\s+[^\n;&|]*\.(claude|cursor|codex|codeium/windsurf|commandcode)(/\*?)?["']?($|[\s;&|])`,
-}
+const builtinProtectedFilesRuleID = BuiltinRuleIDPrefix + "protected-files"
 
 // BuiltinSource emits the embedded self-protection rules. It is constructed by
 // the runtime with the resolved set of file globs to protect (policy source
@@ -38,8 +23,8 @@ var builtinCommandPatterns = []string{
 // check and the disabled: filter.
 type BuiltinSource struct {
 	// FileGlobs are doublestar glob patterns (forward-slash normalized) for
-	// every path a write or delete must be blocked against. Empty disables the
-	// file rule entirely rather than matching every path.
+	// every path that an agent write, delete, or shell command must not
+	// change. Empty disables the rule rather than matching every path.
 	FileGlobs []string
 }
 
@@ -69,35 +54,20 @@ func (s *BuiltinSource) Name() string { return "builtin" }
 // in Go (rather than embedded YAML) because their file patterns are resolved
 // at runtime from the operator's config and the installed agents.
 func (s *BuiltinSource) Load(_ context.Context) ([]*pdp.Policy, error) {
-	rules := make([]pdp.Rule, 0, 2)
-
-	if len(s.FileGlobs) > 0 {
-		rules = append(rules, pdp.Rule{
-			ID:          builtinProtectedFilesRuleID,
-			Description: "Block agent writes and deletes to Gryph's own policy files, config, database, signing keys, and the agents' hook configs.",
-			Action:      model.DecisionBlock,
-			Severity:    model.SeverityCritical,
-			Tags:        []string{"self-protection", "builtin"},
-			Message:     "Blocked by Gryph self-protection: {{.Action.Params.Path}} is a protected Gryph control file.",
-			Match: pdp.Match{
-				ActionTypes:  []string{string(model.ActionFileWrite), string(model.ActionFileDelete)},
-				FilePatterns: append([]string(nil), s.FileGlobs...),
-			},
-		})
+	if len(s.FileGlobs) == 0 {
+		return []*pdp.Policy{{}}, nil
 	}
-
-	rules = append(rules, pdp.Rule{
-		ID:          builtinProtectedCommandsRuleID,
-		Description: "Best-effort block of shell commands that mutate Gryph control files. Shell obfuscation can evade this; the file rule is the real boundary.",
+	rule := pdp.Rule{
+		ID:          builtinProtectedFilesRuleID,
+		Description: "Block agent writes, deletes, and shell commands that change Gryph's own policy files, config, database, signing keys, or the agents' hook configs. The shell check is best effort.",
 		Action:      model.DecisionBlock,
-		Severity:    model.SeverityHigh,
+		Severity:    model.SeverityCritical,
 		Tags:        []string{"self-protection", "builtin"},
-		Message:     "Blocked by Gryph self-protection: command appears to modify a protected Gryph control file.",
+		Message:     "Blocked by Gryph self-protection: {{if .Action.Params.Path}}{{.Action.Params.Path}} is a protected Gryph control file.{{else}}the command changes a protected Gryph control file.{{end}}",
 		Match: pdp.Match{
-			ActionTypes:     []string{string(model.ActionCommandExec)},
-			CommandPatterns: append([]string(nil), builtinCommandPatterns...),
+			ActionTypes:  []string{string(model.ActionFileWrite), string(model.ActionFileDelete), string(model.ActionCommandExec)},
+			FilePatterns: append([]string(nil), s.FileGlobs...),
 		},
-	})
-
-	return []*pdp.Policy{{Rules: rules}}, nil
+	}
+	return []*pdp.Policy{{Rules: []pdp.Rule{rule}}}, nil
 }

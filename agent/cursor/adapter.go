@@ -66,6 +66,13 @@ func (a *Adapter) ParseEvent(ctx context.Context, hookType string, rawData []byt
 // RenderResponse maps a decision to the Cursor wire response. Cursor reads
 // JSON on stdout for every hook and never uses exit codes. Each hook type
 // has its own response schema.
+// HookConfigPaths returns the globs for the files that hold the Gryph hook configuration.
+func (a *Adapter) HookConfigPaths() []string {
+	return []string{
+		agent.HomeConfigGlob(".cursor", "hooks.json"),
+	}
+}
+
 func (a *Adapter) RenderResponse(hookType string, decision agent.HookDecision, detail string) agent.HookResponse {
 	switch decision {
 	case agent.DecisionBlock:

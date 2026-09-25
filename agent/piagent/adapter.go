@@ -64,6 +64,13 @@ const blockingHookType = "tool_call"
 // carries a JSON decision on stdout. Allow on other hooks emits nothing.
 // Guidance on other hooks routes advisory text to stderr at exit 0. Block
 // is exit 2 with the reason on stderr.
+// HookConfigPaths returns the globs for the files that hold the Gryph hook configuration.
+func (a *Adapter) HookConfigPaths() []string {
+	return []string{
+		agent.HomeConfigGlob(".pi", "agent", "extensions", "**"),
+	}
+}
+
 func (a *Adapter) RenderResponse(hookType string, decision agent.HookDecision, detail string) agent.HookResponse {
 	jsonHook := hookType == blockingHookType
 	switch decision {

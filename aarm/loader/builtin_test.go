@@ -3,10 +3,11 @@ package loader
 import (
 	"context"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +24,6 @@ func TestBuiltinSource_Load_HasRules(t *testing.T) {
 		assert.True(t, strings.HasPrefix(r.ID, BuiltinRuleIDPrefix), "builtin rule %q must use reserved prefix", r.ID)
 	}
 	assert.Contains(t, ids, builtinProtectedFilesRuleID)
-	assert.Contains(t, ids, builtinProtectedCommandsRuleID)
 }
 
 func TestBuiltinSource_NoFileGlobs_OmitsFileRule(t *testing.T) {
@@ -32,9 +32,7 @@ func TestBuiltinSource_NoFileGlobs_OmitsFileRule(t *testing.T) {
 	docs, err := NewBuiltinSource().Load(context.Background())
 	require.NoError(t, err)
 	require.Len(t, docs, 1)
-	for _, r := range docs[0].Rules {
-		assert.NotEqual(t, builtinProtectedFilesRuleID, r.ID, "file rule must be omitted with no globs")
-	}
+	assert.Empty(t, docs[0].Rules)
 }
 
 func TestBuiltinSource_DedupesAndDropsEmpty(t *testing.T) {
@@ -85,52 +83,62 @@ func TestLoader_BuiltinAppendedLast(t *testing.T) {
 	assert.True(t, strings.HasPrefix(last.ID, BuiltinRuleIDPrefix), "builtin rules come last")
 }
 
-func TestBuiltinCommandPatterns(t *testing.T) {
-	compiled := make([]*regexp.Regexp, 0, len(builtinCommandPatterns))
-	for _, p := range builtinCommandPatterns {
-		compiled = append(compiled, regexp.MustCompile(p))
-	}
-	matches := func(cmd string) bool {
-		for _, re := range compiled {
-			if re.MatchString(cmd) {
-				return true
-			}
-		}
-		return false
-	}
+func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cfgDir := home + "/.config/safedep/gryph"
+
+	docs, err := NewBuiltinSource("**/.cc/settings.json", "**/.agent/hooks/**", cfgDir+"/**").Load(context.Background())
+	require.NoError(t, err)
+	require.Len(t, docs, 1)
+	engine, err := pdp.New(docs[0])
+	require.NoError(t, err)
 
 	cases := []struct {
-		cmd     string
+		name    string
+		action  model.ActionType
+		path    string
+		command string
 		blocked bool
 	}{
-		{"rm -f /home/u/.commandcode/settings.json", true},
-		{"cp /tmp/x /home/u/.commandcode/settings.json", true},
-		{"unlink /home/u/.commandcode/settings.json", true},
-		{"unlink ~/.claude/settings.json", true},
-		{"unlink ~/.config/safedep/gryph/gryph.db", true},
-		{"unlink /tmp/scratch.json", false},
-		{"rm -rf /home/u/.commandcode", true},
-		{"rm -rf ~/.commandcode/", true},
-		{"rm -rf ~/.commandcode/*", true},
-		{"mv ~/.commandcode /tmp/cc && echo done", true},
-		{"rm -rf ~/.claude", true},
-		{"rm -rf ~/.codeium/windsurf", true},
-		{"rm -rf ~/.cursor; ls", true},
-		{`rm -rf "$HOME/.commandcode"`, true},
-		{`rm -rf '$HOME/.commandcode/'`, true},
-		{"ls && rm -rf ~/.commandcode", true},
-		{"ls ~/.commandcode", false},
-		{"cat ~/.commandcode/settings.json", false},
-		{"rm -rf ~/.commandcode-notes", false},
-		{"rm -rf ~/.commandcode/cache", false},
-		{"rm -rf ./.claude-backup", false},
-		{"rm -rf /tmp/build && ls ~/.commandcode", false},
-		{"rm -rf /tmp/build; cat ~/.claude", false},
-		{"mv a b | grep .cursor", false},
+		{"file write", model.ActionFileWrite, home + "/.cc/settings.json", "", true},
+		{"file delete in hooks dir", model.ActionFileDelete, home + "/.agent/hooks/pre.sh", "", true},
+		{"file read", model.ActionFileRead, home + "/.cc/settings.json", "", false},
+		{"unrelated write", model.ActionFileWrite, "/work/main.go", "", false},
+		{"redirect", model.ActionCommandExec, "", `printf '{}' > ~/.cc/settings.json`, true},
+		{"sed in place", model.ActionCommandExec, "", `sed -i 's/x/y/' ~/.cc/settings.json`, true},
+		{"unlink", model.ActionCommandExec, "", `unlink ~/.cc/settings.json`, true},
+		{"rm directory", model.ActionCommandExec, "", `rm -rf ~/.cc`, true},
+		{"rm quoted directory", model.ActionCommandExec, "", `rm -rf "$HOME/.cc/"`, true},
+		{"rm directory contents", model.ActionCommandExec, "", `rm -rf ~/.cc/*`, true},
+		{"mv hooks directory", model.ActionCommandExec, "", `mv ~/.agent/hooks /tmp/x`, true},
+		{"cp into directory", model.ActionCommandExec, "", `cp /tmp/settings.json ~/.cc/`, true},
+		{"rm gryph config", model.ActionCommandExec, "", `rm -rf ~/.config/safedep`, true},
+		{"cd then rm", model.ActionCommandExec, "", `cd ~/.cc && rm settings.json`, true},
+		{"bash -c", model.ActionCommandExec, "", `bash -c 'rm -rf ~/.cc'`, true},
+		{"read settings", model.ActionCommandExec, "", `cat ~/.cc/settings.json`, false},
+		{"list then rm elsewhere", model.ActionCommandExec, "", `ls ~/.cc && rm -rf /tmp/build`, false},
+		{"rm sibling cache", model.ActionCommandExec, "", `rm -rf ~/.cc/cache`, false},
+		{"rm lookalike", model.ActionCommandExec, "", `rm -rf ~/.cc-notes`, false},
+		{"cp settings out", model.ActionCommandExec, "", `cp ~/.cc/settings.json /tmp/backup.json`, false},
+		{"mv file into home", model.ActionCommandExec, "", `mv notes.txt ~/`, false},
+		{"mv over settings", model.ActionCommandExec, "", `mv /tmp/s.json ~/.cc/settings.json`, true},
 	}
 	for _, tc := range cases {
-		t.Run(tc.cmd, func(t *testing.T) {
-			assert.Equal(t, tc.blocked, matches(tc.cmd))
+		t.Run(tc.name, func(t *testing.T) {
+			action := &model.Action{
+				Type:       tc.action,
+				WorkingDir: "/work",
+				Parameters: model.Parameters{Path: tc.path, Command: tc.command},
+			}
+			res, err := engine.Evaluate(context.Background(), action, nil)
+			require.NoError(t, err)
+			if tc.blocked {
+				assert.Equal(t, model.DecisionBlock, res.Decision)
+				assert.Contains(t, res.Message, "self-protection")
+			} else {
+				assert.Equal(t, model.DecisionAllow, res.Decision)
+			}
 		})
 	}
 }

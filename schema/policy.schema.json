@@ -55,7 +55,7 @@
         },
         "file_patterns": {
           "type": "array",
-          "description": "Doublestar glob patterns matched against the action's file path. Forward-slash normalized.",
+          "description": "Doublestar glob patterns matched against the action's file path. For command_exec actions, also matched against the paths the shell command writes, moves, or deletes. Forward-slash normalized.",
           "items": {
             "type": "string"
           }

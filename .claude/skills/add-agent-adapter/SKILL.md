@@ -7,7 +7,7 @@ description: Use when adding support for a new AI coding agent to Gryph, or when
 
 The full, current guide is `docs/agent-adapter.md`. It is the single source of truth for this task. Read it and follow it step by step.
 
-Do not add an agent adapter from memory. The adapter pattern touches 13 or more files across `agent/`, `config/`, `cli/`, and `tui/`. A missed file breaks detection, registration, or the security response path. The doc lists every file and the exact change each one needs.
+Do not add an agent adapter from memory. The adapter pattern touches several files across `agent/`, `config/`, `cli/`, and `tui/`. A missed file breaks detection, registration, or the security response path. The doc lists every file and the exact change each one needs.
 
 ## How to use this skill
 
@@ -15,6 +15,15 @@ Do not add an agent adapter from memory. The adapter pattern touches 13 or more 
 2. Follow each step in order. Use the wiring table in the doc to change every listed file.
 3. Use an existing adapter as your reference. The `agent/gemini/` package is the recommended model for the `settings.json` pattern.
 4. Run the verify commands from the doc's final step before you finish.
+
+## Invariants
+
+The doc explains these. They break silently if you miss them.
+
+1. Implement `HookConfigPaths()` and return a glob for every file the install step writes. Self-protection guards only these paths. `TestAdapters_InstallWritesOnlyDeclaredHookConfig` fails when a written file has no glob.
+2. Keep agent knowledge in the adapter package. Do not add agent paths, file names, or command regexes to `aarm/loader` or `aarm/pdp`. The loader derives the shell-command check from the declared paths, and `aarm/shellcmd` parses commands with `mvdan.cc/sh`. Do not match shell commands with a regex.
+3. Register the adapter only in `registerAdapters` in `cli/root.go`. The self-protection globs come from that list.
+4. Self-protection is best effort. Do not describe it as a security boundary. Kernel-based self-protection is on the roadmap.
 
 ## Keep the doc correct
 

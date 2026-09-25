@@ -103,6 +103,7 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 	freshDeferRule := ""
 
 	var winnerRule *compiledRule
+	paths := &actionPaths{action: action}
 
 	for i := range p.rules {
 		rule := p.rules[i]
@@ -112,7 +113,7 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 		if !matchesScope(rule.rule.Scope, action) {
 			continue
 		}
-		if !rule.matches(action) {
+		if !rule.matches(action, paths) {
 			continue
 		}
 		if rule.hasCondition {
@@ -355,6 +356,7 @@ type compiledRule struct {
 	condition          cel.Program
 	message            *template.Template
 	filePatterns       []string
+	containerPatterns  []string
 	workingDirPatterns []string
 	hasCondition       bool
 	hasMessageTemplate bool
@@ -398,6 +400,7 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 	if err := validateGlobPatterns("file_patterns", rule.ID, cr.filePatterns); err != nil {
 		return cr, err
 	}
+	cr.containerPatterns = containerPatterns(cr.filePatterns)
 	if err := validateGlobPatterns("working_directory_patterns", rule.ID, cr.workingDirPatterns); err != nil {
 		return cr, err
 	}
@@ -424,7 +427,7 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 	return cr, nil
 }
 
-func (r compiledRule) matches(action *model.Action) bool {
+func (r compiledRule) matches(action *model.Action, paths *actionPaths) bool {
 	match := r.rule.Match
 	if len(match.ActionTypes) > 0 && !containsFold(match.ActionTypes, string(action.Type)) {
 		return false
@@ -432,7 +435,7 @@ func (r compiledRule) matches(action *model.Action) bool {
 	if len(match.ToolNames) > 0 && !containsFold(match.ToolNames, action.Tool) {
 		return false
 	}
-	if len(r.filePatterns) > 0 && !matchesAnyPath(r.filePatterns, action.Parameters.Path) {
+	if len(r.filePatterns) > 0 && !r.matchesFiles(action, paths) {
 		return false
 	}
 	if len(r.workingDirPatterns) > 0 && !matchesAnyPath(r.workingDirPatterns, action.WorkingDir) {
