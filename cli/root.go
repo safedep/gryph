@@ -37,6 +37,8 @@ type App struct {
 	Security  *security.Evaluator
 	Redactor  *privacy.Redactor
 
+	exportKey []byte
+
 	// policyCheck holds the lazily-loaded AARM policy check, when the policy
 	// layer is enabled. Used by cli/hook.go to reach the underlying Mediator
 	// for post-hook RecordResult calls.
@@ -111,6 +113,23 @@ func NewApp(cfg *config.Config) (*App, error) {
 		policyCheck: policyCheck,
 	}
 	return app, nil
+}
+
+// ExportProfile returns the named export profile, keyed with the export key
+// of the install. It creates the key on first use.
+func (a *App) ExportProfile(name string) (privacy.ExportProfile, error) {
+	p, err := a.Config.ExportProfile(name)
+	if err != nil {
+		return privacy.ExportProfile{}, err
+	}
+	if a.exportKey == nil {
+		key, err := config.LoadOrCreateExportKey(a.Config.ExportKeyFile())
+		if err != nil {
+			return privacy.ExportProfile{}, err
+		}
+		a.exportKey = key
+	}
+	return p.WithDigestKey(a.exportKey), nil
 }
 
 // DecisionService returns the in-process decision service for hook events.

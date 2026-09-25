@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -657,7 +658,6 @@ func TestLoad_ClampsWindowLimits(t *testing.T) {
 	}
 }
 
-
 func TestValidate_ExportProfiles(t *testing.T) {
 	rule := func(then privacy.Treatment, classes []privacy.Class, origins []privacy.Origin) privacy.ExportRule {
 		return privacy.ExportRule{Classes: classes, Origins: origins, Then: then}
@@ -695,7 +695,8 @@ func TestValidate_ExportProfiles(t *testing.T) {
 			cfg := Default()
 			cfg.Export.Profiles = tt.profiles
 			cfg.Streams.Targets = []StreamTargetConfig{{Name: "out", Type: "stdout", Enabled: true, ExportProfile: tt.target}}
-			err := validate(cfg)
+			require.NoError(t, validate(cfg), "an export profile error never fails the whole config")
+			err := errors.Join(exportProfileErrors(cfg)...)
 			if tt.wantErr == "" {
 				assert.NoError(t, err)
 				return
@@ -704,6 +705,51 @@ func TestValidate_ExportProfiles(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})
 	}
+}
+
+func TestLoad_InvalidExportProfile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, os.WriteFile(path, []byte(`
+logging:
+  level: minimal
+policy:
+  enabled: true
+export:
+  profiles:
+    team:
+      default: include
+      rules:
+        - classes: [credentials]
+          then: drop
+    full:
+      default: drop
+    ok:
+      default: digest
+streams:
+  targets:
+    - name: out
+      type: stdout
+      enabled: true
+      export_profile: team
+`), 0o600))
+
+	cfg, err := Load(path)
+	require.NoError(t, err, "one bad export profile does not reset the hook config")
+	assert.Equal(t, LoggingMinimal, cfg.Logging.Level)
+	assert.True(t, cfg.Policy.Enabled)
+
+	_, err = cfg.ExportProfile("team")
+	assert.ErrorContains(t, err, `unknown class "credentials"`)
+	_, err = cfg.ExportProfile(cfg.Streams.Targets[0].ExportProfile)
+	assert.Error(t, err, "a target never falls back to a weaker profile")
+	_, err = cfg.ExportProfile(privacy.ProfileFull)
+	assert.ErrorContains(t, err, "the name is a built-in profile", "a user profile never loses to a built-in profile with its name")
+
+	ok, err := cfg.ExportProfile("ok")
+	require.NoError(t, err)
+	assert.Equal(t, privacy.TreatDigest, ok.Default)
+	_, err = cfg.ExportProfile("")
+	assert.NoError(t, err)
 }
 
 func TestLoad_ExportProfiles(t *testing.T) {

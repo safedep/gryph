@@ -14,7 +14,8 @@ exec gryph export --since 1h --export-profile team
 stdout '"prompt":\{"value":"\[REDACTED\]"'
 ! stdout 'Rename the config loader'
 ! stdout 'WRITE_MARKER_7Q'
-stdout '"digest":"sha256:'
+stdout '"digest":"hmac-sha256:'
+! stdout '"digest":"sha256:'
 stderr 'Exported 2 events'
 
 -- home/.config/safedep/gryph/config.yml --

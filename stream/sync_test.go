@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/safedep/gryph/core/events"
@@ -68,8 +69,42 @@ func TestSyncer_AppliesTargetProfile(t *testing.T) {
 
 	got, raw = promptOf(plain.items)
 	assert.Empty(t, got.Value, "a target without a profile gets the default profile")
-	assert.Equal(t, prompt.Label.Digest, got.Label.Digest)
+	assert.Empty(t, got.Label.Digest, "the fallback profile has no digest key")
 	assert.Empty(t, raw, "the raw event holds the prompt unlabeled")
+}
+
+func TestSyncer_InvalidTargetProfile(t *testing.T) {
+	ctx := context.Background()
+	store := storagetest.NewStore(t)
+	sess := session.NewSession("claude-code")
+	require.NoError(t, store.SaveSession(ctx, sess))
+	event := events.NewEvent(sess.ID, "claude-code", events.ActionUserPrompt)
+	require.NoError(t, event.SetPayload(events.UserPromptPayload{Prompt: privacy.NewText("rename the loader")}))
+	require.NoError(t, store.RecordEvent(ctx, event, session.EventCounts(event)))
+
+	bad := &captureTarget{name: "bad"}
+	good := &captureTarget{name: "good"}
+	registry := NewRegistry()
+	registry.Register(bad)
+	registry.Register(good)
+	syncer := NewSyncer(store, registry)
+	syncer.SetProfileError(bad.name, errors.New(`unknown class "credentials"`))
+
+	result, err := syncer.Sync(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, bad.items, "a target with an invalid profile gets nothing")
+	assert.Len(t, good.items, 1)
+
+	byName := map[string]TargetSyncResult{}
+	for _, tr := range result.TargetResults {
+		byName[tr.TargetName] = tr
+	}
+	assert.ErrorContains(t, byName["bad"].Error, "credentials")
+	assert.NoError(t, byName["good"].Error)
+
+	cursor, err := store.GetEventCursor(ctx, bad.name)
+	require.NoError(t, err)
+	assert.Nil(t, cursor, "the cursor of the failed target does not move")
 }
 
 func TestSelfAuditForExport(t *testing.T) {

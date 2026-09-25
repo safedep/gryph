@@ -215,7 +215,7 @@ gryph export --since 1d | jq -r '.action_type' | sort | uniq -c | sort -rn
 ```
 
 Each exported line includes a `$schema` field pointing to [event.schema.json](./schema/event.schema.json).
-The default export profile drops secret content and exports prompts as digests. See [content labels](./docs/content-labels.md#export).
+The default export profile drops secret content and exports prompts as keyed digests. See [content labels](./docs/content-labels.md#export).
 See [CLI Automation](./docs/cli-automation.md) for more `jq` recipes.
 
 ### Statistics Dashboard

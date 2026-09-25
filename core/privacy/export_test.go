@@ -1,6 +1,7 @@
 package privacy
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,7 +12,11 @@ func TestExportProfile_Apply(t *testing.T) {
 	text := func(value string, origin Origin, classes ...Class) Text {
 		return Text{Value: value, Label: Label{Origin: origin, Classes: classes, Size: len(value), Digest: Digest(value), Level: "full"}}
 	}
+	key := []byte("install-key")
 	builtin := BuiltinProfiles()
+	for name, p := range builtin {
+		builtin[name] = p.WithDigestKey(key)
+	}
 	cases := []struct {
 		name       string
 		profile    string
@@ -39,7 +44,7 @@ func TestExportProfile_Apply(t *testing.T) {
 	}
 
 	t.Run("drop keeps the size", func(t *testing.T) {
-		p := ExportProfile{Name: "d", Default: TreatDrop}
+		p := ExportProfile{Name: "d", Default: TreatDrop, DigestKey: key}
 		got, _ := p.Apply(text("page", OriginWeb))
 		assert.Equal(t, Text{Label: Label{Size: 4}}, got)
 	})
@@ -48,6 +53,40 @@ func TestExportProfile_Apply(t *testing.T) {
 		got, _ := builtin[ProfileMetadata].Apply(text("555-0100", OriginCommand, ClassPII))
 		assert.Empty(t, got.Label.Digest)
 		assert.Zero(t, got.Label.Size)
+	})
+
+	t.Run("an exported digest is keyed", func(t *testing.T) {
+		got, _ := builtin[ProfileDefault].Apply(text("yes", OriginUser))
+		assert.NotEqual(t, Digest("yes"), got.Label.Digest)
+		assert.NotContains(t, got.Label.Digest, Digest("yes")[len("sha256:"):])
+		assert.True(t, strings.HasPrefix(got.Label.Digest, KeyedDigestPrefix))
+		again, _ := builtin[ProfileMetadata].Apply(text("yes", OriginCommand))
+		assert.Equal(t, got.Label.Digest, again.Label.Digest, "one install matches its own values")
+		other, _ := BuiltinProfiles()[ProfileDefault].WithDigestKey([]byte("other-key")).Apply(text("yes", OriginUser))
+		assert.NotEqual(t, got.Label.Digest, other.Label.Digest)
+	})
+
+	t.Run("no digest leaves without a key", func(t *testing.T) {
+		got, _ := BuiltinProfiles()[ProfileDefault].Apply(text("yes", OriginUser))
+		assert.Empty(t, got.Label.Digest)
+	})
+
+	t.Run("a partial value loses its digest and size", func(t *testing.T) {
+		full := strings.Repeat("known build output line\n", 10) + "password=hunter2"
+		truncated := Preview(full, 200)
+		truncated.Label.Origin = OriginCommand
+		require.True(t, truncated.Label.Truncated)
+		require.NotContains(t, truncated.Value, "hunter2")
+		stripped := text("yes", OriginUser)
+		stripped.Value = ""
+		stripped.Label.Stripped = true
+		for name, in := range map[string]Text{"truncated": truncated, "stripped": stripped} {
+			for _, profile := range []string{ProfileDefault, ProfileMetadata, ProfileFull} {
+				got, _ := builtin[profile].Apply(in)
+				assert.Empty(t, got.Label.Digest, "%s under %s", name, profile)
+				assert.Zero(t, got.Label.Size, "%s under %s", name, profile)
+			}
+		}
 	})
 
 	t.Run("redact", func(t *testing.T) {
@@ -77,12 +116,13 @@ func TestExportProfile_ApplyDigest(t *testing.T) {
 		{"truncated preview", Label{Truncated: true, Size: 21, Digest: digest}, false},
 		{"stripped", Label{Stripped: true, Size: 21, Digest: digest}, false},
 	}
+	full := BuiltinProfiles()[ProfileFull].WithDigestKey([]byte("key"))
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, _ := BuiltinProfiles()[ProfileFull].Apply(Text{Value: "v", Label: tc.label})
+			got, _ := full.Apply(Text{Value: "v", Label: tc.label})
 			assert.Equal(t, "v", got.Value)
 			if tc.keepDigest {
-				assert.Equal(t, digest, got.Label.Digest)
+				assert.Equal(t, full.KeyedDigest(digest), got.Label.Digest)
 				assert.Equal(t, 21, got.Label.Size)
 				return
 			}

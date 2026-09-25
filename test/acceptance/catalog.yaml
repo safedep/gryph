@@ -87,7 +87,7 @@
   title: "export applies the export profile to each content value"
   category: privacy
   tier: P0
-  guarantee: "gryph export digests a user prompt under the default profile, keeps labels and digests only under metadata, and includes every value under full. Only full exports the raw event, which holds the file content of a read. Export never drops a whole event, and fails on an unknown profile name."
+  guarantee: "gryph export digests a user prompt under the default profile, keeps labels and digests only under metadata, and includes every value under full. Only full exports the raw event, which holds the file content of a read. An exported digest is an HMAC with a key of the install, never a plain sha256. Export never drops a whole event, and fails on an unknown profile name."
   labels: [privacy, export]
 
 - id: privacy/export/user-profile
@@ -96,6 +96,13 @@
   tier: P1
   guarantee: "A profile under export.profiles redacts a user prompt by its origin and digests other values by its default. A value that no rule matches gets the default treatment of the profile."
   labels: [privacy, export, config]
+
+- id: privacy/export/invalid-profile
+  title: "an invalid export profile fails closed for that profile only"
+  category: privacy
+  tier: P1
+  guarantee: "An invalid profile under export.profiles does not reset the config, so the hook keeps its settings. gryph export and stream sync fail for that profile, and never fall back to a weaker profile."
+  labels: [privacy, export, config, streams]
 
 - id: privacy/stream/target-profile
   title: "stream sync applies the export profile of each target"

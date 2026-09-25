@@ -45,6 +45,9 @@ func (e *Event) ForExport(p privacy.ExportProfile) *Event {
 
 	privacy.Project(payload, p)
 	projectPlainFields(payload, plain)
+	keepHash := plain == privacy.TreatInclude && !e.IsSensitive &&
+		!slices.ContainsFunc(labels, func(l privacy.Label) bool { return !l.DigestExportable() })
+	projectContentHash(payload, p, keepHash)
 	data, err := json.Marshal(payload)
 	if err != nil {
 		log.Warnf("events: export %s payload: %v", e.ActionType, err)
@@ -96,6 +99,24 @@ func treatPlain(t privacy.Treatment, v string) string {
 		return privacy.RedactedValue
 	default:
 		return ""
+	}
+}
+
+// projectContentHash keys the content hash of a file payload, or removes it
+// when keep is false. The hash is a plain sha256 of all of the content, so it
+// follows the digest rule of a label.
+func projectContentHash(payload any, p privacy.ExportProfile, keep bool) {
+	treat := func(hash string) string {
+		if !keep {
+			return ""
+		}
+		return p.KeyedDigest(hash)
+	}
+	switch pl := payload.(type) {
+	case *FileReadPayload:
+		pl.ContentHash = treat(pl.ContentHash)
+	case *FileWritePayload:
+		pl.ContentHash = treat(pl.ContentHash)
 	}
 }
 

@@ -413,3 +413,19 @@ func TestManager_Set_RejectsOutOfRangeContextKey(t *testing.T) {
 		}
 	}
 }
+
+func TestManager_Set_RejectsInvalidExportProfile(t *testing.T) {
+	configFile := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, os.WriteFile(configFile, []byte(`
+export:
+  profiles:
+    team:
+      default: hide
+`), 0o600))
+	mgr, err := NewManager(configFile)
+	require.NoError(t, err)
+
+	err = mgr.Set("logging.level", "full")
+	require.ErrorIs(t, err, ErrInvalidValue)
+	assert.Contains(t, err.Error(), `unknown default treatment "hide"`)
+}
