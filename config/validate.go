@@ -104,6 +104,14 @@ var knownStreamTargetTypes = map[string]bool{
 }
 
 func validatePolicyConfig(cfg PolicyConfig) error {
+	// gryph policy context --window reads the window size even when policy
+	// is off, so its limits are checked first.
+	if cfg.Context.WindowMaxEntries < 1 || cfg.Context.WindowMaxEntries > MaxWindowEntries {
+		return fmt.Errorf("policy.context.window_max_entries must be between 1 and %d", MaxWindowEntries)
+	}
+	if cfg.Context.WindowMaxBytes < 0 {
+		return fmt.Errorf("policy.context.window_max_bytes must be non-negative")
+	}
 	if !cfg.Enabled {
 		return nil
 	}
@@ -117,12 +125,6 @@ func validatePolicyConfig(cfg PolicyConfig) error {
 	}
 	if cfg.Context.CELEntries < 1 || cfg.Context.CELEntries > MaxCELEntries {
 		return fmt.Errorf("policy.context.cel_entries must be between 1 and %d", MaxCELEntries)
-	}
-	if cfg.Context.WindowMaxEntries < 1 || cfg.Context.WindowMaxEntries > MaxWindowEntries {
-		return fmt.Errorf("policy.context.window_max_entries must be between 1 and %d", MaxWindowEntries)
-	}
-	if cfg.Context.WindowMaxBytes < 0 {
-		return fmt.Errorf("policy.context.window_max_bytes must be non-negative")
 	}
 	if cfg.ReceiptRetentionDays < 0 {
 		return fmt.Errorf("policy.receipt_retention_days must be non-negative")

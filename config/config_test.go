@@ -656,17 +656,19 @@ func TestValidate_ContextWindow(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := Default()
-			cfg.Policy.Enabled = true
-			cfg.Policy.Context.WindowMaxEntries = tt.maxEntries
-			cfg.Policy.Context.WindowMaxBytes = tt.maxBytes
-			err := validate(cfg)
-			if tt.wantErr == "" {
-				assert.NoError(t, err)
-				return
+			for _, enabled := range []bool{true, false} {
+				cfg := Default()
+				cfg.Policy.Enabled = enabled
+				cfg.Policy.Context.WindowMaxEntries = tt.maxEntries
+				cfg.Policy.Context.WindowMaxBytes = tt.maxBytes
+				err := validate(cfg)
+				if tt.wantErr == "" {
+					assert.NoError(t, err)
+					continue
+				}
+				require.Error(t, err, "policy.enabled=%v", enabled)
+				assert.Contains(t, err.Error(), tt.wantErr)
 			}
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.wantErr)
 		})
 	}
 }

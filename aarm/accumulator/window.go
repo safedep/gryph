@@ -1,6 +1,7 @@
 package accumulator
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -43,7 +44,7 @@ func (a *SQLiteAccumulator) Window(ctx context.Context, sessionID uuid.UUID, spe
 	if intent != nil {
 		rows = append(rows, intent)
 	}
-	slices.Reverse(rows)
+	slices.SortFunc(rows, func(a, b *storage.ContextEntryRow) int { return cmp.Compare(a.Sequence, b.Sequence) })
 
 	w := &model.Window{SessionID: sessionID, Entries: make([]model.WindowEntry, 0, len(rows))}
 	for _, r := range rows {

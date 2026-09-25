@@ -1,7 +1,9 @@
 package accumulator
 
 import (
+	"cmp"
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -157,4 +159,29 @@ func TestFitBytes(t *testing.T) {
 	assert.Equal(t, "bb", w.Entries[0].Content[1].Value, "fitBytes stops once the total fits")
 	assert.Equal(t, "cccc", w.Entries[1].Content[0].Value)
 	assert.False(t, fitBytes(w, 0))
+}
+
+func TestSQLiteAccumulator_WindowOrdersBySequence(t *testing.T) {
+	acc, store := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	sess := session.NewSession("claude-code")
+	saveSession(t, store, sess)
+
+	require.NoError(t, acc.Append(ctx, newEntry(sess.ID, events.KindIntent, model.ActionUserPrompt, "")))
+	for range 3 {
+		require.NoError(t, acc.Append(ctx, newEntry(sess.ID, events.KindAction, model.ActionFileRead, "Read")))
+	}
+
+	for _, spec := range []model.WindowSpec{
+		{MaxEntries: 2},
+		{MaxEntries: 2, Kinds: []model.EntryKind{events.KindAction, events.KindIntent}},
+		{MaxEntries: 10},
+	} {
+		w, err := acc.Window(ctx, sess.ID, spec)
+		require.NoError(t, err)
+		assert.True(t, slices.IsSortedFunc(w.Entries, func(a, b model.WindowEntry) int {
+			return cmp.Compare(a.Entry.Sequence, b.Entry.Sequence)
+		}), "spec %+v", spec)
+		assert.Equal(t, int64(1), w.Entries[0].Entry.Sequence)
+	}
 }
