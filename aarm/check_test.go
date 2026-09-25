@@ -10,12 +10,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/accumulator"
 	"github.com/safedep/gryph/aarm/approval"
+	"github.com/safedep/gryph/aarm/classify"
 	"github.com/safedep/gryph/aarm/identity"
 	"github.com/safedep/gryph/aarm/mediation"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	coresecurity "github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
 	"github.com/stretchr/testify/assert"
@@ -75,6 +77,7 @@ rules:
 
 type spyAccumulator struct {
 	appendErr         error
+	snapshotErr       error
 	appendCalls       int
 	snapshotCalls     int
 	recordResultCalls int
@@ -101,6 +104,9 @@ func (s *spyAccumulator) Snapshot(_ context.Context, id uuid.UUID, pending *mode
 	s.snapshotCalls++
 	s.lastSessionID = id
 	s.lastPending = pending
+	if s.snapshotErr != nil {
+		return nil, s.snapshotErr
+	}
 	if s.snapshot != nil {
 		return s.snapshot, nil
 	}
@@ -180,6 +186,64 @@ rules:
 	res, err = med.Check(context.Background(), event, nil)
 	require.NoError(t, err, "a failed append must not fail the check")
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision, "a failed append must not turn a block into an allow")
+}
+
+func TestMediator_FailedDecisionAppendsEntry(t *testing.T) {
+	cases := []struct {
+		name        string
+		condition   string
+		snapshotErr error
+		wantErr     error
+	}{
+		{
+			name:        "snapshot error",
+			condition:   "true",
+			snapshotErr: errors.New("database is locked"),
+			wantErr:     accumulator.ErrSnapshot,
+		},
+		{
+			name:      "evaluation error",
+			condition: "1 / (context.total_actions - context.total_actions) > 0",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: reads
+    action: warn
+    match: { action_types: [file_read] }
+    condition: "` + tc.condition + `"
+`))
+			require.NoError(t, err)
+
+			spy := &spyAccumulator{snapshotErr: tc.snapshotErr}
+			adapter := mediation.NewHookAdapter(mediation.WithClassifier(classify.NewHeuristic()))
+			med, err := NewMediator(policy, WithAccumulator(spy), WithAdapter(adapter))
+			require.NoError(t, err)
+
+			event := &events.Event{
+				ID:         uuid.New(),
+				SessionID:  uuid.New(),
+				Timestamp:  time.Now(),
+				ActionType: events.ActionFileRead,
+				AgentName:  "claude-code",
+				Payload:    []byte(`{"path":".env"}`),
+			}
+
+			_, err = med.Check(context.Background(), event, nil)
+			require.Error(t, err)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+			}
+			require.Equal(t, 1, spy.appendCalls, "an action without a decision still gets a context entry")
+			assert.Equal(t, model.ResultError, spy.lastEntry.Result)
+			assert.Empty(t, spy.lastEntry.Decision)
+			assert.Contains(t, spy.lastEntry.Classifications, privacy.ClassSecret)
+		})
+	}
 }
 
 var _ accumulator.Accumulator = (*spyAccumulator)(nil)

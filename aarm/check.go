@@ -287,6 +287,7 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 
 	snapshot, err := m.accum.Snapshot(ctx, action.SessionID, entry)
 	if err != nil {
+		m.appendFailedEntry(ctx, entry)
 		return nil, fmt.Errorf("aarm: %w: %w", accumulator.ErrSnapshot, err)
 	}
 	if sess != nil && snapshot != nil {
@@ -298,6 +299,7 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 	stored := m.receiptAction(event, action)
 	decision, err := m.pdp.EvaluateStored(ctx, action, stored, snapshot)
 	if err != nil {
+		m.appendFailedEntry(ctx, entry)
 		return nil, err
 	}
 
@@ -370,6 +372,14 @@ func (m *Mediator) appendEntry(ctx context.Context, entry *model.ContextEntry, d
 	if err := m.accum.Append(ctx, entry); err != nil {
 		log.Warnf("aarm: accumulator append: %v", err)
 	}
+}
+
+// appendFailedEntry writes the entry of an action that has no decision
+// because the snapshot or the evaluation failed. The fail mode can still
+// allow the action, so its classes must reach the session state.
+func (m *Mediator) appendFailedEntry(ctx context.Context, entry *model.ContextEntry) {
+	entry.Result = model.ResultError
+	m.appendEntry(ctx, entry, &model.EvaluationResult{})
 }
 
 // entryResult is the result that the first insert of an entry records. The

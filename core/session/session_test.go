@@ -19,6 +19,8 @@ func TestEventCounts(t *testing.T) {
 		{"blocked sensitive command", events.Event{Kind: events.KindAction, ActionType: events.ActionCommandExec, ResultStatus: events.ResultBlocked, IsSensitive: true},
 			Counts{TotalActions: 1, CommandsExecuted: 1, BlockedActions: 1, SensitiveActions: 1}},
 		{"observation", events.Event{Kind: events.KindObservation, ActionType: events.ActionCommandExec}, Counts{}},
+		{"blocked observation", events.Event{Kind: events.KindObservation, ActionType: events.ActionToolUse, ResultStatus: events.ResultBlocked}, Counts{BlockedActions: 1}},
+		{"sensitive observation", events.Event{Kind: events.KindObservation, ActionType: events.ActionFileRead, IsSensitive: true}, Counts{SensitiveActions: 1}},
 		{"failed observation", events.Event{Kind: events.KindObservation, ActionType: events.ActionCommandExec, ResultStatus: events.ResultError}, Counts{Errors: 1}},
 		{"failed action", events.Event{Kind: events.KindAction, ActionType: events.ActionToolUse, ResultStatus: events.ResultError}, Counts{TotalActions: 1, Errors: 1}},
 		{"failed intent", events.Event{Kind: events.KindIntent, ResultStatus: events.ResultError}, Counts{}},

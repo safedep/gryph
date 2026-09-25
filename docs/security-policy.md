@@ -352,7 +352,7 @@ gryph policy context --verify --all-sessions            # every session in the l
 
 `--verify` exits non-zero on any chain break and records a `context_chain_broken` self-audit row. `--format json` emits a machine-readable verdict (`entries`, `chain_breaks`, `summary`).
 
-The upgrade to `context_entries` drops the old `aarm_context_actions` and `aarm_context_states` tables and their rows. Receipts do not reference them, so the receipt chain stays verifiable. The migration never drops a column or an index, so the retired `audit_events.conversation_context` column stays in place, unused.
+The upgrade to `context_entries` drops the old `aarm_context_actions` and `aarm_context_states` tables. It first copies the tools, the classes, the entities and the network count of each session, so a session that runs across the upgrade keeps them. The old entry log is lost. Receipts do not reference them, so the receipt chain stays verifiable. The migration never drops a column or an index, so the retired `audit_events.conversation_context` column stays in place, unused.
 
 The chain is not signed today. The receipt chain remains the authenticated audit log. The context chain is for the policy engine to read and for tamper-evidence within the same database.
 

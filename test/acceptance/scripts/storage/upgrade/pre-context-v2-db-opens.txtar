@@ -1,8 +1,9 @@
 # A database from the last release, written with the policy layer on, opens
-# under the current binary. The migration drops the old context tables, and
-# their rows are lost. The audit events stay, and new context entries chain
-# from sequence 1. The old session fixture-session (1e44b9f7) continues its
-# event sequence after its four events.
+# under the current binary. The migration copies the old context state of
+# each session and drops the old context tables. The old entry log is lost.
+# The audit events stay, and new context entries chain from sequence 1. The
+# old session fixture-session (1e44b9f7) keeps its tools and classes, and
+# continues its event sequence after its four events.
 env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
 env XDG_DATA_HOME=$WORK/home/.local/share
@@ -11,7 +12,9 @@ mkdir $XDG_DATA_HOME/safedep/gryph
 cp $ACCEPTANCE_TESTDATA/upgrade/audit-v0.9.0.db $XDG_DATA_HOME/safedep/gryph/audit.db
 
 exec gryph policy context --format json --no-color
-stdout '^\[\]$'
+stdout '"session_id": "1e44b9f7-'
+stdout '"secret"'
+stdout '"Read"'
 
 exec gryph query --format json --no-color
 stdout -count=4 '"ActionType"'
@@ -31,6 +34,9 @@ exec gryph _hook claude-code PreToolUse
 exec gryph query --session 1e44b9f7 --format json --no-color
 stdout -count=5 '"ActionType"'
 stdout '"Sequence": 5,'
+
+exec gryph policy context --session 1e44b9f7 --format json --no-color
+stdout '"secret"'
 
 exec gryph doctor --no-color
 stdout '\[ok\]\s+Database schema'

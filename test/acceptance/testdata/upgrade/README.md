@@ -25,7 +25,7 @@ git worktree remove /tmp/gryph-rel
 
 The policy layer is on, so the fixture also holds the context tables of that
 release. The `storage/upgrade/pre-context-v2-db-opens` script checks that the
-current binary drops them.
+current binary copies the state of each session and drops the tables.
 
 Update the fixture file name and the expected counts in the script when the
 fixture changes. Keep one fixture: the most recent release.

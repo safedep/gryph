@@ -296,16 +296,34 @@ func TestDeleteContextBefore_WholeSessions(t *testing.T) {
 	assert.Nil(t, state, "the state row of a purged session is removed")
 }
 
+// retiredContextStateDDL is the aarm_context_states table of gryph v0.9.0.
+const retiredContextStateDDL = "CREATE TABLE `aarm_context_states` (`id` integer NOT NULL PRIMARY KEY AUTOINCREMENT, " +
+	"`session_id` uuid NOT NULL, `first_seen_at` datetime NOT NULL, `last_action_at` datetime NOT NULL, " +
+	"`total_actions` integer NOT NULL DEFAULT (0), `files_read` integer NOT NULL DEFAULT (0), " +
+	"`files_written` integer NOT NULL DEFAULT (0), `commands_executed` integer NOT NULL DEFAULT (0), " +
+	"`network_requests` integer NOT NULL DEFAULT (0), `errors` integer NOT NULL DEFAULT (0), " +
+	"`tools_used` json NULL, `classifications_seen` json NULL, `entities_seen` json NULL, " +
+	"`semantic_drift` real NOT NULL DEFAULT (0))"
+
 func TestInit_DropsRetiredContextTables(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 	ctx := context.Background()
 
-	for _, table := range retiredTables {
-		_, err := store.db.ExecContext(ctx, "CREATE TABLE "+table+" (id TEXT)")
-		require.NoError(t, err)
-	}
+	sessionID := uuid.New()
+	require.NoError(t, store.SaveSession(ctx, &session.Session{ID: sessionID, AgentName: "claude-code", StartedAt: time.Now().UTC()}))
+	_, err := store.db.ExecContext(ctx, "CREATE TABLE aarm_context_actions (id TEXT)")
+	require.NoError(t, err)
+	_, err = store.db.ExecContext(ctx, retiredContextStateDDL)
+	require.NoError(t, err)
+	now := time.Now().UTC()
+	_, err = store.db.ExecContext(ctx, `
+INSERT INTO aarm_context_states (session_id, first_seen_at, last_action_at, network_requests, tools_used, classifications_seen)
+VALUES (?, ?, ?, 3, '["Bash","Read"]', '["secret"]')`, sessionID.String(), now, now)
+	require.NoError(t, err)
+
 	require.NoError(t, store.Init(ctx))
+	require.NoError(t, store.Init(ctx), "a second Init finds no retired table")
 
 	for _, table := range retiredTables {
 		var n int
@@ -313,6 +331,19 @@ func TestInit_DropsRetiredContextTables(t *testing.T) {
 			`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&n))
 		assert.Zero(t, n, "table %s", table)
 	}
+
+	state, err := store.GetContextState(ctx, sessionID)
+	require.NoError(t, err)
+	require.NotNil(t, state, "the old state of a running session is copied")
+	assert.Equal(t, []string{"Bash", "Read"}, state.ToolsUsed)
+	assert.Equal(t, []string{"secret"}, state.ClassificationsSeen)
+	assert.Equal(t, 3, state.NetworkRequests)
+
+	appendEntry(t, store, sessionID, "Write", &ContextStateDelta{Tools: []string{"Write"}})
+	state, err = store.GetContextState(ctx, sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Bash", "Read", "Write"}, state.ToolsUsed, "a new entry merges into the copied state")
+	assert.Equal(t, []string{"secret"}, state.ClassificationsSeen)
 }
 
 func TestInit_KeepsUnknownColumns(t *testing.T) {

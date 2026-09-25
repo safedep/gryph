@@ -125,15 +125,86 @@ func retryableSchemaError(err error) bool {
 }
 
 // retiredTables are tables that no ent schema declares any more. The
-// migration drops them after Schema.Create. Gryph runs no data migration,
-// so their rows are lost.
+// migration drops them after Schema.Create. The entry log is not copied.
 var retiredTables = []string{"aarm_context_actions", "aarm_context_states"}
 
+// dropRetiredTables drops the retired tables in one writer transaction. It
+// first copies the old context state, because an upgrade can happen while a
+// session runs, and its rules must keep the classes, the tools and the
+// network count that the session already has. A read checks for the tables
+// first, so a hook on a migrated database takes no write lock here.
 func (s *SQLiteStore) dropRetiredTables(ctx context.Context) error {
+	found, err := anyTableExists(ctx, s.db, retiredTables...)
+	if err != nil || !found {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin retired table drop: %w", err)
+	}
+	if err := dropRetiredTablesTx(ctx, tx); err != nil {
+		if rerr := tx.Rollback(); rerr != nil {
+			return errors.Join(err, rerr)
+		}
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit retired table drop: %w", err)
+	}
+	return nil
+}
+
+func dropRetiredTablesTx(ctx context.Context, tx *sql.Tx) error {
+	found, err := anyTableExists(ctx, tx, "aarm_context_states")
+	if err != nil {
+		return err
+	}
+	if found {
+		if err := copyRetiredContextStateTx(ctx, tx); err != nil {
+			return err
+		}
+	}
 	for _, table := range retiredTables {
-		if _, err := s.db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
+		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
 			return fmt.Errorf("drop retired table %s: %w", table, err)
 		}
+	}
+	return nil
+}
+
+type rowQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func anyTableExists(ctx context.Context, q rowQuerier, names ...string) (bool, error) {
+	for _, name := range names {
+		var n int
+		if err := q.QueryRowContext(ctx,
+			`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, name).Scan(&n); err != nil {
+			return false, fmt.Errorf("check table %s: %w", name, err)
+		}
+		if n > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// copyRetiredContextStateTx copies one row per session. The other counters
+// were already on sessions before the context tables were retired.
+func copyRetiredContextStateTx(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO context_states (session_id, last_entry_at, tools_used, classifications_seen, entities_seen)
+SELECT session_id, last_action_at, tools_used, classifications_seen, entities_seen
+FROM aarm_context_states WHERE true
+ON CONFLICT(session_id) DO NOTHING`); err != nil {
+		return fmt.Errorf("copy retired context state: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+UPDATE sessions SET network_requests = max(network_requests,
+    (SELECT old.network_requests FROM aarm_context_states old WHERE old.session_id = sessions.id))
+WHERE id IN (SELECT session_id FROM aarm_context_states)`); err != nil {
+		return fmt.Errorf("copy retired network requests: %w", err)
 	}
 	return nil
 }

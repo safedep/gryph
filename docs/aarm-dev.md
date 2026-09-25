@@ -440,7 +440,9 @@ on `audit_events`.
 The decision service owns the activity counters on `sessions`
 (`session.EventCounts`). A counter counts events of kind `action` only, so a
 pre and post pair for one tool call counts once. A blocked action counts.
-`errors` counts actions and observations with an error result. The event
+`errors` counts actions and observations with an error result.
+`blocked_actions` and `sensitive_actions` count events of every kind, because
+a rule can block or flag an observation. The event
 sequence comes from `sessions.event_count`, because the counters no longer
 count every event. The context tables store no counters.
 
@@ -450,6 +452,9 @@ sequences and lose no count. `UpdateSession` writes the session metadata only.
 
 The Mediator writes the entry after the evaluation. A block or defer entry
 goes in with its result. A failed append only logs, so the decision stands.
+When the snapshot or the evaluation fails, the Mediator writes the entry with
+no decision and the result `error`. The fail mode can still allow the action,
+so its classes must reach `context_states`.
 
 ## Special decision paths
 
