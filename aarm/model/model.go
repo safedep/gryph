@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/safedep/gryph/core/events"
 )
 
@@ -65,6 +66,11 @@ type Action struct {
 	OriginalRequest     string
 	DataClassifications []string
 	InjectionScore      float32
+
+	// Shell is the parsed shell command of a command_exec action. The
+	// mediator parses the command once, and the PDP reads the result. It is
+	// not part of the receipt.
+	Shell *shellcmd.Analysis
 
 	// Phase is the source hook's execution phase, surfaced to CEL as
 	// action.phase and persisted on the receipt's action_payload.

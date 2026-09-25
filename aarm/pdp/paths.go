@@ -1,17 +1,15 @@
 package pdp
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
-	"mvdan.cc/sh/v3/syntax"
 )
 
-// actionPaths parses the shell command of an action once per evaluation and
-// shares the result across rules.
+// actionPaths holds the paths that the shell command of an action changes.
+// It uses the mediator's parse when the action carries one, and parses the
+// command once per evaluation otherwise.
 type actionPaths struct {
 	action  *model.Action
 	parsed  bool
@@ -26,18 +24,12 @@ func (a *actionPaths) commandTargets() []shellcmd.Target {
 	if a.action.Type != model.ActionCommandExec {
 		return nil
 	}
-	line := shellLine(a.action.Parameters)
-	if line == "" {
-		return nil
+	analysis := a.action.Shell
+	if analysis == nil {
+		parsed := shellcmd.AnalyzeCommand(a.action.Parameters.Command, a.action.Parameters.Args, a.action.WorkingDir)
+		analysis = &parsed
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = ""
-	}
-	a.targets = shellcmd.Targets(line, shellcmd.Env{
-		WorkingDir: filepath.ToSlash(a.action.WorkingDir),
-		Home:       filepath.ToSlash(home),
-	})
+	a.targets = analysis.Changes()
 	return a.targets
 }
 
@@ -55,7 +47,7 @@ func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) boo
 		if matchesAnyPath(r.filePatterns, t.Path) {
 			return true
 		}
-		if t.Remove && matchesAnyPath(r.containerPatterns, t.Path) {
+		if t.Removes() && matchesAnyPath(r.containerPatterns, t.Path) {
 			return true
 		}
 	}
@@ -79,23 +71,4 @@ func containerPatterns(patterns []string) []string {
 		}
 	}
 	return out
-}
-
-// shellLine rebuilds the command line for the shell parser. Adapters that
-// split argv into Args lose the original quoting, so each argument is
-// quoted again.
-func shellLine(p model.Parameters) string {
-	var b strings.Builder
-	b.WriteString(p.Command)
-	for _, a := range p.Args {
-		q, err := syntax.Quote(a, syntax.LangBash)
-		if err != nil {
-			q = a
-		}
-		if b.Len() > 0 {
-			b.WriteByte(' ')
-		}
-		b.WriteString(q)
-	}
-	return b.String()
 }

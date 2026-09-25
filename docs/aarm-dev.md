@@ -60,10 +60,10 @@ write the execution outcome to the accumulator row and the receipt row.
 | Package | Role |
 | --- | --- |
 | `aarm` | `Mediator`: the `security.Check`. Orchestrates every step. Re-exports model types. |
-| `aarm/model` | Shared data model: `Action`, `Parameters`, `Decision`, `EvaluationResult`, `ContextSnapshot`, `Result`, `Severity`. No dependencies on other aarm packages. |
+| `aarm/model` | Shared data model: `Action`, `Parameters`, `Decision`, `EvaluationResult`, `ContextSnapshot`, `Result`, `Severity`. Its only aarm dependency is `aarm/shellcmd`, for `Action.Shell`. `aarm/shellcmd` imports no Gryph package, and a test enforces it. |
 | `aarm/mediation` | `Adapter` interface plus `HookAdapter` and `MCPAdapter`. Normalizes agent events into `model.Action` and enriches with classify / injectscore / identity. |
 | `aarm/pdp` | Policy Decision Point. `Policy` / `Rule` schema, YAML parse, rule compile, `Evaluate`, CEL conditions, message templates, policy hash. |
-| `aarm/shellcmd` | Parses a shell command with `mvdan.cc/sh` and returns the paths it writes, moves, or deletes. The PDP matches `file_patterns` against them for `command_exec` actions. |
+| `aarm/shellcmd` | Parses a shell command with `mvdan.cc/sh`. `Analyze` returns the paths the command reads, writes, or removes, and the hosts it contacts. The mediator stores the result on `model.Action.Shell`. The PDP matches `file_patterns` against the write and remove targets for `command_exec` actions. |
 | `aarm/pep` | Policy Enforcement boundary. Maps `model.EvaluationResult` to `core/security.CheckResult`. |
 | `aarm/loader` | `Loader` merges policy `Source` values. `FileSource`, `DirSource` (the policies directory), and `BuiltinSource` (self-protection rules). |
 | `aarm/accumulator` | Context Accumulator interface. Per-session action memory feeding `context.*` CEL variables. `Nop` and SQLite implementations. |
@@ -201,7 +201,28 @@ run (after `&&` or `||`, or in an `if` or loop body) adds a directory to the
 set. For a wrapper such as `sudo`, it tries each word after the wrapper as the
 start of the command, because it does not know every wrapper option that takes
 a value. The walk over-approximates. It prefers a false block to a missed
-change. The operator toggles it only through
+change. When the parser rejects a command, `Analysis.Parsed` is false, every
+word is a read and a removal target, and the host list is `?`.
+
+The mediator parses a command once, in `mediation.HookAdapter`, and stores the
+result on `model.Action.Shell`. The PDP and later context work read that
+result. The PDP parses the command itself only when an action has no
+analysis, for example in `gryph policy test`. The receipt does not store the
+analysis.
+
+A read target comes from an input redirect, the source of a copy or a move,
+the file operands of a fixed list of read commands (`cat`, `head`, `grep`,
+`sed` without `-i`, `tar`, `sqlite3`, and others), and the files that
+`curl` and `wget` upload. A host comes from a URL anywhere in a word, from
+the operands of `curl`, `wget`, `ssh`, `nc`, and similar tools, from an
+scp-style `host:path` in `scp`, `rsync`, and the remote of a `git` command,
+from `openssl -connect`, and from a `/dev/tcp/host/port` redirect. Hosts are
+lower case, without the port. `parseArgs` in `aarm/shellcmd/tools.go`
+splits options the way getopt does, with one table of value options for
+each tool. The lists are best effort.
+Self-protection matches write and remove targets only.
+
+The operator toggles self-protection only through
 `policy.self_protection.enabled`. Inspect it with `gryph policy builtin`.
 
 `selfProtectionGlobs` in `cli/policy.go` builds the globs. The Gryph paths come

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -122,4 +123,56 @@ rules:
 	res, err := engine.Evaluate(context.Background(), action, nil)
 	require.NoError(t, err)
 	assert.Equal(t, model.DecisionBlock, res.Decision)
+}
+
+func TestEvaluate_ShellFilePatterns(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: protect-env
+    action: block
+    match:
+      action_types: [command_exec]
+      file_patterns: ["**/.env"]
+`)
+	cases := []struct {
+		name   string
+		action *model.Action
+		want   model.Decision
+	}{
+		{
+			name: "parses the command when the action has no analysis",
+			action: &model.Action{
+				Type: model.ActionCommandExec, WorkingDir: "/work",
+				Parameters: model.Parameters{Command: "rm .env"},
+			},
+			want: model.DecisionBlock,
+		},
+		{
+			name: "uses the mediator analysis",
+			action: &model.Action{
+				Type: model.ActionCommandExec, WorkingDir: "/work",
+				Parameters: model.Parameters{Command: "true"},
+				Shell: &shellcmd.Analysis{Parsed: true, Targets: []shellcmd.Target{
+					{Path: "/work/.env", Access: shellcmd.AccessWrite},
+				}},
+			},
+			want: model.DecisionBlock,
+		},
+		{
+			name: "a read does not match a file pattern",
+			action: &model.Action{
+				Type: model.ActionCommandExec, WorkingDir: "/work",
+				Parameters: model.Parameters{Command: "cat .env"},
+			},
+			want: model.DecisionAllow,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := engine.Evaluate(context.Background(), tc.action, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, res.Decision)
+		})
+	}
 }
