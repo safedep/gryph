@@ -41,6 +41,25 @@ func TestTargets(t *testing.T) {
 		{"subshell", `(cd /tmp; rm -rf ~/.cc)`, []Target{{"/home/u/.cc", true}}},
 		{"second command only", `ls ~/.cc && rm -rf /tmp/build`, []Target{{"/tmp/build", true}}},
 		{"read only", `cat ~/.cc/settings.json`, nil},
+		{"sudo option value", `sudo -u root rm ~/.cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"env unset option", `env -u NAME rm ~/.cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"nice option value", `nice -n 10 rm ~/.cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"stdbuf option value", `stdbuf -o L tee ~/.cc/settings.json`, []Target{{"/home/u/.cc/settings.json", false}}},
+		{"timeout duration", `timeout -s KILL 5 rm ~/.cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"env chdir", `env -C ~/.cc rm settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"bash -lc", `bash -lc 'rm ~/.cc/settings.json'`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"sh -ec", `sh -ec "rm -rf ~/.cc"`, []Target{{"/home/u/.cc", true}}},
+		{"bash -o option -c", `bash -o pipefail -c 'rm -rf ~/.cc'`, []Target{{"/home/u/.cc", true}}},
+		{"bash script file", `bash deploy.sh`, nil},
+		// The shell does not expand a quoted or escaped "~". The walker expands
+		// it anyway, so it can over-block but never miss the home path.
+		{"escaped tilde expands", `rm \~/.cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"escaped space", `rm ~/.cc/my\ settings.json`, []Target{{"/home/u/.cc/my settings.json", true}}},
+		{"escaped quote in double quotes", `tee "$HOME/.cc/a\"b"`, []Target{{"/home/u/.cc/a\"b", false}}},
+		{"find exec rm", `find ~/.cc -name '*.json' -exec rm {} \;`, []Target{{"/home/u/.cc", true}}},
+		{"find exec sed in place", `find ~/.cc -exec sed -i s/a/b/ {} +`, []Target{{"/work/s/a/b", false}, {"/home/u/.cc", true}}},
+		{"find exec read only", `find ~/.cc -exec cat {} \;`, nil},
+		{"find exec grep", `find . -name '*.go' -exec grep -l TODO {} +`, nil},
 		{"unknown variable", `rm -rf "$DIR/.cc"`, nil},
 		{"command substitution", `rm -rf $(echo ~/.cc)`, nil},
 		{"parse error fails closed", `rm ~/.cc/settings.json ) (`, []Target{
@@ -50,6 +69,39 @@ func TestTargets(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, Targets(tc.command, env))
+		})
+	}
+}
+
+func TestTargets_WorkingDirectoryScope(t *testing.T) {
+	env := Env{WorkingDir: "/home/u", Home: "/home/u"}
+
+	cases := []struct {
+		name    string
+		command string
+		want    []Target
+	}{
+		{"cd in subshell does not leak", `(cd /tmp); rm .cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"cd in pipe does not leak", `cd /tmp | true; rm .cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"cd in substitution does not leak", `echo $(cd /tmp); rm .cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"cd in background does not leak", `cd /tmp & rm .cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+		{"skipped cd keeps both", `false && cd /tmp; rm .cc/settings.json`, []Target{
+			{"/home/u/.cc/settings.json", true}, {"/tmp/.cc/settings.json", true},
+		}},
+		{"cd in if body keeps both", `if true; then cd /tmp; fi; rm .cc/settings.json`, []Target{
+			{"/home/u/.cc/settings.json", true}, {"/tmp/.cc/settings.json", true},
+		}},
+		{"cd in if body applies inside", `if true; then cd ~/.cc; rm settings.json; fi`, []Target{
+			{"/home/u/settings.json", true}, {"/home/u/.cc/settings.json", true},
+		}},
+		{"cd chain over-approximates", `cd /tmp && cd ~/.cc && rm settings.json`, []Target{
+			{"/tmp/settings.json", true}, {"/home/u/.cc/settings.json", true},
+		}},
+		{"cd with no argument goes home", `cd /tmp; cd; rm .cc/settings.json`, []Target{{"/home/u/.cc/settings.json", true}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.ElementsMatch(t, tc.want, Targets(tc.command, env))
 		})
 	}
 }

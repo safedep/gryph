@@ -179,8 +179,17 @@ config, database, signing keys, agent hook configs). It is one rule,
 `gryph-builtin-protected-files`, over `file_write`, `file_delete`, and
 `command_exec`. For a command, the PDP matches the paths that `aarm/shellcmd`
 parses from the command line. A delete or move of a directory also matches when
-the directory contains a protected path. The rule has no agent names and no
-command regexes. The operator toggles it only through
+the directory contains a protected path, for a shell command or a
+`file_delete`. The rule has no agent names and no command regexes.
+
+`aarm/shellcmd` walks the parsed command tree. It tracks the set of working
+directories a command can run in: a `cd` in a subshell, a pipe, a
+substitution, or a background job does not carry over, and a `cd` that may not
+run (after `&&` or `||`, or in an `if` or loop body) adds a directory to the
+set. For a wrapper such as `sudo`, it tries each word after the wrapper as the
+start of the command, because it does not know every wrapper option that takes
+a value. The walk over-approximates. It prefers a false block to a missed
+change. The operator toggles it only through
 `policy.self_protection.enabled`. Inspect it with `gryph policy builtin`.
 
 `selfProtectionGlobs` in `cli/policy.go` builds the globs. The Gryph paths come

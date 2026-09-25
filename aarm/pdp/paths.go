@@ -42,10 +42,13 @@ func (a *actionPaths) commandTargets() []shellcmd.Target {
 }
 
 // matchesFiles reports whether the action path, or a path that the shell
-// command changes, matches the rule's file patterns. A removal of a
-// directory that contains a matching path also matches.
+// command changes, matches the rule's file patterns. A file delete or a
+// shell removal of a directory that contains a matching path also matches.
 func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) bool {
 	if matchesAnyPath(r.filePatterns, action.Parameters.Path) {
+		return true
+	}
+	if action.Type == model.ActionFileDelete && matchesAnyPath(r.containerPatterns, action.Parameters.Path) {
 		return true
 	}
 	for _, t := range paths.commandTargets() {
