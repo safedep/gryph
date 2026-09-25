@@ -167,12 +167,60 @@ rules:
 			},
 			want: model.DecisionAllow,
 		},
+		{
+			name: "a tree write matches a pattern under any directory",
+			action: &model.Action{
+				Type: model.ActionCommandExec, WorkingDir: "/work",
+				Parameters: model.Parameters{Command: "rsync -a /tmp/stage/ ./"},
+			},
+			want: model.DecisionBlock,
+		},
+		{
+			name: "a tree write into a project subdirectory does not match",
+			action: &model.Action{
+				Type: model.ActionCommandExec, WorkingDir: "/work",
+				Parameters: model.Parameters{Command: "tar xzf release.tgz -C build"},
+			},
+			want: model.DecisionAllow,
+		},
+		{
+			name: "a tree write of the root matches",
+			action: &model.Action{
+				Type: model.ActionCommandExec, WorkingDir: "/work",
+				Parameters: model.Parameters{Command: "tar -xPf a.tar -C /tmp/x"},
+			},
+			want: model.DecisionBlock,
+		},
+		{
+			name: "a removal of another directory does not match",
+			action: &model.Action{
+				Type: model.ActionCommandExec, WorkingDir: "/work",
+				Parameters: model.Parameters{Command: "rm -rf build"},
+			},
+			want: model.DecisionAllow,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			res, err := engine.Evaluate(context.Background(), tc.action, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, res.Decision)
+		})
+	}
+}
+
+func TestContainerPatterns(t *testing.T) {
+	cases := []struct {
+		pattern string
+		want    []string
+	}{
+		{"**/.cc/settings.json", []string{"**/.cc"}},
+		{"/etc/app/*.conf", []string{"/etc/app", "/etc", "/"}},
+		{"**/*.pem", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.pattern, func(t *testing.T) {
+			assert.Equal(t, tc.want, containerPatterns([]string{tc.pattern}))
 		})
 	}
 }

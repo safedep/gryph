@@ -18,10 +18,24 @@ type options struct {
 	// abbrev is true for a tool that parses with getopt_long. Such a tool
 	// accepts a unique prefix of a long option, so "--cr" is "--create".
 	abbrev bool
+	// guess is true when the table lists every option of the tool that
+	// the walker knows. The value of an option not in the table is then
+	// kept as a guess, because the option can write a file.
+	guess bool
 }
 
 func valueOptions(names ...string) options {
 	return options{values: flagSet(names...)}
+}
+
+// known reports whether the table lists the option. A long option that
+// starts with "--no-" is known when the table lists the option without it.
+func (o options) known(name string) bool {
+	if o.values[name] || o.flags[name] {
+		return true
+	}
+	rest, ok := strings.CutPrefix(name, "--no-")
+	return ok && o.flags["--"+rest]
 }
 
 // longName returns the long option that name stands for. An exact name
@@ -55,6 +69,10 @@ type parsedArgs struct {
 	operands []string
 	values   map[string][]string
 	seen     map[string]bool
+	// guesses are the words that can be the value of an option that the
+	// table does not know. The table must set guess. A guess that is
+	// the next word stays an operand too.
+	guesses []string
 }
 
 func (p parsedArgs) value(flags ...string) []string {
@@ -92,10 +110,16 @@ func parseArgs(args []string, o options) parsedArgs {
 				i++
 				p.values[name] = append(p.values[name], args[i])
 			}
+			if o.guess && !o.known(name) {
+				p.guess(v, args, i)
+			}
 		case strings.HasPrefix(a, "-") && a != "-":
 			for j := 1; j < len(a); j++ {
 				flag := "-" + a[j:j+1]
 				p.seen[flag] = true
+				if o.guess && !o.known(flag) {
+					p.guess(a[j+1:], args, i)
+				}
 				if !o.values[flag] {
 					continue
 				}
@@ -114,6 +138,17 @@ func parseArgs(args []string, o options) parsedArgs {
 	return p
 }
 
+// guess keeps the value of an unknown option as a guess. The value is the
+// rest of the option word, or the next word when the rest is empty.
+func (p *parsedArgs) guess(rest string, args []string, i int) {
+	switch {
+	case rest != "":
+		p.guesses = append(p.guesses, rest)
+	case i+1 < len(args) && !strings.HasPrefix(args[i+1], "-"):
+		p.guesses = append(p.guesses, args[i+1])
+	}
+}
+
 func flagSet(flags ...string) map[string]bool {
 	set := make(map[string]bool, len(flags))
 	for _, f := range flags {
@@ -129,7 +164,7 @@ var readCommands = map[string]options{
 	"hexdump": valueOptions("-e", "-f", "-n", "-s"), "base64": valueOptions("-w"), "base32": valueOptions("-w"),
 	"nl": valueOptions("-b", "-s", "-v", "-w"), "wc": {}, "uniq": valueOptions("-f", "-s", "-w"),
 	"cut": valueOptions("-b", "-c", "-d", "-f"), "diff": {}, "cmp": {}, "md5sum": {},
-	"sha1sum": {}, "sha256sum": {}, "sha512sum": {}, "zcat": {}, "bat": {},
+	"sha1sum": {}, "sha256sum": {}, "sha512sum": {}, "zcat": {}, "bzcat": {}, "xzcat": {}, "bat": {},
 	"head": valueOptions("-n", "-c", "--lines", "--bytes"),
 	"tail": valueOptions("-n", "-c", "--lines", "--bytes", "-s", "--pid"),
 }
@@ -137,18 +172,31 @@ var readCommands = map[string]options{
 // editCommands write every file operand. An option that writes a file,
 // such as "vim -w", is not in the value table, so its file is an operand.
 var editCommands = map[string]options{
-	"vim":  valueOptions("-c", "--cmd", "-S", "-u", "-U", "-t", "-T"),
-	"vi":   valueOptions("-c", "--cmd", "-S", "-u", "-U", "-t", "-T"),
+	"vim": vimOptions, "vi": vimOptions, "nvim": vimOptions, "ex": vimOptions, "view": vimOptions,
 	"nano": {},
 }
 
-// copyTool describes a local copy command. A destination option in
-// dirFlags makes the copy replace paths inside the destination.
+var vimOptions = valueOptions("-c", "--cmd", "-S", "-u", "-U", "-t", "-T")
+
+// copyFlags are the options that change where a copy writes.
+type copyFlags struct {
+	// dir options make the copy replace the destination itself.
+	dir []string
+	// recursive options copy a directory source with all its contents.
+	recursive []string
+	// relative options keep the whole source path under the destination.
+	relative []string
+}
+
+// copyTool describes a local copy command.
 type copyTool struct {
 	opts          options
+	flags         copyFlags
 	readsSources  bool
 	removeSources bool
-	dirFlags      []string
+	// linksHere is true for ln, which makes a link in the working
+	// directory when it has one operand.
+	linksHere bool
 }
 
 var noTargetDirectory = []string{"-T", "--no-target-directory"}
@@ -156,7 +204,8 @@ var noTargetDirectory = []string{"-T", "--no-target-directory"}
 var (
 	copyOptions = options{
 		values: flagSet("-S", "--suffix", "-t", "--target-directory"),
-		flags:  flagSet("--recursive", "--archive", "--no-target-directory"),
+		flags: flagSet("--recursive", "--archive", "--no-target-directory", "--no-dereference",
+			"--parents"),
 		abbrev: true,
 	}
 	installOptions = options{
@@ -166,12 +215,22 @@ var (
 		abbrev: true,
 	}
 	copyTools = map[string]copyTool{
-		"cp": {opts: copyOptions, readsSources: true,
-			dirFlags: append([]string{"-r", "-R", "-a", "--recursive", "--archive"}, noTargetDirectory...)},
-		"install": {opts: installOptions, readsSources: true, dirFlags: noTargetDirectory},
-		"mv":      {opts: copyOptions, readsSources: true, removeSources: true, dirFlags: noTargetDirectory},
-		"ln":      {opts: copyOptions, dirFlags: noTargetDirectory},
+		"cp": {opts: copyOptions, readsSources: true, flags: copyFlags{
+			dir:       noTargetDirectory,
+			recursive: []string{"-r", "-R", "-a", "--recursive", "--archive"},
+			relative:  []string{"--parents"},
+		}},
+		"install": {opts: installOptions, readsSources: true, flags: copyFlags{dir: noTargetDirectory}},
+		"mv":      {opts: copyOptions, readsSources: true, removeSources: true, flags: copyFlags{dir: noTargetDirectory}},
+		"ln": {opts: copyOptions, linksHere: true, flags: copyFlags{
+			dir: append([]string{"-n", "--no-dereference"}, noTargetDirectory...),
+		}},
 	}
+	rsyncFlags = copyFlags{
+		recursive: []string{"-r", "-a", "--recursive", "--archive"},
+		relative:  []string{"-R", "--relative"},
+	}
+	scpFlags = copyFlags{recursive: []string{"-r"}}
 )
 
 var (
@@ -187,15 +246,32 @@ var (
 			"--compress-program", "--files0-from", "--random-source"),
 		abbrev: true,
 	}
-	gzipOptions = options{
-		values: flagSet("-S", "--suffix"),
-		flags: flagSet("--stdout", "--to-stdout", "--keep", "--decompress", "--uncompress",
-			"--recursive", "--list", "--test"),
+	zipOptions = options{
+		values: flagSet("-b", "-n", "-t", "-x", "-i", "-P", "-Z", "-s", "-O", "--temp-path",
+			"--suffixes", "--from-date", "--before-date", "--exclude", "--include", "--password",
+			"--compression-method", "--split-size", "--output-file", "--logfile-path",
+			"--unzip-command", "--dot-size", "--unicode"),
+		flags: flagSet("--move", "--must-match", "--more-help", "--recurse-paths",
+			"--recurse-patterns", "--junk-paths", "--junk-sfx", "--quiet", "--verbose", "--update",
+			"--freshen", "--delete", "--copy-entries", "--test", "--grow", "--encrypt", "--fix",
+			"--fixfix", "--latest-time", "--log-append", "--log-info", "--no-extra",
+			"--no-dir-entries", "--symlinks", "--archive-comment", "--entry-comments",
+			"--adjust-sfx", "--ascii", "--to-crlf", "--from-crlf", "--paths", "--no-wild",
+			"--wild-stop-dirs", "--help", "--license", "--version", "--filesync", "--fifo",
+			"--difference-archive", "--preserve-case", "--regex", "--no-image", "--dos-names",
+			"--archive-clear", "--archive-set", "--notes", "--display-bytes", "--display-counts",
+			"--display-dots", "--display-globaldots", "--display-usize", "--display-volume",
+			"--show-command", "--show-debug", "--show-files", "--show-options", "--show-unicode",
+			"--split-bell", "--split-pause", "--split-verbose"),
+		// Info-ZIP zip accepts a unique prefix of a long option.
 		abbrev: true,
 	}
-	zipOptions = valueOptions("-b", "-n", "-t", "-x", "-i", "-P", "-Z", "-s", "--temp-path",
-		"--suffixes", "--from-date", "--before-date", "--exclude", "--include", "--password",
-		"--compression-method", "--split-size")
+	// zipShortOptions are the zip options with a short name of two letters
+	// that take a value. getopt would read them as a group of flags.
+	zipShortOptions = map[string]string{
+		"-lf": "--logfile-path", "-TT": "--unzip-command", "-ds": "--dot-size",
+		"-UN": "--unicode", "-tt": "--before-date",
+	}
 	rsyncOptions = valueOptions("-e", "--rsh", "-f", "--filter", "--exclude", "--include",
 		"--files-from", "--exclude-from", "--include-from", "--password-file", "--log-file",
 		"--port", "-T", "--temp-dir", "--backup-dir", "--suffix", "--chmod", "--chown", "-B",
@@ -218,10 +294,45 @@ var (
 			"--key", "--cacert", "--resolve", "--retry", "-C", "--continue-at", "-U", "--proxy-user",
 			"-t", "--telnet-option", "-P", "--ftp-port", "-z", "--time-cond", "-Y", "-y", "--url",
 			"--connect-to", "--interface", "--dns-servers", "--output-dir", "-D", "--dump-header",
-			"--trace", "--trace-ascii", "--stderr"),
-		flags: flagSet("--head", "--remote-name", "--remote-name-all", "--remote-header-name"),
+			"--trace", "--trace-ascii", "--stderr", "--hsts", "--etag-save", "--etag-compare",
+			"--libcurl", "--alt-svc", "--ssl-sessions", "-Q", "--quote", "--limit-rate",
+			"--max-filesize", "--max-redirs", "--retry-delay", "--retry-max-time", "--speed-limit",
+			"--speed-time", "--cert-type", "--key-type", "--pass", "--ciphers", "--capath",
+			"--crlfile", "--pinnedpubkey", "--noproxy", "--oauth2-bearer", "--unix-socket",
+			"--abstract-unix-socket", "--socks4", "--socks4a", "--socks5", "--socks5-hostname",
+			"--proxy-header", "--request-target", "--aws-sigv4", "--variable", "--netrc-file",
+			"--proto", "--proto-redir", "--proto-default", "--doh-url", "--local-port",
+			"--keepalive-time", "--expect100-timeout", "--tls-max", "--preproxy", "--mail-from",
+			"--mail-rcpt", "--mail-auth", "--login-options", "--sasl-authzid", "--service-name",
+			"--create-file-mode", "--parallel-max", "--happy-eyeballs-timeout-ms", "--ftp-method",
+			"--ftp-account", "--tftp-blksize", "--url-query", "--proxy-cacert", "--proxy-cert",
+			"--proxy-key", "--proxy-pass", "--proxy-ciphers", "--tls13-ciphers", "--curves",
+			"--dns-interface", "--dns-ipv4-addr", "--dns-ipv6-addr", "--haproxy-clientip",
+			"--trace-config"),
+		flags: flagSet("--head", "--remote-name", "--remote-name-all", "--remote-header-name",
+			"-0", "-1", "-2", "-3", "-4", "-6", "-a", "-B", "-f", "-g", "-G", "-h", "-i", "-I", "-j",
+			"-J", "-k", "-l", "-L", "-M", "-n", "-N", "-O", "-p", "-q", "-R", "-s", "-S", "-v", "-V",
+			"-Z", "-#", "-:", "--silent", "--show-error", "--location", "--location-trusted",
+			"--include", "--insecure", "--proxy-insecure", "--fail", "--fail-with-body",
+			"--fail-early", "--verbose", "--version", "--help", "--manual", "--globoff", "--get",
+			"--buffer", "--append", "--use-ascii", "--list-only", "--netrc", "--netrc-optional",
+			"--proxytunnel", "--remote-time", "--parallel", "--parallel-immediate", "--compressed",
+			"--compressed-ssh", "--create-dirs", "--ftp-create-dirs", "--progress-bar",
+			"--progress-meter", "--http1.0", "--http1.1", "--http2", "--http2-prior-knowledge",
+			"--http3", "--http3-only", "--http0.9", "--ipv4", "--ipv6", "--tlsv1", "--tlsv1.0",
+			"--tlsv1.1", "--tlsv1.2", "--tlsv1.3", "--sslv2", "--sslv3", "--ssl", "--ssl-reqd",
+			"--raw", "--tr-encoding", "--path-as-is", "--tcp-nodelay", "--tcp-fastopen",
+			"--anyauth", "--basic", "--digest", "--ntlm", "--negotiate", "--disable", "--xattr",
+			"--retry-all-errors", "--retry-connrefused", "--junk-session-cookies", "--post301",
+			"--post302", "--post303", "--crlf", "--ignore-content-length",
+			"--suppress-connect-headers", "--doh-insecure", "--ca-native", "--cert-status",
+			"--false-start", "--ftp-pasv", "--ftp-skip-pasv-ip", "--ftp-ssl-ccc", "--ftp-pret",
+			"--styled-output", "--keepalive", "--sessionid", "--alpn", "--npn", "--epsv", "--eprt",
+			"--clobber", "--remove-on-error", "--skip-existing", "--form-escape", "--mptcp",
+			"--trace-time", "--trace-ids", "--show-headers", "--next"),
 		// curl before 8.x accepts a unique prefix of a long option.
 		abbrev: true,
+		guess:  true,
 	}
 	wgetOptions = options{
 		values: flagSet("-O", "--output-document", "-o", "--output-file", "-a",
@@ -253,7 +364,7 @@ var (
 			"--owner-map", "--group-map", "--hole-detection"),
 		flags: flagSet("--create", "--append", "--update", "--catenate", "--concatenate",
 			"--delete", "--extract", "--get", "--list", "--diff", "--compare", "--to-stdout",
-			"--remove-files", "--checkpoint", "--delay-directory-restore"),
+			"--remove-files", "--checkpoint", "--delay-directory-restore", "--absolute-names"),
 		abbrev: true,
 	}
 )
@@ -277,17 +388,22 @@ func (w *walker) scriptTool(p parsedArgs, fileFlags, exprFlags []string, cwds di
 	w.addAll(ops, AccessRead, cwds)
 }
 
-// localCopy handles cp, mv, install, and ln.
+// localCopy handles cp, mv, install, and ln. An ln with one operand makes
+// a link with the base name of the operand in the working directory.
 func (w *walker) localCopy(tool copyTool, args []string, cwds dirs) {
 	p := parseArgs(args, tool.opts)
 	dest, sources := copyOperands(p)
+	if tool.linksHere && dest == "" && len(p.operands) == 1 {
+		w.add(path.Base(p.operands[0]), destAccess(p, nil, tool.flags), cwds)
+		return
+	}
 	if tool.readsSources {
 		w.addAll(sources, AccessRead, cwds)
 	}
 	if tool.removeSources {
 		w.addAll(sources, AccessRemove, cwds)
 	}
-	w.addDest(dest, sources, destAccess(p, sources, tool.dirFlags), cwds)
+	w.addDest(dest, sources, p, tool.flags, cwds)
 }
 
 // copyOperands splits the operands of a copy or move into the destination
@@ -302,13 +418,16 @@ func copyOperands(p parsedArgs) (string, []string) {
 	return p.operands[len(p.operands)-1], p.operands[:len(p.operands)-1]
 }
 
-// destAccess returns how a copy uses its destination. A copy of the
-// contents of a directory, a recursive copy, or a copy onto the
-// destination itself (-T) can write any path in the destination, so it is
-// a removal of the destination.
-func destAccess(p parsedArgs, sources, dirFlags []string) Access {
-	if p.has(dirFlags...) || slices.ContainsFunc(sources, copiesContents) {
-		return AccessRemove
+// destAccess returns how a copy uses its destination. A copy onto the
+// destination itself (-T), a copy of the contents of a directory, or a
+// recursive copy of a source that can be a directory can write any path in
+// the destination.
+func destAccess(p parsedArgs, sources []string, flags copyFlags) Access {
+	switch {
+	case p.has(flags.dir...), slices.ContainsFunc(sources, copiesContents):
+		return AccessWriteTree
+	case p.has(flags.recursive...) && slices.ContainsFunc(sources, mayBeDirectory):
+		return AccessWriteTree
 	}
 	return AccessWrite
 }
@@ -317,61 +436,156 @@ func copiesContents(src string) bool {
 	return strings.HasSuffix(src, "/") || strings.HasSuffix(src, "/.")
 }
 
+// mayBeDirectory reports whether a copy source can name a directory. A
+// name with an extension, such as "notes.txt", counts as a file. A name
+// without one, such as "nvim" or ".cc", can be a directory.
+func mayBeDirectory(src string) bool {
+	if _, p, remote := splitRemote(src); remote {
+		src = p
+	}
+	name := path.Base(src)
+	dot := strings.LastIndex(name, ".")
+	return copiesContents(src) || dot <= 0 || dot == len(name)-1
+}
+
 // sort reads the operands and writes the -o file.
 func (w *walker) sort(p parsedArgs, cwds dirs) {
 	w.addAll(p.operands, AccessRead, cwds)
 	w.addAll(p.value("-o", "--output"), AccessWrite, cwds)
 }
 
-// gzip replaces each operand with the compressed or the decompressed file.
-// With -c, -l, or -t it only reads the operands. With -k it keeps the
-// operands. A recursive run changes files inside the operands.
-func (w *walker) gzip(p parsedArgs, decompress bool, cwds dirs) {
+// compressor describes gzip, bzip2, and xz.
+type compressor struct {
+	opts       options
+	decompress bool
+	// suffix is the suffix of a compressed file.
+	suffix string
+	// known are the suffixes that a decompress removes.
+	known []string
+	// tar are the suffixes that a decompress replaces with ".tar".
+	tar []string
+	// fallback is the suffix that a decompress adds to a file with an
+	// unknown suffix. An empty fallback means the tool refuses the file.
+	fallback string
+}
+
+func (c compressor) unpacks() compressor {
+	c.decompress = true
+	return c
+}
+
+var (
+	gzipTool = compressor{
+		opts: options{
+			values: flagSet("-S", "--suffix"),
+			flags: flagSet("--stdout", "--to-stdout", "--keep", "--decompress", "--uncompress",
+				"--recursive", "--list", "--test", "--name", "--no-name"),
+			abbrev: true,
+		},
+		suffix: ".gz",
+		known:  []string{".gz", "-gz", ".z", "-z", "_z"},
+		tar:    []string{".tgz", ".taz"},
+	}
+	bzip2Tool = compressor{
+		suffix:   ".bz2",
+		known:    []string{".bz2", ".bz"},
+		tar:      []string{".tbz2", ".tbz"},
+		fallback: ".out",
+	}
+	xzTool = compressor{
+		opts: options{
+			values: flagSet("-S", "--suffix", "-T", "--threads", "-F", "--format", "-C", "--check",
+				"-M", "--memlimit", "--memory", "--memlimit-compress", "--memlimit-decompress",
+				"--block-size", "--block-list", "--flush-timeout", "--filters"),
+			flags: flagSet("--stdout", "--to-stdout", "--keep", "--decompress", "--uncompress",
+				"--compress", "--list", "--test", "--files", "--files0", "--force", "--quiet",
+				"--verbose", "--robot", "--extreme", "--fast", "--best", "--single-stream",
+				"--no-sparse", "--ignore-check", "--no-adjust", "--info-memory", "--help",
+				"--long-help", "--version"),
+			abbrev: true,
+		},
+		suffix: ".xz",
+		known:  []string{".xz", ".lzma"},
+		tar:    []string{".txz", ".tlz"},
+	}
+	compressors = map[string]compressor{
+		"gzip": gzipTool, "gunzip": gzipTool.unpacks(),
+		"bzip2": bzip2Tool, "bunzip2": bzip2Tool.unpacks(),
+		"xz": xzTool, "unxz": xzTool.unpacks(),
+	}
+)
+
+// compress replaces each operand with the compressed or the decompressed
+// file. With -c, -l, or -t it only reads the operands. With -k it keeps the
+// operands. A recursive run changes files inside the operands. gzip -N
+// takes the name of the output from the file header, so it can write any
+// name in the directory of the operand. xz --files reads the names from a
+// file, so the files are not known.
+func (w *walker) compress(c compressor, args []string, cwds dirs) {
+	p := parseArgs(args, c.opts)
 	if p.has("-c", "--stdout", "--to-stdout", "-l", "--list", "-t", "--test") {
 		w.addAll(p.operands, AccessRead, cwds)
 		return
+	}
+	if p.has("--files", "--files0") {
+		w.addAnywhere(cwds)
 	}
 	if p.has("-r", "--recursive") {
 		w.addAll(p.operands, AccessRemove, cwds)
 		return
 	}
-	decompress = decompress || p.has("-d", "--decompress", "--uncompress")
+	decompress := c.decompress || p.has("-d", "--decompress", "--uncompress")
+	headerName := decompress && p.has("-N", "--name")
 	for _, op := range p.operands {
 		if p.has("-k", "--keep") {
 			w.add(op, AccessRead, cwds)
 		} else {
 			w.add(op, AccessRemove, cwds)
 		}
-		w.add(gzipOutput(op, p.value("-S", "--suffix"), decompress), AccessWrite, cwds)
+		if headerName {
+			w.add(path.Dir(op), AccessRemove, cwds)
+		}
+		w.add(c.output(op, p.value("-S", "--suffix"), decompress), AccessWrite, cwds)
 	}
 }
 
-// gzipOutput returns the file that gzip writes for file. It returns an
-// empty string when gzip does not know the suffix of a compressed file.
-func gzipOutput(file string, suffixes []string, decompress bool) string {
+// output returns the file that the tool writes for file. It returns an
+// empty string when the tool refuses the file.
+func (c compressor) output(file string, suffixes []string, decompress bool) string {
 	if !decompress {
 		if len(suffixes) > 0 {
 			return file + suffixes[len(suffixes)-1]
 		}
-		return file + ".gz"
+		return file + c.suffix
 	}
 	lower := strings.ToLower(file)
-	for _, s := range append(suffixes, ".gz", "-gz", ".z", "-z", "_z") {
+	for _, s := range slices.Concat(suffixes, c.known) {
 		if strings.HasSuffix(lower, strings.ToLower(s)) && len(file) > len(s) {
 			return file[:len(file)-len(s)]
 		}
 	}
-	for _, s := range []string{".tgz", ".taz"} {
+	for _, s := range c.tar {
 		if strings.HasSuffix(lower, s) && len(file) > len(s) {
 			return file[:len(file)-len(s)] + ".tar"
 		}
+	}
+	if c.fallback != "" {
+		return file + c.fallback
 	}
 	return ""
 }
 
 // zip writes the archive, the first operand, and reads the other operands.
-// With -m it also removes them.
-func (w *walker) zip(p parsedArgs, cwds dirs) {
+// With -m it also removes them. -O writes the new archive to another file.
+func (w *walker) zip(args []string, cwds dirs) {
+	args = slices.Clone(args)
+	for i, a := range args {
+		if long, ok := zipShortOptions[a]; ok {
+			args[i] = long
+		}
+	}
+	p := parseArgs(args, zipOptions)
+	w.addOutputs(p.value("-O", "--output-file", "--logfile-path"), cwds)
 	if len(p.operands) == 0 {
 		return
 	}
@@ -383,16 +597,121 @@ func (w *walker) zip(p parsedArgs, cwds dirs) {
 	}
 }
 
-// tar records the archive and the members. The first word can be a bundle
-// of flags without a dash, as in "tar czf out.tgz dir". A create, append,
-// update, concatenate, or delete writes the archive. An extract writes
-// into the -C directory, or into the working directory. Other modes read
-// the archive.
-func (w *walker) tar(args []string, cwds dirs) {
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") && isLetters(args[0]) {
-		args = append([]string{"-" + args[0]}, args[1:]...)
+// sevenZip records the archive and the files of a 7z command. The first
+// operand is the command. a, u, d, and rn write the archive. x extracts
+// with paths into the -o directory or the working directory. e extracts
+// without paths. -spf extracts to the absolute paths in the archive. An
+// unknown command can write any path.
+func (w *walker) sevenZip(args []string, cwds dirs) {
+	var ops, outDirs []string
+	var toStdout, absolute, deletes bool
+	for _, a := range args {
+		switch {
+		case strings.HasPrefix(a, "-o"):
+			outDirs = append(outDirs, a[2:])
+		case a == "-so":
+			toStdout = true
+		case strings.HasPrefix(a, "-spf"):
+			absolute = true
+		case a == "-sdel":
+			deletes = true
+		case strings.HasPrefix(a, "-") && a != "-":
+		default:
+			ops = append(ops, a)
+		}
 	}
-	p := parseArgs(args, tarOptions)
+	if len(ops) == 0 {
+		return
+	}
+	archive, files := ops[1:min(2, len(ops))], ops[min(2, len(ops)):]
+	switch strings.ToLower(ops[0]) {
+	case "a", "u":
+		w.addOutputs(archive, cwds)
+		w.addAll(files, AccessRead, cwds)
+		if deletes {
+			w.addAll(files, AccessRemove, cwds)
+		}
+	case "d", "rn":
+		w.addOutputs(archive, cwds)
+	case "x", "e":
+		w.addAll(archive, AccessRead, cwds)
+		if toStdout {
+			return
+		}
+		access := AccessRemove
+		if strings.EqualFold(ops[0], "x") {
+			access = AccessWriteTree
+		}
+		w.extractInto(outDirs, access, absolute, cwds)
+	case "l", "t", "h", "i", "b":
+		w.addAll(ops[1:], AccessRead, cwds)
+	default:
+		w.addAnywhere(cwds)
+	}
+}
+
+// unzip reads the archive and extracts into the -d directory or the
+// working directory. -l, -t, -v, -z, -Z, -c, and -p only read. -j drops
+// the paths of the members. -: keeps ".." in member paths, so it can write
+// any path.
+func (w *walker) unzip(args []string, cwds dirs) {
+	var ops, outDirs []string
+	var readOnly, flat, anywhere bool
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if !strings.HasPrefix(a, "-") || a == "-" {
+			ops = append(ops, a)
+			continue
+		}
+		flags, dir, hasDir := strings.Cut(a[1:], "d")
+		readOnly = readOnly || strings.ContainsAny(flags, "ltvzZcp")
+		flat = flat || strings.Contains(flags, "j")
+		anywhere = anywhere || strings.Contains(flags, ":")
+		if !hasDir {
+			continue
+		}
+		if dir == "" && i+1 < len(args) {
+			i++
+			dir = args[i]
+		}
+		outDirs = append(outDirs, dir)
+	}
+	w.addAll(ops[:min(1, len(ops))], AccessRead, cwds)
+	if readOnly {
+		return
+	}
+	access := AccessWriteTree
+	if flat {
+		access = AccessRemove
+	}
+	w.extractInto(outDirs, access, anywhere, cwds)
+}
+
+// extractInto records the directories an extract writes into. It uses the
+// working directory when dirs is empty. An extract that keeps absolute
+// member paths can write any path.
+func (w *walker) extractInto(dirs []string, access Access, absolute bool, cwds dirs) {
+	if len(dirs) == 0 {
+		dirs = []string{"."}
+	}
+	w.addAll(dirs, access, cwds)
+	if absolute {
+		w.addAnywhere(cwds)
+	}
+}
+
+// addAnywhere records that a command can write any path.
+func (w *walker) addAnywhere(cwds dirs) {
+	w.add("/", AccessWriteTree, cwds)
+}
+
+// tar records the archive and the members. A create, append, update,
+// concatenate, or delete writes the archive. An extract writes into the -C
+// directory, or into the working directory. An extract with -P keeps
+// absolute member names, so it can write any path. Other modes read the
+// archive.
+func (w *walker) tar(args []string, cwds dirs) {
+	p := parseArgs(tarOldStyle(args), tarOptions)
 	adds := p.has("-c", "--create", "-r", "--append", "-u", "--update")
 	concatenates := p.has("-A", "--catenate", "--concatenate")
 	archive := AccessRead
@@ -411,12 +730,28 @@ func (w *walker) tar(args []string, cwds dirs) {
 	case adds || concatenates:
 		w.addAll(p.operands, AccessRead, cwds)
 	case p.has("-x", "--extract", "--get") && !p.has("-O", "--to-stdout"):
-		targets := p.value("-C", "--directory")
-		if len(targets) == 0 {
-			targets = []string{"."}
-		}
-		w.addAll(targets, AccessRemove, cwds)
+		w.extractInto(p.value("-C", "--directory"), AccessWriteTree, p.has("-P", "--absolute-names"), cwds)
 	}
+}
+
+// tarOldStyle rewrites an old-style first word, as in "tar czf out.tgz
+// dir", as separate options. GNU tar gives each letter that takes a value
+// the next word, in order, so "tar xfC a.tar dir" reads a.tar with -C dir.
+func tarOldStyle(args []string) []string {
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") || !isLetters(args[0]) {
+		return args
+	}
+	rest := args[1:]
+	out := make([]string, 0, len(args)+len(args[0]))
+	for _, c := range args[0] {
+		flag := "-" + string(c)
+		out = append(out, flag)
+		if tarOptions.values[flag] && len(rest) > 0 {
+			out = append(out, rest[0])
+			rest = rest[1:]
+		}
+	}
+	return append(out, rest...)
 }
 
 func isLetters(s string) bool {
@@ -425,7 +760,9 @@ func isLetters(s string) bool {
 	}) < 0
 }
 
-// curl records the hosts, the uploaded files, and the output files.
+// curl records the hosts, the uploaded files, and the output files. -o
+// and -O write into the --output-dir directory when it is set. The value
+// of an option that the table does not know is a guessed write target.
 func (w *walker) curl(p parsedArgs, cwds dirs) {
 	urls := slices.Concat(p.operands, p.value("--url"))
 	for _, u := range urls {
@@ -449,21 +786,62 @@ func (w *walker) curl(p parsedArgs, cwds dirs) {
 			w.addUpload(file, cwds)
 		}
 	}
-	for _, f := range p.value("-T", "--upload-file", "-K", "--config") {
+	for _, f := range p.value("-T", "--upload-file", "-K", "--config", "--etag-compare") {
 		w.addUpload(f, cwds)
 	}
-	w.addOutputs(p.value("-o", "--output", "-c", "--cookie-jar", "-D", "--dump-header",
-		"--trace", "--trace-ascii", "--stderr"), cwds)
-	w.addAll(p.value("--output-dir"), AccessRemove, cwds)
+	w.addOutputs(p.value("-c", "--cookie-jar", "-D", "--dump-header", "--trace", "--trace-ascii",
+		"--stderr", "--hsts", "--etag-save", "--libcurl", "--alt-svc", "--ssl-sessions"), cwds)
+	w.addOutputs(p.guesses, cwds)
+	for _, format := range p.value("-w", "--write-out") {
+		w.writeOutFiles(format, cwds)
+	}
+
+	dir := "."
+	if dirs := p.value("--output-dir"); len(dirs) > 0 {
+		dir = dirs[len(dirs)-1]
+	}
+	for _, o := range p.value("-o", "--output") {
+		switch {
+		case o == "-":
+		case dir == ".":
+			w.add(o, AccessWrite, cwds)
+		default:
+			w.add(dir+"/"+o, AccessWrite, cwds)
+		}
+	}
 	if !p.has("-O", "--remote-name", "--remote-name-all") {
 		return
 	}
 	if p.has("-J", "--remote-header-name") {
-		w.add(".", AccessRemove, cwds)
+		w.add(dir, AccessRemove, cwds)
 		return
 	}
 	for _, u := range urls {
-		w.add(remoteFileName(u), AccessWrite, cwds)
+		if name := remoteFileName(u); name != "" {
+			w.add(dir+"/"+name, AccessWrite, cwds)
+		} else {
+			w.add(dir, AccessRemove, cwds)
+		}
+	}
+}
+
+// writeOutFiles records the files of "%output{FILE}" in a curl --write-out
+// format. "%output{>>FILE}" appends. A format read from a file with "@" can
+// name any file.
+func (w *walker) writeOutFiles(format string, cwds dirs) {
+	if strings.HasPrefix(format, "@") {
+		w.addAnywhere(cwds)
+		return
+	}
+	const marker = "%output{"
+	for {
+		_, after, ok := strings.Cut(format, marker)
+		if !ok {
+			return
+		}
+		file, rest, _ := strings.Cut(after, "}")
+		w.add(strings.TrimPrefix(file, ">>"), AccessWrite, cwds)
+		format = rest
 	}
 }
 
@@ -502,9 +880,9 @@ func withWgetrc(p parsedArgs) parsedArgs {
 
 // wget records the hosts, the uploaded files, and the output files.
 // Without -O, wget saves each URL under its file name in the -P directory
-// or the working directory. A recursive download, or a download that takes
-// names from the server or an input file, can write any path in that
-// directory.
+// or the working directory. A download that takes names from the server or
+// an input file can write any name in that directory. A recursive
+// download can write any path in it.
 func (w *walker) wget(p parsedArgs, cwds dirs) {
 	p = withWgetrc(p)
 	for _, u := range p.operands {
@@ -513,22 +891,30 @@ func (w *walker) wget(p parsedArgs, cwds dirs) {
 	w.addAll(p.value("--post-file", "--body-file", "-i", "--input-file"), AccessRead, cwds)
 	w.addOutputs(p.value("-O", "--output-document", "-o", "--output-file", "-a", "--append-output",
 		"--save-cookies"), cwds)
-	prefixes := p.value("-P", "--directory-prefix")
-	w.addAll(prefixes, AccessRemove, cwds)
-	if len(prefixes) > 0 || p.has("-O", "--output-document", "--spider") {
+	dirs := p.value("-P", "--directory-prefix")
+	if p.has("-O", "--output-document", "--spider") {
+		w.addAll(dirs, AccessRemove, cwds)
 		return
 	}
-	if p.has("-r", "--recursive", "-m", "--mirror", "-p", "--page-requisites", "-x",
-		"--force-directories", "--content-disposition", "--trust-server-names", "-i", "--input-file") {
-		w.add(".", AccessRemove, cwds)
-		return
+	if len(dirs) == 0 {
+		dirs = []string{"."}
 	}
-	for _, u := range p.operands {
-		name := remoteFileName(u)
-		if name == "" {
-			name = "index.html"
+	switch {
+	case p.has("-r", "--recursive", "-m", "--mirror", "-p", "--page-requisites", "-x",
+		"--force-directories"):
+		w.addAll(dirs, AccessWriteTree, cwds)
+	case p.has("--content-disposition", "--trust-server-names", "-i", "--input-file"):
+		w.addAll(dirs, AccessRemove, cwds)
+	default:
+		for _, dir := range dirs {
+			for _, u := range p.operands {
+				name := remoteFileName(u)
+				if name == "" {
+					name = "index.html"
+				}
+				w.add(dir+"/"+name, AccessWrite, cwds)
+			}
 		}
-		w.add(name, AccessWrite, cwds)
 	}
 }
 
@@ -583,7 +969,7 @@ func (w *walker) netcat(args []string) {
 // Each remote operand gives a host. A local source is a read, and a local
 // destination is a write of the destination and of each source name in it.
 // rsync --remove-source-files removes each local source.
-func (w *walker) remoteCopy(p parsedArgs, dirFlags []string, cwds dirs) {
+func (w *walker) remoteCopy(p parsedArgs, flags copyFlags, cwds dirs) {
 	w.addAll(p.value("--files-from", "--exclude-from", "--include-from", "--password-file"), AccessRead, cwds)
 	if len(p.operands) < 2 {
 		return
@@ -605,7 +991,7 @@ func (w *walker) remoteCopy(p parsedArgs, dirFlags []string, cwds dirs) {
 		w.addHost(host)
 		return
 	}
-	w.addDest(dest, sources, destAccess(p, sources, dirFlags), cwds)
+	w.addDest(dest, sources, p, flags, cwds)
 }
 
 // gitRemoteArg gives, for each git subcommand that names a remote, the

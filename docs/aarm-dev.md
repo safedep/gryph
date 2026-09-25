@@ -221,16 +221,41 @@ from `openssl -connect`, and from a `/dev/tcp/host/port` redirect. Hosts are
 lower case, without the port.
 
 A write or remove target also comes from the file operands of an editor
-(`vim`, `vi`, `nano`), `sort -o`, the archive of `zip` and of a `tar` create,
-append, update, concatenate, or delete, and the output files of `curl` and
-`wget`. A command that can write any path in a directory is a removal of
-that directory: a recursive copy (`cp -r`, `rsync -a`, `scp -r`), a copy of
-directory contents (a source that ends in `/` or `/.`), a copy with `-T`, a
-`tar` extract (the `-C` directory or the working directory), `curl
---output-dir`, and `wget -P` or a recursive `wget`. `gzip` removes each
-operand and writes the compressed or decompressed file, unless `-c` or `-k`
-is set. `zip -m`, `tar --remove-files`, and `rsync --remove-source-files`
-remove the sources.
+(`vim`, `vi`, `nvim`, `ex`, `nano`), `sort -o`, the archive of `zip` (also
+`zip -O` and the `zip -lf` log) and of a `tar` create, append, update,
+concatenate, or delete, the archive of `7z a`, `u`, `d`, and `rn`, and the
+output files of `curl` and `wget`. `curl` also writes the files of `--hsts`,
+`--etag-save`, `--libcurl`, `--alt-svc`, and `-w '%output{FILE}'`. The value
+of a `curl` option that the table does not know is a guessed write target.
+
+A command that can write any path in a directory, at any depth, is a tree
+write (`AccessWriteTree`) of that directory: a recursive copy (`cp -r`,
+`rsync -a`, `scp -r`) of a source that can be a directory, a copy of
+directory contents (a source that ends in `/` or `/.`), a copy or link with
+`-T` or `ln -n`, a `tar`, `7z x`, or `unzip` extract (the target directory or
+the working directory), and a recursive `wget`. An extract that keeps
+absolute member names (`tar -P`, `7z -spf`, `unzip -:`), `xz --files`, `7z`
+with an unknown command, and `curl -w @FILE` are a tree write of `/`. A
+recursive copy of a source with an extension, such as `notes.txt`, is a
+write of the destination and of the source name in it. A download that takes
+a name from the server (`curl -J`, `wget --content-disposition`) and `7z e`,
+`unzip -j`, and `gunzip -N` remove the target directory. A plain download
+writes the URL file name in the `--output-dir` or `-P` directory. `cp
+--parents` and `rsync -R` write the whole source path under the destination.
+An `ln` with one operand writes the base name in the working directory.
+`gzip`, `bzip2`, and `xz` remove each operand and write the compressed or
+decompressed file, unless `-c` or `-k` is set. `zip -m`, `7z -sdel`, `tar
+--remove-files`, and `rsync --remove-source-files` remove the sources.
+
+The PDP matches a removal or a tree write against the parent directories of
+each pattern, and the root for an absolute pattern. A tree write into the
+action working directory, the home directory, or a parent of either (also
+`/`) matches every pattern that starts with `**/`. An agent loads its
+settings from the project root and from home, so a tree write elsewhere
+cannot plant a file that the agent loads. The cost is that an extract or a
+recursive copy into the project root, such as `tar xzf release.tgz`, blocks
+under the built-in rule. An extract into a subdirectory, such as `tar xzf
+release.tgz -C build`, does not.
 
 `parseArgs` in `aarm/shellcmd/tools.go` splits options the way getopt does,
 with one `options` table for each tool. For a tool that parses with
@@ -239,7 +264,9 @@ option also matches by a unique prefix, so `--cr` is `--create`. A prefix
 match is only correct when the table lists every real option that is a
 prefix of a listed value option, such as `curl --head` for `--header`. The
 lists are best effort. A plain `mv` or `ln` onto a directory that does not
-exist yet, and a `wget` or `curl` config file, are not seen.
+exist yet, and a `wget` or `curl` config file, are not seen. `tar` gives each
+letter of an old-style first word that takes a value the next word, in
+order, so `tar xfC a.tar dir` reads `a.tar` into `dir`.
 Self-protection matches write and remove targets only.
 
 The operator toggles self-protection only through

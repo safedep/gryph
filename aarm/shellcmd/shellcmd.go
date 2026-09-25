@@ -30,6 +30,10 @@ const (
 	// permissions of the path. A removal of a directory also removes every
 	// path in it.
 	AccessRemove Access = "remove"
+	// AccessWriteTree means the command can write any path in the
+	// directory, at any depth, with names that the command line does not
+	// show. It also replaces paths in the directory, so it is a removal too.
+	AccessWriteTree Access = "write-tree"
 )
 
 // Target is a path that a command uses.
@@ -40,9 +44,9 @@ type Target struct {
 	Access Access
 }
 
-// Removes reports whether the target is a removal.
+// Removes reports whether the target is a removal or a tree write.
 func (t Target) Removes() bool {
-	return t.Access == AccessRemove
+	return t.Access == AccessRemove || t.Access == AccessWriteTree
 }
 
 // UnknownHost is the host of a command that the parser rejects. The command
@@ -97,12 +101,18 @@ func AnalyzeCommand(command string, args []string, workingDir string) Analysis {
 	if line == "" {
 		return Analysis{Parsed: true}
 	}
+	return Analyze(line, Env{WorkingDir: filepath.ToSlash(workingDir), Home: HomeDir()})
+}
+
+// HomeDir returns the user's home directory with forward slashes, or an
+// empty string when it is not known. AnalyzeCommand resolves "~" with it.
+func HomeDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		log.Warnf("shellcmd: resolve home directory: %v", err)
-		home = ""
+		return ""
 	}
-	return Analyze(line, Env{WorkingDir: filepath.ToSlash(workingDir), Home: filepath.ToSlash(home)})
+	return filepath.ToSlash(home)
 }
 
 // Line rebuilds the command line for the parser. Adapters that split argv
@@ -323,9 +333,9 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	case "cp", "install", "mv", "ln":
 		w.localCopy(copyTools[name], rest, cwds)
 	case "rsync":
-		w.remoteCopy(parseArgs(rest, rsyncOptions), []string{"-r", "-a", "--recursive", "--archive"}, cwds)
+		w.remoteCopy(parseArgs(rest, rsyncOptions), rsyncFlags, cwds)
 	case "scp":
-		w.remoteCopy(parseArgs(rest, scpOptions), []string{"-r"}, cwds)
+		w.remoteCopy(parseArgs(rest, scpOptions), scpFlags, cwds)
 	case "tee", "truncate":
 		w.addAll(operands(rest), AccessWrite, cwds)
 	case "chmod", "chown", "chgrp":
@@ -359,11 +369,13 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	case "tar":
 		w.tar(rest, cwds)
 	case "zip":
-		w.zip(parseArgs(rest, zipOptions), cwds)
-	case "7z":
-		w.addAll(operands(rest), AccessRead, cwds)
-	case "gzip", "gunzip":
-		w.gzip(parseArgs(rest, gzipOptions), name == "gunzip", cwds)
+		w.zip(rest, cwds)
+	case "7z", "7za", "7zr", "7zz":
+		w.sevenZip(rest, cwds)
+	case "unzip":
+		w.unzip(rest, cwds)
+	case "gzip", "gunzip", "bzip2", "bunzip2", "xz", "unxz":
+		w.compress(compressors[name], rest, cwds)
 	case "sort":
 		w.sort(parseArgs(rest, sortOptions), cwds)
 	case "sqlite3", "source", ".":
@@ -580,22 +592,38 @@ func skipOptions(args []string) []string {
 	return nil
 }
 
-// addDest adds the destination of a copy or move with the given access.
-// When the destination is a directory, the command writes each source name
-// into it, so that path is added as a write too.
-func (w *walker) addDest(dest string, sources []string, access Access, cwds dirs) {
+// addDest adds the destination of a copy or move. When the destination is
+// a directory, the command writes each source name into it, so that path is
+// added as a write too. A relative copy, such as "cp --parents", writes the
+// whole source path under the destination.
+func (w *walker) addDest(dest string, sources []string, p parsedArgs, flags copyFlags, cwds dirs) {
 	if dest == "" {
 		return
 	}
-	w.add(dest, access, cwds)
+	w.add(dest, destAccess(p, sources, flags), cwds)
+	relative := p.has(flags.relative...)
 	for _, src := range sources {
-		if _, p, remote := splitRemote(src); remote {
-			src = p
+		if _, remotePath, remote := splitRemote(src); remote {
+			src = remotePath
 		}
-		if src != "" {
-			w.add(strings.TrimSuffix(dest, "/")+"/"+path.Base(src), AccessWrite, cwds)
+		if src == "" {
+			continue
 		}
+		name := path.Base(src)
+		if relative {
+			name = relativeSource(expandHome(src, w.env.Home))
+		}
+		w.add(strings.TrimSuffix(dest, "/")+"/"+name, AccessWrite, cwds)
 	}
+}
+
+// relativeSource returns the part of a source path that a relative copy
+// keeps. rsync drops the part before a "/./" marker.
+func relativeSource(src string) string {
+	if _, after, ok := strings.Cut(src, "/./"); ok {
+		return after
+	}
+	return src
 }
 
 func (w *walker) addAll(values []string, access Access, cwds dirs) {
@@ -615,7 +643,7 @@ func (w *walker) add(value string, access Access, cwds dirs) {
 	}
 	if i := strings.IndexAny(value, "*?["); i >= 0 {
 		value = path.Dir(value[:i] + "x")
-		if access != AccessRead {
+		if access == AccessWrite {
 			access = AccessRemove
 		}
 	}

@@ -1,6 +1,9 @@
 package pdp
 
 import (
+	"path"
+	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/safedep/gryph/aarm/model"
@@ -33,9 +36,29 @@ func (a *actionPaths) commandTargets() []shellcmd.Target {
 	return a.targets
 }
 
+// holdsAgentRoot reports whether dir is the working directory, the home
+// directory, or a parent of either.
+func (a *actionPaths) holdsAgentRoot(dir string) bool {
+	for _, root := range []string{a.action.WorkingDir, shellcmd.HomeDir()} {
+		if root == "" {
+			continue
+		}
+		root = path.Clean(filepath.ToSlash(root))
+		if dir == "/" || dir == root || strings.HasPrefix(root, dir+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 // matchesFiles reports whether the action path, or a path that the shell
 // command changes, matches the rule's file patterns. A file delete or a
 // shell removal of a directory that contains a matching path also matches.
+// A tree write can make any path under its directory. So a tree write into
+// the working directory, the home directory, or a parent of either also
+// matches a pattern that starts with "**/". An agent loads its settings from
+// the project root and from home, so a tree write elsewhere cannot plant a
+// file that the agent loads.
 func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) bool {
 	if matchesAnyPath(r.filePatterns, action.Parameters.Path) {
 		return true
@@ -50,6 +73,9 @@ func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) boo
 		if t.Removes() && matchesAnyPath(r.containerPatterns, t.Path) {
 			return true
 		}
+		if t.Access == shellcmd.AccessWriteTree && r.anyDirectory && paths.holdsAgentRoot(t.Path) {
+			return true
+		}
 	}
 	return false
 }
@@ -57,7 +83,7 @@ func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) boo
 // containerPatterns returns the glob of each parent directory of each
 // pattern. For "**/.agent/hooks.json" it returns "**/.agent". It skips a
 // parent whose last segment is a glob, because that parent can be any
-// directory.
+// directory. An absolute pattern also has the root as a parent.
 func containerPatterns(patterns []string) []string {
 	var out []string
 	for _, pattern := range patterns {
@@ -69,6 +95,17 @@ func containerPatterns(patterns []string) []string {
 			}
 			out = append(out, strings.Join(segs[:i], "/"))
 		}
+		if strings.HasPrefix(pattern, "/") {
+			out = append(out, "/")
+		}
 	}
 	return out
+}
+
+// matchesAnyDirectory reports whether a pattern starts with "**/". Such a
+// pattern matches a path under any directory.
+func matchesAnyDirectory(patterns []string) bool {
+	return slices.ContainsFunc(patterns, func(p string) bool {
+		return p == "**" || strings.HasPrefix(p, "**/")
+	})
 }
