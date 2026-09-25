@@ -1,14 +1,14 @@
-package agent
+package decision
 
 import (
 	"github.com/safedep/gryph/core/events"
 )
 
-// RedactEvent applies the checker's redaction patterns to event fields that may
-// contain user content. Must be called after parsing and before ApplyLoggingLevel,
+// redactEvent applies the checker's redaction patterns to event fields that may
+// contain user content. Must be called after parsing and before applyLoggingLevel,
 // so configured patterns are scrubbed before any storage or logging-level filtering.
 // No-ops on a nil checker or event.
-func RedactEvent(event *events.Event, checker *events.PrivacyChecker) {
+func redactEvent(event *events.Event, checker *events.PrivacyChecker) {
 	if checker == nil || event == nil {
 		return
 	}

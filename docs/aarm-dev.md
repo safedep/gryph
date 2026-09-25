@@ -14,8 +14,10 @@ guidance decision, and records a tamper-evident receipt. The requirement set
 
 The layer implements the `core/security.Check` interface. `cli/root.go`
 registers `lazyPolicyCheck` (in `cli/policy.go`) with the security `Evaluator`.
-Hook processing calls `app.Security.Evaluate` in `cli/hook.go`, which calls the
-check.
+The hook side in `cli/hook.go` parses the agent payload and calls
+`decision.Service.Handle`. The in-process `decision.Local` redacts, applies
+the logging level, upserts the session, and calls `app.Security.Evaluate`,
+which calls the check. `cli/hook.go` then renders the response.
 
 - `lazyPolicyCheck` defers policy load until the first hook event. A broken
   policy file must not lock the user out of `gryph policy validate` and `test`.
@@ -41,7 +43,7 @@ hook event
   -> core/security.CheckResult
 ```
 
-Post-hook, `cli/hook.go` calls `Mediator.RecordResult` on the allow path to
+Post-hook, `decision.Local` calls `Mediator.RecordResult` on the allow path to
 write the execution outcome to the accumulator row and the receipt row.
 
 ## Package map

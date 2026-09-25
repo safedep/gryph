@@ -624,8 +624,8 @@ func (m *Mediator) shouldRecordReceipt(decision *model.EvaluationResult) bool {
 }
 
 // RecordResult propagates a post-hook execution outcome to both the Context
-// Accumulator and the receipt generator. cli/hook.go invokes this on the
-// allow path after the response is sent.
+// Accumulator and the receipt generator. decision.Local invokes this on the
+// allow path after it saves the event.
 func (m *Mediator) RecordResult(ctx context.Context, actionID uuid.UUID, sessionID uuid.UUID, sequence int64, result model.Result) error {
 	if m == nil {
 		return nil

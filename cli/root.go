@@ -20,6 +20,7 @@ import (
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
+	"github.com/safedep/gryph/decision"
 	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
@@ -110,6 +111,20 @@ func NewApp(cfg *config.Config) (*App, error) {
 		policyCheck:    policyCheck,
 	}
 	return app, nil
+}
+
+// DecisionService returns the in-process decision service for hook events.
+// Call it after InitStore.
+func (a *App) DecisionService() decision.Service {
+	return decision.NewLocal(a.Store, a.Security, a.PrivacyChecker, a.Config.GetAgentLoggingLevel,
+		decision.WithResultRecorder(func() decision.ResultRecorder {
+			if m := a.AarmMediator(); m != nil {
+				return m
+			}
+			return nil
+		}),
+		decision.WithSessionEndHook(collectSessionCost),
+	)
 }
 
 // InitStore initializes the database store.
