@@ -6,10 +6,15 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/loader"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/core/events"
+	coresecurity "github.com/safedep/gryph/core/security"
+	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/tui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -102,6 +107,50 @@ func TestBuildPolicyLoader_MissingFileBuiltinsOnly(t *testing.T) {
 	ids := ruleIDs(policy)
 	assert.NotContains(t, ids, "user-rule")
 	assert.Contains(t, ids, "gryph-builtin-protected-files")
+}
+
+func TestLazyPolicyCheck_PassesSessionToMediator(t *testing.T) {
+	tmp := t.TempDir()
+	writePolicyFile(t, filepath.Join(tmp, "policy.yaml"), `version: "1"
+rules:
+  - id: block-on-project
+    action: block
+    scope:
+      projects: [payments]
+    match:
+      action_types: [file_write]
+    message: "blocked write on {{.Action.Project}}"
+`)
+	cfg := config.Default()
+	cfg.Policy.Enabled = true
+	check := newLazyPolicyCheck(cfg, &config.Paths{ConfigDir: tmp}, nil)
+
+	sessID := uuid.New()
+	event := &events.Event{
+		ID:         uuid.New(),
+		SessionID:  sessID,
+		Timestamp:  time.Now(),
+		ActionType: events.ActionFileWrite,
+		AgentName:  "claude-code",
+		Payload:    []byte(`{"path":"/work/app.go"}`),
+	}
+
+	tests := []struct {
+		name     string
+		sess     *session.Session
+		decision coresecurity.Decision
+	}{
+		{"session in scoped project blocks", &session.Session{ID: sessID, ProjectName: "payments"}, coresecurity.DecisionBlock},
+		{"session in other project allows", &session.Session{ID: sessID, ProjectName: "billing"}, coresecurity.DecisionAllow},
+		{"nil session allows", nil, coresecurity.DecisionAllow},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := check.Check(context.Background(), event, tc.sess)
+			require.NoError(t, err)
+			assert.Equal(t, tc.decision, res.Decision)
+		})
+	}
 }
 
 func TestSelfProtectionGlobs_StaticSetNoRepoLocal(t *testing.T) {
