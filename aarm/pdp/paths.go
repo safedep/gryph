@@ -82,16 +82,17 @@ func containerPatterns(patterns []string) []string {
 // split argv into Args lose the original quoting, so each argument is
 // quoted again.
 func shellLine(p model.Parameters) string {
-	parts := make([]string, 0, len(p.Args)+1)
-	if p.Command != "" {
-		parts = append(parts, p.Command)
-	}
+	var b strings.Builder
+	b.WriteString(p.Command)
 	for _, a := range p.Args {
 		q, err := syntax.Quote(a, syntax.LangBash)
 		if err != nil {
 			q = a
 		}
-		parts = append(parts, q)
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(q)
 	}
-	return strings.Join(parts, " ")
+	return b.String()
 }
