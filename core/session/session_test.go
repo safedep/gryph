@@ -3,6 +3,7 @@ package session
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/events"
 	"github.com/stretchr/testify/assert"
 )
@@ -21,6 +22,8 @@ func TestEventCounts(t *testing.T) {
 		{"observation", events.Event{Kind: events.KindObservation, ActionType: events.ActionCommandExec}, Counts{}},
 		{"blocked observation", events.Event{Kind: events.KindObservation, ActionType: events.ActionToolUse, ResultStatus: events.ResultBlocked}, Counts{BlockedActions: 1}},
 		{"sensitive observation", events.Event{Kind: events.KindObservation, ActionType: events.ActionFileRead, IsSensitive: true}, Counts{SensitiveActions: 1}},
+		{"sensitive linked observation", events.Event{Kind: events.KindObservation, ActionType: events.ActionFileRead, IsSensitive: true, LinkedEventID: uuid.New()}, Counts{}},
+		{"blocked linked observation", events.Event{Kind: events.KindObservation, ActionType: events.ActionFileRead, ResultStatus: events.ResultBlocked, LinkedEventID: uuid.New()}, Counts{BlockedActions: 1}},
 		{"failed observation", events.Event{Kind: events.KindObservation, ActionType: events.ActionCommandExec, ResultStatus: events.ResultError}, Counts{Errors: 1}},
 		{"failed action", events.Event{Kind: events.KindAction, ActionType: events.ActionToolUse, ResultStatus: events.ResultError}, Counts{TotalActions: 1, Errors: 1}},
 		{"failed intent", events.Event{Kind: events.KindIntent, ResultStatus: events.ResultError}, Counts{}},

@@ -128,8 +128,10 @@ type Counts struct {
 // event of kind action adds to the activity counters, so a pre and post pair
 // for one tool call counts once. An event with no kind counts as an action.
 // Errors count actions and observations, because the post event of a pair
-// carries the result. The blocked and sensitive counters count events of
-// every kind, because a rule can block or flag an observation.
+// carries the result. The blocked counter counts events of every kind,
+// because a rule can block an observation. The sensitive counter skips an
+// observation that links to its pre event, because the pre event of the pair
+// is sensitive too.
 func EventCounts(e *events.Event) Counts {
 	var c Counts
 	if e.ResultStatus == events.ResultError && e.Kind != events.KindIntent {
@@ -138,7 +140,7 @@ func EventCounts(e *events.Event) Counts {
 	if e.ResultStatus == events.ResultBlocked {
 		c.BlockedActions = 1
 	}
-	if e.IsSensitive {
+	if e.IsSensitive && (e.Kind != events.KindObservation || e.LinkedEventID == uuid.Nil) {
 		c.SensitiveActions = 1
 	}
 	if e.Kind != "" && e.Kind != events.KindAction {
