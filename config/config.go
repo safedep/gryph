@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -359,7 +360,7 @@ func Load(configPath string) (*Config, error) {
 		cfg.Policy.Receipts.SignMode = aliased
 	}
 
-	clampCELEntries(&cfg.Policy.Context)
+	clampContext(&cfg.Policy.Context)
 
 	// Validate config
 	if err := validate(&cfg); err != nil {
@@ -369,15 +370,20 @@ func Load(configPath string) (*Config, error) {
 	return &cfg, nil
 }
 
-// clampCELEntries moves an out-of-range policy.context.cel_entries into the
-// range. A load error makes loadApp fall back to the defaults, and the
-// defaults turn the policy off. gryph config set still rejects the value.
-func clampCELEntries(cfg *ContextConfig) {
-	n := min(max(cfg.CELEntries, 1), MaxCELEntries)
-	if n != cfg.CELEntries {
-		log.Warnf("config: policy.context.cel_entries %d is not between 1 and %d. Gryph uses %d",
-			cfg.CELEntries, MaxCELEntries, n)
-		cfg.CELEntries = n
+// clampContext moves an out-of-range policy.context value into its range. A
+// load error makes loadApp fall back to the defaults, and the defaults turn
+// the policy off. gryph config set still rejects the value.
+func clampContext(cfg *ContextConfig) {
+	clampInt("policy.context.cel_entries", &cfg.CELEntries, 1, MaxCELEntries)
+	clampInt("policy.context.window_max_entries", &cfg.WindowMaxEntries, 1, MaxWindowEntries)
+	clampInt("policy.context.window_max_bytes", &cfg.WindowMaxBytes, 0, math.MaxInt)
+}
+
+func clampInt(key string, v *int, lo, hi int) {
+	n := min(max(*v, lo), hi)
+	if n != *v {
+		log.Warnf("config: %s %d is not between %d and %d. Gryph uses %d", key, *v, lo, hi, n)
+		*v = n
 	}
 }
 

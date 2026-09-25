@@ -672,3 +672,15 @@ func TestValidate_ContextWindow(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_ClampsWindowLimits(t *testing.T) {
+	configFile := filepath.Join(t.TempDir(), "config.yaml")
+	content := "policy:\n  enabled: true\n  context:\n    window_max_entries: 0\n    window_max_bytes: -1\n"
+	require.NoError(t, os.WriteFile(configFile, []byte(content), 0o644))
+
+	cfg, err := Load(configFile)
+	require.NoError(t, err, "an out-of-range value must not turn the policy off")
+	assert.True(t, cfg.Policy.Enabled)
+	assert.Equal(t, 1, cfg.Policy.Context.WindowMaxEntries)
+	assert.Equal(t, 0, cfg.Policy.Context.WindowMaxBytes)
+}
