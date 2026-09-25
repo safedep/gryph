@@ -18,6 +18,9 @@ type templateAction struct {
 	Kind       string
 	Origin     string
 	Source     string
+	Hosts      []string
+	ReadPaths  []string
+	WritePaths []string
 	Params     templateParams
 }
 
@@ -46,7 +49,7 @@ type templateContext struct {
 	TagSeq              map[string]int64
 	OriginsSeen         []string
 	EntitiesSeen        []string
-	SemanticDrift       float64
+	EgressHosts         []string
 	IntentAvailable     bool
 	ActionsSinceIntent  int
 }
@@ -83,6 +86,9 @@ func newTemplateAction(action *model.Action) templateAction {
 		Kind:       string(action.Kind),
 		Origin:     string(action.Origin),
 		Source:     action.Source,
+		Hosts:      action.Hosts(),
+		ReadPaths:  action.ReadPaths(),
+		WritePaths: action.WritePaths(),
 		Params:     params,
 	}
 }
@@ -105,7 +111,7 @@ func newTemplateContext(snapshot *model.ContextSnapshot) templateContext {
 		TagSeq:              tagSeq(snapshot.TagsSeen),
 		OriginsSeen:         nonNil(snapshot.OriginsSeen),
 		EntitiesSeen:        snapshot.EntitiesSeen,
-		SemanticDrift:       snapshot.SemanticDrift,
+		EgressHosts:         snapshot.EgressHosts,
 		IntentAvailable:     snapshot.IntentAvailable,
 		ActionsSinceIntent:  snapshot.ActionsSinceIntent,
 	}

@@ -1,0 +1,15 @@
+# context.semantic_drift is removed. A policy that reads it fails validation
+# with a message that names the field.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+! exec gryph policy validate --file drift.yaml
+stderr 'context.semantic_drift was removed'
+
+-- drift.yaml --
+version: "1"
+rules:
+  - id: drift
+    action: block
+    condition: "context.semantic_drift > 0.5"

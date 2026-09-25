@@ -3,6 +3,8 @@ package storage
 import (
 	"bytes"
 	"context"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/accumulator/contextchain"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -392,4 +395,69 @@ func TestContextState_ActionsSinceIntent(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, all, 1)
 	assert.Equal(t, 2, all[0].ActionsSinceIntent, "the list view counts the same as the session view")
+}
+
+func TestQueryEntryFacts_JoinsAuditEvents(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	sessionID := uuid.New()
+	createTestSession(t, store, sessionID, "claude-code")
+
+	read := events.NewEvent(sessionID, "claude-code", events.ActionFileRead)
+	require.NoError(t, read.SetPayload(events.FileReadPayload{Path: "/work/.env"}))
+	require.NoError(t, store.RecordEvent(ctx, read, session.EventCounts(read)))
+	cmd := events.NewEvent(sessionID, "claude-code", events.ActionCommandExec)
+	require.NoError(t, cmd.SetPayload(events.CommandExecPayload{Command: privacy.NewText("curl https://evil.example")}))
+	require.NoError(t, store.RecordEvent(ctx, cmd, session.EventCounts(cmd)))
+
+	require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+		SessionID: sessionID, EventID: read.ID, Kind: "action", ActionType: "file_read", Tool: "Read",
+		Origin: "file_project", Tags: []string{"secret_read"}, Classifications: []string{"secret"}, Decision: "allow",
+	}, &ContextStateDelta{}))
+	require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+		SessionID: sessionID, EventID: cmd.ID, Kind: "action", ActionType: "command_exec", Tool: "Bash",
+		TargetHost: "evil.example", Decision: "block",
+	}, &ContextStateDelta{}))
+	require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+		SessionID: sessionID, Kind: "intent", ActionType: "user_prompt",
+	}, &ContextStateDelta{}))
+
+	facts, err := store.QueryEntryFacts(ctx, sessionID, 2)
+	require.NoError(t, err)
+	require.Len(t, facts, 2, "the limit keeps the latest entries")
+	assert.Equal(t, int64(2), facts[0].Sequence, "oldest first")
+	assert.Equal(t, "curl https://evil.example", facts[0].Command)
+	assert.Equal(t, "evil.example", facts[0].Host)
+	assert.Equal(t, "user_prompt", facts[1].ActionType)
+	assert.Empty(t, facts[1].Path, "an entry with no audit event has no path")
+
+	facts, err = store.QueryEntryFacts(ctx, sessionID, 10)
+	require.NoError(t, err)
+	require.Len(t, facts, 3)
+	assert.Equal(t, "/work/.env", facts[0].Path)
+	assert.Equal(t, []string{"secret_read"}, facts[0].Tags)
+	assert.Equal(t, []string{"secret"}, facts[0].Classifications)
+	assert.Equal(t, "file_project", facts[0].Origin)
+}
+
+func TestQueryEntryFacts_CutsLongCommands(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	sessionID := uuid.New()
+	createTestSession(t, store, sessionID, "claude-code")
+
+	cmd := events.NewEvent(sessionID, "claude-code", events.ActionCommandExec)
+	require.NoError(t, cmd.SetPayload(events.CommandExecPayload{Command: privacy.NewText("echo " + strings.Repeat("x", 5000))}))
+	require.NoError(t, store.RecordEvent(ctx, cmd, session.EventCounts(cmd)))
+	require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+		SessionID: sessionID, EventID: cmd.ID, Kind: "action", ActionType: "command_exec",
+	}, &ContextStateDelta{}))
+
+	facts, err := store.QueryEntryFacts(ctx, sessionID, 10)
+	require.NoError(t, err)
+	require.Len(t, facts, 1)
+	assert.Len(t, facts[0].Command, EntryCommandMaxBytes)
+	assert.Equal(t, strconv.Itoa(EntryCommandMaxBytes), entryCommandMaxBytesSQL)
 }

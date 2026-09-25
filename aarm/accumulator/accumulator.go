@@ -50,6 +50,9 @@ var ErrAppend = errors.New("accumulator append")
 type Accumulator interface {
 	Snapshot(ctx context.Context, sessionID uuid.UUID, pending *model.ContextEntry) (*model.ContextSnapshot, error)
 	Append(ctx context.Context, entry *model.ContextEntry) error
+	// Entries returns the latest limit stored entries of a session, oldest
+	// first.
+	Entries(ctx context.Context, sessionID uuid.UUID, limit int) ([]model.EntryFacts, error)
 	RecordResult(ctx context.Context, entryID uuid.UUID, result model.Result) error
 	ConfirmIntent(ctx context.Context, entryID uuid.UUID) error
 }
@@ -69,6 +72,9 @@ func (*Nop) Snapshot(_ context.Context, _ uuid.UUID, _ *model.ContextEntry) (*mo
 
 // Append implements Accumulator.
 func (*Nop) Append(_ context.Context, _ *model.ContextEntry) error { return nil }
+
+// Entries implements Accumulator.
+func (*Nop) Entries(context.Context, uuid.UUID, int) ([]model.EntryFacts, error) { return nil, nil }
 
 // RecordResult implements Accumulator.
 func (*Nop) RecordResult(_ context.Context, _ uuid.UUID, _ model.Result) error { return nil }

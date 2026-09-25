@@ -462,3 +462,38 @@
   tier: P2
   guarantee: "gryph policy validate accepts lower-case tag names with digits, underscores and hyphens, and rejects any other name with the rule and the tag in the message. An installed policy with a legacy tag still loads and enforces."
   labels: [policy, tags, validate]
+
+- id: context/dataflow/example-policy-blocks-exfiltration
+  title: "the example policy blocks egress after a secret read"
+  category: context
+  tier: P0
+  guarantee: "The shipped secret-exfiltration example policy installs, lets a network command before a secret read pass, and blocks a command that contacts a host after a read of .env."
+  labels: [context, dataflow, tags, examples]
+
+- id: context/cel/entries-query
+  title: "a rule reads the entry log with glob()"
+  category: context
+  tier: P1
+  guarantee: "context.entries holds the latest entries with their paths, and glob(path, pattern) matches a path. A rule blocks a write after a .pem read."
+  labels: [context, cel]
+
+- id: context/counters/failed-call-counts-error
+  title: "a failed tool call counts one error"
+  category: context
+  tier: P1
+  guarantee: "A pre hook and a failed post hook count one action and one error, and a rule on context.errors sees the error on the next call."
+  labels: [context, counters]
+
+- id: policy/test/context-file
+  title: "policy test reads a session context from a file"
+  category: policy
+  tier: P1
+  guarantee: "gryph policy test --context-file evaluates a rule on tags_seen and entries from a YAML file, --kind and --origin set the action facts, and an unknown key in the file is an error."
+  labels: [policy, test, context]
+
+- id: policy/validate/semantic-drift-removed
+  title: "a policy on semantic_drift fails validation"
+  category: policy
+  tier: P2
+  guarantee: "context.semantic_drift is removed, and a policy that reads it fails validation with a message that names the field."
+  labels: [policy, validate]

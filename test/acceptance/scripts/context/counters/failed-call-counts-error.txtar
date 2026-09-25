@@ -1,0 +1,45 @@
+# A failed tool call counts one error and one action. The post event of the
+# pair carries the error. A rule on context.errors sees it on the next call.
+# The fresh-session defer is off, so the first call is not deferred while
+# context.errors is still zero.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin pre.json
+exec gryph _hook claude-code PreToolUse
+stdin failure.json
+exec gryph _hook claude-code PostToolUseFailure
+
+exec gryph sessions --format json --no-color
+stdout '"TotalActions": 1,'
+stdout '"Errors": 1,'
+
+stdin next.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'stop-after-error'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+  defer:
+    enabled: false
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: stop-after-error
+    action: block
+    match:
+      action_types: [command_exec]
+    condition: "context.errors > 0 && action.phase == 'pre'"
+    message: "stop-after-error: a command failed in this session"
+-- pre.json --
+{"session_id": "s-fail", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "npm run build"}, "tool_use_id": "tu-1"}
+-- failure.json --
+{"session_id": "s-fail", "cwd": "/home/user/project", "hook_event_name": "PostToolUseFailure", "tool_name": "Bash",
+ "tool_input": {"command": "npm run build"}, "tool_response": {"error": "Command failed with exit code 1"}, "tool_use_id": "tu-1"}
+-- next.json --
+{"session_id": "s-fail", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "npm test"}, "tool_use_id": "tu-2"}

@@ -107,6 +107,7 @@ type Mediator struct {
 	adapter      mediation.Adapter
 	pdp          *pdp.PDP
 	accum        accumulator.Accumulator
+	celEntries   int
 	receipt      receipt.Generator
 	approval     approval.Service
 	auditHook    ApprovalAuditHook
@@ -124,6 +125,19 @@ var _ coresecurity.Check = (*Mediator)(nil)
 
 // MediatorOption configures optional Mediator dependencies.
 type MediatorOption func(*Mediator)
+
+// DefaultCELEntries is the number of entries that context.entries holds when
+// the config does not set policy.context.cel_entries.
+const DefaultCELEntries = 100
+
+// WithCELEntries sets the number of entries that context.entries holds.
+func WithCELEntries(n int) MediatorOption {
+	return func(m *Mediator) {
+		if n > 0 {
+			m.celEntries = n
+		}
+	}
+}
 
 // WithAccumulator overrides the default no-op Context Accumulator.
 func WithAccumulator(a accumulator.Accumulator) MediatorOption {
@@ -242,6 +256,7 @@ func NewMediator(policy *pdp.Policy, opts ...MediatorOption) (*Mediator, error) 
 		approval:   approval.NewNop(),
 		adapter:    mediation.NewHookAdapter(),
 		policyHash: policy.Hash(),
+		celEntries: DefaultCELEntries,
 	}
 	for _, opt := range opts {
 		opt(m)
@@ -293,6 +308,15 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 	if sess != nil && snapshot != nil {
 		owned := *snapshot
 		owned.SessionStartedAt = sess.StartedAt
+		snapshot = &owned
+	}
+	if snapshot != nil && m.pdp.NeedsEntries() {
+		entries, err := m.accum.Entries(ctx, action.SessionID, m.celEntries)
+		if err != nil {
+			return nil, errors.Join(fmt.Errorf("aarm: %w: %w", accumulator.ErrSnapshot, err), m.appendFailedEntry(ctx, entry))
+		}
+		owned := *snapshot
+		owned.Entries = entries
 		snapshot = &owned
 	}
 
@@ -399,9 +423,9 @@ func (m *Mediator) appendEntry(ctx context.Context, entry *model.ContextEntry, d
 }
 
 // appendFailedEntry writes the entry of an action that has no decision
-// because the snapshot or the evaluation failed. The fail mode can still
-// allow the action, so its classes must reach the session state. The caller
-// already returns an error, so the append error joins it.
+// because the snapshot, the entry log or the evaluation failed. The fail
+// mode can still allow the action, so its classes must reach the session
+// state. The caller already returns an error, so the append error joins it.
 func (m *Mediator) appendFailedEntry(ctx context.Context, entry *model.ContextEntry) error {
 	entry.Result = model.ResultError
 	return m.appendEntry(ctx, entry, &model.EvaluationResult{})

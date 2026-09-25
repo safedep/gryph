@@ -119,9 +119,31 @@ type ContextStore interface {
 	GetContextStateByPrefix(ctx context.Context, prefix string) (*ContextStateRow, error)
 	QueryAllContextStates(ctx context.Context, limit int) ([]*ContextStateRow, error)
 	QueryContextEntries(ctx context.Context, filter *ContextEntryFilter) ([]*ContextEntryRow, error)
+
+	// QueryEntryFacts returns the latest limit entries of a session, oldest
+	// first, with the path and the command of their audit events.
+	QueryEntryFacts(ctx context.Context, sessionID uuid.UUID, limit int) ([]*EntryFactsRow, error)
 	ListContextSessionIDs(ctx context.Context) ([]uuid.UUID, error)
 	DeleteContextBefore(ctx context.Context, before time.Time) (int, error)
 	CountContextBefore(ctx context.Context, before time.Time) (int, error)
+}
+
+// EntryFactsRow is one entry of the entry log that policy reads. Path and
+// Command come from the audit event. It holds no content.
+type EntryFactsRow struct {
+	Sequence        int64
+	Kind            string
+	ActionType      string
+	Tool            string
+	Path            string
+	Command         string
+	Host            string
+	MCPServer       string
+	Origin          string
+	Classifications []string
+	Tags            []string
+	Decision        string
+	ResultStatus    string
 }
 
 // ContextEntryFilter narrows QueryContextEntries.

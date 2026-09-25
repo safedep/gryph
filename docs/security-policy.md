@@ -168,6 +168,8 @@ action.kind                        intent, action, or observation
 action.origin                      where the content came from, as the adapter claims it
 action.source                      the MCP server of an mcp origin
 action.sources                     every MCP server that the tool name can name
+action.hosts                       hosts of the shell command and the URL, "?" for a host that Gryph cannot read
+action.read_paths / write_paths    paths that the action reads, and writes or removes
 action.human_principal             captured identity, see Identity capture
 action.service_identity            CI / service identity, see Identity capture
 action.role_scope                  OS uid/gid + asserted scopes
@@ -175,11 +177,11 @@ action.gryph_hook                  true when a shell command runs gryph _hook
 context.{total_actions, files_read, files_written, commands_executed,
          network_requests, errors, tools_used, session_duration_ms,
          classifications_seen, tags_seen, tag_seq, origins_seen,
-         entities_seen, semantic_drift, intent_available,
+         entities_seen, egress_hosts, entries, intent_available,
          actions_since_intent}
 ```
 
-`action.data_classifications` carries labels like `secret`, `pii`, `source_code`, `config`, `git_internal`, `external_url`. `context.classifications_seen` is the running union across the session. `semantic_drift` is reserved and reads as `0.0` today.
+`action.data_classifications` carries labels like `secret`, `pii`, `source_code`, `config`, `git_internal`, `external_url`. `context.classifications_seen` is the running union across the session.
 
 The counters count actions, and the current event is in them. A pre and post hook pair for one tool call is one action: the post event is an observation of the pre event, and it does not add to a counter. A post event with no recorded pre event is an action. A blocked action counts. `errors` counts actions and observations with an error result.
 
@@ -204,6 +206,22 @@ The intent fields trust the prompt events that reach `gryph _hook`. The hook inp
 - A rule with no `action_types`.
 
 A rule that must stop prompts must list `user_prompt` in `action_types`. Gryph logs a warning at policy load, and `gryph policy validate` prints one, for a rule that names one of these tool names.
+
+`action.hosts` is best effort. It holds `?` for a network tool whose operand Gryph cannot read (`curl $URL`, `curl -K file`, `wget -i file`, `socat`), and for a git fetch or push to a named remote. It is empty for a program that opens a connection itself, such as a Python script, `npm publish` or `gh gist create`, and for a tool with no URL, such as WebSearch or most MCP tools. `glob()` and `file_patterns` are case-sensitive.
+
+`context.entities_seen` holds the `path:`, `host:` and `mcp:` keys of the session, including the current action and blocked actions. `context.egress_hosts` holds the hosts that earlier actions contacted. A blocked action contacted no host, so it adds none.
+
+`context.entries` is the entry log: the latest entries of the session, oldest first. `policy.context.cel_entries` sets the count (default 100, at most 1000). Gryph loads the log only when a rule reads it. Each item is a map with `seq`, `kind`, `action_type`, `tool`, `path`, `command`, `host`, `mcp_server`, `origin`, `classes`, `tags`, `decision` and `result`. `command` is the stored command, after redaction. No item holds content. `glob(path, pattern)` matches a path with the rules of `file_patterns`:
+
+```yaml
+- id: write-after-key-read
+  action: block
+  match:
+    action_types: [file_write]
+  condition: 'context.entries.exists(e, e.action_type == "file_read" && glob(e.path, "**/*.pem"))'
+```
+
+`context.semantic_drift` is removed. A policy that reads it fails validation.
 
 ### Facts and tags
 
@@ -255,7 +273,7 @@ In a message template, `{{index .Context.TagSeq "secret_read"}}` gives 0 for a m
 
 A tag name starts with a lower-case letter, holds lower-case letters, digits, `_` and `-`, and has at most 63 characters. `gryph policy validate` and `gryph policy install` reject any other name. An installed policy with another name still loads with a warning, so an upgrade does not stop your hooks.
 
-This policy tags a secret read by path or by content, and blocks a network command after it:
+`examples/policies/secret-exfiltration.yaml` ships this pattern as an example, not a built-in. Install it with `gryph policy install`. This policy tags a secret read by path or by content, and blocks a network command after it:
 
 ```yaml
 - id: tag-secret-read
@@ -282,8 +300,8 @@ This policy tags a secret read by path or by content, and blocks a network comma
   action: block
   severity: high
   match:
-    action_types: [command_exec]
-  condition: '"secret_read" in context.tags_seen && action.params.command.contains("curl")'
+    action_types: [command_exec, network_request, tool_use]
+  condition: '"secret_read" in context.tags_seen && size(action.hosts) > 0'
   message: "Blocked: network access after a secret read in this session."
 ```
 
@@ -381,6 +399,20 @@ Do these steps each time you change a policy file.
    ```
 
    Add `--file <path>` to dry-run a draft file plus the built-in rules, before you install it.
+
+   A rule on the session context needs a context. `--context-file <yaml>` reads one. Its keys are the `context.*` names, and an unknown key is an error. `--kind` and `--origin` set the action facts, and the output lists the tags of every matched rule:
+
+   ```yaml
+   # ctx.yaml
+   tags_seen: [secret_read]
+   tag_seq: {secret_read: 1}
+   entries:
+     - {seq: 1, kind: action, action_type: file_read, path: /work/.env}
+   ```
+
+   ```bash
+   gryph policy test --action command_exec --command "curl https://x.example" --context-file ctx.yaml
+   ```
 
    Test three cases per rule: an action that must match, an action that must not match, and an action near the boundary of the rule.
 

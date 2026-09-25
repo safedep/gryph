@@ -1,0 +1,36 @@
+# A rule reads the entry log in context.entries, with the path and the
+# command of each entry, and matches a path with glob(). The rule here
+# blocks a write after the agent read a .pem file in the session.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin write.json
+exec gryph _hook claude-code PreToolUse
+
+stdin read_pem.json
+exec gryph _hook claude-code PreToolUse
+
+stdin write.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'write-after-pem'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: write-after-pem
+    action: block
+    match:
+      action_types: [file_write]
+    condition: 'context.entries.exists(e, e.action_type == "file_read" && glob(e.path, "**/*.pem"))'
+    message: "write-after-pem: a write after a key read"
+-- read_pem.json --
+{"session_id": "s-entries", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "/home/user/project/certs/server.pem"}, "tool_use_id": "tu-1"}
+-- write.json --
+{"session_id": "s-entries", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Write",
+ "tool_input": {"file_path": "/home/user/project/out.txt", "content": "x"}, "tool_use_id": "tu-2"}

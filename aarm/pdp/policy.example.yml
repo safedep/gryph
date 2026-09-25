@@ -163,6 +163,12 @@ rules:
   #   action.params.lines_added      int
   #   action.params.lines_removed    int
   #   action.params.content          string (truncated preview)
+  #   action.kind                    string (intent, action, or observation)
+  #   action.origin                  string (web, mcp, command, file_project, ...)
+  #   action.source                  string (the MCP server of an mcp origin)
+  #   action.hosts                   list<string> ("?" when a host cannot be read)
+  #   action.read_paths              list<string>
+  #   action.write_paths             list<string>
   #
   #   context.total_actions          int
   #   context.files_read             int
@@ -172,10 +178,17 @@ rules:
   #   context.errors                 int
   #   context.tools_used             list<string>
   #   context.session_duration_ms    int (milliseconds, not a CEL duration)
-  #   context.classifications_seen   list<string>  (reserved, empty today)
-  #   context.entities_seen          list<string>  (reserved, empty today)
-  #   context.semantic_drift         double        (reserved, 0 today)
+  #   context.classifications_seen   list<string>
+  #   context.tags_seen              list<string>  (tags of earlier events)
+  #   context.tag_seq                map<string, int> (tag to first sequence)
+  #   context.origins_seen           list<string>
+  #   context.entities_seen          list<string>  (path:, host:, mcp: keys)
+  #   context.egress_hosts           list<string>
+  #   context.intent_available       bool
+  #   context.actions_since_intent   int
+  #   context.entries                list<map>     (the latest entries)
   #
+  # glob(path, pattern) matches a path with the file_patterns rules.
   # CEL evaluation is sandboxed with a 100ms timeout and a fixed cost cap.
   # ---------------------------------------------------------------------------
   - id: guide-large-edit

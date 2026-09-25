@@ -11,6 +11,7 @@ import (
 
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/accumulator/contextchain"
 	"github.com/safedep/gryph/storage/ent"
 	"github.com/safedep/gryph/storage/ent/contextentry"
@@ -695,4 +696,58 @@ func nilIfEmpty(values []string) []string {
 		return nil
 	}
 	return values
+}
+
+// EntryCommandMaxBytes bounds the command of one item of context.entries. A
+// long command would raise the CEL cost of every rule that reads the log, and
+// an agent could pad its commands to push such a rule over its cost limit.
+const EntryCommandMaxBytes = 1024
+
+// entryFactsSQL reads the latest entries of a session, newest first. The
+// audit event gives the path and the stored command.
+const entryFactsSQL = `SELECT ce.sequence, ce.kind, ce.action_type, COALESCE(ce.tool, ''),
+	COALESCE(json_extract(ae.payload, '$.path'), ''), substr(COALESCE(` + payloadCommandSQL + `, ''), 1, ` + entryCommandMaxBytesSQL + `),
+	COALESCE(ce.target_host, ''), COALESCE(ce.target_mcp_server, ''), COALESCE(ce.origin, ''),
+	COALESCE(ce.classifications, 'null'), COALESCE(ce.tags, 'null'), COALESCE(ce.decision, ''), ce.result_status
+FROM context_entries ce LEFT JOIN audit_events ae ON ae.id = ce.event_id
+WHERE ce.session_id = ? ORDER BY ce.sequence DESC LIMIT ?`
+
+const entryCommandMaxBytesSQL = "1024"
+
+// QueryEntryFacts implements ContextStore.
+func (s *SQLiteStore) QueryEntryFacts(ctx context.Context, sessionID uuid.UUID, limit int) ([]*EntryFactsRow, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, entryFactsSQL, sessionID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("storage: query entry facts: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Warnf("storage: close entry facts rows: %v", err)
+		}
+	}()
+
+	var out []*EntryFactsRow
+	for rows.Next() {
+		var r EntryFactsRow
+		var classes, tags string
+		if err := rows.Scan(&r.Sequence, &r.Kind, &r.ActionType, &r.Tool, &r.Path, &r.Command,
+			&r.Host, &r.MCPServer, &r.Origin, &classes, &tags, &r.Decision, &r.ResultStatus); err != nil {
+			return nil, fmt.Errorf("storage: scan entry facts: %w", err)
+		}
+		if err := json.Unmarshal([]byte(classes), &r.Classifications); err != nil {
+			return nil, fmt.Errorf("storage: decode entry classes: %w", err)
+		}
+		if err := json.Unmarshal([]byte(tags), &r.Tags); err != nil {
+			return nil, fmt.Errorf("storage: decode entry tags: %w", err)
+		}
+		out = append(out, &r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: read entry facts: %w", err)
+	}
+	slices.Reverse(out)
+	return out, nil
 }

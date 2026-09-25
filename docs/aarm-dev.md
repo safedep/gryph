@@ -158,7 +158,7 @@ Conditions read two maps. `action.*` fields come from `actionActivation`:
 `context.*` fields come from `contextActivation`: `total_actions`,
 `files_read`, `files_written`, `commands_executed`, `network_requests`,
 `errors`, `tools_used`, `session_duration_ms`, `classifications_seen`,
-`tags_seen`, `tag_seq`, `origins_seen`, `entities_seen`, `semantic_drift`,
+`tags_seen`, `tag_seq`, `origins_seen`, `entities_seen`, `egress_hosts`, `entries`,
 `intent_available`, `actions_since_intent`. `Snapshot` computes the intent
 fields with the pending entry: a pending intent sets `intent_available` and
 resets the count, and a pending action adds one. The pending origin joins
@@ -179,6 +179,20 @@ Mediator that runs alone. `labelEvent` gives the output values the event
 origin and the other values the origin `agent`. A post event sets
 `FullContent` from the tool response through `Event.ObserveOutput`, so
 `content_patterns` and the injection scorer read what the agent received.
+
+`action.hosts`, `action.read_paths` and `action.write_paths` come from
+`Action.Hosts`, `ReadPaths` and `WritePaths` (`aarm/model/targets.go`), which
+read `Action.Shell` and the URL. `newEntry` stores the first host in
+`Target.Host` and passes every host and the `path:`, `host:` and `mcp:` keys to
+the state as `Hosts` and `Entities`. The entry table stores neither list.
+
+`PDP.NeedsEntries` reports whether a rule reads `context.entries`. Only then
+does the Mediator call `Accumulator.Entries`, which reads
+`Store.QueryEntryFacts`: the latest `policy.context.cel_entries` entries,
+joined with `audit_events` for the path and the stored command. The CEL
+function `glob` uses the `file_patterns` matcher. `removedContextFields` makes
+a rule on `context.semantic_drift` fail to compile. The receipt snapshot keeps
+`semantic_drift` at zero, so the receipt hash format does not change.
 
 `EvaluationResult.MatchedTags` is the sorted union of the tags of every
 matched rule. `appendEntry` stores it on the entry, and the accumulator adds

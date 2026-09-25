@@ -93,7 +93,18 @@ type PolicyConfig struct {
 	Defer          DeferConfig          `mapstructure:"defer"`
 	Identity       IdentityConfig       `mapstructure:"identity"`
 	SelfProtection SelfProtectionConfig `mapstructure:"self_protection"`
+	Context        ContextConfig        `mapstructure:"context"`
 }
+
+// ContextConfig controls what the session context gives to policy.
+// CELEntries is the number of the latest entries in context.entries.
+type ContextConfig struct {
+	CELEntries int `mapstructure:"cel_entries"`
+}
+
+// MaxCELEntries bounds context.entries, so one rule cannot load a whole
+// session into every evaluation.
+const MaxCELEntries = 1000
 
 // SelfProtectionConfig toggles the built-in rules that block agent writes to
 // Gryph's policy files, database, keys, and the agents' hook configs. Honored

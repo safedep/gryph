@@ -386,6 +386,9 @@ var (
 			"--trust-server-names", "--force-directories", "--spider"),
 		abbrev: true,
 	}
+	// lookupOptions cover dig, nslookup, host, ping and traceroute.
+	lookupOptions = valueOptions("-p", "-t", "-c", "-q", "-x", "-b", "-f", "-k", "-y", "-W", "-w",
+		"-i", "-I", "-s", "-l", "-m", "-S", "-T", "-z", "-M", "-N")
 	gitOptions = valueOptions("-C", "-c", "--git-dir", "--work-tree", "--namespace",
 		"--exec-path", "-b", "--branch", "-o", "--origin", "--depth", "-u", "--upload-pack",
 		"--reference", "--template", "-j", "--jobs", "--filter", "--separate-git-dir", "--config",
@@ -1026,7 +1029,11 @@ func (w *walker) curl(p parsedArgs, cwds dirs) {
 			w.add(f, AccessRead, cwds)
 			continue
 		}
-		w.addHost(u)
+		w.addNetworkHost(u)
+	}
+	if p.has("-K", "--config") {
+		// A config file can hold the URLs.
+		w.addHost(UnknownHost)
 	}
 	for _, v := range p.value("-d", "--data", "--data-binary", "--data-ascii", "--json") {
 		if file, ok := strings.CutPrefix(v, "@"); ok {
@@ -1145,7 +1152,11 @@ func withWgetrc(p parsedArgs) parsedArgs {
 func (w *walker) wget(p parsedArgs, cwds dirs) {
 	p = withWgetrc(p)
 	for _, u := range p.operands {
-		w.addHost(u)
+		w.addNetworkHost(u)
+	}
+	if len(p.value("-i", "--input-file")) > 0 {
+		// An input file holds the URLs.
+		w.addHost(UnknownHost)
 	}
 	w.addAll(p.value("--post-file", "--body-file", "-i", "--input-file"), AccessRead, cwds)
 	w.addOutputs(p.value("-O", "--output-document", "-o", "--output-file", "-a", "--append-output",
@@ -1211,7 +1222,20 @@ func (w *walker) addUpload(file string, cwds dirs) {
 
 func (w *walker) remoteShell(p parsedArgs) {
 	if len(p.operands) > 0 {
-		w.addHost(p.operands[0])
+		w.addNetworkHost(p.operands[0])
+	}
+}
+
+// lookup records the host of a DNS or reachability tool such as dig or
+// ping. An argument that starts with "@" names the DNS server.
+func (w *walker) lookup(p parsedArgs) {
+	for _, op := range p.operands {
+		if server, ok := strings.CutPrefix(op, "@"); ok {
+			w.addNetworkHost(server)
+			continue
+		}
+		w.addNetworkHost(op)
+		return
 	}
 }
 
@@ -1285,12 +1309,29 @@ func (w *walker) git(args []string, cwds dirs) {
 	case ops[0] == "submodule" && len(ops) > 1 && ops[1] == "add":
 		i, ok = 2, true
 	}
-	if !ok || i >= len(ops) {
+	if !ok {
+		return
+	}
+	if i >= len(ops) {
+		// "git push" with no remote uses a configured remote.
+		if _, fetches := gitRemoteArg[ops[0]]; fetches && ops[0] != "clone" {
+			w.addHost(UnknownHost)
+		}
 		return
 	}
 	if host, _, remote := splitRemote(ops[i]); remote {
 		w.addHost(host)
+		return
 	}
+	if !isLocalPath(ops[i]) {
+		// A named remote such as "origin" points at a host in the git
+		// config.
+		w.addHost(UnknownHost)
+	}
+}
+
+func isLocalPath(s string) bool {
+	return strings.HasPrefix(s, "/") || strings.HasPrefix(s, ".") || strings.HasPrefix(s, "~")
 }
 
 // openssl records the files of the -in, -key and similar options, the
@@ -1350,7 +1391,37 @@ func (w *walker) addHostName(host string) {
 	}
 }
 
+// addNetworkHost records the host of an operand of a network tool. An
+// operand that names no host, such as an unresolved "$URL", gives
+// UnknownHost, because the tool can contact any host.
+func (w *walker) addNetworkHost(value string) {
+	if hostOf(value) == "" {
+		w.addHost(UnknownHost)
+		return
+	}
+	w.addHost(value)
+}
+
+// HostOf returns the lower-case host of a URL, of "user@host:path", or of a
+// bare host name. It returns "" when value names no host that it can read.
+func HostOf(value string) string {
+	return hostOf(strings.TrimSpace(value))
+}
+
 func hostOf(value string) string {
+	if value == UnknownHost {
+		return UnknownHost
+	}
+	if scheme, rest, ok := strings.Cut(value, ":"); ok && isScheme(scheme) && strings.HasPrefix(rest, "/") {
+		// A URL with a scheme. A URL that does not parse, such as
+		// "https:/host" or one with a backslash in the authority, names
+		// no host that Gryph can trust.
+		u, err := url.Parse(value)
+		if err != nil {
+			return ""
+		}
+		return normalizeHost(u.Hostname())
+	}
 	if host, _, remote := splitRemote(value); remote {
 		return host
 	}
@@ -1392,6 +1463,20 @@ func splitRemote(value string) (host, p string, ok bool) {
 		return "", "", false
 	}
 	return host, value[colon+1:], true
+}
+
+// isScheme reports whether s is a URL scheme. A single letter is a Windows
+// drive, not a scheme.
+func isScheme(s string) bool {
+	if first := s[0] | 0x20; len(s) < 2 || first < 'a' || first > 'z' {
+		return false
+	}
+	for _, r := range strings.ToLower(s) {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '+' && r != '-' && r != '.' {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeHost(h string) string {

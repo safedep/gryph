@@ -25,6 +25,12 @@ const (
 	OriginUnknown      Origin = "unknown"
 )
 
+// AllOrigins lists every origin.
+var AllOrigins = []Origin{
+	OriginUser, OriginAgent, OriginFileProject, OriginFileExternal,
+	OriginCommand, OriginWeb, OriginMCP, OriginUnknown,
+}
+
 // Label is the metadata of one piece of stored content. Exporters read it
 // to decide what leaves the machine.
 type Label struct {

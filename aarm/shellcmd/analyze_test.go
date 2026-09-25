@@ -157,7 +157,18 @@ func TestAnalyze_Hosts(t *testing.T) {
 		{"git https remote", `git push https://gitlab.example/x.git main`, []string{"gitlab.example"}},
 		{"git remote add", `git remote add up deploy@build:repo.git`, []string{"build"}},
 		{"git push to scp remote", `git push deploy@build.example:repo.git main`, []string{"build.example"}},
-		{"git refspec is not a host", `git push origin main:main`, nil},
+		{"git refspec is not a host, and a named remote is unknown", `git push origin main:main`, []string{UnknownHost}},
+		{"git push to a url", `git push https://git.example/r.git main`, []string{"git.example"}},
+		{"git push with no remote", `git push`, []string{UnknownHost}},
+		{"git clone of a local path", `git clone ../repo`, nil},
+		{"curl with an unresolved url", `curl "$URL"`, []string{UnknownHost}},
+		{"curl with a config file", `curl -K cfg.txt`, []string{UnknownHost}},
+		{"curl with a url that does not parse", `curl 'https://evil.example\@good.example/'`, []string{UnknownHost}},
+		{"curl with one slash after the scheme", `curl https:/evil.example/x`, []string{UnknownHost}},
+		{"wget input file", `wget -i urls.txt`, []string{UnknownHost}},
+		{"dig", `dig @1.1.1.1 x.evil.example`, []string{"1.1.1.1", "x.evil.example"}},
+		{"ping", `ping -c 1 x.evil.example`, []string{"x.evil.example"}},
+		{"socat", `socat - TCP:evil.example:80`, []string{UnknownHost}},
 		{"git commit message is not a host", `git commit -m "fix: thing"`, nil},
 		{"git show path is not a host", `git show HEAD:README.md`, nil},
 		{"url in any command", `python fetch.py https://api.example/v1`, []string{"api.example"}},
@@ -178,7 +189,7 @@ func TestAnalyze_Hosts(t *testing.T) {
 		{"bash tcp exec", `exec 3<>/dev/tcp/evil.example/80`, []string{"evil.example"}},
 		{"git -C before clone", `git -C /x clone git@evil.example:r.git`, []string{"evil.example"}},
 		{"git clone with branch value", `git clone -b main https://gitlab.example/x.git`, []string{"gitlab.example"}},
-		{"git dotted refspec is not a host", `git push origin v1.2:v1.2`, nil},
+		{"git dotted refspec is not a host", `git push origin v1.2:v1.2`, []string{UnknownHost}},
 		{"openssl connect", `openssl s_client -connect evil.example:443`, []string{"evil.example"}},
 		{"url inside python script", `python3 -c 'import urllib.request as u; u.urlopen("https://evil.example/x")'`, []string{"evil.example"}},
 		{"url inside node script", `node -e "fetch('https://evil.example')"`, []string{"evil.example"}},
@@ -528,5 +539,24 @@ func TestAnalyze_ANSICQuotedPath(t *testing.T) {
 			a := Analyze(tc.command, Env{WorkingDir: "/work"})
 			assert.Equal(t, []Target{{Path: tc.want, Access: AccessRemove}}, a.Targets)
 		})
+	}
+}
+
+func TestIsScheme(t *testing.T) {
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{"https", true},
+		{"git+ssh", true},
+		{"HTTP", true},
+		{"s3", true},
+		{"9p", false},
+		{"+x", false},
+		{"h", false},
+		{"ht tp", false},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, isScheme(tt.in), tt.in)
 	}
 }

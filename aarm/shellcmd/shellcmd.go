@@ -69,6 +69,11 @@ type Target struct {
 	Named bool
 }
 
+// UnknownHost is the host of a network command whose host the walker cannot
+// read, such as a network tool with an unresolved operand. The command can
+// contact any host.
+const UnknownHost = "?"
+
 // Analysis is what a command does to paths and hosts.
 type Analysis struct {
 	// Parsed is false when the parser rejected the command or a script
@@ -498,6 +503,11 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 		w.remoteShell(parseArgs(rest, remoteShellOptions[name]))
 	case "nc", "ncat", "netcat":
 		w.netcat(rest)
+	case "dig", "nslookup", "host", "ping", "ping6", "traceroute", "tracepath", "whois":
+		w.lookup(parseArgs(rest, lookupOptions))
+	case "socat":
+		// socat addresses such as TCP:host:port take many forms.
+		w.addHost(UnknownHost)
 	case "git":
 		w.git(rest, cwds)
 	case "openssl":

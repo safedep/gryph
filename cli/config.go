@@ -170,6 +170,9 @@ func newConfigSetCmd() *cobra.Command {
 				if errors.Is(err, config.ErrUnknownKey) {
 					return ErrConfig(fmt.Sprintf("unknown config key: %s", key), nil)
 				}
+				if errors.Is(err, config.ErrInvalidValue) {
+					return ErrConfig(fmt.Sprintf("invalid value for %s", key), err)
+				}
 				return err
 			}
 

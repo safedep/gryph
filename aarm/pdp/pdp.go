@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"io"
 	"maps"
 	"path/filepath"
 	"regexp"
@@ -18,6 +19,9 @@ import (
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/google/cel-go/cel"
 	celast "github.com/google/cel-go/common/ast"
+	"github.com/google/cel-go/common/operators"
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
@@ -371,8 +375,6 @@ func contextFieldEmpty(field string, s *model.ContextSnapshot) bool {
 		return len(s.ClassificationsSeen) == 0
 	case "entities_seen":
 		return len(s.EntitiesSeen) == 0
-	case "semantic_drift":
-		return s.SemanticDrift == 0
 	default:
 		return false
 	}
@@ -481,6 +483,11 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 		if err != nil {
 			return cr, err
 		}
+		for _, removed := range removedContextFields {
+			if slices.Contains(refs, removed) {
+				return cr, fmt.Errorf("rule %q condition: context.%s was removed. Remove it from the condition", rule.ID, removed)
+			}
+		}
 		cr.condition = prg
 		cr.hasCondition = true
 		cr.contextRefs = refs
@@ -489,6 +496,12 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 	if strings.TrimSpace(rule.Message) != "" {
 		tmpl, err := template.New(rule.ID).Option("missingkey=error").Parse(rule.Message)
 		if err != nil {
+			return cr, fmt.Errorf("rule %q message template: %w", rule.ID, err)
+		}
+		// A field that the template data does not have fails every
+		// evaluation, so it fails validation. Other errors on empty data,
+		// such as an index out of range, can pass at runtime.
+		if err := tmpl.Execute(io.Discard, templateData{}); err != nil && strings.Contains(err.Error(), "can't evaluate field") {
 			return cr, fmt.Errorf("rule %q message template: %w", rule.ID, err)
 		}
 		cr.message = tmpl
@@ -655,6 +668,18 @@ func validateGlobPatterns(field, ruleID string, patterns []string) error {
 	return nil
 }
 
+// conditionCostLimit bounds the CEL cost of a condition. A 90-character
+// matches() regex on a prompt at celPromptContentMax costs about 19000 and
+// runs in under 1 ms, and the limit leaves room for a regex about five times
+// that long. A condition that reads context.entries walks up to
+// config.MaxCELEntries entries with a command of up to
+// storage.EntryCommandMaxBytes each, so it gets entriesCostLimit. The 100 ms
+// timeout bounds both.
+const (
+	conditionCostLimit = 100_000
+	entriesCostLimit   = 5_000_000
+)
+
 func compileCondition(env *cel.Env, ruleID, expr string) (cel.Program, []string, error) {
 	ast, issues := env.Compile(expr)
 	if issues.Err() != nil {
@@ -663,11 +688,15 @@ func compileCondition(env *cel.Env, ruleID, expr string) (cel.Program, []string,
 	if ast.OutputType() != cel.BoolType {
 		return nil, nil, fmt.Errorf("rule %q condition: output type %s, want bool", ruleID, ast.OutputType())
 	}
-	prg, err := env.Program(ast, cel.CostLimit(celCostLimit), cel.InterruptCheckFrequency(100))
+	refs := collectContextRefs(ast)
+	costLimit := uint64(conditionCostLimit)
+	if readsEntries(refs) {
+		costLimit = entriesCostLimit
+	}
+	prg, err := env.Program(ast, cel.CostLimit(costLimit), cel.InterruptCheckFrequency(100))
 	if err != nil {
 		return nil, nil, fmt.Errorf("rule %q condition program: %w", ruleID, err)
 	}
-	refs := collectContextRefs(ast)
 	return prg, refs, nil
 }
 
@@ -684,21 +713,42 @@ func collectContextRefs(ast *cel.Ast) []string {
 		return nil
 	}
 	seen := map[string]struct{}{}
+	idents, accesses := 0, 0
 	visitor := celast.NewExprVisitor(func(e celast.Expr) {
-		if e.Kind() != celast.SelectKind {
-			return
+		switch e.Kind() {
+		case celast.IdentKind:
+			if e.AsIdent() == "context" {
+				idents++
+			}
+		case celast.SelectKind:
+			sel := e.AsSelect()
+			if isContextIdent(sel.Operand()) {
+				seen[sel.FieldName()] = struct{}{}
+				accesses++
+			}
+		case celast.CallKind:
+			call := e.AsCall()
+			switch call.FunctionName() {
+			case operators.Index, operators.OptIndex, operators.OptSelect:
+			default:
+				return
+			}
+			args := call.Args()
+			if len(args) != 2 || !isContextIdent(args[0]) || args[1].Kind() != celast.LiteralKind {
+				return
+			}
+			if name, ok := args[1].AsLiteral().(types.String); ok {
+				seen[string(name)] = struct{}{}
+				accesses++
+			}
 		}
-		sel := e.AsSelect()
-		operand := sel.Operand()
-		if operand == nil || operand.Kind() != celast.IdentKind {
-			return
-		}
-		if operand.AsIdent() != "context" {
-			return
-		}
-		seen[sel.FieldName()] = struct{}{}
 	})
 	celast.PreOrderVisit(native.Expr(), visitor)
+	if idents > accesses {
+		// The condition uses context in a way that names no field, such
+		// as [context].exists(c, c.entries...). It may read any field.
+		seen[anyContextField] = struct{}{}
+	}
 	if len(seen) == 0 {
 		return nil
 	}
@@ -710,12 +760,40 @@ func collectContextRefs(ast *cel.Ast) []string {
 	return out
 }
 
+// anyContextField is the reference of a condition that may read any context
+// field.
+const anyContextField = "*"
+
+func isContextIdent(e celast.Expr) bool {
+	return e != nil && e.Kind() == celast.IdentKind && e.AsIdent() == "context"
+}
+
 func conditionEnv() (*cel.Env, error) {
 	return cel.NewEnv(
 		cel.Variable("action", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("context", cel.MapType(cel.StringType, cel.DynType)),
 		cel.OptionalTypes(),
+		cel.Function("glob",
+			cel.Overload("glob_string_string", []*cel.Type{cel.StringType, cel.StringType}, cel.BoolType,
+				cel.BinaryBinding(celGlob))),
 	)
+}
+
+// removedContextFields are context fields that older policies can name. No
+// component computes them, so a rule on them could never fire as written.
+var removedContextFields = []string{"semantic_drift"}
+
+// celGlob implements glob(path, pattern) with the rules of file_patterns.
+func celGlob(path, pattern ref.Val) ref.Val {
+	p, ok1 := path.(types.String)
+	pat, ok2 := pattern.(types.String)
+	if !ok1 || !ok2 {
+		return types.NewErr("glob: want (string, string)")
+	}
+	if !doublestar.ValidatePattern(string(pat)) {
+		return types.NewErr("glob: invalid pattern %q", string(pat))
+	}
+	return types.Bool(matchesAnyPath([]string{string(pat)}, string(p)))
 }
 
 // phaseOrUnknown normalizes the empty ActionPhase zero value to PhaseUnknown
@@ -733,11 +811,6 @@ func phaseOrUnknown(p model.ActionPhase) model.ActionPhase {
 // referenced files can be long. content_patterns still match the whole
 // prompt, because they run outside CEL.
 const celPromptContentMax = 8 << 10
-
-// celCostLimit bounds the work of one condition. A 90-character regex on a
-// prompt at celPromptContentMax costs about 19000 and runs in under 1 ms.
-// The limit leaves room for a regex about five times that long.
-const celCostLimit = 100000
 
 // paramsContent gives a prompt rule the prompt that the agent gets, with the
 // referenced file content, up to celPromptContentMax bytes cut on a rune
@@ -787,6 +860,9 @@ func actionActivation(action *model.Action, paths *actionPaths) map[string]any {
 		"origin":               string(action.Origin),
 		"source":               action.Source,
 		"sources":              nonNil(action.Sources),
+		"hosts":                action.Hosts(),
+		"read_paths":           action.ReadPaths(),
+		"write_paths":          action.WritePaths(),
 		"params": map[string]any{
 			"path":          action.Parameters.Path,
 			"command":       action.Parameters.Command,
@@ -817,8 +893,9 @@ func contextActivation(snapshot *model.ContextSnapshot) map[string]any {
 		"tags_seen":            tagNames(snapshot.TagsSeen),
 		"tag_seq":              tagSeq(snapshot.TagsSeen),
 		"origins_seen":         nonNil(snapshot.OriginsSeen),
-		"entities_seen":        snapshot.EntitiesSeen,
-		"semantic_drift":       snapshot.SemanticDrift,
+		"entities_seen":        nonNil(snapshot.EntitiesSeen),
+		"egress_hosts":         nonNil(snapshot.EgressHosts),
+		"entries":              entryMaps(snapshot.Entries),
 		"intent_available":     snapshot.IntentAvailable,
 		"actions_since_intent": snapshot.ActionsSinceIntent,
 	}
@@ -842,4 +919,42 @@ func nonNil(s []string) []string {
 		return []string{}
 	}
 	return s
+}
+
+// entryMaps turns the entry log into CEL maps.
+func entryMaps(entries []model.EntryFacts) []map[string]any {
+	out := make([]map[string]any, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, map[string]any{
+			"seq":         e.Seq,
+			"kind":        e.Kind,
+			"action_type": e.ActionType,
+			"tool":        e.Tool,
+			"path":        e.Path,
+			"command":     e.Command,
+			"host":        e.Host,
+			"mcp_server":  e.MCPServer,
+			"origin":      e.Origin,
+			"classes":     nonNil(e.Classes),
+			"tags":        nonNil(e.Tags),
+			"decision":    e.Decision,
+			"result":      e.Result,
+		})
+	}
+	return out
+}
+
+// NeedsEntries reports whether a rule reads context.entries. The Mediator
+// loads the entry log only then.
+func (p *PDP) NeedsEntries() bool {
+	for _, r := range p.rules {
+		if readsEntries(r.contextRefs) {
+			return true
+		}
+	}
+	return false
+}
+
+func readsEntries(refs []string) bool {
+	return slices.Contains(refs, "entries") || slices.Contains(refs, anyContextField)
 }

@@ -324,3 +324,32 @@ func TestSQLiteAccumulator_AmbiguousMCPServerOrigins(t *testing.T) {
 	assert.Equal(t, []string{"mcp:evil", "mcp:evil__read", "mcp:server", "mcp"}, snap.OriginsSeen,
 		"an ambiguous tool name adds every server that it can name")
 }
+
+func TestSQLiteAccumulator_EntitiesAndEgress(t *testing.T) {
+	acc, _ := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	allowed := newEntry(sessionID, events.KindAction, model.ActionCommandExec, "Bash")
+	allowed.Hosts = []string{"api.example.com"}
+	allowed.Entities = []string{"host:api.example.com"}
+	require.NoError(t, acc.Append(ctx, allowed))
+
+	blocked := newEntry(sessionID, events.KindAction, model.ActionCommandExec, "Bash")
+	blocked.Decision = model.DecisionBlock
+	blocked.Hosts = []string{"evil.example"}
+	blocked.Entities = []string{"host:evil.example"}
+	require.NoError(t, acc.Append(ctx, blocked))
+
+	pending := newEntry(sessionID, events.KindAction, model.ActionFileRead, "Read")
+	pending.Entities = []string{"path:/work/.env"}
+	snap, err := acc.Snapshot(ctx, sessionID, pending)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"api.example.com"}, snap.EgressHosts, "a blocked action contacted no host")
+	assert.Equal(t, []string{"host:api.example.com", "host:evil.example", "path:/work/.env"}, snap.EntitiesSeen)
+
+	entries, err := acc.Entries(ctx, sessionID, 10)
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+	assert.Equal(t, "block", entries[1].Decision)
+}
