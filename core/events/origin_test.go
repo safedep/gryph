@@ -134,9 +134,10 @@ func TestObserveOutput(t *testing.T) {
 		wantTruncated bool
 	}{
 		{"string", "", "AKIA0000", "AKIA0000", false},
-		{"map in key order", "", map[string]any{"stdout": "b", "stderr": "a", "code": 1.0}, "a\nb", false},
-		{"nested", "", map[string]any{"file": map[string]any{"content": "secret"}}, "secret", false},
-		{"list", "", []any{"x", map[string]any{"text": "y"}}, "x\ny", false},
+		{"map keys and values in key order", "", map[string]any{"stdout": "b", "stderr": "a", "code": 1.0}, "code\nstderr\na\nstdout\nb", false},
+		{"nested", "", map[string]any{"file": map[string]any{"content": "secret"}}, "file\ncontent\nsecret", false},
+		{"a key with no string value", "", map[string]any{"structuredContent": map[string]any{"AKIAABCDEFGHIJKLMNOP": true}}, "structuredContent\nAKIAABCDEFGHIJKLMNOP", false},
+		{"list", "", []any{"x", map[string]any{"text": "y"}}, "x\ntext\ny", false},
 		{"keeps write content", "written", "ok", "written", false},
 		{"nil", "", nil, "", false},
 		{"exactly at the cap", "", strings.Repeat("a", MaxObservedBytes), strings.Repeat("a", MaxObservedBytes), false},
@@ -149,7 +150,7 @@ func TestObserveOutput(t *testing.T) {
 		{
 			"long values share the budget", "",
 			map[string]any{"stderr": strings.Repeat("e", MaxObservedBytes), "stdout": strings.Repeat("o", MaxObservedBytes)},
-			strings.Repeat("e", MaxObservedBytes/2-1) + "\n" + strings.Repeat("o", MaxObservedBytes/2), true,
+			"stderr\n" + strings.Repeat("e", MaxObservedBytes/2-8) + "\nstdout\n" + strings.Repeat("o", MaxObservedBytes/2-7), true,
 		},
 		{
 			"the cut falls on a rune boundary", "",

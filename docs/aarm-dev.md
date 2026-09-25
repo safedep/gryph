@@ -89,8 +89,9 @@ and accumulator read it. Key fields:
 - `Parameters`: normalized `Path`, `Command`, `Args`, `URL`, `Content`.
   `ContentFull` holds content for `content_patterns` matching only. It is
   capped at 1 MiB. For content over the cap, the PDP matches the first 1 MiB
-  and sets `ContentTruncated`. `Event.ObserveOutput` cuts a tool response to
-  the same cap, gives each value a fair share, and sets
+  and sets `ContentTruncated`. `Event.ObserveOutput` reads each map key and each
+  string value of a tool response. It cuts them to the same cap, gives each
+  string a fair share, and sets
   `Event.OutputTruncated`. Mediation copies it to `ContentTruncated`. A policy
   that needs full inspection must handle `content_truncated`. `ContentFull` is never persisted and is cleared after
   evaluation.

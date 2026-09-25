@@ -462,11 +462,39 @@ func TestMCPSource(t *testing.T) {
 		url, command, want string
 	}{
 		{"https://MCP.Example.com/sse", "", "mcp.example.com"},
+		{"https://mcp.example.com/evil/sse", "", "mcp.example.com/evil"},
+		{"https://mcp.example.com/good/sse", "", "mcp.example.com/good"},
+		{"https://mcp.example.com/mcp", "", "mcp.example.com"},
+		{"http://localhost:3001/", "", "localhost:3001"},
 		{"", "/usr/local/bin/github-mcp-server stdio", "github-mcp-server"},
+		{"", "npx -y @evil/mcp-server", "@evil/mcp-server"},
+		{"", "npx -y @modelcontextprotocol/server-github@1.2.0", "@modelcontextprotocol/server-github"},
+		{"", "npx --package pkg -y mcp-bin --port 3", "mcp-bin"},
+		{"", `"C:\Program Files\nodejs\npx.cmd" -y server-x`, "server-x"},
+		{"", "npx -y", "npx"},
+		{"", "bunx server-y@latest", "server-y"},
+		{"", "pnpm dlx @scope/server", "@scope/server"},
+		{"", "npm exec -- @scope/server", "@scope/server"},
+		{"", "uvx mcp-server-git==0.6.2 --repository .", "mcp-server-git"},
+		{"", "uvx --from git+https://x/y mcp-server-fetch", "mcp-server-fetch"},
+		{"", "uv --directory /srv/weather run weather-server", "weather-server"},
+		{"", "uv tool run mcp-server-time", "mcp-server-time"},
+		{"", "pipx run mcp-server-sqlite[all]", "mcp-server-sqlite"},
+		{"", "python3.12 -u -m mcp_server_time --tz UTC", "mcp_server_time"},
+		{"", "python -m", "python"},
+		{"", "node --require ./hook.js /srv/evil/index.js", "/srv/evil/index.js"},
+		{"", "deno run --allow-net jsr:@scope/server", "jsr:@scope/server"},
+		{"", "docker run -i --rm -e GITHUB_TOKEN ghcr.io/github/github-mcp-server:v1", "ghcr.io/github/github-mcp-server"},
+		{"", "docker run -it --name x -v /a:/b localhost:5000/evil/mcp@sha256:abc", "localhost:5000/evil/mcp"},
+		{"", "docker run --env=A=1 --rm", "docker"},
+		{"", "docker ps", "docker"},
+		{"", `npx -y "@evil/mcp server"`, "@evil/mcp server"},
 		{"", "", ""},
 	}
 	for _, tc := range cases {
-		assert.Equal(t, tc.want, MCPServer{URL: tc.url, Command: tc.command}.source())
+		t.Run(tc.url+tc.command, func(t *testing.T) {
+			assert.Equal(t, tc.want, MCPServer{URL: tc.url, Command: tc.command}.source())
+		})
 	}
 }
 
@@ -477,6 +505,8 @@ func TestParseMCPExecution_Origin(t *testing.T) {
 		{"beforeMCPExecution", `"url":"https://mcp.example.com/sse"`, "mcp.example.com"},
 		{"afterMCPExecution", `"url":"https://mcp.example.com/sse"`, "mcp.example.com"},
 		{"afterMCPExecution", `"command":"/usr/bin/github-mcp-server stdio"`, "github-mcp-server"},
+		{"beforeMCPExecution", `"command":"npx -y @evil/mcp-server"`, "@evil/mcp-server"},
+		{"afterMCPExecution", `"url":"https://mcp.example.com/evil/sse"`, "mcp.example.com/evil"},
 		{"afterMCPExecution", `"duration":5`, ""},
 	}
 	for _, tc := range cases {

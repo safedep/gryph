@@ -3,8 +3,6 @@ package cursor
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
-	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
@@ -567,19 +565,6 @@ func parseStop(sessionID uuid.UUID, agentSessionID string, base HookInput, rawDa
 	}
 
 	return event, nil
-}
-
-// source names the MCP server, because a Cursor MCP hook sends no server
-// name. It uses the host of a remote server URL, or the program of a local
-// server command.
-func (s MCPServer) source() string {
-	if u, err := url.Parse(s.URL); err == nil && u.Hostname() != "" {
-		return strings.ToLower(u.Hostname())
-	}
-	if fields := strings.Fields(s.Command); len(fields) > 0 {
-		return filepath.Base(fields[0])
-	}
-	return ""
 }
 
 func parseBeforeMCPExecution(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {

@@ -228,7 +228,15 @@ A server name can hold `__`, so a tool name such as `mcp__github__x__get` has no
   condition: '"evil" in action.sources'
 ```
 
-For a post event, `content_patterns` and the scorer read the tool output. So a rule on a post event matches what the agent received. Gryph keeps at most 1 MiB of the output. Over the cap, each output value keeps a fair share, and `action.content_truncated` is true. A rule that needs the full output must handle `content_truncated`.
+Claude Code and other agents that use `mcp__<server>__<tool>` names give the server name from the agent config. Windsurf sends the server name. A Cursor MCP hook sends no server name, so Gryph makes one from the server URL or command:
+
+- A remote server gives its host, its port when the URL has one, and the first path segment, such as `mcp.example.com/evil` for `https://mcp.example.com/evil/sse`. A first segment `sse` or `mcp` names the transport, so `https://mcp.example.com/sse` gives `mcp.example.com`.
+- A local server gives the file name of its program, such as `github-mcp-server` for `/usr/local/bin/github-mcp-server stdio`.
+- A launcher starts many servers, so Gryph uses the package, module, image or script that it starts. It skips the launcher flags and removes a version, tag or digest. The launchers are `npx`, `pnpx`, `bunx`, `npm exec`, `pnpm dlx`, `yarn dlx`, `bun x`, `uvx`, `uv run`, `uv tool run`, `pipx run`, `python -m`, `node`, `deno run`, `docker run` and `podman run`. For example, `npx -y @evil/mcp-server@1.0` gives `@evil/mcp-server`, `python -m mcp_server_time` gives `mcp_server_time`, and `docker run -i --rm -e TOKEN ghcr.io/github/github-mcp-server:v1` gives `ghcr.io/github/github-mcp-server`. A script path stays as written.
+
+The launcher parse is best effort. When Gryph cannot find the launcher operand, the name is the launcher, such as `npx` or `docker`. A `docker run` flag that Gryph does not know takes a value. A rule that trusts one Cursor server must not trust a launcher name, because each server that the launcher starts has that name.
+
+For a post event, `content_patterns` and the scorer read the tool output. They read each string value and each map key of the output, because a tool such as an MCP server controls its keys. So a rule on a post event matches what the agent received. Gryph keeps at most 1 MiB of the output. Over the cap, each string keeps a fair share, and `action.content_truncated` is true. A rule that needs the full output must handle `content_truncated`.
 
 `action.kind == "observation"` needs a linked pre event. The Gemini, Windsurf and OpenClaw adapters and the Cursor after hooks do not link a post event, so their post events have the kind `action`. To match what the agent received from every agent, use `action.phase == "post"`.
 
@@ -569,7 +577,7 @@ policy:
     enabled: true
 ```
 
-`classify` labels paths and URLs. An `extra_patterns` key that is not a built-in class, such as `customer_data`, is a custom label. A condition such as `'customer_data' in action.data_classifications` matches it. It does not become a content label. `injection_score` scans tool calls, post events and prompts for prompt-injection phrases and returns a float between 0 and 1. Each match adds 0.15, up to four matches for one phrase, so four hits of one phrase give 0.6. A phrase matches at word boundaries, `_` separates words, and the last word can take a common suffix, such as `system prompts` or `disregard previously`. Use them in conditions:
+`classify` labels paths and URLs. An `extra_patterns` key that is not a built-in class, such as `customer_data`, is a custom label. A condition such as `'customer_data' in action.data_classifications` matches it. It does not become a content label. `injection_score` scans tool calls, post events and prompts for prompt-injection phrases and returns a float between 0 and 1. Each match adds 0.15, up to four matches for one phrase, so four hits of one phrase give 0.6. A phrase matches at word boundaries. White space, a Unicode space, `-` and `_` separate words. Gryph removes a zero-width joiner and a byte order mark before it matches. One filler word (`all`, `the`, `any`, `your`, `my`, `prior`, `above`) can come between two words, such as `ignore all previous instructions`. The first word can take `s`, `ed` or `ing`, such as `ignoring previous instructions`. The last word can take a common suffix, such as `system prompts` or `disregard previously`. Use them in conditions:
 
 Defer fires automatically on insufficient context (fresh sessions whose
 counters have not filled in yet) and on conflicting policies (multiple rules

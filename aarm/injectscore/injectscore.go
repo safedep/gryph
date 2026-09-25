@@ -9,6 +9,7 @@ import (
 	"cmp"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/core/events"
@@ -34,10 +35,11 @@ type Scorer interface {
 }
 
 // Heuristic matches a fixed indicator list. A phrase starts and ends at a
-// word boundary, "_" and white space separate its words, and its last word
-// can take a common suffix (s, es, d, ed, ly). Each match contributes
-// PerMatchWeight, up to MaxHitsPerIndicator for one indicator, capped at
-// MaxScore.
+// word boundary. White space, "-" and "_" separate its words, and one filler
+// word, such as "all" or "the", can come between two words. The first word
+// can take s, ed or ing. The last word can take a common suffix (s, es, d,
+// ed, ly). Each match contributes PerMatchWeight, up to MaxHitsPerIndicator
+// for one indicator, capped at MaxScore.
 type Heuristic struct {
 	indicators []*regexp.Regexp
 }
@@ -58,10 +60,36 @@ func NewHeuristic() *Heuristic {
 		for i, w := range words {
 			words[i] = regexp.QuoteMeta(w)
 		}
-		pattern := `\b` + strings.Join(words, `\s+`) + `(?:s|es|d|ed|ly)?\b`
+		words[0] = inflectFirst(words[0])
+		pattern := `\b` + strings.Join(words, ` (?:`+fillerWords+` )?`) + `(?:s|es|d|ed|ly)?\b`
 		h.indicators = append(h.indicators, regexp.MustCompile(pattern))
 	}
 	return h
+}
+
+const fillerWords = `(?:all|the|any|your|my|prior|above)`
+
+func inflectFirst(word string) string {
+	if stem, ok := strings.CutSuffix(word, "e"); ok {
+		return stem + `(?:e|es|ed|ing)`
+	}
+	return word + `(?:s|ed|ing)?`
+}
+
+// normalize folds the content so that one ASCII space separates words. A
+// zero-width joiner or a byte order mark inside a word can hide a phrase, so
+// normalize removes it. A zero-width space separates words, as a space does.
+func normalize(content string) string {
+	content = strings.Map(func(r rune) rune {
+		switch {
+		case r == '\u200c', r == '\u200d', r == '\u2060', r == '\ufeff':
+			return -1
+		case r == '-', r == '_', r == '\u200b', unicode.IsSpace(r):
+			return ' '
+		}
+		return r
+	}, strings.ToLower(content))
+	return strings.Join(strings.Fields(content), " ")
 }
 
 // Score implements Scorer.
@@ -75,19 +103,19 @@ func (h *Heuristic) Score(action *model.Action) float32 {
 
 	// ContentFull holds the whole content when the adapter has it. Content
 	// is then a preview of it, so the scorer reads one of the two.
-	content := strings.ToLower(cmp.Or(action.Parameters.ContentFull, action.Parameters.Content))
+	content := cmp.Or(action.Parameters.ContentFull, action.Parameters.Content)
 	if action.Parameters.Raw != nil {
 		if v, ok := action.Parameters.Raw["text"].(string); ok && v != "" {
-			content = content + "\n" + strings.ToLower(v)
+			content = content + "\n" + v
 		}
 		if v, ok := action.Parameters.Raw["prompt"].(string); ok && v != "" {
-			content = content + "\n" + strings.ToLower(v)
+			content = content + "\n" + v
 		}
 	}
 	if content == "" {
 		return 0
 	}
-	content = strings.ReplaceAll(content, "_", " ")
+	content = normalize(content)
 
 	var score float32
 	for _, ind := range h.indicators {

@@ -139,8 +139,9 @@ const MaxObservedBytes = 1 << 20
 // ObserveOutput sets FullContent from the tool response of a post event, so
 // content rules and the scorer see what the agent received. It keeps a
 // FullContent that the adapter already set, such as the content of a write.
-// A map response gives its string values, joined by new lines in key order.
-// Over MaxObservedBytes, each value keeps a fair share of the budget, so one
+// A map response gives each key and then its string values, joined by new
+// lines in key order. A tool, such as an MCP server, controls its keys, so
+// the keys count as content. Over MaxObservedBytes, each string keeps a fair share of the budget, so one
 // long value cannot push out the others, and OutputTruncated is set.
 func (e *Event) ObserveOutput(response any) {
 	if e.FullContent != "" || response == nil {
@@ -159,6 +160,7 @@ func collectStrings(v any, values *[]string) {
 		}
 	case map[string]any:
 		for _, k := range slices.Sorted(maps.Keys(v)) {
+			collectStrings(k, values)
 			collectStrings(v[k], values)
 		}
 	case []any:
