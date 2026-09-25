@@ -94,8 +94,9 @@ and accumulator read it. Key fields:
   evaluation.
 - Identity: `HumanPrincipal`, `ServiceIdentity`, `RoleScope`.
 - Risk signals: `DataClassifications`, `InjectionScore`.
-- `Phase` (`pre` / `post` / `unknown`): pre-execution hooks are enforceable;
-  post hooks are detection only.
+- `Phase` (`pre` / `post` / `unknown`): pre-execution hooks are enforceable.
+  Post hooks are detection only. The decision service sets the phase on the
+  event from the adapter's `Hooks()` table, and mediation copies it.
 
 `model.EvaluationResult` is the PDP output: `Decision`, `MatchedRuleIDs`,
 `Message`, `Severity`, `Tags`, `DeferReason`.

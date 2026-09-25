@@ -126,6 +126,26 @@ func SubagentType(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldSubagentType, v))
 }
 
+// Phase applies equality check predicate on the "phase" field. It's identical to PhaseEQ.
+func Phase(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldPhase, v))
+}
+
+// Kind applies equality check predicate on the "kind" field. It's identical to KindEQ.
+func Kind(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldKind, v))
+}
+
+// ToolCallID applies equality check predicate on the "tool_call_id" field. It's identical to ToolCallIDEQ.
+func ToolCallID(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldToolCallID, v))
+}
+
+// LinkedEventID applies equality check predicate on the "linked_event_id" field. It's identical to LinkedEventIDEQ.
+func LinkedEventID(v uuid.UUID) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldLinkedEventID, v))
+}
+
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
 func SessionIDEQ(v uuid.UUID) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldSessionID, v))
@@ -1009,6 +1029,281 @@ func SubagentTypeEqualFold(v string) predicate.AuditEvent {
 // SubagentTypeContainsFold applies the ContainsFold predicate on the "subagent_type" field.
 func SubagentTypeContainsFold(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldContainsFold(FieldSubagentType, v))
+}
+
+// PhaseEQ applies the EQ predicate on the "phase" field.
+func PhaseEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldPhase, v))
+}
+
+// PhaseNEQ applies the NEQ predicate on the "phase" field.
+func PhaseNEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldPhase, v))
+}
+
+// PhaseIn applies the In predicate on the "phase" field.
+func PhaseIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldPhase, vs...))
+}
+
+// PhaseNotIn applies the NotIn predicate on the "phase" field.
+func PhaseNotIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldPhase, vs...))
+}
+
+// PhaseGT applies the GT predicate on the "phase" field.
+func PhaseGT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldPhase, v))
+}
+
+// PhaseGTE applies the GTE predicate on the "phase" field.
+func PhaseGTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldPhase, v))
+}
+
+// PhaseLT applies the LT predicate on the "phase" field.
+func PhaseLT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldPhase, v))
+}
+
+// PhaseLTE applies the LTE predicate on the "phase" field.
+func PhaseLTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldPhase, v))
+}
+
+// PhaseContains applies the Contains predicate on the "phase" field.
+func PhaseContains(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContains(FieldPhase, v))
+}
+
+// PhaseHasPrefix applies the HasPrefix predicate on the "phase" field.
+func PhaseHasPrefix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasPrefix(FieldPhase, v))
+}
+
+// PhaseHasSuffix applies the HasSuffix predicate on the "phase" field.
+func PhaseHasSuffix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasSuffix(FieldPhase, v))
+}
+
+// PhaseIsNil applies the IsNil predicate on the "phase" field.
+func PhaseIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldPhase))
+}
+
+// PhaseNotNil applies the NotNil predicate on the "phase" field.
+func PhaseNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldPhase))
+}
+
+// PhaseEqualFold applies the EqualFold predicate on the "phase" field.
+func PhaseEqualFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEqualFold(FieldPhase, v))
+}
+
+// PhaseContainsFold applies the ContainsFold predicate on the "phase" field.
+func PhaseContainsFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContainsFold(FieldPhase, v))
+}
+
+// KindEQ applies the EQ predicate on the "kind" field.
+func KindEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldKind, v))
+}
+
+// KindNEQ applies the NEQ predicate on the "kind" field.
+func KindNEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldKind, v))
+}
+
+// KindIn applies the In predicate on the "kind" field.
+func KindIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldKind, vs...))
+}
+
+// KindNotIn applies the NotIn predicate on the "kind" field.
+func KindNotIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldKind, vs...))
+}
+
+// KindGT applies the GT predicate on the "kind" field.
+func KindGT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldKind, v))
+}
+
+// KindGTE applies the GTE predicate on the "kind" field.
+func KindGTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldKind, v))
+}
+
+// KindLT applies the LT predicate on the "kind" field.
+func KindLT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldKind, v))
+}
+
+// KindLTE applies the LTE predicate on the "kind" field.
+func KindLTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldKind, v))
+}
+
+// KindContains applies the Contains predicate on the "kind" field.
+func KindContains(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContains(FieldKind, v))
+}
+
+// KindHasPrefix applies the HasPrefix predicate on the "kind" field.
+func KindHasPrefix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasPrefix(FieldKind, v))
+}
+
+// KindHasSuffix applies the HasSuffix predicate on the "kind" field.
+func KindHasSuffix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasSuffix(FieldKind, v))
+}
+
+// KindIsNil applies the IsNil predicate on the "kind" field.
+func KindIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldKind))
+}
+
+// KindNotNil applies the NotNil predicate on the "kind" field.
+func KindNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldKind))
+}
+
+// KindEqualFold applies the EqualFold predicate on the "kind" field.
+func KindEqualFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEqualFold(FieldKind, v))
+}
+
+// KindContainsFold applies the ContainsFold predicate on the "kind" field.
+func KindContainsFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContainsFold(FieldKind, v))
+}
+
+// ToolCallIDEQ applies the EQ predicate on the "tool_call_id" field.
+func ToolCallIDEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldToolCallID, v))
+}
+
+// ToolCallIDNEQ applies the NEQ predicate on the "tool_call_id" field.
+func ToolCallIDNEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldToolCallID, v))
+}
+
+// ToolCallIDIn applies the In predicate on the "tool_call_id" field.
+func ToolCallIDIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldToolCallID, vs...))
+}
+
+// ToolCallIDNotIn applies the NotIn predicate on the "tool_call_id" field.
+func ToolCallIDNotIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldToolCallID, vs...))
+}
+
+// ToolCallIDGT applies the GT predicate on the "tool_call_id" field.
+func ToolCallIDGT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldToolCallID, v))
+}
+
+// ToolCallIDGTE applies the GTE predicate on the "tool_call_id" field.
+func ToolCallIDGTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldToolCallID, v))
+}
+
+// ToolCallIDLT applies the LT predicate on the "tool_call_id" field.
+func ToolCallIDLT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldToolCallID, v))
+}
+
+// ToolCallIDLTE applies the LTE predicate on the "tool_call_id" field.
+func ToolCallIDLTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldToolCallID, v))
+}
+
+// ToolCallIDContains applies the Contains predicate on the "tool_call_id" field.
+func ToolCallIDContains(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContains(FieldToolCallID, v))
+}
+
+// ToolCallIDHasPrefix applies the HasPrefix predicate on the "tool_call_id" field.
+func ToolCallIDHasPrefix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasPrefix(FieldToolCallID, v))
+}
+
+// ToolCallIDHasSuffix applies the HasSuffix predicate on the "tool_call_id" field.
+func ToolCallIDHasSuffix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasSuffix(FieldToolCallID, v))
+}
+
+// ToolCallIDIsNil applies the IsNil predicate on the "tool_call_id" field.
+func ToolCallIDIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldToolCallID))
+}
+
+// ToolCallIDNotNil applies the NotNil predicate on the "tool_call_id" field.
+func ToolCallIDNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldToolCallID))
+}
+
+// ToolCallIDEqualFold applies the EqualFold predicate on the "tool_call_id" field.
+func ToolCallIDEqualFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEqualFold(FieldToolCallID, v))
+}
+
+// ToolCallIDContainsFold applies the ContainsFold predicate on the "tool_call_id" field.
+func ToolCallIDContainsFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContainsFold(FieldToolCallID, v))
+}
+
+// LinkedEventIDEQ applies the EQ predicate on the "linked_event_id" field.
+func LinkedEventIDEQ(v uuid.UUID) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldLinkedEventID, v))
+}
+
+// LinkedEventIDNEQ applies the NEQ predicate on the "linked_event_id" field.
+func LinkedEventIDNEQ(v uuid.UUID) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldLinkedEventID, v))
+}
+
+// LinkedEventIDIn applies the In predicate on the "linked_event_id" field.
+func LinkedEventIDIn(vs ...uuid.UUID) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldLinkedEventID, vs...))
+}
+
+// LinkedEventIDNotIn applies the NotIn predicate on the "linked_event_id" field.
+func LinkedEventIDNotIn(vs ...uuid.UUID) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldLinkedEventID, vs...))
+}
+
+// LinkedEventIDGT applies the GT predicate on the "linked_event_id" field.
+func LinkedEventIDGT(v uuid.UUID) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldLinkedEventID, v))
+}
+
+// LinkedEventIDGTE applies the GTE predicate on the "linked_event_id" field.
+func LinkedEventIDGTE(v uuid.UUID) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldLinkedEventID, v))
+}
+
+// LinkedEventIDLT applies the LT predicate on the "linked_event_id" field.
+func LinkedEventIDLT(v uuid.UUID) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldLinkedEventID, v))
+}
+
+// LinkedEventIDLTE applies the LTE predicate on the "linked_event_id" field.
+func LinkedEventIDLTE(v uuid.UUID) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldLinkedEventID, v))
+}
+
+// LinkedEventIDIsNil applies the IsNil predicate on the "linked_event_id" field.
+func LinkedEventIDIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldLinkedEventID))
+}
+
+// LinkedEventIDNotNil applies the NotNil predicate on the "linked_event_id" field.
+func LinkedEventIDNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldLinkedEventID))
 }
 
 // HasSession applies the HasEdge predicate on the "session" edge.

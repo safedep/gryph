@@ -21,9 +21,10 @@ Do not add an agent adapter from memory. The adapter pattern touches several fil
 The doc explains these. They break silently if you miss them.
 
 1. Implement `HookConfigPaths()` and return a glob for every file the install step writes. Self-protection guards only these paths. `TestAdapters_InstallWritesOnlyDeclaredHookConfig` fails when a written file has no glob.
-2. Keep agent knowledge in the adapter package. Do not add agent paths, file names, or command regexes to `aarm/loader` or `aarm/pdp`. The loader derives the shell-command check from the declared paths, and `aarm/shellcmd` parses commands with `mvdan.cc/sh`. Do not match shell commands with a regex.
-3. Register the adapter only in `registerAdapters` in `cli/root.go`. The self-protection globs come from that list.
-4. Self-protection is best effort. Do not describe it as a security boundary. Kernel-based self-protection is on the roadmap.
+2. Implement `Hooks()` with one `events.HookSpec` per hook, including its phase. The decision service reads the phase from it. Regenerate `docs/agent-enforcement-coverage.md` with `GRYPH_UPDATE_DOCS=1 go test ./cli -run TestEnforcementCoverageDoc`.
+3. Keep agent knowledge in the adapter package. Do not add agent paths, file names, or command regexes to `aarm/loader` or `aarm/pdp`. The loader derives the shell-command check from the declared paths, and `aarm/shellcmd` parses commands with `mvdan.cc/sh`. Do not match shell commands with a regex.
+4. Register the adapter only in `registerAdapters` in `cli/root.go`. The self-protection globs come from that list.
+5. Self-protection is best effort. Do not describe it as a security boundary. Kernel-based self-protection is on the roadmap.
 
 ## Keep the doc correct
 

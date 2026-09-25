@@ -331,6 +331,86 @@ func (_u *AuditEventUpdate) ClearSubagentType() *AuditEventUpdate {
 	return _u
 }
 
+// SetPhase sets the "phase" field.
+func (_u *AuditEventUpdate) SetPhase(v string) *AuditEventUpdate {
+	_u.mutation.SetPhase(v)
+	return _u
+}
+
+// SetNillablePhase sets the "phase" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillablePhase(v *string) *AuditEventUpdate {
+	if v != nil {
+		_u.SetPhase(*v)
+	}
+	return _u
+}
+
+// ClearPhase clears the value of the "phase" field.
+func (_u *AuditEventUpdate) ClearPhase() *AuditEventUpdate {
+	_u.mutation.ClearPhase()
+	return _u
+}
+
+// SetKind sets the "kind" field.
+func (_u *AuditEventUpdate) SetKind(v string) *AuditEventUpdate {
+	_u.mutation.SetKind(v)
+	return _u
+}
+
+// SetNillableKind sets the "kind" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillableKind(v *string) *AuditEventUpdate {
+	if v != nil {
+		_u.SetKind(*v)
+	}
+	return _u
+}
+
+// ClearKind clears the value of the "kind" field.
+func (_u *AuditEventUpdate) ClearKind() *AuditEventUpdate {
+	_u.mutation.ClearKind()
+	return _u
+}
+
+// SetToolCallID sets the "tool_call_id" field.
+func (_u *AuditEventUpdate) SetToolCallID(v string) *AuditEventUpdate {
+	_u.mutation.SetToolCallID(v)
+	return _u
+}
+
+// SetNillableToolCallID sets the "tool_call_id" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillableToolCallID(v *string) *AuditEventUpdate {
+	if v != nil {
+		_u.SetToolCallID(*v)
+	}
+	return _u
+}
+
+// ClearToolCallID clears the value of the "tool_call_id" field.
+func (_u *AuditEventUpdate) ClearToolCallID() *AuditEventUpdate {
+	_u.mutation.ClearToolCallID()
+	return _u
+}
+
+// SetLinkedEventID sets the "linked_event_id" field.
+func (_u *AuditEventUpdate) SetLinkedEventID(v uuid.UUID) *AuditEventUpdate {
+	_u.mutation.SetLinkedEventID(v)
+	return _u
+}
+
+// SetNillableLinkedEventID sets the "linked_event_id" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillableLinkedEventID(v *uuid.UUID) *AuditEventUpdate {
+	if v != nil {
+		_u.SetLinkedEventID(*v)
+	}
+	return _u
+}
+
+// ClearLinkedEventID clears the value of the "linked_event_id" field.
+func (_u *AuditEventUpdate) ClearLinkedEventID() *AuditEventUpdate {
+	_u.mutation.ClearLinkedEventID()
+	return _u
+}
+
 // SetSession sets the "session" edge to the Session entity.
 func (_u *AuditEventUpdate) SetSession(v *Session) *AuditEventUpdate {
 	return _u.SetSessionID(v.ID)
@@ -500,6 +580,30 @@ func (_u *AuditEventUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.SubagentTypeCleared() {
 		_spec.ClearField(auditevent.FieldSubagentType, field.TypeString)
+	}
+	if value, ok := _u.mutation.Phase(); ok {
+		_spec.SetField(auditevent.FieldPhase, field.TypeString, value)
+	}
+	if _u.mutation.PhaseCleared() {
+		_spec.ClearField(auditevent.FieldPhase, field.TypeString)
+	}
+	if value, ok := _u.mutation.Kind(); ok {
+		_spec.SetField(auditevent.FieldKind, field.TypeString, value)
+	}
+	if _u.mutation.KindCleared() {
+		_spec.ClearField(auditevent.FieldKind, field.TypeString)
+	}
+	if value, ok := _u.mutation.ToolCallID(); ok {
+		_spec.SetField(auditevent.FieldToolCallID, field.TypeString, value)
+	}
+	if _u.mutation.ToolCallIDCleared() {
+		_spec.ClearField(auditevent.FieldToolCallID, field.TypeString)
+	}
+	if value, ok := _u.mutation.LinkedEventID(); ok {
+		_spec.SetField(auditevent.FieldLinkedEventID, field.TypeUUID, value)
+	}
+	if _u.mutation.LinkedEventIDCleared() {
+		_spec.ClearField(auditevent.FieldLinkedEventID, field.TypeUUID)
 	}
 	if _u.mutation.SessionCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -852,6 +956,86 @@ func (_u *AuditEventUpdateOne) ClearSubagentType() *AuditEventUpdateOne {
 	return _u
 }
 
+// SetPhase sets the "phase" field.
+func (_u *AuditEventUpdateOne) SetPhase(v string) *AuditEventUpdateOne {
+	_u.mutation.SetPhase(v)
+	return _u
+}
+
+// SetNillablePhase sets the "phase" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillablePhase(v *string) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetPhase(*v)
+	}
+	return _u
+}
+
+// ClearPhase clears the value of the "phase" field.
+func (_u *AuditEventUpdateOne) ClearPhase() *AuditEventUpdateOne {
+	_u.mutation.ClearPhase()
+	return _u
+}
+
+// SetKind sets the "kind" field.
+func (_u *AuditEventUpdateOne) SetKind(v string) *AuditEventUpdateOne {
+	_u.mutation.SetKind(v)
+	return _u
+}
+
+// SetNillableKind sets the "kind" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillableKind(v *string) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetKind(*v)
+	}
+	return _u
+}
+
+// ClearKind clears the value of the "kind" field.
+func (_u *AuditEventUpdateOne) ClearKind() *AuditEventUpdateOne {
+	_u.mutation.ClearKind()
+	return _u
+}
+
+// SetToolCallID sets the "tool_call_id" field.
+func (_u *AuditEventUpdateOne) SetToolCallID(v string) *AuditEventUpdateOne {
+	_u.mutation.SetToolCallID(v)
+	return _u
+}
+
+// SetNillableToolCallID sets the "tool_call_id" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillableToolCallID(v *string) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetToolCallID(*v)
+	}
+	return _u
+}
+
+// ClearToolCallID clears the value of the "tool_call_id" field.
+func (_u *AuditEventUpdateOne) ClearToolCallID() *AuditEventUpdateOne {
+	_u.mutation.ClearToolCallID()
+	return _u
+}
+
+// SetLinkedEventID sets the "linked_event_id" field.
+func (_u *AuditEventUpdateOne) SetLinkedEventID(v uuid.UUID) *AuditEventUpdateOne {
+	_u.mutation.SetLinkedEventID(v)
+	return _u
+}
+
+// SetNillableLinkedEventID sets the "linked_event_id" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillableLinkedEventID(v *uuid.UUID) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetLinkedEventID(*v)
+	}
+	return _u
+}
+
+// ClearLinkedEventID clears the value of the "linked_event_id" field.
+func (_u *AuditEventUpdateOne) ClearLinkedEventID() *AuditEventUpdateOne {
+	_u.mutation.ClearLinkedEventID()
+	return _u
+}
+
 // SetSession sets the "session" edge to the Session entity.
 func (_u *AuditEventUpdateOne) SetSession(v *Session) *AuditEventUpdateOne {
 	return _u.SetSessionID(v.ID)
@@ -1051,6 +1235,30 @@ func (_u *AuditEventUpdateOne) sqlSave(ctx context.Context) (_node *AuditEvent, 
 	}
 	if _u.mutation.SubagentTypeCleared() {
 		_spec.ClearField(auditevent.FieldSubagentType, field.TypeString)
+	}
+	if value, ok := _u.mutation.Phase(); ok {
+		_spec.SetField(auditevent.FieldPhase, field.TypeString, value)
+	}
+	if _u.mutation.PhaseCleared() {
+		_spec.ClearField(auditevent.FieldPhase, field.TypeString)
+	}
+	if value, ok := _u.mutation.Kind(); ok {
+		_spec.SetField(auditevent.FieldKind, field.TypeString, value)
+	}
+	if _u.mutation.KindCleared() {
+		_spec.ClearField(auditevent.FieldKind, field.TypeString)
+	}
+	if value, ok := _u.mutation.ToolCallID(); ok {
+		_spec.SetField(auditevent.FieldToolCallID, field.TypeString, value)
+	}
+	if _u.mutation.ToolCallIDCleared() {
+		_spec.ClearField(auditevent.FieldToolCallID, field.TypeString)
+	}
+	if value, ok := _u.mutation.LinkedEventID(); ok {
+		_spec.SetField(auditevent.FieldLinkedEventID, field.TypeUUID, value)
+	}
+	if _u.mutation.LinkedEventIDCleared() {
+		_spec.ClearField(auditevent.FieldLinkedEventID, field.TypeUUID)
 	}
 	if _u.mutation.SessionCleared() {
 		edge := &sqlgraph.EdgeSpec{

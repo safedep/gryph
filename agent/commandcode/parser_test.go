@@ -101,7 +101,7 @@ func TestParseHookEvent_HookTypeCaptured(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
-	assert.Equal(t, "PreToolUse", event.HookType, "raw hook type must be captured for phase mapping")
+	assert.Equal(t, events.HookType("PreToolUse"), event.HookType, "raw hook type must be captured for phase mapping")
 }
 
 func TestParseHookEvent_PostToolUseEdit(t *testing.T) {
@@ -135,7 +135,7 @@ func TestParseHookEvent_Stop(t *testing.T) {
 	require.NotNil(t, event)
 
 	assert.Equal(t, events.ActionSessionEnd, event.ActionType)
-	assert.Equal(t, "Stop", event.HookType)
+	assert.Equal(t, events.HookType("Stop"), event.HookType)
 	assert.Equal(t, AgentName, event.AgentName)
 }
 
@@ -148,7 +148,7 @@ func TestParseHookEvent_SessionStart(t *testing.T) {
 	require.NotNil(t, event)
 
 	assert.Equal(t, events.ActionSessionStart, event.ActionType)
-	assert.Equal(t, "SessionStart", event.HookType)
+	assert.Equal(t, events.HookType("SessionStart"), event.HookType)
 	assert.Equal(t, events.ResultSuccess, event.ResultStatus)
 }
 

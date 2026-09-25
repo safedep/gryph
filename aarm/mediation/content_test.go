@@ -8,32 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPhaseForHookType(t *testing.T) {
-	cases := map[string]model.ActionPhase{
-		"PreToolUse":           model.PhasePre,
-		"PostToolUse":          model.PhasePost,
-		"PostToolUseFailure":   model.PhasePost,
-		"beforeShellExecution": model.PhasePre,
-		"afterFileEdit":        model.PhasePost,
-		"pre_run_command":      model.PhasePre,
-		"post_write_code":      model.PhasePost,
-		"tool.execute.before":  model.PhasePre,
-		"tool.execute.after":   model.PhasePost,
-		"tool_call":            model.PhasePre,
-		"tool_result":          model.PhasePost,
-		"BeforeTool":           model.PhasePre,
-		"AfterTool":            model.PhasePost,
-		"before_tool_call":     model.PhasePre,
-		"after_tool_call":      model.PhasePost,
-		"SessionStart":         model.PhaseUnknown,
-		"Notification":         model.PhaseUnknown,
-		"":                     model.PhaseUnknown,
-	}
-	for hook, want := range cases {
-		assert.Equalf(t, want, phaseForHookType(hook), "hook %q", hook)
-	}
-}
-
 func TestApplyContentMatch_UnderCap(t *testing.T) {
 	a := &model.Action{}
 	applyContentMatch(a, "small body")

@@ -85,7 +85,7 @@ func TestParseHookEvent_FullContentAndHookType(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
-	assert.Equal(t, "PreToolUse", event.HookType, "raw hook type must be captured for phase mapping")
+	assert.Equal(t, events.HookType("PreToolUse"), event.HookType, "raw hook type must be captured for phase mapping")
 	assert.Contains(t, event.FullContent, "package main",
 		"full untruncated content must be retained in-memory for the policy matcher")
 }

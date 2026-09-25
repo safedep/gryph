@@ -171,6 +171,19 @@ type Adapter interface {
 	// agent's Gryph hook configuration. Self-protection blocks agent changes
 	// to these files, so a governed agent cannot remove its own hooks.
 	HookConfigPaths() []string
+
+	// Hooks declares every hook this adapter installs and parses, with its
+	// phase. The decision service reads the phase from here.
+	Hooks() []events.HookSpec
+}
+
+// HookTypeNames returns the hook type names of specs, in order.
+func HookTypeNames(specs []events.HookSpec) []string {
+	names := make([]string, 0, len(specs))
+	for _, s := range specs {
+		names = append(names, string(s.Type))
+	}
+	return names
 }
 
 // HomeConfigGlob returns a glob for a path under the user's home directory.

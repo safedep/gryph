@@ -11,17 +11,21 @@ import (
 
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/core/events"
 )
 
-// HookTypes are the hook types supported by Command Code that we want to
-// capture. Command Code fires PreToolUse/PostToolUse around every tool call
-// and Stop/SessionStart on turn and session boundaries.
-var HookTypes = []string{
-	"PreToolUse",
-	"PostToolUse",
-	"Stop",
-	"SessionStart",
+// Hooks declares the Command Code hooks Gryph installs and parses. Phase and
+// Blocking drive the enforcement coverage table in
+// docs/agent-enforcement-coverage.md.
+var Hooks = []events.HookSpec{
+	{Type: "PreToolUse", Phase: events.PhasePre, Blocking: true},
+	{Type: "PostToolUse", Phase: events.PhasePost},
+	{Type: "Stop", Phase: events.PhaseUnknown},
+	{Type: "SessionStart", Phase: events.PhaseUnknown},
 }
+
+// HookTypes are the hook type names in Hooks, in install order.
+var HookTypes = agent.HookTypeNames(Hooks)
 
 // SettingsHooks represents the hooks section in settings.json.
 type SettingsHooks map[string][]HookMatcher

@@ -10,6 +10,7 @@ import (
 
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/core/events"
 )
 
 //go:embed plugin.js
@@ -19,13 +20,19 @@ func processedPlugin() []byte {
 	return bytes.ReplaceAll(pluginJS, []byte(utils.GryphCommandPlaceholder), []byte(utils.GryphCommand()))
 }
 
-var HookTypes = []string{
-	"tool.execute.before",
-	"tool.execute.after",
-	"session.created",
-	"session.idle",
-	"session.error",
+// Hooks declares the OpenCode hooks Gryph installs and parses. Phase and
+// Blocking drive the enforcement coverage table in
+// docs/agent-enforcement-coverage.md.
+var Hooks = []events.HookSpec{
+	{Type: "tool.execute.before", Phase: events.PhasePre, Blocking: true},
+	{Type: "tool.execute.after", Phase: events.PhasePost},
+	{Type: "session.created", Phase: events.PhaseUnknown},
+	{Type: "session.idle", Phase: events.PhaseUnknown},
+	{Type: "session.error", Phase: events.PhaseUnknown},
 }
+
+// HookTypes are the hook type names in Hooks, in install order.
+var HookTypes = agent.HookTypeNames(Hooks)
 
 const pluginFileName = "gryph.js"
 

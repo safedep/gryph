@@ -56,6 +56,13 @@
     "is_sensitive": {
       "type": "boolean"
     },
+    "kind": {
+      "type": "string"
+    },
+    "linked_event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
     "payload": {
       "oneOf": [
         {
@@ -68,6 +75,9 @@
           "type": "null"
         }
       ]
+    },
+    "phase": {
+      "type": "string"
     },
     "raw_event": {
       "oneOf": [
@@ -108,6 +118,9 @@
     "timestamp": {
       "type": "string",
       "format": "date-time"
+    },
+    "tool_call_id": {
+      "type": "string"
     },
     "tool_name": {
       "type": "string"

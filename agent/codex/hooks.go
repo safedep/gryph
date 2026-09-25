@@ -10,15 +10,22 @@ import (
 
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/core/events"
 )
 
-var HookTypes = []string{
-	"SessionStart",
-	"PreToolUse",
-	"PostToolUse",
-	"UserPromptSubmit",
-	"Stop",
+// Hooks declares the Codex hooks Gryph installs and parses. Phase and
+// Blocking drive the enforcement coverage table in
+// docs/agent-enforcement-coverage.md.
+var Hooks = []events.HookSpec{
+	{Type: "SessionStart", Phase: events.PhaseUnknown},
+	{Type: "PreToolUse", Phase: events.PhasePre, Blocking: true},
+	{Type: "PostToolUse", Phase: events.PhasePost},
+	{Type: "UserPromptSubmit", Phase: events.PhaseUnknown, Prompt: true},
+	{Type: "Stop", Phase: events.PhaseUnknown},
 }
+
+// HookTypes are the hook type names in Hooks, in install order.
+var HookTypes = agent.HookTypeNames(Hooks)
 
 type HooksConfig struct {
 	Hooks map[string][]HookMatcher `json:"hooks"`

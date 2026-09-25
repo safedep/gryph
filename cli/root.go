@@ -124,6 +124,7 @@ func (a *App) DecisionService() decision.Service {
 			return nil
 		}),
 		decision.WithSessionEndHook(collectSessionCost),
+		decision.WithHookSpecs(a.Registry.HookSpec),
 	)
 }
 

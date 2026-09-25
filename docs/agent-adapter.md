@@ -57,6 +57,37 @@ func Register(registry *agent.Registry, pc *events.PrivacyChecker, level config.
 
 See `agent/gemini/adapter.go` for the full pattern.
 
+#### Declare the hooks
+
+`Hooks()` returns a `[]events.HookSpec` table with one entry for every hook the
+adapter installs and parses. Keep the table in `hooks.go`, and derive the
+install list from it with `agent.HookTypeNames(Hooks)`:
+
+```go
+var Hooks = []events.HookSpec{
+    {Type: "PreToolUse", Phase: events.PhasePre, Blocking: true},
+    {Type: "PostToolUse", Phase: events.PhasePost},
+    {Type: "SessionStart", Phase: events.PhaseUnknown},
+}
+
+var HookTypes = agent.HookTypeNames(Hooks)
+
+func (a *Adapter) Hooks() []events.HookSpec { return Hooks }
+```
+
+- `Phase` is `pre` for a hook that fires before the operation runs, `post` for
+  one that fires after it, and `unknown` for lifecycle hooks. The decision
+  service reads the phase from this table. It does not guess from the name.
+- `Blocking` is true when a block from Gryph stops the operation. Only a `pre`
+  hook can be blocking.
+- `Prompt` is true when the hook carries a user prompt.
+- Set `event.HookType` in `ParseEvent` to the declared name. A hook that the
+  table does not declare gets phase `unknown`.
+- Set `event.ToolCallID` when the agent sends a tool call identifier. The
+  decision service uses it to link a post event to its pre event.
+- Regenerate the coverage table with
+  `GRYPH_UPDATE_DOCS=1 go test ./cli -run TestEnforcementCoverageDoc`.
+
 #### Declare the hook config paths
 
 `HookConfigPaths()` returns doublestar globs for every file your install step

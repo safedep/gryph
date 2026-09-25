@@ -226,6 +226,62 @@ func (_c *AuditEventCreate) SetNillableSubagentType(v *string) *AuditEventCreate
 	return _c
 }
 
+// SetPhase sets the "phase" field.
+func (_c *AuditEventCreate) SetPhase(v string) *AuditEventCreate {
+	_c.mutation.SetPhase(v)
+	return _c
+}
+
+// SetNillablePhase sets the "phase" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillablePhase(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetPhase(*v)
+	}
+	return _c
+}
+
+// SetKind sets the "kind" field.
+func (_c *AuditEventCreate) SetKind(v string) *AuditEventCreate {
+	_c.mutation.SetKind(v)
+	return _c
+}
+
+// SetNillableKind sets the "kind" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableKind(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetKind(*v)
+	}
+	return _c
+}
+
+// SetToolCallID sets the "tool_call_id" field.
+func (_c *AuditEventCreate) SetToolCallID(v string) *AuditEventCreate {
+	_c.mutation.SetToolCallID(v)
+	return _c
+}
+
+// SetNillableToolCallID sets the "tool_call_id" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableToolCallID(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetToolCallID(*v)
+	}
+	return _c
+}
+
+// SetLinkedEventID sets the "linked_event_id" field.
+func (_c *AuditEventCreate) SetLinkedEventID(v uuid.UUID) *AuditEventCreate {
+	_c.mutation.SetLinkedEventID(v)
+	return _c
+}
+
+// SetNillableLinkedEventID sets the "linked_event_id" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableLinkedEventID(v *uuid.UUID) *AuditEventCreate {
+	if v != nil {
+		_c.SetLinkedEventID(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AuditEventCreate) SetID(v uuid.UUID) *AuditEventCreate {
 	_c.mutation.SetID(v)
@@ -446,6 +502,22 @@ func (_c *AuditEventCreate) createSpec() (*AuditEvent, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SubagentType(); ok {
 		_spec.SetField(auditevent.FieldSubagentType, field.TypeString, value)
 		_node.SubagentType = value
+	}
+	if value, ok := _c.mutation.Phase(); ok {
+		_spec.SetField(auditevent.FieldPhase, field.TypeString, value)
+		_node.Phase = value
+	}
+	if value, ok := _c.mutation.Kind(); ok {
+		_spec.SetField(auditevent.FieldKind, field.TypeString, value)
+		_node.Kind = value
+	}
+	if value, ok := _c.mutation.ToolCallID(); ok {
+		_spec.SetField(auditevent.FieldToolCallID, field.TypeString, value)
+		_node.ToolCallID = value
+	}
+	if value, ok := _c.mutation.LinkedEventID(); ok {
+		_spec.SetField(auditevent.FieldLinkedEventID, field.TypeUUID, value)
+		_node.LinkedEventID = &value
 	}
 	if nodes := _c.mutation.SessionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

@@ -49,10 +49,10 @@ type Event struct {
 	// TranscriptPath is the path to the agent's transcript file (if provided by the agent).
 	// Excluded from JSON export as it is internal to the local machine.
 	TranscriptPath string `json:"-"`
-	// HookType is the raw agent hook identifier (e.g. "PreToolUse") used by the
-	// AARM layer for execution-phase classification. In-memory only: excluded
-	// from JSON and storage.
-	HookType string `json:"-"`
+	// HookType is the raw agent hook identifier (e.g. "PreToolUse"). The
+	// decision service looks up its HookSpec to set Phase. In-memory only:
+	// excluded from JSON and storage.
+	HookType HookType `json:"-"`
 	// FullContent is the untruncated content read by the AARM content matcher.
 	// In-memory only (excluded from JSON, storage, logs); only the short
 	// ContentPreview is persisted. Empty for sensitive paths.
@@ -63,6 +63,17 @@ type Event struct {
 	SubagentID string `json:"subagent_id,omitempty"`
 	// SubagentType is the type of subagent (e.g., "Explore", "Plan", "general-purpose").
 	SubagentType string `json:"subagent_type,omitempty"`
+	// Phase is the execution phase of the source hook, from the adapter's
+	// HookSpec.
+	Phase Phase `json:"phase,omitempty"`
+	// Kind is the kind of the event in the session context.
+	Kind Kind `json:"kind,omitempty"`
+	// ToolCallID is the agent's identifier for one tool call. The pre and
+	// post events of one call share it.
+	ToolCallID string `json:"tool_call_id,omitempty"`
+	// LinkedEventID is the ID of the pre event of the same tool call, set on
+	// a post event when Gryph recorded the pre event.
+	LinkedEventID uuid.UUID `json:"linked_event_id,omitempty,omitzero"`
 }
 
 // NewEvent creates a new Event with a generated UUID and current timestamp.

@@ -279,7 +279,7 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	}
 	if event != nil {
 		event.TranscriptPath = baseInput.TranscriptPath
-		event.HookType = hookType
+		event.HookType = events.HookType(hookType)
 	}
 	return event, nil
 }
@@ -296,6 +296,7 @@ func (a *Adapter) parsePreToolUse(sessionID uuid.UUID, agentSessionID string, ba
 	}
 
 	event := events.NewEvent(sessionID, AgentName, actionType)
+	event.ToolCallID = input.ToolUseID
 	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
 	event.WorkingDirectory = input.Cwd
@@ -320,6 +321,7 @@ func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, b
 	}
 
 	event := events.NewEvent(sessionID, AgentName, actionType)
+	event.ToolCallID = input.ToolUseID
 	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
 	event.WorkingDirectory = input.Cwd
@@ -347,6 +349,7 @@ func (a *Adapter) parsePostToolUseFailure(sessionID uuid.UUID, agentSessionID st
 	}
 
 	event := events.NewEvent(sessionID, AgentName, actionType)
+	event.ToolCallID = input.ToolUseID
 	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
 	event.WorkingDirectory = input.Cwd

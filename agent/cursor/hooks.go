@@ -10,41 +10,42 @@ import (
 
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/core/events"
 )
 
-// HookTypes are the hook types supported by Cursor that we install.
-// These are the hooks that Gryph registers for monitoring.
-var HookTypes = []string{
+// Hooks declares the Cursor hooks Gryph installs and parses. Phase and
+// Blocking drive the enforcement coverage table in
+// docs/agent-enforcement-coverage.md.
+var Hooks = []events.HookSpec{
 	// Pre-action hooks (can block)
-	"preToolUse",
-	"beforeShellExecution",
-	"beforeMCPExecution",
-	"beforeReadFile",
-	"beforeTabFileRead",
-	"beforeSubmitPrompt",
-
+	{Type: "preToolUse", Phase: events.PhasePre, Blocking: true},
+	{Type: "beforeShellExecution", Phase: events.PhasePre, Blocking: true},
+	{Type: "beforeMCPExecution", Phase: events.PhasePre, Blocking: true},
+	{Type: "beforeReadFile", Phase: events.PhasePre, Blocking: true},
+	{Type: "beforeTabFileRead", Phase: events.PhasePre, Blocking: true},
+	{Type: "beforeSubmitPrompt", Phase: events.PhasePre, Blocking: true, Prompt: true},
 	// Post-action hooks (for logging)
-	"postToolUse",
-	"postToolUseFailure",
-	"afterFileEdit",
-	"afterTabFileEdit",
-	"afterShellExecution",
-	"afterMCPExecution",
-	"afterAgentResponse",
-	"afterAgentThought",
-
+	{Type: "postToolUse", Phase: events.PhasePost},
+	{Type: "postToolUseFailure", Phase: events.PhasePost},
+	{Type: "afterFileEdit", Phase: events.PhasePost},
+	{Type: "afterTabFileEdit", Phase: events.PhasePost},
+	{Type: "afterShellExecution", Phase: events.PhasePost},
+	{Type: "afterMCPExecution", Phase: events.PhasePost},
+	{Type: "afterAgentResponse", Phase: events.PhasePost},
+	{Type: "afterAgentThought", Phase: events.PhasePost},
 	// Session lifecycle hooks
-	"sessionStart",
-	"sessionEnd",
-	"stop",
-
+	{Type: "sessionStart", Phase: events.PhaseUnknown},
+	{Type: "sessionEnd", Phase: events.PhaseUnknown},
+	{Type: "stop", Phase: events.PhaseUnknown},
 	// Subagent hooks
-	"subagentStart",
-	"subagentStop",
-
+	{Type: "subagentStart", Phase: events.PhaseUnknown},
+	{Type: "subagentStop", Phase: events.PhaseUnknown},
 	// Other hooks
-	"preCompact",
+	{Type: "preCompact", Phase: events.PhaseUnknown},
 }
+
+// HookTypes are the hook type names in Hooks, in install order.
+var HookTypes = agent.HookTypeNames(Hooks)
 
 // HooksConfig represents the Cursor hooks.json structure.
 type HooksConfig struct {

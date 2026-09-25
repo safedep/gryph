@@ -1340,3 +1340,56 @@ func TestSQLiteStore_QuerySessionsEventSubQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestSQLiteStore_FindPreEventByToolCall(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	sessionID := uuid.New()
+	otherSession := uuid.New()
+	createTestSession(t, store, sessionID, "claude-code")
+	createTestSession(t, store, otherSession, "claude-code")
+
+	base := time.Now().UTC()
+	sequence := 0
+	save := func(sess uuid.UUID, phase events.Phase, callID string, at time.Duration) *events.Event {
+		e := events.NewEvent(sess, "claude-code", events.ActionCommandExec)
+		e.Timestamp = base.Add(at)
+		e.Phase = phase
+		e.ToolCallID = callID
+		sequence++
+		e.Sequence = sequence
+		require.NoError(t, store.SaveEvent(ctx, e))
+		return e
+	}
+
+	first := save(sessionID, events.PhasePre, "tu-1", 0)
+	save(sessionID, events.PhasePre, "tu-1", time.Second)
+	save(sessionID, events.PhasePost, "tu-2", 2*time.Second)
+	save(otherSession, events.PhasePre, "tu-3", 3*time.Second)
+
+	cases := []struct {
+		name    string
+		session uuid.UUID
+		callID  string
+		want    uuid.UUID
+	}{
+		{"returns the earliest pre event", sessionID, "tu-1", first.ID},
+		{"ignores a post event", sessionID, "tu-2", uuid.Nil},
+		{"does not match another session", sessionID, "tu-3", uuid.Nil},
+		{"empty id finds nothing", sessionID, "", uuid.Nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := store.FindPreEventByToolCall(ctx, tc.session, tc.callID)
+			require.NoError(t, err)
+			if tc.want == uuid.Nil {
+				assert.Nil(t, got)
+				return
+			}
+			require.NotNil(t, got)
+			assert.Equal(t, tc.want, got.ID)
+		})
+	}
+}

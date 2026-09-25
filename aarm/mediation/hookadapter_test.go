@@ -284,3 +284,25 @@ func mustMarshal(t *testing.T, v any) json.RawMessage {
 	require.NoError(t, err)
 	return b
 }
+
+func TestHookAdapter_Normalize_Phase(t *testing.T) {
+	cases := []struct {
+		name  string
+		phase events.Phase
+		want  model.ActionPhase
+	}{
+		{"pre", events.PhasePre, model.PhasePre},
+		{"post", events.PhasePost, model.PhasePost},
+		{"empty is unknown", "", model.PhaseUnknown},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			event := mustEvent(t, uuid.New(), uuid.New(), events.ActionFileRead, "Read", time.Now(),
+				events.FileReadPayload{Path: "/tmp/a"})
+			event.Phase = tc.phase
+			action, err := NewHookAdapter().Normalize(context.Background(), event, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, action.Phase)
+		})
+	}
+}
