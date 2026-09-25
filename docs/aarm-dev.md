@@ -197,11 +197,18 @@ resolves the action path (`~`, `..`, a relative path, a trailing slash)
 before it matches. A delete or move of a directory also matches when the
 directory contains a protected path, for a shell command or a `file_delete`.
 A shell read of such a directory matches the read rule, because a copy or a
-recursive read reads every file in it. A shell read through a glob matches
+recursive read reads every file in it. Such a directory is a literal parent
+in a pattern (`containerPatterns`). A pattern such as `**/.env` has no
+literal parent, so it does not match a recursive read of a directory. A shell read through a glob matches
 when the glob and a pattern, or the glob and a directory that holds a
 pattern, can match the same path (`Target.Glob`, `globsOverlap` in
 `aarm/pdp/paths.go`). `globsOverlap` compares the two globs one segment at a
-time, and one character at a time in a segment. A `file_read` of a directory
+time, and one character at a time in a segment. A shell glob segment that
+starts with `*`, `?`, or a class does not meet a pattern segment that starts
+with a literal dot, as in bash without `dotglob`. `globTokens` knows a
+leading `]` in a class and `[:name:]`, `[=c=]`, and `[.c.]`. A class that
+does not close makes the rest of the segment a star, so the check fails
+closed. A `file_read` of a directory
 that holds a protected path at any depth also matches, but a `file_read` of
 the home directory or one of its parents does not. The rules have no agent
 names and no command regexes.
@@ -244,10 +251,18 @@ the file operands of a fixed list of read commands (`cat`, `head`, `grep`,
 and `wget` upload, and a `file:` URL of `curl` or `sqlite3`. For `sqlite3`,
 the walker also reads the `-init` file and the files that `.open`, `.read`,
 `.import`, `.restore`, `.load`, or `ATTACH` names in an operand or a `-cmd`
-value. `tar` applies each `-C` to the members after it. For a command that
-the walker does not know, each operand without white space is a read with
-`Target.Guess` set. The PDP matches a guessed read against the file patterns
-only, not against a directory that holds a pattern. `nonReadCommands` lists
+value, and the file of `readfile()`, `fsdir()`, and `load_extension()`. When
+`ATTACH` or one of these functions names the file with an expression other
+than one string literal, the walker records a read of the glob `/**`
+(`addAnyRead`), which matches every pattern. It analyzes the command of
+`.shell` and `.system` as a nested script. `tar` applies each `-C` to the
+members after it. For a command that the walker does not know, each operand,
+the value after `=` of an option, and each tail of a short option
+(`guessWords`) is a read with `Target.Guess` set. `git` records the same
+guessed reads relative to the last `-C` directory, and a read of each `-C`,
+`--git-dir`, and `--work-tree` directory. The PDP matches a guessed read
+against the file patterns only, not against a directory that holds a
+pattern. `nonReadCommands` lists
 the commands that read no file content, such as `ls` and `stat`. The walker
 expands a brace list such as `a.{db,x}` before it records a path. A sequence
 such as `{1..9}`, or a word that expands to more than 64 words, becomes the

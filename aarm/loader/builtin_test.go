@@ -375,6 +375,19 @@ func TestBuiltinSource_BlocksReadsOfProtectedPaths(t *testing.T) {
 		{"brace list in copy", model.ActionCommandExec, "", `cp ~/.local/share/safedep/gryph/audit.{db,x} /tmp`, true},
 		{"brace sequence", model.ActionCommandExec, "", `cat ~/.local/share/safedep/gryph/audit.d{a..c}`, true},
 		{"brace in redirect", model.ActionCommandExec, "", `base64 < ~/.config/safedep/gryph/keys/receipt.k{ey,}`, true},
+		{"posix class", model.ActionCommandExec, "", `cat ~/.config/safedep/gryph/keys/receipt.ke[[:alpha:]]`, true},
+		{"class with a leading bracket", model.ActionCommandExec, "", `cat ~/.config/safedep/gryph/keys/receipt.ke[]y]`, true},
+		{"posix class on the database", model.ActionCommandExec, "", `cat ~/.local/share/safedep/gryph/audit.d[[:lower:]]`, true},
+		{"recursive grep through a home star", model.ActionCommandExec, "", `grep -r TODO ~/*`, false},
+		{"count through a home star", model.ActionCommandExec, "", `wc -l ~/*`, false},
+		{"sqlite3 attach expression", model.ActionCommandExec, "", `sqlite3 :memory: "attach '` + data + `/aud' || 'it.db' as a; select 1"`, true},
+		{"sqlite3 readfile", model.ActionCommandExec, "", `sqlite3 :memory: "select readfile('` + key + `')"`, true},
+		{"sqlite3 shell", model.ActionCommandExec, "", `sqlite3 :memory: '.shell cat ` + key + `'`, true},
+		{"git diff through -C", model.ActionCommandExec, "", `git -C ~/.config/safedep/gryph diff --no-index keys/receipt.key /dev/null`, true},
+		{"git -C of the data directory", model.ActionCommandExec, "", `git -C ~/.local/share/safedep/gryph status`, true},
+		{"git -C of a project", model.ActionCommandExec, "", `git -C /work/repo diff`, false},
+		{"unknown command long option value", model.ActionCommandExec, "", `foo --file=` + db, true},
+		{"unknown command short option value", model.ActionCommandExec, "", `foo -f` + db, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -415,6 +428,7 @@ func TestBuiltinSource_ReadsWhenConfigAndDataShareADirectory(t *testing.T) {
 		{"read the policy file", `cat "` + dir + `/policy.yaml"`, false},
 		{"glob over every file", `cat "` + dir + `"/*`, true},
 		{"read the database", `strings "` + db + `"`, true},
+		{"unknown command on the database", `paste "` + db + `"`, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

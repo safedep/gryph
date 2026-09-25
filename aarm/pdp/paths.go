@@ -146,13 +146,20 @@ func globsOverlap(glob string, patterns []string) bool {
 
 func isDoubleStar(seg string) bool { return seg == "**" }
 
-// segmentsOverlap reports whether two glob segments can match the same
-// name. A segment with a brace can match anything, so the result is true.
-func segmentsOverlap(a, b string) bool {
-	if strings.Contains(a, "{") || strings.Contains(b, "{") {
+// segmentsOverlap reports whether a shell glob segment and a pattern
+// segment can match the same name. A segment with a brace can match
+// anything, so the result is true. The shell does not let a leading "*",
+// "?", or class match a leading dot, so such a glob segment does not meet a
+// pattern segment that starts with a literal dot.
+func segmentsOverlap(glob, pattern string) bool {
+	if strings.Contains(glob, "{") || strings.Contains(pattern, "{") {
 		return true
 	}
-	return intersects(globTokens(a), globTokens(b), isStarToken, tokensMeet)
+	g, p := globTokens(glob), globTokens(pattern)
+	if len(g) > 0 && len(p) > 0 && isWildToken(g[0]) && !isWildToken(p[0]) && literal(p[0]) == "." {
+		return false
+	}
+	return intersects(g, p, isStarToken, tokensMeet)
 }
 
 // globToken is one element of a glob segment: "*", "?", a class such as
@@ -161,6 +168,13 @@ type globToken string
 
 func isStarToken(t globToken) bool { return t == "*" }
 
+func isWildToken(t globToken) bool { return t == "*" || t == "?" || isClassToken(t) }
+
+func isClassToken(t globToken) bool { return strings.HasPrefix(string(t), "[") }
+
+// globTokens splits a glob segment into tokens. A class that does not close
+// makes the rest of the segment a star token, so that the check can only
+// over-match.
 func globTokens(seg string) []globToken {
 	var out []globToken
 	for i := 0; i < len(seg); i++ {
@@ -171,12 +185,12 @@ func globTokens(seg string) []globToken {
 			}
 			out = append(out, globToken(`\`+seg[i:i+1]))
 		case '[':
-			if end := strings.IndexByte(seg[i+1:], ']'); end > 0 {
-				out = append(out, globToken(seg[i:i+end+2]))
-				i += end + 1
-				continue
+			end := classEnd(seg, i)
+			if end < 0 {
+				return append(out, "*")
 			}
-			out = append(out, `\[`)
+			out = append(out, globToken(seg[i:end+1]))
+			i = end
 		default:
 			out = append(out, globToken(seg[i:i+1]))
 		}
@@ -184,25 +198,61 @@ func globTokens(seg string) []globToken {
 	return out
 }
 
+// classEnd returns the index of the "]" that closes the class that starts
+// at seg[start], or -1. A "]" right after "[", "[!", or "[^" is a member.
+// A "]" inside "[:name:]", "[=c=]", or "[.c.]" does not close the class.
+func classEnd(seg string, start int) int {
+	i := start + 1
+	if i < len(seg) && (seg[i] == '!' || seg[i] == '^') {
+		i++
+	}
+	if i < len(seg) && seg[i] == ']' {
+		i++
+	}
+	for i < len(seg) {
+		switch {
+		case seg[i] == '\\':
+			i += 2
+		case seg[i] == '[' && i+1 < len(seg) && strings.IndexByte(":=.", seg[i+1]) >= 0:
+			end := strings.Index(seg[i+2:], string(seg[i+1])+"]")
+			if end < 0 {
+				return -1
+			}
+			i += end + 4
+		case seg[i] == ']':
+			return i
+		default:
+			i++
+		}
+	}
+	return -1
+}
+
 // tokensMeet reports whether two tokens that each match one character can
-// match the same character. Two classes always meet, so the check can only
-// over-match.
+// match the same character. Two classes always meet, and so does a class
+// that doublestar cannot check exactly, so the check can only over-match.
 func tokensMeet(a, b globToken) bool {
 	if a == "?" || b == "?" {
 		return true
 	}
-	aClass, bClass := strings.HasPrefix(string(a), "["), strings.HasPrefix(string(b), "[")
 	switch {
-	case aClass && bClass:
+	case isClassToken(a) && isClassToken(b):
 		return true
-	case aClass:
-		ok, _ := doublestar.Match(string(a), literal(b))
-		return ok
-	case bClass:
-		ok, _ := doublestar.Match(string(b), literal(a))
-		return ok
+	case isClassToken(a):
+		return classMatches(a, literal(b))
+	case isClassToken(b):
+		return classMatches(b, literal(a))
 	}
 	return literal(a) == literal(b)
+}
+
+func classMatches(class globToken, char string) bool {
+	body := strings.TrimLeft(string(class[1:len(class)-1]), "!^")
+	if body == "" || body[0] == ']' || strings.ContainsAny(body, `[\`) {
+		return true
+	}
+	ok, err := doublestar.Match(string(class), char)
+	return ok || err != nil
 }
 
 func literal(t globToken) string {

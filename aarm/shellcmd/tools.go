@@ -811,41 +811,67 @@ func (w *walker) sqliteValue(flag, value string, cwds dirs) {
 }
 
 var (
-	sqliteToken  = regexp.MustCompile(`'(?:[^']|'')*'|"[^"]*"|[^\s;]+`)
-	sqliteAttach = regexp.MustCompile(`(?i)\battach\s+(?:database\s+)?('(?:[^']|'')*'|"[^"]*"|[^\s;]+)`)
+	sqliteToken = regexp.MustCompile(`'(?:[^']|'')*'|"[^"]*"|[^\s;]+`)
+	// sqliteFileCall finds each SQL construct that opens a file named by an
+	// expression.
+	sqliteFileCall = regexp.MustCompile(`(?i)\b(?:attach\b(?:\s+database\b)?|(?:readfile|fsdir|load_extension)\s*\()`)
+	// sqliteLiteralArg matches a file name that is one string literal,
+	// followed by the word or character that ends the argument.
+	sqliteLiteralArg = regexp.MustCompile(`(?i)^\s*('(?:[^']|'')*')\s*(?:as\b|[,)])`)
 )
 
 // sqliteFileCommands are the dot commands of sqlite3 that read a file
-// operand.
-var sqliteFileCommands = []string{"open", "read", "import", "restore", "load"}
+// operand. sqliteShellCommands run the rest of the line as a shell command.
+var (
+	sqliteFileCommands  = []string{"open", "read", "import", "restore", "load"}
+	sqliteShellCommands = []string{"shell", "system"}
+)
 
-// isSqliteFileCommand reports whether a word is a dot command that reads a
-// file. sqlite3 accepts a short prefix of a dot command name.
-func isSqliteFileCommand(word string) bool {
+// isSqliteDotCommand reports whether a word is one of the dot commands.
+// sqlite3 accepts a short prefix of a dot command name.
+func isSqliteDotCommand(word string, commands []string) bool {
 	name, ok := strings.CutPrefix(word, ".")
 	if !ok || len(name) < 2 {
 		return false
 	}
-	return slices.ContainsFunc(sqliteFileCommands, func(c string) bool { return strings.HasPrefix(c, name) })
+	return slices.ContainsFunc(commands, func(c string) bool { return strings.HasPrefix(c, name) })
 }
 
 // sqliteText records the files that SQL text or a dot command opens with
-// ATTACH, .open, .read, .import, .restore, or .load.
+// .open, .read, .import, .restore, .load, ATTACH, readfile(), fsdir(), or
+// load_extension(). When the SQL names the file with an expression other
+// than one string literal, the walker records a read of any path. It also
+// analyzes the command of .shell and .system.
 func (w *walker) sqliteText(text string, cwds dirs) {
 	for _, line := range strings.Split(text, "\n") {
-		tokens := sqliteToken.FindAllString(strings.TrimSpace(line), -1)
-		if len(tokens) == 0 || !isSqliteFileCommand(tokens[0]) {
-			continue
-		}
-		for _, tok := range tokens[1:] {
-			if !strings.HasPrefix(tok, "-") {
-				w.add(filePath(sqliteUnquote(tok)), AccessRead, cwds)
+		line = strings.TrimSpace(line)
+		tokens := sqliteToken.FindAllString(line, -1)
+		switch {
+		case len(tokens) == 0:
+		case isSqliteDotCommand(tokens[0], sqliteShellCommands):
+			w.nested(strings.TrimPrefix(line, tokens[0]), cwds)
+		case isSqliteDotCommand(tokens[0], sqliteFileCommands):
+			for _, tok := range tokens[1:] {
+				if !strings.HasPrefix(tok, "-") {
+					w.add(filePath(sqliteUnquote(tok)), AccessRead, cwds)
+				}
 			}
 		}
 	}
-	for _, m := range sqliteAttach.FindAllStringSubmatch(text, -1) {
-		w.add(filePath(sqliteUnquote(m[1])), AccessRead, cwds)
+	for _, loc := range sqliteFileCall.FindAllStringIndex(text, -1) {
+		if m := sqliteLiteralArg.FindStringSubmatch(text[loc[1]:]); m != nil {
+			w.add(filePath(sqliteUnquote(m[1])), AccessRead, cwds)
+		} else {
+			w.addAnyRead()
+		}
 	}
+}
+
+// addAnyRead records a read of a file that the walker cannot name, such as
+// the result of a SQL expression. The glob can match any path, so the read
+// fails closed.
+func (w *walker) addAnyRead() {
+	w.addTarget(Target{Path: "/", Access: AccessRead, Glob: "/**"})
 }
 
 func sqliteUnquote(s string) string {
@@ -1127,9 +1153,23 @@ var gitRemoteArg = map[string]int{
 	"clone": 1, "fetch": 1, "pull": 1, "push": 1, "ls-remote": 1,
 }
 
-// git records the host of the remote that a git command names.
-func (w *walker) git(args []string) {
-	ops := parseArgs(args, gitOptions).operands
+// git records the host of the remote that a git command names. git can
+// read any file under its working tree, so each -C directory, --git-dir,
+// and --work-tree is a read of that tree. Each word that can name a file is
+// a guessed read relative to the last -C directory.
+func (w *walker) git(args []string, cwds dirs) {
+	p := parseArgs(args, gitOptions)
+	for _, a := range p.seq {
+		switch a.flag {
+		case "-C":
+			cwds = w.cd([]string{"--", a.value}, cwds)
+			w.add(".", AccessRead, cwds)
+		case "--git-dir", "--work-tree":
+			w.add(a.value, AccessRead, cwds)
+		}
+	}
+	w.guessReads(guessWords(args), cwds)
+	ops := p.operands
 	if len(ops) == 0 {
 		return
 	}

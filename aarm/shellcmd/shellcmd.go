@@ -468,7 +468,7 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	case "nc", "ncat", "netcat":
 		w.netcat(rest)
 	case "git":
-		w.git(rest)
+		w.git(rest, cwds)
 	case "openssl":
 		w.openssl(rest, cwds)
 	default:
@@ -477,7 +477,7 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 		} else if opts, ok := editCommands[name]; ok {
 			w.addAll(parseArgs(rest, opts).operands, AccessWrite, cwds)
 		} else if !nonReadCommands[name] {
-			w.guessReads(operands(rest), cwds)
+			w.guessReads(guessWords(rest), cwds)
 		}
 	}
 	return cwds
@@ -839,12 +839,11 @@ func (w *walker) add(value string, access Access, cwds dirs) {
 	}
 }
 
-// guessReads records each operand of a command that the walker does not
-// know as a read, because the command can read any file it names. A word
-// with white space is a script or a message, and a URL is not a file.
+// guessReads records each value as a read, because a command that the
+// walker does not know can read any file it names. A URL is not a file.
 func (w *walker) guessReads(values []string, cwds dirs) {
 	for _, v := range values {
-		if strings.ContainsAny(v, " \t\n") || strings.Contains(v, "://") {
+		if strings.Contains(v, "://") {
 			continue
 		}
 		for _, t := range w.targetsOf(v, AccessRead, cwds) {
@@ -852,6 +851,30 @@ func (w *walker) guessReads(values []string, cwds dirs) {
 			w.addTarget(t)
 		}
 	}
+}
+
+// guessWords returns the words of an unknown command that can name a file:
+// each operand, the value after the first "=" of an option, and each tail
+// of a short option, because "-fvalue" can pass the value "value".
+func guessWords(args []string) []string {
+	out := operands(args)
+	for _, a := range args {
+		if a == "--" {
+			break
+		}
+		if !strings.HasPrefix(a, "-") || a == "-" {
+			continue
+		}
+		if _, v, ok := strings.Cut(a, "="); ok {
+			out = append(out, v)
+		}
+		if !strings.HasPrefix(a, "--") {
+			for j := 2; j < len(a); j++ {
+				out = append(out, a[j:])
+			}
+		}
+	}
+	return out
 }
 
 func (w *walker) targetsOf(value string, access Access, cwds dirs) []Target {

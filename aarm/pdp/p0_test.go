@@ -337,6 +337,9 @@ rules:
 		{"cat .e*", model.DecisionBlock},
 		{"cat config/.[e]nv", model.DecisionBlock},
 		{"cat *.md", model.DecisionAllow},
+		{"cat .en?", model.DecisionBlock},
+		{"cat ./.env*", model.DecisionBlock},
+		{"cat */.e*", model.DecisionBlock},
 	}
 	for _, tc := range cases {
 		t.Run(tc.command, func(t *testing.T) {
@@ -404,10 +407,24 @@ func TestGlobsOverlap(t *testing.T) {
 	}{
 		{"/w/.e*", "**/.env", true},
 		{"/w/*.md", "**/.env", false},
-		{"/w/*.env", "**/.e*", true},
+		{"/w/*.env", "**/.e*", false},
 		{"/w/.[a-f]nv", "**/.env", true},
 		{"/w/.[x-z]nv", "**/.env", false},
-		{"/w/?env", "**/.env", true},
+		{"/w/?env", "**/.env", false},
+		{"/w/*", "**/.env", false},
+		{"/w/[.]env", "**/.env", false},
+		{"/w/.*", "**/.env", true},
+		{"/w/*/.env", "**/.env", true},
+		{"/h/*", "/h/.config/g/k", false},
+		{"/h/*", "/h/src", true},
+		{"/k/receipt.ke[[:alpha:]]", "/k/receipt.key", true},
+		{"/k/receipt.ke[]y]", "/k/receipt.key", true},
+		{"/k/receipt.ke[!]x]", "/k/receipt.key", true},
+		{"/k/receipt.ke[[=y=]]", "/k/receipt.key", true},
+		{"/k/receipt.ke[=y=]]", "/k/receipt.key", false},
+		{"/k/receipt.ke[x", "/k/receipt.key", true},
+		{"/k/receipt.ke[x-z]", "/k/receipt.key", true},
+		{"/k/receipt.ke[a-c]", "/k/receipt.key", false},
 		{"/w/*/x", "/w/a/**", true},
 		{"/other/**", "/data/audit.db", false},
 		{"/data/**", "/data/g/audit.db", true},
@@ -435,7 +452,7 @@ rules:
     action: block
     match:
       action_types: [file_read, command_exec]
-      file_patterns: ["/data/gryph/audit.db"]
+      file_patterns: ["/data/gryph/audit.db", "**/.env"]
       file_access: [read]
   - id: write-key
     action: block
@@ -472,6 +489,11 @@ rules:
 		{"remove access ignores a write", shellAction("echo x > /cfg/hooks.json"), model.DecisionAllow},
 		{"remove access selects a tree write", shellAction("tar -xf a.tar -C /cfg"), model.DecisionBlock},
 		{"read access ignores a tree write", shellAction("tar -xf a.tar -C /data/gryph"), model.DecisionAllow},
+		{"shell star does not match a dot name", shellAction("cat *"), model.DecisionAllow},
+		{"recursive grep through a star", shellAction("grep -rn TODO *"), model.DecisionAllow},
+		{"star after a dot matches a dot name", shellAction("cat .e*"), model.DecisionBlock},
+		{"recursive grep of the working directory", shellAction("grep -r TODO ."), model.DecisionAllow},
+		{"archive of the working directory", shellAction("tar czf /out/x.tgz ."), model.DecisionAllow},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
