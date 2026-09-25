@@ -326,14 +326,43 @@ func TestLocal_Handle_ResultRecorder(t *testing.T) {
 	}
 }
 
-type captureCheck struct{ seen *events.Event }
+type captureCheck struct {
+	seen     *events.Event
+	sessions []*session.Session
+}
 
 func (*captureCheck) Name() string  { return "test-capture" }
 func (*captureCheck) Enabled() bool { return true }
-func (c *captureCheck) Check(_ context.Context, event *events.Event, _ *session.Session) (*security.CheckResult, error) {
+func (c *captureCheck) Check(_ context.Context, event *events.Event, sess *session.Session) (*security.CheckResult, error) {
 	copied := *event
 	c.seen = &copied
+	c.sessions = append(c.sessions, sess)
 	return &security.CheckResult{CheckName: "test-capture", Decision: security.DecisionAllow}, nil
+}
+
+func TestLocal_Handle_PassesStoredSessionToEvaluator(t *testing.T) {
+	ctx := context.Background()
+	store := storagetest.NewStore(t)
+	capture := &captureCheck{}
+	evaluator := security.New(&security.Config{FailOpen: true})
+	evaluator.RegisterCheck(capture)
+	svc := NewLocal(store, evaluator, nil, fullLevel)
+	sessionID := uuid.New()
+
+	for range 2 {
+		_, err := svc.Handle(ctx, writeRequest(sessionID))
+		require.NoError(t, err)
+	}
+
+	stored, err := store.GetSession(ctx, sessionID)
+	require.NoError(t, err)
+	require.Len(t, capture.sessions, 2)
+	for _, got := range capture.sessions {
+		require.NotNil(t, got, "a nil session fails open on project-scoped rules")
+		assert.Equal(t, stored.ID, got.ID)
+		assert.Equal(t, "project", got.ProjectName)
+		assert.True(t, stored.StartedAt.Equal(got.StartedAt))
+	}
 }
 
 func TestLocal_Handle_InMemoryFieldsReachEvaluator(t *testing.T) {
