@@ -197,9 +197,10 @@ older. With `IncludeContent` it loads the audit events in one
 `QueryEventsByIDs` call and projects each content value: the value stays only
 when its label level is `full`, so a preview stored at `standard` never
 reaches a window, even after the config changes to `full`. `MaxBytes` bounds
-the bytes of the content values. Labels and entries do not count. It empties
-values from the oldest entries first until the total fits, and sets
-`Truncated`. `MaxEntries` is at most `config.MaxWindowEntries` (1000).
+the bytes of the content values. Labels and entries do not count. The
+latest intent gets the budget first, then the entries from the newest to the
+oldest. A value that does not fit is emptied, and a smaller value after it
+can still use the budget. `Truncated` is true when a value was emptied. `MaxEntries` is at most `config.MaxWindowEntries` (1000).
 `accumulator.CanonicalWindow` gives the same bytes for the same window. The
 PDP does not call `Window`. `gryph policy context --window --session <id>
 [--content] [--limit N]` prints it, and `policy.context.window_max_entries`

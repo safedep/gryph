@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -67,7 +68,7 @@ func TestSQLiteAccumulator_Window(t *testing.T) {
 		assert.False(t, w.Truncated)
 	})
 
-	t.Run("max bytes drops the oldest content first", func(t *testing.T) {
+	t.Run("max bytes keeps the newest content", func(t *testing.T) {
 		recordWrite(t, acc, store, sess.ID, "newest at full", "full")
 		w, err := acc.Window(ctx, sess.ID, model.WindowSpec{MaxEntries: 10, MaxBytes: len("newest at full"), IncludeContent: true})
 		require.NoError(t, err)
@@ -149,16 +150,64 @@ func TestSQLiteAccumulator_WindowLegacyRows(t *testing.T) {
 
 func TestFitBytes(t *testing.T) {
 	text := func(v string) privacy.Text { return privacy.Text{Value: v} }
-	w := &model.Window{Entries: []model.WindowEntry{
-		{Content: []privacy.Text{text("aaaa"), text("bb")}},
-		{Content: []privacy.Text{text("cccc")}},
-	}}
+	entry := func(kind events.Kind, values ...string) model.WindowEntry {
+		e := model.WindowEntry{Entry: model.ContextEntry{Kind: kind}}
+		for _, v := range values {
+			e.Content = append(e.Content, text(v))
+		}
+		return e
+	}
+	values := func(w *model.Window) [][]string {
+		var out [][]string
+		for _, e := range w.Entries {
+			var vs []string
+			for _, c := range e.Content {
+				vs = append(vs, c.Value)
+			}
+			out = append(out, vs)
+		}
+		return out
+	}
 
-	assert.True(t, fitBytes(w, 6))
-	assert.Empty(t, w.Entries[0].Content[0].Value)
-	assert.Equal(t, "bb", w.Entries[0].Content[1].Value, "fitBytes stops once the total fits")
-	assert.Equal(t, "cccc", w.Entries[1].Content[0].Value)
-	assert.False(t, fitBytes(w, 0))
+	tests := []struct {
+		name          string
+		entries       []model.WindowEntry
+		maxBytes      int
+		want          [][]string
+		wantTruncated bool
+	}{
+		{
+			name:     "the newest entries keep their content",
+			entries:  []model.WindowEntry{entry(events.KindAction, "aaaa", "bb"), entry(events.KindAction, "cccc")},
+			maxBytes: 6,
+			want:     [][]string{{"", "bb"}, {"cccc"}}, wantTruncated: true,
+		},
+		{
+			name:     "the latest intent keeps its content first",
+			entries:  []model.WindowEntry{entry(events.KindIntent, "refactor the loader"), entry(events.KindAction, "aaaa"), entry(events.KindAction, "bbbb")},
+			maxBytes: 23,
+			want:     [][]string{{"refactor the loader"}, {""}, {"bbbb"}}, wantTruncated: true,
+		},
+		{
+			name:     "one large value does not empty the smaller values",
+			entries:  []model.WindowEntry{entry(events.KindAction, "small"), entry(events.KindAction, "small"), entry(events.KindAction, strings.Repeat("x", 100))},
+			maxBytes: 20,
+			want:     [][]string{{"small"}, {"small"}, {""}}, wantTruncated: true,
+		},
+		{
+			name:     "no limit",
+			entries:  []model.WindowEntry{entry(events.KindAction, "aaaa")},
+			maxBytes: 0,
+			want:     [][]string{{"aaaa"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := &model.Window{Entries: tt.entries}
+			assert.Equal(t, tt.wantTruncated, fitBytes(w, tt.maxBytes))
+			assert.Equal(t, tt.want, values(w))
+		})
+	}
 }
 
 func TestSQLiteAccumulator_WindowOrdersBySequence(t *testing.T) {

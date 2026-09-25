@@ -22,7 +22,8 @@ import (
 // IncludeContent it loads the audit events in one query and projects their
 // content: a value stays only when Gryph stored it at the full level. A
 // preview stored at standard never reaches a window, even after the config
-// changes to full. MaxBytes drops content from the oldest entries first.
+// changes to full. MaxBytes keeps the latest intent first, then the newest
+// entries.
 func (a *SQLiteAccumulator) Window(ctx context.Context, sessionID uuid.UUID, spec model.WindowSpec) (*model.Window, error) {
 	if a == nil || a.store == nil {
 		return nil, fmt.Errorf("accumulator: store is not initialized")
@@ -129,28 +130,45 @@ func projectContent(e *events.Event) []privacy.Text {
 	return out
 }
 
-// fitBytes empties content values from the oldest entries first until the
-// total bytes of the values fit maxBytes. Labels and entries do not count.
-// It reports whether it removed a value. A maxBytes of zero or less keeps
+// fitBytes keeps the content values that fit maxBytes and empties the
+// rest. The latest intent comes first, then the entries from the newest to
+// the oldest. A value that does not fit is emptied, and the next smaller
+// values can still use the budget. Labels and entries do not count. It
+// reports whether it removed a value. A maxBytes of zero or less keeps
 // everything.
 func fitBytes(w *model.Window, maxBytes int) bool {
 	if maxBytes <= 0 {
 		return false
 	}
-	total := 0
-	for _, e := range w.Entries {
-		for _, t := range e.Content {
-			total += len(t.Value)
+	order := make([]int, 0, len(w.Entries))
+	intent := -1
+	for i := len(w.Entries) - 1; i >= 0; i-- {
+		if w.Entries[i].Entry.Kind == events.KindIntent {
+			intent = i
+			break
 		}
 	}
+	if intent >= 0 {
+		order = append(order, intent)
+	}
+	for i := len(w.Entries) - 1; i >= 0; i-- {
+		if i != intent {
+			order = append(order, i)
+		}
+	}
+
+	budget := maxBytes
 	truncated := false
-	for i := 0; i < len(w.Entries) && total > maxBytes; i++ {
-		for j := 0; j < len(w.Entries[i].Content) && total > maxBytes; j++ {
+	for _, i := range order {
+		for j := range w.Entries[i].Content {
 			t := &w.Entries[i].Content[j]
 			if t.Value == "" {
 				continue
 			}
-			total -= len(t.Value)
+			if len(t.Value) <= budget {
+				budget -= len(t.Value)
+				continue
+			}
 			t.Value = ""
 			truncated = true
 		}
