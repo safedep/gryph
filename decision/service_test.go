@@ -115,7 +115,7 @@ func assertDataOnly(t *testing.T, typ reflect.Type, path string) {
 			}
 			assertDataOnly(t, f.Type, path+"."+f.Name)
 		}
-	case reflect.Ptr, reflect.Slice, reflect.Array:
+	case reflect.Pointer, reflect.Slice, reflect.Array:
 		assertDataOnly(t, typ.Elem(), path)
 	case reflect.Map:
 		assertDataOnly(t, typ.Key(), path)
