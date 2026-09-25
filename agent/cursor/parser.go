@@ -117,13 +117,19 @@ type StopInput struct {
 	LoopCount int    `json:"loop_count"`
 }
 
+// MCPServer holds the fields that a Cursor MCP hook sends about the server:
+// the URL of a remote server or the command of a local server.
+type MCPServer struct {
+	URL     string `json:"url,omitempty"`
+	Command string `json:"command,omitempty"`
+}
+
 // BeforeMCPExecutionInput represents the input for beforeMCPExecution hooks.
 type BeforeMCPExecutionInput struct {
 	HookInput
+	MCPServer
 	ToolName  string                 `json:"tool_name"`
 	ToolInput map[string]interface{} `json:"tool_input"`
-	URL       string                 `json:"url,omitempty"`
-	Command   string                 `json:"command,omitempty"`
 	Cwd       string                 `json:"cwd,omitempty"`
 }
 
@@ -139,6 +145,7 @@ type AfterShellExecutionInput struct {
 // AfterMCPExecutionInput represents the input for afterMCPExecution hooks.
 type AfterMCPExecutionInput struct {
 	HookInput
+	MCPServer
 	ToolName   string                 `json:"tool_name"`
 	ToolInput  map[string]interface{} `json:"tool_input"`
 	ResultJSON map[string]interface{} `json:"result_json,omitempty"`
@@ -562,14 +569,14 @@ func parseStop(sessionID uuid.UUID, agentSessionID string, base HookInput, rawDa
 	return event, nil
 }
 
-// mcpSource names an MCP server for a Cursor MCP hook, which sends no server
+// source names the MCP server, because a Cursor MCP hook sends no server
 // name. It uses the host of a remote server URL, or the program of a local
 // server command.
-func mcpSource(rawURL, command string) string {
-	if u, err := url.Parse(rawURL); err == nil && u.Hostname() != "" {
+func (s MCPServer) source() string {
+	if u, err := url.Parse(s.URL); err == nil && u.Hostname() != "" {
 		return strings.ToLower(u.Hostname())
 	}
-	if fields := strings.Fields(command); len(fields) > 0 {
+	if fields := strings.Fields(s.Command); len(fields) > 0 {
 		return filepath.Base(fields[0])
 	}
 	return ""
@@ -585,7 +592,7 @@ func parseBeforeMCPExecution(sessionID uuid.UUID, agentSessionID string, base Ho
 	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
 	event.Origin = privacy.OriginMCP
-	event.OriginSource = mcpSource(input.URL, input.Command)
+	event.OriginSource = input.source()
 	event.RawEvent = rawData
 	if input.Cwd != "" {
 		event.WorkingDirectory = input.Cwd
@@ -646,6 +653,7 @@ func parseAfterMCPExecution(sessionID uuid.UUID, agentSessionID string, base Hoo
 	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
 	event.Origin = privacy.OriginMCP
+	event.OriginSource = input.source()
 	event.ObserveOutput(input.ResultJSON)
 	event.DurationMs = input.Duration
 	event.RawEvent = rawData

@@ -466,15 +466,27 @@ func TestMCPSource(t *testing.T) {
 		{"", "", ""},
 	}
 	for _, tc := range cases {
-		assert.Equal(t, tc.want, mcpSource(tc.url, tc.command))
+		assert.Equal(t, tc.want, MCPServer{URL: tc.url, Command: tc.command}.source())
 	}
 }
 
-func TestParseBeforeMCPExecution_Origin(t *testing.T) {
-	data := []byte(`{"conversation_id":"c","generation_id":"g","hook_event_name":"beforeMCPExecution",
-		"workspace_roots":["/work"],"tool_name":"search","tool_input":{"q":"x"},"url":"https://mcp.example.com/sse"}`)
-	event, err := testAdapter(t).ParseEvent(context.Background(), "beforeMCPExecution", data)
-	require.NoError(t, err)
-	assert.Equal(t, privacy.OriginMCP, event.Origin)
-	assert.Equal(t, "mcp.example.com", event.OriginSource)
+func TestParseMCPExecution_Origin(t *testing.T) {
+	cases := []struct {
+		hook, server, want string
+	}{
+		{"beforeMCPExecution", `"url":"https://mcp.example.com/sse"`, "mcp.example.com"},
+		{"afterMCPExecution", `"url":"https://mcp.example.com/sse"`, "mcp.example.com"},
+		{"afterMCPExecution", `"command":"/usr/bin/github-mcp-server stdio"`, "github-mcp-server"},
+		{"afterMCPExecution", `"duration":5`, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.hook+"/"+tc.want, func(t *testing.T) {
+			data := []byte(`{"conversation_id":"c","generation_id":"g","hook_event_name":"` + tc.hook + `",
+				"workspace_roots":["/work"],"tool_name":"search","tool_input":{"q":"x"},` + tc.server + `}`)
+			event, err := testAdapter(t).ParseEvent(context.Background(), tc.hook, data)
+			require.NoError(t, err)
+			assert.Equal(t, privacy.OriginMCP, event.Origin)
+			assert.Equal(t, tc.want, event.OriginSource)
+		})
+	}
 }
