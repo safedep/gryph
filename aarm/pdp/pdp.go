@@ -70,8 +70,17 @@ func New(policy *Policy, opts ...Option) (*PDP, error) {
 	return p, nil
 }
 
-// Evaluate computes the final decision and matched rule IDs.
+// Evaluate computes the final decision and matched rule IDs. It renders the
+// rule message from the action.
 func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *model.ContextSnapshot) (*model.EvaluationResult, error) {
+	return p.EvaluateStored(ctx, action, action, snapshot)
+}
+
+// EvaluateStored evaluates the action as Evaluate does. It renders
+// FullMessage from the action and Message from stored, the action as the
+// receipt records it. A template can name a parameter that the stored action
+// drops, so the stored message must not come from the full action.
+func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, snapshot *model.ContextSnapshot) (*model.EvaluationResult, error) {
 	result := &model.EvaluationResult{Decision: model.DecisionAllow, MatchedRuleIDs: []string{}}
 	if action == nil {
 		return result, nil
@@ -173,11 +182,17 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 	}
 
 	if winnerRule != nil {
-		msg, err := winnerRule.renderMessage(action, snapshot)
+		full, err := winnerRule.renderMessage(action, snapshot)
 		if err != nil {
 			return nil, err
 		}
-		result.Message = msg
+		result.FullMessage = full
+		result.Message = full
+		if stored != action {
+			if result.Message, err = winnerRule.renderMessage(stored, snapshot); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return result, nil

@@ -271,6 +271,43 @@ rules:
 	assert.Equal(t, "block", got.Message)
 }
 
+func TestPDP_EvaluateStoredRendersTwoMessages(t *testing.T) {
+	const secretURL = "https://example.com/invite/k7Qz9xWm"
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: block-fetch
+    action: block
+    match:
+      action_types: [tool_use]
+    message: "blocked fetch to {{.Action.Params.URL}}"
+`)
+	engine, err := New(policy)
+	require.NoError(t, err)
+
+	full := &model.Action{Type: model.ActionToolUse, Tool: "WebFetch", Parameters: model.Parameters{URL: secretURL}}
+	stored := &model.Action{Type: model.ActionToolUse, Tool: "WebFetch"}
+
+	cases := []struct {
+		name       string
+		stored     *model.Action
+		wantStored string
+	}{
+		{"same action", full, "blocked fetch to " + secretURL},
+		{"stripped action", stored, "blocked fetch to"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := engine.EvaluateStored(context.Background(), full, tc.stored, nil)
+			require.NoError(t, err)
+			assert.Equal(t, model.DecisionBlock, got.Decision)
+			assert.Equal(t, "blocked fetch to "+secretURL, got.FullMessage)
+			assert.Equal(t, "blocked fetch to "+secretURL, got.AgentMessage())
+			assert.Equal(t, tc.wantStored, got.Message)
+		})
+	}
+}
+
 func TestParsePolicy_RejectsInvalidRules(t *testing.T) {
 	tests := []struct {
 		name   string

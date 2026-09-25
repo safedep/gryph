@@ -203,9 +203,16 @@ func (l *Local) loadSession(ctx context.Context, event *events.Event) (*session.
 	return sess, nil
 }
 
+// recordBlocked saves the blocked event with the stored block reason. The
+// agent gets the full reason. The stored reason comes from the action that
+// the receipt records, so it does not hold content that applyLevel removed.
+// The redactor runs on it again, because a check can put any text in it.
 func (l *Local) recordBlocked(ctx context.Context, sess *session.Session, event *events.Event, result *security.Result) {
 	event.ResultStatus = events.ResultBlocked
-	event.ErrorMessage = result.BlockReason
+	event.ErrorMessage = result.StoredBlockReason
+	if l.redactor != nil {
+		event.ErrorMessage = l.redactor.Redact(event.ErrorMessage)
+	}
 	event.Sequence = sess.TotalActions + 1
 
 	if err := l.store.SaveEvent(ctx, event); err != nil {

@@ -185,6 +185,17 @@ CEL evaluation runs sandboxed with a 100 ms timeout.
 
 The rendered message is delivered to the agent on stderr for block and guidance decisions.
 
+Gryph renders the message two times. The agent and the approval prompt get
+the message rendered from the full action. The receipt and the
+`error_message` of the stored event get the message rendered from the stored
+action. When the logging level or a sensitive path removes the content of the
+event, the stored action has no URL, no line counts, no write content, and no
+tool-input parameters. So a stored message never holds a value that the
+stored event does not keep. For example, at `logging.level: minimal` the rule
+message `blocked fetch to {{.Action.Params.URL}}` reaches the agent with the
+URL, and the store keeps `blocked fetch to`. The redactor also runs on the
+stored `error_message`.
+
 ## Decisions
 
 | Decision | What happens | Exit code |

@@ -665,3 +665,39 @@ func TestLocal_Handle_PolicySeesContentBeforeLevel(t *testing.T) {
 	assert.Equal(t, []privacy.Class{privacy.ClassPII}, p.Input.Label.Classes)
 	assert.Equal(t, "minimal", p.Input.Label.Level)
 }
+
+type splitReasonCheck struct{}
+
+func (splitReasonCheck) Name() string  { return "test-split" }
+func (splitReasonCheck) Enabled() bool { return true }
+func (splitReasonCheck) Check(context.Context, *events.Event, *session.Session) (*security.CheckResult, error) {
+	return &security.CheckResult{
+		CheckName:    "test-split",
+		Decision:     security.DecisionBlock,
+		Reason:       "refused https://example.com/invite/k7Qz9xWm",
+		StoredReason: "refused password=hunter2",
+	}, nil
+}
+
+// TestLocal_Handle_BlockStoresStoredReason checks that the agent gets the
+// full reason, and that the stored event keeps the redacted stored reason.
+func TestLocal_Handle_BlockStoresStoredReason(t *testing.T) {
+	ctx := context.Background()
+	store := storagetest.NewStore(t)
+	evaluator := security.New(&security.Config{FailOpen: true})
+	evaluator.RegisterCheck(splitReasonCheck{})
+	redactor, err := privacy.NewRedactor(nil, privacy.DefaultRedactPatterns())
+	require.NoError(t, err)
+
+	req := writeRequest(uuid.New())
+	resp, err := NewLocal(store, evaluator, redactor, fullLevel).Handle(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, "refused https://example.com/invite/k7Qz9xWm", resp.Reason)
+
+	stored, err := store.GetEvent(ctx, req.Event.ID)
+	require.NoError(t, err)
+	assert.Equal(t, events.ResultBlocked, stored.ResultStatus)
+	assert.Contains(t, stored.ErrorMessage, "refused")
+	assert.NotContains(t, stored.ErrorMessage, "k7Qz9xWm")
+	assert.NotContains(t, stored.ErrorMessage, "hunter2")
+}

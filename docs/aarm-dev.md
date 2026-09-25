@@ -98,7 +98,9 @@ and accumulator read it. Key fields:
   event from the adapter's `Hooks()` table, and mediation copies it.
 
 `model.EvaluationResult` is the PDP output: `Decision`, `MatchedRuleIDs`,
-`Message`, `Severity`, `Tags`, `DeferReason`.
+`Message`, `FullMessage`, `Severity`, `Tags`, `DeferReason`. `Message` is the
+stored message. `FullMessage` goes only to the agent and to the approval
+prompt. `AgentMessage` returns `FullMessage`, or `Message` when it is empty.
 
 ## Policy schema and evaluation
 
@@ -398,6 +400,15 @@ verifier, or every existing chain fails verification.
   `receiptAction` drops the URL, the line counts, and the tool-input
   parameters from the receipt. The PDP and the approval prompt still see the
   full action.
+- The stored message follows the same rule. The Mediator calls
+  `EvaluateStored` with the full action and the `receiptAction` result. The
+  PDP renders `FullMessage` from the full action and `Message` from the
+  stored action. The receipt hashes and stores `Message`. `pep.Apply` puts
+  `FullMessage` in `CheckResult.Reason` for the agent and `Message` in
+  `CheckResult.StoredReason`. The evaluator copies it to
+  `Result.StoredBlockReason`, and `decision.Local` redacts it and stores it
+  as the event `error_message`. A check that does not set `StoredReason`
+  stores its `Reason`.
 - Export with `gryph policy receipts export`. Verify a chain with
   `gryph policy receipts verify-log`.
 

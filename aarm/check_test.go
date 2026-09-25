@@ -586,6 +586,7 @@ func TestMediator_ReceiptDropsStrippedParameters(t *testing.T) {
 	}{
 		{"allow keeps", "allow", false},
 		{"allow strips", "allow", true},
+		{"block keeps", "block", false},
 		{"block strips", "block", true},
 		{"escalate strips", "escalate", true},
 		{"defer strips", "defer\n    reason: wait", true},
@@ -598,6 +599,7 @@ rules:
   - id: rule
     action: ` + tc.rule + `
     match: { action_types: [tool_use] }
+    message: "fetch {{.Action.Params.URL}}"
 `))
 			require.NoError(t, err)
 
@@ -623,15 +625,24 @@ rules:
 				AgentName:  "claude-code",
 				Payload:    []byte(`{"tool_name":"WebFetch","input":{"value":"{\"url\":\"` + rawURL + `\"}","label":{}}}`),
 			}
-			_, err = med.Check(context.Background(), event, nil)
+			res, err := med.Check(context.Background(), event, nil)
 			require.NoError(t, err)
 			assert.Same(t, event, seen)
 			require.Len(t, rec.records, 1)
+			if tc.rule == "block" {
+				assert.Equal(t, "fetch "+rawURL, res.Reason)
+			}
 			if tc.strip {
 				assert.Empty(t, rec.records[0].Action.Parameters.URL)
+				assert.NotContains(t, rec.records[0].Decision.Message, rawURL)
+				assert.NotContains(t, res.StoredReason, rawURL)
 				return
 			}
 			assert.Equal(t, rawURL, rec.records[0].Action.Parameters.URL)
+			if tc.rule == "block" {
+				assert.Equal(t, "fetch "+rawURL, rec.records[0].Decision.Message)
+				assert.Equal(t, "fetch "+rawURL, res.StoredReason)
+			}
 		})
 	}
 }

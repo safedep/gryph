@@ -459,3 +459,98 @@ rules:
 	assertHookBlocked(t, stdout, stderr, runErr, "blocked-by-policy")
 	assertSingleEventStatus(t, env, events.ResultBlocked)
 }
+
+// TestPolicy_StoredMessageFollowsLoggingLevel checks that a rule message
+// that names a stripped value reaches the agent, but not the stored event,
+// the export line, or the receipt.
+func TestPolicy_StoredMessageFollowsLoggingLevel(t *testing.T) {
+	const (
+		tokenURL = "https://example.com/invite/k7Qz9xWm"
+		secret   = "zq7Rk2Wm9xTokenValue"
+	)
+	cases := []struct {
+		name        string
+		level       string
+		rule        string
+		payload     []byte
+		leak        string
+		decision    string
+		exportArgs  []string
+		wantStatus  events.ResultStatus
+		wantStored  string
+		wantBlocked bool
+	}{
+		{
+			name:  "minimal level drops the url from the block message",
+			level: "minimal",
+			rule: `    action: block
+    match: { action_types: [tool_use] }
+    message: "blocked fetch to {{.Action.Params.URL}}"`,
+			payload:     claudePreToolUse(t, "WebFetch", map[string]any{"url": tokenURL, "prompt": "read"}),
+			leak:        tokenURL,
+			decision:    "block",
+			exportArgs:  []string{"export"},
+			wantStatus:  events.ResultBlocked,
+			wantStored:  "blocked fetch to",
+			wantBlocked: true,
+		},
+		{
+			name:  "sensitive write drops the content from the block message",
+			level: "full",
+			rule: `    action: block
+    match: { action_types: [file_write] }
+    message: "refused {{.Action.Params.Content}}"`,
+			payload:     claudePreToolUse(t, "Write", map[string]any{"file_path": "/home/user/project/.env", "content": secret}),
+			leak:        secret,
+			decision:    "block",
+			exportArgs:  []string{"export", "--sensitive"},
+			wantStatus:  events.ResultBlocked,
+			wantStored:  "refused",
+			wantBlocked: true,
+		},
+		{
+			name:  "sensitive write drops the content from the warn message",
+			level: "full",
+			rule: `    action: warn
+    match: { action_types: [file_write] }
+    message: "careful {{.Action.Params.Content}}"`,
+			payload:    claudePreToolUse(t, "Write", map[string]any{"file_path": "/home/user/project/.env", "content": secret}),
+			leak:       secret,
+			decision:   "warn",
+			exportArgs: []string{"export", "--sensitive"},
+			wantStatus: events.ResultSuccess,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newTestEnvWithPolicy(t, "version: \"1\"\nrules:\n  - id: leak-rule\n"+tc.rule+"\n")
+			_, _, err := env.run("config", "set", "logging.level", tc.level)
+			require.NoError(t, err)
+
+			stdout, stderr, runErr := env.runHookCapturingStd("claude-code", "PreToolUse", tc.payload)
+			if tc.wantBlocked {
+				assertHookBlocked(t, stdout, stderr, runErr, tc.leak)
+			} else {
+				assertHookGuidance(t, stdout, stderr, runErr, tc.leak)
+			}
+
+			store, cleanup := env.openStore()
+			evts, err := store.QueryEvents(context.Background(), events.NewEventFilter())
+			cleanup()
+			require.NoError(t, err)
+			require.Len(t, evts, 1)
+			assert.Equal(t, tc.wantStatus, evts[0].ResultStatus)
+			assert.Equal(t, tc.wantStored, evts[0].ErrorMessage)
+
+			exported, _, err := env.run(tc.exportArgs...)
+			require.NoError(t, err)
+			assert.Contains(t, exported, evts[0].ID.String())
+			assert.NotContains(t, exported, tc.leak)
+
+			receipt := loadLatestMatchingReceipt(t, env, tc.decision)
+			require.NotNil(t, receipt)
+			assert.NotEmpty(t, receipt.Message)
+			assert.NotContains(t, receipt.Message, tc.leak)
+		})
+	}
+}

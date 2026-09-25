@@ -299,7 +299,8 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 		snapshot = &owned
 	}
 
-	decision, err := m.pdp.Evaluate(ctx, action, snapshot)
+	stored := m.receiptAction(event, action)
+	decision, err := m.pdp.EvaluateStored(ctx, action, stored, snapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +308,6 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 	// Drop the full match buffer so no later serialization of the action can
 	// leak full content.
 	action.Parameters.ContentFull = ""
-	stored := m.receiptAction(event, action)
 
 	if decision.Decision == model.DecisionEscalate {
 		return m.handleEscalate(ctx, action, stored, snapshot, decision)

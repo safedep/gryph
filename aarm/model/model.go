@@ -194,15 +194,30 @@ func (s Severity) IsValid() bool {
 type EvaluationResult struct {
 	Decision       Decision
 	MatchedRuleIDs []string
-	Message        string
-	Severity       Severity
-	Tags           []string
+	// Message is the rule message that the receipt and the stored event
+	// record. The PDP renders it from the stored action, so it never holds
+	// a value that the stored action drops.
+	Message string
+	// FullMessage is the rule message rendered from the full action. Only
+	// the agent and the operator see it. Gryph never stores it.
+	FullMessage string
+	Severity    Severity
+	Tags        []string
 
 	// DeferReason is set when Decision == DecisionDefer. Either the rule's
 	// reason field for explicit defer rules, or one of the synthetic reasons
 	// (fresh_session_insufficient_context, conflicting_policies) for the
 	// auto-defer triggers.
 	DeferReason string
+}
+
+// AgentMessage returns the message for the agent and the operator. A result
+// with no FullMessage returns Message.
+func (r *EvaluationResult) AgentMessage() string {
+	if r.FullMessage != "" {
+		return r.FullMessage
+	}
+	return r.Message
 }
 
 // ContextSnapshot is the point-in-time session context exposed to the PDP.

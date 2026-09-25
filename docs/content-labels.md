@@ -70,6 +70,12 @@ When the stored event loses its content, the receipt drops the URL, the line
 counts, and every parameter that a tool-use action takes from the tool
 input. So a receipt never keeps what the stored event loses.
 
+A rule message can name a content value. The PDP renders the message for
+the agent from the full action. It renders the stored message from the
+action that the receipt records. The receipt and the `error_message` of a
+blocked event keep only the stored message. `decision.Local` runs the
+redactor on it before the save.
+
 `applyLevel` runs after the evaluation and before the save:
 
 5. Apply the logging level. Set `Stripped` when the level removes the value.
