@@ -219,8 +219,8 @@ validate` and `install` call it. `unknownTemplateField` walks every `if` and
 `else` branch of the template, and the pipelines of `range` and `with`. A
 template that still fails at render time gives the message `rule <id>`
 (`messageOrFallback`), so the decision stands. A policy load only warns, and
-the field reads as zero. The receipt snapshot keeps `semantic_drift` at zero,
-so the receipt hash format does not change.
+the field reads as zero. The receipt snapshot does not hold it. The verifier
+reads the stored snapshot, so old receipts still verify.
 
 `EvaluationResult.MatchedTags` is the sorted union of the tags of every
 matched rule. `appendEntry` stores it on the entry, and the accumulator adds
@@ -540,6 +540,46 @@ verifier, or every existing chain fails verification.
   stores its `Reason`.
 - Export with `gryph policy receipts export`. Verify a chain with
   `gryph policy receipts verify-log`.
+
+### Hash versions
+
+The `hash_version` column selects the recipe. `ComputeHash` dispatches on it.
+A row without the column is v1. `Record` writes v2.
+
+- v1 hashes fields 1 to 27.
+- v2 hashes the same fields in the same order. Field 19 hashes
+  `action_payload` without the `command`, `args` and `url` keys. Fields 28
+  (`command_digest`), 29 (`url_digest`) and 30 (`hash_version`) follow.
+- `command_digest` and `url_digest` are commitments:
+  `sha256:<hex>` of `sha256(content_salt || value)`. The command commitment
+  reads the canonical JSON of the command and the args. The values are the
+  stored values, after write-time redaction. Each row has a random 16-byte
+  `content_salt`, which the hash does not cover. An export profile never
+  changes the commitment columns.
+- The verifier recomputes each commitment when the value and the salt are
+  present, so a changed command fails verification. A value that an export
+  profile removed or redacted is not checked.
+- `gryph policy receipts export --export-profile` applies the profile to the
+  command and the URL of each JSONL row. The command is a plain string, so it
+  gets `Event.PlainTreatment` of its audit event. A receipt without an audit
+  event gets the treatment of an `unknown_sensitive` value. When the
+  treatment removes the content, the export also removes `content_salt`, so
+  a commitment of a short secret cannot be reversed by brute force. The
+  `error_message` gets the same treatment. The hash does not cover it.
+- A v2 row verifies under every profile. A v1 row that the profile changed
+  carries `projected: true` and fails verification with a reason that names
+  `--export-profile full`. `ExportStats` counts these rows, and the CLI
+  prints a warning. Receipts outlive audit events, so an old v1 row without
+  its event loses its command under the default profile.
+- The snapshot (field 18) holds the counters, `tools_used`,
+  `classifications_seen`, `tags_seen` and `origins_seen`. It holds
+  `entities_seen`, `egress_hosts` and `entries` as counts, because they hold
+  paths, commands and hosts.
+- The hash covers the rule `message`, so a profile does not change it. A rule
+  message that quotes `{{.Action.Params.Command}}` puts the command in the
+  export. The CLI prints a warning with the count of such rows.
+- A Gryph build from before hash v2 cannot verify a v2 row. It reports
+  "stored hash does not match recomputed hash" after a downgrade.
 
 ## Context accumulator
 

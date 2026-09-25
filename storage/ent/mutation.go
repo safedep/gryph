@@ -999,6 +999,11 @@ type AarmReceiptMutation struct {
 	human_principal         *string
 	service_identity        *string
 	role_scope              *string
+	command_digest          *string
+	url_digest              *string
+	hash_version            *int
+	addhash_version         *int
+	content_salt            *[]byte
 	clearedFields           map[string]struct{}
 	done                    bool
 	oldValue                func(context.Context) (*AarmReceipt, error)
@@ -2566,6 +2571,223 @@ func (m *AarmReceiptMutation) ResetRoleScope() {
 	delete(m.clearedFields, aarmreceipt.FieldRoleScope)
 }
 
+// SetCommandDigest sets the "command_digest" field.
+func (m *AarmReceiptMutation) SetCommandDigest(s string) {
+	m.command_digest = &s
+}
+
+// CommandDigest returns the value of the "command_digest" field in the mutation.
+func (m *AarmReceiptMutation) CommandDigest() (r string, exists bool) {
+	v := m.command_digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommandDigest returns the old "command_digest" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldCommandDigest(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommandDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommandDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommandDigest: %w", err)
+	}
+	return oldValue.CommandDigest, nil
+}
+
+// ClearCommandDigest clears the value of the "command_digest" field.
+func (m *AarmReceiptMutation) ClearCommandDigest() {
+	m.command_digest = nil
+	m.clearedFields[aarmreceipt.FieldCommandDigest] = struct{}{}
+}
+
+// CommandDigestCleared returns if the "command_digest" field was cleared in this mutation.
+func (m *AarmReceiptMutation) CommandDigestCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldCommandDigest]
+	return ok
+}
+
+// ResetCommandDigest resets all changes to the "command_digest" field.
+func (m *AarmReceiptMutation) ResetCommandDigest() {
+	m.command_digest = nil
+	delete(m.clearedFields, aarmreceipt.FieldCommandDigest)
+}
+
+// SetURLDigest sets the "url_digest" field.
+func (m *AarmReceiptMutation) SetURLDigest(s string) {
+	m.url_digest = &s
+}
+
+// URLDigest returns the value of the "url_digest" field in the mutation.
+func (m *AarmReceiptMutation) URLDigest() (r string, exists bool) {
+	v := m.url_digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldURLDigest returns the old "url_digest" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldURLDigest(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldURLDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldURLDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldURLDigest: %w", err)
+	}
+	return oldValue.URLDigest, nil
+}
+
+// ClearURLDigest clears the value of the "url_digest" field.
+func (m *AarmReceiptMutation) ClearURLDigest() {
+	m.url_digest = nil
+	m.clearedFields[aarmreceipt.FieldURLDigest] = struct{}{}
+}
+
+// URLDigestCleared returns if the "url_digest" field was cleared in this mutation.
+func (m *AarmReceiptMutation) URLDigestCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldURLDigest]
+	return ok
+}
+
+// ResetURLDigest resets all changes to the "url_digest" field.
+func (m *AarmReceiptMutation) ResetURLDigest() {
+	m.url_digest = nil
+	delete(m.clearedFields, aarmreceipt.FieldURLDigest)
+}
+
+// SetHashVersion sets the "hash_version" field.
+func (m *AarmReceiptMutation) SetHashVersion(i int) {
+	m.hash_version = &i
+	m.addhash_version = nil
+}
+
+// HashVersion returns the value of the "hash_version" field in the mutation.
+func (m *AarmReceiptMutation) HashVersion() (r int, exists bool) {
+	v := m.hash_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHashVersion returns the old "hash_version" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldHashVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHashVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHashVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHashVersion: %w", err)
+	}
+	return oldValue.HashVersion, nil
+}
+
+// AddHashVersion adds i to the "hash_version" field.
+func (m *AarmReceiptMutation) AddHashVersion(i int) {
+	if m.addhash_version != nil {
+		*m.addhash_version += i
+	} else {
+		m.addhash_version = &i
+	}
+}
+
+// AddedHashVersion returns the value that was added to the "hash_version" field in this mutation.
+func (m *AarmReceiptMutation) AddedHashVersion() (r int, exists bool) {
+	v := m.addhash_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearHashVersion clears the value of the "hash_version" field.
+func (m *AarmReceiptMutation) ClearHashVersion() {
+	m.hash_version = nil
+	m.addhash_version = nil
+	m.clearedFields[aarmreceipt.FieldHashVersion] = struct{}{}
+}
+
+// HashVersionCleared returns if the "hash_version" field was cleared in this mutation.
+func (m *AarmReceiptMutation) HashVersionCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldHashVersion]
+	return ok
+}
+
+// ResetHashVersion resets all changes to the "hash_version" field.
+func (m *AarmReceiptMutation) ResetHashVersion() {
+	m.hash_version = nil
+	m.addhash_version = nil
+	delete(m.clearedFields, aarmreceipt.FieldHashVersion)
+}
+
+// SetContentSalt sets the "content_salt" field.
+func (m *AarmReceiptMutation) SetContentSalt(b []byte) {
+	m.content_salt = &b
+}
+
+// ContentSalt returns the value of the "content_salt" field in the mutation.
+func (m *AarmReceiptMutation) ContentSalt() (r []byte, exists bool) {
+	v := m.content_salt
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContentSalt returns the old "content_salt" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldContentSalt(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContentSalt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContentSalt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContentSalt: %w", err)
+	}
+	return oldValue.ContentSalt, nil
+}
+
+// ClearContentSalt clears the value of the "content_salt" field.
+func (m *AarmReceiptMutation) ClearContentSalt() {
+	m.content_salt = nil
+	m.clearedFields[aarmreceipt.FieldContentSalt] = struct{}{}
+}
+
+// ContentSaltCleared returns if the "content_salt" field was cleared in this mutation.
+func (m *AarmReceiptMutation) ContentSaltCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldContentSalt]
+	return ok
+}
+
+// ResetContentSalt resets all changes to the "content_salt" field.
+func (m *AarmReceiptMutation) ResetContentSalt() {
+	m.content_salt = nil
+	delete(m.clearedFields, aarmreceipt.FieldContentSalt)
+}
+
 // Where appends a list predicates to the AarmReceiptMutation builder.
 func (m *AarmReceiptMutation) Where(ps ...predicate.AarmReceipt) {
 	m.predicates = append(m.predicates, ps...)
@@ -2600,7 +2822,7 @@ func (m *AarmReceiptMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AarmReceiptMutation) Fields() []string {
-	fields := make([]string, 0, 30)
+	fields := make([]string, 0, 34)
 	if m.session_id != nil {
 		fields = append(fields, aarmreceipt.FieldSessionID)
 	}
@@ -2691,6 +2913,18 @@ func (m *AarmReceiptMutation) Fields() []string {
 	if m.role_scope != nil {
 		fields = append(fields, aarmreceipt.FieldRoleScope)
 	}
+	if m.command_digest != nil {
+		fields = append(fields, aarmreceipt.FieldCommandDigest)
+	}
+	if m.url_digest != nil {
+		fields = append(fields, aarmreceipt.FieldURLDigest)
+	}
+	if m.hash_version != nil {
+		fields = append(fields, aarmreceipt.FieldHashVersion)
+	}
+	if m.content_salt != nil {
+		fields = append(fields, aarmreceipt.FieldContentSalt)
+	}
 	return fields
 }
 
@@ -2759,6 +2993,14 @@ func (m *AarmReceiptMutation) Field(name string) (ent.Value, bool) {
 		return m.ServiceIdentity()
 	case aarmreceipt.FieldRoleScope:
 		return m.RoleScope()
+	case aarmreceipt.FieldCommandDigest:
+		return m.CommandDigest()
+	case aarmreceipt.FieldURLDigest:
+		return m.URLDigest()
+	case aarmreceipt.FieldHashVersion:
+		return m.HashVersion()
+	case aarmreceipt.FieldContentSalt:
+		return m.ContentSalt()
 	}
 	return nil, false
 }
@@ -2828,6 +3070,14 @@ func (m *AarmReceiptMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldServiceIdentity(ctx)
 	case aarmreceipt.FieldRoleScope:
 		return m.OldRoleScope(ctx)
+	case aarmreceipt.FieldCommandDigest:
+		return m.OldCommandDigest(ctx)
+	case aarmreceipt.FieldURLDigest:
+		return m.OldURLDigest(ctx)
+	case aarmreceipt.FieldHashVersion:
+		return m.OldHashVersion(ctx)
+	case aarmreceipt.FieldContentSalt:
+		return m.OldContentSalt(ctx)
 	}
 	return nil, fmt.Errorf("unknown AarmReceipt field %s", name)
 }
@@ -3047,6 +3297,34 @@ func (m *AarmReceiptMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetRoleScope(v)
 		return nil
+	case aarmreceipt.FieldCommandDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommandDigest(v)
+		return nil
+	case aarmreceipt.FieldURLDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetURLDigest(v)
+		return nil
+	case aarmreceipt.FieldHashVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHashVersion(v)
+		return nil
+	case aarmreceipt.FieldContentSalt:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContentSalt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt field %s", name)
 }
@@ -3064,6 +3342,9 @@ func (m *AarmReceiptMutation) AddedFields() []string {
 	if m.adddeferral_of_sequence != nil {
 		fields = append(fields, aarmreceipt.FieldDeferralOfSequence)
 	}
+	if m.addhash_version != nil {
+		fields = append(fields, aarmreceipt.FieldHashVersion)
+	}
 	return fields
 }
 
@@ -3078,6 +3359,8 @@ func (m *AarmReceiptMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedDurationMs()
 	case aarmreceipt.FieldDeferralOfSequence:
 		return m.AddedDeferralOfSequence()
+	case aarmreceipt.FieldHashVersion:
+		return m.AddedHashVersion()
 	}
 	return nil, false
 }
@@ -3107,6 +3390,13 @@ func (m *AarmReceiptMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddDeferralOfSequence(v)
+		return nil
+	case aarmreceipt.FieldHashVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddHashVersion(v)
 		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt numeric field %s", name)
@@ -3184,6 +3474,18 @@ func (m *AarmReceiptMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(aarmreceipt.FieldRoleScope) {
 		fields = append(fields, aarmreceipt.FieldRoleScope)
+	}
+	if m.FieldCleared(aarmreceipt.FieldCommandDigest) {
+		fields = append(fields, aarmreceipt.FieldCommandDigest)
+	}
+	if m.FieldCleared(aarmreceipt.FieldURLDigest) {
+		fields = append(fields, aarmreceipt.FieldURLDigest)
+	}
+	if m.FieldCleared(aarmreceipt.FieldHashVersion) {
+		fields = append(fields, aarmreceipt.FieldHashVersion)
+	}
+	if m.FieldCleared(aarmreceipt.FieldContentSalt) {
+		fields = append(fields, aarmreceipt.FieldContentSalt)
 	}
 	return fields
 }
@@ -3267,6 +3569,18 @@ func (m *AarmReceiptMutation) ClearField(name string) error {
 		return nil
 	case aarmreceipt.FieldRoleScope:
 		m.ClearRoleScope()
+		return nil
+	case aarmreceipt.FieldCommandDigest:
+		m.ClearCommandDigest()
+		return nil
+	case aarmreceipt.FieldURLDigest:
+		m.ClearURLDigest()
+		return nil
+	case aarmreceipt.FieldHashVersion:
+		m.ClearHashVersion()
+		return nil
+	case aarmreceipt.FieldContentSalt:
+		m.ClearContentSalt()
 		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt nullable field %s", name)
@@ -3365,6 +3679,18 @@ func (m *AarmReceiptMutation) ResetField(name string) error {
 		return nil
 	case aarmreceipt.FieldRoleScope:
 		m.ResetRoleScope()
+		return nil
+	case aarmreceipt.FieldCommandDigest:
+		m.ResetCommandDigest()
+		return nil
+	case aarmreceipt.FieldURLDigest:
+		m.ResetURLDigest()
+		return nil
+	case aarmreceipt.FieldHashVersion:
+		m.ResetHashVersion()
+		return nil
+	case aarmreceipt.FieldContentSalt:
+		m.ResetContentSalt()
 		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt field %s", name)

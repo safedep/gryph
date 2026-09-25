@@ -25,10 +25,28 @@ type ChainRow struct {
 	PrevHash  []byte
 	Hash      []byte
 	Fields    HashInputFields
+	// Projected is true when an export profile changed the payload.
+	Projected bool
+	// ContentSalt is the salt of the content commitments. An export that
+	// removes the content also removes it.
+	ContentSalt []byte
 }
 
 // ChainRowFromReceipt builds a ChainRow from a storage.ReceiptRow.
 func ChainRowFromReceipt(r *storage.ReceiptRow) ChainRow {
+	return ChainRow{
+		SessionID:   r.SessionID,
+		Sequence:    r.Sequence,
+		PrevHash:    r.PrevHash,
+		Hash:        r.Hash,
+		Fields:      hashFieldsFromRow(r),
+		ContentSalt: r.ContentSalt,
+	}
+}
+
+// hashFieldsFromRow collects the hash input of a stored row. The insert
+// path and the verifier both call it, so their inputs agree.
+func hashFieldsFromRow(r *storage.ReceiptRow) HashInputFields {
 	fields := HashInputFields{
 		Sequence:        r.Sequence,
 		PrevHash:        r.PrevHash,
@@ -53,17 +71,14 @@ func ChainRowFromReceipt(r *storage.ReceiptRow) ChainRow {
 		HumanPrincipal:  r.HumanPrincipal,
 		ServiceIdentity: r.ServiceIdentity,
 		RoleScope:       r.RoleScope,
+		CommandDigest:   r.CommandDigest,
+		URLDigest:       r.URLDigest,
+		HashVersion:     r.HashVersion,
 	}
 	if r.DeferralOfSequence != nil {
 		fields.DeferralOfSequence = *r.DeferralOfSequence
 	}
-	return ChainRow{
-		SessionID: r.SessionID,
-		Sequence:  r.Sequence,
-		PrevHash:  r.PrevHash,
-		Hash:      r.Hash,
-		Fields:    fields,
-	}
+	return fields
 }
 
 // VerifyChain re-derives the per-session hash chain over rows and returns any
@@ -119,10 +134,22 @@ func VerifyChain(rows []ChainRow) []ChainBreak {
 				Reason:    fmt.Sprintf("recompute hash: %v", err),
 			})
 		} else if !bytes.Equal(expectedHash, r.Hash) {
+			reason := "stored hash does not match recomputed hash"
+			if r.Projected && r.Fields.HashVersion != HashV2 && !hasContent(r.Fields.ActionPayload) {
+				reason = "the v1 hash covers the command and the URL, and the export profile removed them. Export with --export-profile full to verify this receipt"
+			}
 			breaks = append(breaks, ChainBreak{
 				SessionID: r.SessionID,
 				Sequence:  r.Sequence,
-				Reason:    "stored hash does not match recomputed hash",
+				Reason:    reason,
+			})
+		}
+
+		if reason := checkContent(r.ContentSalt, r.Fields); reason != "" {
+			breaks = append(breaks, ChainBreak{
+				SessionID: r.SessionID,
+				Sequence:  r.Sequence,
+				Reason:    reason,
 			})
 		}
 

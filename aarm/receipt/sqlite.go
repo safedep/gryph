@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -113,37 +115,23 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 			next.DeferralOfSequence = &v
 		}
 		next.ResultStatus = DeriveInsertResultStatus(next.Decision)
+		next.HashVersion = HashV2
+		if hasContent(next.ActionPayload) {
+			salt := in.ContentSalt
+			if len(salt) == 0 {
+				var err error
+				if salt, err = newContentSalt(); err != nil {
+					return nil, err
+				}
+			}
+			command, url, err := contentDigests(salt, next.ActionPayload)
+			if err != nil {
+				return nil, err
+			}
+			next.ContentSalt, next.CommandDigest, next.URLDigest = salt, command, url
+		}
 
-		hashFields := HashInputFields{
-			Sequence:        next.Sequence,
-			PrevHash:        next.PrevHash,
-			RecordedAtUnix:  next.RecordedAt.UnixNano(),
-			SessionID:       next.SessionID,
-			ActionID:        next.ActionID,
-			EventID:         next.EventID,
-			Agent:           next.Agent,
-			Tool:            next.Tool,
-			ActionType:      next.ActionType,
-			Project:         next.Project,
-			Decision:        next.Decision,
-			Severity:        next.Severity,
-			Message:         next.Message,
-			MatchedRuleIDs:  next.MatchedRuleIDs,
-			Snapshot:        next.Snapshot,
-			ActionPayload:   next.ActionPayload,
-			SubagentID:      next.SubagentID,
-			SubagentType:    next.SubagentType,
-			PolicyHash:      next.PolicyHash,
-			DeferReason:     next.DeferReason,
-			HumanPrincipal:  next.HumanPrincipal,
-			ServiceIdentity: next.ServiceIdentity,
-			RoleScope:       next.RoleScope,
-		}
-		if next.DeferralOfSequence != nil {
-			hashFields.DeferralOfSequence = *next.DeferralOfSequence
-		}
-		hashInput := NewHashInput(hashFields)
-		hash, err := ComputeHash(hashInput)
+		hash, err := ComputeHash(NewHashInput(hashFieldsFromRow(next)))
 		if err != nil {
 			return nil, fmt.Errorf("compute hash: %w", err)
 		}
@@ -196,8 +184,9 @@ func (g *SQLiteGenerator) UpdateDecision(ctx context.Context, sessionID uuid.UUI
 // snapshotMap copies snapshot fields into the JSON-friendly map persisted on
 // the receipt row. The receipt hash covers the map, and the verifier reads
 // the stored map, so a key change affects new receipts only. The map holds
-// counts, not the entity list, because the list holds paths and hosts, and
-// a hash-chained receipt can never drop them.
+// counts for the entities, the egress hosts and the entries, because they
+// hold paths, commands and hosts, and a hash-chained receipt can never drop
+// them.
 func snapshotMap(s *model.ContextSnapshot) map[string]interface{} {
 	if s == nil {
 		return nil
@@ -212,12 +201,19 @@ func snapshotMap(s *model.ContextSnapshot) map[string]interface{} {
 		"session_duration":  int64(s.SessionDuration),
 		"entities_seen":     len(s.EntitiesSeen),
 		"egress_hosts":      len(s.EgressHosts),
+		"entries":           len(s.Entries),
 	}
 	if len(s.ToolsUsed) > 0 {
 		m["tools_used"] = append([]string(nil), s.ToolsUsed...)
 	}
 	if len(s.ClassificationsSeen) > 0 {
 		m["classifications_seen"] = append([]string(nil), s.ClassificationsSeen...)
+	}
+	if len(s.TagsSeen) > 0 {
+		m["tags_seen"] = slices.Sorted(maps.Keys(s.TagsSeen))
+	}
+	if len(s.OriginsSeen) > 0 {
+		m["origins_seen"] = append([]string(nil), s.OriginsSeen...)
 	}
 	return m
 }
