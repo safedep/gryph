@@ -80,8 +80,29 @@
   title: "sensitive file content never reaches storage or export"
   category: privacy
   tier: P0
-  guarantee: "A write to a sensitive path is flagged, its content is not stored at any logging level, and export excludes the event unless --sensitive is set. The exported label keeps the secret class and the stripped flag, and drops the digest."
+  guarantee: "A write to a sensitive path is flagged, and its content is not stored at any logging level. The default export profile exports the event and drops the secret label. The full profile keeps the secret class and the stripped flag, and drops the digest."
   labels: [privacy, sensitive, redaction, export]
+
+- id: privacy/export/profile-treatments
+  title: "export applies the export profile to each content value"
+  category: privacy
+  tier: P0
+  guarantee: "gryph export digests a user prompt under the default profile, keeps labels and digests only under metadata, and includes every value under full. Only full exports the raw event, which holds the file content of a read. Export never drops a whole event, and fails on an unknown profile name."
+  labels: [privacy, export]
+
+- id: privacy/export/user-profile
+  title: "a user export profile gives a treatment by origin or class"
+  category: privacy
+  tier: P1
+  guarantee: "A profile under export.profiles redacts a user prompt by its origin and digests other values by its default. A value that no rule matches gets the default treatment of the profile."
+  labels: [privacy, export, config]
+
+- id: privacy/stream/target-profile
+  title: "stream sync applies the export profile of each target"
+  category: privacy
+  tier: P0
+  guarantee: "gryph stream sync applies streams.targets[].export_profile to every event before it sends it. A target without export_profile gets the default profile."
+  labels: [privacy, export, streams]
 
 - id: receipts/verify-log/tamper-fails
   title: "receipt log verification detects tampering"

@@ -1,0 +1,60 @@
+# gryph export applies an export profile to every content value. The default
+# profile digests a user prompt and includes other content. The metadata
+# profile digests every value. The full profile includes every value. The
+# raw event holds every value without a label, so only the full profile
+# exports it. An unknown profile name is a config error. Export never drops
+# a whole event.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin prompt.json
+exec gryph _hook claude-code UserPromptSubmit
+stdin write.json
+exec gryph _hook claude-code PostToolUse
+stdin read.json
+exec gryph _hook claude-code PostToolUse
+
+# The default profile digests the prompt and drops the raw event of the
+# prompt, because the raw event holds the prompt unlabeled.
+exec gryph export --since 1h
+stdout '"prompt":\{"value":"","label":\{[^}]*"origin":"user"[^}]*"digest":"sha256:'
+! stdout 'Rename the config loader'
+stdout 'WRITE_MARKER_7Q'
+! stdout 'READ_MARKER_3K'
+! stdout '"raw_event"'
+stderr 'Exported 3 events'
+
+# The metadata profile keeps labels and digests only.
+exec gryph export --since 1h --export-profile metadata
+! stdout 'Rename the config loader'
+! stdout 'WRITE_MARKER_7Q'
+! stdout 'READ_MARKER_3K'
+! stdout '"raw_event"'
+stdout '"digest":"sha256:'
+stderr 'Exported 3 events'
+
+# The full profile includes every value.
+exec gryph export --since 1h --export-profile full
+stdout '"prompt":\{"value":"Rename the config loader"'
+stdout 'WRITE_MARKER_7Q'
+stdout 'READ_MARKER_3K'
+stderr 'Exported 3 events'
+
+! exec gryph export --since 1h --export-profile nope
+stderr 'unknown export profile "nope"'
+
+-- home/.config/safedep/gryph/config.yml --
+logging:
+  level: full
+-- prompt.json --
+{"session_id": "s-export", "cwd": "/home/user/project", "hook_event_name": "UserPromptSubmit",
+ "prompt": "Rename the config loader"}
+-- write.json --
+{"session_id": "s-export", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "Write",
+ "tool_input": {"file_path": "/home/user/project/main.go", "content": "package main // WRITE_MARKER_7Q"},
+ "tool_response": {"success": true}, "tool_use_id": "tu-write"}
+-- read.json --
+{"session_id": "s-export", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "/home/user/project/notes.txt"},
+ "tool_response": {"file": {"filePath": "/home/user/project/notes.txt", "content": "READ_MARKER_3K"}}, "tool_use_id": "tu-read"}

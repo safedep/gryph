@@ -100,10 +100,10 @@ Blocked or rejected actions:
 gryph export --since 1w | jq 'select(.result_status == "blocked" or .result_status == "rejected") | {action: .action_type, tool: .tool_name, status: .result_status, error: .error_message}'
 ```
 
-Sensitive file access audit (requires `--sensitive` to include these events):
+Sensitive file access audit. The default export profile keeps these events and drops their secret content:
 
 ```bash
-gryph export --since 1w --sensitive | jq 'select(.is_sensitive) | {action: .action_type, path: .payload.path, tool: .tool_name, timestamp: .timestamp}'
+gryph export --since 1w | jq 'select(.is_sensitive) | {action: .action_type, path: .payload.path, tool: .tool_name, timestamp: .timestamp}'
 ```
 
 ## Session Analysis

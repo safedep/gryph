@@ -117,18 +117,67 @@ unclassified action.
 
 ## Export
 
-`Event.ForExport` makes the copy that leaves the machine. `gryph export` and
-stream sync use it. It decodes and encodes the payload again, so an old row
-has the same shape as a new row.
+An export profile decides what happens to each content value that leaves
+the machine. Each value gets one treatment:
 
-Export keeps the digest and the size only when the exported value is the
-whole original value. It removes them when the label has `Redacted`,
-`Truncated`, or `Stripped`, or has the `secret` class. The digest and the
-size describe the whole original value. For a truncated or stripped value,
-that original can hold a secret that the export does not show. A digest of
-a short secret can be reversed by brute force. The local store keeps the
-digest, so `gryph cat --format json` shows it. Export profiles replace
-`Text.ForExport`. Every export profile must keep this rule.
+| Treatment | Value          | Label                     |
+|-----------|----------------|---------------------------|
+| `include` | kept           | kept                      |
+| `redact`  | `[REDACTED]`   | kept                      |
+| `digest`  | emptied        | kept, with the digest     |
+| `drop`    | removed        | removed, except the size  |
+
+Every profile removes the digest and the size of a value that Gryph
+redacted, truncated or stripped, or that has the class `secret`, `pii` or
+`unknown_sensitive`. The digest and the size describe the whole original
+value. A truncated or stripped value can hide a secret that the export does
+not show. A digest of a short secret or a phone number can be reversed by
+brute force.
+The local store keeps the digest, so `gryph cat --format json` shows it.
+
+Gryph has three built-in profiles:
+
+- `default` drops content with class `secret`, `pii` or `unknown_sensitive`,
+  digests content with origin `user` (prompts), and includes the rest.
+- `metadata` digests every value.
+- `full` includes every value.
+
+Add a profile under `export.profiles`. A rule matches a value when its label
+has any of the classes or any of the origins. The first matching rule wins.
+A value that no rule matches gets `default`. A profile cannot use a
+built-in name.
+
+```yaml
+export:
+  profiles:
+    team:
+      default: digest
+      rules:
+        - classes: [secret, pii]
+          then: drop
+        - origins: [user]
+          then: redact
+```
+
+`Event.ForExport(profile)` makes the copy that leaves the machine. `gryph
+export --export-profile` and stream sync use it.
+
+- It decodes and encodes the payload again, so an old row has the same
+  shape as a new row.
+- It keeps the raw event only when the profile includes every value,
+  because the raw event holds every value without a label.
+- It drops a payload with no typed struct, or a payload that does not
+  decode, unless the profile includes every value.
+- A plain string field has no label of its own. These fields are
+  `error_message`, the command `description` and `args`, the read
+  `pattern`, the session end `reason`, and the notification `message` and
+  `details`. Each gets the most restrictive treatment of any value in the
+  event.
+- A row from before content labels has no label. A sensitive row gets the
+  class `secret` on every value, and a prompt gets the origin `user`.
+
+Stream sync also removes `details.raw_event` and the error of a hook error
+self-audit, unless the profile includes every value.
 
 `gryph cat` shows each content value as its text, and a stripped value as
 `[stripped]`.
@@ -136,5 +185,5 @@ digest, so `gryph cat --format json` shows it. Export profiles replace
 ## Adding a content field
 
 1. Declare it as `privacy.Text` with `json:",omitzero"`.
-2. Nothing else. `Walk` finds it, so the label step and later export
+2. Nothing else. `Walk` finds it, so the label step and the export
    profiles treat it with no new code.

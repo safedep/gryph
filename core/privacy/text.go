@@ -179,20 +179,3 @@ func Digest(v string) string {
 	sum := sha256.Sum256([]byte(v))
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
-
-// ForExport returns t with the digest and the size only when the exported
-// value is the whole original value and holds no secret. A redacted,
-// truncated, or stripped value, or a value with the secret class, loses
-// them. The digest and the size describe the whole original value. For a
-// truncated or stripped value that original can hold a secret that the
-// export does not show. A digest of a low-entropy secret, such as a short
-// password, can be reversed by brute force, so it must not leave the
-// machine. Export profiles replace this method and must keep this rule.
-func (t Text) ForExport() Text {
-	l := t.Label
-	if l.Redacted || l.Truncated || l.Stripped || l.HasClass(ClassSecret) {
-		t.Label.Digest = ""
-		t.Label.Size = 0
-	}
-	return t
-}
