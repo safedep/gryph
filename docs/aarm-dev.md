@@ -199,6 +199,35 @@ config, database, signing keys, agent hook configs). The rule
 and `command_exec` with `file_access: [read]`. The rule
 `gryph-builtin-hook-command` blocks a `command_exec` that can run
 `gryph _hook`, through `action.gryph_hook` (`shellcmd.Analysis.GryphHook`).
+`shellcmd` sets it per call, from `runsGryphHook` on the call words. It
+decodes ANSI-C quoting (`$'...'`) and expands braces first. A word built from
+a variable, a command substitution, or another expansion is unknown. The check
+fails closed on it. A gryph call blocks when an argument is `_hook`, unknown,
+a glob, `~`, or empty. So any gryph command with a variable argument blocks. A
+call with an unknown program blocks when an argument can be `_hook`. An
+unquoted unknown program blocks by itself, because the shell can split it.
+`xargs gryph` blocks. An `eval` or `sh -c` with an unknown script blocks. The
+check looks inside wrappers and `find -exec`. A wrapper tries each word after
+it as the program, so `sudo -u "$U" ls "$D"` blocks.
+
+The output of a trusted emitter is the exception. An unquoted command
+substitution in the program word, and an `eval` or `sh -c` script that is only
+a command substitution, pass when the substitution runs one trusted emitter.
+`trustedEmitters` in `aarm/shellcmd/shellcmd.go` holds the list: `go env`,
+`ssh-agent`, `direnv export`, `direnv hook`, `pyenv init`, `rbenv init`,
+`nodenv init`, `brew shellenv`, `conda shell.*`, `starship init`,
+`zoxide init`, `fnm env`, `mise activate`, `asdf where`, `asdf which`,
+`dirname`, `basename`, `pwd`, `git rev-parse`, `npm bin`, `yarn bin`, `which`,
+and `command -v`. The list leaves out `direnv exec` and `asdf exec`, because
+they run a command. `trustedEmitter` also needs literal words, no word that
+holds `gryph` or `_hook`, no redirect, and one command. A script that sets a
+variable turns the list off (`walker.assigns`), because an exported variable
+can change the output. The arguments of the call still get the check. Add a
+command to the list only when the agent cannot set its output from the same
+command. The walker parses a known
+`eval` or `sh -c` script, and each call in it gets the check. A `_hook` word
+in the arguments of another program does not block. The block message names
+these cases, so an agent can retry with literal words.
 The intent fields of the session context depend on it. It protects the database, its
 SQLite side files, and the receipt signing key. For a command, the PDP matches
 the paths that `aarm/shellcmd` parses from the command line. The PDP also

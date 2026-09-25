@@ -58,10 +58,27 @@ func TestBuiltinSource_BlocksHookCommand(t *testing.T) {
 		{"split args", "gryph", []string{"_hook", "claude-code", "UserPromptSubmit"}, true},
 		{"nested shell with an unknown script", `bash -c "$(command -v gryph) _hook claude-code UserPromptSubmit"`, nil, true},
 		{"parse failure", `gryph _hook claude-code ) (`, nil, true},
+		{"ANSI-C quoting", `gryph $'\x5fhook' claude-code UserPromptSubmit < p.json`, nil, true},
+		{"glob argument", `touch _hook && gryph _hoo? claude-code UserPromptSubmit < p.json`, nil, true},
+		{"variable program and argument", `G=gryph; H=_ho; $G ${H}ok claude-code UserPromptSubmit < p.json`, nil, true},
+		{"exec with a name", `exec -a x gryph _hook claude-code UserPromptSubmit`, nil, true},
+		{"eval", `eval gryph _hook claude-code UserPromptSubmit`, nil, true},
+		{"find -exec", `find . -exec gryph _hook claude-code UserPromptSubmit \;`, nil, true},
+		{"function", `f() { gryph "$@"; }; f _hook claude-code UserPromptSubmit`, nil, true},
+		{"brace expansion", `gryph _{hook,x} claude-code UserPromptSubmit`, nil, true},
+		{"xargs", `echo _hook | xargs gryph`, nil, true},
+		{"eval of a file", `eval "$(cat script)"`, nil, true},
+		{"substitution program that runs gryph", `$(echo gryph)/x _hook`, nil, true},
+		{"gryph with a variable argument", `gryph query --since "$T"`, nil, true},
 		{"unknown word without the hook", `echo "$(date)" > out.txt`, nil, false},
 		{"other gryph command", `gryph query --since 1h`, nil, false},
 		{"search for the word", `grep -rn _hook cli/`, nil, false},
 		{"commit message", `git commit -m "fix gryph _hook"`, nil, false},
+		{"emitter program", `$(go env GOPATH)/bin/golangci-lint run ./...`, nil, false},
+		{"eval of ssh-agent", `eval "$(ssh-agent -s)"`, nil, false},
+		{"eval of direnv", `eval "$(direnv export bash)"`, nil, false},
+		{"grep for the word with a variable", `grep -rn register_hook "$SRC"`, nil, false},
+		{"git log for the word with a substitution", `git log --grep=pre_hook $(git merge-base HEAD main)..HEAD`, nil, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -75,6 +92,7 @@ func TestBuiltinSource_BlocksHookCommand(t *testing.T) {
 			if tc.blocked {
 				assert.Equal(t, model.DecisionBlock, res.Decision)
 				assert.Equal(t, []string{builtinHookCommandRuleID}, res.MatchedRuleIDs)
+				assert.Equal(t, hookCommandMessage, res.Message)
 			} else {
 				assert.Equal(t, model.DecisionAllow, res.Decision)
 			}

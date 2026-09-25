@@ -59,7 +59,7 @@
   title: "builtin self-protection blocks agent shell commands that run gryph _hook"
   category: policy
   tier: P0
-  guarantee: "With policy enabled, an agent shell command that runs gryph _hook, directly or in a nested shell, is blocked at exit 2, so it cannot forge a user prompt. Another gryph command passes."
+  guarantee: "With policy enabled, an agent shell command that runs gryph _hook, directly, in a nested shell, or through ANSI-C quoting, is blocked at exit 2, so it cannot forge a user prompt. Another gryph command passes. A grep for a word that holds _hook passes."
   labels: [policy, self-protection, intent]
 
 - id: policy/file-access/read-rule-matches-shell-reads

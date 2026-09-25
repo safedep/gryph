@@ -53,6 +53,18 @@ Self-protection is best effort. It blocks file writes and deletes to protected p
 - On macOS, a path in a different letter case. The file system ignores case, and the match does not.
 - The Gryph commands that print the audit data, such as `gryph query`, `gryph export`, and `gryph cat`.
 
+The rule `gryph-builtin-hook-command` checks each call in the command, also inside wrappers (`env`, `sudo`, `exec`, `command`, `xargs`, and others), `find -exec`, `bash -c`, `eval`, command substitutions, and functions. Gryph decodes ANSI-C quoting (`$'\x5fhook'`) and expands braces before the check. A word that Gryph cannot resolve can be any text, so the check fails closed on it:
+
+- A gryph command blocks when an argument is `_hook`, a variable, a command substitution, a glob (`_hoo?`), `~`, or empty. Such an argument can be `_hook`. So `gryph query --since "$T"` blocks. Use literal arguments.
+- A command whose program is a variable or a command substitution blocks when an argument can be `_hook`. An unquoted variable program, such as `$G`, blocks by itself, because the shell can split it into `gryph _hook`. An unquoted command substitution in the program blocks by itself too, unless it runs a trusted emitter.
+- A wrapper tries each word after it as the program. So `sudo -u "$U" ls "$D"` blocks, because `"$U"` can be gryph and `"$D"` can be `_hook`. Use literal words.
+- `xargs gryph` blocks, because `xargs` adds arguments from its input.
+- `eval` or `bash -c` with a script that Gryph cannot resolve blocks, such as `eval "$S"` or `eval "$(cat script)"`. A script that is only the output of a trusted emitter passes, such as `eval "$(ssh-agent -s)"`.
+
+A trusted emitter is a command from a fixed list that prints shell setup code or a path, such as `go env`, `ssh-agent`, `direnv export`, or `pyenv init`. The substitution must hold one such command with literal words, and no word that holds `gryph` or `_hook`, no variable, no glob, and no redirect. So `$(go env GOPATH)/bin/golangci-lint run` passes. Gryph does not trust an emitter when the command sets or exports a variable, because the variable can change the output. Gryph does not check the output of an emitter. An agent that sets the emitter output in an earlier command, or through a file that the emitter reads, can get past the check. This is a limit of the same kind as a script file.
+
+A word such as `_hook` in the arguments of another program, as in `grep -rn register_hook "$SRC"`, does not block.
+
 The read rule also blocks a file read of each directory that holds the database or the signing key, at any depth, below the home directory. This blocks a `Grep`, `Glob`, or `LS` tool call on the data directory, the config directory, their `safedep` parents, `~/.config`, and `~/.local/share`. On macOS, these are the `~/Library` directories that hold them. A read of one file in these directories, such as `policy.yaml`, passes. A file read of the home directory, or of a parent of it, passes. So does a shell read of it, such as `grep -r x ~` or `tar -C ~ -czf home.tgz .`. A tool that searches the whole home directory can read the protected files, so this is a limit of the read rule. A `sqlite3` command that names a file with a SQL expression is also a limit.
 
 Kernel-based self-protection is on the roadmap. Until then, treat self-protection as a guard against mistakes and simple attempts, not as a security boundary. The [threat model](./security-policy-threat-model.md) lists the lower-level controls for a hardened deployment.

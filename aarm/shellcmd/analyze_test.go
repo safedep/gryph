@@ -436,3 +436,89 @@ func TestSQLFiles(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalyze_GryphHook(t *testing.T) {
+	cases := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		{"direct", `gryph _hook claude-code UserPromptSubmit < p.json`, true},
+		{"full path", `/usr/local/bin/gryph _hook cursor beforeSubmitPrompt`, true},
+		{"windows binary", `gryph.exe _hook codex UserPromptSubmit`, true},
+		{"env wrapper", `env -i gryph _hook claude-code UserPromptSubmit`, true},
+		{"exec with a name", `exec -a x gryph _hook claude-code UserPromptSubmit`, true},
+		{"command wrapper", `command gryph _hook claude-code UserPromptSubmit`, true},
+		{"which substitution", `$(which gryph) _hook claude-code UserPromptSubmit`, true},
+		{"quoted which substitution", `"$(which gryph)" _hook claude-code UserPromptSubmit`, true},
+		{"bash -c", `bash -c "gryph _hook claude-code UserPromptSubmit"`, true},
+		{"eval", `eval gryph _hook claude-code UserPromptSubmit`, true},
+		{"eval of an unknown script", `eval "$(printf 'gryph _hook x y')"`, true},
+		{"bash -c with an unknown script", `bash -c "$S"`, true},
+		{"find -exec", `find . -name x -exec gryph _hook claude-code UserPromptSubmit \;`, true},
+		{"find -exec with the found file", `find _hook -exec gryph {} claude-code UserPromptSubmit \;`, true},
+		{"find -execdir in bash -c", `find . -execdir bash -c 'gryph _hook x y' \;`, true},
+		{"function", `f() { gryph "$@"; }; f _hook claude-code UserPromptSubmit`, true},
+		{"brace expansion", `gryph _{hook,x} claude-code UserPromptSubmit`, true},
+		{"ANSI-C quoting", `gryph $'\x5fhook' claude-code UserPromptSubmit < p.json`, true},
+		{"ANSI-C octal program", `$'\147ryph' _hook claude-code UserPromptSubmit`, true},
+		{"glob argument", `touch _hook && gryph _hoo? claude-code UserPromptSubmit < p.json`, true},
+		{"glob program", `/usr/*/bin/gry?h _hook x y`, true},
+		{"variable program and argument", `G=gryph; H=_ho; $G ${H}ok claude-code UserPromptSubmit < p.json`, true},
+		{"quoted variable program", `"$G" _hook x y`, true},
+		{"home variable argument", `HOME=_hook; gryph $HOME claude-code UserPromptSubmit`, true},
+		{"tilde argument", `HOME=_hook; gryph ~ claude-code UserPromptSubmit`, true},
+		{"variable splits into the command", `G="gryph _hook x y"; $G < p.json`, true},
+		{"xargs", `echo _hook | xargs gryph`, true},
+		{"sudo in xargs", `printf '\x5fhook' | xargs -0 sudo gryph`, true},
+		{"unknown gryph argument", `gryph query --since "$T"`, true},
+		{"parse failure", `gryph _hook claude-code ) (`, true},
+		{"substitution program that runs gryph", `$(echo gryph)/x _hook`, true},
+		{"substitution program with a variable", `$(printf %s "$G") _hook`, true},
+		{"emitter program with a hook argument", `$(go env GOPATH)/bin/x _hook`, true},
+		{"emitter program with a variable argument", `$(go env GOPATH)/bin/x "$A"`, true},
+		{"emitter with a gryph word", `$(which gryph) query`, true},
+		{"emitter after an assignment", `export GOPATH="/usr/bin/gryph _hook x y"; $(go env GOPATH)`, true},
+		{"emitter with a redirect", `$(dirname < f) x`, true},
+		{"eval of a file", `eval "$(cat script)"`, true},
+		{"eval of a variable", `eval "$S"`, true},
+		{"eval of an emitter and a word", `eval gryph "$(go env GOPATH)"`, true},
+		{"bash -c of a file", `bash -c "$(cat script)"`, true},
+		{"other gryph command", `gryph query --since 1h`, false},
+		{"emitter program", `$(go env GOPATH)/bin/golangci-lint run ./...`, false},
+		{"backtick emitter program", "`go env GOPATH`/bin/golangci-lint run ./...", false},
+		{"eval of ssh-agent", `eval "$(ssh-agent -s)"`, false},
+		{"eval of direnv", `eval "$(direnv export bash)"`, false},
+		{"bash -c of an emitter", `bash -c "$(pyenv init -)"`, false},
+		{"grep for the word", `grep -rn register_hook "$SRC"`, false},
+		{"git log for the word", `git log --grep=pre_hook $(git merge-base HEAD main)..HEAD`, false},
+		{"commit message", `git commit -m "fix gryph _hook"`, false},
+		{"quoted variable program with literal arguments", `"$(go env GOPATH)/bin/golangci-lint" run ./...`, false},
+		{"wrapper with a variable option and argument", `sudo -u "$U" ls "$D"`, true},
+		{"unknown word without the hook", `echo "$(date)" > out.txt`, false},
+		{"xargs other command", `echo _hook | xargs grep -rn`, false},
+		{"bash -c with a known script", `bash -c "gryph query"`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, Analyze(tc.command, Env{WorkingDir: "/work", Home: "/home/u"}).GryphHook)
+		})
+	}
+}
+
+func TestAnalyze_ANSICQuotedPath(t *testing.T) {
+	cases := []struct {
+		command string
+		want    string
+	}{
+		{`rm $'\x2econfig/x'`, "/work/.config/x"},
+		{`rm $'a%d\tb'`, "/work/a%d\tb"},
+		{`rm $'a\x00b'`, "/work/a"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.command, func(t *testing.T) {
+			a := Analyze(tc.command, Env{WorkingDir: "/work"})
+			assert.Equal(t, []Target{{Path: tc.want, Access: AccessRemove}}, a.Targets)
+		})
+	}
+}
