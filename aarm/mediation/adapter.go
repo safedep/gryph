@@ -8,6 +8,7 @@ import (
 	"github.com/safedep/gryph/aarm/identity"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
 )
 
@@ -18,7 +19,7 @@ import (
 // classify package (avoids an import cycle with aarm/check.go which holds
 // the Mediator).
 type Classifier interface {
-	Classify(action *model.Action) []string
+	Classify(action *model.Action) []privacy.Class
 }
 
 // InjectionScorer assigns a 0..1 injection-likelihood score to a tool-use

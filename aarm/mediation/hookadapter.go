@@ -114,7 +114,7 @@ func extractParameters(event *events.Event) (model.Parameters, error) {
 			SizeBytes:    p.SizeBytes,
 			LinesAdded:   p.LinesAdded,
 			LinesRemoved: p.LinesRemoved,
-			Content:      p.ContentPreview,
+			Content:      p.ContentPreview.Value,
 		}, nil
 
 	case events.ActionFileDelete:
@@ -130,9 +130,9 @@ func extractParameters(event *events.Event) (model.Parameters, error) {
 			return model.Parameters{}, err
 		}
 		return model.Parameters{
-			Command: p.Command,
+			Command: p.Command.Value,
 			Args:    p.Args,
-			Content: p.StdoutPreview,
+			Content: p.StdoutPreview.Value,
 		}, nil
 
 	case events.ActionToolUse:
@@ -140,7 +140,7 @@ func extractParameters(event *events.Event) (model.Parameters, error) {
 		if err != nil || p == nil {
 			return model.Parameters{}, err
 		}
-		params := model.Parameters{Raw: rawToolInput(p.Input)}
+		params := model.Parameters{Raw: rawToolInput(json.RawMessage(p.Input.Value))}
 		populateWellKnownParams(&params, params.Raw)
 		return params, nil
 

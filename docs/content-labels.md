@@ -1,0 +1,108 @@
+# Content Labels
+
+Every piece of agent content that Gryph stores is a `privacy.Text`: the value
+and a `privacy.Label`. Exporters and policy read the label. They do not need
+the current config to know what the value is.
+
+## Types
+
+`core/privacy` holds the types. It imports no Gryph package.
+
+| Type | Meaning |
+|---|---|
+| `Text` | `Value` and `Label`. JSON: `{"value": "...", "label": {...}}` |
+| `Label` | `Classes`, `Origin`, `Source`, `Redacted`, `Truncated`, `Stripped`, `Level`, `Size`, `Digest` |
+| `Class` | A closed set: `secret`, `pii`, `source_code`, `config`, `git_internal`, `external_url`, `unknown_sensitive` |
+| `Origin` | A closed set: `user`, `agent`, `file_project`, `file_external`, `command`, `web`, `mcp`, `unknown` |
+| `Redactor` | The sensitive-path globs and the redaction regexps |
+| `Walk` | Visits every `Text` in a value by reflection |
+
+A class is a fact from the built-in heuristic classifier (`aarm/classify`).
+It is not a config value. `policy.classify.extra_patterns` can add globs to
+a class. The classifier skips an unknown class key with a warning. It is not
+a config error, because a config error makes the CLI fall back to the
+default config. The admin's own names
+for events are rule tags, not classes.
+
+## Fields
+
+These payload fields are `privacy.Text`:
+
+- `FileWritePayload`: `ContentPreview`, `OldString`, `NewString`
+- `CommandExecPayload`: `Command`, `Output`, `StdoutPreview`, `StderrPreview`
+- `ToolUsePayload`: `Input`, `Output`, `OutputPreview`. `Input` and `Output`
+  hold the tool JSON as a string. Parse `Value` to read the structure.
+- `SubagentStopPayload`: `LastAssistantMessage`
+- `Event`: `DiffContent`. The `diff_label` column stores its label.
+
+Identifiers stay `string`: paths, URLs, tool names, and session IDs.
+`TestPayloadStringFields` in `core/events` lists the allowed `string` fields.
+A new content field that is a `string` fails the test.
+
+`Text` reads the old row forms. A bare JSON string becomes `Value` with an
+empty label. Any other JSON value, such as an old tool input object, becomes
+its compact JSON text. So rows from before labels stay readable with no data
+migration. The storage filters on the command read `$.command.value` and fall
+back to `$.command`.
+
+## The label step
+
+`decision.Local` labels an event in two steps, around the policy
+evaluation. `labelEvent` (`decision/label.go`) runs before the evaluation:
+
+1. Set `Digest` (`sha256:<hex>`) and `Size` from the raw value. An adapter
+   that truncates a preview uses `privacy.Preview`, which sets them from the
+   whole value and sets `Truncated`.
+2. Set `Classes` from the classifier (`classify.Heuristic.ClassifyEvent`) and
+   the sensitive-path check. The classifier reads the paths and the URL that
+   `Event.Targets` returns.
+3. `Origin` and `Source` are claims from the adapter. No adapter sets them
+   yet.
+4. Apply the redactor. Set `Redacted` when a pattern matched. A value that
+   holds a JSON object or array keeps its structure. The redactor also
+   applies to the raw event and to the error message.
+
+The policy then evaluates the redacted event. It sees the content at every
+logging level, so a rule on a URL or on content still fires at `minimal`.
+
+`applyLevel` runs after the evaluation and before the save:
+
+5. Apply the logging level. Set `Stripped` when the level removes the value.
+   Set `Level` to the logging level in force.
+
+Only the `secret` class makes an event sensitive. The sensitive-path check
+adds it. The other classes, `pii` included, are facts on the label. The
+heuristic `pii` globs are coarse, and a sensitive event loses its content.
+
+## Logging levels
+
+| Level | Stored content |
+|---|---|
+| `full` | Every value, and the diff, the raw event, and the conversation context |
+| `standard` | The payload values. The diff, the raw event, and the context are removed |
+| `minimal` | Labels only, except the command of a `command_exec` event |
+
+A sensitive event keeps labels only, at every level, except the command. An
+event is sensitive when its path matches `privacy.sensitive_paths`, or when
+its labels have class `secret`. Content labels use the heuristic without the
+fail-safe wrapper. The wrapper adds `unknown_sensitive` to every
+unclassified action.
+
+## Export
+
+`Event.ForExport` makes the copy that leaves the machine. `gryph export` and
+stream sync use it. It decodes and encodes the payload again, so an old row
+has the same shape as a new row. It removes the digest and the size of a
+value that Gryph redacted or that has the `secret` class. A digest of a
+short secret can be reversed by brute force. The local store keeps the
+digest, so `gryph cat --format json` shows it. Export profiles replace this
+rule.
+
+`gryph cat` shows each content value as its text, and a stripped value as
+`[stripped]`.
+
+## Adding a content field
+
+1. Declare it as `privacy.Text` with `json:",omitzero"`.
+2. Nothing else. `Walk` finds it, so the label step and later export
+   profiles treat it with no new code.

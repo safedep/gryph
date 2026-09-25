@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,7 +36,7 @@ func TestEventTarget(t *testing.T) {
 		},
 		{
 			name:  "command exec",
-			event: &events.Event{ActionType: events.ActionCommandExec, Payload: mustJSON(events.CommandExecPayload{Command: "go test ./..."})},
+			event: &events.Event{ActionType: events.ActionCommandExec, Payload: mustJSON(events.CommandExecPayload{Command: privacy.NewText("go test ./...")})},
 			want:  "go test ./...",
 		},
 		{

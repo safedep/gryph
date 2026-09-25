@@ -17,6 +17,7 @@ import (
 	celast "github.com/google/cel-go/common/ast"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
+	"github.com/safedep/gryph/core/privacy"
 )
 
 const conditionTimeout = 100 * time.Millisecond
@@ -648,7 +649,7 @@ func actionActivation(action *model.Action) map[string]any {
 	if action == nil {
 		action = &model.Action{}
 	}
-	classifications := action.DataClassifications
+	classifications := privacy.Strings(action.DataClassifications)
 	if classifications == nil {
 		classifications = []string{}
 	}

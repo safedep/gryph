@@ -364,7 +364,7 @@ func eventToView(reg *agent.Registry, e *events.Event) *tui.EventView {
 		ResultStatus:     string(e.ResultStatus),
 		ErrorMessage:     e.ErrorMessage,
 		IsSensitive:      e.IsSensitive,
-		HasDiff:          e.DiffContent != "",
+		HasDiff:          e.DiffContent.Value != "",
 	}
 
 	// Extract path/command from payload
@@ -381,7 +381,7 @@ func eventToView(reg *agent.Registry, e *events.Event) *tui.EventView {
 		}
 	case events.ActionCommandExec:
 		if p, err := e.GetCommandExecPayload(); err == nil && p != nil {
-			view.Command = p.Command
+			view.Command = p.Command.Value
 			view.ExitCode = p.ExitCode
 			view.DurationMs = p.DurationMs
 		}

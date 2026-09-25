@@ -66,7 +66,7 @@ func TestHook_ClaudeCode(t *testing.T) {
 				assert.Equal(t, events.ActionCommandExec, evts[0].ActionType)
 				p, pErr := evts[0].GetCommandExecPayload()
 				require.NoError(t, pErr)
-				assert.Contains(t, p.Command, "npm install")
+				assert.Contains(t, p.Command.Value, "npm install")
 			},
 		},
 		{
@@ -519,7 +519,7 @@ func TestHook_Windsurf(t *testing.T) {
 				assert.Equal(t, events.ActionCommandExec, evts[0].ActionType)
 				p, pErr := evts[0].GetCommandExecPayload()
 				require.NoError(t, pErr)
-				assert.Equal(t, "npm install", p.Command)
+				assert.Equal(t, "npm install", p.Command.Value)
 			},
 		},
 		{
@@ -725,7 +725,7 @@ func TestHook_PiAgent(t *testing.T) {
 				assert.Equal(t, events.ActionCommandExec, evts[0].ActionType)
 				p, pErr := evts[0].GetCommandExecPayload()
 				require.NoError(t, pErr)
-				assert.Contains(t, p.Command, "npm install")
+				assert.Contains(t, p.Command.Value, "npm install")
 			},
 		},
 		{

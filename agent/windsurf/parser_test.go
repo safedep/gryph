@@ -8,6 +8,7 @@ import (
 
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,10 +23,10 @@ func loadFixture(t *testing.T, name string) []byte {
 	return data
 }
 
-func testPrivacyChecker(t *testing.T) *events.PrivacyChecker {
+func testPrivacyChecker(t *testing.T) *privacy.Redactor {
 	t.Helper()
 
-	pc, err := events.NewPrivacyChecker(events.DefaultSensitivePatterns(), nil)
+	pc, err := privacy.NewRedactor(privacy.DefaultSensitivePatterns(), nil)
 	require.NoError(t, err)
 
 	return pc
@@ -74,8 +75,8 @@ func TestParseHookEvent_PreWriteCode(t *testing.T) {
 	payload, err := event.GetFileWritePayload()
 	require.NoError(t, err)
 	assert.Equal(t, "/home/user/project/src/main.go", payload.Path)
-	assert.Equal(t, "fmt.Println(\"hello\")", payload.OldString)
-	assert.Equal(t, "fmt.Println(\"world\")", payload.NewString)
+	assert.Equal(t, "fmt.Println(\"hello\")", payload.OldString.Value)
+	assert.Equal(t, "fmt.Println(\"world\")", payload.NewString.Value)
 }
 
 func TestParseHookEvent_PostWriteCode(t *testing.T) {
@@ -107,7 +108,7 @@ func TestParseHookEvent_PreRunCommand(t *testing.T) {
 
 	payload, err := event.GetCommandExecPayload()
 	require.NoError(t, err)
-	assert.Equal(t, "npm install", payload.Command)
+	assert.Equal(t, "npm install", payload.Command.Value)
 }
 
 func TestParseHookEvent_PreMCPToolUse(t *testing.T) {
@@ -221,9 +222,9 @@ func TestParseHookEvent_DiffGeneration_FullLevel(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
-	assert.NotEmpty(t, event.DiffContent)
-	assert.Contains(t, event.DiffContent, "--- a/")
-	assert.Contains(t, event.DiffContent, "+++ b/")
+	assert.NotEmpty(t, event.DiffContent.Value)
+	assert.Contains(t, event.DiffContent.Value, "--- a/")
+	assert.Contains(t, event.DiffContent.Value, "+++ b/")
 }
 
 func TestParseHookEvent_NoDiff_StandardLevel(t *testing.T) {
@@ -234,7 +235,7 @@ func TestParseHookEvent_NoDiff_StandardLevel(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
-	assert.Empty(t, event.DiffContent)
+	assert.Empty(t, event.DiffContent.Value)
 }
 
 func TestHookTypeMapping(t *testing.T) {

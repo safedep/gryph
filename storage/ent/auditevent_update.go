@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/predicate"
 	"github.com/safedep/gryph/storage/ent/session"
@@ -242,6 +243,26 @@ func (_u *AuditEventUpdate) SetNillableDiffContent(v *string) *AuditEventUpdate 
 // ClearDiffContent clears the value of the "diff_content" field.
 func (_u *AuditEventUpdate) ClearDiffContent() *AuditEventUpdate {
 	_u.mutation.ClearDiffContent()
+	return _u
+}
+
+// SetDiffLabel sets the "diff_label" field.
+func (_u *AuditEventUpdate) SetDiffLabel(v privacy.Label) *AuditEventUpdate {
+	_u.mutation.SetDiffLabel(v)
+	return _u
+}
+
+// SetNillableDiffLabel sets the "diff_label" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillableDiffLabel(v *privacy.Label) *AuditEventUpdate {
+	if v != nil {
+		_u.SetDiffLabel(*v)
+	}
+	return _u
+}
+
+// ClearDiffLabel clears the value of the "diff_label" field.
+func (_u *AuditEventUpdate) ClearDiffLabel() *AuditEventUpdate {
+	_u.mutation.ClearDiffLabel()
 	return _u
 }
 
@@ -553,6 +574,12 @@ func (_u *AuditEventUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.DiffContentCleared() {
 		_spec.ClearField(auditevent.FieldDiffContent, field.TypeString)
+	}
+	if value, ok := _u.mutation.DiffLabel(); ok {
+		_spec.SetField(auditevent.FieldDiffLabel, field.TypeJSON, value)
+	}
+	if _u.mutation.DiffLabelCleared() {
+		_spec.ClearField(auditevent.FieldDiffLabel, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.RawEvent(); ok {
 		_spec.SetField(auditevent.FieldRawEvent, field.TypeJSON, value)
@@ -867,6 +894,26 @@ func (_u *AuditEventUpdateOne) SetNillableDiffContent(v *string) *AuditEventUpda
 // ClearDiffContent clears the value of the "diff_content" field.
 func (_u *AuditEventUpdateOne) ClearDiffContent() *AuditEventUpdateOne {
 	_u.mutation.ClearDiffContent()
+	return _u
+}
+
+// SetDiffLabel sets the "diff_label" field.
+func (_u *AuditEventUpdateOne) SetDiffLabel(v privacy.Label) *AuditEventUpdateOne {
+	_u.mutation.SetDiffLabel(v)
+	return _u
+}
+
+// SetNillableDiffLabel sets the "diff_label" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillableDiffLabel(v *privacy.Label) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetDiffLabel(*v)
+	}
+	return _u
+}
+
+// ClearDiffLabel clears the value of the "diff_label" field.
+func (_u *AuditEventUpdateOne) ClearDiffLabel() *AuditEventUpdateOne {
+	_u.mutation.ClearDiffLabel()
 	return _u
 }
 
@@ -1208,6 +1255,12 @@ func (_u *AuditEventUpdateOne) sqlSave(ctx context.Context) (_node *AuditEvent, 
 	}
 	if _u.mutation.DiffContentCleared() {
 		_spec.ClearField(auditevent.FieldDiffContent, field.TypeString)
+	}
+	if value, ok := _u.mutation.DiffLabel(); ok {
+		_spec.SetField(auditevent.FieldDiffLabel, field.TypeJSON, value)
+	}
+	if _u.mutation.DiffLabelCleared() {
+		_spec.ClearField(auditevent.FieldDiffLabel, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.RawEvent(); ok {
 		_spec.SetField(auditevent.FieldRawEvent, field.TypeJSON, value)

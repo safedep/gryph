@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 )
 
 // ActionType is the canonical action category.
@@ -64,7 +65,7 @@ type Action struct {
 	RoleScope       string
 
 	OriginalRequest     string
-	DataClassifications []string
+	DataClassifications []privacy.Class
 	InjectionScore      float32
 
 	// Shell is the parsed shell command of a command_exec action. The

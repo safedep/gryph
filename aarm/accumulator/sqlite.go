@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/storage"
 )
 
@@ -46,7 +47,7 @@ func (a *SQLiteAccumulator) Append(ctx context.Context, action *model.Action) er
 		Agent:               action.Agent,
 		Project:             action.Project,
 		WorkingDir:          action.WorkingDir,
-		DataClassifications: action.DataClassifications,
+		DataClassifications: privacy.Strings(action.DataClassifications),
 	}
 	if row.ID == uuid.Nil {
 		row.ID = uuid.New()

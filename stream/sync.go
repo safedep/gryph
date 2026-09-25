@@ -179,7 +179,7 @@ func (s *Syncer) syncTarget(ctx context.Context, target corestream.Target, batch
 		items := make([]corestream.StreamItem, 0, len(evts)+len(audits))
 
 		for _, e := range evts {
-			items = append(items, corestream.StreamItem{Event: e})
+			items = append(items, corestream.StreamItem{Event: e.ForExport()})
 			eventAfter = e.Timestamp
 			lastEventID = e.ID
 		}

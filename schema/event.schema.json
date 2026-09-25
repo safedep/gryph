@@ -41,7 +41,7 @@
       "type": "string"
     },
     "diff_content": {
-      "type": "string"
+      "$ref": "#/$defs/text"
     },
     "duration_ms": {
       "type": "integer"
@@ -152,7 +152,7 @@
           }
         },
         "command": {
-          "type": "string"
+          "$ref": "#/$defs/text"
         },
         "description": {
           "type": "string"
@@ -164,13 +164,13 @@
           "type": "integer"
         },
         "output": {
-          "type": "string"
+          "$ref": "#/$defs/text"
         },
         "stderr_preview": {
-          "type": "string"
+          "$ref": "#/$defs/text"
         },
         "stdout_preview": {
-          "type": "string"
+          "$ref": "#/$defs/text"
         }
       },
       "required": [
@@ -219,7 +219,7 @@
           "type": "string"
         },
         "content_preview": {
-          "type": "string"
+          "$ref": "#/$defs/text"
         },
         "lines_added": {
           "type": "integer"
@@ -228,10 +228,10 @@
           "type": "integer"
         },
         "new_string": {
-          "type": "string"
+          "$ref": "#/$defs/text"
         },
         "old_string": {
-          "type": "string"
+          "$ref": "#/$defs/text"
         },
         "path": {
           "type": "string"
@@ -243,6 +243,61 @@
       "required": [
         "path"
       ]
+    },
+    "label": {
+      "type": "object",
+      "description": "Privacy facts about one content value. Exporters read it to decide what leaves the machine.",
+      "properties": {
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "secret",
+              "pii",
+              "source_code",
+              "config",
+              "git_internal",
+              "external_url",
+              "unknown_sensitive"
+            ]
+          }
+        },
+        "digest": {
+          "type": "string"
+        },
+        "level": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "user",
+            "agent",
+            "file_project",
+            "file_external",
+            "command",
+            "web",
+            "mcp",
+            "unknown"
+          ]
+        },
+        "redacted": {
+          "type": "boolean"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        },
+        "stripped": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      }
     },
     "notification_payload": {
       "type": "object",
@@ -323,7 +378,7 @@
           "type": "string"
         },
         "last_assistant_message": {
-          "type": "string"
+          "$ref": "#/$defs/text"
         }
       },
       "required": [
@@ -331,38 +386,34 @@
         "agent_type"
       ]
     },
+    "text": {
+      "type": "object",
+      "description": "Agent content with its privacy label. Export writes every row in this shape.",
+      "properties": {
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "label"
+      ]
+    },
     "tool_use_payload": {
       "type": "object",
       "description": "Payload for tool use actions.",
       "properties": {
         "input": {
-          "oneOf": [
-            {
-              "type": "object"
-            },
-            {
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/text"
         },
         "output": {
-          "oneOf": [
-            {
-              "type": "object"
-            },
-            {
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/text"
         },
         "output_preview": {
-          "type": "string"
+          "$ref": "#/$defs/text"
         },
         "tool_name": {
           "type": "string"

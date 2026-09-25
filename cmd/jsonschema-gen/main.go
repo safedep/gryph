@@ -12,6 +12,7 @@ import (
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 )
 
 const (
@@ -119,7 +120,7 @@ func generateEventSchema() jsonSchema {
 
 		schema.Properties[name] = prop
 
-		if !strings.Contains(opts, "omitempty") {
+		if !isOptional(opts) {
 			schema.Required = append(schema.Required, name)
 		}
 	}
@@ -299,10 +300,20 @@ func parseJSONTag(tag string) (string, string) {
 	return name, opts
 }
 
+// isOptional reports whether a field with these JSON tag options can be
+// absent from the output.
+func isOptional(opts string) bool {
+	return strings.Contains(opts, "omitempty") || strings.Contains(opts, "omitzero")
+}
+
 func fieldToProperty(field reflect.StructField) property {
 	prop := property{}
 
 	switch field.Type {
+	case reflect.TypeOf(privacy.Text{}):
+		prop.Ref = "#/$defs/text"
+	case reflect.TypeOf(privacy.Label{}):
+		prop.Ref = "#/$defs/label"
 	case reflect.TypeOf(uuid.UUID{}):
 		prop.Type = "string"
 		prop.Format = "uuid"
@@ -376,6 +387,18 @@ func severityValues() []string {
 }
 
 func addPayloadDefinitions(defs map[string]definition) {
+	defs["text"] = structToDefinition(
+		reflect.TypeOf(privacy.Text{}),
+		"Agent content with its privacy label. Export writes every row in this shape.",
+	)
+	label := structToDefinition(
+		reflect.TypeOf(privacy.Label{}),
+		"Privacy facts about one content value. Exporters read it to decide what leaves the machine.",
+	)
+	label.Properties["classes"] = property{Type: "array", Items: &items{Type: "string", Enum: privacy.Strings(privacy.AllClasses)}}
+	label.Properties["origin"] = property{Type: "string", Enum: originValues()}
+	defs["label"] = label
+
 	defs["file_read_payload"] = structToDefinition(
 		reflect.TypeOf(events.FileReadPayload{}),
 		"Payload for file read actions.",
@@ -436,10 +459,18 @@ func structToDefinition(t reflect.Type, desc string) definition {
 		prop := fieldToProperty(field)
 		def.Properties[name] = prop
 
-		if !strings.Contains(opts, "omitempty") {
+		if !isOptional(opts) {
 			def.Required = append(def.Required, name)
 		}
 	}
 
 	return def
+}
+
+func originValues() []string {
+	return []string{
+		string(privacy.OriginUser), string(privacy.OriginAgent), string(privacy.OriginFileProject),
+		string(privacy.OriginFileExternal), string(privacy.OriginCommand), string(privacy.OriginWeb),
+		string(privacy.OriginMCP), string(privacy.OriginUnknown),
+	}
 }

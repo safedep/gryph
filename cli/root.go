@@ -18,7 +18,7 @@ import (
 	"github.com/safedep/gryph/agent/piagent"
 	"github.com/safedep/gryph/agent/windsurf"
 	"github.com/safedep/gryph/config"
-	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/decision"
 	"github.com/safedep/gryph/internal/version"
@@ -29,13 +29,13 @@ import (
 
 // App holds the application dependencies.
 type App struct {
-	Config         *config.Config
-	Store          storage.Store
-	Registry       *agent.Registry
-	Presenter      tui.Presenter
-	Paths          *config.Paths
-	Security       *security.Evaluator
-	PrivacyChecker *events.PrivacyChecker
+	Config    *config.Config
+	Store     storage.Store
+	Registry  *agent.Registry
+	Presenter tui.Presenter
+	Paths     *config.Paths
+	Security  *security.Evaluator
+	Redactor  *privacy.Redactor
 
 	// policyCheck holds the lazily-loaded AARM policy check, when the policy
 	// layer is enabled. Used by cli/hook.go to reach the underlying Mediator
@@ -58,11 +58,11 @@ func NewApp(cfg *config.Config) (*App, error) {
 
 	// Merge default patterns with config patterns
 	// There may be duplicates, but that's okay for now.
-	sensitivePathPatterns := append(events.DefaultSensitivePatterns(), cfg.Privacy.SensitivePaths...)
-	redactPatterns := append(events.DefaultRedactPatterns(), cfg.Privacy.RedactPatterns...)
+	sensitivePathPatterns := append(privacy.DefaultSensitivePatterns(), cfg.Privacy.SensitivePaths...)
+	redactPatterns := append(privacy.DefaultRedactPatterns(), cfg.Privacy.RedactPatterns...)
 
 	// Create shared privacy checker
-	privacyChecker, err := events.NewPrivacyChecker(sensitivePathPatterns, redactPatterns)
+	privacyChecker, err := privacy.NewRedactor(sensitivePathPatterns, redactPatterns)
 	if err != nil {
 		return nil, err
 	}
@@ -102,13 +102,13 @@ func NewApp(cfg *config.Config) (*App, error) {
 	}
 
 	app = &App{
-		Config:         cfg,
-		Registry:       registry,
-		Presenter:      presenter,
-		Paths:          paths,
-		Security:       sec,
-		PrivacyChecker: privacyChecker,
-		policyCheck:    policyCheck,
+		Config:      cfg,
+		Registry:    registry,
+		Presenter:   presenter,
+		Paths:       paths,
+		Security:    sec,
+		Redactor:    privacyChecker,
+		policyCheck: policyCheck,
 	}
 	return app, nil
 }
@@ -116,7 +116,7 @@ func NewApp(cfg *config.Config) (*App, error) {
 // DecisionService returns the in-process decision service for hook events.
 // Call it after InitStore.
 func (a *App) DecisionService() decision.Service {
-	return decision.NewLocal(a.Store, a.Security, a.PrivacyChecker, a.Config.GetAgentLoggingLevel,
+	return decision.NewLocal(a.Store, a.Security, a.Redactor, a.Config.GetAgentLoggingLevel,
 		decision.WithResultRecorder(func() decision.ResultRecorder {
 			if m := a.AarmMediator(); m != nil {
 				return m
@@ -125,7 +125,18 @@ func (a *App) DecisionService() decision.Service {
 		}),
 		decision.WithSessionEndHook(collectSessionCost),
 		decision.WithHookSpecs(a.Registry.HookSpec),
+		decision.WithClassifier(a.classifier()),
 	)
+}
+
+// classifier returns the content classifier, or nil when classification is
+// off. A nil *classify.Heuristic in the interface would not be nil, so this
+// returns the interface.
+func (a *App) classifier() decision.Classifier {
+	if h := newClassifier(a.Config); h != nil {
+		return h
+	}
+	return nil
 }
 
 // InitStore initializes the database store.
@@ -315,7 +326,7 @@ func getFormat(format string) tui.Format {
 
 // registerAdapters registers every supported agent adapter. It is the single
 // list of adapters, so the self-protection globs come from the same source.
-func registerAdapters(registry *agent.Registry, privacyChecker *events.PrivacyChecker, cfg *config.Config) {
+func registerAdapters(registry *agent.Registry, privacyChecker *privacy.Redactor, cfg *config.Config) {
 	claudecode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentClaudeCode), cfg.Logging.ContentHash)
 	cursor.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCursor), cfg.Logging.ContentHash)
 	gemini.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentGemini), cfg.Logging.ContentHash)

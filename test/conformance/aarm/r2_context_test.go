@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/safedep/gryph/aarm/classify"
 	aarm "github.com/safedep/gryph/aarm/conformance"
 	"github.com/safedep/gryph/aarm/receipt"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,7 +43,7 @@ func TestR2_ClassificationsTracked(t *testing.T) {
 
 	snap, err := ref.Accumulator.Snapshot(context.Background(), ev.SessionID)
 	require.NoError(t, err)
-	assert.Contains(t, snap.ClassificationsSeen, classify.LabelSecret,
+	assert.Contains(t, snap.ClassificationsSeen, string(privacy.ClassSecret),
 		"reading .env must populate classifications_seen with 'secret'")
 }
 
@@ -61,7 +61,7 @@ func TestR2_FailSafeOnNoClassifier(t *testing.T) {
 
 	snap, err := ref.Accumulator.Snapshot(context.Background(), ev.SessionID)
 	require.NoError(t, err)
-	assert.Contains(t, snap.ClassificationsSeen, classify.LabelUnknownSensitive,
+	assert.Contains(t, snap.ClassificationsSeen, string(privacy.ClassUnknownSensitive),
 		"actions with no other classification must surface as unknown_sensitive (fail-safe)")
 }
 

@@ -39,18 +39,18 @@ agent/youragent/
 
 ### 2. Implement the adapter (`adapter.go`)
 
-The adapter struct holds a privacy checker, logging level, and content hash flag. Delegate each interface method to the corresponding helper function.
+The adapter struct holds a redactor, logging level, and content hash flag. Delegate each interface method to the corresponding helper function.
 
 ```go
 var _ agent.Adapter = (*Adapter)(nil) // compile-time check
 
 type Adapter struct {
-    privacyChecker *events.PrivacyChecker
+    privacyChecker *privacy.Redactor
     loggingLevel   config.LoggingLevel
     contentHash    bool
 }
 
-func Register(registry *agent.Registry, pc *events.PrivacyChecker, level config.LoggingLevel, contentHash bool) {
+func Register(registry *agent.Registry, pc *privacy.Redactor, level config.LoggingLevel, contentHash bool) {
     registry.Register(New(pc, level, contentHash))
 }
 ```
@@ -147,9 +147,10 @@ This is where hook stdin JSON gets converted to `events.Event` objects.
 3. Switch on hook type to parse type-specific input structs
 4. Map tool names to action types (`events.ActionFileRead`, `ActionFileWrite`, `ActionCommandExec`, `ActionToolUse`)
 5. Build typed payloads (`FileReadPayload`, `FileWritePayload`, `CommandExecPayload`, etc.)
-6. Mark sensitive paths via the privacy checker
-7. Generate diffs at `LoggingFull` level using `utils.GenerateDiff()`
-8. Hash content when `contentHash` is enabled using `utils.HashContent()`
+6. Mark sensitive paths via the redactor
+7. Put agent content in `privacy.Text` fields. Use `privacy.Preview(v, n)` for a truncated preview. It records the size and the digest of the whole value. Do not redact, label, or strip content. The decision service does it (see `docs/content-labels.md`)
+8. Generate diffs at `LoggingFull` level using `utils.GenerateDiff()`
+9. Hash content when `contentHash` is enabled using `utils.HashContent()`
 
 **Hook response types** - The Security Policy Engine drives three response paths. Define a response type for each:
 

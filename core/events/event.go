@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/core/privacy"
 )
 
 // EventSchemaURL is the canonical URL for the Event JSON Schema hosted on GitHub.
@@ -41,7 +42,7 @@ type Event struct {
 	// Payload contains action-specific data.
 	Payload json.RawMessage `json:"payload,omitempty"`
 	// DiffContent contains file diff (full logging only, never for sensitive paths).
-	DiffContent string `json:"diff_content,omitempty"`
+	DiffContent privacy.Text `json:"diff_content,omitzero"`
 	// RawEvent is the original event from agent (full logging only).
 	RawEvent json.RawMessage `json:"raw_event,omitempty"`
 	// ConversationContext is the prompt/conversation (full logging only).
@@ -108,14 +109,14 @@ func (p *FileReadPayload) DisplayTarget() string {
 
 // FileWritePayload represents the payload for file_write actions.
 type FileWritePayload struct {
-	Path           string `json:"path"`
-	SizeBytes      int64  `json:"size_bytes,omitempty"`
-	ContentHash    string `json:"content_hash,omitempty"`
-	ContentPreview string `json:"content_preview,omitempty"`
-	OldString      string `json:"old_string,omitempty"`
-	NewString      string `json:"new_string,omitempty"`
-	LinesAdded     int    `json:"lines_added,omitempty"`
-	LinesRemoved   int    `json:"lines_removed,omitempty"`
+	Path           string       `json:"path"`
+	SizeBytes      int64        `json:"size_bytes,omitempty"`
+	ContentHash    string       `json:"content_hash,omitempty"`
+	ContentPreview privacy.Text `json:"content_preview,omitzero"`
+	OldString      privacy.Text `json:"old_string,omitzero"`
+	NewString      privacy.Text `json:"new_string,omitzero"`
+	LinesAdded     int          `json:"lines_added,omitempty"`
+	LinesRemoved   int          `json:"lines_removed,omitempty"`
 }
 
 // FileDeletePayload represents the payload for file_delete actions.
@@ -125,22 +126,24 @@ type FileDeletePayload struct {
 
 // CommandExecPayload represents the payload for command_exec actions.
 type CommandExecPayload struct {
-	Command       string   `json:"command"`
-	Description   string   `json:"description,omitempty"`
-	Args          []string `json:"args,omitempty"`
-	ExitCode      int      `json:"exit_code"`
-	Output        string   `json:"output,omitempty"`
-	DurationMs    int64    `json:"duration_ms,omitempty"`
-	StdoutPreview string   `json:"stdout_preview,omitempty"`
-	StderrPreview string   `json:"stderr_preview,omitempty"`
+	Command       privacy.Text `json:"command"`
+	Description   string       `json:"description,omitempty"`
+	Args          []string     `json:"args,omitempty"`
+	ExitCode      int          `json:"exit_code"`
+	Output        privacy.Text `json:"output,omitzero"`
+	DurationMs    int64        `json:"duration_ms,omitempty"`
+	StdoutPreview privacy.Text `json:"stdout_preview,omitzero"`
+	StderrPreview privacy.Text `json:"stderr_preview,omitzero"`
 }
 
 // ToolUsePayload represents the payload for tool_use actions.
+// Input and Output hold the tool's JSON as a string value. Readers that
+// need the structure parse Value.
 type ToolUsePayload struct {
-	ToolName      string          `json:"tool_name"`
-	Input         json.RawMessage `json:"input,omitempty"`
-	Output        json.RawMessage `json:"output,omitempty"`
-	OutputPreview string          `json:"output_preview,omitempty"`
+	ToolName      string       `json:"tool_name"`
+	Input         privacy.Text `json:"input,omitzero"`
+	Output        privacy.Text `json:"output,omitzero"`
+	OutputPreview privacy.Text `json:"output_preview,omitzero"`
 }
 
 // SessionPayload represents the payload for session_start actions.
@@ -170,10 +173,10 @@ type SubagentStartPayload struct {
 
 // SubagentStopPayload represents the payload for subagent_stop actions.
 type SubagentStopPayload struct {
-	AgentID              string `json:"agent_id"`
-	AgentType            string `json:"agent_type"`
-	AgentTranscriptPath  string `json:"agent_transcript_path,omitempty"`
-	LastAssistantMessage string `json:"last_assistant_message,omitempty"`
+	AgentID              string       `json:"agent_id"`
+	AgentType            string       `json:"agent_type"`
+	AgentTranscriptPath  string       `json:"agent_transcript_path,omitempty"`
+	LastAssistantMessage privacy.Text `json:"last_assistant_message,omitzero"`
 }
 
 // toolUseDisplayFields lists Input keys checked in priority order by DisplayTarget.
@@ -187,12 +190,12 @@ var toolUseDisplayFields = []string{
 // It checks a prioritised list of well-known fields (url, query, command, …)
 // and returns the first non-empty string value found.
 func (p *ToolUsePayload) DisplayTarget() string {
-	if len(p.Input) == 0 {
+	if p.Input.Value == "" {
 		return ""
 	}
 
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(p.Input, &m); err != nil {
+	if err := json.Unmarshal([]byte(p.Input.Value), &m); err != nil {
 		return ""
 	}
 
@@ -305,4 +308,66 @@ func (e *Event) GetNotificationPayload() (*NotificationPayload, error) {
 		return nil, err
 	}
 	return &payload, nil
+}
+
+// NewPayload returns a pointer to the zero payload struct of an action type.
+// It returns nil when the action type has no payload struct.
+func NewPayload(t ActionType) any {
+	switch t {
+	case ActionFileRead:
+		return &FileReadPayload{}
+	case ActionFileWrite:
+		return &FileWritePayload{}
+	case ActionFileDelete:
+		return &FileDeletePayload{}
+	case ActionCommandExec:
+		return &CommandExecPayload{}
+	case ActionToolUse:
+		return &ToolUsePayload{}
+	case ActionSessionStart:
+		return &SessionPayload{}
+	case ActionSessionEnd:
+		return &SessionEndPayload{}
+	case ActionNotification:
+		return &NotificationPayload{}
+	case ActionSubagentStart:
+		return &SubagentStartPayload{}
+	case ActionSubagentStop:
+		return &SubagentStopPayload{}
+	default:
+		return nil
+	}
+}
+
+// toolTargetKeys are the tool input keys that name a file.
+var toolTargetKeys = []string{"file_path", "path", "notebook_path"}
+
+// Targets returns the paths and the URL that the event acts on. The
+// classifier reads them.
+func (e *Event) Targets() (paths []string, url string) {
+	switch e.ActionType {
+	case ActionFileRead, ActionFileWrite, ActionFileDelete:
+		var p struct {
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal(e.Payload, &p); err == nil && p.Path != "" {
+			paths = append(paths, p.Path)
+		}
+	case ActionToolUse:
+		p, err := e.GetToolUsePayload()
+		if err != nil || p == nil || p.Input.Value == "" {
+			return nil, ""
+		}
+		var input map[string]any
+		if err := json.Unmarshal([]byte(p.Input.Value), &input); err != nil {
+			return nil, ""
+		}
+		for _, k := range toolTargetKeys {
+			if v, ok := input[k].(string); ok && v != "" {
+				paths = append(paths, v)
+			}
+		}
+		url, _ = input["url"].(string)
+	}
+	return paths, url
 }

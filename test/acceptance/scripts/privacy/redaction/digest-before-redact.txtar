@@ -1,0 +1,43 @@
+# A command with a matched token stores [REDACTED] in place of the token. Its
+# label sets redacted to true and keeps the digest of the original value, so
+# a local reader can match the stored event to the command that ran. Export
+# drops that digest.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin bash_token.json
+exec gryph _hook claude-code PreToolUse
+
+# The stored label keeps the digest of the original value.
+exec gryph query --format json --no-color
+capture EVENT_ID '"ShortID": "([0-9a-f]+)"'
+exec gryph cat $EVENT_ID --format json
+stdout '\[REDACTED\]'
+stdout '"redacted": true'
+stdout '"digest": "sha256:7ee5896023586faf0c35b321127dffe83f2e5db05813423571e11c97064fdab6"'
+stdout '"level": "full"'
+! stdout 'abc123SECRET'
+
+# Export keeps the redacted flag and drops the digest and the size, because a
+# digest of a short secret can be reversed by brute force.
+exec gryph export --since 1h
+stdout '\[REDACTED\]'
+stdout '"redacted":true'
+! stdout '7ee5896023586faf0c35b321127dffe83f2e5db05813423571e11c97064fdab6'
+! stdout 'abc123SECRET'
+
+-- home/.config/safedep/gryph/config.yml --
+logging:
+  level: full
+-- bash_token.json --
+{
+  "session_id": "test-session-redact",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "curl -s -H \"Authorization: Bearer abc123SECRET\" https://api.example.com/v1"
+  },
+  "tool_use_id": "tool-use-redact"
+}

@@ -62,11 +62,18 @@
   guarantee: "A rule with file_access [read] blocks a shell read of a matching path and passes a shell write. A rule without file_access blocks a shell write and passes a shell read."
   labels: [policy]
 
+- id: privacy/redaction/digest-before-redact
+  title: "redaction keeps the digest of the original value"
+  category: privacy
+  tier: P1
+  guarantee: "A command with a matched token stores [REDACTED], sets redacted to true in its label, and keeps the digest of the original value in the local store. Export drops that digest."
+  labels: [privacy, labels]
+
 - id: privacy/sensitive/content-never-stored
   title: "sensitive file content never reaches storage or export"
   category: privacy
   tier: P0
-  guarantee: "A write to a sensitive path is flagged, its content is not stored at any logging level, and export excludes the event unless --sensitive is set."
+  guarantee: "A write to a sensitive path is flagged, its content is not stored at any logging level, and export excludes the event unless --sensitive is set. The exported label keeps the secret class and the stripped flag, and drops the digest."
   labels: [privacy, sensitive, redaction, export]
 
 - id: receipts/verify-log/tamper-fails

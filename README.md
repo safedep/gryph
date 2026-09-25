@@ -273,6 +273,7 @@ All data stays on the local machine. There is no cloud component, no telemetry, 
 
 - **Sensitive file detection** : Files matching `.env`, `*.pem`, `*.key`, `*secret*`, `.ssh/**`, `.aws/**` and more are automatically flagged. Actions are logged but content is never stored.
 - **Content redaction** : Passwords, API keys, tokens, and credentials are automatically redacted from logged output.
+- **Content labels** : Each stored content value carries a label: its data classes, its size, a SHA-256 digest of the value before redaction, and flags that say whether Gryph redacted, truncated, or removed it.
 - **Content hashing** : File contents are stored as SHA-256 hashes by default, allowing identity verification without storing actual content.
 - **Local-only storage** : SQLite database with configurable retention (default 90 days).
 

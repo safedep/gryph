@@ -181,14 +181,18 @@ type ApprovalConfig struct {
 //
 // FailOpen toggles the AARM safe-by-default classification safety net. When
 // false (the default and AARM-conformant), the mediation adapter appends
-// classify.LabelUnknownSensitive to any action the classifier left
+// privacy.ClassUnknownSensitive to any action the classifier left
 // unlabeled so policies that gate on classification fail safe. When true,
 // the adapter skips the safety-net label so an unlabeled action carries an
 // empty list. Operators who explicitly want classification off and do not
 // want the fail-safe label flip this to true.
 type ClassifyConfig struct {
-	Enabled       bool                `mapstructure:"enabled"`
-	FailOpen      bool                `mapstructure:"fail_open"`
+	Enabled  bool `mapstructure:"enabled"`
+	FailOpen bool `mapstructure:"fail_open"`
+	// ExtraPatterns adds globs to built-in classes. Each key must be a
+	// privacy.Class. A class is never a config value, so the classifier skips
+	// an unknown key with a warning. An error would make the CLI fall back to
+	// the default config and lose every other setting.
 	ExtraPatterns map[string][]string `mapstructure:"extra_patterns"`
 }
 

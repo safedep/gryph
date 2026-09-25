@@ -9,6 +9,7 @@ import (
 	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 )
 
 // HookInput represents the common fields in all Cursor hook inputs.
@@ -378,7 +379,7 @@ func parseBeforeShellExecution(sessionID uuid.UUID, agentSessionID string, base 
 	event.RawEvent = rawData
 
 	payload := events.CommandExecPayload{
-		Command: input.Command,
+		Command: privacy.NewText(input.Command),
 	}
 
 	if err := event.SetPayload(payload); err != nil {
@@ -439,8 +440,8 @@ func (a *Adapter) parseAfterFileEdit(sessionID uuid.UUID, agentSessionID string,
 			payload.LinesAdded += a
 			payload.LinesRemoved += r
 		}
-		payload.OldString = truncateString(input.Edits[0].OldString, 200)
-		payload.NewString = truncateString(input.Edits[0].NewString, 200)
+		payload.OldString = privacy.Preview(input.Edits[0].OldString, 200)
+		payload.NewString = privacy.Preview(input.Edits[0].NewString, 200)
 	}
 
 	if a.contentHash && len(input.Edits) > 0 {
@@ -460,7 +461,7 @@ func (a *Adapter) parseAfterFileEdit(sessionID uuid.UUID, agentSessionID string,
 		for _, edit := range input.Edits {
 			diffBuilder.WriteString(utils.GenerateDiff(input.FilePath, edit.OldString, edit.NewString))
 		}
-		event.DiffContent = diffBuilder.String()
+		event.DiffContent = privacy.NewText(diffBuilder.String())
 	}
 
 	a.markSensitivePath(event, input.FilePath)
@@ -585,7 +586,7 @@ func parseBeforeMCPExecution(sessionID uuid.UUID, agentSessionID string, base Ho
 		ToolName: input.ToolName,
 	}
 	if inputBytes, err := json.Marshal(input.ToolInput); err == nil {
-		payload.Input = inputBytes
+		payload.Input = privacy.NewText(string(inputBytes))
 	}
 	if err := event.SetPayload(payload); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
@@ -613,8 +614,8 @@ func parseAfterShellExecution(sessionID uuid.UUID, agentSessionID string, base H
 	}
 
 	payload := events.CommandExecPayload{
-		Command: input.Command,
-		Output:  truncateString(input.Output, 500),
+		Command: privacy.NewText(input.Command),
+		Output:  privacy.Preview(input.Output, 500),
 	}
 	if err := event.SetPayload(payload); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
@@ -643,11 +644,11 @@ func parseAfterMCPExecution(sessionID uuid.UUID, agentSessionID string, base Hoo
 		ToolName: input.ToolName,
 	}
 	if inputBytes, err := json.Marshal(input.ToolInput); err == nil {
-		payload.Input = inputBytes
+		payload.Input = privacy.NewText(string(inputBytes))
 	}
 	if input.ResultJSON != nil {
 		if resultBytes, err := json.Marshal(input.ResultJSON); err == nil {
-			payload.Output = resultBytes
+			payload.Output = privacy.NewText(string(resultBytes))
 		}
 	}
 	if err := event.SetPayload(payload); err != nil {
@@ -680,7 +681,7 @@ func parseSubagentStart(sessionID uuid.UUID, agentSessionID string, base HookInp
 		"model":         input.SubModel,
 	}
 	if inputBytes, err := json.Marshal(inputMap); err == nil {
-		payload.Input = inputBytes
+		payload.Input = privacy.NewText(string(inputBytes))
 	}
 	if err := event.SetPayload(payload); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
@@ -713,7 +714,7 @@ func parseSubagentStop(sessionID uuid.UUID, agentSessionID string, base HookInpu
 		"result":        input.Result,
 	}
 	if inputBytes, err := json.Marshal(inputMap); err == nil {
-		payload.Input = inputBytes
+		payload.Input = privacy.NewText(string(inputBytes))
 	}
 	if err := event.SetPayload(payload); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
@@ -744,7 +745,7 @@ func parseAfterAgentThought(sessionID uuid.UUID, agentSessionID string, base Hoo
 		"text": input.Text,
 	}
 	if inputBytes, err := json.Marshal(inputMap); err == nil {
-		payload.Input = inputBytes
+		payload.Input = privacy.NewText(string(inputBytes))
 	}
 	if err := event.SetPayload(payload); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
@@ -799,14 +800,14 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		}
 
 		if fullContent != "" {
-			payload.ContentPreview = truncateString(fullContent, 200)
+			payload.ContentPreview = privacy.Preview(fullContent, 200)
 			event.FullContent = fullContent
 		}
 		if fullOldStr != "" {
-			payload.OldString = truncateString(fullOldStr, 200)
+			payload.OldString = privacy.Preview(fullOldStr, 200)
 		}
 		if fullNewStr != "" {
-			payload.NewString = truncateString(fullNewStr, 200)
+			payload.NewString = privacy.Preview(fullNewStr, 200)
 		}
 		if err := event.SetPayload(payload); err != nil {
 			return fmt.Errorf("failed to set payload: %w", err)
@@ -814,20 +815,20 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 
 		if a.loggingLevel.IsAtLeast(config.LoggingFull) {
 			if fullOldStr != "" || fullNewStr != "" {
-				event.DiffContent = utils.GenerateDiff(filePath, fullOldStr, fullNewStr)
+				event.DiffContent = privacy.NewText(utils.GenerateDiff(filePath, fullOldStr, fullNewStr))
 			} else if fullContent != "" {
-				event.DiffContent = utils.GenerateDiff(filePath, "", fullContent)
+				event.DiffContent = privacy.NewText(utils.GenerateDiff(filePath, "", fullContent))
 			}
 		}
 
 	case events.ActionCommandExec:
 		payload := events.CommandExecPayload{}
 		if cmd, ok := toolInput["command"].(string); ok {
-			payload.Command = cmd
+			payload.Command = privacy.NewText(cmd)
 		}
 		if toolOutput != nil {
 			if output, ok := toolOutput["output"].(string); ok {
-				payload.Output = truncateString(output, 500)
+				payload.Output = privacy.Preview(output, 500)
 			}
 		}
 		if err := event.SetPayload(payload); err != nil {
@@ -839,11 +840,11 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 			ToolName: toolName,
 		}
 		if input, err := json.Marshal(toolInput); err == nil {
-			payload.Input = input
+			payload.Input = privacy.NewText(string(input))
 		}
 		if toolOutput != nil {
 			if resp, err := json.Marshal(toolOutput); err == nil {
-				payload.Output = resp
+				payload.Output = privacy.NewText(string(resp))
 			}
 		}
 		if err := event.SetPayload(payload); err != nil {

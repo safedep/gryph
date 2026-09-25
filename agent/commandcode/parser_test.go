@@ -9,6 +9,7 @@ import (
 
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -21,9 +22,9 @@ func loadFixture(t *testing.T, name string) []byte {
 	return data
 }
 
-func testPrivacyChecker(t *testing.T) *events.PrivacyChecker {
+func testPrivacyChecker(t *testing.T) *privacy.Redactor {
 	t.Helper()
-	pc, err := events.NewPrivacyChecker(events.DefaultSensitivePatterns(), nil)
+	pc, err := privacy.NewRedactor(privacy.DefaultSensitivePatterns(), nil)
 	require.NoError(t, err)
 	return pc
 }
@@ -54,7 +55,7 @@ func TestParseHookEvent_PreToolUseShell(t *testing.T) {
 
 	payload, err := event.GetCommandExecPayload()
 	require.NoError(t, err)
-	assert.Equal(t, "go test ./... -run TestParse", payload.Command,
+	assert.Equal(t, "go test ./... -run TestParse", payload.Command.Value,
 		"args array must be folded back into the audited command line")
 }
 
@@ -89,7 +90,7 @@ func TestParseHookEvent_PreToolUseWrite(t *testing.T) {
 	payload, err := event.GetFileWritePayload()
 	require.NoError(t, err)
 	assert.Equal(t, "/home/dev/project/main.go", payload.Path)
-	assert.Contains(t, payload.ContentPreview, "package main")
+	assert.Contains(t, payload.ContentPreview.Value, "package main")
 	assert.Contains(t, event.FullContent, "package main")
 }
 
@@ -120,8 +121,8 @@ func TestParseHookEvent_PostToolUseEdit(t *testing.T) {
 	payload, err := event.GetFileWritePayload()
 	require.NoError(t, err)
 	assert.Equal(t, "/home/dev/project/main.go", payload.Path)
-	assert.Equal(t, "func main() {}", payload.OldString)
-	assert.Contains(t, payload.NewString, "println")
+	assert.Equal(t, "func main() {}", payload.OldString.Value)
+	assert.Contains(t, payload.NewString.Value, "println")
 	assert.Contains(t, event.FullContent, "println",
 		"edit new_value beyond the preview boundary must reach the content matcher")
 }
@@ -196,7 +197,7 @@ func TestParseHookEvent_FullLoggingGeneratesDiff(t *testing.T) {
 	event, err := testAdapterWithLevel(t, config.LoggingFull).ParseEvent(ctx, "PostToolUse", data)
 	require.NoError(t, err)
 	require.NotNil(t, event)
-	assert.Contains(t, event.DiffContent, "println")
+	assert.Contains(t, event.DiffContent.Value, "println")
 }
 
 func TestToolNameMapping(t *testing.T) {

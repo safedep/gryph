@@ -9,6 +9,7 @@ import (
 	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 )
 
 type HookInput struct {
@@ -180,8 +181,8 @@ func (a *Adapter) parseWriteCode(sessionID uuid.UUID, agentSessionID string, inp
 			payload.LinesAdded += added
 			payload.LinesRemoved += removed
 		}
-		payload.OldString = truncateString(info.Edits[0].OldString, 200)
-		payload.NewString = truncateString(info.Edits[0].NewString, 200)
+		payload.OldString = privacy.Preview(info.Edits[0].OldString, 200)
+		payload.NewString = privacy.Preview(info.Edits[0].NewString, 200)
 	}
 
 	if a.contentHash && len(info.Edits) > 0 {
@@ -201,7 +202,7 @@ func (a *Adapter) parseWriteCode(sessionID uuid.UUID, agentSessionID string, inp
 		for _, edit := range info.Edits {
 			diffBuilder.WriteString(utils.GenerateDiff(info.FilePath, edit.OldString, edit.NewString))
 		}
-		event.DiffContent = diffBuilder.String()
+		event.DiffContent = privacy.NewText(diffBuilder.String())
 	}
 
 	a.markSensitivePath(event, info.FilePath)
@@ -226,7 +227,7 @@ func parseRunCommand(sessionID uuid.UUID, agentSessionID string, input HookInput
 	}
 
 	payload := events.CommandExecPayload{
-		Command: info.CommandLine,
+		Command: privacy.NewText(info.CommandLine),
 	}
 	if err := event.SetPayload(payload); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
@@ -255,12 +256,12 @@ func parseMCPToolUse(sessionID uuid.UUID, agentSessionID string, input HookInput
 	}
 	if info.MCPToolArguments != nil {
 		if inputBytes, err := json.Marshal(info.MCPToolArguments); err == nil {
-			payload.Input = inputBytes
+			payload.Input = privacy.NewText(string(inputBytes))
 		}
 	}
 	if isPost && info.MCPResult != "" {
 		if resultBytes, err := json.Marshal(map[string]string{"result": info.MCPResult}); err == nil {
-			payload.Output = resultBytes
+			payload.Output = privacy.NewText(string(resultBytes))
 		}
 	}
 	if err := event.SetPayload(payload); err != nil {
@@ -334,7 +335,7 @@ func parseSetupWorktree(sessionID uuid.UUID, agentSessionID string, input HookIn
 		"root_workspace_path": info.RootWorkspacePath,
 	}
 	if inputBytes, err := json.Marshal(inputMap); err == nil {
-		payload.Input = inputBytes
+		payload.Input = privacy.NewText(string(inputBytes))
 	}
 	if err := event.SetPayload(payload); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)

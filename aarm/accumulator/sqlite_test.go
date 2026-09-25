@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/storage/storagetest"
 	"github.com/stretchr/testify/assert"
@@ -213,15 +214,15 @@ func TestSQLiteAccumulator_AppendUnionsClassificationsAndEntities(t *testing.T) 
 	ctx := context.Background()
 
 	a1 := newAction(t, sessionID, model.ActionFileRead, "Read")
-	a1.DataClassifications = []string{"secret"}
+	a1.DataClassifications = []privacy.Class{"secret"}
 	require.NoError(t, acc.Append(ctx, a1))
 
 	a2 := newAction(t, sessionID, model.ActionFileRead, "Read")
-	a2.DataClassifications = []string{"secret", "config"}
+	a2.DataClassifications = []privacy.Class{"secret", "config"}
 	require.NoError(t, acc.Append(ctx, a2))
 
 	a3 := newAction(t, sessionID, model.ActionCommandExec, "Bash")
-	a3.DataClassifications = []string{"config"}
+	a3.DataClassifications = []privacy.Class{"config"}
 	require.NoError(t, acc.Append(ctx, a3))
 
 	snap, err := acc.Snapshot(ctx, sessionID)

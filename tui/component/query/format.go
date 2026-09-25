@@ -88,7 +88,7 @@ func eventTarget(e *events.Event) string {
 		}
 	case events.ActionCommandExec:
 		if p, err := e.GetCommandExecPayload(); err == nil && p != nil {
-			return p.Command
+			return p.Command.Value
 		}
 	case events.ActionToolUse:
 		if p, err := e.GetToolUsePayload(); err == nil && p != nil {
@@ -153,10 +153,10 @@ func formatExpandedEvent(e *events.Event, width int) string {
 			redTextStyle.Render(e.ErrorMessage))
 	}
 
-	if e.DiffContent != "" {
+	if e.DiffContent.Value != "" {
 		sb.WriteString("\n" + dimStyle.Render(" Diff:") + "\n")
 		sb.WriteString(dimStyle.Render(strings.Repeat("─", max(0, width))) + "\n")
-		for _, line := range strings.Split(e.DiffContent, "\n") {
+		for _, line := range strings.Split(e.DiffContent.Value, "\n") {
 			if strings.HasPrefix(line, "+") {
 				sb.WriteString(addedStyle.Render(" "+line) + "\n")
 			} else if strings.HasPrefix(line, "-") {
@@ -169,32 +169,32 @@ func formatExpandedEvent(e *events.Event, width int) string {
 
 	if e.ActionType == events.ActionCommandExec {
 		if p, err := e.GetCommandExecPayload(); err == nil && p != nil {
-			if p.StdoutPreview != "" {
+			if p.StdoutPreview.Value != "" {
 				sb.WriteString("\n" + dimStyle.Render(" stdout:") + "\n")
-				sb.WriteString(" " + p.StdoutPreview + "\n")
+				sb.WriteString(" " + p.StdoutPreview.Value + "\n")
 			}
-			if p.StderrPreview != "" {
+			if p.StderrPreview.Value != "" {
 				sb.WriteString("\n" + dimStyle.Render(" stderr:") + "\n")
-				sb.WriteString(" " + p.StderrPreview + "\n")
+				sb.WriteString(" " + p.StderrPreview.Value + "\n")
 			}
 		}
 	}
 
 	if e.ActionType == events.ActionToolUse {
 		if p, err := e.GetToolUsePayload(); err == nil && p != nil {
-			if len(p.Input) > 0 {
+			if len(p.Input.Value) > 0 {
 				sb.WriteString("\n" + dimStyle.Render(" Input:") + "\n")
 				sb.WriteString(dimStyle.Render(strings.Repeat("─", max(0, width))) + "\n")
-				sb.WriteString(formatJSON(p.Input, width) + "\n")
+				sb.WriteString(formatJSON(json.RawMessage(p.Input.Value), width) + "\n")
 			}
-			if len(p.Output) > 0 {
+			if len(p.Output.Value) > 0 {
 				sb.WriteString("\n" + dimStyle.Render(" Output:") + "\n")
 				sb.WriteString(dimStyle.Render(strings.Repeat("─", max(0, width))) + "\n")
-				sb.WriteString(formatJSON(p.Output, width) + "\n")
+				sb.WriteString(formatJSON(json.RawMessage(p.Output.Value), width) + "\n")
 			}
-			if p.OutputPreview != "" && len(p.Output) == 0 {
+			if p.OutputPreview.Value != "" && len(p.Output.Value) == 0 {
 				sb.WriteString("\n" + dimStyle.Render(" Output preview:") + "\n")
-				sb.WriteString(" " + p.OutputPreview + "\n")
+				sb.WriteString(" " + p.OutputPreview.Value + "\n")
 			}
 		}
 	}

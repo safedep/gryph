@@ -43,7 +43,7 @@ func computeSummary(evts []*events.Event) sessionSummary {
 		case events.ActionCommandExec:
 			cs := cmdSummary{}
 			if p, err := e.GetCommandExecPayload(); err == nil && p != nil {
-				cs.command = p.Command
+				cs.command = p.Command.Value
 				cs.exitCode = p.ExitCode
 				if p.ExitCode != 0 {
 					s.commandsFailed++

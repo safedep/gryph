@@ -13,6 +13,7 @@ import (
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	coresecurity "github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/tui"
@@ -213,4 +214,20 @@ func TestResolveEditor_Precedence(t *testing.T) {
 
 	t.Setenv("VISUAL", "code -w")
 	assert.Equal(t, "code -w", resolveEditor())
+}
+
+func TestNewClassifier_SkipsUnknownClass(t *testing.T) {
+	cfg := config.Default()
+	cfg.Policy.Classify.ExtraPatterns = map[string][]string{
+		"secret":        {"**/*.vault"},
+		"customer_data": {"**/customers.csv"},
+	}
+
+	h := newClassifier(cfg)
+	require.NotNil(t, h)
+	assert.Equal(t, []privacy.Class{privacy.ClassSecret}, h.ClassifyPaths([]string{"/work/a.vault"}, ""))
+	assert.Empty(t, h.ClassifyPaths([]string{"/work/customers.csv"}, ""))
+
+	cfg.Policy.Classify.Enabled = false
+	assert.Nil(t, newClassifier(cfg))
 }

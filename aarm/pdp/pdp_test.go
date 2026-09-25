@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -223,7 +224,7 @@ rules:
 	t.Run("data classification membership matches", func(t *testing.T) {
 		action := &model.Action{
 			Type:                model.ActionToolUse,
-			DataClassifications: []string{"secret"},
+			DataClassifications: []privacy.Class{"secret"},
 		}
 		got, err := engine.Evaluate(context.Background(), action, nil)
 		require.NoError(t, err)

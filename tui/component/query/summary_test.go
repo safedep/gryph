@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -52,12 +53,12 @@ func TestComputeSummary(t *testing.T) {
 				{
 					ActionType:   events.ActionCommandExec,
 					ResultStatus: events.ResultSuccess,
-					Payload:      mustJSON(events.CommandExecPayload{Command: "go test", ExitCode: 0}),
+					Payload:      mustJSON(events.CommandExecPayload{Command: privacy.NewText("go test"), ExitCode: 0}),
 				},
 				{
 					ActionType:   events.ActionCommandExec,
 					ResultStatus: events.ResultSuccess,
-					Payload:      mustJSON(events.CommandExecPayload{Command: "go build", ExitCode: 1}),
+					Payload:      mustJSON(events.CommandExecPayload{Command: privacy.NewText("go build"), ExitCode: 1}),
 				},
 			},
 			wantCmds:   2,
@@ -79,7 +80,7 @@ func TestComputeSummary(t *testing.T) {
 			name: "rejected counts as blocked",
 			events: []*events.Event{
 				{ActionType: events.ActionCommandExec, ResultStatus: events.ResultRejected,
-					Payload: mustJSON(events.CommandExecPayload{Command: "rm -rf /", ExitCode: 0})},
+					Payload: mustJSON(events.CommandExecPayload{Command: privacy.NewText("rm -rf /"), ExitCode: 0})},
 			},
 			wantCmds:    1,
 			wantBlocked: 1,

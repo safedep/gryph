@@ -219,6 +219,7 @@ var (
 		{Name: "error_message", Type: field.TypeString, Nullable: true},
 		{Name: "payload", Type: field.TypeJSON, Nullable: true},
 		{Name: "diff_content", Type: field.TypeString, Nullable: true, Size: 2147483647, SchemaType: map[string]string{"sqlite3": "text"}},
+		{Name: "diff_label", Type: field.TypeJSON, Nullable: true},
 		{Name: "raw_event", Type: field.TypeJSON, Nullable: true},
 		{Name: "conversation_context", Type: field.TypeString, Nullable: true, Size: 2147483647, SchemaType: map[string]string{"sqlite3": "text"}},
 		{Name: "is_sensitive", Type: field.TypeBool, Default: false},
@@ -238,7 +239,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "audit_events_sessions_events",
-				Columns:    []*schema.Column{AuditEventsColumns[22]},
+				Columns:    []*schema.Column{AuditEventsColumns[23]},
 				RefColumns: []*schema.Column{SessionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -252,7 +253,7 @@ var (
 			{
 				Name:    "auditevent_session_id",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[22]},
+				Columns: []*schema.Column{AuditEventsColumns[23]},
 			},
 			{
 				Name:    "auditevent_agent_name",
@@ -272,7 +273,7 @@ var (
 			{
 				Name:    "auditevent_session_id_tool_call_id",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[22], AuditEventsColumns[20]},
+				Columns: []*schema.Column{AuditEventsColumns[23], AuditEventsColumns[21]},
 			},
 		},
 	}

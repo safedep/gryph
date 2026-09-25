@@ -17,6 +17,7 @@ import (
 	"github.com/safedep/gryph/aarm/mediation"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/receipt"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/storage/storagetest"
 	"github.com/stretchr/testify/require"
@@ -208,7 +209,7 @@ func NewReferenceMediator(t *testing.T, opts ...Option) *ReferenceBundle {
 		RoleScope:       "uid=0",
 	})
 	adapter := mediation.NewHookAdapter(
-		mediation.WithClassifier(classify.NewFailSafe(classify.NewHeuristic(), classify.LabelUnknownSensitive)),
+		mediation.WithClassifier(classify.NewFailSafe(classify.NewHeuristic(), privacy.ClassUnknownSensitive)),
 		mediation.WithInjectionScorer(injectscore.NewHeuristic()),
 		mediation.WithIdentityCapturer(cap),
 	)

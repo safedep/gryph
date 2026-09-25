@@ -123,8 +123,8 @@ func logHookError(ctx context.Context, app *App, agentName, hookType string, raw
 			rawEvent = rawEvent[:maxRawEventSize]
 		}
 
-		if app.PrivacyChecker != nil {
-			rawEvent = app.PrivacyChecker.Redact(rawEvent)
+		if app.Redactor != nil {
+			rawEvent = app.Redactor.Redact(rawEvent)
 		}
 
 		details["raw_event"] = rawEvent

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage"
 	"github.com/stretchr/testify/assert"
@@ -28,7 +29,7 @@ func seedFileWriteWithDiff(env *testEnv) string {
 		evt.Timestamp = time.Now().UTC().Add(-30 * time.Minute)
 		evt.ResultStatus = events.ResultSuccess
 		evt.ToolName = "Write"
-		evt.DiffContent = "--- a/main.go\n+++ b/main.go\n@@ -1,3 +1,4 @@\n package main\n+\n+import \"fmt\"\n"
+		evt.DiffContent = privacy.NewText("--- a/main.go\n+++ b/main.go\n@@ -1,3 +1,4 @@\n package main\n+\n+import \"fmt\"\n")
 		payload := &events.FileWritePayload{Path: "/tmp/project/main.go", LinesAdded: 2, LinesRemoved: 0}
 		require.NoError(env.t, evt.SetPayload(payload))
 		require.NoError(env.t, store.SaveEvent(ctx, evt))

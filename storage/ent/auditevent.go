@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/session"
 )
@@ -46,6 +47,8 @@ type AuditEvent struct {
 	Payload map[string]interface{} `json:"payload,omitempty"`
 	// DiffContent holds the value of the "diff_content" field.
 	DiffContent string `json:"diff_content,omitempty"`
+	// Content label of diff_content
+	DiffLabel privacy.Label `json:"diff_label,omitempty"`
 	// RawEvent holds the value of the "raw_event" field.
 	RawEvent map[string]interface{} `json:"raw_event,omitempty"`
 	// ConversationContext holds the value of the "conversation_context" field.
@@ -97,7 +100,7 @@ func (*AuditEvent) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case auditevent.FieldLinkedEventID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case auditevent.FieldPayload, auditevent.FieldRawEvent:
+		case auditevent.FieldPayload, auditevent.FieldDiffLabel, auditevent.FieldRawEvent:
 			values[i] = new([]byte)
 		case auditevent.FieldIsSensitive:
 			values[i] = new(sql.NullBool)
@@ -210,6 +213,14 @@ func (_m *AuditEvent) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field diff_content", values[i])
 			} else if value.Valid {
 				_m.DiffContent = value.String
+			}
+		case auditevent.FieldDiffLabel:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field diff_label", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.DiffLabel); err != nil {
+					return fmt.Errorf("unmarshal field diff_label: %w", err)
+				}
 			}
 		case auditevent.FieldRawEvent:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -349,6 +360,9 @@ func (_m *AuditEvent) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("diff_content=")
 	builder.WriteString(_m.DiffContent)
+	builder.WriteString(", ")
+	builder.WriteString("diff_label=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DiffLabel))
 	builder.WriteString(", ")
 	builder.WriteString("raw_event=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RawEvent))

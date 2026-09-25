@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -753,7 +754,12 @@ func TestSQLiteStore_QueryEventsWithCommandPattern(t *testing.T) {
 	}
 
 	for i, cmd := range commands {
-		payload, _ := json.Marshal(events.CommandExecPayload{Command: cmd})
+		payload, err := json.Marshal(events.CommandExecPayload{Command: privacy.NewText(cmd)})
+		require.NoError(t, err)
+		if cmd == "git status" {
+			// A row from before content labels holds the command as a string.
+			payload = []byte(`{"command":"git status","exit_code":0}`)
+		}
 		event := &events.Event{
 			ID:           uuid.New(),
 			SessionID:    sessionID,
@@ -764,8 +770,7 @@ func TestSQLiteStore_QueryEventsWithCommandPattern(t *testing.T) {
 			ResultStatus: events.ResultSuccess,
 			Payload:      payload,
 		}
-		err := store.SaveEvent(ctx, event)
-		require.NoError(t, err)
+		require.NoError(t, store.SaveEvent(ctx, event))
 	}
 
 	tests := []struct {
@@ -1286,7 +1291,7 @@ func TestSQLiteStore_QuerySessionsEventSubQuery(t *testing.T) {
 		Payload:      payload1,
 	}))
 
-	payload2, _ := json.Marshal(events.CommandExecPayload{Command: "npm test"})
+	payload2, _ := json.Marshal(events.CommandExecPayload{Command: privacy.NewText("npm test")})
 	require.NoError(t, store.SaveEvent(ctx, &events.Event{
 		ID:           uuid.New(),
 		SessionID:    sess2.ID,
