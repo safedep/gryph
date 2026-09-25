@@ -218,6 +218,7 @@ func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, r
 	if err := a.buildToolPayload(event, actionType, input.ToolInput, toolResponse); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
+	event.ObserveOutput(toolResponse)
 
 	a.markSensitivePaths(event, actionType, input.ToolInput)
 

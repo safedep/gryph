@@ -456,3 +456,25 @@ func TestGenerateContinueResponse_GuidanceCarriesMessage(t *testing.T) {
 	assert.Equal(t, true, result["continue"])
 	assert.Equal(t, "note this", result["user_message"])
 }
+
+func TestMCPSource(t *testing.T) {
+	cases := []struct {
+		url, command, want string
+	}{
+		{"https://MCP.Example.com/sse", "", "mcp.example.com"},
+		{"", "/usr/local/bin/github-mcp-server stdio", "github-mcp-server"},
+		{"", "", ""},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.want, mcpSource(tc.url, tc.command))
+	}
+}
+
+func TestParseBeforeMCPExecution_Origin(t *testing.T) {
+	data := []byte(`{"conversation_id":"c","generation_id":"g","hook_event_name":"beforeMCPExecution",
+		"workspace_roots":["/work"],"tool_name":"search","tool_input":{"q":"x"},"url":"https://mcp.example.com/sse"}`)
+	event, err := testAdapter(t).ParseEvent(context.Background(), "beforeMCPExecution", data)
+	require.NoError(t, err)
+	assert.Equal(t, privacy.OriginMCP, event.Origin)
+	assert.Equal(t, "mcp.example.com", event.OriginSource)
+}

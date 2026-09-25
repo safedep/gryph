@@ -36,6 +36,8 @@ func fullRequest() *HookRequest {
 	event.Payload = json.RawMessage(`{"command":"ls"}`)
 	event.DiffContent = privacy.NewText("diff")
 	event.RawEvent = json.RawMessage(`{"raw":true}`)
+	event.Origin = privacy.OriginMCP
+	event.OriginSource = "github"
 	event.IsSensitive = true
 	event.SubagentID = "sub-1"
 	event.SubagentType = "Explore"
@@ -67,6 +69,8 @@ func TestHookRequest_CarriesInMemoryEventFields(t *testing.T) {
 	assert.Equal(t, "/tmp/transcript.jsonl", event.TranscriptPath)
 	assert.Equal(t, events.HookType("PreToolUse"), event.HookType)
 	assert.Equal(t, "full content", event.FullContent)
+	assert.Equal(t, privacy.OriginMCP, event.Origin)
+	assert.Equal(t, "github", event.OriginSource)
 
 	assert.Empty(t, req.Event.TranscriptPath, "each value has one source")
 	assert.Empty(t, req.Event.HookType)

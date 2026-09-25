@@ -420,3 +420,38 @@
   tier: P1
   guarantee: "One gryph install writes the prompt hook of every agent that has one: UserPromptSubmit, beforeSubmitPrompt, BeforeAgent, pre_user_prompt, chat.message and the Pi input event."
   labels: [install, prompt]
+
+- id: context/tags/allow-rule-tags-event
+  title: "an allow rule with tags labels an event for later rules"
+  category: context
+  tier: P0
+  guarantee: "A rule with action allow and tags labels the event and does not change the decision. The entry stores the tag, tags_seen records its first sequence, and a later rule on context.tags_seen blocks."
+  labels: [context, tags, policy]
+
+- id: context/tags/all-matched-rules-tag
+  title: "every matched rule adds its tags to the entry"
+  category: context
+  tier: P1
+  guarantee: "The context entry stores the union of the tags of every matched rule, at any decision, not only the tags of the winning rule."
+  labels: [context, tags, policy]
+
+- id: context/tags/content-pattern-on-observation
+  title: "content_patterns on an observation read the tool output"
+  category: context
+  tier: P1
+  guarantee: "For a post event, content_patterns read the tool output. A tag rule on action.kind observation tags a command whose output holds an AWS key."
+  labels: [context, tags, observation]
+
+- id: context/observation/origin-recorded
+  title: "the context records the origin of content"
+  category: context
+  tier: P1
+  guarantee: "A web tool gives the origin web, an mcp__<server>__ tool gives mcp with the server, and a read outside the working directory gives file_external. The entry, origins_seen, action.origin, action.source and the output label carry it."
+  labels: [context, observation, origin]
+
+- id: policy/validate/tag-name-format
+  title: "policy validation rejects a bad tag name"
+  category: policy
+  tier: P2
+  guarantee: "gryph policy validate accepts lower-case tag names with digits, underscores and hyphens, and rejects any other name with the rule and the tag in the message. An installed policy with a legacy tag still loads and enforces."
+  labels: [policy, tags, validate]

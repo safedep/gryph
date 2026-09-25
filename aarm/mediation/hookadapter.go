@@ -41,6 +41,7 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 		return nil, nil, fmt.Errorf("mediation: event must not be nil")
 	}
 
+	event.ClaimOrigin()
 	action := &model.Action{
 		ID:             uuid.New(),
 		Timestamp:      event.Timestamp,
@@ -53,6 +54,9 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 		WorkingDir:     event.WorkingDirectory,
 		SubagentID:     event.SubagentID,
 		SubagentType:   event.SubagentType,
+		Kind:           entryKind(event),
+		Origin:         event.Origin,
+		Source:         event.OriginSource,
 	}
 
 	if sess != nil {
@@ -89,16 +93,12 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 // The entry copies the kind, the phase, and the tool call link from the
 // event, and takes the content digest from the content labels.
 func newEntry(event *events.Event, action *model.Action) *model.ContextEntry {
-	kind := event.Kind
-	if kind == "" {
-		kind = events.KindAction
-	}
 	return &model.ContextEntry{
 		ID:              action.ID,
 		SessionID:       action.SessionID,
 		EventID:         action.EventID,
 		LinkedEventID:   event.LinkedEventID,
-		Kind:            kind,
+		Kind:            action.Kind,
 		Timestamp:       action.Timestamp,
 		ActionType:      action.Type,
 		Tool:            action.Tool,
@@ -108,8 +108,30 @@ func newEntry(event *events.Event, action *model.Action) *model.ContextEntry {
 		InjectionScore:  action.InjectionScore,
 		ContentDigest:   event.ContentDigest(),
 		Result:          entryEventResult(event),
-		Origin:          entryOrigin(event),
+		Origin:          action.Origin,
+		Target:          entryTarget(action),
 	}
+}
+
+// entryKind is the kind that the decision service set, or the kind that
+// KindOf gives when the Mediator runs without the decision service.
+func entryKind(event *events.Event) model.EntryKind {
+	if event.Kind != "" {
+		return event.Kind
+	}
+	return events.KindOf(event, event.LinkedEventID != uuid.Nil)
+}
+
+// entryTarget names the MCP server and tool of an MCP entry.
+func entryTarget(action *model.Action) model.DerivedTarget {
+	if action.Origin != privacy.OriginMCP {
+		return model.DerivedTarget{}
+	}
+	target := model.DerivedTarget{MCPServer: action.Source, MCPTool: action.Tool}
+	if server, tool, ok := events.SplitMCPTool(action.Tool); ok {
+		target.MCPServer, target.MCPTool = server, tool
+	}
+	return target
 }
 
 // entryEventResult is the result that a post event reports. A pre event has
@@ -119,15 +141,6 @@ func entryEventResult(event *events.Event) model.ResultStatus {
 		return ""
 	}
 	return model.ResultStatus(event.ResultStatus)
-}
-
-// entryOrigin returns the origin that the event content claims. A prompt
-// with no claimed origin has the origin unknown.
-func entryOrigin(event *events.Event) privacy.Origin {
-	if event.ActionType == events.ActionUserPrompt && event.Origin == "" {
-		return privacy.OriginUnknown
-	}
-	return event.Origin
 }
 
 func extractParameters(event *events.Event) (model.Parameters, error) {

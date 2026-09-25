@@ -260,3 +260,28 @@ func TestSQLiteAccumulator_ConfirmIntent(t *testing.T) {
 
 	require.NoError(t, acc.ConfirmIntent(ctx, uuid.New()), "an unknown entry is not an error")
 }
+
+func TestSQLiteAccumulator_TagsAndOrigins(t *testing.T) {
+	acc, _ := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	read := newEntry(sessionID, events.KindAction, model.ActionFileRead, "Read")
+	read.Tags = []string{"secret_read"}
+	read.Origin = privacy.OriginFileProject
+	require.NoError(t, acc.Append(ctx, read))
+
+	web := newEntry(sessionID, events.KindObservation, model.ActionToolUse, "mcp__github__get_issue")
+	web.Tags = []string{"secret_read", "untrusted_input"}
+	web.Origin = privacy.OriginMCP
+	web.Target = model.DerivedTarget{MCPServer: "github", MCPTool: "get_issue"}
+	require.NoError(t, acc.Append(ctx, web))
+
+	pending := newEntry(sessionID, events.KindAction, model.ActionCommandExec, "Bash")
+	pending.Origin = privacy.OriginCommand
+	pending.Tags = []string{"ignored"}
+	snap, err := acc.Snapshot(ctx, sessionID, pending)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]int64{"secret_read": 1, "untrusted_input": 2}, snap.TagsSeen, "each tag keeps the sequence of its first entry")
+	assert.Equal(t, []string{"file_project", "mcp:github", "command"}, snap.OriginsSeen, "the pending origin counts")
+}

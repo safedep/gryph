@@ -3,6 +3,7 @@ package accumulator
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -173,6 +174,8 @@ func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID, p
 		Errors:              state.Errors,
 		ToolsUsed:           slices.Clone(state.ToolsUsed),
 		ClassificationsSeen: slices.Clone(state.ClassificationsSeen),
+		TagsSeen:            maps.Clone(state.TagsSeen),
+		OriginsSeen:         slices.Clone(state.OriginsSeen),
 		EntitiesSeen:        slices.Clone(state.EntitiesSeen),
 		IntentAvailable:     state.LastIntentSeq != nil,
 		ActionsSinceIntent:  state.ActionsSinceIntent,
@@ -196,6 +199,7 @@ func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID, p
 		delta := stateDelta(pending)
 		snap.ToolsUsed = addNew(snap.ToolsUsed, delta.Tools)
 		snap.ClassificationsSeen = addNew(snap.ClassificationsSeen, delta.Classifications)
+		snap.OriginsSeen = addNew(snap.OriginsSeen, delta.Origins)
 		switch entryKind(pending) {
 		case events.KindIntent:
 			snap.IntentAvailable = true

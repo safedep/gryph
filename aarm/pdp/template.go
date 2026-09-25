@@ -15,6 +15,9 @@ type templateAction struct {
 	Agent      string
 	WorkingDir string
 	Project    string
+	Kind       string
+	Origin     string
+	Source     string
 	Params     templateParams
 }
 
@@ -39,6 +42,9 @@ type templateContext struct {
 	ToolsUsed           []string
 	SessionDurationMs   int64
 	ClassificationsSeen []string
+	TagsSeen            []string
+	TagSeq              map[string]int64
+	OriginsSeen         []string
 	EntitiesSeen        []string
 	SemanticDrift       float64
 	IntentAvailable     bool
@@ -74,6 +80,9 @@ func newTemplateAction(action *model.Action) templateAction {
 		Agent:      action.Agent,
 		WorkingDir: action.WorkingDir,
 		Project:    action.Project,
+		Kind:       string(action.Kind),
+		Origin:     string(action.Origin),
+		Source:     action.Source,
 		Params:     params,
 	}
 }
@@ -92,6 +101,9 @@ func newTemplateContext(snapshot *model.ContextSnapshot) templateContext {
 		ToolsUsed:           snapshot.ToolsUsed,
 		SessionDurationMs:   snapshot.SessionDuration.Milliseconds(),
 		ClassificationsSeen: snapshot.ClassificationsSeen,
+		TagsSeen:            tagNames(snapshot.TagsSeen),
+		TagSeq:              tagSeq(snapshot.TagsSeen),
+		OriginsSeen:         nonNil(snapshot.OriginsSeen),
 		EntitiesSeen:        snapshot.EntitiesSeen,
 		SemanticDrift:       snapshot.SemanticDrift,
 		IntentAvailable:     snapshot.IntentAvailable,

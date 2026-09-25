@@ -1,0 +1,38 @@
+# For a post event, the adapter sets the content that content_patterns read
+# to the tool output. A tag rule on the observation matches what the agent
+# read. The file name does not look like a secret. The session ID e046120e
+# derives from the agent session ID s-obs.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin pre.json
+exec gryph _hook claude-code PreToolUse
+stdin post.json
+exec gryph _hook claude-code PostToolUse
+
+exec gryph policy context --session e046120e --format json --no-color
+stdout '"kind": "observation"'
+stdout '"secret_read": 2'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: tag-secret-content
+    action: allow
+    tags: [secret_read]
+    match:
+      action_types: [file_read, command_exec, tool_use]
+      content_patterns: ['AKIA[0-9A-Z]{16}']
+    condition: 'action.kind == "observation"'
+-- pre.json --
+{"session_id": "s-obs", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "cat notes.txt"}, "tool_use_id": "tu-cat"}
+-- post.json --
+{"session_id": "s-obs", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "cat notes.txt"}, "tool_response": {"stdout": "aws key AKIAABCDEFGHIJKLMNOP", "exitCode": 0},
+ "tool_use_id": "tu-cat"}

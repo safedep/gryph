@@ -226,13 +226,13 @@ func TestHookAdapter_Normalize_AppliesClassifierAndScorer(t *testing.T) {
 		WithInjectionScorer(stubScorer{score: 0.6}),
 	)
 
-	t.Run("file_read gets classifications, no score", func(t *testing.T) {
+	t.Run("file_read gets classifications and the stub scorer result", func(t *testing.T) {
 		event := mustEvent(t, uuid.New(), uuid.New(), events.ActionFileRead, "Read", now,
 			events.FileReadPayload{Path: "/work/.env"})
 		action, _, err := adapter.Normalize(context.Background(), event, nil)
 		require.NoError(t, err)
 		assert.Equal(t, []privacy.Class{privacy.ClassSecret}, action.DataClassifications)
-		assert.Equal(t, float32(0), action.InjectionScore, "score is gated to tool_use only")
+		assert.Equal(t, float32(0.6), action.InjectionScore, "the scorer decides which actions it reads")
 	})
 
 	t.Run("tool_use gets classifications and score", func(t *testing.T) {

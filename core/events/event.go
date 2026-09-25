@@ -76,8 +76,11 @@ type Event struct {
 	// a post event when Gryph recorded the pre event.
 	LinkedEventID uuid.UUID `json:"linked_event_id,omitempty,omitzero"`
 	// Origin is where the content of the event came from, as the adapter
-	// claims it. The context entry and the content labels store it.
+	// claims it. ClaimOrigin fills it from the event facts when the adapter
+	// does not. The context entry and the content labels store it.
 	Origin privacy.Origin `json:"-"`
+	// OriginSource names the MCP server when Origin is OriginMCP.
+	OriginSource string `json:"-"`
 }
 
 // NewEvent creates a new Event with a generated UUID and current timestamp.

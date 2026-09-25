@@ -191,6 +191,11 @@ func (a *Adapter) parseToolResult(sessionID uuid.UUID, agentSessionID string, ba
 	if err := a.buildPayloadForResult(event, actionType, input.ToolName, input.Input, input.Content); err != nil {
 		return nil, fmt.Errorf("failed to build result payload: %w", err)
 	}
+	texts := make([]any, 0, len(input.Content))
+	for _, c := range input.Content {
+		texts = append(texts, c.Text)
+	}
+	event.ObserveOutput(texts)
 
 	a.markSensitivePaths(event, actionType, input.Input)
 

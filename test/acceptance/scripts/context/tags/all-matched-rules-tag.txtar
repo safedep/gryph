@@ -1,0 +1,50 @@
+# The context entry stores the tags of every rule that matched, at any
+# decision, not only the tags of the winning rule. The session ID 152aa6cb
+# derives from the agent session ID s-multi.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin read.json
+exec gryph _hook claude-code PreToolUse
+stderr 'config-read'
+
+exec gryph policy context --session 152aa6cb --format json --no-color
+stdout '"tags": \[\n\s+"audit",\n\s+"config_file",\n\s+"dotfile"\n\s+\]'
+stdout '"decision": "warn"'
+stdout '"audit": 1'
+stdout '"config_file": 1'
+stdout '"dotfile": 1'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: tag-dotfile
+    action: allow
+    tags: [dotfile]
+    match:
+      action_types: [file_read]
+      file_patterns: ["**/.*"]
+      file_access: [read]
+  - id: tag-config
+    action: allow
+    tags: [config_file, audit]
+    match:
+      action_types: [file_read]
+      file_patterns: ["**/*.yml"]
+      file_access: [read]
+  - id: warn-config-read
+    action: warn
+    tags: [audit]
+    match:
+      action_types: [file_read]
+      file_patterns: ["**/*.yml"]
+      file_access: [read]
+    message: "config-read: the agent reads a config file"
+-- read.json --
+{"session_id": "s-multi", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "/home/user/project/.ci.yml"}, "tool_use_id": "tu-1"}

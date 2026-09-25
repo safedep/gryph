@@ -11,6 +11,7 @@ import (
 	"context"
 
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/security"
 )
 
@@ -31,6 +32,8 @@ type HookRequest struct {
 	Event          events.Event    `json:"event"`
 	TranscriptPath string          `json:"transcript_path,omitempty"`
 	FullContent    string          `json:"full_content,omitempty"`
+	Origin         privacy.Origin  `json:"origin,omitempty"`
+	OriginSource   string          `json:"origin_source,omitempty"`
 }
 
 // HookResponse is the decision the hook side renders for the agent.
@@ -64,6 +67,8 @@ func NewHookRequest(event *events.Event) *HookRequest {
 		Event:          *event,
 		TranscriptPath: event.TranscriptPath,
 		FullContent:    event.FullContent,
+		Origin:         event.Origin,
+		OriginSource:   event.OriginSource,
 	}
 	req.Event.TranscriptPath = ""
 	req.Event.HookType = ""
@@ -76,5 +81,7 @@ func (r *HookRequest) event() *events.Event {
 	event.TranscriptPath = r.TranscriptPath
 	event.HookType = r.HookType
 	event.FullContent = r.FullContent
+	event.Origin = r.Origin
+	event.OriginSource = r.OriginSource
 	return &event
 }

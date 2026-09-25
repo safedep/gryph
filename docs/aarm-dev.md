@@ -155,11 +155,26 @@ Conditions read two maps. `action.*` fields come from `actionActivation`:
 `context.*` fields come from `contextActivation`: `total_actions`,
 `files_read`, `files_written`, `commands_executed`, `network_requests`,
 `errors`, `tools_used`, `session_duration_ms`, `classifications_seen`,
-`entities_seen`, `semantic_drift`, `intent_available`,
-`actions_since_intent`. `Snapshot` computes the intent fields with the pending
-entry: a pending intent sets `intent_available` and resets the count, and a
-pending action adds one. `contextFieldEmpty` never reports an intent field as
-empty, so the fresh-session defer does not hide a missing intent.
+`tags_seen`, `tag_seq`, `origins_seen`, `entities_seen`, `semantic_drift`,
+`intent_available`, `actions_since_intent`. `Snapshot` computes the intent
+fields with the pending entry: a pending intent sets `intent_available` and
+resets the count, and a pending action adds one. The pending origin joins
+`origins_seen`. The pending entry has no tags yet, because the PDP decides
+all rules in one pass. `contextFieldEmpty` never reports an intent, tag or
+origin field as empty, so the fresh-session defer does not hide these facts.
+
+`action.kind`, `action.origin` and `action.source` come from the event.
+`events.Event.ClaimOrigin` fills the origin from the tool name, the action
+type and the path when the adapter did not set it. The decision service calls
+it before the label step, and `mediation.Normalize` calls it again for a
+Mediator that runs alone. `labelEvent` gives the output values the event
+origin and the other values the origin `agent`. A post event sets
+`FullContent` from the tool response through `Event.ObserveOutput`, so
+`content_patterns` and the injection scorer read what the agent received.
+
+`EvaluationResult.MatchedTags` is the sorted union of the tags of every
+matched rule. `appendEntry` stores it on the entry, and the accumulator adds
+each new tag to `tags_seen` with the entry sequence.
 
 Conditions run under a 100 ms timeout and a CEL cost limit (`celCostLimit`,
 100000). A 90-character `matches()` regex on an 8 KiB prompt costs about

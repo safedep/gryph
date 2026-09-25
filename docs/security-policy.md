@@ -161,15 +161,20 @@ Available variables:
 action.type / tool / operation / agent / working_dir / project
 action.params.{path, command, args, url, size_bytes, lines_added, lines_removed, content}
 action.data_classifications        list, set by the heuristic classifier
-action.injection_score             float 0..1, set for tool_use actions only
+action.injection_score             float 0..1, for tool calls, observations and intents.
+                                   Each indicator phrase counts once, as whole words.
+action.kind                        intent, action, or observation
+action.origin                      where the content came from, as the adapter claims it
+action.source                      the MCP server of an mcp origin
 action.human_principal             captured identity, see Identity capture
 action.service_identity            CI / service identity, see Identity capture
 action.role_scope                  OS uid/gid + asserted scopes
 action.gryph_hook                  true when a shell command runs gryph _hook
 context.{total_actions, files_read, files_written, commands_executed,
          network_requests, errors, tools_used, session_duration_ms,
-         classifications_seen, entities_seen, semantic_drift,
-         intent_available, actions_since_intent}
+         classifications_seen, tags_seen, tag_seq, origins_seen,
+         entities_seen, semantic_drift, intent_available,
+         actions_since_intent}
 ```
 
 `action.data_classifications` carries labels like `secret`, `pii`, `source_code`, `config`, `git_internal`, `external_url`. `context.classifications_seen` is the running union across the session. `semantic_drift` is reserved and reads as `0.0` today.
@@ -197,6 +202,69 @@ The intent fields trust the prompt events that reach `gryph _hook`. The hook inp
 - A rule with no `action_types`.
 
 A rule that must stop prompts must list `user_prompt` in `action_types`. Gryph logs a warning at policy load, and `gryph policy validate` prints one, for a rule that names one of these tool names.
+
+### Facts and tags
+
+The session context records facts. Your policy decides what the facts mean.
+
+| Value | Set by | Notes |
+|---|---|---|
+| `kind`, `phase` | The adapter's `Hooks()` table | Fixed per hook |
+| `origin`, `source` | The adapter, as a claim | From the tool name and the path |
+| `data_classifications` | The built-in classifier | A closed set. A fact, not a decision |
+| `tags` | Only your tag rules | Gryph ships no tag rule |
+| The decision | Only your rules, plus self-protection | - |
+
+`action.origin` is one of `user`, `agent`, `file_project`, `file_external`, `command`, `web`, `mcp`, and `unknown`. A web tool (`WebFetch`, `WebSearch`, `browser_*`) or a network request gives `web`. An `mcp__<server>__<tool>` tool gives `mcp`, and `action.source` names the server. A read inside the working directory gives `file_project`, and any other read, including a `~` path, gives `file_external`. A read with no path or no working directory gives `unknown`. The origin is a claim about the path string, and Gryph does not resolve symbolic links. A shell command gives `command`, and a write gives `agent`. Gryph does not decide which origin is trusted.
+
+A server name can hold `__`, so a tool name such as `mcp__github__x__get` has no single reading. `action.source` is then empty, so a rule that trusts one server fails closed.
+
+For a post event, `content_patterns` and the scorer read the tool output. So a rule on an observation matches what the agent received.
+
+A rule with `action: allow` and `tags` labels an event and does not change the decision, because `allow` has the lowest precedence. The context entry stores the tags of every rule that matched, at any decision. `context.tags_seen` lists the tags of earlier entries, and `context.tag_seq` maps each tag to the sequence of the first entry that has it. A rule cannot see the tags of the event under evaluation. `context.origins_seen` lists the origins of the session, with `mcp:<server>` for MCP. Tags do not make two rules conflict.
+
+A tag that the session does not have is not a key of `context.tag_seq`. Guard the lookup, or use an optional lookup:
+
+```
+"secret_read" in context.tag_seq && context.tag_seq["secret_read"] > 3
+context.tag_seq[?"secret_read"].orValue(0) > 3
+```
+
+In a message template, `{{index .Context.TagSeq "secret_read"}}` gives 0 for a missing tag.
+
+A tag name starts with a lower-case letter, holds lower-case letters, digits, `_` and `-`, and has at most 63 characters. `gryph policy validate` and `gryph policy install` reject any other name. An installed policy with another name still loads with a warning, so an upgrade does not stop your hooks.
+
+This policy tags a secret read by path or by content, and blocks a network command after it:
+
+```yaml
+- id: tag-secret-read
+  action: allow
+  tags: [secret_read]
+  match:
+    action_types: [file_read, command_exec]
+    file_patterns: ["**/.env", "**/.env.*", "**/*.pem", "**/.aws/credentials"]
+    file_access: [read]
+- id: tag-secret-content
+  action: allow
+  tags: [secret_read]
+  match:
+    action_types: [file_read, command_exec, tool_use]
+    content_patterns: ['AKIA[0-9A-Z]{16}', '-----BEGIN [A-Z ]*PRIVATE KEY-----']
+  condition: 'action.kind == "observation"'
+- id: tag-untrusted-input
+  action: allow
+  tags: [untrusted_input]
+  match:
+    action_types: [tool_use, network_request]
+  condition: 'action.origin in ["web", "mcp"]'
+- id: block-egress-after-secret-read
+  action: block
+  severity: high
+  match:
+    action_types: [command_exec]
+  condition: '"secret_read" in context.tags_seen && action.params.command.contains("curl")'
+  message: "Blocked: network access after a secret read in this session."
+```
 
 `action.human_principal`, `action.service_identity`, and `action.role_scope` carry the AARM R6 identity fields. They are empty strings when capture is disabled or the resolver could not derive a value. See [Identity capture](#identity-capture).
 

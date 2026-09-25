@@ -236,6 +236,7 @@ func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, b
 	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, input.ToolResponse); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
+	event.ObserveOutput(input.ToolResponse)
 
 	if isFailure {
 		event.ResultStatus = events.ResultError

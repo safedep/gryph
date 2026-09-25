@@ -391,6 +391,7 @@ func (m *Mediator) receiptAction(event *events.Event, action *model.Action) *mod
 func (m *Mediator) appendEntry(ctx context.Context, entry *model.ContextEntry, decision *model.EvaluationResult) error {
 	entry.Decision = decision.Decision
 	entry.MatchedRuleIDs = decision.MatchedRuleIDs
+	entry.Tags = decision.MatchedTags
 	if err := m.accum.Append(ctx, entry); err != nil {
 		return fmt.Errorf("aarm: %w: %w", accumulator.ErrAppend, err)
 	}

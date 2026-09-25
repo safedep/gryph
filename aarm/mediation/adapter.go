@@ -93,7 +93,7 @@ func (c *Common) applyEnrichment(ctx context.Context, action *model.Action, meta
 	if c.Classifier != nil {
 		action.DataClassifications = c.Classifier.Classify(action)
 	}
-	if c.Scorer != nil && action.Type == model.ActionToolUse {
+	if c.Scorer != nil {
 		action.InjectionScore = c.Scorer.Score(action)
 	}
 	if c.IdentityCapture != nil {

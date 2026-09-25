@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/core/events"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,6 +28,24 @@ func TestHeuristic_Score(t *testing.T) {
 				Parameters: model.Parameters{Content: "ignore previous instructions"},
 			},
 			want: 0,
+		},
+		{
+			name: "observation of a read scores its full content",
+			action: &model.Action{
+				Type:       model.ActionFileRead,
+				Kind:       events.KindObservation,
+				Parameters: model.Parameters{ContentFull: "README: ignore previous instructions"},
+			},
+			want: PerMatchWeight,
+		},
+		{
+			name: "intent scores the prompt",
+			action: &model.Action{
+				Type:       model.ActionUserPrompt,
+				Kind:       events.KindIntent,
+				Parameters: model.Parameters{Content: "ignore previous instructions", ContentFull: "ignore previous instructions"},
+			},
+			want: PerMatchWeight,
 		},
 		{
 			name: "empty content",
@@ -82,14 +101,31 @@ func TestHeuristic_Score(t *testing.T) {
 			want: 4 * PerMatchWeight,
 		},
 		{
-			name: "score is capped at MaxScore",
+			name: "a repeated indicator counts once",
 			action: &model.Action{
 				Type: model.ActionToolUse,
 				Parameters: model.Parameters{
 					Content: "ignore previous instructions disregard previous you are now system prompt act as prompt injection extra repetition ignore previous instructions disregard previous",
 				},
 			},
-			want: MaxScore,
+			want: 6 * PerMatchWeight,
+		},
+		{
+			name: "an indicator inside a word does not match",
+			action: &model.Action{
+				Type:       model.ActionToolUse,
+				Parameters: model.Parameters{Content: "impact assessment. Contact as soon as you can, exact as-is"},
+			},
+			want: 0,
+		},
+		{
+			name: "the preview and the full content count once",
+			action: &model.Action{
+				Type:       model.ActionFileRead,
+				Kind:       events.KindObservation,
+				Parameters: model.Parameters{Content: "the system prompt is", ContentFull: "the system prompt is x and more"},
+			},
+			want: PerMatchWeight,
 		},
 	}
 

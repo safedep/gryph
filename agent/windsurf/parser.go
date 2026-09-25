@@ -245,10 +245,13 @@ func parseMCPToolUse(sessionID uuid.UUID, agentSessionID string, input HookInput
 	event := events.NewEvent(sessionID, AgentName, events.ActionToolUse)
 	event.AgentSessionID = agentSessionID
 	event.ToolName = info.MCPToolName
+	event.Origin = privacy.OriginMCP
+	event.OriginSource = info.MCPServerName
 	event.RawEvent = nil
 
 	if isPost {
 		event.ResultStatus = events.ResultSuccess
+		event.ObserveOutput(info.MCPResult)
 	}
 
 	payload := events.ToolUsePayload{
