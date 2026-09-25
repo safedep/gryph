@@ -33,9 +33,9 @@ when the two differ. Run
 | Command Code | `PreToolUse` | `PostToolUse` | `Stop`, `SessionStart` |
 | Cursor | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `beforeTabFileRead`, `beforeSubmitPrompt` (prompt) | `postToolUse`, `postToolUseFailure`, `afterFileEdit`, `afterTabFileEdit`, `afterShellExecution`, `afterMCPExecution`, `afterAgentResponse`, `afterAgentThought` | `sessionStart`, `sessionEnd`, `stop`, `subagentStart`, `subagentStop`, `preCompact` |
 | Devin | `PreToolUse`, `UserPromptSubmit` (prompt) | `PostToolUse` | `SessionStart`, `Stop`, `SessionEnd` |
-| Gemini CLI | `BeforeTool` | `AfterTool` | `SessionStart`, `SessionEnd`, `Notification` |
-| OpenCode | `tool.execute.before` | `tool.execute.after` | `session.created`, `session.idle`, `session.error` |
-| Pi Agent | `tool_call` | `tool_result` | `session_start`, `session_shutdown` |
+| Gemini CLI | `BeforeAgent` (prompt), `BeforeTool` | `AfterTool` | `SessionStart`, `SessionEnd`, `Notification` |
+| OpenCode | `chat.message` (prompt), `tool.execute.before` | `tool.execute.after` | `session.created`, `session.idle`, `session.error` |
+| Pi Agent | `input` (prompt), `tool_call` | `tool_result` | `session_start`, `session_shutdown` |
 | Windsurf | `pre_read_code`, `pre_write_code`, `pre_run_command`, `pre_mcp_tool_use`, `pre_user_prompt` (prompt) | `post_read_code`, `post_write_code`, `post_run_command`, `post_mcp_tool_use`, `post_cascade_response`, `post_setup_worktree` | (none) |
 | OpenClaw (inactive) | `before_tool_call` | `after_tool_call` | `session_start`, `session_end` |
 
@@ -83,3 +83,44 @@ Known gaps:
   are actions.
 - Cursor `sessionStart` can stop a session with `continue: false`. It is not a
   tool call, so its phase is `unknown` and its `Blocking` flag is false.
+
+## Prompt hooks
+
+A hook marked `(prompt)` carries the user prompt. Gryph records it as a
+`user_prompt` event. A prompt that a person typed is an intent entry. A block
+on a blocking prompt hook stops the prompt before the model sees it. Command
+Code has no prompt hook, so its sessions have no intent.
+
+- Cursor blocks a prompt with `continue: false` at exit 0. The other agents
+  block at exit 2.
+- Gemini CLI turns hooks on by default from v0.26.0, and Pi fires `input` from
+  v0.47.0. `gryph doctor` warns when the detected version is older. An older
+  Gemini CLI fires the hooks only when the user turns hooks on.
+- Gemini CLI appends the files that the user names with `@` to the prompt.
+  Gryph records the text before the `--- Content from referenced files ---`
+  line only.
+- OpenCode has no documented block result for `chat.message`. Its
+  `Plugin.trigger` runs each hook in `Effect.promise`, so the error that the
+  Gryph plugin throws on a block fails the prompt before OpenCode saves the
+  user message. The plugin sends only the text parts that the user typed. It
+  skips the `synthetic` parts, such as file contents.
+- The model writes the prompt of an OpenCode subagent session, which has a
+  parent session. Pi marks input from extension code with `source: extension`.
+  Gryph gives both prompts the origin `agent`, and records them as
+  observations, not intents.
+- Pi input with `source: rpc` comes from a program that drives Pi. Gryph gives
+  it the origin `user`.
+- An install without the prompt hook stays valid. `gryph doctor` warns about
+  it. An OpenCode or Pi plugin from an older Gryph lacks the prompt hook, and
+  `gryph install --force` replaces it.
+
+Known gaps:
+
+- Pi runs the `input` handlers before it expands `/skill:` commands and prompt
+  templates. A content rule sees `/review`, not the expanded text. An
+  extension command never reaches `input`.
+- Gemini CLI ignores guidance on `BeforeAgent`, because Gryph writes it to
+  stderr at exit 0.
+- When a Gemini CLI `AfterAgent` hook asks for a retry, Gemini CLI fires
+  `BeforeAgent` again with text that the hook wrote. Gryph records it with the
+  origin `user`.

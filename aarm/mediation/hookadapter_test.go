@@ -320,3 +320,28 @@ func TestHookAdapter_Normalize_Phase(t *testing.T) {
 		})
 	}
 }
+
+func TestHookAdapter_Normalize_PromptOrigin(t *testing.T) {
+	cases := []struct {
+		name       string
+		origin     privacy.Origin
+		wantOrigin privacy.Origin
+		wantKind   events.Kind
+	}{
+		{"typed prompt", privacy.OriginUser, privacy.OriginUser, events.KindIntent},
+		{"prompt from extension code", privacy.OriginAgent, privacy.OriginAgent, events.KindObservation},
+		{"prompt with no origin", "", privacy.OriginUnknown, events.KindIntent},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			event := events.NewEvent(uuid.New(), "pi-agent", events.ActionUserPrompt)
+			require.NoError(t, event.SetPrompt("summarize the issues", tc.origin))
+			event.Kind = events.KindOf(event, false)
+
+			_, entry, err := NewHookAdapter().Normalize(context.Background(), event, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantOrigin, entry.Origin)
+			assert.Equal(t, tc.wantKind, entry.Kind)
+		})
+	}
+}

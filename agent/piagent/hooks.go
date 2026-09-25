@@ -25,6 +25,7 @@ func processedPlugin() []byte {
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
 var Hooks = []events.HookSpec{
+	{Type: "input", Phase: events.PhasePre, Blocking: true, Prompt: true, MinVersion: "0.47.0"},
 	{Type: "tool_call", Phase: events.PhasePre, Blocking: true},
 	{Type: "tool_result", Phase: events.PhasePost},
 	{Type: "session_start", Phase: events.PhaseUnknown},
@@ -188,17 +189,9 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 		return status, nil
 	}
 
-	expectedContent := string(processedPlugin())
-	if string(data) == expectedContent {
-		status.Installed = true
-		status.Valid = true
-		status.Hooks = HookTypes
-	} else {
-		status.Installed = true
-		status.Valid = false
-		status.Hooks = HookTypes
-		status.Issues = append(status.Issues, "extension content differs from expected (may have been modified)")
-	}
+	agent.SetPluginStatus(status, data, processedPlugin(), Hooks,
+		func(hookType string) string { return `pi.on("` + hookType + `"` },
+		"extension content differs from expected (may have been modified)")
 
 	return status, nil
 }

@@ -21,6 +21,11 @@ type HookInput struct {
 	Timestamp      string `json:"timestamp"`
 }
 
+type BeforeAgentInput struct {
+	HookInput
+	Prompt string `json:"prompt"`
+}
+
 type BeforeToolInput struct {
 	HookInput
 	ToolName  string                 `json:"tool_name"`
@@ -75,6 +80,8 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	var event *events.Event
 	var err error
 	switch eventName {
+	case "BeforeAgent":
+		event, err = parseBeforeAgent(sessionID, agentSessionID, rawData)
 	case "BeforeTool":
 		event, err = a.parseBeforeTool(sessionID, agentSessionID, baseInput, rawData)
 	case "AfterTool":
@@ -165,6 +172,29 @@ func (a *Adapter) parseAfterTool(sessionID uuid.UUID, agentSessionID string, bas
 
 	a.markSensitivePaths(event, actionType, input.ToolInput)
 
+	return event, nil
+}
+
+// referencedFilesMarker starts the block where Gemini CLI appends the files
+// and MCP resources that the user names with @. That text is file content,
+// not what the user typed.
+const referencedFilesMarker = "--- Content from referenced files ---"
+
+func parseBeforeAgent(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {
+	var input BeforeAgentInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse BeforeAgent input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionUserPrompt)
+	event.AgentSessionID = agentSessionID
+	event.WorkingDirectory = input.Cwd
+	event.TranscriptPath = input.TranscriptPath
+	event.RawEvent = rawData
+	prompt, _, _ := strings.Cut(input.Prompt, referencedFilesMarker)
+	if err := event.SetPrompt(strings.TrimRight(prompt, "\n "), privacy.OriginUser); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
 	return event, nil
 }
 

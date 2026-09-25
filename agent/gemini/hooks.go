@@ -13,15 +13,21 @@ import (
 	"github.com/safedep/gryph/core/events"
 )
 
+// minVersion is the first Gemini CLI version that turns hooks on by default.
+// An older version fires them only when the user turns hooks on in the
+// settings.
+const minVersion = "0.26.0"
+
 // Hooks declares the Gemini CLI hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
 var Hooks = []events.HookSpec{
-	{Type: "BeforeTool", Phase: events.PhasePre, Blocking: true},
-	{Type: "AfterTool", Phase: events.PhasePost},
-	{Type: "SessionStart", Phase: events.PhaseUnknown},
-	{Type: "SessionEnd", Phase: events.PhaseUnknown},
-	{Type: "Notification", Phase: events.PhaseUnknown},
+	{Type: "BeforeAgent", Phase: events.PhasePre, Blocking: true, Prompt: true, MinVersion: minVersion},
+	{Type: "BeforeTool", Phase: events.PhasePre, Blocking: true, MinVersion: minVersion},
+	{Type: "AfterTool", Phase: events.PhasePost, MinVersion: minVersion},
+	{Type: "SessionStart", Phase: events.PhaseUnknown, MinVersion: minVersion},
+	{Type: "SessionEnd", Phase: events.PhaseUnknown, MinVersion: minVersion},
+	{Type: "Notification", Phase: events.PhaseUnknown, MinVersion: minVersion},
 }
 
 // HookTypes are the hook type names in Hooks, in install order.

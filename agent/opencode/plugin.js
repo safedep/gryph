@@ -1,7 +1,7 @@
 import { execFileSync } from "child_process";
 import { appendFileSync } from "fs";
 
-export const GryphPlugin = async ({ directory }) => {
+export const GryphPlugin = async ({ directory, client }) => {
   const debugFilePath = process.env.GRYPH_OPENCODE_DEBUG_FILE_PATH || "";
 
   function invokeGryph(hookType, payload) {
@@ -24,7 +24,32 @@ export const GryphPlugin = async ({ directory }) => {
     }
   }
 
+  // A subagent session has a parent. Its prompt comes from the model, not
+  // from the user.
+  async function parentSessionID(sessionID) {
+    try {
+      const res = await client.session.get({ path: { id: sessionID } });
+      return res?.data?.parentID || "";
+    } catch (_) {
+      return "";
+    }
+  }
+
   return {
+    "chat.message": async (input, output) => {
+      const prompt = (output.parts || [])
+        .filter((part) => part.type === "text" && !part.synthetic)
+        .map((part) => part.text)
+        .join("\n");
+      if (!prompt) return;
+      invokeGryph("chat.message", {
+        hook_type: "chat.message",
+        session_id: input.sessionID,
+        parent_session_id: await parentSessionID(input.sessionID),
+        prompt,
+        cwd: directory,
+      });
+    },
     "tool.execute.before": async (input, output) => {
       invokeGryph("tool.execute.before", {
         hook_type: "tool.execute.before",

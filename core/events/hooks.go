@@ -1,5 +1,7 @@
 package events
 
+import "github.com/safedep/gryph/core/privacy"
+
 // HookType is the name an agent gives one of its hook events, such as
 // "PreToolUse" or "beforeShellExecution".
 type HookType string
@@ -23,6 +25,9 @@ type HookSpec struct {
 	Blocking bool
 	// Prompt is true when the hook carries a user prompt.
 	Prompt bool
+	// MinVersion is the first agent version that fires the hook. It is empty
+	// when every supported version fires it.
+	MinVersion string
 }
 
 // Kind classifies an event in the session context.
@@ -38,7 +43,9 @@ const (
 	KindObservation Kind = "observation"
 )
 
-// KindOf returns the kind of an event. A user prompt is an intent. linked
+// KindOf returns the kind of an event. A prompt that a person typed is an
+// intent. A prompt that agent code injected (origin agent) is an
+// observation, so it never becomes the intent of the session. linked
 // is true when the event is a post event whose pre event Gryph recorded. A
 // post event with no linked pre event is an action, so agents with post-only
 // coverage still count it.
@@ -46,6 +53,8 @@ func KindOf(e *Event, linked bool) Kind {
 	switch {
 	case e == nil:
 		return KindAction
+	case e.ActionType == ActionUserPrompt && e.Origin == privacy.OriginAgent:
+		return KindObservation
 	case e.ActionType == ActionUserPrompt:
 		return KindIntent
 	case e.Phase == PhasePost && linked:

@@ -75,6 +75,9 @@ type Event struct {
 	// LinkedEventID is the ID of the pre event of the same tool call, set on
 	// a post event when Gryph recorded the pre event.
 	LinkedEventID uuid.UUID `json:"linked_event_id,omitempty,omitzero"`
+	// Origin is where the content of the event came from, as the adapter
+	// claims it. The context entry and the content labels store it.
+	Origin privacy.Origin `json:"-"`
 }
 
 // NewEvent creates a new Event with a generated UUID and current timestamp.
@@ -422,12 +425,14 @@ func (e *Event) ContentDigest() string {
 	}
 }
 
-// SetPrompt sets the payload of a user_prompt event. The prompt text has the
-// origin user. FullContent carries the whole prompt for content rules.
-func (e *Event) SetPrompt(prompt string) error {
+// SetPrompt sets the payload of a user_prompt event. The origin is user for
+// a prompt that a person typed, and agent for a prompt that agent code
+// injected. FullContent carries the whole prompt for content rules.
+func (e *Event) SetPrompt(prompt string, origin privacy.Origin) error {
 	e.FullContent = prompt
+	e.Origin = origin
 	return e.SetPayload(UserPromptPayload{
-		Prompt: privacy.Text{Value: prompt, Label: privacy.Label{Origin: privacy.OriginUser}},
+		Prompt: privacy.Text{Value: prompt, Label: privacy.Label{Origin: origin}},
 	})
 }
 

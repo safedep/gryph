@@ -481,7 +481,7 @@ func parseBeforeSubmitPrompt(sessionID uuid.UUID, agentSessionID string, base Ho
 	if len(base.WorkspaceRoots) > 0 {
 		event.WorkingDirectory = base.WorkspaceRoots[0]
 	}
-	if err := event.SetPrompt(input.Prompt); err != nil {
+	if err := event.SetPrompt(input.Prompt, privacy.OriginUser); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
 	}
 	return event, nil

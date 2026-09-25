@@ -333,3 +333,27 @@ func TestNewGuidanceResponse(t *testing.T) {
 	assert.Equal(t, "allow", result["decision"])
 	assert.Equal(t, "security advisory", result["reason"])
 }
+
+func TestParseHookEvent_BeforeAgent(t *testing.T) {
+	event, err := testAdapter(t).ParseEvent(context.Background(), "BeforeAgent", loadFixture(t, "before_agent.json"))
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionUserPrompt, event.ActionType)
+	assert.Equal(t, events.KindIntent, events.KindOf(event, false))
+	assert.Equal(t, "gemini-session-abc", event.AgentSessionID)
+	assert.Equal(t, "/home/user/.gemini/tmp/abc/chats/session-1.jsonl", event.TranscriptPath)
+	p, err := event.GetUserPromptPayload()
+	require.NoError(t, err)
+	assert.Equal(t, "Add a retry to the upload function", p.Prompt.Value)
+	assert.Equal(t, privacy.OriginUser, p.Prompt.Label.Origin)
+}
+
+func TestParseHookEvent_BeforeAgent_DropsReferencedFiles(t *testing.T) {
+	event, err := testAdapter(t).ParseEvent(context.Background(), "BeforeAgent", loadFixture(t, "before_agent_referenced_file.json"))
+	require.NoError(t, err)
+	p, err := event.GetUserPromptPayload()
+	require.NoError(t, err)
+	assert.Equal(t, "@.env explain this file", p.Prompt.Value)
+	assert.NotContains(t, event.FullContent, "AWS_SECRET_ACCESS_KEY")
+}

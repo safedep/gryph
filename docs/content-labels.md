@@ -34,7 +34,9 @@ These payload fields are `privacy.Text`:
 - `ToolUsePayload`: `Input`, `Output`, `OutputPreview`. `Input` and `Output`
   hold the tool JSON as a string. Parse `Value` to read the structure.
 - `SubagentStopPayload`: `LastAssistantMessage`
-- `UserPromptPayload`: `Prompt`. `Event.SetPrompt` sets the origin `user`.
+- `UserPromptPayload`: `Prompt`. `Event.SetPrompt` sets the origin: `user`
+  for a prompt that a person typed, `agent` for a prompt that agent code
+  injected.
 - `Event`: `DiffContent`. The `diff_label` column stores its label.
 
 Identifiers stay `string`: paths, URLs, tool names, and session IDs.

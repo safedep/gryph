@@ -1,0 +1,6 @@
+{
+  "session_id": "gemini-session-abc",
+  "cwd": "/home/user/project",
+  "hook_event_name": "BeforeAgent",
+  "prompt": "@.env explain this file\n--- Content from referenced files ---\nContent from @.env:\nAWS_SECRET_ACCESS_KEY=abc\n--- End of content ---"
+}

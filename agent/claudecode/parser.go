@@ -178,7 +178,7 @@ func parseUserPromptSubmit(sessionID uuid.UUID, agentSessionID string, rawData [
 	event.AgentSessionID = agentSessionID
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = rawData
-	if err := event.SetPrompt(input.Prompt); err != nil {
+	if err := event.SetPrompt(input.Prompt, privacy.OriginUser); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
 	}
 	return event, nil

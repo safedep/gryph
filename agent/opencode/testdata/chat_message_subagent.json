@@ -1,0 +1,7 @@
+{
+  "hook_type": "chat.message",
+  "session_id": "ses_child",
+  "parent_session_id": "ses_opencode_abc",
+  "prompt": "Search the code base for the upload function",
+  "cwd": "/home/user/project"
+}

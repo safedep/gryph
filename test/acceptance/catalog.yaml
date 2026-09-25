@@ -399,3 +399,17 @@
   tier: P2
   guarantee: "An install without the prompt hook stays valid. Doctor warns that the prompt hook is not installed and suggests a reinstall."
   labels: [doctor, prompt]
+
+- id: context/intent/agent-matrix
+  title: "every agent's prompt hook records and blocks a prompt"
+  category: context
+  tier: P1
+  guarantee: "Claude Code, Cursor, Gemini CLI, Codex, Devin, Windsurf, OpenCode and Pi record a prompt as a user_prompt event, and a content rule on user_prompt blocks it with the agent's block response."
+  labels: [context, intent, prompt, protocols]
+
+- id: install/all-agents/prompt-hooks-written
+  title: "install writes the prompt hook of every agent"
+  category: install
+  tier: P1
+  guarantee: "One gryph install writes the prompt hook of every agent that has one: UserPromptSubmit, beforeSubmitPrompt, BeforeAgent, pre_user_prompt, chat.message and the Pi input event."
+  labels: [install, prompt]

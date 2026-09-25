@@ -109,7 +109,7 @@ func TestLabelEvent_PromptKeptAtFullOnly(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("%s sensitive=%v", tc.level, tc.sensitive), func(t *testing.T) {
 			event := events.NewEvent(uuid.New(), "test-agent", events.ActionUserPrompt)
-			require.NoError(t, event.SetPrompt(prompt))
+			require.NoError(t, event.SetPrompt(prompt, privacy.OriginUser))
 			event.IsSensitive = tc.sensitive
 
 			label(event, nil, nil, tc.level)

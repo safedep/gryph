@@ -279,7 +279,7 @@ func parseUserPrompt(sessionID uuid.UUID, agentSessionID string, input HookInput
 
 	event := events.NewEvent(sessionID, AgentName, events.ActionUserPrompt)
 	event.AgentSessionID = agentSessionID
-	if err := event.SetPrompt(info.UserPrompt); err != nil {
+	if err := event.SetPrompt(info.UserPrompt, privacy.OriginUser); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
 	}
 	return event, nil

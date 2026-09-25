@@ -406,3 +406,29 @@ func TestNewGuidanceResponse(t *testing.T) {
 	assert.Equal(t, "allow", result["decision"])
 	assert.Equal(t, "security advisory", result["reason"])
 }
+
+func TestParseHookEvent_Input(t *testing.T) {
+	cases := []struct {
+		fixture    string
+		wantPrompt string
+		wantOrigin privacy.Origin
+	}{
+		{"input_interactive.json", "Add a retry to the upload function", privacy.OriginUser},
+		{"input_extension.json", "Summarize the open issues", privacy.OriginAgent},
+	}
+	for _, tc := range cases {
+		t.Run(tc.fixture, func(t *testing.T) {
+			event, err := testAdapter(t).ParseEvent(context.Background(), "input", loadFixture(t, tc.fixture))
+			require.NoError(t, err)
+			require.NotNil(t, event)
+
+			assert.Equal(t, events.ActionUserPrompt, event.ActionType)
+			assert.Equal(t, "pi-session-abc", event.AgentSessionID)
+			p, err := event.GetUserPromptPayload()
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantPrompt, p.Prompt.Value)
+			assert.Equal(t, tc.wantOrigin, p.Prompt.Label.Origin)
+			assert.Equal(t, tc.wantPrompt, event.FullContent)
+		})
+	}
+}
