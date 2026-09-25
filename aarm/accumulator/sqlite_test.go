@@ -341,15 +341,30 @@ func TestSQLiteAccumulator_EntitiesAndEgress(t *testing.T) {
 	blocked.Entities = []string{"host:evil.example"}
 	require.NoError(t, acc.Append(ctx, blocked))
 
+	escalated := newEntry(sessionID, events.KindAction, model.ActionCommandExec, "Bash")
+	escalated.Decision = model.DecisionEscalate
+	escalated.Phase = model.PhasePre
+	escalated.Hosts = []string{"approval.example"}
+	require.NoError(t, acc.Append(ctx, escalated))
+
 	pending := newEntry(sessionID, events.KindAction, model.ActionFileRead, "Read")
 	pending.Entities = []string{"path:/work/.env"}
 	snap, err := acc.Snapshot(ctx, sessionID, pending)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"api.example.com"}, snap.EgressHosts, "a blocked action contacted no host")
+	assert.Equal(t, []string{"api.example.com"}, snap.EgressHosts, "a blocked action contacted no host, and an escalated action waits for approval")
 	assert.Equal(t, []string{"host:api.example.com", "host:evil.example", "path:/work/.env"}, snap.EntitiesSeen)
 
 	entries, err := acc.Entries(ctx, sessionID, 10)
 	require.NoError(t, err)
-	require.Len(t, entries, 2)
+	require.Len(t, entries, 3)
 	assert.Equal(t, "block", entries[1].Decision)
+
+	ran := newEntry(sessionID, events.KindAction, model.ActionCommandExec, "Bash")
+	ran.Decision = model.DecisionEscalate
+	ran.Phase = model.PhasePost
+	ran.Hosts = []string{"approval.example"}
+	require.NoError(t, acc.Append(ctx, ran))
+	snap, err = acc.Snapshot(ctx, sessionID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"api.example.com", "approval.example"}, snap.EgressHosts, "the post action of an approved escalation adds its hosts")
 }

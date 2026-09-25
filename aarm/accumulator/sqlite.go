@@ -88,9 +88,11 @@ func entryRow(e *model.ContextEntry) *storage.ContextEntryRow {
 // for the approval, and ConfirmIntent sets it on approve. A failed
 // evaluation has no decision, and fail_mode closed then blocks the prompt.
 // So a failed entry never becomes the latest intent. Under fail_mode open
-// the prompt runs, and the next intent resets the counters. A pre action
-// that did not reach the agent contacted no host, so it adds no egress host.
-// A post action already ran, so it adds its hosts at any decision.
+// the prompt runs, and the next intent resets the counters. A pre action adds
+// its egress hosts only when it reaches the agent. A blocked or deferred
+// action contacted no host, and an escalated action waits for an approval
+// that can deny it. A post action already ran, so it adds its hosts at any
+// decision. An approved escalation adds its hosts with its post action.
 func stateDelta(e *model.ContextEntry) *storage.ContextStateDelta {
 	delta := &storage.ContextStateDelta{
 		Classifications: privacy.Strings(e.Classifications),

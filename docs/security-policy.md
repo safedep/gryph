@@ -207,11 +207,11 @@ The intent fields trust the prompt events that reach `gryph _hook`. The hook inp
 
 A rule that must stop prompts must list `user_prompt` in `action_types`. Gryph logs a warning at policy load, and `gryph policy validate` prints one, for a rule that names one of these tool names.
 
-`action.hosts` is best effort. It holds `?` for a network tool whose operand Gryph cannot read (`curl $URL`, `curl -K file`, `wget -i file`, `socat`), and for a git fetch or push to a named remote. It is empty for a program that opens a connection itself, such as a Python script, `npm publish` or `gh gist create`, and for a tool with no URL, such as WebSearch or most MCP tools. `glob()` and `file_patterns` are case-sensitive.
+`action.hosts` is best effort. It holds `?` for a network tool whose operand Gryph cannot read (`curl $URL`, `curl -K file`, `curl --resolve`, `wget -i file`, `socat`, `ssh -F file`, `ssh -o ProxyCommand=...`), for a network tool that `xargs` runs, for shell code that Gryph cannot read (`eval "$X"`, `bash -c "$X"`, `... | sh`), and for a git fetch or push to a named remote. It also holds the proxy and jump hosts of `ssh -J`, `ssh -o ProxyJump` and `-o HostName`, `curl -x` and `--connect-to`, and of a proxy variable such as `ALL_PROXY` or `https_proxy`. It does not hold a proxy or a host alias from a config file that the command does not name, such as `~/.ssh/config`, `~/.curlrc`, `~/.wgetrc`, a git `http.proxy` setting, or the ssh command of `rsync -e`. It is empty for a program that opens a connection itself, such as a Python script, `npm publish` or `gh gist create`, and for a tool with no URL, such as WebSearch or most MCP tools. So an egress allow list on `action.hosts` is a check on the command, not a network control. `glob()` and `file_patterns` are case-sensitive.
 
-`context.entities_seen` holds the `path:`, `host:` and `mcp:` keys of the session, including the current action and blocked actions. `context.egress_hosts` holds the hosts that earlier actions contacted. A blocked action contacted no host, so it adds none.
+`context.entities_seen` holds the `path:`, `host:` and `mcp:` keys of the session, including the current action and blocked actions. The `path:` keys come from the action path and from the read and write paths of a shell command. `context.egress_hosts` holds the hosts that earlier actions contacted. A blocked or deferred action contacted no host, so it adds none. An escalated action adds its hosts only with its post event, after an approval.
 
-`context.entries` is the entry log: the latest entries of the session, oldest first. `policy.context.cel_entries` sets the count (default 100, at most 1000). Gryph loads the log only when a rule reads it. Each item is a map with `seq`, `kind`, `action_type`, `tool`, `path`, `command`, `host`, `mcp_server`, `origin`, `classes`, `tags`, `decision` and `result`. `command` is the stored command, after redaction. No item holds content. `glob(path, pattern)` matches a path with the rules of `file_patterns`:
+`context.entries` is the entry log: the latest entries of the session, oldest first. `policy.context.cel_entries` sets the count (default 100, at most 1000). `gryph config set` rejects a value out of this range. A config file or environment variable with such a value loads with a warning, and Gryph uses the nearest bound. Gryph loads the log only when a rule reads it. Each item is a map with `seq`, `kind`, `action_type`, `tool`, `path`, `command`, `host`, `mcp_server`, `origin`, `classes`, `tags`, `decision` and `result`. `command` is the stored command, after redaction. No item holds content. The log cuts `command` to its first 1024 bytes, `path` to its last 1024 bytes, and `tool`, `host` and `mcp_server` to 256 bytes, so that padding cannot push a rule over its limits. `glob(path, pattern)` matches one path against one doublestar pattern:
 
 ```yaml
 - id: write-after-key-read
@@ -221,7 +221,11 @@ A rule that must stop prompts must list `user_prompt` in `action_types`. Gryph l
   condition: 'context.entries.exists(e, e.action_type == "file_read" && glob(e.path, "**/*.pem"))'
 ```
 
-`context.semantic_drift` is removed. A policy that reads it fails validation.
+`glob()` does not match a directory that holds a matching path. A `file_patterns` rule with `file_access: [read]` does. So use `file_patterns`, not `glob()` over `action.read_paths`, to match a shell read of a secret, such as `tar c ~/.ssh`.
+
+`context.semantic_drift` is removed. `gryph policy validate` and `gryph policy install` reject a
+policy that reads it or `.Context.SemanticDrift`. An installed policy that reads it still loads
+with a warning, and the value is always zero.
 
 ### Facts and tags
 

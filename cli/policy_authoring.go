@@ -192,7 +192,7 @@ func newPolicyInstallCmd() *cobra.Command {
 			}
 			candidate, err := pdp.ParsePolicy(data)
 			if err == nil {
-				err = pdp.CheckTagNames(candidate)
+				err = pdp.CheckStrict(candidate)
 			}
 			if err != nil {
 				return ErrConfig("candidate policy is not valid", err)

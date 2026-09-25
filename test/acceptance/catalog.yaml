@@ -467,7 +467,7 @@
   title: "the example policy blocks egress after a secret read"
   category: context
   tier: P0
-  guarantee: "The shipped secret-exfiltration example policy installs, lets a network command before a secret read pass, and blocks a command that contacts a host after a read of .env."
+  guarantee: "The shipped secret-exfiltration example policy installs, lets a network command before a secret read pass, and blocks a command that contacts a host after a read of .env. It also blocks one command that reads a secret and contacts a host, including a read of ~/.ssh and a host that xargs gives to curl."
   labels: [context, dataflow, tags, examples]
 
 - id: context/cel/entries-query
@@ -495,5 +495,5 @@
   title: "a policy on semantic_drift fails validation"
   category: policy
   tier: P2
-  guarantee: "context.semantic_drift is removed, and a policy that reads it fails validation with a message that names the field."
+  guarantee: "context.semantic_drift is removed. Policy validation rejects a policy that reads it, also through an alias, with a message that names the field. An installed policy that reads it still loads, reads it as zero, and enforces."
   labels: [policy, validate]

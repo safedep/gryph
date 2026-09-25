@@ -52,6 +52,10 @@ type templateContext struct {
 	EgressHosts         []string
 	IntentAvailable     bool
 	ActionsSinceIntent  int
+
+	// SemanticDrift is a removed field. It stays at zero so that an older
+	// message template still renders.
+	SemanticDrift float64
 }
 
 type templateRule struct {

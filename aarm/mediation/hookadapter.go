@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/identity"
@@ -117,11 +118,16 @@ func newEntry(event *events.Event, action *model.Action) *model.ContextEntry {
 	}
 }
 
-// entities returns the path:, host: and mcp: keys of the action.
+// entities returns the path:, host: and mcp: keys of the action. The path
+// keys come from the action path and from the read and write targets of a
+// shell command.
 func entities(action *model.Action, hosts []string) []string {
 	var keys []string
-	if action.Parameters.Path != "" {
-		keys = append(keys, "path:"+action.Parameters.Path)
+	paths := append([]string{action.Parameters.Path}, action.ReadPaths()...)
+	for _, p := range append(paths, action.WritePaths()...) {
+		if key := "path:" + p; p != "" && !slices.Contains(keys, key) {
+			keys = append(keys, key)
+		}
 	}
 	for _, h := range hosts {
 		keys = append(keys, "host:"+h)

@@ -3,7 +3,6 @@ package storage
 import (
 	"bytes"
 	"context"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -441,7 +440,7 @@ func TestQueryEntryFacts_JoinsAuditEvents(t *testing.T) {
 	assert.Equal(t, "file_project", facts[0].Origin)
 }
 
-func TestQueryEntryFacts_CutsLongCommands(t *testing.T) {
+func TestQueryEntryFacts_CutsLongFields(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 	ctx := context.Background()
@@ -451,13 +450,25 @@ func TestQueryEntryFacts_CutsLongCommands(t *testing.T) {
 	cmd := events.NewEvent(sessionID, "claude-code", events.ActionCommandExec)
 	require.NoError(t, cmd.SetPayload(events.CommandExecPayload{Command: privacy.NewText("echo " + strings.Repeat("x", 5000))}))
 	require.NoError(t, store.RecordEvent(ctx, cmd, session.EventCounts(cmd)))
+	read := events.NewEvent(sessionID, "claude-code", events.ActionFileRead)
+	require.NoError(t, read.SetPayload(events.FileReadPayload{Path: "/" + strings.Repeat("p", 50000) + "/id.pem"}))
+	require.NoError(t, store.RecordEvent(ctx, read, session.EventCounts(read)))
+	long := strings.Repeat("h", 50000)
 	require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
 		SessionID: sessionID, EventID: cmd.ID, Kind: "action", ActionType: "command_exec",
+	}, &ContextStateDelta{}))
+	require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+		SessionID: sessionID, EventID: read.ID, Kind: "action", ActionType: "file_read",
+		Tool: long, TargetHost: long, TargetMCPServer: long,
 	}, &ContextStateDelta{}))
 
 	facts, err := store.QueryEntryFacts(ctx, sessionID, 10)
 	require.NoError(t, err)
-	require.Len(t, facts, 1)
+	require.Len(t, facts, 2)
 	assert.Len(t, facts[0].Command, EntryCommandMaxBytes)
-	assert.Equal(t, strconv.Itoa(EntryCommandMaxBytes), entryCommandMaxBytesSQL)
+	assert.Len(t, facts[1].Path, EntryPathMaxBytes)
+	assert.True(t, strings.HasSuffix(facts[1].Path, "/id.pem"), "a path keeps its end")
+	assert.Len(t, facts[1].Tool, EntryNameMaxBytes)
+	assert.Len(t, facts[1].Host, EntryNameMaxBytes)
+	assert.Len(t, facts[1].MCPServer, EntryNameMaxBytes)
 }

@@ -262,6 +262,7 @@ func (w *walker) command(cmd syntax.Command, cwds dirs) dirs {
 	case *syntax.CallExpr:
 		for _, a := range c.Assigns {
 			w.subshells(a, cwds)
+			w.proxyAssign(a, cwds)
 		}
 		for _, a := range c.Args {
 			w.subshells(a, cwds)
@@ -283,6 +284,11 @@ func (w *walker) command(cmd syntax.Command, cwds dirs) dirs {
 		return cwds
 	case *syntax.Block:
 		return w.stmts(c.Stmts, cwds)
+	case *syntax.DeclClause:
+		for _, a := range c.Args {
+			w.proxyAssign(a, cwds)
+		}
+		return w.maybe(cmd, cwds)
 	default:
 		return w.maybe(cmd, cwds)
 	}
@@ -443,7 +449,9 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	case "rsync":
 		w.remoteCopy(parseArgs(rest, rsyncOptions), rsyncFlags, cwds)
 	case "scp":
-		w.remoteCopy(parseArgs(rest, scpOptions), scpFlags, cwds)
+		p := parseArgs(rest, scpOptions)
+		w.sshRoute(p)
+		w.remoteCopy(p, scpFlags, cwds)
 	case "tee", "truncate":
 		w.addAll(operands(rest), AccessWrite, cwds)
 	case "chmod", "chown", "chgrp":
@@ -500,11 +508,13 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	case "wget":
 		w.wget(parseArgs(rest, wgetOptions), cwds)
 	case "ssh", "sftp", "telnet", "ftp":
-		w.remoteShell(parseArgs(rest, remoteShellOptions[name]))
+		p := parseArgs(rest, remoteShellOptions[name])
+		if name == "ssh" || name == "sftp" {
+			w.sshRoute(p)
+		}
+		w.remoteShell(p)
 	case "nc", "ncat", "netcat":
 		w.netcat(rest)
-	case "dig", "nslookup", "host", "ping", "ping6", "traceroute", "tracepath", "whois":
-		w.lookup(parseArgs(rest, lookupOptions))
 	case "socat":
 		// socat addresses such as TCP:host:port take many forms.
 		w.addHost(UnknownHost)
@@ -519,6 +529,8 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 			w.addReads(p.operands, !recursive, shallowReads[name] && !recursive, cwds)
 		} else if opts, ok := editCommands[name]; ok {
 			w.addAll(parseArgs(rest, opts).operands, AccessWrite, cwds)
+		} else if tool, ok := lookupTools[name]; ok {
+			w.lookup(tool, rest)
 		} else if !nonReadCommands[name] {
 			w.guessReads(guessWords(rest), cwds)
 		}
@@ -532,7 +544,7 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 // script that the parser rejects adds no host.
 func (w *walker) delegate(name string, rest []string, cwds dirs) (dirs, bool) {
 	if spec, ok := wrappers[name]; ok {
-		w.wrapper(spec, rest, cwds)
+		w.wrapper(name, spec, rest, cwds)
 		return cwds, true
 	}
 	switch name {
@@ -541,13 +553,14 @@ func (w *walker) delegate(name string, rest []string, cwds dirs) (dirs, bool) {
 		// the working directory.
 		return w.call(skipOptions(rest), cwds), true
 	case "eval":
+		if slices.Contains(rest, "") {
+			// An unresolved word holds code that Gryph cannot see.
+			w.addHost(UnknownHost)
+		}
 		return w.nested(strings.Join(rest, " "), cwds), true
 	}
-	if shells[name] {
-		if src, ok := shellScript(rest); ok {
-			w.nested(src, cwds)
-			return cwds, true
-		}
+	if shells[name] && w.shell(rest, cwds) {
+		return cwds, true
 	}
 	return cwds, false
 }
@@ -583,14 +596,85 @@ func (w *walker) cd(args []string, cwds dirs) dirs {
 
 // wrapper analyzes the command that a wrapper such as sudo or env runs. It
 // parses the wrapper arguments the way the wrapper does and calls only the
-// program. So a chain of wrappers costs one call per wrapper.
-func (w *walker) wrapper(spec wrapperSpec, args []string, cwds dirs) {
+// program. So a chain of wrappers costs one call per wrapper. A NAME=value
+// word can set a proxy. xargs adds arguments that it reads at run time.
+func (w *walker) wrapper(name string, spec wrapperSpec, args []string, cwds dirs) {
 	start, chdir := spec.program(args)
 	if chdir != "" {
 		cwds = w.cd([]string{chdir}, cwds)
 	}
-	if start < len(args) {
-		w.call(args[start:], cwds)
+	if spec.assigns {
+		for _, a := range args[:start] {
+			if k, v, ok := strings.Cut(a, "="); ok && isAssignment(a) {
+				w.proxyEnv(k, v)
+			}
+		}
+	}
+	if start >= len(args) {
+		return
+	}
+	cmd := args[start:]
+	if name == "xargs" {
+		cmd = xargsCommand(args[:start], cmd)
+	}
+	w.call(cmd, cwds)
+}
+
+// xargsCommand returns the command that xargs runs, with an unresolved word
+// in place of the arguments that xargs reads at run time. With a replace
+// string, as in "xargs -I{} curl {}", each word that holds the string is
+// unresolved. Else xargs adds the arguments at the end.
+func xargsCommand(opts, cmd []string) []string {
+	repl := xargsReplace(opts)
+	if repl == "" {
+		return append(slices.Clone(cmd), "")
+	}
+	out := slices.Clone(cmd)
+	for i, a := range out {
+		if strings.Contains(a, repl) {
+			out[i] = ""
+		}
+	}
+	return out
+}
+
+// xargsReplace returns the replace string of the xargs options -I, -i or
+// --replace.
+func xargsReplace(opts []string) string {
+	repl := ""
+	for i, a := range opts {
+		switch {
+		case a == "-I":
+			if i+1 < len(opts) {
+				repl = opts[i+1]
+			}
+		case a == "-i" || a == "--replace":
+			repl = "{}"
+		case strings.HasPrefix(a, "--replace="):
+			repl = strings.TrimPrefix(a, "--replace=")
+		case strings.HasPrefix(a, "-I") || strings.HasPrefix(a, "-i"):
+			repl = a[2:]
+		}
+	}
+	return repl
+}
+
+// proxyAssign records the proxy of a shell assignment such as
+// "ALL_PROXY=host curl ...".
+func (w *walker) proxyAssign(a *syntax.Assign, cwds dirs) {
+	if a.Name == nil || a.Value == nil {
+		return
+	}
+	v, _ := w.word(a.Value, cwds)
+	w.proxyEnv(a.Name.Value, v)
+}
+
+// proxyEnv records the host of a proxy variable such as ALL_PROXY or
+// https_proxy, because a network tool then connects to the proxy.
+func (w *walker) proxyEnv(name, value string) {
+	name = strings.ToLower(name)
+	if strings.HasSuffix(name, "_proxy") && name != "no_proxy" {
+		w.addNetworkHost(value)
 	}
 }
 
@@ -689,31 +773,51 @@ func isAssignment(word string) bool {
 // shells are the shells whose "-c SCRIPT" the walker parses.
 var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true}
 
-// shellScript returns the script of "sh -c SCRIPT". The -c flag can be part
-// of a flag group, as in "bash -lc". The script is the first operand.
-func shellScript(args []string) (string, bool) {
-	hasC := false
+// shell analyzes the script of "sh -c SCRIPT" and reports whether it did.
+// Gryph cannot see a script in an unresolved word, as in sh -c "$X", or a
+// script that the shell reads from stdin, as in "curl ... | sh". Such a
+// script can contact any host.
+func (w *walker) shell(args []string, cwds dirs) bool {
+	i, inline, stdin := shellArgs(args)
+	switch {
+	case inline && i >= 0 && args[i] != "":
+		w.nested(args[i], cwds)
+		return true
+	case inline || stdin:
+		w.addHost(UnknownHost)
+	}
+	return false
+}
+
+// shellArgs reads the arguments of a shell. It returns the index of the
+// first operand, or -1 when there is none. With -c, that operand is the
+// script, and inline is true. The -c flag can be part of a flag group, as in
+// "bash -lc". Without -c, the shell reads its script from stdin when it has
+// -s or no operand.
+func shellArgs(args []string) (index int, inline, stdin bool) {
+	hasC, hasS := false, false
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
 		case a == "-o" || a == "+o" || a == "-O" || a == "+O" || a == "--rcfile" || a == "--init-file":
 			i++
 		case a == "--":
-			if hasC && i+1 < len(args) {
-				return args[i+1], true
+			if i+1 < len(args) {
+				return i + 1, hasC, hasS && !hasC
 			}
-			return "", false
+			return -1, hasC, !hasC
 		case strings.HasPrefix(a, "--"):
 			continue
 		case strings.HasPrefix(a, "-") || strings.HasPrefix(a, "+"):
-			if strings.HasPrefix(a, "-") && strings.Contains(a[1:], "c") {
-				hasC = true
+			if strings.HasPrefix(a, "-") {
+				hasC = hasC || strings.Contains(a[1:], "c")
+				hasS = hasS || strings.Contains(a[1:], "s")
 			}
 		default:
-			return a, hasC
+			return i, hasC, hasS && !hasC
 		}
 	}
-	return "", false
+	return -1, hasC, !hasC
 }
 
 // find records the changes of a find command. -delete removes the search

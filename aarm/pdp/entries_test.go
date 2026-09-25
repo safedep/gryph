@@ -7,6 +7,7 @@ import (
 
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
+	"github.com/safedep/gryph/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -51,17 +52,45 @@ rules:
 	assert.False(t, engine.NeedsEntries())
 }
 
-func TestValidate_SemanticDriftRemoved(t *testing.T) {
-	policy, err := ParsePolicy([]byte(`
+func TestCheckStrict_SemanticDriftRemoved(t *testing.T) {
+	cases := []struct {
+		name string
+		rule string
+		want string
+	}{
+		{"select", `condition: 'context.semantic_drift > 0.5'`, "context.semantic_drift was removed"},
+		{"index", `condition: 'context["semantic_drift"] > 0.5'`, "context.semantic_drift was removed"},
+		{"optional select", `condition: 'context.?semantic_drift.orValue(0.0) > 0.5'`, "context.semantic_drift was removed"},
+		{"alias in a macro", `condition: '[context].exists(c, c.semantic_drift > 0.5)'`, "context.semantic_drift was removed"},
+		{"alias in has", `condition: '[context].exists(c, has(c.semantic_drift))'`, "context.semantic_drift was removed"},
+		{"alias by index", `condition: '[context].all(c, c["semantic_drift"] < 0.5)'`, "context.semantic_drift was removed"},
+		{"message template", `message: "drift {{.Context.SemanticDrift}}"`, ".Context.SemanticDrift was removed"},
+		{"message template alias", `message: "{{with .Context}}{{.SemanticDrift}}{{end}}"`, ".Context.SemanticDrift was removed"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			policy, err := ParsePolicy([]byte("version: \"1\"\nrules:\n  - id: drift\n    action: block\n    " + tc.rule + "\n"))
+			require.NoError(t, err, "a policy load only warns, so an upgrade does not stop the hooks")
+			err = CheckStrict(policy)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.want)
+		})
+	}
+}
+
+func TestEvaluate_SemanticDriftIsZero(t *testing.T) {
+	engine := mustPDP(t, `
 version: "1"
 rules:
   - id: drift
     action: block
-    condition: "context.semantic_drift > 0.5"
-`))
-	require.Error(t, err)
-	assert.Nil(t, policy)
-	assert.Contains(t, err.Error(), "context.semantic_drift was removed")
+    condition: "context.semantic_drift < 0.5 && [context].exists(c, c.semantic_drift == 0.0)"
+    message: "drift {{.Context.SemanticDrift}}"
+`)
+	res, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionFileRead}, &model.ContextSnapshot{})
+	require.NoError(t, err)
+	assert.Equal(t, model.DecisionBlock, res.Decision)
+	assert.Equal(t, "drift 0", res.Message)
 }
 
 func TestGlob_InvalidPattern(t *testing.T) {
@@ -98,6 +127,37 @@ rules:
 	assert.Equal(t, model.DecisionAllow, res.Decision)
 }
 
+func TestEvaluate_EntriesGlobAtMaxSize(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: pem-read
+    action: block
+    condition: 'context.entries.exists(e, glob(e.path, "**/.ssh/id_*") || glob(e.path, "**/*.pem"))'
+`)
+	entries := make([]model.EntryFacts, 1000)
+	for i := range entries {
+		entries[i] = model.EntryFacts{Seq: int64(i + 1), Path: "/" + strings.Repeat("a/", storage.EntryPathMaxBytes/2-1)}
+	}
+	res, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionFileRead}, &model.ContextSnapshot{Entries: entries})
+	require.NoError(t, err, "a glob rule on the largest entry log ends in time")
+	assert.Equal(t, model.DecisionAllow, res.Decision)
+}
+
+func TestGlob_PathTooLong(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: pem-read
+    action: block
+    condition: 'glob(action.params.path, "**/*.pem")'
+`)
+	_, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionFileRead,
+		Parameters: model.Parameters{Path: "/" + strings.Repeat("a", globPathMaxBytes) + ".pem"}}, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "longer than")
+}
+
 func TestCollectContextRefs_Forms(t *testing.T) {
 	cases := []struct {
 		condition string
@@ -113,18 +173,10 @@ func TestCollectContextRefs_Forms(t *testing.T) {
 	require.NoError(t, err)
 	for _, tc := range cases {
 		t.Run(tc.condition, func(t *testing.T) {
-			_, refs, err := compileCondition(env, "r", tc.condition)
+			_, ast, err := compileCondition(env, "r", tc.condition)
 			require.NoError(t, err)
-			assert.Equal(t, tc.want, refs)
+			assert.Equal(t, tc.want, collectContextRefs(ast))
 		})
-	}
-}
-
-func TestValidate_SemanticDriftRemovedByIndex(t *testing.T) {
-	for _, cond := range []string{`context["semantic_drift"] > 0.5`, `context.?semantic_drift.orValue(0.0) > 0.5`} {
-		_, err := ParsePolicy([]byte("version: \"1\"\nrules:\n  - id: drift\n    action: block\n    condition: '" + cond + "'\n"))
-		require.Error(t, err, cond)
-		assert.Contains(t, err.Error(), "context.semantic_drift was removed")
 	}
 }
 
@@ -134,7 +186,7 @@ version: "1"
 rules:
   - id: drift-message
     action: warn
-    message: "drift {{.Context.SemanticDrift}}"
+    message: "drift {{.Context.Drift}}"
 `))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "can't evaluate field")

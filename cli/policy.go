@@ -544,7 +544,7 @@ func reportPolicyValidation(cmd *cobra.Command, app *App) error {
 	if err != nil {
 		return ErrConfig("failed to validate policy", err)
 	}
-	if err := pdp.CheckTagNames(policy); err != nil {
+	if err := pdp.CheckStrict(policy); err != nil {
 		return ErrConfig("failed to validate policy", err)
 	}
 
@@ -576,7 +576,7 @@ func renderPolicyWarnings(out io.Writer, c *tui.Colorizer, policy *pdp.Policy) e
 func reportFileValidation(cmd *cobra.Command, app *App, path string) error {
 	policy, err := pdp.LoadPolicyFile(path)
 	if err == nil {
-		err = pdp.CheckTagNames(policy)
+		err = pdp.CheckStrict(policy)
 	}
 	if err != nil {
 		return ErrConfig("failed to validate policy file", err)

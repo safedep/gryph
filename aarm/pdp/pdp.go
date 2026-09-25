@@ -72,8 +72,8 @@ func New(policy *Policy, opts ...Option) (*PDP, error) {
 		return nil, err
 	}
 	if policy != nil {
-		if err := CheckTagNames(policy); err != nil {
-			log.Warnf("pdp: %v. The policy loads, but gryph policy validate rejects the tag", err)
+		if err := cmp.Or(CheckTagNames(policy), removedFieldError(compiled)); err != nil {
+			log.Warnf("pdp: %v. The policy loads, but gryph policy validate rejects it", err)
 		}
 	}
 	p := &PDP{rules: compiled}
@@ -375,6 +375,8 @@ func contextFieldEmpty(field string, s *model.ContextSnapshot) bool {
 		return len(s.ClassificationsSeen) == 0
 	case "entities_seen":
 		return len(s.EntitiesSeen) == 0
+	case "semantic_drift":
+		return true
 	default:
 		return false
 	}
@@ -425,6 +427,9 @@ type compiledRule struct {
 	hasCondition       bool
 	hasMessageTemplate bool
 	contextRefs        []string
+	// removed is the validation error of a rule that reads a removed
+	// context field. The rule still loads.
+	removed error
 }
 
 func compileRules(rules []Rule) ([]compiledRule, error) {
@@ -479,18 +484,16 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 	}
 
 	if strings.TrimSpace(rule.Condition) != "" {
-		prg, refs, err := compileCondition(env, rule.ID, rule.Condition)
+		prg, ast, err := compileCondition(env, rule.ID, rule.Condition)
 		if err != nil {
 			return cr, err
 		}
-		for _, removed := range removedContextFields {
-			if slices.Contains(refs, removed) {
-				return cr, fmt.Errorf("rule %q condition: context.%s was removed. Remove it from the condition", rule.ID, removed)
-			}
-		}
 		cr.condition = prg
 		cr.hasCondition = true
-		cr.contextRefs = refs
+		cr.contextRefs = collectContextRefs(ast)
+		if field := removedFieldRef(ast); field != "" {
+			cr.removed = fmt.Errorf("rule %q condition: context.%s was removed. Remove it from the condition", rule.ID, field)
+		}
 	}
 
 	if strings.TrimSpace(rule.Message) != "" {
@@ -506,6 +509,11 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 		}
 		cr.message = tmpl
 		cr.hasMessageTemplate = true
+		for _, f := range removedContextFields {
+			if cr.removed == nil && f.templateRE.MatchString(rule.Message) {
+				cr.removed = fmt.Errorf("rule %q message template: .Context.%s was removed. Remove it from the message", rule.ID, f.template)
+			}
+		}
 	}
 
 	return cr, nil
@@ -672,15 +680,14 @@ func validateGlobPatterns(field, ruleID string, patterns []string) error {
 // matches() regex on a prompt at celPromptContentMax costs about 19000 and
 // runs in under 1 ms, and the limit leaves room for a regex about five times
 // that long. A condition that reads context.entries walks up to
-// config.MaxCELEntries entries with a command of up to
-// storage.EntryCommandMaxBytes each, so it gets entriesCostLimit. The 100 ms
-// timeout bounds both.
+// config.MaxCELEntries entries, and the storage bounds the size of each entry
+// field, so it gets entriesCostLimit. The 100 ms timeout bounds both.
 const (
 	conditionCostLimit = 100_000
 	entriesCostLimit   = 5_000_000
 )
 
-func compileCondition(env *cel.Env, ruleID, expr string) (cel.Program, []string, error) {
+func compileCondition(env *cel.Env, ruleID, expr string) (cel.Program, *cel.Ast, error) {
 	ast, issues := env.Compile(expr)
 	if issues.Err() != nil {
 		return nil, nil, fmt.Errorf("rule %q condition: %w", ruleID, issues.Err())
@@ -688,16 +695,15 @@ func compileCondition(env *cel.Env, ruleID, expr string) (cel.Program, []string,
 	if ast.OutputType() != cel.BoolType {
 		return nil, nil, fmt.Errorf("rule %q condition: output type %s, want bool", ruleID, ast.OutputType())
 	}
-	refs := collectContextRefs(ast)
 	costLimit := uint64(conditionCostLimit)
-	if readsEntries(refs) {
+	if readsEntries(collectContextRefs(ast)) {
 		costLimit = entriesCostLimit
 	}
 	prg, err := env.Program(ast, cel.CostLimit(costLimit), cel.InterruptCheckFrequency(100))
 	if err != nil {
 		return nil, nil, fmt.Errorf("rule %q condition program: %w", ruleID, err)
 	}
-	return prg, refs, nil
+	return prg, ast, nil
 }
 
 // collectContextRefs walks the compiled CEL AST and returns the immediate
@@ -720,25 +726,9 @@ func collectContextRefs(ast *cel.Ast) []string {
 			if e.AsIdent() == "context" {
 				idents++
 			}
-		case celast.SelectKind:
-			sel := e.AsSelect()
-			if isContextIdent(sel.Operand()) {
-				seen[sel.FieldName()] = struct{}{}
-				accesses++
-			}
-		case celast.CallKind:
-			call := e.AsCall()
-			switch call.FunctionName() {
-			case operators.Index, operators.OptIndex, operators.OptSelect:
-			default:
-				return
-			}
-			args := call.Args()
-			if len(args) != 2 || !isContextIdent(args[0]) || args[1].Kind() != celast.LiteralKind {
-				return
-			}
-			if name, ok := args[1].AsLiteral().(types.String); ok {
-				seen[string(name)] = struct{}{}
+		default:
+			if operand, field, ok := fieldAccess(e); ok && isContextIdent(operand) {
+				seen[field] = struct{}{}
 				accesses++
 			}
 		}
@@ -760,6 +750,73 @@ func collectContextRefs(ast *cel.Ast) []string {
 	return out
 }
 
+// fieldAccess returns the operand and the field name of a select such as
+// x.f or x.?f, or of an index with a string literal such as x["f"].
+func fieldAccess(e celast.Expr) (celast.Expr, string, bool) {
+	switch e.Kind() {
+	case celast.SelectKind:
+		sel := e.AsSelect()
+		return sel.Operand(), sel.FieldName(), true
+	case celast.CallKind:
+		call := e.AsCall()
+		switch call.FunctionName() {
+		case operators.Index, operators.OptIndex, operators.OptSelect:
+		default:
+			return nil, "", false
+		}
+		args := call.Args()
+		if len(args) != 2 || args[1].Kind() != celast.LiteralKind {
+			return nil, "", false
+		}
+		if name, ok := args[1].AsLiteral().(types.String); ok {
+			return args[0], string(name), true
+		}
+	}
+	return nil, "", false
+}
+
+// removedField is a context field that older policies can name. No
+// component computes it, so a rule on it can never fire as written. A policy
+// load keeps it at zero and warns. Validation rejects it.
+type removedField struct {
+	cel        string
+	template   string
+	templateRE *regexp.Regexp
+}
+
+var removedContextFields = []removedField{
+	{cel: "semantic_drift", template: "SemanticDrift", templateRE: regexp.MustCompile(`\.SemanticDrift\b`)},
+}
+
+// removedFieldError returns the error of the first rule that reads a removed
+// context field.
+func removedFieldError(rules []compiledRule) error {
+	for _, r := range rules {
+		if r.removed != nil {
+			return r.removed
+		}
+	}
+	return nil
+}
+
+// removedFieldRef returns a removed context field that the condition reads
+// on any value. Only context has these fields, so this also finds a read
+// through an alias, as in [context].exists(c, c.semantic_drift > 0).
+func removedFieldRef(ast *cel.Ast) string {
+	native := ast.NativeRep()
+	if native == nil {
+		return ""
+	}
+	var found string
+	celast.PreOrderVisit(native.Expr(), celast.NewExprVisitor(func(e celast.Expr) {
+		_, field, ok := fieldAccess(e)
+		if ok && found == "" && slices.ContainsFunc(removedContextFields, func(f removedField) bool { return f.cel == field }) {
+			found = field
+		}
+	}))
+	return found
+}
+
 // anyContextField is the reference of a condition that may read any context
 // field.
 const anyContextField = "*"
@@ -779,16 +836,21 @@ func conditionEnv() (*cel.Env, error) {
 	)
 }
 
-// removedContextFields are context fields that older policies can name. No
-// component computes them, so a rule on them could never fire as written.
-var removedContextFields = []string{"semantic_drift"}
+// globPathMaxBytes bounds the path of glob(). CEL gives glob() a fixed cost,
+// and the timeout cannot stop one long match, so a padded path must not reach
+// the matcher. It is PATH_MAX.
+const globPathMaxBytes = 4096
 
-// celGlob implements glob(path, pattern) with the rules of file_patterns.
+// celGlob implements glob(path, pattern). It matches one path against one
+// pattern with the matcher of file_patterns.
 func celGlob(path, pattern ref.Val) ref.Val {
 	p, ok1 := path.(types.String)
 	pat, ok2 := pattern.(types.String)
 	if !ok1 || !ok2 {
 		return types.NewErr("glob: want (string, string)")
+	}
+	if len(p) > globPathMaxBytes {
+		return types.NewErr("glob: path is longer than %d bytes", globPathMaxBytes)
 	}
 	if !doublestar.ValidatePattern(string(pat)) {
 		return types.NewErr("glob: invalid pattern %q", string(pat))
@@ -894,6 +956,7 @@ func contextActivation(snapshot *model.ContextSnapshot) map[string]any {
 		"tag_seq":              tagSeq(snapshot.TagsSeen),
 		"origins_seen":         nonNil(snapshot.OriginsSeen),
 		"entities_seen":        nonNil(snapshot.EntitiesSeen),
+		"semantic_drift":       0.0,
 		"egress_hosts":         nonNil(snapshot.EgressHosts),
 		"entries":              entryMaps(snapshot.Entries),
 		"intent_available":     snapshot.IntentAvailable,

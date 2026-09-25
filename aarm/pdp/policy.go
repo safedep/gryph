@@ -144,10 +144,8 @@ const TagNamePattern = `^[a-z][a-z0-9_-]{0,62}$`
 var tagNameRE = regexp.MustCompile(TagNamePattern)
 
 // CheckTagNames returns an error for the first tag that does not match
-// TagNamePattern. gryph policy validate and gryph policy install call it.
-// Loading a policy only warns, because tags were free-form before this
-// check, and a policy that fails to load would stop every hook under
-// fail_mode closed.
+// TagNamePattern. CheckStrict calls it. Loading a policy only warns,
+// because tags were free-form before this check.
 func CheckTagNames(policy *Policy) error {
 	for _, rule := range policy.Rules {
 		for _, tag := range rule.Tags {
@@ -157,6 +155,21 @@ func CheckTagNames(policy *Policy) error {
 		}
 	}
 	return nil
+}
+
+// CheckStrict returns the first problem that gryph policy validate and
+// gryph policy install reject, but that a policy load only warns on: a bad
+// tag name or a removed context field. A policy that fails to load stops
+// every hook under fail_mode closed, so an upgrade must not cause that.
+func CheckStrict(policy *Policy) error {
+	if err := CheckTagNames(policy); err != nil {
+		return err
+	}
+	compiled, err := compileRules(policy.Rules)
+	if err != nil {
+		return fmt.Errorf("pdp: compile policy: %w", err)
+	}
+	return removedFieldError(compiled)
 }
 
 var fileAccessValues = []shellcmd.Access{shellcmd.AccessRead, shellcmd.AccessWrite, shellcmd.AccessRemove}

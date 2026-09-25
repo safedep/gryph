@@ -352,12 +352,26 @@ func Load(configPath string) (*Config, error) {
 		cfg.Policy.Receipts.SignMode = aliased
 	}
 
+	clampCELEntries(&cfg.Policy.Context)
+
 	// Validate config
 	if err := validate(&cfg); err != nil {
 		return nil, err
 	}
 
 	return &cfg, nil
+}
+
+// clampCELEntries moves an out-of-range policy.context.cel_entries into the
+// range. A load error makes loadApp fall back to the defaults, and the
+// defaults turn the policy off. gryph config set still rejects the value.
+func clampCELEntries(cfg *ContextConfig) {
+	n := min(max(cfg.CELEntries, 1), MaxCELEntries)
+	if n != cfg.CELEntries {
+		log.Warnf("config: policy.context.cel_entries %d is not between 1 and %d. Gryph uses %d",
+			cfg.CELEntries, MaxCELEntries, n)
+		cfg.CELEntries = n
+	}
 }
 
 func signModeFromLegacyBool(b bool) string {

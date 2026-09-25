@@ -698,28 +698,33 @@ func nilIfEmpty(values []string) []string {
 	return values
 }
 
-// EntryCommandMaxBytes bounds the command of one item of context.entries. A
-// long command would raise the CEL cost of every rule that reads the log, and
-// an agent could pad its commands to push such a rule over its cost limit.
-const EntryCommandMaxBytes = 1024
+// These bound the fields of one item of context.entries. A long value would
+// raise the CEL cost and the run time of every rule that reads the log, and
+// an agent could pad its commands or paths to push such a rule over its
+// limits on every later action. A path keeps its end, so that a pattern on
+// the file name, such as "**/*.pem", still matches.
+const (
+	EntryCommandMaxBytes = 1024
+	EntryPathMaxBytes    = 1024
+	EntryNameMaxBytes    = 256
+)
 
 // entryFactsSQL reads the latest entries of a session, newest first. The
 // audit event gives the path and the stored command.
-const entryFactsSQL = `SELECT ce.sequence, ce.kind, ce.action_type, COALESCE(ce.tool, ''),
-	COALESCE(json_extract(ae.payload, '$.path'), ''), substr(COALESCE(` + payloadCommandSQL + `, ''), 1, ` + entryCommandMaxBytesSQL + `),
-	COALESCE(ce.target_host, ''), COALESCE(ce.target_mcp_server, ''), COALESCE(ce.origin, ''),
+const entryFactsSQL = `SELECT ce.sequence, ce.kind, ce.action_type, substr(COALESCE(ce.tool, ''), 1, ?),
+	substr(COALESCE(json_extract(ae.payload, '$.path'), ''), -?), substr(COALESCE(` + payloadCommandSQL + `, ''), 1, ?),
+	substr(COALESCE(ce.target_host, ''), 1, ?), substr(COALESCE(ce.target_mcp_server, ''), 1, ?), COALESCE(ce.origin, ''),
 	COALESCE(ce.classifications, 'null'), COALESCE(ce.tags, 'null'), COALESCE(ce.decision, ''), ce.result_status
 FROM context_entries ce LEFT JOIN audit_events ae ON ae.id = ce.event_id
 WHERE ce.session_id = ? ORDER BY ce.sequence DESC LIMIT ?`
-
-const entryCommandMaxBytesSQL = "1024"
 
 // QueryEntryFacts implements ContextStore.
 func (s *SQLiteStore) QueryEntryFacts(ctx context.Context, sessionID uuid.UUID, limit int) ([]*EntryFactsRow, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
-	rows, err := s.db.QueryContext(ctx, entryFactsSQL, sessionID, limit)
+	rows, err := s.db.QueryContext(ctx, entryFactsSQL, EntryNameMaxBytes, EntryPathMaxBytes, EntryCommandMaxBytes,
+		EntryNameMaxBytes, EntryNameMaxBytes, sessionID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query entry facts: %w", err)
 	}

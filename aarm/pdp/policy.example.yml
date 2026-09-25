@@ -188,7 +188,9 @@ rules:
   #   context.actions_since_intent   int
   #   context.entries                list<map>     (the latest entries)
   #
-  # glob(path, pattern) matches a path with the file_patterns rules.
+  # glob(path, pattern) matches one path against one doublestar pattern. It
+  # does not match a directory that holds a matching path. file_patterns
+  # with file_access: [read] do.
   # CEL evaluation is sandboxed with a 100ms timeout and a fixed cost cap.
   # ---------------------------------------------------------------------------
   - id: guide-large-edit

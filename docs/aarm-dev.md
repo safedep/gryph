@@ -190,9 +190,12 @@ the state as `Hosts` and `Entities`. The entry table stores neither list.
 does the Mediator call `Accumulator.Entries`, which reads
 `Store.QueryEntryFacts`: the latest `policy.context.cel_entries` entries,
 joined with `audit_events` for the path and the stored command. The CEL
-function `glob` uses the `file_patterns` matcher. `removedContextFields` makes
-a rule on `context.semantic_drift` fail to compile. The receipt snapshot keeps
-`semantic_drift` at zero, so the receipt hash format does not change.
+function `glob` uses the `file_patterns` matcher. `pdp.CheckStrict` rejects a
+rule that reads a field in `removedContextFields`, such as
+`context.semantic_drift`, also through an alias. `gryph policy validate` and
+`install` call it. A policy load only warns, and the field reads as zero. The
+receipt snapshot keeps `semantic_drift` at zero, so the receipt hash format
+does not change.
 
 `EvaluationResult.MatchedTags` is the sorted union of the tags of every
 matched rule. `appendEntry` stores it on the entry, and the accumulator adds

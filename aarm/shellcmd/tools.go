@@ -386,9 +386,6 @@ var (
 			"--trust-server-names", "--force-directories", "--spider"),
 		abbrev: true,
 	}
-	// lookupOptions cover dig, nslookup, host, ping and traceroute.
-	lookupOptions = valueOptions("-p", "-t", "-c", "-q", "-x", "-b", "-f", "-k", "-y", "-W", "-w",
-		"-i", "-I", "-s", "-l", "-m", "-S", "-T", "-z", "-M", "-N")
 	gitOptions = valueOptions("-C", "-c", "--git-dir", "--work-tree", "--namespace",
 		"--exec-path", "-b", "--branch", "-o", "--origin", "--depth", "-u", "--upload-pack",
 		"--reference", "--template", "-j", "--jobs", "--filter", "--separate-git-dir", "--config",
@@ -1031,9 +1028,24 @@ func (w *walker) curl(p parsedArgs, cwds dirs) {
 		}
 		w.addNetworkHost(u)
 	}
-	if p.has("-K", "--config") {
-		// A config file can hold the URLs.
+	if p.has("-K", "--config", "--resolve") {
+		// A config file can hold the URLs, and --resolve sends a host
+		// name to any address.
 		w.addHost(UnknownHost)
+	}
+	for _, v := range p.value("-x", "--proxy", "--preproxy", "--socks4", "--socks4a", "--socks5",
+		"--socks5-hostname", "--doh-url") {
+		w.addNetworkHost(v)
+	}
+	for _, v := range p.value("--connect-to") {
+		// HOST1:PORT1:HOST2:PORT2 sends HOST1 to HOST2. An empty HOST2
+		// keeps HOST1.
+		parts := strings.Split(v, ":")
+		if len(parts) != 4 || strings.Contains(v, "[") {
+			w.addHost(UnknownHost)
+		} else if parts[2] != "" {
+			w.addNetworkHost(parts[2])
+		}
 	}
 	for _, v := range p.value("-d", "--data", "--data-binary", "--data-ascii", "--json") {
 		if file, ok := strings.CutPrefix(v, "@"); ok {
@@ -1154,9 +1166,14 @@ func (w *walker) wget(p parsedArgs, cwds dirs) {
 	for _, u := range p.operands {
 		w.addNetworkHost(u)
 	}
-	if len(p.value("-i", "--input-file")) > 0 {
+	if p.has("-i", "--input-file") {
 		// An input file holds the URLs.
 		w.addHost(UnknownHost)
+	}
+	for _, e := range p.value("-e", "--execute") {
+		if strings.Contains(strings.ToLower(e), "proxy") {
+			w.addHost(UnknownHost)
+		}
 	}
 	w.addAll(p.value("--post-file", "--body-file", "-i", "--input-file"), AccessRead, cwds)
 	w.addOutputs(p.value("-O", "--output-document", "-o", "--output-file", "-a", "--append-output",
@@ -1220,22 +1237,136 @@ func (w *walker) addUpload(file string, cwds dirs) {
 	}
 }
 
+// sshRoute records the hosts that ssh, scp or sftp connects through: the
+// jump hosts of -J and ProxyJump, and the host of the HostName option. A
+// config file or a ProxyCommand can connect to any host.
+func (w *walker) sshRoute(p parsedArgs) {
+	if p.has("-F") {
+		w.addHost(UnknownHost)
+	}
+	jumps := p.value("-J")
+	for _, o := range p.value("-o") {
+		key, value, _ := strings.Cut(strings.TrimSpace(o), "=")
+		if k, v, ok := strings.Cut(key, " "); ok {
+			key, value = k, v
+		}
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "proxyjump":
+			jumps = append(jumps, value)
+		case "hostname":
+			w.addNetworkHost(strings.TrimSpace(value))
+		case "proxycommand", "":
+			w.addHost(UnknownHost)
+		}
+	}
+	for _, j := range jumps {
+		for _, h := range strings.Split(j, ",") {
+			w.addNetworkHost(strings.TrimSpace(h))
+		}
+	}
+}
+
 func (w *walker) remoteShell(p parsedArgs) {
 	if len(p.operands) > 0 {
 		w.addNetworkHost(p.operands[0])
 	}
 }
 
-// lookup records the host of a DNS or reachability tool such as dig or
-// ping. An argument that starts with "@" names the DNS server.
-func (w *walker) lookup(p parsedArgs) {
+// lookupTool describes the options and operands of a DNS or reachability
+// tool. A value flag that a tool does not have would hide the host that
+// follows it, so each table lists only the options that take a value on
+// every common build of the tool.
+type lookupTool struct {
+	opts options
+	// hostFlags take a host, or a list of hosts split by commas.
+	hostFlags []string
+	// fileFlags read the names from a file.
+	fileFlags []string
+	// skip reports an operand that names no host.
+	skip func(op string) bool
+	// firstOnly is true when only the first operand names a host.
+	firstOnly bool
+	// stdin is true when the tool reads the names from stdin when it has
+	// no operand or the operand "-".
+	stdin bool
+}
+
+var lookupTools = func() map[string]lookupTool {
+	ping := lookupTool{opts: valueOptions("-c", "-e", "-F", "-i", "-I", "-l", "-m", "-M", "-N",
+		"-p", "-s", "-S", "-t", "-T", "-w", "-W")}
+	return map[string]lookupTool{
+		"dig": {
+			opts:      valueOptions("-b", "-c", "-f", "-k", "-p", "-q", "-t", "-x", "-y"),
+			hostFlags: []string{"-q", "-x"},
+			fileFlags: []string{"-f"},
+			skip:      isDigArg,
+		},
+		"host":     {opts: valueOptions("-c", "-m", "-N", "-p", "-R", "-t", "-W")},
+		"nslookup": {skip: func(op string) bool { return op == "-" }, stdin: true},
+		"ping":     ping,
+		"ping6":    ping,
+		"traceroute": {
+			opts: valueOptions("-f", "-g", "-i", "-l", "-m", "-M", "-N", "-O", "-p", "-P", "-q", "-s",
+				"-t", "-w", "-z"),
+			hostFlags: []string{"-g"},
+			firstOnly: true,
+		},
+		"tracepath": {opts: valueOptions("-l", "-m", "-p"), firstOnly: true},
+		"whois": {
+			opts:      valueOptions("-h", "--host", "-p", "--port", "-g", "-i", "-q", "-s", "-t", "-T", "-v"),
+			hostFlags: []string{"-h", "--host"},
+		},
+	}
+}()
+
+// dnsKeywords are the record types and classes that dig takes as operands.
+var dnsKeywords = flagSet("a", "aaaa", "afsdb", "any", "axfr", "caa", "cdnskey", "cds", "cert",
+	"ch", "chaos", "cname", "csync", "dname", "dnskey", "ds", "hinfo", "hs", "hesiod", "https",
+	"in", "ixfr", "key", "loc", "mx", "naptr", "none", "ns", "nsec", "nsec3", "nsec3param",
+	"openpgpkey", "ptr", "rp", "rrsig", "sig", "smimea", "soa", "spf", "srv", "sshfp", "svcb",
+	"tlsa", "txt", "uri", "zonemd")
+
+// isDigArg reports a dig operand that is a query option such as "+short", a
+// record type, or a class.
+func isDigArg(op string) bool {
+	op = strings.ToLower(op)
+	if strings.HasPrefix(op, "+") || dnsKeywords[op] {
+		return true
+	}
+	for _, prefix := range []string{"type", "class"} {
+		if n, ok := strings.CutPrefix(op, prefix); ok && n != "" && strings.Trim(n, "0123456789") == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// lookup records the hosts of a DNS or reachability tool such as dig or
+// ping. An operand that starts with "@" names the DNS server.
+func (w *walker) lookup(tool lookupTool, args []string) {
+	p := parseArgs(args, tool.opts)
+	if p.has(tool.fileFlags...) || tool.stdin && (len(p.operands) == 0 || p.operands[0] == "-") {
+		w.addHost(UnknownHost)
+	}
+	for _, v := range p.value(tool.hostFlags...) {
+		for _, h := range strings.Split(v, ",") {
+			w.addNetworkHost(h)
+		}
+	}
+	names := 0
 	for _, op := range p.operands {
+		if tool.skip != nil && tool.skip(op) {
+			continue
+		}
 		if server, ok := strings.CutPrefix(op, "@"); ok {
 			w.addNetworkHost(server)
 			continue
 		}
+		if tool.firstOnly && names > 0 {
+			return
+		}
+		names++
 		w.addNetworkHost(op)
-		return
 	}
 }
 
