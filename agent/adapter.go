@@ -7,6 +7,7 @@ import (
 	"path"
 	"slices"
 
+	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/core/events"
 )
 
@@ -203,27 +204,18 @@ func RequiredHookTypeNames(specs []events.HookSpec) []string {
 
 // SetPluginStatus fills status for a plugin file that Gryph generates.
 // marker returns the text that the plugin holds for one hook type. A plugin
-// that equals expected is valid. A plugin from an older Gryph that lacks only
-// prompt hooks is also valid, so doctor warns about the prompt hook. Any
-// other difference makes the plugin invalid, with the issue text stale.
-func SetPluginStatus(status *HookStatus, content, expected []byte, specs []events.HookSpec, marker func(hookType string) string, stale string) {
+// is valid only when it equals expected, or when its SHA-256 digest is in
+// legacyDigests. A legacy plugin can lack the prompt hooks, so doctor warns
+// about them. Any other content can skip a block, so the plugin is invalid,
+// with the issue text stale.
+func SetPluginStatus(status *HookStatus, content, expected []byte, legacyDigests []string, specs []events.HookSpec, marker func(hookType string) string, stale string) {
 	status.Installed = true
 	for _, s := range specs {
 		if bytes.Contains(content, []byte(marker(string(s.Type)))) {
 			status.Hooks = append(status.Hooks, string(s.Type))
 		}
 	}
-	if bytes.Equal(content, expected) {
-		status.Valid = true
-		return
-	}
-	missingOnlyPrompts := len(status.Hooks) < len(specs)
-	for _, t := range RequiredHookTypeNames(specs) {
-		if !slices.Contains(status.Hooks, t) {
-			missingOnlyPrompts = false
-		}
-	}
-	status.Valid = missingOnlyPrompts
+	status.Valid = bytes.Equal(content, expected) || slices.Contains(legacyDigests, utils.HashContent(string(content)))
 	if !status.Valid {
 		status.Issues = append(status.Issues, stale)
 	}

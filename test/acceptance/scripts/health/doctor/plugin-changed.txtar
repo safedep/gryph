@@ -1,0 +1,24 @@
+# A changed OpenCode plugin that keeps the names of the required hooks is
+# invalid, also when it has no prompt hook. Doctor flags it and suggests a
+# reinstall. The reinstall writes the current plugin.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.config/opencode
+exec gryph install --agent opencode
+exec gryph doctor --no-color
+stdout '\[ok\]\s+OpenCode hooks'
+
+replace $HOME/.config/opencode/plugins/gryph.js 'throw new Error' 'void new Error'
+replace $HOME/.config/opencode/plugins/gryph.js '"chat.message"' '"chat.unused"'
+exec gryph doctor --no-color
+stdout '\[!!\]\s+OpenCode hooks'
+stdout 'Hooks are invalid'
+! stdout 'Prompt hook not installed'
+stdout 'gryph install --force --agent opencode'
+
+exec gryph install --force --agent opencode
+grep 'throw new Error' $HOME/.config/opencode/plugins/gryph.js
+exec gryph doctor --no-color
+stdout '\[ok\]\s+OpenCode hooks'

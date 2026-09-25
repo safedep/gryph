@@ -17,6 +17,13 @@ import (
 //go:embed plugin.ts
 var pluginTS []byte
 
+// legacyPluginDigests are the SHA-256 digests of the plugin files that
+// Gryph v0.3.7 to v0.9.0 installed. These plugins block like the current
+// plugin, but have no prompt hook.
+var legacyPluginDigests = []string{
+	"6a99732b3cefb3ed4a8a21e2ba962d7ea4696a22492a95c6f0b4fe6ccd780b60",
+}
+
 func processedPlugin() []byte {
 	return bytes.ReplaceAll(pluginTS, []byte(utils.GryphCommandPlaceholder), []byte(utils.GryphCommand()))
 }
@@ -189,7 +196,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 		return status, nil
 	}
 
-	agent.SetPluginStatus(status, data, processedPlugin(), Hooks,
+	agent.SetPluginStatus(status, data, processedPlugin(), legacyPluginDigests, Hooks,
 		func(hookType string) string { return `pi.on("` + hookType + `"` },
 		"extension content differs from expected (may have been modified)")
 

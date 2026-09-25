@@ -393,6 +393,13 @@
   guarantee: "gryph install --agent claude-code writes a UserPromptSubmit hook entry, and doctor reports the hooks as valid."
   labels: [install, prompt]
 
+- id: health/doctor/plugin-changed
+  title: "doctor flags a changed plugin that keeps the hook names"
+  category: health
+  tier: P1
+  guarantee: "gryph doctor reports an OpenCode plugin as invalid unless it equals the current plugin or a known released plugin, and suggests install --force."
+  labels: [doctor]
+
 - id: health/doctor/prompt-hook-missing
   title: "doctor warns when the prompt hook is missing"
   category: health

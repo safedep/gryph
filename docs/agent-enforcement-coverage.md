@@ -96,9 +96,12 @@ Code has no prompt hook, so its sessions have no intent.
 - Gemini CLI turns hooks on by default from v0.26.0, and Pi fires `input` from
   v0.47.0. `gryph doctor` warns when the detected version is older. An older
   Gemini CLI fires the hooks only when the user turns hooks on.
-- Gemini CLI appends the files that the user names with `@` to the prompt.
-  Gryph records the text before the `--- Content from referenced files ---`
-  line only.
+- Gemini CLI appends the files that the user names with `@` to the prompt,
+  between a `--- Content from referenced files ---` line and a
+  `--- End of content ---` line. Gryph records the text before that block
+  only when the block has this full structure. Content rules match the full
+  prompt, file content included, because Gemini CLI reads those files
+  without a `BeforeTool` hook.
 - OpenCode has no documented block result for `chat.message`. Its
   `Plugin.trigger` runs each hook in `Effect.promise`, so the error that the
   Gryph plugin throws on a block fails the prompt before OpenCode saves the
@@ -112,13 +115,25 @@ Code has no prompt hook, so its sessions have no intent.
   it the origin `user`.
 - An install without the prompt hook stays valid. `gryph doctor` warns about
   it. An OpenCode or Pi plugin from an older Gryph lacks the prompt hook, and
-  `gryph install --force` replaces it.
+  `gryph install --force` replaces it. Gryph accepts an OpenCode or Pi plugin
+  only when it is equal to the current plugin or to a plugin that a Gryph
+  release installed. `gryph doctor` reports any other plugin as invalid.
 
 Known gaps:
 
 - Pi runs the `input` handlers before it expands `/skill:` commands and prompt
   templates. A content rule sees `/review`, not the expanded text. An
   extension command never reaches `input`.
+- Pi fires `input` only in `AgentSession.prompt()`. `AgentSession.steer()`
+  and `AgentSession.followUp()` queue the message for the model without an
+  `input` event. The RPC `steer` and `follow_up` commands use them, and so
+  does the interactive mode when it sends the messages that the user typed
+  during a compaction. Gryph does not record these prompts, and a prompt
+  rule does not apply to them. Pi has no event that blocks a queued message.
+  The `context` event can change the messages before each model call, but it
+  fires again for every call with the full history, so Gryph does not use it
+  for prompts. The `tool_call` hook still checks every tool call that such a
+  prompt causes.
 - Gemini CLI ignores guidance on `BeforeAgent`, because Gryph writes it to
   stderr at exit 0.
 - When a Gemini CLI `AfterAgent` hook asks for a retry, Gemini CLI fires

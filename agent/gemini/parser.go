@@ -175,10 +175,26 @@ func (a *Adapter) parseAfterTool(sessionID uuid.UUID, agentSessionID string, bas
 	return event, nil
 }
 
-// referencedFilesMarker starts the block where Gemini CLI appends the files
-// and MCP resources that the user names with @. That text is file content,
-// not what the user typed.
-const referencedFilesMarker = "--- Content from referenced files ---"
+// Gemini CLI appends the files and MCP resources that the user names with @
+// in a block between these lines. The block holds file content, not what the
+// user typed.
+const (
+	referencedFilesStart = "\n--- Content from referenced files ---\n"
+	referencedFilesEnd   = "\n--- End of content ---"
+)
+
+// typedPrompt removes the referenced files block that Gemini CLI appends.
+// A user can type the start line, so the text is cut only when the start
+// line is followed by a file block and the text ends with the end line.
+func typedPrompt(prompt string) string {
+	trimmed := strings.TrimRight(prompt, "\n ")
+	i := strings.LastIndex(trimmed, referencedFilesStart)
+	if i < 0 || !strings.HasSuffix(trimmed, referencedFilesEnd) ||
+		!strings.HasPrefix(trimmed[i+len(referencedFilesStart):], "Content from @") {
+		return trimmed
+	}
+	return strings.TrimRight(trimmed[:i], "\n ")
+}
 
 func parseBeforeAgent(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {
 	var input BeforeAgentInput
@@ -191,10 +207,13 @@ func parseBeforeAgent(sessionID uuid.UUID, agentSessionID string, rawData []byte
 	event.WorkingDirectory = input.Cwd
 	event.TranscriptPath = input.TranscriptPath
 	event.RawEvent = rawData
-	prompt, _, _ := strings.Cut(input.Prompt, referencedFilesMarker)
-	if err := event.SetPrompt(strings.TrimRight(prompt, "\n "), privacy.OriginUser); err != nil {
+	if err := event.SetPrompt(typedPrompt(input.Prompt), privacy.OriginUser); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
 	}
+	// Gemini CLI reads the referenced files without a BeforeTool hook, and a
+	// user can type the block lines. So content rules match the whole text
+	// that the model gets.
+	event.FullContent = input.Prompt
 	return event, nil
 }
 
