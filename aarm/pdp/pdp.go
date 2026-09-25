@@ -16,6 +16,7 @@ import (
 	"github.com/google/cel-go/cel"
 	celast "github.com/google/cel-go/common/ast"
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/aarm/shellcmd"
 )
 
 const conditionTimeout = 100 * time.Millisecond
@@ -344,8 +345,8 @@ type compiledRule struct {
 	message            *template.Template
 	filePatterns       []string
 	containerPatterns  []string
-	treePatterns       []string
-	namedTreePatterns  []string
+	parentPatterns     []string
+	fileAccess         []shellcmd.Access
 	workingDirPatterns []string
 	hasCondition       bool
 	hasMessageTemplate bool
@@ -390,8 +391,14 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 		return cr, err
 	}
 	cr.containerPatterns = containerPatterns(cr.filePatterns)
-	cr.treePatterns = parentPatterns(cr.filePatterns)
-	cr.namedTreePatterns = namedTreePatterns(cr.filePatterns)
+	cr.parentPatterns = parentPatterns(cr.filePatterns)
+	cr.fileAccess = defaultFileAccess
+	if len(rule.Match.FileAccess) > 0 {
+		cr.fileAccess = make([]shellcmd.Access, 0, len(rule.Match.FileAccess))
+		for _, a := range rule.Match.FileAccess {
+			cr.fileAccess = append(cr.fileAccess, shellcmd.Access(a))
+		}
+	}
 	if err := validateGlobPatterns("working_directory_patterns", rule.ID, cr.workingDirPatterns); err != nil {
 		return cr, err
 	}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
+	"github.com/safedep/gryph/aarm/shellcmd"
 )
 
 // BuiltinRuleIDPrefix is the reserved ID prefix for built-in self-protection
@@ -14,7 +15,10 @@ import (
 // document's disabled: list, so a repo-local policy cannot weaken them.
 const BuiltinRuleIDPrefix = "gryph-builtin-"
 
-const builtinProtectedFilesRuleID = BuiltinRuleIDPrefix + "protected-files"
+const (
+	builtinProtectedFilesRuleID = BuiltinRuleIDPrefix + "protected-files"
+	builtinProtectedReadsRuleID = BuiltinRuleIDPrefix + "protected-reads"
+)
 
 // BuiltinSource emits the embedded self-protection rules. It is constructed by
 // the runtime with the resolved set of file globs to protect (policy source
@@ -26,12 +30,26 @@ type BuiltinSource struct {
 	// every path that an agent write, delete, or shell command must not
 	// change. Empty disables the rule rather than matching every path.
 	FileGlobs []string
+
+	// ReadGlobs are the paths that an agent read or shell command must not
+	// read. Empty omits the read rule.
+	ReadGlobs []string
 }
 
 // NewBuiltinSource builds a BuiltinSource from the given protected paths. Each
 // path is forward-slash normalized; duplicates and empties are dropped. Pass
 // glob patterns directly (e.g. "**/.cursor/hooks.json") or absolute paths.
 func NewBuiltinSource(globs ...string) *BuiltinSource {
+	return &BuiltinSource{FileGlobs: normalizeGlobs(globs)}
+}
+
+// WithReadGlobs sets the paths that the read rule protects.
+func (s *BuiltinSource) WithReadGlobs(globs ...string) *BuiltinSource {
+	s.ReadGlobs = normalizeGlobs(globs)
+	return s
+}
+
+func normalizeGlobs(globs []string) []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, len(globs))
 	for _, g := range globs {
@@ -45,7 +63,7 @@ func NewBuiltinSource(globs ...string) *BuiltinSource {
 		seen[g] = struct{}{}
 		out = append(out, g)
 	}
-	return &BuiltinSource{FileGlobs: out}
+	return out
 }
 
 func (s *BuiltinSource) Name() string { return "builtin" }
@@ -54,10 +72,18 @@ func (s *BuiltinSource) Name() string { return "builtin" }
 // in Go (rather than embedded YAML) because their file patterns are resolved
 // at runtime from the operator's config and the installed agents.
 func (s *BuiltinSource) Load(_ context.Context) ([]*pdp.Policy, error) {
-	if len(s.FileGlobs) == 0 {
-		return []*pdp.Policy{{}}, nil
+	var rules []pdp.Rule
+	if len(s.FileGlobs) > 0 {
+		rules = append(rules, s.protectedFilesRule())
 	}
-	rule := pdp.Rule{
+	if len(s.ReadGlobs) > 0 {
+		rules = append(rules, s.protectedReadsRule())
+	}
+	return []*pdp.Policy{{Rules: rules}}, nil
+}
+
+func (s *BuiltinSource) protectedFilesRule() pdp.Rule {
+	return pdp.Rule{
 		ID:          builtinProtectedFilesRuleID,
 		Description: "Block agent writes, deletes, and shell commands that change Gryph's own policy files, config, database, signing keys, or the agents' hook configs. The shell check is best effort.",
 		Action:      model.DecisionBlock,
@@ -69,5 +95,20 @@ func (s *BuiltinSource) Load(_ context.Context) ([]*pdp.Policy, error) {
 			FilePatterns: append([]string(nil), s.FileGlobs...),
 		},
 	}
-	return []*pdp.Policy{{Rules: []pdp.Rule{rule}}}, nil
+}
+
+func (s *BuiltinSource) protectedReadsRule() pdp.Rule {
+	return pdp.Rule{
+		ID:          builtinProtectedReadsRuleID,
+		Description: "Block agent reads and shell commands that read Gryph's database or receipt signing key. The shell check is best effort.",
+		Action:      model.DecisionBlock,
+		Severity:    model.SeverityCritical,
+		Tags:        []string{"self-protection", "builtin"},
+		Message:     "Blocked by Gryph self-protection: {{if .Action.Params.Path}}a read of {{.Action.Params.Path}} reads a protected Gryph file.{{else}}the command reads a protected Gryph file.{{end}}",
+		Match: pdp.Match{
+			ActionTypes:  []string{string(model.ActionFileRead), string(model.ActionCommandExec)},
+			FilePatterns: append([]string(nil), s.ReadGlobs...),
+			FileAccess:   []string{string(shellcmd.AccessRead)},
+		},
+	}
 }

@@ -363,7 +363,8 @@ func newPolicyBuiltinCmd() *cobra.Command {
 		Short: "Print the built-in self-protection rules",
 		Long: "Prints the AARM self-protection rules compiled into Gryph as YAML. " +
 			"These rules block agent writes to Gryph's own policy files, config, " +
-			"database, signing keys, and the agents' hook configs. They load last, " +
+			"database, signing keys, and the agents' hook configs, and agent reads " +
+			"of the database and the receipt signing key. They load last, " +
 			"cannot be disabled by a repo-local policy, and are toggled only via " +
 			"policy.self_protection.enabled in the operator's config file.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -381,7 +382,7 @@ func newPolicyBuiltinCmd() *cobra.Command {
 				paths = config.ResolvePaths()
 			}
 
-			src := loader.NewBuiltinSource(selfProtectionGlobs(cfg, paths)...)
+			src := selfProtectionSource(cfg, paths)
 			docs, err := src.Load(cmd.Context())
 			if err != nil {
 				return ErrConfig("build self-protection rules", err)
@@ -442,6 +443,7 @@ func sourceToRow(src loader.Source) sourceRow {
 			Status:   sourceStatusFound,
 			Hints: []string{
 				"Built-in rules protecting Gryph policy files, config, database, keys, and agent hook configs",
+				"Reads of the database and the receipt signing key are also blocked",
 				"Always loaded last; not affected by user disabled: lists",
 				"Toggle with policy.self_protection.enabled in the config file",
 			},
@@ -1256,7 +1258,7 @@ func policyLoaderSources(cfg *config.Config, paths *config.Paths) []loader.Sourc
 // appendBuiltinSource adds the self-protection source when it is enabled.
 func appendBuiltinSource(sources []loader.Source, cfg *config.Config, paths *config.Paths) []loader.Source {
 	if selfProtectionEnabled(cfg) {
-		sources = append(sources, loader.NewBuiltinSource(selfProtectionGlobs(cfg, paths)...))
+		sources = append(sources, selfProtectionSource(cfg, paths))
 	}
 	return sources
 }
@@ -1284,15 +1286,39 @@ func testPolicyLoader(app *App, file string) (*loader.Loader, error) {
 	return loader.New(sources...), nil
 }
 
+func selfProtectionSource(cfg *config.Config, paths *config.Paths) *loader.BuiltinSource {
+	return loader.NewBuiltinSource(selfProtectionGlobs(cfg, paths)...).
+		WithReadGlobs(selfProtectionReadGlobs(cfg, paths)...)
+}
+
+// selfProtectionReadGlobs returns the paths an agent must not read: the
+// database with its SQLite side files, and the receipt signing key. An agent
+// may read the policy files and the hook configs, so they are not here.
+func selfProtectionReadGlobs(cfg *config.Config, paths *config.Paths) []string {
+	if cfg == nil {
+		return nil
+	}
+	return append(databaseGlobs(cfg), filepath.ToSlash(cfg.ResolveReceiptKeyPath(paths)))
+}
+
+// databaseGlobs returns the database path and its SQLite side files. The
+// WAL file holds committed rows until a checkpoint copies them.
+func databaseGlobs(cfg *config.Config) []string {
+	db := cfg.GetDatabasePath()
+	if db == "" {
+		return nil
+	}
+	db = filepath.ToSlash(db)
+	return []string{db, db + "-wal", db + "-shm", db + "-journal"}
+}
+
 func selfProtectionGlobs(cfg *config.Config, paths *config.Paths) []string {
 	var globs []string
 	if paths != nil && paths.ConfigDir != "" {
 		globs = append(globs, filepath.ToSlash(paths.ConfigDir)+"/**")
 	}
 	if cfg != nil {
-		if db := cfg.GetDatabasePath(); db != "" {
-			globs = append(globs, filepath.ToSlash(db))
-		}
+		globs = append(globs, databaseGlobs(cfg)...)
 		globs = append(globs,
 			filepath.ToSlash(cfg.ResolveReceiptKeyPath(paths)),
 			filepath.ToSlash(cfg.ResolveReceiptTrustStorePath(paths)),

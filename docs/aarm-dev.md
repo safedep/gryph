@@ -63,7 +63,7 @@ write the execution outcome to the accumulator row and the receipt row.
 | `aarm/model` | Shared data model: `Action`, `Parameters`, `Decision`, `EvaluationResult`, `ContextSnapshot`, `Result`, `Severity`. Its only aarm dependency is `aarm/shellcmd`, for `Action.Shell`. `aarm/shellcmd` imports no Gryph package, and a test enforces it. |
 | `aarm/mediation` | `Adapter` interface plus `HookAdapter` and `MCPAdapter`. Normalizes agent events into `model.Action` and enriches with classify / injectscore / identity. |
 | `aarm/pdp` | Policy Decision Point. `Policy` / `Rule` schema, YAML parse, rule compile, `Evaluate`, CEL conditions, message templates, policy hash. |
-| `aarm/shellcmd` | Parses a shell command with `mvdan.cc/sh`. `Analyze` returns the paths the command reads, writes, or removes, and the hosts it contacts. The mediator stores the result on `model.Action.Shell`. The PDP matches `file_patterns` against the write and remove targets for `command_exec` actions. |
+| `aarm/shellcmd` | Parses a shell command with `mvdan.cc/sh`. `Analyze` returns the paths the command reads, writes, or removes, and the hosts it contacts. The mediator stores the result on `model.Action.Shell`. The PDP matches `file_patterns` against the targets that the rule's `file_access` selects (write and remove by default) for `command_exec` actions. |
 | `aarm/pep` | Policy Enforcement boundary. Maps `model.EvaluationResult` to `core/security.CheckResult`. |
 | `aarm/loader` | `Loader` merges policy `Source` values. `FileSource`, `DirSource` (the policies directory), and `BuiltinSource` (self-protection rules). |
 | `aarm/accumulator` | Context Accumulator interface. Per-session action memory feeding `context.*` CEL variables. `Nop` and SQLite implementations. |
@@ -187,12 +187,20 @@ relies on this. See
 [security-policy-threat-model.md](./security-policy-threat-model.md).
 
 Self-protection blocks agent changes to Gryph's own control surfaces (policy,
-config, database, signing keys, agent hook configs). It is one rule,
-`gryph-builtin-protected-files`, over `file_write`, `file_delete`, and
-`command_exec`. For a command, the PDP matches the paths that `aarm/shellcmd`
-parses from the command line. A delete or move of a directory also matches when
-the directory contains a protected path, for a shell command or a
-`file_delete`. The rule has no agent names and no command regexes.
+config, database, signing keys, agent hook configs). The rule
+`gryph-builtin-protected-files` covers `file_write`, `file_delete`, and
+`command_exec`. The rule `gryph-builtin-protected-reads` covers `file_read`
+and `command_exec` with `file_access: [read]`. It protects the database, its
+SQLite side files, and the receipt signing key. For a command, the PDP matches
+the paths that `aarm/shellcmd` parses from the command line. The PDP also
+resolves the action path (`~`, `..`, a relative path, a trailing slash)
+before it matches. A delete or move of a directory also matches when the
+directory contains a protected path, for a shell command or a `file_delete`.
+A shell read of such a directory matches the read rule, because a copy or a
+recursive read reads every file in it. A shell read through a glob matches
+when the glob covers a protected path (`Target.Glob`). A `file_read` of the
+directory that directly holds a protected path also matches. The rules have
+no agent names and no command regexes.
 
 `aarm/shellcmd` walks the parsed command tree. It tracks the set of working
 directories a command can run in: a `cd` in a subshell, a pipe, a
@@ -271,15 +279,10 @@ decompressed file, unless `-c` or `-k` is set. `zip -m`, `7z -sdel`, `tar
 
 The PDP matches a removal against every parent directory of each pattern,
 and the root for an absolute pattern. So `rm -rf ~` matches the Gryph config
-directory. The PDP matches a tree write against the directory that holds
-each pattern (`treePatterns`), and against the pattern itself. A recursive
-copy of a named directory into home or the working directory is a named
-tree write (`Target.Named`). It also matches each ancestor below the
-leading `**` of a relative pattern (`namedTreePatterns`). So `cp -r
-dotfiles/.codeium ~/` matches `**/.codeium/windsurf/hooks.json`, and `cp -r
-dotfiles/nvim ~/.config/` and `tar xf x -C ~/.config` do not match
-`**/.config/devin/config.json`. A tree write into another parent does not
-match. So `tar xzf
+directory. The PDP matches a tree write only against the directory that
+holds each pattern (`parentPatterns`), and against the pattern itself. A
+rule that selects `write` or `remove` in `file_access` also selects a tree
+write. A tree write into a parent of that directory does not match. So `tar xzf
 node_modules.tgz` in the project root, `cp -r dotfiles/nvim ~/.config/`, and
 `rsync -a stage/ ~/` do not match the built-in rule or a user rule on
 `**/.env`. A copy or an extract into the Gryph config directory, or into
@@ -298,12 +301,12 @@ lists are best effort. A plain `mv` or `ln` onto a directory that does not
 exist yet, and a `wget` or `curl` config file, are not seen. `tar` gives each
 letter of an old-style first word that takes a value the next word, in
 order, so `tar xfC a.tar dir` reads `a.tar` into `dir`.
-Self-protection matches write and remove targets only.
 
 The operator toggles self-protection only through
 `policy.self_protection.enabled`. Inspect it with `gryph policy builtin`.
 
-`selfProtectionGlobs` in `cli/policy.go` builds the globs. The Gryph paths come
+`selfProtectionGlobs` in `cli/policy.go` builds the write globs, and
+`selfProtectionReadGlobs` builds the read globs. The Gryph paths come
 from the config. The hook config paths come from each adapter's
 `HookConfigPaths()`, collected by `Registry.HookConfigGlobs()` over the adapters
 that `registerAdapters` in `cli/root.go` registers. To protect a new agent,

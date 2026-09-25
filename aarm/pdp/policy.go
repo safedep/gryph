@@ -4,12 +4,14 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/safedep/gryph/aarm/canonical"
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/aarm/shellcmd"
 	"gopkg.in/yaml.v3"
 )
 
@@ -51,6 +53,10 @@ type Match struct {
 	ToolNames                []string `yaml:"tool_names,omitempty"`
 	ContentPatterns          []string `yaml:"content_patterns,omitempty"`
 	WorkingDirectoryPatterns []string `yaml:"working_directory_patterns,omitempty"`
+	// FileAccess selects the shell targets of a command_exec action that
+	// FilePatterns match: read, write, or remove. The default is write and
+	// remove. FilePatterns always match the action path.
+	FileAccess []string `yaml:"file_access,omitempty"`
 }
 
 // Scope narrows rules to selected agents, projects, or tools.
@@ -114,8 +120,24 @@ func validateRule(rule Rule) error {
 	if rule.Action == model.DecisionDefer && strings.TrimSpace(rule.Reason) == "" {
 		return fmt.Errorf("rule %q action %q requires a non-empty reason", rule.ID, rule.Action)
 	}
+	if len(rule.Match.FileAccess) > 0 && len(rule.Match.FilePatterns) == 0 {
+		return fmt.Errorf("rule %q file_access requires file_patterns", rule.ID)
+	}
+	for i, a := range rule.Match.FileAccess {
+		if !slices.Contains(fileAccessValues, shellcmd.Access(a)) {
+			return fmt.Errorf("rule %q has invalid file_access %q: must be one of %v", rule.ID, a, fileAccessValues)
+		}
+		if slices.Contains(rule.Match.FileAccess[:i], a) {
+			return fmt.Errorf("rule %q lists file_access %q more than once", rule.ID, a)
+		}
+	}
 	return nil
 }
+
+var fileAccessValues = []shellcmd.Access{shellcmd.AccessRead, shellcmd.AccessWrite, shellcmd.AccessRemove}
+
+// defaultFileAccess keeps the behavior of rules written before file_access.
+var defaultFileAccess = []shellcmd.Access{shellcmd.AccessWrite, shellcmd.AccessRemove}
 
 func isRuleEnabled(rule Rule) bool {
 	if rule.Enabled == nil {
@@ -236,6 +258,7 @@ func matchCanonical(m Match) map[string]interface{} {
 	addSortedStrings(out, "tool_names", m.ToolNames)
 	addSortedStrings(out, "content_patterns", m.ContentPatterns)
 	addSortedStrings(out, "working_directory_patterns", m.WorkingDirectoryPatterns)
+	addSortedStrings(out, "file_access", m.FileAccess)
 	return out
 }
 

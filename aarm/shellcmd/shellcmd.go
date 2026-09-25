@@ -44,10 +44,9 @@ type Target struct {
 	// command or the working directory gives enough information.
 	Path   string
 	Access Access
-	// Named marks the directory that a recursive copy creates under the
-	// source name, as DEST/NAME in "cp -r dotfiles/.claude ~/". The copy can
-	// write any path in that tree.
-	Named bool
+	// Glob is the resolved pattern when the command reads the path through
+	// a glob. Path is then the directory before the first glob character.
+	Glob string
 }
 
 // Analysis is what a command does to paths and hosts.
@@ -98,6 +97,16 @@ func AnalyzeCommand(command string, args []string, workingDir string) Analysis {
 		return Analysis{Parsed: true}
 	}
 	return Analyze(line, Env{WorkingDir: filepath.ToSlash(workingDir), Home: HomeDir()})
+}
+
+// ResolvePath makes a path that an agent reports absolute and clean, the
+// same way the analysis resolves a shell path. It expands "~" and joins a
+// relative path with workingDir.
+func ResolvePath(p, workingDir string) string {
+	if p == "" {
+		return ""
+	}
+	return resolve(filepath.ToSlash(p), filepath.ToSlash(workingDir), HomeDir())
 }
 
 // HomeDir returns the user's home directory with forward slashes, or an
@@ -376,7 +385,9 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 		w.compress(compressors[name], rest, cwds)
 	case "sort":
 		w.sort(parseArgs(rest, sortOptions), cwds)
-	case "sqlite3", "source", ".":
+	case "sqlite3":
+		w.sqlite(rest, cwds)
+	case "source", ".":
 		if ops := operands(rest); len(ops) > 0 {
 			w.add(ops[0], AccessRead, cwds)
 		}
@@ -587,13 +598,13 @@ func (w *walker) find(args []string, cwds dirs) {
 		case "-exec", "-ok":
 			end := findActionEnd(args, i)
 			for _, root := range roots {
-				w.call(substitute(args[i+1:end], strings.TrimSuffix(root, "/")+"/*"), cwds)
+				w.call(substitute(args[i+1:end], strings.TrimSuffix(root, "/")+"/**"), cwds)
 			}
 			i = end
 		case "-execdir", "-okdir":
 			end := findActionEnd(args, i)
 			for _, root := range roots {
-				w.execdir(root, substitute(args[i+1:end], "./*"), cwds)
+				w.execdir(root, substitute(args[i+1:end], "./**"), cwds)
 			}
 			i = end
 		}
@@ -754,14 +765,20 @@ func (w *walker) add(value string, access Access, cwds dirs) {
 	if value == "" || (value == "-" && access == AccessRead) {
 		return
 	}
+	glob := ""
 	if i := strings.IndexAny(value, "*?["); i >= 0 {
+		glob = value
 		value = path.Dir(value[:i] + "x")
 		if access == AccessWrite {
 			access = AccessWriteTree
 		}
 	}
 	for _, cwd := range cwds {
-		w.addTarget(Target{Path: resolve(value, cwd, w.env.Home), Access: access})
+		t := Target{Path: resolve(value, cwd, w.env.Home), Access: access}
+		if glob != "" && access == AccessRead {
+			t.Glob = resolve(glob, cwd, w.env.Home)
+		}
+		w.addTarget(t)
 	}
 }
 

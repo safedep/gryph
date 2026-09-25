@@ -53,9 +53,21 @@
             "type": "string"
           }
         },
+        "file_access": {
+          "type": "array",
+          "description": "The shell targets of a command_exec action that `file_patterns` match: `read`, `write`, or `remove`. The default is `[write, remove]`. Requires `file_patterns`.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write",
+              "remove"
+            ]
+          }
+        },
         "file_patterns": {
           "type": "array",
-          "description": "Doublestar glob patterns matched against the action's file path. For command_exec actions, also matched against the paths the shell command writes, moves, or deletes. Forward-slash normalized.",
+          "description": "Doublestar glob patterns matched against the action's file path. For command_exec actions, also matched against the shell targets that `file_access` selects. Forward-slash normalized.",
           "items": {
             "type": "string"
           }

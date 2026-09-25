@@ -1,0 +1,55 @@
+# A user rule with file_access: [read] blocks a shell read of a matching path
+# and passes a shell write to it. A rule without file_access keeps the old
+# behavior: it blocks a shell write and passes a shell read.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin cat_secrets.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'secret read'
+
+stdin write_secrets.json
+exec gryph _hook claude-code PreToolUse
+! stderr 'secret read'
+
+stdin write_key.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'key write'
+
+stdin cat_key.json
+exec gryph _hook claude-code PreToolUse
+! stderr 'key write'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: no-secret-reads
+    action: block
+    message: secret read
+    match:
+      action_types: [command_exec]
+      file_patterns: ["**/secrets.txt"]
+      file_access: [read]
+  - id: no-key-writes
+    action: block
+    message: key write
+    match:
+      action_types: [command_exec]
+      file_patterns: ["**/key.pem"]
+-- cat_secrets.json --
+{"session_id": "s-fa", "cwd": "/work", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "cat secrets.txt"}, "tool_use_id": "f1"}
+-- write_secrets.json --
+{"session_id": "s-fa", "cwd": "/work", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "echo x > secrets.txt"}, "tool_use_id": "f2"}
+-- write_key.json --
+{"session_id": "s-fa", "cwd": "/work", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "echo x > key.pem"}, "tool_use_id": "f3"}
+-- cat_key.json --
+{"session_id": "s-fa", "cwd": "/work", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "cat key.pem"}, "tool_use_id": "f4"}

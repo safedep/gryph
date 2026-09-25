@@ -32,7 +32,7 @@ Gryph loads policy from three sources, in this order:
 
 1. **Global policy file** (`${ConfigDir}/policy.yaml`, optional). The single operator-owned file. On macOS this is `~/Library/Application Support/safedep/gryph/policy.yaml`; on Linux `~/.config/safedep/gryph/policy.yaml`. A missing file is not an error.
 2. **Policies directory** (`${ConfigDir}/policies/*.yaml` and `*.yml`, optional). Each file is a separate policy document. Files load in sorted name order and merge after the global file. A missing directory is not an error. This lets you author policy as many small, self-contained files instead of one large file.
-3. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, and agent hook configs from agent self-modification. Self-protection is best effort. See [Self-protection limits](#self-protection-limits).
+3. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, and agent hook configs from agent self-modification. A second rule, `gryph-builtin-protected-reads`, blocks agent reads of the database (with its `-wal`, `-shm`, and `-journal` files) and of the receipt signing key. An agent may read the policy files and the hook configs. Self-protection is best effort. See [Self-protection limits](#self-protection-limits).
 
 With `policy.enabled: true` and no user files on disk, the merged policy contains built-in self-protection rules only.
 
@@ -40,7 +40,7 @@ Both the global file and the policies directory sit inside `${ConfigDir}`, so bo
 
 ### Self-protection limits
 
-Self-protection is best effort. It blocks file writes and deletes to protected paths, and shell commands that Gryph can parse as a change to a protected path. It does not stop every bypass. A human or an agent can get past it in many ways, for example:
+Self-protection is best effort. It blocks file writes and deletes to protected paths, and shell commands that Gryph can parse as a change to a protected path. It blocks file reads of the database and the signing key, and shell commands that Gryph can parse as a read of them. It does not stop every bypass. A human or an agent can get past it in many ways, for example:
 
 - A command that builds the path at run time, such as a variable, a command substitution, or a base64 payload.
 - A script file or an interpreter (`python -c`, `node -e`) that writes the file.
@@ -48,6 +48,11 @@ Self-protection is best effort. It blocks file writes and deletes to protected p
 - A command that the shell parser rejects.
 - An archive with absolute member paths (`tar -P`, `7z -spf`, `unzip -:`), or a recursive copy into a parent of a protected directory, such as `cp -r evil/safedep ~/.config/`.
 - A human who edits the file or turns off `policy.self_protection.enabled`.
+- A symbolic link to a protected directory, or a `~user/` path.
+- On macOS, a path in a different letter case. The file system ignores case, and the match does not.
+- The Gryph commands that print the audit data, such as `gryph query`, `gryph export`, and `gryph cat`.
+
+The read rule also blocks a file read of the directory that holds the database. This blocks a `Grep`, `Glob`, or `LS` tool call on that directory. On macOS, the database is in the config directory, so these tool calls on the config directory are blocked. A read of one file in it, such as `policy.yaml`, passes.
 
 Kernel-based self-protection is on the roadmap. Until then, treat self-protection as a guard against mistakes and simple attempts, not as a security boundary. The [threat model](./security-policy-threat-model.md) lists the lower-level controls for a hardened deployment.
 
@@ -87,7 +92,8 @@ Run `gryph policy test --action file_write --path /repo/prod/config.yaml` to see
 | Field | Type | Notes |
 |---|---|---|
 | `action_types` | list | `file_read`, `file_write`, `file_delete`, `command_exec`, `network_request`, `tool_use`, `session_start`, `session_end`, `notification`, `subagent_start`, `subagent_stop` |
-| `file_patterns` | list | Doublestar globs (`**`) over the action path. For `command_exec`, also over the paths the shell command writes, moves, or deletes (see below) |
+| `file_patterns` | list | Doublestar globs (`**`) over the action path. For `command_exec`, also over the shell targets that `file_access` selects (see below) |
+| `file_access` | list | `read`, `write`, `remove`. The shell targets that `file_patterns` match. The default is `[write, remove]`. Requires `file_patterns` |
 | `command_patterns` | list | Go regexps over the shell command |
 | `tool_names` | list | Exact tool names like `Bash`, `Write`, `WebFetch` |
 | `content_patterns` | list | Go regexps over the captured content preview |
@@ -95,7 +101,20 @@ Run `gryph policy test --action file_write --path /repo/prod/config.yaml` to see
 
 An empty `match` block matches every action. Combine with `scope` to narrow further.
 
-For a `command_exec` action, Gryph parses the shell command and finds the paths it changes: redirect targets (`>`, `>>`), `tee`, `cp` / `mv` / `install` / `ln` destinations, `rm` / `unlink`, `truncate`, `chmod` / `chown`, `sed -i` / `perl -i`, `dd of=`, editors (`vim`, `vi`, `nvim`, `ex`, `nano`), `sort -o`, `gzip`, `bzip2`, `xz`, `zip`, `7z`, `tar`, `unzip`, and the output files of `curl` and `wget`. A recursive copy of a directory, a copy of directory contents, an archive extract, and a recursive download can write paths in the destination directory that the command line does not show. They match a pattern only when the destination is the directory that holds the pattern, or a path that the pattern matches. A parent directory does not match. So `tar xzf node_modules.tgz` or `unzip -o dist.zip` in the project root, and `cp -r dotfiles/nvim ~/.config/`, do not block under self-protection or under a rule on `**/.env`. A recursive copy of a directory into a directory that holds a protected path still matches when the copy creates that path, so `cp -r dotfiles/devin ~/.config/` blocks under a rule on `**/.config/devin/config.json`. `tar xzf a.tgz -C ~/.config/safedep/gryph` blocks. For `find`, `-delete` changes the search roots, and `-exec` runs its command on any path under the roots. `-execdir` runs its command from any directory under the roots, so a relative path it changes counts as a change to the roots. Gryph looks inside wrappers such as `sudo`, `env`, `nice`, and `timeout`. It skips the wrapper options and their values, and it takes the first remaining word as the program. Gryph also looks inside `bash -c` (also `bash -lc`) and `eval`, and follows a literal `cd`, also through `eval`, `command cd`, and `builtin cd`. A `cd` inside a subshell, a pipe, or `bash -c` does not carry over. A command after `&&`, `||`, or in an `if` or loop body may not run, so Gryph checks the paths from every working directory it could have. `file_patterns` matches these paths. A delete or move of a directory also matches every pattern under that directory. The same is true for a `file_delete` action. A read, such as `cat` or `find -exec cat`, does not match. A command that does not parse records no paths, so it does not match.
+For a `command_exec` action, Gryph parses the shell command and finds the paths it changes: redirect targets (`>`, `>>`), `tee`, `cp` / `mv` / `install` / `ln` destinations, `rm` / `unlink`, `truncate`, `chmod` / `chown`, `sed -i` / `perl -i`, `dd of=`, editors (`vim`, `vi`, `nvim`, `ex`, `nano`), `sort -o`, `gzip`, `bzip2`, `xz`, `zip`, `7z`, `tar`, `unzip`, and the output files of `curl` and `wget`. A recursive copy of a directory, a copy of directory contents, an archive extract, and a recursive download can write paths in the destination directory that the command line does not show. They match a pattern only when the destination is the directory that holds the pattern, or a path that the pattern matches. A parent directory does not match. So `tar xzf node_modules.tgz` or `unzip -o dist.zip` in the project root, and `cp -r dotfiles/nvim ~/.config/`, do not block under self-protection or under a rule on `**/.env`. `tar xzf a.tgz -C ~/.config/safedep/gryph` blocks. For `find`, `-delete` changes the search roots, and `-exec` runs its command on any path under the roots. `-execdir` runs its command from any directory under the roots, so a relative path it changes counts as a change to the roots. Gryph looks inside wrappers such as `sudo`, `env`, `nice`, and `timeout`. It skips the wrapper options and their values, and it takes the first remaining word as the program. Gryph also looks inside `bash -c` (also `bash -lc`) and `eval`, and follows a literal `cd`, also through `eval`, `command cd`, and `builtin cd`. A `cd` inside a subshell, a pipe, or `bash -c` does not carry over. A command after `&&`, `||`, or in an `if` or loop body may not run, so Gryph checks the paths from every working directory it could have. `file_patterns` matches these paths. A delete or move of a directory also matches every pattern under that directory. The same is true for a `file_delete` action. A read, such as `cat` or `find -exec cat`, does not match by default. A command that does not parse records no paths, so it does not match.
+
+Gryph also finds the paths a command reads: input redirects (`<`), the sources of `cp`, `mv`, `rsync`, and `scp`, `dd if=`, and the file operands of read commands such as `cat`, `head`, `tail`, `grep`, `sed` and `awk` without `-i`, `tar`, `base64`, `strings`, `xxd`, and `sqlite3`. A rule with `file_access: [read]` matches these paths. A shell read of a directory that contains a matching path also matches, because a copy or a recursive read, such as `cp -r dir` or `grep -r x dir`, reads every file in it. A read through a glob matches when the glob covers a matching path: `cat dir/*` matches `dir/secret.txt`, and `cat dir/*.md` does not. For a `file_read` action, a rule that selects `read` also matches a read of the directory that directly holds a matching path.
+
+Gryph resolves the action path before it matches: it expands `~`, joins a relative path with the working directory, and removes `.`, `..`, and a trailing slash. A pattern matches the path as the agent reports it or the resolved path. Set `file_access: [read, write, remove]` to match every shell target.
+
+```yaml
+- id: no-secret-reads
+  action: block
+  match:
+    action_types: [file_read, command_exec]
+    file_patterns: ["**/.env"]
+    file_access: [read]
+```
 
 The parse is best effort. It can match more than the command changes, and it can miss a change. Gryph does not run the command, so it cannot resolve an unknown variable, a command substitution, a script file, input to `xargs`, or an encoded payload. Gryph records only the paths that it can resolve. It does not fail closed on a command that it cannot parse or cannot resolve. For example, `rm -rf ~/.cc ) (`, `curl -w @format.txt`, `tar -xPf a.tar`, and a `7z` command that Gryph does not know do not block.
 

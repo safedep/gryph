@@ -704,10 +704,17 @@ func (w *walker) tar(args []string, cwds dirs) {
 		}
 	}
 	w.addAll(p.value("-T", "--files-from", "-X", "--exclude-from"), AccessRead, cwds)
+	members := cwds
+	if dirs := p.value("-C", "--directory"); adds && len(dirs) > 0 {
+		members = w.cd([]string{dirs[len(dirs)-1]}, cwds)
+	}
 	switch {
-	case adds && p.has("--remove-files"):
-		w.addAll(p.operands, AccessRemove, cwds)
-	case adds || concatenates:
+	case adds:
+		w.addAll(p.operands, AccessRead, members)
+		if p.has("--remove-files") {
+			w.addAll(p.operands, AccessRemove, members)
+		}
+	case concatenates:
 		w.addAll(p.operands, AccessRead, cwds)
 	case p.has("-x", "--extract", "--get") && !p.has("-O", "--to-stdout"):
 		w.extractInto(p.value("-C", "--directory"), cwds)
@@ -732,6 +739,28 @@ func tarOldStyle(args []string) []string {
 		}
 	}
 	return append(out, rest...)
+}
+
+var sqliteValueFlags = flagSet("-cmd", "-init", "-separator", "-newline", "-nullvalue",
+	"-vfs", "-maxsize", "-mmap", "-pagecache", "-lookaside", "-heap")
+
+// sqlite records every operand of sqlite3 as a read, because the database
+// can follow options that sqlite3 parses with a single dash. A "file:" URI
+// names the database file before its query string.
+func (w *walker) sqlite(args []string, cwds dirs) {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case sqliteValueFlags[strings.TrimPrefix(a, "-")] || sqliteValueFlags[a]:
+			i++
+		case strings.HasPrefix(a, "-"):
+		default:
+			if uri, ok := strings.CutPrefix(a, "file:"); ok {
+				a, _, _ = strings.Cut(uri, "?")
+			}
+			w.add(a, AccessRead, cwds)
+		}
+	}
 }
 
 func isLetters(s string) bool {

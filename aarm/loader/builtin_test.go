@@ -287,3 +287,112 @@ func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestBuiltinSource_BlocksReadsOfProtectedPaths(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	data := home + "/.local/share/safedep/gryph"
+	db := data + "/audit.db"
+	key := home + "/.config/safedep/gryph/keys/receipt.key"
+
+	docs, err := NewBuiltinSource("**/.cc/settings.json").
+		WithReadGlobs(db, db+"-wal", db+"-shm", db+"-journal", key).
+		Load(context.Background())
+	require.NoError(t, err)
+	require.Len(t, docs, 1)
+	require.Len(t, docs[0].Rules, 2)
+	assert.Equal(t, builtinProtectedReadsRuleID, docs[0].Rules[1].ID)
+	engine, err := pdp.New(docs[0])
+	require.NoError(t, err)
+
+	cases := []struct {
+		name    string
+		action  model.ActionType
+		path    string
+		command string
+		blocked bool
+	}{
+		{"read database", model.ActionFileRead, db, "", true},
+		{"read wal file", model.ActionFileRead, db + "-wal", "", true},
+		{"read signing key", model.ActionFileRead, key, "", true},
+		{"read data directory", model.ActionFileRead, data, "", true},
+		{"read hook config", model.ActionFileRead, home + "/.cc/settings.json", "", false},
+		{"read project file", model.ActionFileRead, "/work/README.md", "", false},
+		{"sqlite3", model.ActionCommandExec, "", `sqlite3 ~/.local/share/safedep/gryph/audit.db 'select * from audit_events'`, true},
+		{"cat", model.ActionCommandExec, "", `cat ~/.local/share/safedep/gryph/audit.db`, true},
+		{"cp out", model.ActionCommandExec, "", `cp ~/.local/share/safedep/gryph/audit.db /tmp/x`, true},
+		{"base64 redirect", model.ActionCommandExec, "", `base64 < ~/.config/safedep/gryph/keys/receipt.key`, true},
+		{"glob over data directory", model.ActionCommandExec, "", `cat ~/.local/share/safedep/gryph/*`, true},
+		{"archive data directory", model.ActionCommandExec, "", `tar czf /tmp/g.tgz ~/.local/share/safedep/gryph`, true},
+		{"cd then read", model.ActionCommandExec, "", `cd ~/.local/share/safedep/gryph && strings audit.db`, true},
+		{"parse failure records nothing", model.ActionCommandExec, "", `cat ~/.local/share/safedep/gryph/audit.db ) (`, false},
+		{"parse failure without a protected word", model.ActionCommandExec, "", `cat README.md ) (`, false},
+		{"cat readme", model.ActionCommandExec, "", `cat README.md`, false},
+		{"list data directory", model.ActionCommandExec, "", `ls ~/.local/share/safedep/gryph`, false},
+		{"read shm file", model.ActionFileRead, db + "-shm", "", true},
+		{"read through dot segment", model.ActionFileRead, data + "/./audit.db", "", true},
+		{"sqlite3 with options first", model.ActionCommandExec, "", `sqlite3 -cmd .tables ~/.local/share/safedep/gryph/audit.db`, true},
+		{"sqlite3 file uri", model.ActionCommandExec, "", `sqlite3 'file:` + db + `?mode=ro' .dump`, true},
+		{"copy of the data tree", model.ActionCommandExec, "", `cp -r ~/.local/share/safedep /tmp/x`, true},
+		{"rsync of an ancestor", model.ActionCommandExec, "", `rsync -a ~/.local/share/ /tmp/x`, true},
+		{"glob over the key directory", model.ActionCommandExec, "", `cat ~/.config/safedep/gryph/*/receipt.key`, true},
+		{"tar with -C", model.ActionCommandExec, "", `tar -C ~/.local/share/safedep -czf /tmp/x.tgz gryph`, true},
+		{"find exec cat", model.ActionCommandExec, "", `find ~/.local/share/safedep -exec cat {} +`, true},
+		{"glob over other files in the data directory", model.ActionCommandExec, "", `cat ~/.local/share/safedep/gryph/*.yaml`, false},
+		{"read of the config file", model.ActionCommandExec, "", `cat ~/.config/safedep/gryph/config.yml`, false},
+		{"grep home", model.ActionCommandExec, "", `grep -r TODO ~/src`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			action := &model.Action{
+				Type:       tc.action,
+				WorkingDir: "/work",
+				Parameters: model.Parameters{Path: tc.path, Command: tc.command},
+			}
+			res, err := engine.Evaluate(context.Background(), action, nil)
+			require.NoError(t, err)
+			if tc.blocked {
+				assert.Equal(t, model.DecisionBlock, res.Decision)
+				assert.Contains(t, res.Message, "self-protection")
+			} else {
+				assert.Equal(t, model.DecisionAllow, res.Decision)
+			}
+		})
+	}
+}
+
+// TestBuiltinSource_ReadsWhenConfigAndDataShareADirectory covers the macOS
+// layout, where the database sits in the config directory. An agent may
+// still read the policy and config files there.
+func TestBuiltinSource_ReadsWhenConfigAndDataShareADirectory(t *testing.T) {
+	dir := "/Users/u/Library/Application Support/safedep/gryph"
+	db := dir + "/audit.db"
+	docs, err := NewBuiltinSource(dir+"/**").WithReadGlobs(db, db+"-wal", dir+"/keys/receipt.key").Load(context.Background())
+	require.NoError(t, err)
+	engine, err := pdp.New(docs[0])
+	require.NoError(t, err)
+
+	cases := []struct {
+		name    string
+		command string
+		blocked bool
+	}{
+		{"glob over policy files", `cat "` + dir + `"/*.yaml`, false},
+		{"read the policy file", `cat "` + dir + `/policy.yaml"`, false},
+		{"glob over every file", `cat "` + dir + `"/*`, true},
+		{"read the database", `strings "` + db + `"`, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := engine.Evaluate(context.Background(), &model.Action{
+				Type: model.ActionCommandExec, WorkingDir: "/work", Parameters: model.Parameters{Command: tc.command},
+			}, nil)
+			require.NoError(t, err)
+			if tc.blocked {
+				assert.Equal(t, model.DecisionBlock, res.Decision)
+			} else {
+				assert.Equal(t, model.DecisionAllow, res.Decision)
+			}
+		})
+	}
+}

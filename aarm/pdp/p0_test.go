@@ -2,6 +2,7 @@ package pdp
 
 import (
 	"context"
+	"encoding/hex"
 	"strings"
 	"testing"
 
@@ -274,6 +275,9 @@ func TestParentPatterns(t *testing.T) {
 		{"**/.env", nil},
 		{"/etc/**/app.conf", nil},
 		{".env", nil},
+		{"/a/b/c.db", []string{"/a/b"}},
+		{"/a", nil},
+		{"**/.aws/credentials", []string{"**/.aws"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.pattern, func(t *testing.T) {
@@ -296,4 +300,153 @@ func TestContainerPatterns(t *testing.T) {
 			assert.Equal(t, tc.want, containerPatterns([]string{tc.pattern}))
 		})
 	}
+}
+
+func TestEvaluate_FileAccess(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: no-secret-reads
+    action: block
+    match:
+      action_types: [command_exec, file_read]
+      file_patterns: ["**/secrets.txt"]
+      file_access: [read]
+  - id: no-key-writes
+    action: block
+    match:
+      action_types: [command_exec]
+      file_patterns: ["**/key.pem"]
+`)
+	cases := []struct {
+		command string
+		want    model.Decision
+	}{
+		{"cat secrets.txt", model.DecisionBlock},
+		{"cp secrets.txt /tmp/s", model.DecisionBlock},
+		{"echo x > secrets.txt", model.DecisionAllow},
+		{"rm secrets.txt", model.DecisionAllow},
+		{"echo x > key.pem", model.DecisionBlock},
+		{"cat key.pem", model.DecisionAllow},
+	}
+	for _, tc := range cases {
+		t.Run(tc.command, func(t *testing.T) {
+			action := &model.Action{
+				Type: model.ActionCommandExec, WorkingDir: "/work",
+				Parameters: model.Parameters{Command: tc.command},
+			}
+			res, err := engine.Evaluate(context.Background(), action, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, res.Decision)
+		})
+	}
+}
+
+func TestParsePolicy_FileAccessValidation(t *testing.T) {
+	cases := []struct {
+		name    string
+		match   string
+		wantErr string
+	}{
+		{"valid", `{file_patterns: ["a"], file_access: [read, write, remove]}`, ""},
+		{"unknown access", `{file_patterns: ["a"], file_access: [exec]}`, `invalid file_access "exec"`},
+		{"no file patterns", `{file_access: [read]}`, "file_access requires file_patterns"},
+		{"duplicate access", `{file_patterns: ["a"], file_access: [read, read]}`, "more than once"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ParsePolicy([]byte("version: \"1\"\nrules:\n  - id: r\n    action: block\n    match: " + tc.match + "\n"))
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
+}
+
+// TestPolicyHash_Golden pins the hash of a policy without file_access to the
+// value from before file_access existed, so the field does not change the
+// hash of existing policies.
+func TestPolicyHash_Golden(t *testing.T) {
+	p, err := ParsePolicy([]byte(`version: "1"
+rules:
+  - id: protect-env
+    action: block
+    severity: high
+    match:
+      action_types: [file_write, command_exec]
+      file_patterns: ["**/.env", "/etc/**"]
+      command_patterns: ["curl.*"]
+`))
+	require.NoError(t, err)
+	assert.Equal(t, "651d4772258bbfec8e811aa11210dcdaacab9593e4e86ac1d4197babcbdc6020", hex.EncodeToString(p.Hash()))
+
+	withDefault := mustPDPPolicy(t, `{file_patterns: ["a"], file_access: [write, remove]}`)
+	assert.NotEqual(t, mustPDPPolicy(t, `{file_patterns: ["a"]}`).Hash(), withDefault.Hash())
+}
+
+func TestEvaluate_FileAccessPaths(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: read-db
+    action: block
+    match:
+      action_types: [file_read, command_exec]
+      file_patterns: ["/data/gryph/audit.db"]
+      file_access: [read]
+  - id: write-key
+    action: block
+    match:
+      action_types: [file_read, file_write, command_exec]
+      file_patterns: ["/keys/receipt.key"]
+  - id: remove-only
+    action: block
+    match:
+      action_types: [command_exec]
+      file_patterns: ["/cfg/hooks.json"]
+      file_access: [remove]
+`)
+	cases := []struct {
+		name   string
+		action *model.Action
+		want   model.Decision
+	}{
+		{"file read with dot segment", &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: "/data/gryph/./audit.db"}}, model.DecisionBlock},
+		{"file read with parent segment", &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: "/data/other/../gryph/audit.db"}}, model.DecisionBlock},
+		{"file read relative to working dir", &model.Action{Type: model.ActionFileRead, WorkingDir: "/data/gryph", Parameters: model.Parameters{Path: "audit.db"}}, model.DecisionBlock},
+		{"file read of the directory", &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: "/data/gryph/"}}, model.DecisionBlock},
+		{"file read of an ancestor", &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: "/data"}}, model.DecisionAllow},
+		{"default rule ignores a read of the parent", &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: "/keys"}}, model.DecisionAllow},
+		{"file write with dot segment", &model.Action{Type: model.ActionFileWrite, Parameters: model.Parameters{Path: "/keys/./receipt.key"}}, model.DecisionBlock},
+		{"shell copy of an ancestor", shellAction("cp -r /data /tmp/x"), model.DecisionBlock},
+		{"shell recursive grep of an ancestor", shellAction("grep -r token /data"), model.DecisionBlock},
+		{"shell glob over a middle directory", shellAction("cat /data/*/audit.db"), model.DecisionBlock},
+		{"shell glob that misses the database", shellAction("cat /data/gryph/*.yaml"), model.DecisionAllow},
+		{"shell list is not a read", shellAction("ls /data/gryph"), model.DecisionAllow},
+		{"remove access matches a removal of the directory", shellAction("rm -rf /cfg"), model.DecisionBlock},
+		{"remove access ignores a write", shellAction("echo x > /cfg/hooks.json"), model.DecisionAllow},
+		{"remove access selects a tree write", shellAction("tar -xf a.tar -C /cfg"), model.DecisionBlock},
+		{"read access ignores a tree write", shellAction("tar -xf a.tar -C /data/gryph"), model.DecisionAllow},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := engine.Evaluate(context.Background(), tc.action, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, res.Decision)
+		})
+	}
+}
+
+func shellAction(command string) *model.Action {
+	return &model.Action{Type: model.ActionCommandExec, WorkingDir: "/work", Parameters: model.Parameters{Command: command}}
+}
+
+func mustPDPPolicy(t *testing.T, match string) *Policy {
+	t.Helper()
+	p, err := ParsePolicy([]byte("version: \"1\"\nrules:\n  - id: r\n    action: block\n    match: " + match + "\n"))
+	require.NoError(t, err)
+	return p
 }
