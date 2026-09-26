@@ -168,12 +168,28 @@ rules:
 			want: model.DecisionAllow,
 		},
 		{
-			name: "a tree write matches a pattern under any directory",
+			name: "a tree write into the project root does not match a pattern under any directory",
 			action: &model.Action{
 				Type: model.ActionCommandExec, WorkingDir: "/work",
 				Parameters: model.Parameters{Command: "rsync -a /tmp/stage/ ./"},
 			},
-			want: model.DecisionBlock,
+			want: model.DecisionAllow,
+		},
+		{
+			name: "a tar extract in the project root does not match",
+			action: &model.Action{
+				Type: model.ActionCommandExec, WorkingDir: "/work",
+				Parameters: model.Parameters{Command: "tar xzf node_modules.tgz"},
+			},
+			want: model.DecisionAllow,
+		},
+		{
+			name: "an unzip in the project root does not match",
+			action: &model.Action{
+				Type: model.ActionCommandExec, WorkingDir: "/work",
+				Parameters: model.Parameters{Command: "unzip -o dist.zip"},
+			},
+			want: model.DecisionAllow,
 		},
 		{
 			name: "a tree write into a project subdirectory does not match",
@@ -184,12 +200,12 @@ rules:
 			want: model.DecisionAllow,
 		},
 		{
-			name: "a tree write of the root matches",
+			name: "a tar extract with absolute names does not match",
 			action: &model.Action{
 				Type: model.ActionCommandExec, WorkingDir: "/work",
 				Parameters: model.Parameters{Command: "tar -xPf a.tar -C /tmp/x"},
 			},
-			want: model.DecisionBlock,
+			want: model.DecisionAllow,
 		},
 		{
 			name: "a removal of another directory does not match",
@@ -205,6 +221,63 @@ rules:
 			res, err := engine.Evaluate(context.Background(), tc.action, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, res.Decision)
+		})
+	}
+}
+
+func TestEvaluate_TreeWriteMatchesOnlyTheHoldingDirectory(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: protect-hooks
+    action: block
+    match:
+      action_types: [command_exec]
+      file_patterns: ["**/.agent/hooks.json", "/home/u/.config/app/**"]
+`)
+	cases := []struct {
+		command string
+		want    model.Decision
+	}{
+		{"tar xzf a.tgz -C .agent", model.DecisionBlock},
+		{"cd .agent && unzip -o /tmp/a.zip", model.DecisionBlock},
+		{"cp -r /tmp/stage /home/u/.config/app", model.DecisionBlock},
+		{"tar xf /tmp/a.tar -C /home/u/.config/app/sub", model.DecisionBlock},
+		{"tar xzf a.tgz", model.DecisionAllow},
+		{"tar xzf a.tgz -C .agent/sub", model.DecisionAllow},
+		{"cp -r dotfiles/nvim /home/u/.config/", model.DecisionAllow},
+		{"rsync -a /tmp/stage/ /home/u/", model.DecisionAllow},
+		{"rm -rf /home/u", model.DecisionBlock},
+		{"rm -rf .agent", model.DecisionBlock},
+	}
+	for _, tc := range cases {
+		t.Run(tc.command, func(t *testing.T) {
+			action := &model.Action{
+				Type: model.ActionCommandExec, WorkingDir: "/work",
+				Parameters: model.Parameters{Command: tc.command},
+			}
+			res, err := engine.Evaluate(context.Background(), action, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, res.Decision)
+		})
+	}
+}
+
+func TestParentPatterns(t *testing.T) {
+	cases := []struct {
+		pattern string
+		want    []string
+	}{
+		{"**/.cc/settings.json", []string{"**/.cc"}},
+		{"/etc/app/**", []string{"/etc/app"}},
+		{"/etc/*/app.conf", []string{"/etc/*"}},
+		{"**/.env", nil},
+		{"/etc/**/app.conf", nil},
+		{".env", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.pattern, func(t *testing.T) {
+			assert.Equal(t, tc.want, parentPatterns([]string{tc.pattern}))
 		})
 	}
 }

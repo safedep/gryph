@@ -198,12 +198,26 @@ the directory contains a protected path, for a shell command or a
 directories a command can run in: a `cd` in a subshell, a pipe, a
 substitution, or a background job does not carry over, and a `cd` that may not
 run (after `&&` or `||`, or in an `if` or loop body) adds a directory to the
-set. For a wrapper such as `sudo`, it tries each word after the wrapper as the
-start of the command, because it does not know every wrapper option that takes
-a value. The walk over-approximates. It prefers a false block to a missed
-change. When the parser rejects a command, or a script nested in it such as
-the script of `bash -c`, `Analysis.Parsed` is false, every word of the
-rejected script is a read and a removal target, and the host list has `?`.
+set. For a wrapper such as `sudo`, `env`, `nice`, or `timeout`, it parses the
+wrapper arguments the way the wrapper does. It skips the options, the values
+of the options in the `wrappers` table, `NAME=value` words for `env` and
+`sudo`, and the fixed operands (the duration of `timeout`, the priority of
+`chrt`, the mask of `taskset`). Then it analyzes only the first remaining word
+as the program. An option that is not in the table takes no value. So a chain
+of wrappers costs one call for each wrapper. The walker also counts the
+simple commands it visits in one analysis. At `maxCalls` (4096) it stops and
+keeps the targets it has.
+
+The analysis is best effort. The hook runs on every agent tool call, so the
+walker must stay fast, and a false block costs more than a missed change.
+The walker records only the paths that it can resolve. When it cannot
+resolve a path, it records nothing. It does not record a broad target, such
+as a tree write of `/`, in place of an unknown path. The one exception is a
+command that the parser rejects, or a script nested in it such as the script
+of `bash -c`. Then `Analysis.Parsed` is false, every word of the rejected
+script is a read and a removal target, and the host list has `?`. Kernel
+sandboxing is the planned control for commands that the walker cannot
+resolve.
 
 The mediator parses a command once, in `mediation.HookAdapter`, and stores the
 result on `model.Action.Shell`. The PDP and later context work read that
@@ -228,18 +242,19 @@ output files of `curl` and `wget`. `curl` also writes the files of `--hsts`,
 `--etag-save`, `--libcurl`, `--alt-svc`, and `-w '%output{FILE}'`. The value
 of a `curl` option that the table does not know is a guessed write target.
 
-A command that can write any path in a directory, at any depth, is a tree
-write (`AccessWriteTree`) of that directory: a recursive copy (`cp -r`,
-`rsync -a`, `scp -r`) of a source that can be a directory, a copy of
-directory contents (a source that ends in `/` or `/.`), a copy or link with
-`-T` or `ln -n`, a `tar`, `7z x`, or `unzip` extract (the target directory or
-the working directory), and a recursive `wget`. An extract that keeps
-absolute member names (`tar -P`, `7z -spf`, `unzip -:`), `xz --files`, `7z`
-with an unknown command, and `curl -w @FILE` are a tree write of `/`. A
-recursive copy of a source with an extension, such as `notes.txt`, is a
-write of the destination and of the source name in it. A download that takes
-a name from the server (`curl -J`, `wget --content-disposition`) and `7z e`,
-`unzip -j`, and `gunzip -N` remove the target directory. A plain download
+A command that writes paths in a directory with names that the command line
+does not show is a tree write (`AccessWriteTree`) of that directory: a
+recursive copy (`cp -r`, `rsync -a`, `scp -r`) of a source that can be a
+directory, a copy of directory contents (a source that ends in `/` or `/.`),
+a copy or link with `-T` or `ln -n`, a `tar`, `7z`, or `unzip` extract (the
+target directory or the working directory), a recursive `wget`, a download
+that takes a name from the server (`curl -J`, `wget --content-disposition`),
+`gunzip -N`, and a write through a glob. The walker does not record the
+absolute member names of `tar -P`, `7z -spf`, or `unzip -:`, the files that
+`xz --files` names, the targets of a `7z` command that it does not know, or
+the files that a `curl -w @FILE` format names. `curl -w @FILE` is a read of
+`FILE`. A recursive copy of a source with an extension, such as `notes.txt`,
+is a write of the destination and of the source name in it. A plain download
 writes the URL file name in the `--output-dir` or `-P` directory. `cp
 --parents` and `rsync -R` write the whole source path under the destination.
 An `ln` with one operand writes the base name in the working directory.
@@ -247,15 +262,18 @@ An `ln` with one operand writes the base name in the working directory.
 decompressed file, unless `-c` or `-k` is set. `zip -m`, `7z -sdel`, `tar
 --remove-files`, and `rsync --remove-source-files` remove the sources.
 
-The PDP matches a removal or a tree write against the parent directories of
-each pattern, and the root for an absolute pattern. A tree write into the
-action working directory, the home directory, or a parent of either (also
-`/`) matches every pattern that starts with `**/`. An agent loads its
-settings from the project root and from home, so a tree write elsewhere
-cannot plant a file that the agent loads. The cost is that an extract or a
-recursive copy into the project root, such as `tar xzf release.tgz`, blocks
-under the built-in rule. An extract into a subdirectory, such as `tar xzf
-release.tgz -C build`, does not.
+The PDP matches a removal against every parent directory of each pattern,
+and the root for an absolute pattern. So `rm -rf ~` matches the Gryph config
+directory. The PDP matches a tree write only against the directory that
+holds each pattern (`parentPatterns`), and against the pattern itself. A
+tree write into a parent of that directory does not match. So `tar xzf
+node_modules.tgz` in the project root, `cp -r dotfiles/nvim ~/.config/`, and
+`rsync -a stage/ ~/` do not match the built-in rule or a user rule on
+`**/.env`. A copy or an extract into the Gryph config directory, or into
+`~/.cc` for `**/.cc/settings.json`, matches. The cost is a missed change: a
+recursive copy of a directory named like a parent of a protected path, such
+as `cp -r evil/safedep ~/.config/`, or a copy with `-T` onto such a parent,
+does not match.
 
 `parseArgs` in `aarm/shellcmd/tools.go` splits options the way getopt does,
 with one `options` table for each tool. For a tool that parses with
@@ -280,7 +298,9 @@ implement `HookConfigPaths()` in its adapter. Do not edit the loader.
 
 Self-protection is best effort. The shell parse cannot resolve unknown
 variables, command substitutions, encoded payloads, script files, or
-interpreters, and a process outside the hook path is never seen. Kernel-based
+interpreters, and a process outside the hook path is never seen. It does not
+fail closed on a command that it cannot resolve, and a tree write into a
+parent of a protected directory does not match. Kernel-based
 self-protection is on the roadmap. See
 [security-policy-threat-model.md](./security-policy-threat-model.md).
 

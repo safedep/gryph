@@ -1,9 +1,12 @@
 package shellcmd
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAnalyze_Changes(t *testing.T) {
@@ -57,7 +60,7 @@ func TestAnalyze_Changes(t *testing.T) {
 		{"escaped space", `rm ~/.cc/my\ settings.json`, []Target{{"/home/u/.cc/my settings.json", AccessRemove}}},
 		{"escaped quote in double quotes", `tee "$HOME/.cc/a\"b"`, []Target{{"/home/u/.cc/a\"b", AccessWrite}}},
 		{"find exec rm", `find ~/.cc -name '*.json' -exec rm {} \;`, []Target{{"/home/u/.cc", AccessRemove}}},
-		{"find exec sed in place", `find ~/.cc -exec sed -i s/a/b/ {} +`, []Target{{"/work/s/a/b", AccessWrite}, {"/home/u/.cc", AccessRemove}}},
+		{"find exec sed in place", `find ~/.cc -exec sed -i s/a/b/ {} +`, []Target{{"/work/s/a/b", AccessWrite}, {"/home/u/.cc", AccessWriteTree}}},
 		{"find exec read only", `find ~/.cc -exec cat {} \;`, nil},
 		{"find exec grep", `find . -name '*.go' -exec grep -l TODO {} +`, nil},
 		{"find -H root", `find -H ~/.cc -delete`, []Target{{"/home/u/.cc", AccessRemove}}},
@@ -67,7 +70,7 @@ func TestAnalyze_Changes(t *testing.T) {
 		{"find no root", `find -name x -delete`, []Target{{"/work", AccessRemove}}},
 		{"find execdir rm", `find ~/.cc -execdir rm settings.json \;`, []Target{{"/home/u/.cc", AccessRemove}}},
 		{"find execdir rm file", `find ~/.cc -name '*.json' -execdir rm {} +`, []Target{{"/home/u/.cc", AccessRemove}}},
-		{"find execdir reads the root", `find ~/.cc -execdir cp {} /tmp/backup \;`, []Target{{"/tmp/backup", AccessWrite}, {"/tmp/backup", AccessRemove}}},
+		{"find execdir reads the root", `find ~/.cc -execdir cp {} /tmp/backup \;`, []Target{{"/tmp/backup", AccessWrite}, {"/tmp/backup", AccessWriteTree}}},
 		{"find execdir read only", `find ~/.cc -execdir cat {} \;`, nil},
 		{"find okdir", `find ~/.cc -okdir rm {} \;`, []Target{{"/home/u/.cc", AccessRemove}}},
 		{"unknown variable", `rm -rf "$DIR/.cc"`, nil},
@@ -122,4 +125,80 @@ func TestAnalyze_ChangesWorkingDirectoryScope(t *testing.T) {
 
 func TestAnalyze_NoWorkingDirKeepsRelativePath(t *testing.T) {
 	assert.Equal(t, []Target{{".cc/settings.json", AccessRemove}}, Analyze("rm .cc/settings.json", Env{}).Changes())
+}
+
+func TestAnalyze_Wrappers(t *testing.T) {
+	env := Env{WorkingDir: "/work", Home: "/home/u"}
+	settings := []Target{{"/home/u/.cc/settings.json", AccessRemove}}
+
+	cases := []struct {
+		command string
+		want    []Target
+	}{
+		{`sudo --user=root rm ~/.cc/settings.json`, settings},
+		{`sudo -u rm cat ~/.cc/settings.json`, nil},
+		{`sudo -D ~/.cc rm settings.json`, settings},
+		{`sudo A=1 rm ~/.cc/settings.json`, settings},
+		{`doas -u root rm ~/.cc/settings.json`, settings},
+		{`env -i A=1 B=2 rm ~/.cc/settings.json`, settings},
+		{`env - rm ~/.cc/settings.json`, settings},
+		{`env --chdir=/home/u/.cc rm settings.json`, settings},
+		{`env A=1`, nil},
+		{`nohup rm ~/.cc/settings.json`, settings},
+		{`exec -a name rm ~/.cc/settings.json`, settings},
+		{`time -p rm ~/.cc/settings.json`, settings},
+		{`nice -10 rm ~/.cc/settings.json`, settings},
+		{`ionice -c 2 -n 7 rm ~/.cc/settings.json`, settings},
+		{`stdbuf -oL rm ~/.cc/settings.json`, settings},
+		{`timeout --signal=KILL 5 rm ~/.cc/settings.json`, settings},
+		{`timeout 5 rm ~/.cc/settings.json`, settings},
+		{`timeout 5`, nil},
+		{`xargs -I {} rm ~/.cc/settings.json`, settings},
+		{`chrt -f 10 rm ~/.cc/settings.json`, settings},
+		{`taskset -c 0 rm ~/.cc/settings.json`, settings},
+		{`sudo nice -n 5 timeout 1 env A=1 rm ~/.cc/settings.json`, settings},
+	}
+	for _, tc := range cases {
+		t.Run(tc.command, func(t *testing.T) {
+			assert.Equal(t, tc.want, Analyze(tc.command, env).Changes())
+		})
+	}
+}
+
+func wrapperChain(wrapper string, n int) string {
+	return strings.Repeat(wrapper+" ", n) + "rm ~/.cc/settings.json"
+}
+
+var chainWrappers = []string{"nice", "sudo", "env", "nohup", "timeout 1", "command", "sudo -u root", "xargs"}
+
+func TestAnalyze_WrapperChainIsFast(t *testing.T) {
+	env := Env{WorkingDir: "/work", Home: "/home/u"}
+	for _, wrapper := range chainWrappers {
+		t.Run(wrapper, func(t *testing.T) {
+			start := time.Now()
+			a := Analyze(wrapperChain(wrapper, 60), env)
+			assert.Less(t, time.Since(start), 50*time.Millisecond)
+			assert.Equal(t, []Target{{"/home/u/.cc/settings.json", AccessRemove}}, a.Changes())
+		})
+	}
+}
+
+func TestAnalyze_CallBudgetStopsTheWalk(t *testing.T) {
+	command := strings.Repeat("find a b c d -exec ", 8) + "rm {} +"
+	w := &walker{env: Env{WorkingDir: "/work"}}
+	_, err := w.script(command, dirs{"/work"})
+	require.NoError(t, err)
+	assert.Equal(t, maxCalls, w.calls)
+}
+
+func BenchmarkAnalyze_WrapperChain(b *testing.B) {
+	env := Env{WorkingDir: "/work", Home: "/home/u"}
+	for _, wrapper := range chainWrappers {
+		command := wrapperChain(wrapper, 60)
+		b.Run(wrapper, func(b *testing.B) {
+			for b.Loop() {
+				Analyze(command, env)
+			}
+		})
+	}
 }

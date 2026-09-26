@@ -4,7 +4,9 @@
 // file access and a shell command.
 //
 // The analysis is best effort. It does not run the command, so it cannot
-// resolve unknown variables, command substitutions, or encoded payloads.
+// resolve unknown variables, command substitutions, or encoded payloads. It
+// records only the paths that it can resolve, and it does not record a broad
+// target in place of a path that it cannot resolve.
 package shellcmd
 
 import (
@@ -30,9 +32,9 @@ const (
 	// permissions of the path. A removal of a directory also removes every
 	// path in it.
 	AccessRemove Access = "remove"
-	// AccessWriteTree means the command can write any path in the
-	// directory, at any depth, with names that the command line does not
-	// show. It also replaces paths in the directory, so it is a removal too.
+	// AccessWriteTree means the command can write paths in the directory
+	// with names that the command line does not show, such as an extract
+	// or a recursive copy.
 	AccessWriteTree Access = "write-tree"
 )
 
@@ -42,11 +44,6 @@ type Target struct {
 	// command or the working directory gives enough information.
 	Path   string
 	Access Access
-}
-
-// Removes reports whether the target is a removal or a tree write.
-func (t Target) Removes() bool {
-	return t.Access == AccessRemove || t.Access == AccessWriteTree
 }
 
 // UnknownHost is the host of a command that the parser rejects. The command
@@ -133,8 +130,13 @@ func Line(command string, args []string) string {
 	return b.String()
 }
 
-// maxDepth limits nested shells, eval, and wrapper chains.
+// maxDepth limits nested shells and eval.
 const maxDepth = 8
+
+// maxCalls limits the simple commands that one analysis visits. A command
+// such as a nested "find -exec" can make the walker visit many commands. When
+// the budget runs out, the walker stops and keeps the targets it has.
+const maxCalls = 4096
 
 // maxDirs limits the set of possible working directories. When the set grows
 // past it, the unknown directory takes the place of the extra entries.
@@ -162,6 +164,7 @@ func union(a, b dirs) dirs {
 type walker struct {
 	env     Env
 	depth   int
+	calls   int
 	targets []Target
 	hosts   []string
 	failed  bool
@@ -305,14 +308,19 @@ func (w *walker) words(args []*syntax.Word, cwds dirs) []string {
 // call analyzes one simple command and returns the working directories
 // after it.
 func (w *walker) call(args []string, cwds dirs) dirs {
-	if len(args) == 0 || args[0] == "" {
+	if len(args) == 0 || args[0] == "" || w.calls >= maxCalls {
 		return cwds
 	}
+	w.calls++
 	name := path.Base(args[0])
 	rest := args[1:]
 
 	w.inlineURLs(rest)
 
+	if spec, ok := wrappers[name]; ok {
+		w.wrapper(spec, rest, cwds)
+		return cwds
+	}
 	switch name {
 	case "cd", "pushd":
 		return w.cd(rest, cwds)
@@ -320,8 +328,6 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 		// These run a command in the current shell, so "command cd" changes
 		// the working directory.
 		return w.call(skipOptions(rest), cwds)
-	case "sudo", "doas", "env", "nohup", "exec", "time", "nice", "ionice", "stdbuf", "timeout", "xargs":
-		w.wrapper(name, rest, cwds)
 	case "sh", "bash", "zsh", "dash", "ksh":
 		if src, ok := shellScript(rest); ok {
 			w.nested(src, cwds)
@@ -419,46 +425,107 @@ func (w *walker) cd(args []string, cwds dirs) dirs {
 	return out
 }
 
-// wrapper analyzes the command that a wrapper such as sudo or env runs.
-// Wrapper options can take a value, as in "sudo -u root", and the walker
-// does not know every such option. So it tries each word after the wrapper
-// as the start of the command. A wrong start is a word that names no known
-// command, so it adds no target.
-func (w *walker) wrapper(name string, args []string, cwds dirs) {
-	if w.depth >= maxDepth {
-		return
+// wrapper analyzes the command that a wrapper such as sudo or env runs. It
+// parses the wrapper arguments the way the wrapper does and calls only the
+// program. So a chain of wrappers costs one call per wrapper.
+func (w *walker) wrapper(spec wrapperSpec, args []string, cwds dirs) {
+	start, chdir := spec.program(args)
+	if chdir != "" {
+		cwds = w.cd([]string{chdir}, cwds)
 	}
-	w.depth++
-	defer func() { w.depth-- }()
-
-	if dir, ok := wrapperChdir(name, args); ok {
-		cwds = w.cd([]string{dir}, cwds)
-	}
-	for i, a := range args {
-		if a == "" || strings.HasPrefix(a, "-") {
-			continue
-		}
-		if strings.Contains(a, "=") && !strings.Contains(a, "/") {
-			continue
-		}
-		w.call(args[i:], cwds)
+	if start < len(args) {
+		w.call(args[start:], cwds)
 	}
 }
 
-// wrapperChdir returns the directory from "env -C DIR" or "sudo -D DIR".
-func wrapperChdir(name string, args []string) (string, bool) {
-	short := map[string]string{"env": "-C", "sudo": "-D"}[name]
-	for i, a := range args {
-		if (a == short && short != "") || a == "--chdir" {
-			if i+1 < len(args) {
-				return args[i+1], true
+// wrapperSpec describes how a wrapper parses its arguments.
+type wrapperSpec struct {
+	// values are the options that take a value. An option that is not in
+	// the table takes no value.
+	values map[string]bool
+	// chdir are the options whose value is the working directory of the
+	// program.
+	chdir []string
+	// assigns is true for a wrapper that takes NAME=value words before the
+	// program.
+	assigns bool
+	// operands is the number of fixed operands before the program, such as
+	// the duration of timeout.
+	operands int
+}
+
+var wrappers = map[string]wrapperSpec{
+	"sudo": {values: flagSet("-u", "--user", "-g", "--group", "-C", "--close-from", "-D", "--chdir",
+		"-p", "--prompt", "-r", "--role", "-t", "--type", "-T", "--command-timeout", "-U",
+		"--other-user", "--host"), chdir: []string{"-D", "--chdir"}, assigns: true},
+	"doas":    {values: flagSet("-u", "-C")},
+	"env":     {values: flagSet("-u", "--unset", "-C", "--chdir", "-S", "--split-string"), chdir: []string{"-C", "--chdir"}, assigns: true},
+	"nohup":   {},
+	"exec":    {values: flagSet("-a")},
+	"time":    {values: flagSet("-o", "--output", "-f", "--format")},
+	"nice":    {values: flagSet("-n", "--adjustment")},
+	"ionice":  {values: flagSet("-c", "--class", "-n", "--classdata")},
+	"stdbuf":  {values: flagSet("-i", "--input", "-o", "--output", "-e", "--error")},
+	"timeout": {values: flagSet("-s", "--signal", "-k", "--kill-after"), operands: 1},
+	"xargs": {values: flagSet("-a", "--arg-file", "-d", "--delimiter", "-E", "-I", "-L", "--max-lines",
+		"-n", "--max-args", "-P", "--max-procs", "-s", "--max-chars", "--process-slot-var")},
+	"chrt": {values: flagSet("-T", "--sched-runtime", "-P", "--sched-period", "-D", "--sched-deadline"),
+		operands: 1},
+	"taskset": {operands: 1},
+}
+
+// program returns the index of the program word in args and the working
+// directory that a chdir option sets. The index is len(args) when args
+// name no program. Options end at the first word that is not an option.
+func (s wrapperSpec) program(args []string) (int, string) {
+	chdir := ""
+	skip := s.operands
+	options := true
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case options && a == "--":
+			options = false
+		case options && strings.HasPrefix(a, "--"):
+			name, v, hasValue := strings.Cut(a, "=")
+			if !hasValue && s.values[name] && i+1 < len(args) {
+				i++
+				v = args[i]
 			}
-		}
-		if v, ok := strings.CutPrefix(a, "--chdir="); ok {
-			return v, true
+			if slices.Contains(s.chdir, name) {
+				chdir = v
+			}
+		case options && strings.HasPrefix(a, "-"):
+			for j := 1; j < len(a); j++ {
+				flag := "-" + a[j:j+1]
+				if !s.values[flag] {
+					continue
+				}
+				v := a[j+1:]
+				if v == "" && i+1 < len(args) {
+					i++
+					v = args[i]
+				}
+				if slices.Contains(s.chdir, flag) {
+					chdir = v
+				}
+				break
+			}
+		case s.assigns && isAssignment(a):
+			options = false
+		case skip > 0:
+			skip--
+			options = false
+		default:
+			return i, chdir
 		}
 	}
-	return "", false
+	return len(args), chdir
+}
+
+func isAssignment(word string) bool {
+	name, _, ok := strings.Cut(word, "=")
+	return ok && name != "" && !strings.Contains(name, "/")
 }
 
 // shellScript returns the script of "sh -c SCRIPT". The -c flag can be part
@@ -521,8 +588,9 @@ func (w *walker) find(args []string, cwds dirs) {
 // So a relative target becomes a removal of the root, as for -delete. An
 // absolute target stays as it is.
 func (w *walker) execdir(root string, cmd []string, cwds dirs) {
-	sub := &walker{env: w.env, depth: w.depth}
+	sub := &walker{env: w.env, depth: w.depth, calls: w.calls}
 	sub.call(cmd, dirs{""})
+	w.calls = sub.calls
 	for _, t := range sub.targets {
 		if path.IsAbs(t.Path) {
 			w.addTarget(t)
@@ -635,8 +703,8 @@ func (w *walker) addAll(values []string, access Access, cwds dirs) {
 // add records a target for each possible working directory. A path with
 // glob characters is reduced to the directory before the first glob,
 // because the glob can select any path in that directory. A write through a
-// glob is recorded as a removal of the directory. A read through a glob is
-// recorded as a read of the directory.
+// glob is recorded as a tree write of the directory. A removal or a read
+// through a glob is recorded as a removal or a read of the directory.
 func (w *walker) add(value string, access Access, cwds dirs) {
 	if value == "" || (value == "-" && access == AccessRead) {
 		return
@@ -644,7 +712,7 @@ func (w *walker) add(value string, access Access, cwds dirs) {
 	if i := strings.IndexAny(value, "*?["); i >= 0 {
 		value = path.Dir(value[:i] + "x")
 		if access == AccessWrite {
-			access = AccessRemove
+			access = AccessWriteTree
 		}
 	}
 	for _, cwd := range cwds {

@@ -520,16 +520,14 @@ var (
 // operands. A recursive run changes files inside the operands. gzip -N
 // takes the name of the output from the file header, so it can write any
 // name in the directory of the operand. xz --files reads the names from a
-// file, so the files are not known.
+// file, so the walker records only that file as a read.
 func (w *walker) compress(c compressor, args []string, cwds dirs) {
 	p := parseArgs(args, c.opts)
 	if p.has("-c", "--stdout", "--to-stdout", "-l", "--list", "-t", "--test") {
 		w.addAll(p.operands, AccessRead, cwds)
 		return
 	}
-	if p.has("--files", "--files0") {
-		w.addAnywhere(cwds)
-	}
+	w.addAll(p.value("--files", "--files0"), AccessRead, cwds)
 	if p.has("-r", "--recursive") {
 		w.addAll(p.operands, AccessRemove, cwds)
 		return
@@ -543,7 +541,7 @@ func (w *walker) compress(c compressor, args []string, cwds dirs) {
 			w.add(op, AccessRemove, cwds)
 		}
 		if headerName {
-			w.add(path.Dir(op), AccessRemove, cwds)
+			w.add(path.Dir(op), AccessWriteTree, cwds)
 		}
 		w.add(c.output(op, p.value("-S", "--suffix"), decompress), AccessWrite, cwds)
 	}
@@ -600,19 +598,17 @@ func (w *walker) zip(args []string, cwds dirs) {
 // sevenZip records the archive and the files of a 7z command. The first
 // operand is the command. a, u, d, and rn write the archive. x extracts
 // with paths into the -o directory or the working directory. e extracts
-// without paths. -spf extracts to the absolute paths in the archive. An
-// unknown command can write any path.
+// without paths. The walker does not record the absolute member paths of
+// -spf or the targets of an unknown command, because it cannot know them.
 func (w *walker) sevenZip(args []string, cwds dirs) {
 	var ops, outDirs []string
-	var toStdout, absolute, deletes bool
+	var toStdout, deletes bool
 	for _, a := range args {
 		switch {
 		case strings.HasPrefix(a, "-o"):
 			outDirs = append(outDirs, a[2:])
 		case a == "-so":
 			toStdout = true
-		case strings.HasPrefix(a, "-spf"):
-			absolute = true
 		case a == "-sdel":
 			deletes = true
 		case strings.HasPrefix(a, "-") && a != "-":
@@ -638,25 +634,19 @@ func (w *walker) sevenZip(args []string, cwds dirs) {
 		if toStdout {
 			return
 		}
-		access := AccessRemove
-		if strings.EqualFold(ops[0], "x") {
-			access = AccessWriteTree
-		}
-		w.extractInto(outDirs, access, absolute, cwds)
+		w.extractInto(outDirs, cwds)
 	case "l", "t", "h", "i", "b":
 		w.addAll(ops[1:], AccessRead, cwds)
-	default:
-		w.addAnywhere(cwds)
 	}
 }
 
 // unzip reads the archive and extracts into the -d directory or the
 // working directory. -l, -t, -v, -z, -Z, -c, and -p only read. -j drops
-// the paths of the members. -: keeps ".." in member paths, so it can write
-// any path.
+// the paths of the members. The walker does not record the paths that -:
+// keeps, because it cannot know them.
 func (w *walker) unzip(args []string, cwds dirs) {
 	var ops, outDirs []string
-	var readOnly, flat, anywhere bool
+	var readOnly bool
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if !strings.HasPrefix(a, "-") || a == "-" {
@@ -665,8 +655,6 @@ func (w *walker) unzip(args []string, cwds dirs) {
 		}
 		flags, dir, hasDir := strings.Cut(a[1:], "d")
 		readOnly = readOnly || strings.ContainsAny(flags, "ltvzZcp")
-		flat = flat || strings.Contains(flags, "j")
-		anywhere = anywhere || strings.Contains(flags, ":")
 		if !hasDir {
 			continue
 		}
@@ -677,39 +665,27 @@ func (w *walker) unzip(args []string, cwds dirs) {
 		outDirs = append(outDirs, dir)
 	}
 	w.addAll(ops[:min(1, len(ops))], AccessRead, cwds)
-	if readOnly {
-		return
+	if !readOnly {
+		w.extractInto(outDirs, cwds)
 	}
-	access := AccessWriteTree
-	if flat {
-		access = AccessRemove
-	}
-	w.extractInto(outDirs, access, anywhere, cwds)
 }
 
-// extractInto records the directories an extract writes into. It uses the
-// working directory when dirs is empty. An extract that keeps absolute
-// member paths can write any path.
-func (w *walker) extractInto(dirs []string, access Access, absolute bool, cwds dirs) {
+// extractInto records the directories an extract writes into as tree
+// writes. It uses the working directory when dirs is empty. An extract
+// without member paths writes only names in the directory, but the names
+// are not known, so a tree write is the closest target.
+func (w *walker) extractInto(dirs []string, cwds dirs) {
 	if len(dirs) == 0 {
 		dirs = []string{"."}
 	}
-	w.addAll(dirs, access, cwds)
-	if absolute {
-		w.addAnywhere(cwds)
-	}
-}
-
-// addAnywhere records that a command can write any path.
-func (w *walker) addAnywhere(cwds dirs) {
-	w.add("/", AccessWriteTree, cwds)
+	w.addAll(dirs, AccessWriteTree, cwds)
 }
 
 // tar records the archive and the members. A create, append, update,
 // concatenate, or delete writes the archive. An extract writes into the -C
-// directory, or into the working directory. An extract with -P keeps
-// absolute member names, so it can write any path. Other modes read the
-// archive.
+// directory, or into the working directory. The walker does not record the
+// absolute member names of -P, because it cannot know them. Other modes read
+// the archive.
 func (w *walker) tar(args []string, cwds dirs) {
 	p := parseArgs(tarOldStyle(args), tarOptions)
 	adds := p.has("-c", "--create", "-r", "--append", "-u", "--update")
@@ -730,7 +706,7 @@ func (w *walker) tar(args []string, cwds dirs) {
 	case adds || concatenates:
 		w.addAll(p.operands, AccessRead, cwds)
 	case p.has("-x", "--extract", "--get") && !p.has("-O", "--to-stdout"):
-		w.extractInto(p.value("-C", "--directory"), AccessWriteTree, p.has("-P", "--absolute-names"), cwds)
+		w.extractInto(p.value("-C", "--directory"), cwds)
 	}
 }
 
@@ -813,24 +789,23 @@ func (w *walker) curl(p parsedArgs, cwds dirs) {
 		return
 	}
 	if p.has("-J", "--remote-header-name") {
-		w.add(dir, AccessRemove, cwds)
+		w.add(dir, AccessWriteTree, cwds)
 		return
 	}
 	for _, u := range urls {
 		if name := remoteFileName(u); name != "" {
 			w.add(dir+"/"+name, AccessWrite, cwds)
-		} else {
-			w.add(dir, AccessRemove, cwds)
 		}
 	}
 }
 
 // writeOutFiles records the files of "%output{FILE}" in a curl --write-out
-// format. "%output{>>FILE}" appends. A format read from a file with "@" can
-// name any file.
+// format. "%output{>>FILE}" appends. A format read from a file with "@" is a
+// read of that file. The walker does not read the file, so it does not know
+// the files that the format names.
 func (w *walker) writeOutFiles(format string, cwds dirs) {
-	if strings.HasPrefix(format, "@") {
-		w.addAnywhere(cwds)
+	if file, ok := strings.CutPrefix(format, "@"); ok {
+		w.addUpload(file, cwds)
 		return
 	}
 	const marker = "%output{"
@@ -891,11 +866,10 @@ func (w *walker) wget(p parsedArgs, cwds dirs) {
 	w.addAll(p.value("--post-file", "--body-file", "-i", "--input-file"), AccessRead, cwds)
 	w.addOutputs(p.value("-O", "--output-document", "-o", "--output-file", "-a", "--append-output",
 		"--save-cookies"), cwds)
-	dirs := p.value("-P", "--directory-prefix")
 	if p.has("-O", "--output-document", "--spider") {
-		w.addAll(dirs, AccessRemove, cwds)
 		return
 	}
+	dirs := p.value("-P", "--directory-prefix")
 	if len(dirs) == 0 {
 		dirs = []string{"."}
 	}
@@ -904,7 +878,7 @@ func (w *walker) wget(p parsedArgs, cwds dirs) {
 		"--force-directories"):
 		w.addAll(dirs, AccessWriteTree, cwds)
 	case p.has("--content-disposition", "--trust-server-names", "-i", "--input-file"):
-		w.addAll(dirs, AccessRemove, cwds)
+		w.addAll(dirs, AccessWriteTree, cwds)
 	default:
 		for _, dir := range dirs {
 			for _, u := range p.operands {
