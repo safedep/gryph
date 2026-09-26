@@ -187,6 +187,8 @@ func TestAnalyze_CallBudgetStopsTheWalk(t *testing.T) {
 	_, err := w.script(command, dirs{"/work"})
 	require.NoError(t, err)
 	assert.Equal(t, maxCalls, w.calls)
+	assert.True(t, w.failed, "a walk that stops at the budget is not a full analysis")
+	assert.False(t, Analyze(command, Env{WorkingDir: "/work"}).Parsed)
 }
 
 func BenchmarkAnalyze_WrapperChain(b *testing.B) {

@@ -303,7 +303,11 @@ func (w *walker) words(args []*syntax.Word, cwds dirs) []string {
 // call analyzes one simple command and returns the working directories
 // after it.
 func (w *walker) call(args []string, cwds dirs) dirs {
-	if len(args) == 0 || args[0] == "" || w.calls >= maxCalls {
+	if len(args) == 0 || args[0] == "" {
+		return cwds
+	}
+	if w.calls >= maxCalls {
+		w.failed = true
 		return cwds
 	}
 	w.calls++

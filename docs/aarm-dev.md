@@ -205,8 +205,9 @@ of the options in the `wrappers` table, `NAME=value` words for `env` and
 `chrt`, the mask of `taskset`). Then it analyzes only the first remaining word
 as the program. An option that is not in the table takes no value. So a chain
 of wrappers costs one call for each wrapper. The walker also counts the
-simple commands it visits in one analysis. At `maxCalls` (4096) it stops and
-keeps the targets it has.
+simple commands it visits in one analysis. At `maxCalls` (4096) it stops,
+keeps the targets it has, and sets `Parsed` to false, so a caller can see that
+the analysis is not complete.
 
 The analysis is best effort. The hook runs on every agent tool call, so the
 walker must stay fast, and a false block costs more than a missed change.
