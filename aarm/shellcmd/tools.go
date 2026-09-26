@@ -189,6 +189,13 @@ var readCommands = map[string]options{
 	"tail": valueOptions("-n", "-c", "--lines", "--bytes", "-s", "--pid"),
 }
 
+// recursiveReads are the options of a read command that read every file in
+// a directory operand, as in "diff -r DIR other".
+var recursiveReads = map[string][]string{
+	"diff": {"-r", "--recursive"},
+	"zcat": {"-r", "--recursive"},
+}
+
 // editCommands write every file operand. An option that writes a file,
 // such as "vim -w", is not in the value table, so its file is an operand.
 var editCommands = map[string]options{

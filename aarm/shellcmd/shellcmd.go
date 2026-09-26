@@ -59,6 +59,10 @@ type Target struct {
 	// as in "cat ~/.*" or "grep -n PATH ~/.*". The command does not read
 	// the files in a directory that it names.
 	Flat bool
+	// Named marks the tree write of a directory that a recursive copy
+	// creates under the source name, as DEST/NAME in "cp -r dotfiles/.claude
+	// ~/". The copy can write any path in that tree.
+	Named bool
 }
 
 // Analysis is what a command does to paths and hosts.
@@ -484,7 +488,8 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 		w.openssl(rest, cwds)
 	default:
 		if opts, ok := readCommands[name]; ok {
-			w.addReads(parseArgs(rest, opts).operands, true, cwds)
+			p := parseArgs(rest, opts)
+			w.addReads(p.operands, !p.has(recursiveReads[name]...), cwds)
 		} else if opts, ok := editCommands[name]; ok {
 			w.addAll(parseArgs(rest, opts).operands, AccessWrite, cwds)
 		} else if !nonReadCommands[name] {

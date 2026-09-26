@@ -275,7 +275,8 @@ pattern, so `find . -name '*.go' -exec grep x {} +` does not read `.env`.
 against the file patterns only, not against a directory that holds a
 pattern. A read with `Target.Flat` set matches the same way. The walker
 sets it for a command that reads only the files it names: the
-`readCommands` table, `grep` without a recursive option, `awk`, `jq`, and a
+`readCommands` table unless a `recursiveReads` option is set, as in
+`diff -r`, `grep` without a recursive option, `awk`, `jq`, and a
 copy without a recursive option. `nonReadCommands` lists
 the commands that read no file content, such as `ls` and `stat`. The walker
 expands a brace list such as `a.{db,x}` before it records a path. A sequence
@@ -323,9 +324,13 @@ decompressed file, unless `-c` or `-k` is set. `zip -m`, `7z -sdel`, `tar
 The PDP matches a removal against every parent directory of each pattern,
 and the root for an absolute pattern. So `rm -rf ~` matches the Gryph config
 directory. The PDP matches a tree write against the directory that holds
-each pattern, against each ancestor below the leading `**` of a relative
-pattern (`treePatterns`), and against the pattern itself. So `cp -r
-dotfiles/.codeium ~/` matches `**/.codeium/windsurf/hooks.json`. A rule
+each pattern (`treePatterns`), and against the pattern itself. A recursive
+copy of a named directory into home or the working directory is a named
+tree write (`Target.Named`). It also matches each ancestor below the
+leading `**` of a relative pattern (`namedTreePatterns`). So `cp -r
+dotfiles/.codeium ~/` matches `**/.codeium/windsurf/hooks.json`, and `cp -r
+dotfiles/nvim ~/.config/` and `tar xf x -C ~/.config` do not match
+`**/.config/devin/config.json`. A rule
 that selects `write` or `remove` in `file_access` also selects a tree
 write. A tree write into another parent does not match. So `tar xzf
 node_modules.tgz` in the project root, `cp -r dotfiles/nvim ~/.config/`, and
