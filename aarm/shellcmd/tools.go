@@ -186,6 +186,9 @@ type copyFlags struct {
 	recursive []string
 	// relative options keep the whole source path under the destination.
 	relative []string
+	// slashContents is true when a source that ends in "/" copies the
+	// contents of the directory, as in rsync. cp copies the directory.
+	slashContents bool
 }
 
 // copyTool describes a local copy command.
@@ -227,8 +230,9 @@ var (
 		}},
 	}
 	rsyncFlags = copyFlags{
-		recursive: []string{"-r", "-a", "--recursive", "--archive"},
-		relative:  []string{"-R", "--relative"},
+		recursive:     []string{"-r", "-a", "--recursive", "--archive"},
+		relative:      []string{"-R", "--relative"},
+		slashContents: true,
 	}
 	scpFlags = copyFlags{recursive: []string{"-r"}}
 )

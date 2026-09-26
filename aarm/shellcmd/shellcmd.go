@@ -701,7 +701,8 @@ func (w *walker) addDest(dest string, sources []string, p parsedArgs, flags copy
 			name = relativeSource(expandHome(src, w.env.Home))
 		}
 		access := AccessWrite
-		if tree && !copiesContents(src) && mayBeDirectory(src) {
+		contents := strings.HasSuffix(src, "/.") || (flags.slashContents && strings.HasSuffix(src, "/"))
+		if tree && !contents && mayBeDirectory(src) {
 			access = AccessWriteTree
 		}
 		w.add(strings.TrimSuffix(dest, "/")+"/"+name, access, cwds)
@@ -709,8 +710,9 @@ func (w *walker) addDest(dest string, sources []string, p parsedArgs, flags copy
 }
 
 func (w *walker) isCwdOrHome(dest string) bool {
-	d := strings.TrimSuffix(dest, "/")
-	return d == "." || (w.env.Home != "" && expandHome(d, w.env.Home) == w.env.Home)
+	d := path.Clean(expandHome(dest, w.env.Home))
+	return d == "." || (w.env.Home != "" && d == path.Clean(w.env.Home)) ||
+		(w.env.WorkingDir != "" && d == path.Clean(w.env.WorkingDir))
 }
 
 // relativeSource returns the part of a source path that a relative copy
