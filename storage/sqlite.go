@@ -385,6 +385,22 @@ func (s *SQLiteStore) GetEvent(ctx context.Context, id uuid.UUID) (*events.Event
 	return entToEvent(entEvent), nil
 }
 
+// QueryEventsByIDs implements EventStore.
+func (s *SQLiteStore) QueryEventsByIDs(ctx context.Context, ids []uuid.UUID) ([]*events.Event, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	rows, err := s.client.AuditEvent.Query().Where(auditevent.IDIn(ids...)).All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query events by id: %w", err)
+	}
+	out := make([]*events.Event, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, entToEvent(r))
+	}
+	return out, nil
+}
+
 // FindPreEventByToolCall retrieves the pre-phase event of a tool call.
 func (s *SQLiteStore) FindPreEventByToolCall(ctx context.Context, sessionID uuid.UUID, toolCallID string) (*events.Event, error) {
 	if toolCallID == "" {

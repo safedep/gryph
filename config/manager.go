@@ -102,7 +102,7 @@ func (m *Manager) Set(key string, value interface{}) error {
 	// A value that the loader rejects makes loadApp fall back to the
 	// defaults on every hook, which turns the policy off. So it never
 	// reaches the file.
-	if err := validateSettings(m.v); err != nil {
+	if err := validateSettings(m.v, key); err != nil {
 		m.v.Set(key, old)
 		return fmt.Errorf("%w: %w", ErrInvalidValue, err)
 	}
@@ -190,10 +190,17 @@ func ParseValue(value string) interface{} {
 // invalid.
 var ErrInvalidValue = errors.New("invalid config value")
 
-func validateSettings(v *viper.Viper) error {
+// validateSettings clamps the policy.context values as Load does, so an
+// out-of-range value that is already in the file does not block a set of
+// another key. The key that the call sets must be in its range.
+func validateSettings(v *viper.Viper, key string) error {
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return err
 	}
+	if err := checkContextKey(v, key, &cfg.Policy.Context); err != nil {
+		return err
+	}
+	clampContext(v, &cfg.Policy.Context)
 	return validate(&cfg)
 }

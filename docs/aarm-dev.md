@@ -191,6 +191,21 @@ read `Action.Shell` and the URL. `newEntry` stores the first host in
 `Target.Host` and passes every host and the `path:`, `host:` and `mcp:` keys to
 the state as `Hosts` and `Entities`. The entry table stores neither list.
 
+`Accumulator.Window` returns the latest `WindowSpec.MaxEntries` entries in
+sequence order, and adds the latest intent that reached the agent when it is
+older. With `IncludeContent` it loads the audit events in one
+`QueryEventsByIDs` call and projects each content value: the value stays only
+when its label level is `full`, so a preview stored at `standard` never
+reaches a window, even after the config changes to `full`. `MaxBytes` bounds
+the bytes of the content values. Labels and entries do not count. The
+latest intent gets the budget first, then the entries from the newest to the
+oldest. A value that does not fit is emptied, and a smaller value after it
+can still use the budget. `Truncated` is true when a value was emptied. `MaxEntries` is at most `config.MaxWindowEntries` (1000).
+`accumulator.CanonicalWindow` gives the same bytes for the same window. The
+PDP does not call `Window`. `gryph policy context --window --session <id>
+[--content] [--limit N]` prints it, and `policy.context.window_max_entries`
+(default 50) and `window_max_bytes` (default 65536) set its size.
+
 `PDP.NeedsEntries` reports whether a rule reads `context.entries`. Only then
 does the Mediator call `Accumulator.Entries`, which reads
 `Store.QueryEntryFacts`: the latest `policy.context.cel_entries` entries,

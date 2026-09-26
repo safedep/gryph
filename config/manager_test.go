@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -364,4 +365,51 @@ func TestManager_Set_RejectsInvalidValue(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(data), "5001")
 	require.NoError(t, mgr.Set("policy.context.cel_entries", 200))
+}
+
+func TestManager_Set_ClampsOtherContextKeys(t *testing.T) {
+	configFile := filepath.Join(t.TempDir(), "config.yml")
+	content := "policy:\n  enabled: false\n  context:\n    window_max_entries: 0\n    window_max_bytes: -1\n"
+	require.NoError(t, os.WriteFile(configFile, []byte(content), 0o600))
+
+	mgr, err := NewManager(configFile)
+	require.NoError(t, err)
+
+	require.NoError(t, mgr.Set("policy.enabled", true), "an out-of-range value in the file must not block another key")
+	require.NoError(t, mgr.Set("policy.context.window_max_entries", "50"))
+	assert.ErrorIs(t, mgr.Set("policy.context.window_max_entries", "0"), ErrInvalidValue)
+}
+
+func TestManager_Set_RejectsOutOfRangeContextKey(t *testing.T) {
+	tests := []struct {
+		key   string
+		value interface{}
+		ok    bool
+	}{
+		{"policy.context.cel_entries", 0, false},
+		{"policy.context.cel_entries", MaxCELEntries + 1, false},
+		{"policy.context.cel_entries", MaxCELEntries, true},
+		{"policy.context.window_max_entries", 0, false},
+		{"policy.context.window_max_entries", MaxWindowEntries + 1, false},
+		{"policy.context.window_max_entries", 1, true},
+		{"policy.context.window_max_bytes", -1, false},
+		{"policy.context.window_max_bytes", -0.5, false},
+		{"policy.context.window_max_bytes", 0, true},
+	}
+	for _, tt := range tests {
+		for _, enabled := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s=%v/enabled=%v", tt.key, tt.value, enabled), func(t *testing.T) {
+				mgr, err := NewManager(filepath.Join(t.TempDir(), "config.yml"))
+				require.NoError(t, err)
+				require.NoError(t, mgr.Set("policy.enabled", enabled))
+
+				err = mgr.Set(tt.key, tt.value)
+				if tt.ok {
+					assert.NoError(t, err)
+					return
+				}
+				assert.ErrorIs(t, err, ErrInvalidValue)
+			})
+		}
+	}
 }

@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/storage/storagetest"
@@ -227,4 +231,83 @@ func TestRunPolicyContextVerify_UnknownHashVersionFails(t *testing.T) {
 	err = runPolicyContextVerify(ctx, &buf, tui.NewColorizer(false), store, sessionID.String(), 50, false, "table")
 	require.Error(t, err)
 	assert.Contains(t, buf.String(), "unknown hash version 1")
+}
+
+func TestWindowContentText(t *testing.T) {
+	c := tui.NewColorizer(false)
+	tests := []struct {
+		name string
+		text privacy.Text
+		want string
+	}{
+		{"indents every line", privacy.Text{Value: "one\ntwo"}, "         one\n         two"},
+		{"escapes control characters", privacy.Text{Value: "a\x1b[2Jb\rc"}, "         a\uFFFD[2Jb\uFFFDc"},
+		{"escapes bidi controls", privacy.Text{Value: "rm \u202Egnp.x\u2066"}, "         rm \uFFFDgnp.x\uFFFD"},
+		{"keeps CRLF lines", privacy.Text{Value: "one\r\ntwo"}, "         one\n         two"},
+		{"digest without a value", privacy.Text{Label: privacy.Label{Digest: "sha256:ab"}}, "         sha256:ab"},
+		{"no value and no digest", privacy.Text{}, "         (no content)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, windowContentText(c, tt.text))
+		})
+	}
+}
+
+func TestRenderPolicyContextWindow_EscapesTool(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+	require.NoError(t, store.AppendContextEntry(ctx, &storage.ContextEntryRow{
+		SessionID:  sessionID,
+		Kind:       "action",
+		Timestamp:  time.Now().UTC(),
+		ActionType: string(events.ActionToolUse),
+		Tool:       "evil\x1b]0;title\x07\nforged row" + strings.Repeat("x", 100),
+	}, nil))
+
+	var buf bytes.Buffer
+	err := renderPolicyContextWindow(ctx, &buf, tui.NewColorizer(false), store, sessionID.String(), model.WindowSpec{MaxEntries: 10}, "table")
+	require.NoError(t, err)
+	out := buf.String()
+	assert.NotContains(t, out, "\x1b")
+	assert.NotContains(t, out, "\x07")
+	assert.Contains(t, out, "evil�]0;title��forged row")
+	assert.Len(t, strings.Split(strings.TrimSpace(out), "\n"), 2, "the tool name stays on one row")
+}
+
+func TestRenderPolicyContextWindow_CutsToolOnRuneBoundary(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+	require.NoError(t, store.AppendContextEntry(ctx, &storage.ContextEntryRow{
+		SessionID:  sessionID,
+		Kind:       "action",
+		Timestamp:  time.Now().UTC(),
+		ActionType: string(events.ActionToolUse),
+		Tool:       strings.Repeat("\u00e9", 40),
+	}, nil))
+
+	var buf bytes.Buffer
+	err := renderPolicyContextWindow(ctx, &buf, tui.NewColorizer(false), store, sessionID.String(), model.WindowSpec{MaxEntries: 10}, "table")
+	require.NoError(t, err)
+	assert.True(t, utf8.ValidString(buf.String()))
+	assert.Contains(t, buf.String(), strings.Repeat("\u00e9", 30)+"...")
+}
+
+func TestRenderContextTables_EscapeStoredValues(t *testing.T) {
+	evil := "evil\x1b]0;title\x07\nforged"
+	var buf bytes.Buffer
+	renderContextStateTable(&buf, tui.NewColorizer(false), policyContextStateView{
+		ToolsUsed:   []string{evil},
+		TagsSeen:    map[string]int64{evil: 1},
+		OriginsSeen: []string{"mcp:" + evil},
+	})
+	renderContextEntriesTable(&buf, tui.NewColorizer(false), []policyContextEntryView{
+		{Sequence: 1, Kind: evil, ActionType: evil, Tool: evil, Decision: evil, ResultStatus: evil},
+	})
+	out := buf.String()
+	assert.NotContains(t, out, "\x1b")
+	assert.NotContains(t, out, "\x07")
+	assert.NotContains(t, out, "\nforged")
 }

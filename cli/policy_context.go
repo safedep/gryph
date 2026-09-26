@@ -13,7 +13,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/aarm/accumulator"
 	"github.com/safedep/gryph/aarm/accumulator/contextchain"
+	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -26,6 +30,8 @@ func newPolicyContextCmd() *cobra.Command {
 		format      string
 		verify      bool
 		allSessions bool
+		window      bool
+		content     bool
 	)
 
 	cmd := &cobra.Command{
@@ -41,7 +47,11 @@ func newPolicyContextCmd() *cobra.Command {
 			"  --verify                  verifies sessions whose entries " +
 			"appear in the most recent --limit entries.\n" +
 			"  --verify --all-sessions   enumerates every session in the context " +
-			"log and verifies each chain in full.",
+			"log and verifies each chain in full.\n\n" +
+			"Pass --window --session ID to print the window of a session: the latest " +
+			"entries and the latest prompt. --content adds the content that Gryph " +
+			"stored at the full logging level. --limit sets the entry count, and " +
+			"policy.context.window_max_bytes bounds the content.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
@@ -50,6 +60,18 @@ func newPolicyContextCmd() *cobra.Command {
 			}
 			if allSessions && !verify {
 				return ErrConfig("invalid flags", fmt.Errorf("--all-sessions requires --verify"))
+			}
+			if window && sessionID == "" {
+				return ErrConfig("invalid flags", fmt.Errorf("--window requires --session"))
+			}
+			if content && !window {
+				return ErrConfig("invalid flags", fmt.Errorf("--content requires --window"))
+			}
+			if window && verify {
+				return ErrConfig("invalid flags", fmt.Errorf("--window cannot be combined with --verify"))
+			}
+			if window && cmd.Flags().Changed("limit") && (limit < 1 || limit > config.MaxWindowEntries) {
+				return ErrConfig("invalid flags", fmt.Errorf("--limit must be between 1 and %d with --window", config.MaxWindowEntries))
 			}
 
 			app, err := loadApp()
@@ -73,6 +95,18 @@ func newPolicyContextCmd() *cobra.Command {
 				return runPolicyContextVerify(ctx, out, c, app.Store, sessionID, limit, allSessions, format)
 			}
 
+			if window {
+				spec := model.WindowSpec{
+					MaxEntries:     app.Config.Policy.Context.WindowMaxEntries,
+					MaxBytes:       app.Config.Policy.Context.WindowMaxBytes,
+					IncludeContent: content,
+				}
+				if cmd.Flags().Changed("limit") {
+					spec.MaxEntries = limit
+				}
+				return renderPolicyContextWindow(ctx, out, c, app.Store, sessionID, spec, format)
+			}
+
 			if sessionID != "" {
 				return renderPolicyContextSession(ctx, out, c, app.Store, sessionID, limit, format)
 			}
@@ -84,6 +118,8 @@ func newPolicyContextCmd() *cobra.Command {
 	cmd.Flags().IntVar(&limit, "limit", 50, "maximum number of entries or sessions to return")
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json")
 	cmd.Flags().BoolVar(&verify, "verify", false, "re-derive the per-session hash chain and report any breaks")
+	cmd.Flags().BoolVar(&window, "window", false, "with --session, print the window of the session: the latest entries and the latest prompt")
+	cmd.Flags().BoolVar(&content, "content", false, "with --window, add the content that Gryph stored at the full logging level")
 	cmd.Flags().BoolVar(&allSessions, "all-sessions", false, "with --verify, enumerate every session in the context log and verify each chain in full. Mutually exclusive with --session")
 	return cmd
 }
@@ -251,13 +287,13 @@ func renderContextStateTable(w io.Writer, c *tui.Colorizer, v policyContextState
 		_, _ = fmt.Fprintf(w, "  %-12s %d\n", c.Dim("errors"), v.Errors)
 	}
 	if len(v.ToolsUsed) > 0 {
-		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tools"), strings.Join(v.ToolsUsed, ", "))
+		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tools"), escapeJoin(v.ToolsUsed))
 	}
 	if len(v.TagsSeen) > 0 {
-		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tags"), strings.Join(slices.Sorted(maps.Keys(v.TagsSeen)), ", "))
+		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tags"), escapeJoin(slices.Sorted(maps.Keys(v.TagsSeen))))
 	}
 	if len(v.OriginsSeen) > 0 {
-		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("origins"), strings.Join(v.OriginsSeen, ", "))
+		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("origins"), escapeJoin(v.OriginsSeen))
 	}
 	if v.IntentAvailable {
 		_, _ = fmt.Fprintf(w, "  %-12s %d actions since the last prompt\n", c.Dim("intent"), v.ActionsSinceIntent)
@@ -277,8 +313,19 @@ func renderContextEntriesTable(w io.Writer, c *tui.Colorizer, entries []policyCo
 		c.Dim("seq"), c.Dim("kind"), c.Dim("action_type"), c.Dim("tool"), c.Dim("decision"), c.Dim("result"), c.Dim("id"))
 	for _, e := range entries {
 		_, _ = fmt.Fprintf(w, "  %-5d  %-11s  %-14s  %-12s  %-8s  %-9s  %s\n",
-			e.Sequence, e.Kind, e.ActionType, tui.TruncateString(e.Tool, 12), e.Decision, e.ResultStatus, tui.FormatShortID(e.ID))
+			e.Sequence, tui.EscapeLine(e.Kind), tui.EscapeLine(e.ActionType), tui.TruncateString(tui.EscapeLine(e.Tool), 12),
+			tui.EscapeLine(e.Decision), tui.EscapeLine(e.ResultStatus), tui.FormatShortID(e.ID))
 	}
+}
+
+// escapeJoin escapes each stored value for one terminal line, because an
+// agent or an MCP server chooses tool names and origins.
+func escapeJoin(values []string) string {
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = tui.EscapeLine(v)
+	}
+	return strings.Join(out, ", ")
 }
 
 func renderContextStatesTable(w io.Writer, c *tui.Colorizer, states []policyContextStateView) {
@@ -487,4 +534,67 @@ func writeContextVerifyJSON(w io.Writer, rows []*storage.ContextEntryRow, breaks
 		"summary":      summary,
 	}
 	return enc.Encode(out)
+}
+
+func renderPolicyContextWindow(ctx context.Context, w io.Writer, c *tui.Colorizer, store storage.Store, sessionRef string, spec model.WindowSpec, format string) error {
+	sessionID, err := resolveAarmSessionID(ctx, store, sessionRef)
+	if err != nil {
+		return err
+	}
+	win, err := accumulator.NewSQLite(store).Window(ctx, sessionID, spec)
+	if err != nil {
+		return fmt.Errorf("failed to load the window: %w", err)
+	}
+
+	if format == "json" {
+		data, err := accumulator.CanonicalWindow(win)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(w, string(data)); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if _, err := fmt.Fprintf(w, "%s %s\n", c.Header("Window"), c.Cyan(tui.FormatShortID(win.SessionID.String()))); err != nil {
+		return err
+	}
+	for _, e := range win.Entries {
+		if _, err := fmt.Fprintf(w, "  %-5d  %-11s  %-14s  %s\n", e.Entry.Sequence,
+			tui.EscapeLine(string(e.Entry.Kind)), tui.EscapeLine(string(e.Entry.ActionType)),
+			tui.TruncateString(tui.EscapeLine(e.Entry.Tool), windowToolMaxLen)); err != nil {
+			return err
+		}
+		for _, t := range e.Content {
+			if _, err := fmt.Fprintln(w, windowContentText(c, t)); err != nil {
+				return err
+			}
+		}
+	}
+	if win.Truncated {
+		if _, err := fmt.Fprintln(w, c.Dim("Content was cut to fit policy.context.window_max_bytes.")); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+const windowContentIndent = "         "
+
+// windowToolMaxLen bounds the tool name on a window row. A hook sends the
+// name, so it can be long.
+const windowToolMaxLen = 64
+
+// windowContentText indents every line of a content value. A value that
+// Gryph did not store at the full level shows its digest.
+func windowContentText(c *tui.Colorizer, t privacy.Text) string {
+	switch {
+	case t.Value != "":
+		return windowContentIndent + strings.ReplaceAll(tui.EscapeControl(t.Value), "\n", "\n"+windowContentIndent)
+	case t.Label.Digest != "":
+		return windowContentIndent + c.Dim(t.Label.Digest)
+	default:
+		return windowContentIndent + c.Dim("(no content)")
+	}
 }

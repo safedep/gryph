@@ -1,0 +1,74 @@
+# A window keeps the latest prompt even when it is older than the entry
+# limit. With --limit 3 and ten actions after a prompt, the window still
+# holds the prompt. The session ID 592bfcf8 derives from the agent session
+# ID s-winintent.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin prompt.json
+exec gryph _hook claude-code UserPromptSubmit
+
+stdin read1.json
+exec gryph _hook claude-code PreToolUse
+
+stdin read2.json
+exec gryph _hook claude-code PreToolUse
+
+stdin read3.json
+exec gryph _hook claude-code PreToolUse
+
+stdin read4.json
+exec gryph _hook claude-code PreToolUse
+
+stdin read5.json
+exec gryph _hook claude-code PreToolUse
+
+stdin read6.json
+exec gryph _hook claude-code PreToolUse
+
+stdin read7.json
+exec gryph _hook claude-code PreToolUse
+
+stdin read8.json
+exec gryph _hook claude-code PreToolUse
+
+stdin read9.json
+exec gryph _hook claude-code PreToolUse
+
+stdin read10.json
+exec gryph _hook claude-code PreToolUse
+
+
+exec gryph policy context --window --session 592bfcf8 --limit 3 --format json --no-color
+stdout -count=4 '"action_type":'
+stdout '"action_type":"user_prompt"'
+stdout '"sequence":1,'
+stdout '"sequence":11,'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- prompt.json --
+{"session_id": "s-winintent", "cwd": "/home/user/project", "hook_event_name": "UserPromptSubmit", "prompt": "Refactor the loader"}
+-- read1.json --
+{"session_id": "s-winintent", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "/home/user/project/f1.go"}, "tool_use_id": "tu-1"}
+-- read2.json --
+{"session_id": "s-winintent", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "/home/user/project/f2.go"}, "tool_use_id": "tu-2"}
+-- read3.json --
+{"session_id": "s-winintent", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "/home/user/project/f3.go"}, "tool_use_id": "tu-3"}
+-- read4.json --
+{"session_id": "s-winintent", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "/home/user/project/f4.go"}, "tool_use_id": "tu-4"}
+-- read5.json --
+{"session_id": "s-winintent", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "/home/user/project/f5.go"}, "tool_use_id": "tu-5"}
+-- read6.json --
+{"session_id": "s-winintent", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "/home/user/project/f6.go"}, "tool_use_id": "tu-6"}
+-- read7.json --
+{"session_id": "s-winintent", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "/home/user/project/f7.go"}, "tool_use_id": "tu-7"}
+-- read8.json --
+{"session_id": "s-winintent", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "/home/user/project/f8.go"}, "tool_use_id": "tu-8"}
+-- read9.json --
+{"session_id": "s-winintent", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "/home/user/project/f9.go"}, "tool_use_id": "tu-9"}
+-- read10.json --
+{"session_id": "s-winintent", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "/home/user/project/f10.go"}, "tool_use_id": "tu-10"}

@@ -57,6 +57,8 @@ func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".fail_mode", "closed")
 	v.SetDefault(prefix+".context_retention_days", 90)
 	v.SetDefault(prefix+".context.cel_entries", 100)
+	v.SetDefault(prefix+".context.window_max_entries", 50)
+	v.SetDefault(prefix+".context.window_max_bytes", DefaultWindowMaxBytes)
 	v.SetDefault(prefix+".receipt_retention_days", 365)
 	v.SetDefault(prefix+".log_all_evaluations", false)
 	v.SetDefault(prefix+".approval.mode", string(ApprovalModeNop))
