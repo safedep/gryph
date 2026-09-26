@@ -385,12 +385,14 @@ from `openssl -connect`, and from a `/dev/tcp/host/port` redirect. The ssh
 route adds the hosts of `-J`, `-W`, `-L`, `-R`, and the `-o` options. The ssh
 command of `GIT_SSH_COMMAND` and `git -c core.sshCommand` goes through the
 same route (`sshCommand`). `gitConfig` reads the proxy and `insteadOf` keys
-of `git -c`. For a command that the walker does not know, an argument that
-is the bare name of a network tool, or an absolute path to it, gives `?`
-(`networkWords`). A relative path or a package name does not count, such as
-`./cmd/host` or `curlimages/curl`. The build and package tools in
-`buildTools` (`go`, `make`, `npm`, `docker`, `man`, and others) skip this
-check. A host with a glob character is a host that Gryph cannot read. Hosts
+of `git -c`. For a command that the walker does not know, an absolute path
+to a network tool in any argument gives `?` (`networkWords`). A bare network
+tool name gives `?` only as the first operand (`firstOperand`). The walker
+takes the word after each option as the value of that option, so `journalctl
+-u ssh` and `mytool -v curl x` do not give `?`. A relative path or a package
+name does not count, such as `./cmd/host` or `curlimages/curl`. The tools in
+`namingTools` (`go`, `make`, `npm`, `docker`, `man`, test runners, `pkill`,
+`file`, and others) skip this check. A host with a glob character is a host that Gryph cannot read. Hosts
 are lower case, without the port.
 
 `xargs` without a replace string adds an unresolved word at the end of its

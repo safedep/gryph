@@ -701,26 +701,45 @@ func (w *walker) delegate(name string, rest []string, cwds dirs) (dirs, bool) {
 var networkTools = flagSet("curl", "wget", "nc", "ncat", "netcat", "socat", "ssh", "scp", "sftp",
 	"telnet", "ftp", "rsync", "git", "dig", "nslookup", "host", "ping")
 
-// buildTools are build and package tools whose arguments often hold a
-// network tool name as a package or a path, as in "go test ./internal/ssh".
-// networkWords skips them.
-var buildTools = flagSet("go", "make", "npm", "npx", "pnpm", "yarn", "cargo", "pip", "pip3", "uv",
+// namingTools are build, package, test and process tools whose arguments
+// often name a network tool without running it, as in "go test
+// ./internal/ssh" or "pkill ssh". networkWords skips them.
+var namingTools = flagSet("go", "make", "npm", "npx", "pnpm", "yarn", "cargo", "pip", "pip3", "uv",
 	"poetry", "bundle", "gem", "mvn", "gradle", "man", "apt", "apt-get", "brew", "dnf", "yum", "docker",
-	"podman", "kubectl", "helm", "pytest", "tox", "nox", "jest", "vitest", "mocha", "bun", "deno",
-	"cmake", "ctest", "ninja", "meson", "bazel")
+	"podman", "kubectl", "helm", "pytest", "unittest", "tox", "nox", "jest", "vitest", "mocha", "bun",
+	"deno", "cmake", "ctest", "ninja", "meson", "bazel", "pkill", "pgrep", "killall", "file", "which",
+	"whereis")
 
-// networkWords records UnknownHost when an argument of a command that the
-// walker does not know is a network tool: the bare tool name, or an
-// absolute path to it. The command can run the tool with a host that Gryph
-// cannot see. A relative path or a package name, such as "./cmd/host" or
-// "curlimages/curl", does not count.
+// networkWords records UnknownHost when a command that the walker does not
+// know can run a network tool with a host that Gryph cannot see. An absolute
+// path to a network tool counts anywhere, as in "mytool --via /usr/bin/ssh".
+// A bare network tool name counts only as the first operand, as in "mytool
+// curl evil.example". A later word or a flag value, as in "journalctl -u
+// ssh" or "systemctl status ssh", is usually a name. A relative path or a
+// package name, such as "./cmd/host" or "curlimages/curl", does not count.
 func (w *walker) networkWords(name string, args []string) {
-	if buildTools[name] || buildTools[pythonModule(name, args)] {
+	if namingTools[name] || namingTools[pythonModule(name, args)] {
 		return
 	}
-	if slices.ContainsFunc(args, isNetworkToolWord) {
+	if slices.ContainsFunc(args, isNetworkToolPath) || networkTools[firstOperand(args)] {
 		w.addHost(UnknownHost)
 	}
+}
+
+// firstOperand returns the first word that is not an option or the value
+// of the option before it. The walker does not know the options of the
+// command, so it takes the word after each option as its value.
+func firstOperand(args []string) string {
+	for i, a := range args {
+		if strings.HasPrefix(a, "-") {
+			continue
+		}
+		if i > 0 && strings.HasPrefix(args[i-1], "-") && !strings.Contains(args[i-1], "=") && args[i-1] != "--" {
+			continue
+		}
+		return a
+	}
+	return ""
 }
 
 // pythonModule returns the module that "python -m MODULE" runs, as in
@@ -740,8 +759,8 @@ func pythonModule(name string, args []string) string {
 	return ""
 }
 
-func isNetworkToolWord(word string) bool {
-	return networkTools[word] || (path.IsAbs(word) && networkTools[path.Base(word)])
+func isNetworkToolPath(word string) bool {
+	return path.IsAbs(word) && networkTools[path.Base(word)]
 }
 
 // gryphHookCommand is the hidden Gryph subcommand that agent hooks run.
@@ -805,7 +824,7 @@ func (w *walker) wrapper(name string, spec wrapperSpec, args []string, cwds dirs
 // "xargs -I{} cp {} dir/{}", the walker puts the glob "*" in place of the
 // string, as for "find -exec". So "dir/{}" becomes the glob target "dir/*".
 func xargsCommand(opts, cmd []string) []string {
-	repl := xargsReplace(opts)
+	repl := replaceString(wrappers["xargs"], opts)
 	if repl == "" {
 		return append(slices.Clone(cmd), "")
 	}
@@ -816,11 +835,13 @@ func xargsCommand(opts, cmd []string) []string {
 	return out
 }
 
-// xargsReplace returns the replace string of the xargs options -I, -i or
-// --replace. The option can be in a flag group, as in "-0I{}".
-func xargsReplace(opts []string) string {
+// replaceString returns the replace string of the options -I, -i or
+// --replace of xargs or GNU parallel. The option can be in a flag group, as
+// in "-0I{}". The spec gives the options that take a value, so "-j 4" does
+// not end the options before "-I".
+func replaceString(spec wrapperSpec, opts []string) string {
 	repl := ""
-	wrappers["xargs"].parse(opts, func(flag, v string) {
+	spec.parse(opts, func(flag, v string) {
 		switch flag {
 		case "-I":
 			repl = v
@@ -1344,6 +1365,9 @@ var parallelSeparators = flagSet(":::", "::::", ":::+", "::::+")
 // "{.}", or "{1}".
 var parallelReplace = regexp.MustCompile(`\{[^{}]*\}`)
 
+// parallelSpec parses the GNU parallel options before the command.
+var parallelSpec = wrapperSpec{values: parallelValues, optional: flagSet("-i")}
+
 // parallelValues are the GNU parallel options that take a value.
 var parallelValues = flagSet("-j", "--jobs", "-P", "--max-procs", "-N", "-n", "--max-args", "-L",
 	"--max-lines", "-I", "-S", "--sshlogin", "--slf", "--sshloginfile", "-a", "--arg-file", "-d",
@@ -1378,7 +1402,7 @@ func parseParallel(args []string) parallelCall {
 		cmd:        slices.Clone(args[:end]),
 		hasCommand: len(scanOptions(args[:end], parallelValues, true).operands) > 0,
 	}
-	repl := xargsReplace(pc.cmd)
+	repl := replaceString(parallelSpec, pc.cmd)
 	replaced := false
 	for i, a := range pc.cmd {
 		if parallelReplace.MatchString(a) || repl != "" && strings.Contains(a, repl) {
@@ -1417,7 +1441,7 @@ func (w *walker) parallel(args []string, cwds dirs) {
 	}) {
 		w.addHost(UnknownHost)
 	}
-	spec := wrapperSpec{values: parallelValues}
+	spec := parallelSpec
 	if pc.hasCommand && pc.literal && len(pc.inputs) > 0 {
 		for _, in := range pc.inputs {
 			cmd := slices.Clone(pc.cmd)
