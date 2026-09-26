@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/model"
@@ -273,4 +274,23 @@ func TestRenderPolicyContextWindow_EscapesTool(t *testing.T) {
 	assert.NotContains(t, out, "\x07")
 	assert.Contains(t, out, "evil�]0;title��forged row")
 	assert.Len(t, strings.Split(strings.TrimSpace(out), "\n"), 2, "the tool name stays on one row")
+}
+
+func TestRenderPolicyContextWindow_CutsToolOnRuneBoundary(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+	require.NoError(t, store.AppendContextEntry(ctx, &storage.ContextEntryRow{
+		SessionID:  sessionID,
+		Kind:       "action",
+		Timestamp:  time.Now().UTC(),
+		ActionType: string(events.ActionToolUse),
+		Tool:       strings.Repeat("\u00e9", 40),
+	}, nil))
+
+	var buf bytes.Buffer
+	err := renderPolicyContextWindow(ctx, &buf, tui.NewColorizer(false), store, sessionID.String(), model.WindowSpec{MaxEntries: 10}, "table")
+	require.NoError(t, err)
+	assert.True(t, utf8.ValidString(buf.String()))
+	assert.Contains(t, buf.String(), strings.Repeat("\u00e9", 30)+"...")
 }

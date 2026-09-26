@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 // FormatBytes formats bytes as a human-readable string.
@@ -112,15 +113,24 @@ func FormatExitCode(code int) string {
 	return fmt.Sprintf("exit:%d", code)
 }
 
-// TruncateString truncates a string to the given length.
+// TruncateString truncates a string to at most maxLen bytes. It cuts on a
+// rune boundary, so the result stays valid UTF-8.
 func TruncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
 	if maxLen <= 3 {
-		return s[:maxLen]
+		return s[:runeStart(s, maxLen)]
 	}
-	return s[:maxLen-3] + "..."
+	return s[:runeStart(s, maxLen-3)] + "..."
+}
+
+// runeStart moves i back to the start of the rune that holds byte i.
+func runeStart(s string, i int) int {
+	for i > 0 && !utf8.RuneStart(s[i]) {
+		i--
+	}
+	return i
 }
 
 var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
