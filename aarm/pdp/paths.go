@@ -39,9 +39,12 @@ func (a *actionPaths) commandTargets() []shellcmd.Target {
 // shell removal of a directory that contains a matching path also matches.
 // A tree write also matches when it writes into the directory that holds a
 // matching path. A named tree write, the directory that a recursive copy
-// creates, also matches an ancestor below the "**" of a relative pattern. A
-// tree write into another parent does not match, because a copy or an
-// extract into the project root, home or ~/.config is a common command.
+// creates in home or the working directory, also matches an ancestor below
+// the "**" of a relative pattern. A named plain write matches the same way
+// when its parent holds a matching path, as in "cp -r dotfiles/devin
+// ~/.config/". A tree write into another parent does not match, because a
+// copy or an extract into the project root, home or ~/.config is a common
+// command.
 func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) bool {
 	if matchesAnyPath(r.filePatterns, action.Parameters.Path) {
 		return true
@@ -51,6 +54,10 @@ func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) boo
 	}
 	for _, t := range paths.commandTargets() {
 		if matchesAnyPath(r.filePatterns, t.Path) {
+			return true
+		}
+		if t.Named && t.Access == shellcmd.AccessWrite && matchesAnyPath(r.containerPatterns, path.Dir(t.Path)) &&
+			matchesAnyPath(r.namedTreePatterns, t.Path) {
 			return true
 		}
 		switch t.Access {

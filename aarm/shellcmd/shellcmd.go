@@ -44,9 +44,9 @@ type Target struct {
 	// command or the working directory gives enough information.
 	Path   string
 	Access Access
-	// Named marks the tree write of a directory that a recursive copy
-	// creates under the source name, as DEST/NAME in "cp -r dotfiles/.claude
-	// ~/". The copy can write any path in that tree.
+	// Named marks the directory that a recursive copy creates under the
+	// source name, as DEST/NAME in "cp -r dotfiles/.claude ~/". The copy can
+	// write any path in that tree.
 	Named bool
 }
 
@@ -682,12 +682,14 @@ func skipOptions(args []string) []string {
 // added as a write too. A relative copy, such as "cp --parents", writes the
 // whole source path under the destination.
 //
-// A recursive copy of a directory into the working directory or home, such
-// as "cp -r dotfiles/.claude ~/", writes new files into DEST/NAME. So that
-// path is a tree write. For other destinations it stays a plain write,
-// because a backup such as "cp -r ~/.claude /tmp/backup" is common. The
-// walker resolves DEST for each working directory, so "cd /tmp/backup &&
-// cp -r ~/.claude ." stays a backup.
+// A recursive copy of a directory writes new files into DEST/NAME, so that
+// path is named. Into the working directory or home, such as "cp -r
+// dotfiles/.claude ~/", it is a tree write. For other destinations it is a
+// plain write, because a backup such as "cp -r ~/.claude /tmp/backup" is
+// common. The PDP still matches it when DEST holds a protected path, as in
+// "cp -r dotfiles/devin ~/.config/". The walker resolves DEST for each
+// working directory, so "cd /tmp/backup && cp -r ~/.claude ." stays a
+// backup.
 func (w *walker) addDest(dest string, sources []string, p parsedArgs, flags copyFlags, cwds dirs) {
 	if dest == "" {
 		return
@@ -710,8 +712,12 @@ func (w *walker) addDest(dest string, sources []string, p parsedArgs, flags copy
 			}
 			target := strings.TrimSuffix(dest, "/") + "/" + name
 			contents := strings.HasSuffix(src, "/.") || (flags.slashContents && strings.HasSuffix(src, "/"))
-			if tree && !contents && mayBeDirectory(src) && !strings.ContainsAny(target, "*?[") {
-				w.addTarget(Target{Path: resolve(target, cwd, w.env.Home), Access: AccessWriteTree, Named: true})
+			if recursive && !contents && mayBeDirectory(src) && !strings.ContainsAny(target, "*?[") {
+				access := AccessWrite
+				if tree {
+					access = AccessWriteTree
+				}
+				w.addTarget(Target{Path: resolve(target, cwd, w.env.Home), Access: access, Named: true})
 				continue
 			}
 			w.add(target, AccessWrite, dirs{cwd})
