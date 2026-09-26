@@ -345,7 +345,7 @@ type compiledRule struct {
 	message            *template.Template
 	filePatterns       []string
 	containerPatterns  []string
-	parentPatterns     []string
+	treePatterns       []string
 	fileAccess         []shellcmd.Access
 	workingDirPatterns []string
 	hasCondition       bool
@@ -391,7 +391,7 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 		return cr, err
 	}
 	cr.containerPatterns = containerPatterns(cr.filePatterns)
-	cr.parentPatterns = parentPatterns(cr.filePatterns)
+	cr.treePatterns = treePatterns(cr.filePatterns)
 	cr.fileAccess = defaultFileAccess
 	if len(rule.Match.FileAccess) > 0 {
 		cr.fileAccess = make([]shellcmd.Access, 0, len(rule.Match.FileAccess))

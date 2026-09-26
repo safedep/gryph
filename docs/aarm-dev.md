@@ -322,10 +322,12 @@ decompressed file, unless `-c` or `-k` is set. `zip -m`, `7z -sdel`, `tar
 
 The PDP matches a removal against every parent directory of each pattern,
 and the root for an absolute pattern. So `rm -rf ~` matches the Gryph config
-directory. The PDP matches a tree write only against the directory that
-holds each pattern (`parentPatterns`), and against the pattern itself. A
-rule that selects `write` or `remove` in `file_access` also selects a tree
-write. A tree write into a parent of that directory does not match. So `tar xzf
+directory. The PDP matches a tree write against the directory that holds
+each pattern, against each ancestor below the leading `**` of a relative
+pattern (`treePatterns`), and against the pattern itself. So `cp -r
+dotfiles/.codeium ~/` matches `**/.codeium/windsurf/hooks.json`. A rule
+that selects `write` or `remove` in `file_access` also selects a tree
+write. A tree write into another parent does not match. So `tar xzf
 node_modules.tgz` in the project root, `cp -r dotfiles/nvim ~/.config/`, and
 `rsync -a stage/ ~/` do not match the built-in rule or a user rule on
 `**/.env`. A copy or an extract into the Gryph config directory, or into

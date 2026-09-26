@@ -68,9 +68,10 @@ func (a *actionPaths) actionPath() []string {
 // matching path also matches, unless the directory is the home directory or
 // one of its parents.
 //
-// A tree write matches the directory that holds a matching path. A tree
-// write into a parent of that directory does not match, because a copy or an
-// extract into the project root or into home is a common command.
+// A tree write matches the directory that holds a matching path, or an
+// ancestor below the "**" of a relative pattern. A tree write into another
+// parent does not match, because a copy or an extract into the project root
+// or into home is a common command.
 func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) bool {
 	for _, p := range paths.actionPath() {
 		switch {
@@ -120,7 +121,7 @@ func (r compiledRule) matchesTarget(t shellcmd.Target) bool {
 	case shellcmd.AccessRead:
 		return treeRead && matchesAnyPath(r.containerPatterns, t.Path)
 	case shellcmd.AccessWriteTree:
-		return matchesAnyPath(r.parentPatterns, t.Path)
+		return matchesAnyPath(r.treePatterns, t.Path)
 	}
 	return false
 }
