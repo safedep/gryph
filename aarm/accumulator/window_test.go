@@ -101,6 +101,29 @@ func TestSQLiteAccumulator_Window(t *testing.T) {
 	})
 }
 
+func TestSQLiteAccumulator_WindowSkipsOtherSessionEvent(t *testing.T) {
+	acc, store := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	mine := session.NewSession("claude-code")
+	other := session.NewSession("claude-code")
+	saveSession(t, store, mine)
+	saveSession(t, store, other)
+
+	event := events.NewEvent(other.ID, "claude-code", events.ActionFileWrite)
+	preview := privacy.NewText("other session secret")
+	preview.Label.Level = "full"
+	require.NoError(t, event.SetPayload(events.FileWritePayload{Path: "/work/b.txt", ContentPreview: preview}))
+	require.NoError(t, store.RecordEvent(ctx, event, session.EventCounts(event)))
+	entry := newEntry(mine.ID, events.KindAction, model.ActionFileWrite, "Write")
+	entry.EventID = event.ID
+	require.NoError(t, acc.Append(ctx, entry))
+
+	w, err := acc.Window(ctx, mine.ID, model.WindowSpec{MaxEntries: 10, IncludeContent: true})
+	require.NoError(t, err)
+	require.Len(t, w.Entries, 1)
+	assert.Nil(t, w.Entries[0].Content)
+}
+
 func TestSQLiteAccumulator_WindowBlockedPrompt(t *testing.T) {
 	acc, store := newTestSQLiteAccumulator(t)
 	ctx := context.Background()

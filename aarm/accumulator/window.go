@@ -97,7 +97,7 @@ func (a *SQLiteAccumulator) loadContent(ctx context.Context, w *model.Window) er
 		byID[e.ID] = e
 	}
 	for i := range w.Entries {
-		if e, ok := byID[w.Entries[i].Entry.EventID]; ok {
+		if e, ok := byID[w.Entries[i].Entry.EventID]; ok && e.SessionID == w.SessionID {
 			w.Entries[i].Content = projectContent(e)
 		}
 	}

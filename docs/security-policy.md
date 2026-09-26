@@ -230,7 +230,7 @@ names an unknown field, such as `{{.Context.Drift}}`, and a `glob()` call with a
 pattern, such as `"["`. An installed policy with either loads with a warning. When a message template
 fails to render for an action, the rule still decides, and the message is `rule <id>`.
 
-`gryph policy context --window --session <id> --content` prints the latest entries of a session with their content, and always the latest prompt. It prints a value only when Gryph stored it at the `full` logging level. For any other value it prints the digest. `policy.context.window_max_entries` (1 to 1000, default 50) sets the default entry count, and `--limit` overrides it. `policy.context.window_max_bytes` (default 65536, 0 for no limit) bounds the bytes of the content values. Gryph uses the default for a negative value in the config file. Labels and entries do not count.
+`gryph policy context --window --session <id> --content` prints the latest entries of a session with their content, and always the latest prompt. It prints a value only when Gryph stored it at the `full` logging level. For any other value it prints the digest. The table output replaces each control character other than a newline or a tab with U+FFFD, so stored content cannot send escape sequences to the terminal. An entry shows the content of an event only when the event belongs to the same session. `policy.context.window_max_entries` (1 to 1000, default 50) sets the default entry count, and `--limit` overrides it. `policy.context.window_max_bytes` (default 65536, 0 for no limit) bounds the bytes of the content values. Gryph uses the default for a negative value in the config file. Labels and entries do not count.
 
 ### Facts and tags
 

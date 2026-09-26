@@ -574,7 +574,7 @@ const windowContentIndent = "         "
 func windowContentText(c *tui.Colorizer, t privacy.Text) string {
 	switch {
 	case t.Value != "":
-		return windowContentIndent + strings.ReplaceAll(t.Value, "\n", "\n"+windowContentIndent)
+		return windowContentIndent + strings.ReplaceAll(tui.EscapeControl(t.Value), "\n", "\n"+windowContentIndent)
 	case t.Label.Digest != "":
 		return windowContentIndent + c.Dim(t.Label.Digest)
 	default:

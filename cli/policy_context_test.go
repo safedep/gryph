@@ -9,10 +9,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/storage/storagetest"
-	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/tui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -238,6 +238,7 @@ func TestWindowContentText(t *testing.T) {
 		want string
 	}{
 		{"indents every line", privacy.Text{Value: "one\ntwo"}, "         one\n         two"},
+		{"escapes control characters", privacy.Text{Value: "a\x1b[2Jb\rc"}, "         a\uFFFD[2Jb\uFFFDc"},
 		{"digest without a value", privacy.Text{Label: privacy.Label{Digest: "sha256:ab"}}, "         sha256:ab"},
 		{"no value and no digest", privacy.Text{}, "         (no content)"},
 	}

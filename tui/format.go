@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // FormatBytes formats bytes as a human-readable string.
@@ -123,6 +124,18 @@ func TruncateString(s string, maxLen int) string {
 }
 
 var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// EscapeControl replaces each control character other than a newline or a
+// tab with U+FFFD. Stored content comes from agent tools, and an escape
+// sequence in it must not reach the terminal.
+func EscapeControl(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r != '\n' && r != '\t' && unicode.IsControl(r) {
+			return '\uFFFD'
+		}
+		return r
+	}, s)
+}
 
 func VisibleLen(s string) int {
 	return len(ansiRegex.ReplaceAllString(s, ""))
