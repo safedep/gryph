@@ -166,6 +166,23 @@ func TestSelfProtectionGlobs_StaticSetNoRepoLocal(t *testing.T) {
 	assert.NotContains(t, globs, "**/.gryph-policy.yaml")
 }
 
+func TestSelfProtectionReadGlobs(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := config.Default()
+	cfg.Storage.Path = filepath.Join(tmp, "audit.db")
+	paths := &config.Paths{ConfigDir: tmp}
+	db := filepath.ToSlash(cfg.Storage.Path)
+
+	globs := selfProtectionReadGlobs(cfg, paths)
+
+	assert.Equal(t, []string{
+		db, db + "-wal", db + "-shm", db + "-journal",
+		filepath.ToSlash(filepath.Join(tmp, "keys", "receipt.key")),
+	}, globs)
+	assert.NotContains(t, globs, "**/.claude/settings.json")
+	assert.Empty(t, selfProtectionReadGlobs(nil, paths))
+}
+
 func TestWriteExamplePolicy_WritesAndRefuses(t *testing.T) {
 	tmp := t.TempDir()
 	target := filepath.Join(tmp, "sub", "policy.yaml")

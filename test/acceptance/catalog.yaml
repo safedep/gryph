@@ -48,6 +48,20 @@
   guarantee: "With policy enabled, a Command Code write or edit of ~/.commandcode/settings.json, and a shell command that removes, redirects into, or edits it in place, is blocked by the builtin rules."
   labels: [policy, self-protection, command-code]
 
+- id: policy/self-protection/database-read-blocked
+  title: "builtin self-protection blocks reads of the gryph database and signing key"
+  category: policy
+  tier: P0
+  guarantee: "With policy enabled, an agent read of the database, its WAL or SHM file, or the receipt signing key is blocked. A Grep of the data directory, of the config directory, or of the config parent directory is blocked. sqlite3, cat, cp, base64, and cd-then-read commands that read them are blocked. A read of a project file or an agent hook config, and a Grep of the home directory, pass."
+  labels: [policy, self-protection]
+
+- id: policy/file-access/read-rule-matches-shell-reads
+  title: "file_access selects which shell targets a file rule matches"
+  category: policy
+  tier: P1
+  guarantee: "A rule with file_access [read] blocks a shell read of a matching path and passes a shell write. A rule without file_access blocks a shell write and passes a shell read."
+  labels: [policy]
+
 - id: privacy/sensitive/content-never-stored
   title: "sensitive file content never reaches storage or export"
   category: privacy

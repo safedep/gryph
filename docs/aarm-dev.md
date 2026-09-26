@@ -63,7 +63,7 @@ write the execution outcome to the accumulator row and the receipt row.
 | `aarm/model` | Shared data model: `Action`, `Parameters`, `Decision`, `EvaluationResult`, `ContextSnapshot`, `Result`, `Severity`. Its only aarm dependency is `aarm/shellcmd`, for `Action.Shell`. `aarm/shellcmd` imports no Gryph package, and a test enforces it. |
 | `aarm/mediation` | `Adapter` interface plus `HookAdapter` and `MCPAdapter`. Normalizes agent events into `model.Action` and enriches with classify / injectscore / identity. |
 | `aarm/pdp` | Policy Decision Point. `Policy` / `Rule` schema, YAML parse, rule compile, `Evaluate`, CEL conditions, message templates, policy hash. |
-| `aarm/shellcmd` | Parses a shell command with `mvdan.cc/sh`. `Analyze` returns the paths the command reads, writes, or removes, and the hosts it contacts. The mediator stores the result on `model.Action.Shell`. The PDP matches `file_patterns` against the write and remove targets for `command_exec` actions. |
+| `aarm/shellcmd` | Parses a shell command with `mvdan.cc/sh`. `Analyze` returns the paths the command reads, writes, or removes, and the hosts it contacts. The mediator stores the result on `model.Action.Shell`. The PDP matches `file_patterns` against the targets that the rule's `file_access` selects (write and remove by default) for `command_exec` actions. |
 | `aarm/pep` | Policy Enforcement boundary. Maps `model.EvaluationResult` to `core/security.CheckResult`. |
 | `aarm/loader` | `Loader` merges policy `Source` values. `FileSource`, `DirSource` (the policies directory), and `BuiltinSource` (self-protection rules). |
 | `aarm/accumulator` | Context Accumulator interface. Per-session action memory feeding `context.*` CEL variables. `Nop` and SQLite implementations. |
@@ -187,12 +187,33 @@ relies on this. See
 [security-policy-threat-model.md](./security-policy-threat-model.md).
 
 Self-protection blocks agent changes to Gryph's own control surfaces (policy,
-config, database, signing keys, agent hook configs). It is one rule,
-`gryph-builtin-protected-files`, over `file_write`, `file_delete`, and
-`command_exec`. For a command, the PDP matches the paths that `aarm/shellcmd`
-parses from the command line. A delete or move of a directory also matches when
-the directory contains a protected path, for a shell command or a
-`file_delete`. The rule has no agent names and no command regexes.
+config, database, signing keys, agent hook configs). The rule
+`gryph-builtin-protected-files` covers `file_write`, `file_delete`, and
+`command_exec`. The rule `gryph-builtin-protected-reads` covers `file_read`
+and `command_exec` with `file_access: [read]`. It protects the database, its
+SQLite side files, and the receipt signing key. For a command, the PDP matches
+the paths that `aarm/shellcmd` parses from the command line. The PDP also
+resolves the action path (`~`, `..`, a relative path, a trailing slash)
+before it matches. A delete or move of a directory also matches when the
+directory contains a protected path, for a shell command or a `file_delete`.
+A shell read of such a directory matches the read rule, because a copy or a
+recursive read reads every file in it. Such a directory is a literal parent
+in a pattern (`containerPatterns`). A pattern such as `**/.env` has no
+literal parent, so it does not match a recursive read of a directory. A shell read through a glob matches
+when the glob and a pattern, or the glob and a directory that holds a
+pattern, can match the same path (`Target.Glob`, `globsOverlap` in
+`aarm/pdp/paths.go`). `globsOverlap` compares the two globs one segment at a
+time, and one character at a time in a segment. A shell glob segment that
+starts with `*`, `?`, or a class does not meet a pattern segment that starts
+with a literal dot, as in bash without `dotglob`. `globTokens` knows a
+leading `]` in a class and `[:name:]`, `[=c=]`, and `[.c.]`. A class that
+does not close makes the rest of the segment a star, so the check can only
+over-match. A `file_read` of a directory that holds a protected path at any
+depth also matches. A `file_read` or a shell read of the home directory or
+one of its parents (`isHomeOrParent`) matches the file patterns only, not a
+directory that holds a pattern, because a search of home is a common
+command. A glob below home, such as `~/.c*`, does not get this exemption. The rules have no agent
+names and no command regexes.
 
 `aarm/shellcmd` walks the parsed command tree. It tracks the set of working
 directories a command can run in: a `cd` in a subshell, a pipe, a
@@ -228,8 +249,42 @@ analysis.
 
 A read target comes from an input redirect, the source of a copy or a move,
 the file operands of a fixed list of read commands (`cat`, `head`, `grep`,
-`sed` without `-i`, `sort`, `tar`, `sqlite3`, and others), and the files that
-`curl` and `wget` upload. A host comes from a URL anywhere in a word, from
+`sed` without `-i`, `sort`, `tar`, `sqlite3`, and others), the files that `curl`
+and `wget` upload, and a `file:` URL of `curl` or `sqlite3`. For `sqlite3`,
+the first operand is a read of the database, and each later operand is a
+guessed read. The walker also reads the `-init` file and the files that
+`.open`, `.read`, `.import`, `.restore`, or `.load` names in an operand or a
+`-cmd` value. `sqlTokens` splits the SQL into tokens. It skips string
+literals and `--` and `/* */` comments, and it makes a quoted name bare.
+`sqlFiles` then reads the file of `ATTACH` at the start of a statement, and
+of a call of `readfile()`, `fsdir()`, or `load_extension()`, only when one
+single-quoted string names the file. When an expression names the file, the
+walker records nothing. So the word `attach` in a string, a comment, or a
+column name adds no read. It analyzes the command of `.shell` and `.system`
+as a nested script. `tar` applies each `-C` to the
+members after it. For a command that the walker does not know, each operand,
+the value after `=` of an option, and each tail of a short option
+(`guessWords`) is a read with `Target.Guess` set. `git` records the same
+guessed reads relative to the last `-C` directory, and a read of each `-C`,
+`--git-dir`, and `--work-tree` directory. For `find -exec`, `{}` is any path
+under a root. When one `-name` test before the first action selects the
+files, and no `-o` or negation can select others, `{}` ends with that name
+pattern, so `find . -name '*.go' -exec grep x {} +` does not read `.env`.
+`findName` skips the words of each action. The glob of `{}` has
+`Target.MatchDot` set, because `find -name '*.env'` matches `.env`. The PDP matches a guessed read
+against the file patterns only, not against a directory that holds a
+pattern. A read with `Target.Flat` set matches the same way. The walker
+sets it for a command that reads only the files it names: the
+`readCommands` table unless a `recursiveReads` option is set, as in
+`diff -r`, `grep` without a recursive option, `awk`, `jq`, and a
+copy without a recursive option. GNU diff without `-r` still reads the
+files directly in a directory operand, so the walker also sets
+`Target.Shallow` for `shallowReads`. The PDP matches a shallow read against
+the directory that holds a pattern. `nonReadCommands` lists
+the commands that read no file content, such as `ls` and `stat`. The walker
+expands a brace list such as `a.{db,x}` before it records a path. A sequence
+such as `{1..9}`, or a word that expands to more than 64 words, becomes the
+glob `*`. A host comes from a URL anywhere in a word, from
 the operands of `curl`, `wget`, `ssh`, `sftp`, `nc`, and similar tools, from an
 scp-style `host:path` in `scp`, `rsync`, and the remote of a `git` command,
 from `openssl -connect`, and from a `/dev/tcp/host/port` redirect. Hosts are
@@ -247,7 +302,7 @@ A command that writes paths in a directory with names that the command line
 does not show is a tree write (`AccessWriteTree`) of that directory: a
 recursive copy (`cp -r`, `rsync -a`, `scp -r`) of a source that can be a
 directory, a copy of directory contents (a source that ends in `/` or `/.`),
-a copy or link with `-T` or `ln -n`, a `tar`, `7z`, or `unzip` extract (the
+a copy or link with `-T` or `ln -n`, a `tar`, `7z`, or `unzip` extract (each
 target directory or the working directory), a recursive `wget`, a download
 that takes a name from the server (`curl -J`, `wget --content-disposition`),
 `gunzip -N`, and a write through a glob. The walker does not record the
@@ -278,8 +333,9 @@ tree write (`Target.Named`). It also matches each ancestor below the
 leading `**` of a relative pattern (`namedTreePatterns`). So `cp -r
 dotfiles/.codeium ~/` matches `**/.codeium/windsurf/hooks.json`, and `cp -r
 dotfiles/nvim ~/.config/` and `tar xf x -C ~/.config` do not match
-`**/.config/devin/config.json`. A tree write into another parent does not
-match. So `tar xzf
+`**/.config/devin/config.json`. A rule
+that selects `write` or `remove` in `file_access` also selects a tree
+write. A tree write into another parent does not match. So `tar xzf
 node_modules.tgz` in the project root, `cp -r dotfiles/nvim ~/.config/`, and
 `rsync -a stage/ ~/` do not match the built-in rule or a user rule on
 `**/.env`. A copy or an extract into the Gryph config directory, or into
@@ -298,12 +354,12 @@ lists are best effort. A plain `mv` or `ln` onto a directory that does not
 exist yet, and a `wget` or `curl` config file, are not seen. `tar` gives each
 letter of an old-style first word that takes a value the next word, in
 order, so `tar xfC a.tar dir` reads `a.tar` into `dir`.
-Self-protection matches write and remove targets only.
 
 The operator toggles self-protection only through
 `policy.self_protection.enabled`. Inspect it with `gryph policy builtin`.
 
-`selfProtectionGlobs` in `cli/policy.go` builds the globs. The Gryph paths come
+`selfProtectionGlobs` in `cli/policy.go` builds the write globs, and
+`selfProtectionReadGlobs` builds the read globs. The Gryph paths come
 from the config. The hook config paths come from each adapter's
 `HookConfigPaths()`, collected by `Registry.HookConfigGlobs()` over the adapters
 that `registerAdapters` in `cli/root.go` registers. To protect a new agent,

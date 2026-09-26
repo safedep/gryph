@@ -103,7 +103,7 @@ func activeRuleCount(p *pdp.Policy) int {
 }
 
 func builtinListRow(cfg *config.Config, paths *config.Paths) policyListRow {
-	src := loader.NewBuiltinSource(selfProtectionGlobs(cfg, paths)...)
+	src := selfProtectionSource(cfg, paths)
 	docs, err := src.Load(context.Background())
 	if err != nil {
 		return policyListRow{source: "builtin", file: "(embedded self-protection)", err: firstLine(err.Error())}

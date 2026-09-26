@@ -1,0 +1,123 @@
+# The builtin protected-reads rule blocks agent reads of the gryph database,
+# its WAL file, and the receipt signing key. It also blocks shell commands that
+# read them. A Grep of the config directory or of its parent reads the key,
+# so it is blocked too. A read of a project file, of an agent hook config, or
+# a Grep of the home directory passes.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+expandenv read_db.json read_wal.json read_key.json sqlite.json cat_db.json cp_db.json base64_key.json grep_data.json read_shm.json cd_cat.json cat_readme.json read_hookcfg.json grep_cfg.json grep_cfg_parent.json grep_home.json
+
+stdin read_db.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin read_wal.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin read_key.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin sqlite.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin cat_db.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin cp_db.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin base64_key.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin grep_data.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin read_shm.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin cd_cat.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin grep_cfg.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin grep_cfg_parent.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin grep_home.json
+exec gryph _hook claude-code PreToolUse
+! stderr 'self-protection'
+
+stdin cat_readme.json
+exec gryph _hook claude-code PreToolUse
+! stderr 'self-protection'
+
+stdin read_hookcfg.json
+exec gryph _hook claude-code PreToolUse
+! stderr 'self-protection'
+
+exec gryph query --status blocked --format json --no-color
+stdout -count=12 '"ResultStatus": "blocked"'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- read_db.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "${XDG_DATA_HOME}/safedep/gryph/audit.db"}, "tool_use_id": "r1"}
+-- read_wal.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "${XDG_DATA_HOME}/safedep/gryph/audit.db-wal"}, "tool_use_id": "r2"}
+-- read_key.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "${XDG_CONFIG_HOME}/safedep/gryph/keys/receipt.key"}, "tool_use_id": "r3"}
+-- sqlite.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "sqlite3 ${XDG_DATA_HOME}/safedep/gryph/audit.db 'select * from audit_events'"}, "tool_use_id": "r4"}
+-- cat_db.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "cat ${XDG_DATA_HOME}/safedep/gryph/audit.db"}, "tool_use_id": "r5"}
+-- cp_db.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "cp ${XDG_DATA_HOME}/safedep/gryph/audit.db /tmp/x"}, "tool_use_id": "r6"}
+-- base64_key.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "base64 < ${XDG_CONFIG_HOME}/safedep/gryph/keys/receipt.key"}, "tool_use_id": "r7"}
+-- cat_readme.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "cat README.md"}, "tool_use_id": "r8"}
+-- read_hookcfg.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "${HOME}/.claude/settings.json"}, "tool_use_id": "r9"}
+-- grep_data.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Grep",
+ "tool_input": {"pattern": "select", "path": "${XDG_DATA_HOME}/safedep/gryph/"}, "tool_use_id": "r10"}
+-- read_shm.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "${XDG_DATA_HOME}/safedep/gryph/audit.db-shm"}, "tool_use_id": "r11"}
+-- cd_cat.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "cd ${XDG_DATA_HOME}/safedep/gryph && strings audit.db"}, "tool_use_id": "r12"}
+-- grep_cfg.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Grep",
+ "tool_input": {"pattern": "PRIVATE", "path": "${XDG_CONFIG_HOME}/safedep/gryph"}, "tool_use_id": "r13"}
+-- grep_cfg_parent.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Grep",
+ "tool_input": {"pattern": "PRIVATE", "path": "${XDG_CONFIG_HOME}"}, "tool_use_id": "r14"}
+-- grep_home.json --
+{"session_id": "s-read", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Grep",
+ "tool_input": {"pattern": "TODO", "path": "${HOME}"}, "tool_use_id": "r15"}

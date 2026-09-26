@@ -73,6 +73,26 @@ type parsedArgs struct {
 	// table does not know. The table must set guess. A guess that is
 	// the next word stays an operand too.
 	guesses []string
+	// seq holds the operands and the option values in command line order.
+	// An operand has an empty flag.
+	seq []flagValue
+}
+
+type flagValue struct {
+	flag  string
+	value string
+}
+
+func (p *parsedArgs) addOperands(values ...string) {
+	p.operands = append(p.operands, values...)
+	for _, v := range values {
+		p.seq = append(p.seq, flagValue{value: v})
+	}
+}
+
+func (p *parsedArgs) addValue(flag, value string) {
+	p.values[flag] = append(p.values[flag], value)
+	p.seq = append(p.seq, flagValue{flag: flag, value: value})
 }
 
 func (p parsedArgs) value(flags ...string) []string {
@@ -98,17 +118,17 @@ func parseArgs(args []string, o options) parsedArgs {
 		a := args[i]
 		switch {
 		case a == "--":
-			p.operands = append(p.operands, args[i+1:]...)
+			p.addOperands(args[i+1:]...)
 			return p
 		case strings.HasPrefix(a, "--"):
 			name, v, hasValue := strings.Cut(a, "=")
 			name = o.longName(name)
 			p.seen[name] = true
 			if hasValue {
-				p.values[name] = append(p.values[name], v)
+				p.addValue(name, v)
 			} else if o.values[name] && i+1 < len(args) {
 				i++
-				p.values[name] = append(p.values[name], args[i])
+				p.addValue(name, args[i])
 			}
 			if o.guess && !o.known(name) {
 				p.guess(v, args, i)
@@ -128,11 +148,11 @@ func parseArgs(args []string, o options) parsedArgs {
 					i++
 					v = args[i]
 				}
-				p.values[flag] = append(p.values[flag], v)
+				p.addValue(flag, v)
 				break
 			}
 		default:
-			p.operands = append(p.operands, a)
+			p.addOperands(a)
 		}
 	}
 	return p
@@ -169,6 +189,17 @@ var readCommands = map[string]options{
 	"tail": valueOptions("-n", "-c", "--lines", "--bytes", "-s", "--pid"),
 }
 
+// recursiveReads are the options of a read command that read every file in
+// a directory operand, as in "diff -r DIR other".
+var recursiveReads = map[string][]string{
+	"diff": {"-r", "--recursive"},
+	"zcat": {"-r", "--recursive"},
+}
+
+// shallowReads are the read commands that read the files directly in a
+// directory operand without a recursive option.
+var shallowReads = flagSet("diff")
+
 // editCommands write every file operand. An option that writes a file,
 // such as "vim -w", is not in the value table, so its file is an operand.
 var editCommands = map[string]options{
@@ -203,6 +234,12 @@ type copyTool struct {
 }
 
 var noTargetDirectory = []string{"-T", "--no-target-directory"}
+
+// nonReadCommands do not read the content of their operands. The walker
+// does not guess reads for them.
+var nonReadCommands = flagSet("ls", "stat", "du", "df", "echo", "printf", "test", "[", "[[",
+	"mkdir", "touch", "which", "type", "basename", "dirname", "realpath", "readlink", "export",
+	"unset", "set", "declare", "local", "alias", "true", "false", "sleep", "kill", "popd")
 
 var (
 	copyOptions = options{
@@ -383,13 +420,13 @@ var remoteShellOptions = map[string]options{
 // program or pattern, such as grep or awk. The program comes from a file
 // option or an expression option instead when either is set, and then every
 // operand is a file.
-func (w *walker) scriptTool(p parsedArgs, fileFlags, exprFlags []string, cwds dirs) {
-	w.addAll(p.value(fileFlags...), AccessRead, cwds)
+func (w *walker) scriptTool(p parsedArgs, fileFlags, exprFlags []string, flat bool, cwds dirs) {
+	w.addReads(p.value(fileFlags...), true, false, cwds)
 	ops := p.operands
 	if !p.has(fileFlags...) && !p.has(exprFlags...) && len(ops) > 0 {
 		ops = ops[1:]
 	}
-	w.addAll(ops, AccessRead, cwds)
+	w.addReads(ops, flat, false, cwds)
 }
 
 // localCopy handles cp, mv, install, and ln. An ln with one operand makes
@@ -402,7 +439,7 @@ func (w *walker) localCopy(tool copyTool, args []string, cwds dirs) {
 		return
 	}
 	if tool.readsSources {
-		w.addAll(sources, AccessRead, cwds)
+		w.addReads(sources, !p.has(tool.flags.recursive...), false, cwds)
 	}
 	if tool.removeSources {
 		w.addAll(sources, AccessRemove, cwds)
@@ -686,8 +723,9 @@ func (w *walker) extractInto(dirs []string, cwds dirs) {
 }
 
 // tar records the archive and the members. A create, append, update,
-// concatenate, or delete writes the archive. An extract writes into the -C
-// directory, or into the working directory. The walker does not record the
+// concatenate, or delete writes the archive. An extract writes into each -C
+// directory, or into the working directory. Each -C applies to the members
+// after it, relative to the previous -C. The walker does not record the
 // absolute member names of -P, because it cannot know them. Other modes read
 // the archive.
 func (w *walker) tar(args []string, cwds dirs) {
@@ -704,13 +742,29 @@ func (w *walker) tar(args []string, cwds dirs) {
 		}
 	}
 	w.addAll(p.value("-T", "--files-from", "-X", "--exclude-from"), AccessRead, cwds)
-	switch {
-	case adds && p.has("--remove-files"):
-		w.addAll(p.operands, AccessRemove, cwds)
-	case adds || concatenates:
-		w.addAll(p.operands, AccessRead, cwds)
-	case p.has("-x", "--extract", "--get") && !p.has("-O", "--to-stdout"):
-		w.extractInto(p.value("-C", "--directory"), cwds)
+	members := cwds
+	extracts := p.has("-x", "--extract", "--get") && !p.has("-O", "--to-stdout")
+	if extracts && !p.has("-C", "--directory") {
+		w.add(".", AccessWriteTree, cwds)
+	}
+	for _, a := range p.seq {
+		switch {
+		case a.flag == "-C" || a.flag == "--directory":
+			next := w.cd([]string{a.value}, members)
+			switch {
+			case !extracts:
+			case strings.ContainsAny(a.value, "*?["):
+				w.add(a.value, AccessWriteTree, members)
+			default:
+				w.add(".", AccessWriteTree, next)
+			}
+			members = next
+		case a.flag == "" && (adds || concatenates):
+			w.add(a.value, AccessRead, members)
+			if adds && p.has("--remove-files") {
+				w.add(a.value, AccessRemove, members)
+			}
+		}
 	}
 }
 
@@ -734,18 +788,244 @@ func tarOldStyle(args []string) []string {
 	return append(out, rest...)
 }
 
+var sqliteOptions = valueOptions("-cmd", "-init", "-separator", "-newline", "-nullvalue",
+	"-vfs", "-maxsize", "-mmap", "-pagecache", "-lookaside", "-heap")
+
+// sqlite records the first operand of sqlite3 as a read of the database.
+// The database can follow an option that sqlite3 parses with a single dash
+// and that the table does not know, so each later operand is a guessed read.
+// It also records the -init file, and each file that the SQL of an operand
+// or of -cmd opens.
+func (w *walker) sqlite(args []string, cwds dirs) {
+	database := true
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		flag := "-" + strings.TrimLeft(a, "-")
+		switch {
+		case strings.HasPrefix(a, "-") && sqliteOptions.values[flag]:
+			if i+1 < len(args) {
+				i++
+				w.sqliteValue(flag, args[i], cwds)
+			}
+		case strings.HasPrefix(a, "-"):
+		case database:
+			database = false
+			w.add(filePath(a), AccessRead, cwds)
+		default:
+			w.guessReads([]string{filePath(a)}, cwds)
+			w.sqliteText(a, cwds)
+		}
+	}
+}
+
+func (w *walker) sqliteValue(flag, value string, cwds dirs) {
+	switch flag {
+	case "-init":
+		w.add(value, AccessRead, cwds)
+	case "-cmd":
+		w.sqliteText(value, cwds)
+	}
+}
+
+var sqliteToken = regexp.MustCompile(`'(?:[^']|'')*'|"[^"]*"|[^\s;]+`)
+
+// sqliteFileCommands are the dot commands of sqlite3 that read a file
+// operand. sqliteShellCommands run the rest of the line as a shell command.
+var (
+	sqliteFileCommands  = []string{"open", "read", "import", "restore", "load"}
+	sqliteShellCommands = []string{"shell", "system"}
+)
+
+// isSqliteDotCommand reports whether a word is one of the dot commands.
+// sqlite3 accepts a short prefix of a dot command name.
+func isSqliteDotCommand(word string, commands []string) bool {
+	name, ok := strings.CutPrefix(word, ".")
+	if !ok || len(name) < 2 {
+		return false
+	}
+	return slices.ContainsFunc(commands, func(c string) bool { return strings.HasPrefix(c, name) })
+}
+
+// sqliteText records the files that SQL text or a dot command opens with
+// .open, .read, .import, .restore, .load, ATTACH, readfile(), fsdir(), or
+// load_extension(). It also analyzes the command of .shell and .system.
+func (w *walker) sqliteText(text string, cwds dirs) {
+	var sql []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		tokens := sqliteToken.FindAllString(line, -1)
+		switch {
+		case len(tokens) == 0:
+		case isSqliteDotCommand(tokens[0], sqliteShellCommands):
+			w.nested(strings.TrimPrefix(line, tokens[0]), cwds)
+		case isSqliteDotCommand(tokens[0], sqliteFileCommands):
+			for _, tok := range tokens[1:] {
+				if !strings.HasPrefix(tok, "-") {
+					w.add(filePath(sqliteUnquote(tok)), AccessRead, cwds)
+				}
+			}
+		case !strings.HasPrefix(line, "."):
+			sql = append(sql, line)
+		}
+	}
+	w.addAll(sqlFiles(sqlTokens(strings.Join(sql, "\n"))), AccessRead, cwds)
+}
+
+// sqlToken is one SQL token. A string literal keeps its quotes. A quoted
+// name is bare, so "readfile" and readfile are the same word.
+type sqlToken struct {
+	text    string
+	literal bool
+}
+
+// sqlTokens splits SQL into tokens. It drops white space and comments.
+func sqlTokens(sql string) []sqlToken {
+	var out []sqlToken
+	for i := 0; i < len(sql); {
+		c := sql[i]
+		switch {
+		case c == ' ' || c == '\t' || c == '\n' || c == '\r':
+			i++
+		case strings.HasPrefix(sql[i:], "--"):
+			end := strings.IndexByte(sql[i:], '\n')
+			if end < 0 {
+				return out
+			}
+			i += end
+		case strings.HasPrefix(sql[i:], "/*"):
+			end := strings.Index(sql[i+2:], "*/")
+			if end < 0 {
+				return out
+			}
+			i += end + 4
+		case c == '\'':
+			end := quoteEnd(sql, i, '\'')
+			out = append(out, sqlToken{text: sql[i:end], literal: true})
+			i = end
+		case c == '"' || c == '`' || c == '[':
+			closer := map[byte]byte{'"': '"', '`': '`', '[': ']'}[c]
+			end := quoteEnd(sql, i, closer)
+			out = append(out, sqlToken{text: strings.Trim(sql[i:end], string(c)+string(closer))})
+			i = end
+		case strings.IndexByte("(),;", c) >= 0:
+			out = append(out, sqlToken{text: sql[i : i+1]})
+			i++
+		default:
+			end := i + 1
+			for end < len(sql) && strings.IndexByte(" \t\n\r(),;'\"`[", sql[end]) < 0 && !strings.HasPrefix(sql[end:], "--") && !strings.HasPrefix(sql[end:], "/*") {
+				end++
+			}
+			out = append(out, sqlToken{text: sql[i:end]})
+			i = end
+		}
+	}
+	return out
+}
+
+// quoteEnd returns the index after the quote that closes the quote at
+// sql[start]. A doubled quote does not close it. An open quote runs to the
+// end.
+func quoteEnd(sql string, start int, closer byte) int {
+	for i := start + 1; i < len(sql); i++ {
+		if sql[i] != closer {
+			continue
+		}
+		if i+1 < len(sql) && sql[i+1] == closer && closer != ']' {
+			i++
+			continue
+		}
+		return i + 1
+	}
+	return len(sql)
+}
+
+// sqlFileFunctions are the SQL functions that open the file of their first
+// argument.
+var sqlFileFunctions = []string{"readfile", "fsdir", "load_extension"}
+
+// sqlFiles returns the files that ATTACH at the start of a statement, or a
+// call of a file function, names with one string literal. A file that an
+// expression names is not known, so it adds nothing.
+func sqlFiles(tokens []sqlToken) []string {
+	var out []string
+	start := true
+	for i, tok := range tokens {
+		word := strings.ToLower(tok.text)
+		switch {
+		case tok.literal:
+		case start && word == "attach":
+			arg := i + 1
+			if arg < len(tokens) && !tokens[arg].literal && strings.EqualFold(tokens[arg].text, "database") {
+				arg++
+			}
+			out = appendLiteralArg(out, tokens, arg, "as")
+		case slices.Contains(sqlFileFunctions, word) && i+1 < len(tokens) && tokens[i+1].text == "(":
+			out = appendLiteralArg(out, tokens, i+2, ",", ")")
+		}
+		start = !tok.literal && tok.text == ";"
+	}
+	return out
+}
+
+// appendLiteralArg appends the string literal at tokens[i] when the token
+// after it is one of ends.
+func appendLiteralArg(out []string, tokens []sqlToken, i int, ends ...string) []string {
+	if i+1 >= len(tokens) || !tokens[i].literal || tokens[i+1].literal {
+		return out
+	}
+	if !slices.ContainsFunc(ends, func(e string) bool { return strings.EqualFold(tokens[i+1].text, e) }) {
+		return out
+	}
+	return append(out, filePath(sqliteUnquote(tokens[i].text)))
+}
+
+func sqliteUnquote(s string) string {
+	if len(s) >= 2 && (s[0] == '\'' || s[0] == '"') && s[len(s)-1] == s[0] {
+		q := string(s[0])
+		return strings.ReplaceAll(s[1:len(s)-1], q+q, q)
+	}
+	return s
+}
+
+// filePath returns the local path of a "file:" URI, as SQLite and curl read
+// it: the percent-decoded path without the query, the fragment, and a
+// "localhost" or empty host. It returns any other value as it is. The scheme
+// is not case sensitive.
+func filePath(value string) string {
+	if len(value) < 5 || !strings.EqualFold(value[:5], "file:") {
+		return value
+	}
+	u, err := url.Parse(value)
+	if err != nil {
+		p, _, _ := strings.Cut(value[5:], "?")
+		return p
+	}
+	if u.Opaque == "" {
+		return u.Path
+	}
+	if p, err := url.PathUnescape(u.Opaque); err == nil {
+		return p
+	}
+	return u.Opaque
+}
+
 func isLetters(s string) bool {
 	return s != "" && strings.IndexFunc(s, func(r rune) bool {
 		return (r < 'a' || r > 'z') && (r < 'A' || r > 'Z')
 	}) < 0
 }
 
-// curl records the hosts, the uploaded files, and the output files. -o
-// and -O write into the --output-dir directory when it is set. The value
-// of an option that the table does not know is a guessed write target.
+// curl records the hosts, the files of "file://" URLs, the uploaded files,
+// and the output files. -o and -O write into the --output-dir directory
+// when it is set. The value of an option that the table does not know is a
+// guessed write target.
 func (w *walker) curl(p parsedArgs, cwds dirs) {
 	urls := slices.Concat(p.operands, p.value("--url"))
 	for _, u := range urls {
+		if f := filePath(u); f != u {
+			w.add(f, AccessRead, cwds)
+			continue
+		}
 		w.addHost(u)
 	}
 	for _, v := range p.value("-d", "--data", "--data-binary", "--data-ascii", "--json") {
@@ -849,7 +1129,7 @@ func withWgetrc(p parsedArgs) parsedArgs {
 		case !known:
 		case wgetOptions.values[opt]:
 			p.seen[opt] = true
-			p.values[opt] = append(p.values[opt], v)
+			p.addValue(opt, v)
 		case !strings.EqualFold(v, "off"):
 			p.seen[opt] = true
 		}
@@ -978,9 +1258,23 @@ var gitRemoteArg = map[string]int{
 	"clone": 1, "fetch": 1, "pull": 1, "push": 1, "ls-remote": 1,
 }
 
-// git records the host of the remote that a git command names.
-func (w *walker) git(args []string) {
-	ops := parseArgs(args, gitOptions).operands
+// git records the host of the remote that a git command names. git can
+// read any file under its working tree, so each -C directory, --git-dir,
+// and --work-tree is a read of that tree. Each word that can name a file is
+// a guessed read relative to the last -C directory.
+func (w *walker) git(args []string, cwds dirs) {
+	p := parseArgs(args, gitOptions)
+	for _, a := range p.seq {
+		switch a.flag {
+		case "-C":
+			cwds = w.cd([]string{"--", a.value}, cwds)
+			w.add(".", AccessRead, cwds)
+		case "--git-dir", "--work-tree":
+			w.add(a.value, AccessRead, cwds)
+		}
+	}
+	w.guessReads(guessWords(args), cwds)
+	ops := p.operands
 	if len(ops) == 0 {
 		return
 	}

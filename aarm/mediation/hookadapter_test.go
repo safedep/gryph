@@ -105,7 +105,7 @@ func TestHookAdapter_Normalize(t *testing.T) {
 				require.NotNil(t, a.Shell)
 				assert.True(t, a.Shell.Parsed)
 				assert.Equal(t, []string{"x.example"}, a.Shell.Hosts)
-				assert.Contains(t, a.Shell.Targets, shellcmd.Target{Path: "/work/proj/.env", Access: shellcmd.AccessRead})
+				assert.Contains(t, a.Shell.Targets, shellcmd.Target{Path: "/work/proj/.env", Access: shellcmd.AccessRead, Flat: true})
 			},
 		},
 		{

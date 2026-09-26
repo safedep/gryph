@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/safedep/gryph/core/events"
 )
 
@@ -49,8 +50,9 @@ type oneOf struct {
 }
 
 type items struct {
-	Type string `json:"type,omitempty"`
-	Ref  string `json:"$ref,omitempty"`
+	Type string   `json:"type,omitempty"`
+	Ref  string   `json:"$ref,omitempty"`
+	Enum []string `json:"enum,omitempty"`
 }
 
 type definition struct {
@@ -231,8 +233,13 @@ func generatePolicySchema() jsonSchema {
 			},
 			"file_patterns": {
 				Type:        "array",
-				Description: "Doublestar glob patterns matched against the action's file path. For command_exec actions, also matched against the paths the shell command writes, moves, or deletes. Forward-slash normalized.",
+				Description: "Doublestar glob patterns matched against the action's file path. For command_exec actions, also matched against the shell targets that `file_access` selects. Forward-slash normalized.",
 				Items:       &items{Type: "string"},
+			},
+			"file_access": {
+				Type:        "array",
+				Description: "The shell targets of a command_exec action that `file_patterns` match: `read`, `write`, or `remove`. The default is `[write, remove]`. Requires `file_patterns`.",
+				Items:       &items{Type: "string", Enum: []string{string(shellcmd.AccessRead), string(shellcmd.AccessWrite), string(shellcmd.AccessRemove)}},
 			},
 			"command_patterns": {
 				Type:        "array",

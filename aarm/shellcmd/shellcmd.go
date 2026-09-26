@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/safedep/dry/log"
+	"mvdan.cc/sh/v3/expand"
 	"mvdan.cc/sh/v3/syntax"
 )
 
@@ -44,9 +45,27 @@ type Target struct {
 	// command or the working directory gives enough information.
 	Path   string
 	Access Access
-	// Named marks the directory that a recursive copy creates under the
-	// source name, as DEST/NAME in "cp -r dotfiles/.claude ~/". The copy can
-	// write any path in that tree.
+	// Glob is the resolved pattern when the command reads the path through
+	// a glob. Path is then the directory before the first glob character.
+	Glob string
+	// Guess marks a read by a command that the walker does not know. Such a
+	// command may read the path, but it may not read every file in a
+	// directory that the path names.
+	Guess bool
+	// MatchDot marks a glob that comes from a find -name test. find lets a
+	// leading "*", "?", or class match a leading dot. The shell does not.
+	MatchDot bool
+	// Flat marks a read of only the files that the path or the glob names,
+	// as in "cat ~/.*" or "grep -n PATH ~/.*". The command does not read
+	// the files in a directory that it names.
+	Flat bool
+	// Shallow marks a read of the path and of the files directly in it, as
+	// in "diff -N DIR other". GNU diff compares the files one level down in
+	// a directory operand without "-r".
+	Shallow bool
+	// Named marks the tree write of a directory that a recursive copy
+	// creates under the source name, as DEST/NAME in "cp -r dotfiles/.claude
+	// ~/". The copy can write any path in that tree.
 	Named bool
 }
 
@@ -98,6 +117,16 @@ func AnalyzeCommand(command string, args []string, workingDir string) Analysis {
 		return Analysis{Parsed: true}
 	}
 	return Analyze(line, Env{WorkingDir: filepath.ToSlash(workingDir), Home: HomeDir()})
+}
+
+// ResolvePath makes a path that an agent reports absolute and clean, the
+// same way the analysis resolves a shell path. It expands "~" and joins a
+// relative path with workingDir.
+func ResolvePath(p, workingDir string) string {
+	if p == "" {
+		return ""
+	}
+	return resolve(filepath.ToSlash(p), filepath.ToSlash(workingDir), HomeDir())
 }
 
 // HomeDir returns the user's home directory with forward slashes, or an
@@ -161,12 +190,13 @@ func union(a, b dirs) dirs {
 }
 
 type walker struct {
-	env     Env
-	depth   int
-	calls   int
-	targets []Target
-	hosts   []string
-	failed  bool
+	env      Env
+	depth    int
+	calls    int
+	targets  []Target
+	hosts    []string
+	failed   bool
+	matchDot bool
 }
 
 func (w *walker) script(src string, cwds dirs) (dirs, error) {
@@ -277,31 +307,94 @@ func (w *walker) subshells(node syntax.Node, cwds dirs) {
 }
 
 func (w *walker) redirect(r *syntax.Redirect, cwds dirs) {
-	switch r.Op {
-	case syntax.RdrOut, syntax.AppOut, syntax.RdrInOut, syntax.RdrClob,
-		syntax.RdrAll, syntax.RdrAllClob, syntax.AppAll, syntax.AppAllClob:
-		if v, ok := w.word(r.Word, cwds); ok {
-			w.add(v, AccessWrite, cwds)
+	for _, word := range expandBraces(r.Word) {
+		v, ok := w.word(word, cwds)
+		if !ok {
+			continue
 		}
-	case syntax.RdrIn:
-		if v, ok := w.word(r.Word, cwds); ok {
+		switch r.Op {
+		case syntax.RdrOut, syntax.AppOut, syntax.RdrInOut, syntax.RdrClob,
+			syntax.RdrAll, syntax.RdrAllClob, syntax.AppAll, syntax.AppAllClob:
+			w.add(v, AccessWrite, cwds)
+		case syntax.RdrIn:
 			w.add(v, AccessRead, cwds)
 		}
-	}
-	if v, ok := w.word(r.Word, cwds); ok {
 		w.devSocket(v)
 	}
 }
 
-// words resolves each argument. An argument that cannot be resolved becomes
-// an empty string so that argument positions stay stable.
+// words resolves each argument after brace expansion. An argument that
+// cannot be resolved becomes an empty string so that argument positions
+// stay stable.
 func (w *walker) words(args []*syntax.Word, cwds dirs) []string {
 	out := make([]string, 0, len(args))
 	for _, a := range args {
-		v, _ := w.word(a, cwds)
-		out = append(out, v)
+		for _, word := range expandBraces(a) {
+			v, _ := w.word(word, cwds)
+			out = append(out, v)
+		}
 	}
 	return out
+}
+
+// maxBraceWords limits the words that one brace expansion makes.
+const maxBraceWords = 64
+
+// expandBraces splits a word such as "a.d{b,}" into the words the shell
+// makes from it. A sequence such as "{1..9}", and every brace of a word
+// that expands to more than maxBraceWords words, becomes the glob "*",
+// which covers each word the shell makes.
+func expandBraces(word *syntax.Word) []*syntax.Word {
+	if word == nil {
+		return nil
+	}
+	if !syntax.SplitBraces(word) {
+		return []*syntax.Word{word}
+	}
+	parts := globBraces(word.Parts, true)
+	if braceWords(parts) > maxBraceWords {
+		parts = globBraces(parts, false)
+	}
+	return expand.Braces(&syntax.Word{Parts: parts})
+}
+
+// globBraces replaces each brace expansion with "*". With onlySequences,
+// it replaces only the sequences, also inside the elements of a list.
+func globBraces(parts []syntax.WordPart, onlySequences bool) []syntax.WordPart {
+	out := make([]syntax.WordPart, 0, len(parts))
+	for _, part := range parts {
+		br, ok := part.(*syntax.BraceExp)
+		switch {
+		case !ok:
+			out = append(out, part)
+		case br.Sequence || !onlySequences:
+			out = append(out, &syntax.Lit{Value: "*"})
+		default:
+			for _, elem := range br.Elems {
+				elem.Parts = globBraces(elem.Parts, true)
+			}
+			out = append(out, br)
+		}
+	}
+	return out
+}
+
+// braceWords returns the number of words that the brace lists in parts
+// make, up to maxBraceWords+1.
+func braceWords(parts []syntax.WordPart) int {
+	n := 1
+	for _, part := range parts {
+		br, ok := part.(*syntax.BraceExp)
+		if !ok {
+			continue
+		}
+		elems := 0
+		for _, elem := range br.Elems {
+			elems = min(elems+braceWords(elem.Parts), maxBraceWords+1)
+		}
+		n = min(n*elems, maxBraceWords+1)
+	}
+	return n
 }
 
 // call analyzes one simple command and returns the working directories
@@ -348,7 +441,7 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 			w.addAll(ops[1:], AccessRead, cwds)
 		}
 	case "awk", "gawk", "mawk":
-		w.scriptTool(parseArgs(rest, awkOptions), []string{"-f", "--file"}, nil, cwds)
+		w.scriptTool(parseArgs(rest, awkOptions), []string{"-f", "--file"}, nil, true, cwds)
 	case "dd":
 		for _, a := range rest {
 			if v, ok := strings.CutPrefix(a, "of="); ok {
@@ -361,9 +454,12 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	case "find":
 		w.find(rest, cwds)
 	case "grep", "egrep", "fgrep", "rg":
-		w.scriptTool(parseArgs(rest, grepOptions), []string{"-f", "--file"}, []string{"-e", "--regexp"}, cwds)
+		p := parseArgs(rest, grepOptions)
+		flat := name != "rg" && !p.has("-r", "-R", "--recursive", "--dereference-recursive") &&
+			!slices.Contains(p.value("-d", "--directories"), "recurse")
+		w.scriptTool(p, []string{"-f", "--file"}, []string{"-e", "--regexp"}, flat, cwds)
 	case "jq":
-		w.scriptTool(parseArgs(rest, jqOptions), []string{"-f", "--from-file"}, nil, cwds)
+		w.scriptTool(parseArgs(rest, jqOptions), []string{"-f", "--from-file"}, nil, true, cwds)
 	case "tar":
 		w.tar(rest, cwds)
 	case "zip":
@@ -376,7 +472,9 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 		w.compress(compressors[name], rest, cwds)
 	case "sort":
 		w.sort(parseArgs(rest, sortOptions), cwds)
-	case "sqlite3", "source", ".":
+	case "sqlite3":
+		w.sqlite(rest, cwds)
+	case "source", ".":
 		if ops := operands(rest); len(ops) > 0 {
 			w.add(ops[0], AccessRead, cwds)
 		}
@@ -389,14 +487,18 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	case "nc", "ncat", "netcat":
 		w.netcat(rest)
 	case "git":
-		w.git(rest)
+		w.git(rest, cwds)
 	case "openssl":
 		w.openssl(rest, cwds)
 	default:
 		if opts, ok := readCommands[name]; ok {
-			w.addAll(parseArgs(rest, opts).operands, AccessRead, cwds)
+			p := parseArgs(rest, opts)
+			recursive := p.has(recursiveReads[name]...)
+			w.addReads(p.operands, !recursive, shallowReads[name] && !recursive, cwds)
 		} else if opts, ok := editCommands[name]; ok {
 			w.addAll(parseArgs(rest, opts).operands, AccessWrite, cwds)
+		} else if !nonReadCommands[name] {
+			w.guessReads(guessWords(rest), cwds)
 		}
 	}
 	return cwds
@@ -489,6 +591,8 @@ var wrappers = map[string]wrapperSpec{
 	"chrt": {values: flagSet("-T", "--sched-runtime", "-P", "--sched-period", "-D", "--sched-deadline"),
 		operands: 1},
 	"taskset": {operands: 1},
+	"busybox": {},
+	"toybox":  {},
 }
 
 // program returns the index of the program word in args and the working
@@ -575,29 +679,60 @@ func shellScript(args []string) (string, bool) {
 // find records the changes of a find command. -delete removes the search
 // roots. -exec and the related actions run a command on each file found, so
 // the walker analyzes that command with "{}" set to any path under a root.
+// When a -name test selects the files, "{}" ends with that name pattern.
 func (w *walker) find(args []string, cwds dirs) {
 	roots := findRoots(args)
 	if len(roots) == 0 {
 		roots = []string{"."}
 	}
+	found := "/**" + findName(args)
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-delete":
 			w.addAll(roots, AccessRemove, cwds)
 		case "-exec", "-ok":
 			end := findActionEnd(args, i)
+			w.matchDot = true
 			for _, root := range roots {
-				w.call(substitute(args[i+1:end], strings.TrimSuffix(root, "/")+"/*"), cwds)
+				w.call(substitute(args[i+1:end], strings.TrimSuffix(root, "/")+found), cwds)
 			}
+			w.matchDot = false
 			i = end
 		case "-execdir", "-okdir":
 			end := findActionEnd(args, i)
 			for _, root := range roots {
-				w.execdir(root, substitute(args[i+1:end], "./*"), cwds)
+				w.execdir(root, substitute(args[i+1:end], "./**"), cwds)
 			}
 			i = end
 		}
 	}
+}
+
+// findName returns "/" and the pattern of the -name test of a find
+// command. It returns an empty string when there is no such test before the
+// first action, when the test is negated, or when an -o operator can select
+// other files. find runs an action on each file before the tests that come
+// after it, and the words of an action are not tests.
+func findName(args []string) string {
+	name := ""
+	acted := false
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case isFindAction(a):
+			acted = true
+			i = findActionEnd(args, i)
+		case a == "-o" || a == "-or":
+			return ""
+		case a == "-name" && !acted && name == "" && i+1 < len(args) && (i == 0 || (args[i-1] != "!" && args[i-1] != "-not")):
+			name = "/" + args[i+1]
+		}
+	}
+	return name
+}
+
+func isFindAction(a string) bool {
+	return a == "-exec" || a == "-ok" || a == "-execdir" || a == "-okdir"
 }
 
 // execdir analyzes the command of -execdir. find runs it from the
@@ -745,24 +880,90 @@ func (w *walker) addAll(values []string, access Access, cwds dirs) {
 	}
 }
 
+// addReads records each value as a read. A flat read reads only the files
+// that each value names. A shallow read also reads the files directly in a
+// directory that a value names.
+func (w *walker) addReads(values []string, flat, shallow bool, cwds dirs) {
+	for _, v := range values {
+		for _, t := range w.targetsOf(v, AccessRead, cwds) {
+			t.Flat = flat
+			t.Shallow = shallow
+			w.addTarget(t)
+		}
+	}
+}
+
 // add records a target for each possible working directory. A path with
 // glob characters is reduced to the directory before the first glob,
 // because the glob can select any path in that directory. A write through a
 // glob is recorded as a tree write of the directory. A removal or a read
 // through a glob is recorded as a removal or a read of the directory.
 func (w *walker) add(value string, access Access, cwds dirs) {
-	if value == "" || (value == "-" && access == AccessRead) {
-		return
+	for _, t := range w.targetsOf(value, access, cwds) {
+		w.addTarget(t)
 	}
+}
+
+// guessReads records each value as a read, because a command that the
+// walker does not know can read any file it names. A URL is not a file.
+func (w *walker) guessReads(values []string, cwds dirs) {
+	for _, v := range values {
+		if strings.Contains(v, "://") {
+			continue
+		}
+		for _, t := range w.targetsOf(v, AccessRead, cwds) {
+			t.Guess = true
+			w.addTarget(t)
+		}
+	}
+}
+
+// guessWords returns the words of an unknown command that can name a file:
+// each operand, the value after the first "=" of an option, and each tail
+// of a short option, because "-fvalue" can pass the value "value".
+func guessWords(args []string) []string {
+	out := operands(args)
+	for _, a := range args {
+		if a == "--" {
+			break
+		}
+		if !strings.HasPrefix(a, "-") || a == "-" {
+			continue
+		}
+		if _, v, ok := strings.Cut(a, "="); ok {
+			out = append(out, v)
+		}
+		if !strings.HasPrefix(a, "--") {
+			for j := 2; j < len(a); j++ {
+				out = append(out, a[j:])
+			}
+		}
+	}
+	return out
+}
+
+func (w *walker) targetsOf(value string, access Access, cwds dirs) []Target {
+	if value == "" || (value == "-" && access == AccessRead) {
+		return nil
+	}
+	glob := ""
 	if i := strings.IndexAny(value, "*?["); i >= 0 {
+		glob = value
 		value = path.Dir(value[:i] + "x")
 		if access == AccessWrite {
 			access = AccessWriteTree
 		}
 	}
+	out := make([]Target, 0, len(cwds))
 	for _, cwd := range cwds {
-		w.addTarget(Target{Path: resolve(value, cwd, w.env.Home), Access: access})
+		t := Target{Path: resolve(value, cwd, w.env.Home), Access: access}
+		if glob != "" && access == AccessRead {
+			t.Glob = resolve(glob, cwd, w.env.Home)
+			t.MatchDot = w.matchDot
+		}
+		out = append(out, t)
 	}
+	return out
 }
 
 func (w *walker) addTarget(t Target) {
