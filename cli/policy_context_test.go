@@ -241,6 +241,8 @@ func TestWindowContentText(t *testing.T) {
 	}{
 		{"indents every line", privacy.Text{Value: "one\ntwo"}, "         one\n         two"},
 		{"escapes control characters", privacy.Text{Value: "a\x1b[2Jb\rc"}, "         a\uFFFD[2Jb\uFFFDc"},
+		{"escapes bidi controls", privacy.Text{Value: "rm \u202Egnp.x\u2066"}, "         rm \uFFFDgnp.x\uFFFD"},
+		{"keeps CRLF lines", privacy.Text{Value: "one\r\ntwo"}, "         one\n         two"},
 		{"digest without a value", privacy.Text{Label: privacy.Label{Digest: "sha256:ab"}}, "         sha256:ab"},
 		{"no value and no digest", privacy.Text{}, "         (no content)"},
 	}

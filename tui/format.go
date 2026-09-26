@@ -127,25 +127,38 @@ var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 // EscapeControl replaces each control character other than a newline or a
 // tab with U+FFFD. Stored content comes from agent tools, and an escape
-// sequence in it must not reach the terminal.
+// sequence in it must not reach the terminal. It also replaces the bidi and
+// invisible format characters, which can show text in an order that is not
+// the stored order. A CRLF line end becomes a newline.
 func EscapeControl(s string) string {
 	return strings.Map(func(r rune) rune {
-		if r != '\n' && r != '\t' && unicode.IsControl(r) {
+		if r != '\n' && r != '\t' && unsafeRune(r) {
+			return '\uFFFD'
+		}
+		return r
+	}, strings.ReplaceAll(s, "\r\n", "\n"))
+}
+
+// EscapeLine escapes as EscapeControl does, a newline and a tab included, so
+// the value stays on one table row.
+func EscapeLine(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unsafeRune(r) {
 			return '\uFFFD'
 		}
 		return r
 	}, s)
 }
 
-// EscapeLine replaces each control character with U+FFFD, a newline and a
-// tab included, so the value stays on one table row.
-func EscapeLine(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return '\uFFFD'
-		}
-		return r
-	}, s)
+func unsafeRune(r rune) bool {
+	switch {
+	case unicode.IsControl(r):
+		return true
+	case r >= '\u200B' && r <= '\u200F', r >= '\u202A' && r <= '\u202E',
+		r >= '\u2066' && r <= '\u2069', r == '\u2028', r == '\u2029', r == '\u061C':
+		return true
+	}
+	return false
 }
 
 func VisibleLen(s string) int {
