@@ -404,3 +404,13 @@ func TestParseHookEvent_ChatMessage_Subagent(t *testing.T) {
 	assert.Equal(t, privacy.OriginAgent, p.Prompt.Label.Origin, "the model writes the prompt of a subagent session")
 	assert.Equal(t, events.KindObservation, events.KindOf(event, false))
 }
+
+func TestParseHookEvent_ChatMessage_ParentLookupFailed(t *testing.T) {
+	raw := []byte(`{"hook_type":"chat.message","session_id":"ses_x","parent_session_id":"","parent_lookup_failed":true,"prompt":"hello","cwd":"/p"}`)
+	event, err := testAdapter(t).ParseEvent(context.Background(), "chat.message", raw)
+	require.NoError(t, err)
+	p, err := event.GetUserPromptPayload()
+	require.NoError(t, err)
+	assert.Equal(t, privacy.OriginAgent, p.Prompt.Label.Origin, "a failed parent lookup must not become user intent")
+	assert.Equal(t, events.KindObservation, events.KindOf(event, false))
+}

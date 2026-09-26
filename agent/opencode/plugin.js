@@ -25,13 +25,15 @@ export const GryphPlugin = async ({ directory, client }) => {
   }
 
   // A subagent session has a parent. Its prompt comes from the model, not
-  // from the user.
-  async function parentSessionID(sessionID) {
+  // from the user. A failed lookup cannot tell the two apart, so Gryph
+  // must not record the prompt as user intent.
+  async function parentSession(sessionID) {
     try {
       const res = await client.session.get({ path: { id: sessionID } });
-      return res?.data?.parentID || "";
+      if (!res?.data) return { parentID: "", lookupFailed: true };
+      return { parentID: res.data.parentID || "", lookupFailed: false };
     } catch (_) {
-      return "";
+      return { parentID: "", lookupFailed: true };
     }
   }
 
@@ -42,10 +44,12 @@ export const GryphPlugin = async ({ directory, client }) => {
         .map((part) => part.text)
         .join("\n");
       if (!prompt) return;
+      const parent = await parentSession(input.sessionID);
       invokeGryph("chat.message", {
         hook_type: "chat.message",
         session_id: input.sessionID,
-        parent_session_id: await parentSessionID(input.sessionID),
+        parent_session_id: parent.parentID,
+        parent_lookup_failed: parent.lookupFailed,
         prompt,
         cwd: directory,
       });

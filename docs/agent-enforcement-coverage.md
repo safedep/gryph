@@ -110,7 +110,9 @@ Code has no prompt hook, so its sessions have no intent.
 - The model writes the prompt of an OpenCode subagent session, which has a
   parent session. Pi marks input from extension code with `source: extension`.
   Gryph gives both prompts the origin `agent`, and records them as
-  observations, not intents.
+  observations, not intents. When the OpenCode plugin cannot look up the
+  parent session, Gryph also gives the prompt the origin `agent`, so a failed
+  lookup never records a model prompt as user intent.
 - Pi input with `source: rpc` comes from a program that drives Pi. Gryph gives
   it the origin `user`.
 - An install without the prompt hook stays valid. `gryph doctor` warns about

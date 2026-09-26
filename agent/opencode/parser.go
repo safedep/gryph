@@ -24,10 +24,11 @@ type ToolEventInput struct {
 }
 
 type ChatMessageInput struct {
-	SessionID       string `json:"session_id"`
-	ParentSessionID string `json:"parent_session_id"`
-	Prompt          string `json:"prompt"`
-	Cwd             string `json:"cwd"`
+	SessionID          string `json:"session_id"`
+	ParentSessionID    string `json:"parent_session_id"`
+	ParentLookupFailed bool   `json:"parent_lookup_failed"`
+	Prompt             string `json:"prompt"`
+	Cwd                string `json:"cwd"`
 }
 
 type SessionEventInput struct {
@@ -99,7 +100,7 @@ func parseChatMessage(rawData []byte) (*events.Event, error) {
 	event.WorkingDirectory = input.Cwd
 	event.RawEvent = rawData
 	origin := privacy.OriginUser
-	if input.ParentSessionID != "" {
+	if input.ParentSessionID != "" || input.ParentLookupFailed {
 		origin = privacy.OriginAgent
 	}
 	if err := event.SetPrompt(input.Prompt, origin); err != nil {
