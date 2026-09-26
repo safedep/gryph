@@ -72,6 +72,15 @@ func SplitMCPTool(name string) (server, tool string, ok bool) {
 	}
 }
 
+// TrimMCPTool removes the "mcp__<server>__" prefix from an MCP tool name.
+// It keeps the name when the prefix names a different server.
+func TrimMCPTool(server, name string) string {
+	if rest, ok := strings.CutPrefix(name, mcpPrefix+server+mcpSeparator); ok && rest != "" {
+		return rest
+	}
+	return name
+}
+
 // MCPServers returns every server name that an MCP tool name can hold, one
 // for each "__" that has text on both sides. The MCP server author chooses
 // the tool name, so mcp__evil__read__file gives "evil" and "evil__read".

@@ -20,11 +20,15 @@ const (
 	PerMatchWeight float32 = 0.15
 	// MaxScore is the cap returned by Heuristic.Score.
 	MaxScore float32 = 1.0
-	// MaxHitsPerIndicator caps the matches that one indicator adds. Four
-	// hits of one phrase pass the documented threshold of 0.5, and only a
-	// second phrase takes the score higher. So a long file that names one
-	// indicator often does not reach MaxScore.
+	// MaxHitsPerIndicator caps the matches that one strong indicator adds.
+	// Four hits of one strong phrase pass the documented threshold of 0.5,
+	// and only a second phrase takes the score higher. So a long file that
+	// names one indicator often does not reach MaxScore.
 	MaxHitsPerIndicator = 4
+	// MaxHitsPerWeakIndicator caps the matches that one weak indicator adds.
+	// Normal text, such as "acts as" in a README, often holds a weak phrase.
+	// Two hits stay below the threshold, so only a mix of phrases passes it.
+	MaxHitsPerWeakIndicator = 2
 )
 
 // Scorer returns an injection-likelihood score in the range [0.0, 1.0] for an
@@ -35,39 +39,60 @@ type Scorer interface {
 }
 
 // Heuristic matches a fixed indicator list. A phrase starts and ends at a
-// word boundary. White space, "-" and "_" separate its words, and one filler
-// word, such as "all" or "the", can come between two words. The first word
-// can take s, ed or ing. The last word can take a common suffix (s, es, d,
-// ed, ly). Each match contributes PerMatchWeight, up to MaxHitsPerIndicator
-// for one indicator, capped at MaxScore.
+// word boundary. White space, a dash, "*", "`" and "~" separate its words.
+// "_" also separates the words of a strong phrase. It does not separate the
+// words of a weak phrase, so an identifier such as system_prompt does not
+// count. One filler word, such as "all" or "the", can come between two
+// words. The first word can take s, ed or ing. The last word can take a
+// common suffix (s, es, d, ed, ly). Each match contributes PerMatchWeight,
+// up to MaxHitsPerIndicator for a strong indicator and
+// MaxHitsPerWeakIndicator for a weak one, capped at MaxScore.
 type Heuristic struct {
-	indicators []*regexp.Regexp
+	indicators []indicator
 }
 
-// NewHeuristic returns the default Heuristic with the built-in indicator set.
-func NewHeuristic() *Heuristic {
-	phrases := []string{
+type indicator struct {
+	pattern *regexp.Regexp
+	maxHits int
+	weak    bool
+}
+
+var (
+	strongPhrases = []string{
 		"ignore previous instructions",
 		"disregard previous",
+		"forget instructions",
+	}
+	weakPhrases = []string{
 		"you are now",
 		"system prompt",
 		"act as",
 		"prompt injection",
 	}
+)
+
+// NewHeuristic returns the default Heuristic with the built-in indicator set.
+func NewHeuristic() *Heuristic {
 	h := &Heuristic{}
-	for _, p := range phrases {
-		words := strings.Fields(p)
-		for i, w := range words {
-			words[i] = regexp.QuoteMeta(w)
-		}
-		words[0] = inflectFirst(words[0])
-		pattern := `\b` + strings.Join(words, ` (?:`+fillerWords+` )?`) + `(?:s|es|d|ed|ly)?\b`
-		h.indicators = append(h.indicators, regexp.MustCompile(pattern))
+	for _, p := range strongPhrases {
+		h.indicators = append(h.indicators, indicator{pattern: phrasePattern(p), maxHits: MaxHitsPerIndicator})
+	}
+	for _, p := range weakPhrases {
+		h.indicators = append(h.indicators, indicator{pattern: phrasePattern(p), maxHits: MaxHitsPerWeakIndicator, weak: true})
 	}
 	return h
 }
 
 const fillerWords = `(?:all|the|any|your|my|prior|above)`
+
+func phrasePattern(phrase string) *regexp.Regexp {
+	words := strings.Fields(phrase)
+	for i, w := range words {
+		words[i] = regexp.QuoteMeta(w)
+	}
+	words[0] = inflectFirst(words[0])
+	return regexp.MustCompile(`\b` + strings.Join(words, ` (?:`+fillerWords+` )?`) + `(?:s|es|d|ed|ly)?\b`)
+}
 
 func inflectFirst(word string) string {
 	if stem, ok := strings.CutSuffix(word, "e"); ok {
@@ -76,19 +101,48 @@ func inflectFirst(word string) string {
 	return word + `(?:s|ed|ing)?`
 }
 
-// normalize folds the content so that one ASCII space separates words. A
-// zero-width joiner or a byte order mark inside a word can hide a phrase, so
-// normalize removes it. A zero-width space separates words, as a space does.
-func normalize(content string) string {
+// lookalikes maps Cyrillic and Greek letters that look like ASCII letters
+// to those ASCII letters. It holds only the common ones. The map applies
+// before the text is lower case, because a capital can look like a
+// different ASCII letter than its lower case form. Greek capital nu looks
+// like "N", but Greek small nu looks like "v".
+var lookalikes = map[rune]rune{
+	'\u0430': 'a', '\u0435': 'e', '\u043e': 'o', '\u0440': 'p', '\u0441': 'c',
+	'\u0443': 'y', '\u0445': 'x', '\u0456': 'i', '\u0458': 'j', '\u0455': 's',
+	'\u0410': 'a', '\u0415': 'e', '\u041e': 'o', '\u0420': 'p', '\u0421': 'c',
+	'\u0423': 'y', '\u0425': 'x', '\u0406': 'i', '\u0408': 'j', '\u0405': 's',
+	'\u03bf': 'o', '\u03b1': 'a', '\u03b5': 'e', '\u03b9': 'i', '\u03bd': 'v',
+	'\u03c1': 'p', '\u03c4': 't', '\u03c5': 'u', '\u03ba': 'k',
+	'\u039f': 'o', '\u0391': 'a', '\u0395': 'e', '\u0399': 'i', '\u039d': 'n',
+	'\u03a1': 'p', '\u03a4': 't', '\u03a5': 'y', '\u039a': 'k',
+}
+
+var htmlSpaces = strings.NewReplacer("&nbsp;", " ", "&#160;", " ", "&#xa0;", " ")
+
+// normalize folds the content so that one ASCII space separates words. An
+// invisible format character, such as a zero-width space or a soft hyphen,
+// or a combining mark inside a word can hide a phrase, so normalize removes
+// it. A dash, markdown emphasis and a non-breaking space entity separate
+// words. When foldUnderscore is true, "_" also separates words.
+func normalize(content string, foldUnderscore bool) string {
+	content = strings.Map(func(r rune) rune {
+		if ascii, ok := lookalikes[r]; ok {
+			return ascii
+		}
+		return r
+	}, content)
+	content = htmlSpaces.Replace(strings.ToLower(content))
 	content = strings.Map(func(r rune) rune {
 		switch {
-		case r == '\u200c', r == '\u200d', r == '\u2060', r == '\ufeff':
+		case unicode.In(r, unicode.Cf, unicode.Mn):
 			return -1
-		case r == '-', r == '_', r == '\u200b', unicode.IsSpace(r):
+		case r == '*', r == '`', r == '~', unicode.Is(unicode.Pd, r), unicode.IsSpace(r):
+			return ' '
+		case r == '_' && foldUnderscore:
 			return ' '
 		}
 		return r
-	}, strings.ToLower(content))
+	}, content)
 	return strings.Join(strings.Fields(content), " ")
 }
 
@@ -115,11 +169,15 @@ func (h *Heuristic) Score(action *model.Action) float32 {
 	if content == "" {
 		return 0
 	}
-	content = normalize(content)
+	strong, weak := normalize(content, true), normalize(content, false)
 
 	var score float32
 	for _, ind := range h.indicators {
-		hits := len(ind.FindAllStringIndex(content, MaxHitsPerIndicator))
+		text := strong
+		if ind.weak {
+			text = weak
+		}
+		hits := len(ind.pattern.FindAllStringIndex(text, ind.maxHits))
 		score += PerMatchWeight * float32(hits)
 		if score >= MaxScore {
 			return MaxScore

@@ -169,7 +169,9 @@ origin field as empty, so the fresh-session defer does not hide these facts.
 `action.kind`, `action.origin`, `action.source` and `action.sources` come
 from the event. `events.OriginSources` gives `sources`: the adapter claim, or
 every server reading of an ambiguous `mcp__` tool name. The accumulator adds
-`mcp:<server>` to `origins_seen` for each one.
+`mcp:<server>` to `origins_seen` for each one. The server author chooses the
+tool name, so the adapter claim always wins. `entryTarget` reads the server
+from the tool name only when the adapter makes no claim.
 `events.Event.ClaimOrigin` fills the origin from the tool name, the action
 type and the path when the adapter did not set it. The decision service calls
 it before the label step, and `mediation.Normalize` calls it again for a

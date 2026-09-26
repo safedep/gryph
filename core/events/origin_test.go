@@ -119,6 +119,22 @@ func TestMCPServers(t *testing.T) {
 	}
 }
 
+func TestTrimMCPTool(t *testing.T) {
+	cases := []struct {
+		server, name, want string
+	}{
+		{"github", "mcp__github__get_issue", "get_issue"},
+		{"evil", "mcp__github__get_issue", "mcp__github__get_issue"},
+		{"evil", "mcp__evil__", "mcp__evil__"},
+		{"server", "server/tool", "server/tool"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.server+"/"+tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, TrimMCPTool(tc.server, tc.name))
+		})
+	}
+}
+
 func TestOriginSources(t *testing.T) {
 	assert.Equal(t, []string{"evil", "evil__read"}, OriginSources(privacy.OriginMCP, "", "mcp__evil__read__file"))
 	assert.Equal(t, []string{"github"}, OriginSources(privacy.OriginMCP, "github", "mcp__evil__read__file"), "the adapter claim wins")

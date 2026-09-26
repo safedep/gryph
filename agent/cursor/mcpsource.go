@@ -1,6 +1,7 @@
 package cursor
 
 import (
+	"net"
 	"net/url"
 	"path"
 	"regexp"
@@ -21,16 +22,24 @@ func (s MCPServer) source() string {
 
 var mcpTransportSegments = []string{"sse", "mcp"}
 
+var defaultPorts = map[string]string{"http": "80", "https": "443"}
+
 // mcpURLSource names a remote server by its host and port and the first
 // path segment. One host can serve many servers under different paths. A
 // first segment that names the transport, such as "sse", is not part of
-// the name.
+// the name. The host drops a trailing dot and the default port of the
+// scheme, so each spelling of one host gives one name.
 func mcpURLSource(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil || u.Hostname() == "" {
 		return ""
 	}
-	host := strings.ToLower(u.Host)
+	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+	if port := u.Port(); port != "" && port != defaultPorts[strings.ToLower(u.Scheme)] {
+		host = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
 	first, _, _ := strings.Cut(strings.TrimPrefix(u.Path, "/"), "/")
 	if first == "" || slices.Contains(mcpTransportSegments, strings.ToLower(first)) {
 		return host
@@ -39,8 +48,8 @@ func mcpURLSource(raw string) string {
 }
 
 // launcher describes a program that starts an MCP server from a package,
-// a module, an image or a script. The server name is the first operand
-// after the subcommand.
+// a module, an image or a script. The server name is the value of a
+// package flag, or else the first operand after the subcommand.
 type launcher struct {
 	subcommands [][]string
 	valueFlags  []string
@@ -49,26 +58,31 @@ type launcher struct {
 	// next word as its value.
 	flagsTakeValue bool
 	targetFlags    []string
-	trimVersion    func(string) string
+	// packageFlags name the package that holds the command. The command
+	// name is free text, so the package names the server.
+	packageFlags []string
+	trimVersion  func(string) string
 }
 
 var (
-	npmFlags  = []string{"-p", "--package", "-c", "--call", "-w", "--workspace"}
-	pypiFlags = []string{"--from", "--with", "--with-requirements", "--python", "-p", "--index", "--index-url", "--extra-index-url", "--directory", "--project", "--spec", "--pip-args"}
+	npmFlags         = []string{"-c", "--call", "-w", "--workspace"}
+	npmPackageFlags  = []string{"-p", "--package"}
+	pypiFlags        = []string{"--with", "--with-requirements", "--python", "-p", "--index", "--index-url", "--extra-index-url", "--directory", "--project", "--pip-args"}
+	pypiPackageFlags = []string{"--from", "--spec"}
 
-	npmLauncher = launcher{valueFlags: npmFlags, trimVersion: trimNPMVersion}
+	npmLauncher = launcher{valueFlags: npmFlags, packageFlags: npmPackageFlags, trimVersion: trimNPMVersion}
 
 	mcpLaunchers = map[string]launcher{
 		"npx":    npmLauncher,
 		"pnpx":   npmLauncher,
 		"bunx":   npmLauncher,
-		"npm":    {subcommands: [][]string{{"exec"}, {"x"}}, valueFlags: npmFlags, trimVersion: trimNPMVersion},
-		"pnpm":   {subcommands: [][]string{{"dlx"}, {"exec"}}, valueFlags: npmFlags, trimVersion: trimNPMVersion},
-		"yarn":   {subcommands: [][]string{{"dlx"}}, valueFlags: npmFlags, trimVersion: trimNPMVersion},
-		"bun":    {subcommands: [][]string{{"x"}, {"run"}}, valueFlags: npmFlags, trimVersion: trimNPMVersion},
-		"uvx":    {valueFlags: pypiFlags, trimVersion: trimPyPIVersion},
-		"uv":     {subcommands: [][]string{{"run"}, {"tool", "run"}}, valueFlags: pypiFlags, trimVersion: trimPyPIVersion},
-		"pipx":   {subcommands: [][]string{{"run"}}, valueFlags: pypiFlags, trimVersion: trimPyPIVersion},
+		"npm":    {subcommands: [][]string{{"exec"}, {"x"}}, valueFlags: npmFlags, packageFlags: npmPackageFlags, trimVersion: trimNPMVersion},
+		"pnpm":   {subcommands: [][]string{{"dlx"}, {"exec"}}, valueFlags: npmFlags, packageFlags: npmPackageFlags, trimVersion: trimNPMVersion},
+		"yarn":   {subcommands: [][]string{{"dlx"}}, valueFlags: npmFlags, packageFlags: npmPackageFlags, trimVersion: trimNPMVersion},
+		"bun":    {subcommands: [][]string{{"x"}, {"run"}}, valueFlags: npmFlags, packageFlags: npmPackageFlags, trimVersion: trimNPMVersion},
+		"uvx":    {valueFlags: pypiFlags, packageFlags: pypiPackageFlags, trimVersion: trimPyPIVersion},
+		"uv":     {subcommands: [][]string{{"run"}, {"tool", "run"}}, valueFlags: pypiFlags, packageFlags: pypiPackageFlags, trimVersion: trimPyPIVersion},
+		"pipx":   {subcommands: [][]string{{"run"}}, valueFlags: pypiFlags, packageFlags: pypiPackageFlags, trimVersion: trimPyPIVersion},
 		"python": {valueFlags: []string{"-X", "-W"}, targetFlags: []string{"-m"}},
 		"node":   {valueFlags: []string{"-r", "--require", "--import", "--loader"}},
 		"deno":   {subcommands: [][]string{{"run"}}, valueFlags: []string{"-c", "--config", "--import-map"}},
@@ -90,7 +104,8 @@ var (
 // a known launcher, such as npx, uvx, python -m or docker run, the name is
 // the package, the module, the image or the script that it starts, with no
 // version, tag or digest. When the launcher operand is not found, the name
-// is the launcher.
+// is the launcher. Any other program keeps the path as written, because a
+// base name such as github-mcp-server can come from any directory.
 func mcpCommandSource(command string) string {
 	words := commandWords(command)
 	if len(words) == 0 {
@@ -103,7 +118,7 @@ func mcpCommandSource(command string) string {
 	}
 	l, ok := mcpLaunchers[key]
 	if !ok {
-		return program
+		return words[0]
 	}
 	target := l.target(words[1:])
 	if target == "" {
@@ -123,42 +138,59 @@ func commandWords(command string) []string {
 	return words
 }
 
+// target returns the package flag value when the launcher has one. More
+// than one package flag makes the command ambiguous, so target then returns
+// no name.
 func (l launcher) target(args []string) string {
+	operand, packages := l.scan(args)
+	switch len(packages) {
+	case 0:
+		return operand
+	case 1:
+		return packages[0]
+	default:
+		return ""
+	}
+}
+
+// scan returns the first operand after the subcommand and the value of
+// each package flag before it.
+func (l launcher) scan(args []string) (operand string, packages []string) {
 	needSub := len(l.subcommands) > 0
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
 		case arg == "--":
 			if needSub || i+1 >= len(args) {
-				return ""
+				return "", packages
 			}
-			return args[i+1]
+			return args[i+1], packages
 		case strings.HasPrefix(arg, "-") && arg != "-":
-			name, _, inline := strings.Cut(arg, "=")
-			if slices.Contains(l.targetFlags, name) {
-				if inline {
-					return arg[len(name)+1:]
-				}
+			name, value, inline := strings.Cut(arg, "=")
+			if !inline && (slices.Contains(l.targetFlags, name) || slices.Contains(l.packageFlags, name) || l.takesValue(name)) {
 				if i+1 < len(args) {
-					return args[i+1]
+					i++
+					value = args[i]
 				}
-				return ""
 			}
-			if !inline && l.takesValue(name) {
-				i++
+			switch {
+			case slices.Contains(l.targetFlags, name):
+				return value, packages
+			case slices.Contains(l.packageFlags, name):
+				packages = append(packages, value)
 			}
 		case needSub:
 			sub := l.matchSubcommand(args[i:])
 			if sub == 0 {
-				return ""
+				return "", packages
 			}
 			i += sub - 1
 			needSub = false
 		default:
-			return arg
+			return arg, packages
 		}
 	}
-	return ""
+	return "", packages
 }
 
 func (l launcher) takesValue(flag string) bool {

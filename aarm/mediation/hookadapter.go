@@ -123,16 +123,20 @@ func entryKind(event *events.Event) model.EntryKind {
 	return events.KindOf(event, event.LinkedEventID != uuid.Nil)
 }
 
-// entryTarget names the MCP server and tool of an MCP entry.
+// entryTarget names the MCP server and tool of an MCP entry. The server
+// author chooses the tool name, so a server claim from the adapter wins.
+// The tool name gives the server only when the adapter makes no claim.
 func entryTarget(action *model.Action) model.DerivedTarget {
 	if action.Origin != privacy.OriginMCP {
 		return model.DerivedTarget{}
 	}
-	target := model.DerivedTarget{MCPServer: action.Source, MCPTool: action.Tool}
-	if server, tool, ok := events.SplitMCPTool(action.Tool); ok && server != "" {
-		target.MCPServer, target.MCPTool = server, tool
+	if action.Source != "" {
+		return model.DerivedTarget{MCPServer: action.Source, MCPTool: events.TrimMCPTool(action.Source, action.Tool)}
 	}
-	return target
+	if server, tool, ok := events.SplitMCPTool(action.Tool); ok && server != "" {
+		return model.DerivedTarget{MCPServer: server, MCPTool: tool}
+	}
+	return model.DerivedTarget{MCPTool: action.Tool}
 }
 
 // entryEventResult is the result that a post event reports. A pre event has

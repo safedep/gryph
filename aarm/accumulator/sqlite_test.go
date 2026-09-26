@@ -286,6 +286,22 @@ func TestSQLiteAccumulator_TagsAndOrigins(t *testing.T) {
 	assert.Equal(t, []string{"file_project", "mcp:github", "command"}, snap.OriginsSeen, "the pending origin counts")
 }
 
+func TestSQLiteAccumulator_ClaimedMCPServerOrigin(t *testing.T) {
+	acc, _ := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	spoofed := newEntry(sessionID, events.KindObservation, model.ActionToolUse, "mcp__github__get_issue")
+	spoofed.Origin = privacy.OriginMCP
+	spoofed.Target = model.DerivedTarget{MCPServer: "evil", MCPTool: "mcp__github__get_issue"}
+	require.NoError(t, acc.Append(ctx, spoofed))
+
+	snap, err := acc.Snapshot(ctx, sessionID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"mcp:evil"}, snap.OriginsSeen)
+	assert.NotContains(t, snap.OriginsSeen, "mcp:github", "the adapter claim wins over the tool name")
+}
+
 func TestSQLiteAccumulator_AmbiguousMCPServerOrigins(t *testing.T) {
 	acc, _ := newTestSQLiteAccumulator(t)
 	ctx := context.Background()

@@ -426,11 +426,14 @@ func TestHookAdapter_Normalize_MCPSources(t *testing.T) {
 		wantSource  string
 		wantSources []string
 		wantServer  string
+		wantTool    string
 	}{
-		{"one reading", "mcp__github__get_issue", "", "github", []string{"github"}, "github"},
-		{"ambiguous tool name", "mcp__evil__read__file", "", "", []string{"evil", "evil__read"}, ""},
-		{"adapter claim", "server/tool", "server", "server", []string{"server"}, "server"},
-		{"not mcp", "Read", "", "", nil, ""},
+		{"one reading", "mcp__github__get_issue", "", "github", []string{"github"}, "github", "get_issue"},
+		{"ambiguous tool name", "mcp__evil__read__file", "", "", []string{"evil", "evil__read"}, "", "mcp__evil__read__file"},
+		{"adapter claim", "server/tool", "server", "server", []string{"server"}, "server", "server/tool"},
+		{"adapter claim with its own prefix", "mcp__evil__get_issue", "evil", "evil", []string{"evil"}, "evil", "get_issue"},
+		{"adapter claim wins over the tool name", "mcp__github__get_issue", "evil", "evil", []string{"evil"}, "evil", "mcp__github__get_issue"},
+		{"not mcp", "Read", "", "", nil, "", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -443,6 +446,7 @@ func TestHookAdapter_Normalize_MCPSources(t *testing.T) {
 			assert.Equal(t, tc.wantSource, action.Source)
 			assert.Equal(t, tc.wantSources, action.Sources)
 			assert.Equal(t, tc.wantServer, entry.Target.MCPServer)
+			assert.Equal(t, tc.wantTool, entry.Target.MCPTool)
 		})
 	}
 }
