@@ -61,15 +61,18 @@ func (p ExportProfile) WithDigestKey(key []byte) ExportProfile {
 
 // KeyedDigest returns "hmac-sha256:<hex>" of a local digest, keyed with the
 // digest key. A plain sha256 of a short prompt or password can be reversed
-// with a dictionary. The keyed form cannot without the key, and one install
-// can still match its own events. It returns an empty string when the
-// digest is empty or the profile has no key.
-func (p ExportProfile) KeyedDigest(digest string) string {
+// with a dictionary. The keyed form cannot without the key. The HMAC input
+// binds the profile name and the scope, which is the label origin or the
+// name of a field. One install matches its own values only within one
+// profile and one scope. Thus a digest does not match a value that another
+// profile or origin includes. It returns an empty string when the digest is
+// empty or the profile has no key.
+func (p ExportProfile) KeyedDigest(scope, digest string) string {
 	if digest == "" || len(p.DigestKey) == 0 {
 		return ""
 	}
 	mac := hmac.New(sha256.New, p.DigestKey)
-	mac.Write([]byte(digest))
+	mac.Write([]byte(p.Name + "\x00" + scope + "\x00" + digest))
 	return KeyedDigestPrefix + hex.EncodeToString(mac.Sum(nil))
 }
 
@@ -161,19 +164,23 @@ func (l Label) DigestExportable() bool {
 		!slices.ContainsFunc([]Class{ClassSecret, ClassPII, ClassUnknownSensitive}, l.HasClass)
 }
 
-// Apply returns t with the treatment of the profile. The digest leaves the
-// machine only when DigestExportable allows it, and then only in the keyed
-// form of KeyedDigest.
+// Apply returns t with the treatment of the profile. A value that the
+// export includes carries no digest, because a reader has the value. A
+// value that the export redacts or digests carries the keyed form of
+// KeyedDigest, when DigestExportable allows it.
 func (p ExportProfile) Apply(t Text) (Text, Treatment) {
 	if t.IsZero() {
 		return t, TreatInclude
 	}
 	treatment := p.Treatment(t.Label)
-	if t.Label.DigestExportable() {
-		t.Label.Digest = p.KeyedDigest(t.Label.Digest)
-	} else {
+	switch {
+	case !t.Label.DigestExportable():
 		t.Label.Digest = ""
 		t.Label.Size = 0
+	case treatment == TreatInclude:
+		t.Label.Digest = ""
+	default:
+		t.Label.Digest = p.KeyedDigest(string(t.Label.Origin), t.Label.Digest)
 	}
 	switch treatment {
 	case TreatRedact:

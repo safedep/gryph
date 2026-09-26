@@ -122,19 +122,36 @@ the machine. Each value gets one treatment:
 
 | Treatment | Value        | Label                       |
 |-----------|--------------|-----------------------------|
-| `include` | kept         | kept                        |
-| `redact`  | `[REDACTED]` | kept                        |
+| `include` | kept         | kept, without the digest    |
+| `redact`  | `[REDACTED]` | kept, with the keyed digest |
 | `digest`  | emptied      | kept, with the keyed digest |
 | `drop`    | removed      | removed, except the size    |
 
+An included value carries no digest, because the export holds the value. A
+reader cannot match a digest to an included value with the same text.
+
 A digest never leaves the machine as a plain sha256. A dictionary recovers
 a short prompt, such as `yes`, or a short password from its plain sha256.
-The export holds `hmac-sha256:<hex>`, an HMAC-SHA256 of the local
-`sha256:<hex>` digest. The key is 32 random bytes in `export.key`, next to
-the database, with mode 0600. Gryph creates it on the first export and
-never exports it. One install gives the same keyed digest for the same
-content, so it can match its own events. Another install cannot. When you
-delete the key, the new key gives new digests.
+The export holds `hmac-sha256:<hex>`, an HMAC-SHA256 of this input:
+
+```
+<profile name> 0x00 <origin> 0x00 sha256:<hex>
+```
+
+The origin is the origin of the label, or an empty string when the label
+has none. The `content_hash` of a file payload uses `content_hash` in
+place of the origin. So one install matches its own values only within one
+profile and one origin. The prompt `make deploy` under `default` and the
+same text under `metadata` give different digests. The same text with
+origin `user` and with origin `agent` also give different digests.
+
+The key is 32 random bytes in `export.key`, next to the database, with mode
+0600. Gryph creates it on the first export and never exports it. Another
+install cannot match the digests. When you delete the key, the new key
+gives new digests. The self-protection rules block an agent read, write or
+removal of `export.key`. An agent that reads the key can reverse a digest
+with a dictionary. An agent that writes a known key can do the same with
+later exports.
 
 Every profile removes the digest and the size of a value that:
 
@@ -193,7 +210,8 @@ export --export-profile` and stream sync use it.
   `details`. Each gets the most restrictive treatment of any value in the
   event.
 - The `content_hash` of a file read or write is a plain sha256 of the
-  whole file content. The export keys it as a digest. It removes the hash
+  whole file content. The export keys it as a digest, with the scope
+  `content_hash` in place of the origin. It removes the hash
   when the plain field treatment is not `include`, when the event is
   sensitive, or when any value in the event loses its digest by the rules
   above.

@@ -4,7 +4,8 @@
 # raw event holds every value without a label, so only the full profile
 # exports it. An unknown profile name is a config error. Export never drops
 # a whole event. An exported digest is an HMAC with a key that stays in the
-# data directory, never a plain sha256 of the content.
+# data directory, never a plain sha256 of the content. Only a value that the
+# export redacts or digests carries a digest.
 env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
 env XDG_DATA_HOME=$WORK/home/.local/share
@@ -41,6 +42,7 @@ stderr 'Exported 3 events'
 # The full profile includes every value.
 exec gryph export --since 1h --export-profile full
 stdout '"prompt":\{"value":"Rename the config loader"'
+! stdout '"digest":'
 stdout 'WRITE_MARKER_7Q'
 stdout 'READ_MARKER_3K'
 stderr 'Exported 3 events'

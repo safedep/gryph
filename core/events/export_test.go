@@ -44,7 +44,7 @@ func TestEvent_ForExport(t *testing.T) {
 		keyed := profiles[privacy.ProfileMetadata].WithDigestKey([]byte("k"))
 		p, err = in.ForExport(keyed).GetCommandExecPayload()
 		require.NoError(t, err)
-		assert.Equal(t, keyed.KeyedDigest(privacy.Digest("notes")), p.Output.Label.Digest)
+		assert.Equal(t, keyed.KeyedDigest(string(privacy.OriginCommand), privacy.Digest("notes")), p.Output.Label.Digest)
 	})
 
 	t.Run("an untyped payload leaves only with a profile that includes all", func(t *testing.T) {
@@ -186,7 +186,7 @@ func TestEvent_ForExportContentHash(t *testing.T) {
 			}
 			require.NoError(t, json.Unmarshal(out.Payload, &got))
 			if tc.keep {
-				assert.Equal(t, profile(tc.profile).KeyedDigest(hash), got.ContentHash)
+				assert.Equal(t, profile(tc.profile).KeyedDigest(contentHashContext, hash), got.ContentHash)
 				return
 			}
 			assert.Empty(t, got.ContentHash)
