@@ -300,7 +300,7 @@ Do these steps each time you change a policy file.
 
 | Command | Purpose |
 |---|---|
-| `gryph policy context` | List per-session counters (action counts, tools used, classifications seen). `--session <id|prefix>` drills into one session and shows its recent entries. |
+| `gryph policy context` | List per-session counters (action counts, tools used, classifications seen). `--session <id\|prefix>` drills into one session and shows its recent entries. |
 | `gryph policy receipts` | List receipt rows for mediated actions. `--session`, `--decision`, `--since`, `--until` filter. Pass `--show-hash` to include the per-row hash. |
 | `gryph policy receipts --verify` | Recompute the hash chain and verify any signatures. `--session ID` verifies one chain in full; `--all-sessions` verifies every chain. Exits non-zero on break or invalid signature. |
 | `gryph policy receipts export` | Stream receipts as JSONL or CSV. `--include-signatures` adds the Ed25519 signature columns. |

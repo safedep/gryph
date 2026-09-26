@@ -502,7 +502,6 @@ func seed3Sessions(env *testEnv) {
 			sess := session.NewSessionWithID(sessID, agentName)
 			sess.StartedAt = time.Now().UTC().Add(-time.Duration(3-idx) * time.Hour)
 			sess.WorkingDirectory = "/tmp/project"
-			sess.TotalActions = idx + 1
 			require.NoError(env.t, store.SaveSession(ctx, sess))
 
 			for i := 0; i < idx+1; i++ {

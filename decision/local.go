@@ -199,7 +199,7 @@ func (l *Local) loadSession(ctx context.Context, event *events.Event) (*session.
 	if sess.TranscriptPath == "" && event.TranscriptPath != "" {
 		sess.TranscriptPath = event.TranscriptPath
 		if err := l.store.UpdateSession(ctx, sess); err != nil {
-			return nil, fmt.Errorf("failed to update session: %w", err)
+			log.Warnf("failed to update session transcript path: %v", err)
 		}
 	}
 

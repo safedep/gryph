@@ -103,7 +103,9 @@ func (s *SQLiteStore) createSchema(ctx context.Context) error {
 	var err error
 	for i := 0; i < attempts; i++ {
 		if err = s.client.Schema.Create(ctx); err == nil {
-			return s.dropRetiredTables(ctx)
+			if err = s.dropRetiredTables(ctx); err == nil {
+				return nil
+			}
 		}
 		if !retryableSchemaError(err) {
 			return err
