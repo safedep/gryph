@@ -15,8 +15,8 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/google/cel-go/cel"
-	"github.com/safedep/dry/log"
 	celast "github.com/google/cel-go/common/ast"
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/safedep/gryph/core/privacy"

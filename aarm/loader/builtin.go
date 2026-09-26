@@ -115,12 +115,9 @@ func (s *BuiltinSource) protectedReadsRule() pdp.Rule {
 	}
 }
 
-// hookCommandMessage covers a literal "gryph _hook" and a word that the shell
-// check cannot resolve. The check fails closed on such a word, so the message
-// must not claim that the command runs the hook.
-const hookCommandMessage = "Blocked by Gryph self-protection: the command can run gryph _hook. Only an agent hook may run it. " +
-	"Gryph blocks a gryph command with a variable, glob, or empty argument, because the argument can be _hook. " +
-	"Gryph also blocks a command with a variable program when an argument can be _hook. Use literal words."
+// hookCommandMessage covers a call of gryph, or of a program that the shell
+// check cannot resolve, with the literal argument "_hook".
+const hookCommandMessage = "Blocked by Gryph self-protection: the command runs gryph _hook. Only an agent hook may run it."
 
 // hookCommandRule blocks an agent shell command that runs "gryph _hook". The
 // command can record a forged event, such as a user prompt that resets
