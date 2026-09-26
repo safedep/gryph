@@ -106,7 +106,7 @@
         },
         "condition": {
           "type": "string",
-          "description": "CEL expression returning bool. Evaluated after `match` succeeds. Variables: action.{type,tool,operation,agent,working_dir,project,params.{path,command,args,url,size_bytes,lines_added,lines_removed,content}}, context.{total_actions,files_read,files_written,commands_executed,network_requests,errors,tools_used,session_duration_ms,classifications_seen,entities_seen,semantic_drift}. Sandboxed; 100ms timeout."
+          "description": "CEL expression returning bool. Evaluated after `match` succeeds. Variables: action.{type,tool,operation,agent,working_dir,project,params.{path,command,args,url,size_bytes,lines_added,lines_removed,content}}, context.{total_actions,files_read,files_written,commands_executed,network_requests,errors,tools_used,session_duration_ms,classifications_seen,entities_seen,semantic_drift,intent_available,actions_since_intent}. Sandboxed; 100ms timeout."
         },
         "description": {
           "type": "string",

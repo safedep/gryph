@@ -114,29 +114,12 @@ func eventToDetailView(reg *agent.Registry, e *events.Event) *tui.EventDetailVie
 		RawEvent:         e.RawEvent,
 	}
 
-	switch e.ActionType {
-	case events.ActionFileRead:
-		if p, err := e.GetFileReadPayload(); err == nil && p != nil {
-			view.Payload = p
-		}
-	case events.ActionFileWrite:
-		if p, err := e.GetFileWritePayload(); err == nil && p != nil {
-			view.Payload = p
-		}
-	case events.ActionCommandExec:
-		if p, err := e.GetCommandExecPayload(); err == nil && p != nil {
-			view.Payload = p
-		}
-	case events.ActionToolUse:
-		if p, err := e.GetToolUsePayload(); err == nil && p != nil {
-			view.Payload = p
-		}
-	default:
-		if len(e.Payload) > 0 {
-			var raw any
-			if json.Unmarshal(e.Payload, &raw) == nil {
-				view.Payload = raw
-			}
+	if p, err := e.DecodePayload(); err == nil && p != nil {
+		view.Payload = p
+	} else if len(e.Payload) > 0 {
+		var raw any
+		if json.Unmarshal(e.Payload, &raw) == nil {
+			view.Payload = raw
 		}
 	}
 

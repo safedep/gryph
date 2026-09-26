@@ -79,6 +79,11 @@ type Analysis struct {
 	// Hosts are the lower-case host names the command contacts, without the
 	// port.
 	Hosts []string
+	// GryphHook is true when a call runs the Gryph hook entry point,
+	// "gryph _hook". The call counts when its program is gryph, or a word that
+	// the walker cannot resolve, and one argument is the literal word
+	// "_hook". The check is best effort, like the rest of the analysis.
+	GryphHook bool
 }
 
 // Changes returns the targets the command writes or removes.
@@ -105,7 +110,7 @@ func Analyze(command string, env Env) Analysis {
 	if _, err := w.script(command, start); err != nil {
 		w.failed = true
 	}
-	return Analysis{Parsed: !w.failed, Targets: w.targets, Hosts: w.hosts}
+	return Analysis{Parsed: !w.failed, Targets: w.targets, Hosts: w.hosts, GryphHook: w.gryphHook}
 }
 
 // AnalyzeCommand analyzes a command given as a command string plus split
@@ -190,13 +195,14 @@ func union(a, b dirs) dirs {
 }
 
 type walker struct {
-	env      Env
-	depth    int
-	calls    int
-	targets  []Target
-	hosts    []string
-	failed   bool
-	matchDot bool
+	env       Env
+	depth     int
+	calls     int
+	targets   []Target
+	hosts     []string
+	failed    bool
+	matchDot  bool
+	gryphHook bool
 }
 
 func (w *walker) script(src string, cwds dirs) (dirs, error) {
@@ -400,7 +406,7 @@ func braceWords(parts []syntax.WordPart) int {
 // call analyzes one simple command and returns the working directories
 // after it.
 func (w *walker) call(args []string, cwds dirs) dirs {
-	if len(args) == 0 || args[0] == "" {
+	if len(args) == 0 {
 		return cwds
 	}
 	if w.calls >= maxCalls {
@@ -408,6 +414,12 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 		return cwds
 	}
 	w.calls++
+	if runsGryphHook(args) {
+		w.gryphHook = true
+	}
+	if args[0] == "" {
+		return cwds
+	}
 	name := path.Base(args[0])
 	rest := args[1:]
 
@@ -518,15 +530,30 @@ func (w *walker) delegate(name string, rest []string, cwds dirs) (dirs, bool) {
 		// These run a command in the current shell, so "command cd" changes
 		// the working directory.
 		return w.call(skipOptions(rest), cwds), true
-	case "sh", "bash", "zsh", "dash", "ksh":
+	case "eval":
+		return w.nested(strings.Join(rest, " "), cwds), true
+	}
+	if shells[name] {
 		if src, ok := shellScript(rest); ok {
 			w.nested(src, cwds)
 			return cwds, true
 		}
-	case "eval":
-		return w.nested(strings.Join(rest, " "), cwds), true
 	}
 	return cwds, false
+}
+
+// gryphHookCommand is the hidden Gryph subcommand that agent hooks run.
+const gryphHookCommand = "_hook"
+
+// runsGryphHook reports whether a call runs "gryph _hook". The program is
+// gryph, or a word that the walker cannot resolve, such as "$G". One
+// argument is the literal word "_hook". A word that can only become "_hook"
+// when the shell runs the command does not count.
+func runsGryphHook(args []string) bool {
+	if len(args) < 2 || !slices.Contains(args[1:], gryphHookCommand) {
+		return false
+	}
+	return args[0] == "" || strings.TrimSuffix(path.Base(args[0]), ".exe") == "gryph"
 }
 
 func (w *walker) cd(args []string, cwds dirs) dirs {
@@ -649,6 +676,9 @@ func isAssignment(word string) bool {
 	return ok && name != "" && !strings.Contains(name, "/")
 }
 
+// shells are the shells whose "-c SCRIPT" the walker parses.
+var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true}
+
 // shellScript returns the script of "sh -c SCRIPT". The -c flag can be part
 // of a flag group, as in "bash -lc". The script is the first operand.
 func shellScript(args []string) (string, bool) {
@@ -756,6 +786,7 @@ func (w *walker) execdir(root string, cmd []string, cwds dirs) {
 		w.addHostName(h)
 	}
 	w.failed = w.failed || sub.failed
+	w.gryphHook = w.gryphHook || sub.gryphHook
 }
 
 func findActionEnd(args []string, start int) int {
@@ -1014,7 +1045,15 @@ func (w *walker) wordPart(b *strings.Builder, part syntax.WordPart, quoted bool,
 	case *syntax.Lit:
 		b.WriteString(unescape(p.Value, quoted))
 	case *syntax.SglQuoted:
-		b.WriteString(p.Value)
+		if !p.Dollar {
+			b.WriteString(p.Value)
+			break
+		}
+		v, ok := ansiC(p.Value)
+		if !ok {
+			return false
+		}
+		b.WriteString(v)
 	case *syntax.DblQuoted:
 		for _, inner := range p.Parts {
 			if !w.wordPart(b, inner, true, cwds) {
@@ -1037,6 +1076,19 @@ func (w *walker) wordPart(b *strings.Builder, part syntax.WordPart, quoted bool,
 		return false
 	}
 	return true
+}
+
+// ansiC decodes the escapes of an ANSI-C quoted word, $'...'. With no
+// arguments, expand.Format reads "%" as a literal. The shell ends the word at
+// the first NUL.
+func ansiC(s string) (string, bool) {
+	v, _, err := expand.Format(nil, s, nil)
+	if err != nil {
+		log.Warnf("shellcmd: decode ANSI-C quoted word: %v", err)
+		return "", false
+	}
+	v, _, _ = strings.Cut(v, "\x00")
+	return v, true
 }
 
 // unescape removes the backslash escapes that the shell removes. Outside

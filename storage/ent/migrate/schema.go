@@ -135,7 +135,7 @@ var (
 		{Name: "agent_name", Type: field.TypeString},
 		{Name: "agent_version", Type: field.TypeString, Nullable: true},
 		{Name: "working_directory", Type: field.TypeString, Nullable: true},
-		{Name: "action_type", Type: field.TypeEnum, Enums: []string{"file_read", "file_write", "file_delete", "command_exec", "network_request", "tool_use", "session_start", "session_end", "notification", "subagent_start", "subagent_stop", "unknown"}},
+		{Name: "action_type", Type: field.TypeEnum, Enums: []string{"file_read", "file_write", "file_delete", "command_exec", "network_request", "tool_use", "session_start", "session_end", "notification", "subagent_start", "subagent_stop", "user_prompt", "unknown"}},
 		{Name: "tool_name", Type: field.TypeString, Nullable: true},
 		{Name: "result_status", Type: field.TypeEnum, Enums: []string{"success", "error", "blocked", "rejected"}, Default: "success"},
 		{Name: "error_message", Type: field.TypeString, Nullable: true},

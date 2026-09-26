@@ -139,6 +139,25 @@ func TestPolicyValidateFile(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestPolicyValidate_WarnsOnFormerPromptTool(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+	body := "version: \"1\"\nrules:\n  - id: no-prompts\n    action: block\n    match:\n      tool_names: [beforeSubmitPrompt]\n"
+
+	file := filepath.Join(t.TempDir(), "old.yaml")
+	writePolicyFile(t, file, body)
+	out, err := runPolicyCmd(t, newPolicyValidateCmd(), "--file", file)
+	require.NoError(t, err)
+	assert.Contains(t, out, "File valid")
+	assert.Contains(t, out, `rule "no-prompts" names the tool "beforeSubmitPrompt"`)
+
+	writePolicyFile(t, filepath.Join(gryphConfigDir(root), "policy.yaml"), body)
+	out, err = runPolicyCmd(t, newPolicyValidateCmd())
+	require.NoError(t, err)
+	assert.Contains(t, out, "Policy valid")
+	assert.Contains(t, out, "action_types: [user_prompt]")
+}
+
 func TestPolicyInstall_LifecycleAndList(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", root)

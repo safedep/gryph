@@ -28,11 +28,11 @@ when the two differ. Run
 
 | Agent | Blocking pre-execution hooks | Post-execution hooks (detection) | Other hooks |
 |---|---|---|---|
-| Claude Code | `PreToolUse` | `PostToolUse`, `PostToolUseFailure` | `SessionStart`, `SessionEnd`, `Notification`, `SubagentStart`, `SubagentStop` |
-| Codex | `PreToolUse` | `PostToolUse` | `SessionStart`, `UserPromptSubmit` (prompt), `Stop` |
+| Claude Code | `PreToolUse`, `UserPromptSubmit` (prompt) | `PostToolUse`, `PostToolUseFailure` | `SessionStart`, `SessionEnd`, `Notification`, `SubagentStart`, `SubagentStop` |
+| Codex | `PreToolUse`, `UserPromptSubmit` (prompt) | `PostToolUse` | `SessionStart`, `Stop` |
 | Command Code | `PreToolUse` | `PostToolUse` | `Stop`, `SessionStart` |
 | Cursor | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `beforeTabFileRead`, `beforeSubmitPrompt` (prompt) | `postToolUse`, `postToolUseFailure`, `afterFileEdit`, `afterTabFileEdit`, `afterShellExecution`, `afterMCPExecution`, `afterAgentResponse`, `afterAgentThought` | `sessionStart`, `sessionEnd`, `stop`, `subagentStart`, `subagentStop`, `preCompact` |
-| Devin | `PreToolUse` | `PostToolUse` | `SessionStart`, `UserPromptSubmit` (prompt), `Stop`, `SessionEnd` |
+| Devin | `PreToolUse`, `UserPromptSubmit` (prompt) | `PostToolUse` | `SessionStart`, `Stop`, `SessionEnd` |
 | Gemini CLI | `BeforeTool` | `AfterTool` | `SessionStart`, `SessionEnd`, `Notification` |
 | OpenCode | `tool.execute.before` | `tool.execute.after` | `session.created`, `session.idle`, `session.error` |
 | Pi Agent | `tool_call` | `tool_result` | `session_start`, `session_shutdown` |

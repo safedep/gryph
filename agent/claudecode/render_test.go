@@ -24,6 +24,9 @@ func TestRenderResponse(t *testing.T) {
 		{"block pre hook", "PreToolUse", agent.DecisionBlock, "blocked reason", nil, "blocked reason", 2},
 		{"guidance pre hook", "PreToolUse", agent.DecisionGuidance, "advisory", nil, "advisory", 0},
 		{"guidance post hook", "PostToolUse", agent.DecisionGuidance, "advisory", nil, "advisory", 0},
+		{"allow prompt hook", "UserPromptSubmit", agent.DecisionAllow, "", nil, "", 0},
+		{"block prompt hook", "UserPromptSubmit", agent.DecisionBlock, "blocked prompt", nil, "blocked prompt", 2},
+		{"guidance prompt hook goes to stdout", "UserPromptSubmit", agent.DecisionGuidance, "advisory", []byte("advisory"), "", 0},
 	}
 
 	for _, tt := range tests {

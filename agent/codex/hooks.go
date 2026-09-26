@@ -20,7 +20,7 @@ var Hooks = []events.HookSpec{
 	{Type: "SessionStart", Phase: events.PhaseUnknown},
 	{Type: "PreToolUse", Phase: events.PhasePre, Blocking: true},
 	{Type: "PostToolUse", Phase: events.PhasePost},
-	{Type: "UserPromptSubmit", Phase: events.PhaseUnknown, Prompt: true},
+	{Type: "UserPromptSubmit", Phase: events.PhasePre, Blocking: true, Prompt: true},
 	{Type: "Stop", Phase: events.PhaseUnknown},
 }
 
@@ -349,7 +349,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 	}
 
 	if status.Installed {
-		for _, hookType := range HookTypes {
+		for _, hookType := range agent.RequiredHookTypeNames(Hooks) {
 			found := false
 			for _, h := range status.Hooks {
 				if h == hookType {

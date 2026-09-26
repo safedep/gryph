@@ -173,3 +173,90 @@ func TestSQLiteAccumulator_ConcurrentSessionsDoNotCorrupt(t *testing.T) {
 		}
 	}
 }
+
+func TestSQLiteAccumulator_Intent(t *testing.T) {
+	acc, _ := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	snap, err := acc.Snapshot(ctx, sessionID, newEntry(sessionID, events.KindAction, model.ActionFileRead, "Read"))
+	require.NoError(t, err)
+	assert.False(t, snap.IntentAvailable)
+	assert.Zero(t, snap.ActionsSinceIntent)
+
+	intent := newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, "")
+	snap, err = acc.Snapshot(ctx, sessionID, intent)
+	require.NoError(t, err)
+	assert.True(t, snap.IntentAvailable, "the pending intent counts")
+	assert.Zero(t, snap.TotalActions, "an intent is not an action")
+	require.NoError(t, acc.Append(ctx, intent))
+
+	for range 2 {
+		require.NoError(t, acc.Append(ctx, newEntry(sessionID, events.KindAction, model.ActionFileRead, "Read")))
+	}
+	require.NoError(t, acc.Append(ctx, newEntry(sessionID, events.KindObservation, model.ActionFileRead, "Read")))
+
+	snap, err = acc.Snapshot(ctx, sessionID, newEntry(sessionID, events.KindAction, model.ActionCommandExec, "Bash"))
+	require.NoError(t, err)
+	assert.True(t, snap.IntentAvailable)
+	assert.Equal(t, 3, snap.ActionsSinceIntent, "two stored actions and the pending one, not the observation")
+
+	snap, err = acc.Snapshot(ctx, sessionID, newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, ""))
+	require.NoError(t, err)
+	assert.Zero(t, snap.ActionsSinceIntent, "a new intent resets the count")
+
+	blocked := newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, "")
+	blocked.Decision = model.DecisionBlock
+	require.NoError(t, acc.Append(ctx, blocked))
+	snap, err = acc.Snapshot(ctx, sessionID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 2, snap.ActionsSinceIntent, "a blocked prompt never reached the agent, so it does not reset the count")
+}
+
+func TestSQLiteAccumulator_BlockedIntentOnly(t *testing.T) {
+	acc, _ := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	for _, d := range []model.Decision{model.DecisionBlock, model.DecisionDefer, model.DecisionEscalate} {
+		e := newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, "")
+		e.Decision = d
+		require.NoError(t, acc.Append(ctx, e))
+	}
+	snap, err := acc.Snapshot(ctx, sessionID, nil)
+	require.NoError(t, err)
+	assert.False(t, snap.IntentAvailable, "a session whose prompts were all stopped has no intent")
+}
+
+func TestSQLiteAccumulator_ConfirmIntent(t *testing.T) {
+	acc, _ := newTestSQLiteAccumulator(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	require.NoError(t, acc.Append(ctx, newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, "")))
+	require.NoError(t, acc.Append(ctx, newEntry(sessionID, events.KindAction, model.ActionFileRead, "Read")))
+	escalated := newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, "")
+	escalated.Decision = model.DecisionEscalate
+	require.NoError(t, acc.Append(ctx, escalated))
+	action := newEntry(sessionID, events.KindAction, model.ActionCommandExec, "Bash")
+	require.NoError(t, acc.Append(ctx, action))
+
+	snapshotCount := func() int {
+		snap, err := acc.Snapshot(ctx, sessionID, nil)
+		require.NoError(t, err)
+		return snap.ActionsSinceIntent
+	}
+	assert.Equal(t, 2, snapshotCount(), "an escalated intent waits for the approval")
+
+	require.NoError(t, acc.ConfirmIntent(ctx, action.ID))
+	assert.Equal(t, 2, snapshotCount(), "an action entry does not become the intent")
+
+	require.NoError(t, acc.ConfirmIntent(ctx, escalated.ID))
+	assert.Equal(t, 1, snapshotCount(), "only the action after the approved intent counts")
+
+	require.NoError(t, acc.Append(ctx, newEntry(sessionID, events.KindIntent, model.ActionUserPrompt, "")))
+	require.NoError(t, acc.ConfirmIntent(ctx, escalated.ID))
+	assert.Zero(t, snapshotCount(), "a late approval does not move the intent back")
+
+	require.NoError(t, acc.ConfirmIntent(ctx, uuid.New()), "an unknown entry is not an error")
+}

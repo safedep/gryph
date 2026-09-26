@@ -55,6 +55,13 @@
   guarantee: "With policy enabled, an agent read of the database, its WAL or SHM file, or the receipt signing key is blocked. A Grep of the data directory, of the config directory, or of the config parent directory is blocked. sqlite3, cat, cp, base64, and cd-then-read commands that read them are blocked. A read of a project file or an agent hook config, and a Grep of the home directory, pass."
   labels: [policy, self-protection]
 
+- id: policy/self-protection/hook-command-blocked
+  title: "builtin self-protection blocks agent shell commands that run gryph _hook"
+  category: policy
+  tier: P0
+  guarantee: "With policy enabled, an agent shell command that runs gryph _hook with a literal _hook argument, directly, in a nested shell, or through ANSI-C quoting, is blocked at exit 2, so it cannot forge a user prompt. Another gryph command passes, also with a variable argument. A grep for a word that holds _hook passes."
+  labels: [policy, self-protection, intent]
+
 - id: policy/file-access/read-rule-matches-shell-reads
   title: "file_access selects which shell targets a file rule matches"
   category: policy
@@ -350,3 +357,45 @@
   tier: P2
   guarantee: "gryph retention cleanup deletes events older than the configured retention and reports the count, and --dry-run only previews."
   labels: [retention]
+
+- id: context/intent/prompt-recorded
+  title: "a user prompt is recorded as an intent"
+  category: context
+  tier: P0
+  guarantee: "A Claude Code UserPromptSubmit hook records a user_prompt event and an intent entry. The intent is not an action. The next action sees intent_available true and one action since the intent."
+  labels: [context, intent, prompt]
+
+- id: context/intent/prompt-rule-blocks
+  title: "a content rule on user_prompt blocks the prompt"
+  category: context
+  tier: P1
+  guarantee: "A block rule with action_types [user_prompt] and content_patterns blocks a matching prompt at exit 2 with the rule message. A prompt that does not match passes."
+  labels: [context, intent, prompt, policy]
+
+- id: context/intent/escalated-prompt-denied
+  title: "a denied escalated prompt does not become the latest intent"
+  category: context
+  tier: P1
+  guarantee: "A user_prompt escalate rule with the default nop approval denies the prompt at exit 2. The denied prompt does not reset actions_since_intent, and a rule on actions_since_intent still blocks the next command."
+  labels: [context, intent, prompt, policy, escalate]
+
+- id: context/intent/unavailable
+  title: "an agent with no prompt hook has no intent"
+  category: context
+  tier: P1
+  guarantee: "A Command Code session has no intent. A rule on !context.intent_available fires, and policy context shows intent_available false."
+  labels: [context, intent]
+
+- id: install/claude-code/prompt-hook-written
+  title: "install writes the Claude Code prompt hook"
+  category: install
+  tier: P1
+  guarantee: "gryph install --agent claude-code writes a UserPromptSubmit hook entry, and doctor reports the hooks as valid."
+  labels: [install, prompt]
+
+- id: health/doctor/prompt-hook-missing
+  title: "doctor warns when the prompt hook is missing"
+  category: health
+  tier: P2
+  guarantee: "An install without the prompt hook stays valid. Doctor warns that the prompt hook is not installed and suggests a reinstall."
+  labels: [doctor, prompt]

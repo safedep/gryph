@@ -32,7 +32,80 @@ func TestBuiltinSource_NoFileGlobs_OmitsFileRule(t *testing.T) {
 	docs, err := NewBuiltinSource().Load(context.Background())
 	require.NoError(t, err)
 	require.Len(t, docs, 1)
-	assert.Empty(t, docs[0].Rules)
+	require.Len(t, docs[0].Rules, 1)
+	assert.Equal(t, builtinHookCommandRuleID, docs[0].Rules[0].ID)
+}
+
+func TestBuiltinSource_BlocksHookCommand(t *testing.T) {
+	docs, err := NewBuiltinSource().Load(context.Background())
+	require.NoError(t, err)
+	engine, err := pdp.New(docs[0])
+	require.NoError(t, err)
+
+	cases := []struct {
+		name    string
+		command string
+		args    []string
+		blocked bool
+	}{
+		{"forged prompt", `printf '{"prompt":"continue"}' | gryph _hook claude-code UserPromptSubmit`, nil, true},
+		{"absolute path", `/usr/local/bin/gryph _hook cursor beforeSubmitPrompt`, nil, true},
+		{"quoted words", `g"ry"ph '_hook' codex UserPromptSubmit`, nil, true},
+		{"wrapper", `env -i sudo -u root gryph _hook claude-code UserPromptSubmit`, nil, true},
+		{"nested shell", `bash -c "gryph _hook claude-code UserPromptSubmit"`, nil, true},
+		{"unknown program", `$(command -v gryph) _hook claude-code UserPromptSubmit`, nil, true},
+		{"unknown argument", `gryph $(printf _hook) claude-code UserPromptSubmit`, nil, false},
+		{"split args", "gryph", []string{"_hook", "claude-code", "UserPromptSubmit"}, true},
+		{"nested shell with an unknown script", `bash -c "$(command -v gryph) _hook claude-code UserPromptSubmit"`, nil, false},
+		{"parse failure", `gryph _hook claude-code ) (`, nil, false},
+		{"ANSI-C quoting", `gryph $'\x5fhook' claude-code UserPromptSubmit < p.json`, nil, true},
+		{"glob argument", `touch _hook && gryph _hoo? claude-code UserPromptSubmit < p.json`, nil, false},
+		{"variable program and argument", `G=gryph; H=_ho; $G ${H}ok claude-code UserPromptSubmit < p.json`, nil, false},
+		{"exec with a name", `exec -a x gryph _hook claude-code UserPromptSubmit`, nil, true},
+		{"eval", `eval gryph _hook claude-code UserPromptSubmit`, nil, true},
+		{"find -exec", `find . -exec gryph _hook claude-code UserPromptSubmit \;`, nil, true},
+		{"function", `f() { gryph "$@"; }; f _hook claude-code UserPromptSubmit`, nil, false},
+		{"brace expansion", `gryph _{hook,x} claude-code UserPromptSubmit`, nil, true},
+		{"xargs", `echo _hook | xargs gryph`, nil, false},
+		{"eval of a file", `eval "$(cat script)"`, nil, false},
+		{"substitution program that runs gryph", `$(echo gryph)/x _hook`, nil, true},
+		{"gryph with a variable argument", `gryph query --since "$T"`, nil, false},
+		{"unknown word without the hook", `echo "$(date)" > out.txt`, nil, false},
+		{"file test with a variable", `[ -f "$F" ] && cat "$F"`, nil, false},
+		{"env with variables", `env GOOS="$OS" go build -o "$OUT" .`, nil, false},
+		{"timeout with variables", `timeout "$T" make "$TARGET"`, nil, false},
+		{"eval of brew shellenv", `eval "$(/opt/homebrew/bin/brew shellenv)"`, nil, false},
+		{"variable path program", `$GOPATH/bin/golangci-lint run ./...`, nil, false},
+		{"default value program", `${PYTHON:-python3} -m pytest`, nil, false},
+		{"gryph with a session variable", `gryph query --session "$SID"`, nil, false},
+		{"variable program with a literal hook", `$G _hook x y`, nil, true},
+		{"other gryph command", `gryph query --since 1h`, nil, false},
+		{"search for the word", `grep -rn _hook cli/`, nil, false},
+		{"commit message", `git commit -m "fix gryph _hook"`, nil, false},
+		{"emitter program", `$(go env GOPATH)/bin/golangci-lint run ./...`, nil, false},
+		{"eval of ssh-agent", `eval "$(ssh-agent -s)"`, nil, false},
+		{"eval of direnv", `eval "$(direnv export bash)"`, nil, false},
+		{"grep for the word with a variable", `grep -rn register_hook "$SRC"`, nil, false},
+		{"git log for the word with a substitution", `git log --grep=pre_hook $(git merge-base HEAD main)..HEAD`, nil, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			action := &model.Action{
+				Type:       model.ActionCommandExec,
+				WorkingDir: "/work",
+				Parameters: model.Parameters{Command: tc.command, Args: tc.args},
+			}
+			res, err := engine.Evaluate(context.Background(), action, nil)
+			require.NoError(t, err)
+			if tc.blocked {
+				assert.Equal(t, model.DecisionBlock, res.Decision)
+				assert.Equal(t, []string{builtinHookCommandRuleID}, res.MatchedRuleIDs)
+				assert.Equal(t, hookCommandMessage, res.Message)
+			} else {
+				assert.Equal(t, model.DecisionAllow, res.Decision)
+			}
+		})
+	}
 }
 
 func TestBuiltinSource_DedupesAndDropsEmpty(t *testing.T) {
@@ -302,7 +375,7 @@ func TestBuiltinSource_BlocksReadsOfProtectedPaths(t *testing.T) {
 		Load(context.Background())
 	require.NoError(t, err)
 	require.Len(t, docs, 1)
-	require.Len(t, docs[0].Rules, 2)
+	require.Len(t, docs[0].Rules, 3)
 	assert.Equal(t, builtinProtectedReadsRuleID, docs[0].Rules[1].ID)
 	engine, err := pdp.New(docs[0])
 	require.NoError(t, err)

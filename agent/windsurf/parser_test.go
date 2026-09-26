@@ -131,8 +131,13 @@ func TestParseHookEvent_PreUserPrompt(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
-	assert.Equal(t, events.ActionToolUse, event.ActionType)
-	assert.Equal(t, "pre_user_prompt", event.ToolName)
+	assert.Equal(t, events.ActionUserPrompt, event.ActionType)
+	payload, err := event.GetUserPromptPayload()
+	require.NoError(t, err)
+	require.NotNil(t, payload)
+	assert.Equal(t, "Help me fix the login bug", payload.Prompt.Value)
+	assert.Equal(t, privacy.OriginUser, payload.Prompt.Label.Origin)
+	assert.Equal(t, "Help me fix the login bug", event.FullContent)
 }
 
 func TestParseHookEvent_PostCascadeResponse(t *testing.T) {
@@ -251,7 +256,7 @@ func TestHookTypeMapping(t *testing.T) {
 		{"post_run_command", events.ActionCommandExec},
 		{"pre_mcp_tool_use", events.ActionToolUse},
 		{"post_mcp_tool_use", events.ActionToolUse},
-		{"pre_user_prompt", events.ActionToolUse},
+		{"pre_user_prompt", events.ActionUserPrompt},
 		{"post_cascade_response", events.ActionNotification},
 		{"post_setup_worktree", events.ActionToolUse},
 	}

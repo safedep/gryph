@@ -551,6 +551,15 @@ func reportPolicyValidation(cmd *cobra.Command, app *App) error {
 	if len(policy.Disabled) > 0 {
 		_, _ = fmt.Fprintf(out, "\n%s %s\n", c.Header("Disabled rule IDs:"), c.Dim(strings.Join(policy.Disabled, ", ")))
 	}
+	return renderPolicyWarnings(out, c, policy)
+}
+
+func renderPolicyWarnings(out io.Writer, c *tui.Colorizer, policy *pdp.Policy) error {
+	for _, w := range policy.Warnings() {
+		if _, err := fmt.Fprintf(out, "%s %s\n", c.Warning("[warn]"), w); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -563,10 +572,13 @@ func reportFileValidation(cmd *cobra.Command, app *App, path string) error {
 		return ErrConfig("failed to validate policy file", err)
 	}
 	c := policyColorizer(app)
-	_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n",
+	out := cmd.OutOrStdout()
+	if _, err := fmt.Fprintf(out, "%s %s\n",
 		c.StatusOK(),
-		c.Success(fmt.Sprintf("File valid: %d rules in %s", len(policy.Rules), path)))
-	return err
+		c.Success(fmt.Sprintf("File valid: %d rules in %s", len(policy.Rules), path))); err != nil {
+		return err
+	}
+	return renderPolicyWarnings(out, c, policy)
 }
 
 func newPolicyValidateCmd() *cobra.Command {

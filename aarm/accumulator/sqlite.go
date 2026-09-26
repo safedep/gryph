@@ -82,12 +82,17 @@ func entryRow(e *model.ContextEntry) *storage.ContextEntryRow {
 }
 
 // stateDelta computes what the entry adds to the session state. Only an
-// action adds to tools_used, as with the counters.
+// action adds to tools_used, as with the counters. An intent becomes the
+// latest intent only when it reaches the agent. An escalated intent waits
+// for the approval, and ConfirmIntent sets it on approve. A failed
+// evaluation has no decision, and fail_mode closed then blocks the prompt.
+// So a failed entry never becomes the latest intent. Under fail_mode open
+// the prompt runs, and the next intent resets the counters.
 func stateDelta(e *model.ContextEntry) *storage.ContextStateDelta {
 	delta := &storage.ContextStateDelta{
 		Classifications: privacy.Strings(e.Classifications),
 		Tags:            e.Tags,
-		Intent:          entryKind(e) == events.KindIntent,
+		Intent:          entryKind(e) == events.KindIntent && e.Result != model.ResultError && reachesAgent(e.Decision),
 	}
 	if entryKind(e) == events.KindAction && e.Tool != "" {
 		delta.Tools = []string{e.Tool}
@@ -96,6 +101,15 @@ func stateDelta(e *model.ContextEntry) *storage.ContextStateDelta {
 		delta.Origins = []string{origin}
 	}
 	return delta
+}
+
+func reachesAgent(d model.Decision) bool {
+	switch d {
+	case model.DecisionBlock, model.DecisionDefer, model.DecisionEscalate:
+		return false
+	default:
+		return true
+	}
 }
 
 // originKey names an origin in origins_seen. An MCP origin carries its
@@ -126,6 +140,15 @@ func (a *SQLiteAccumulator) RecordResult(ctx context.Context, entryID uuid.UUID,
 	return a.store.UpdateContextEntryResult(ctx, entryID, status, result.Duration.Milliseconds(), result.Error)
 }
 
+// ConfirmIntent makes an escalated intent the latest intent after an
+// approval lets it reach the agent.
+func (a *SQLiteAccumulator) ConfirmIntent(ctx context.Context, entryID uuid.UUID) error {
+	if a == nil || a.store == nil {
+		return fmt.Errorf("accumulator: store is not initialized")
+	}
+	return a.store.SetContextIntent(ctx, entryID)
+}
+
 // Snapshot returns the stored context of a session with the pending entry
 // added in memory. The counters come from the session row. A session with
 // no stored state gives an empty snapshot plus the pending entry.
@@ -151,6 +174,8 @@ func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID, p
 		ToolsUsed:           slices.Clone(state.ToolsUsed),
 		ClassificationsSeen: slices.Clone(state.ClassificationsSeen),
 		EntitiesSeen:        slices.Clone(state.EntitiesSeen),
+		IntentAvailable:     state.LastIntentSeq != nil,
+		ActionsSinceIntent:  state.ActionsSinceIntent,
 	}
 	if !state.StartedAt.IsZero() {
 		snap.SessionDuration = max(a.now().Sub(state.StartedAt), 0)
@@ -171,6 +196,15 @@ func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID, p
 		delta := stateDelta(pending)
 		snap.ToolsUsed = addNew(snap.ToolsUsed, delta.Tools)
 		snap.ClassificationsSeen = addNew(snap.ClassificationsSeen, delta.Classifications)
+		switch entryKind(pending) {
+		case events.KindIntent:
+			snap.IntentAvailable = true
+			snap.ActionsSinceIntent = 0
+		case events.KindAction:
+			if snap.IntentAvailable {
+				snap.ActionsSinceIntent++
+			}
+		}
 	}
 	return snap, nil
 }

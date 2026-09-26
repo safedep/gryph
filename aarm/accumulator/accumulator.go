@@ -37,6 +37,9 @@ var ErrAppend = errors.New("accumulator append")
 //     transaction.
 //   - RecordResult is called with the execution outcome of an entry. It
 //     does not re-run the PDP.
+//   - ConfirmIntent is called when an approval lets an escalated entry
+//     reach the agent. An intent entry then becomes the latest intent.
+//     Other entries do not change.
 //
 // Implementations must be safe for concurrent calls across sessions. A
 // Snapshot error propagates to the Mediator and is subject to the security
@@ -48,6 +51,7 @@ type Accumulator interface {
 	Snapshot(ctx context.Context, sessionID uuid.UUID, pending *model.ContextEntry) (*model.ContextSnapshot, error)
 	Append(ctx context.Context, entry *model.ContextEntry) error
 	RecordResult(ctx context.Context, entryID uuid.UUID, result model.Result) error
+	ConfirmIntent(ctx context.Context, entryID uuid.UUID) error
 }
 
 // Nop is a no-op Accumulator: Append and RecordResult succeed silently and
@@ -68,5 +72,8 @@ func (*Nop) Append(_ context.Context, _ *model.ContextEntry) error { return nil 
 
 // RecordResult implements Accumulator.
 func (*Nop) RecordResult(_ context.Context, _ uuid.UUID, _ model.Result) error { return nil }
+
+// ConfirmIntent implements Accumulator.
+func (*Nop) ConfirmIntent(_ context.Context, _ uuid.UUID) error { return nil }
 
 var _ Accumulator = (*Nop)(nil)

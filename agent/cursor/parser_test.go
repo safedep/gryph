@@ -174,8 +174,13 @@ func TestParseHookEvent_BeforeSubmitPrompt(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
-	assert.Equal(t, events.ActionToolUse, event.ActionType)
-	assert.Equal(t, "beforeSubmitPrompt", event.ToolName)
+	assert.Equal(t, events.ActionUserPrompt, event.ActionType)
+	payload, err := event.GetUserPromptPayload()
+	require.NoError(t, err)
+	require.NotNil(t, payload)
+	assert.Equal(t, "Fix the build errors", payload.Prompt.Value)
+	assert.Equal(t, privacy.OriginUser, payload.Prompt.Label.Origin)
+	assert.Equal(t, "Fix the build errors", event.FullContent)
 	assert.Equal(t, "/home/user/project", event.WorkingDirectory)
 }
 

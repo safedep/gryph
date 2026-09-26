@@ -98,12 +98,13 @@ func TestParseHookEvent_UserPromptSubmit(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
-	assert.Equal(t, events.ActionToolUse, event.ActionType)
-	assert.Equal(t, "UserPromptSubmit", event.ToolName)
-
-	payload, err := event.GetToolUsePayload()
+	assert.Equal(t, events.ActionUserPrompt, event.ActionType)
+	payload, err := event.GetUserPromptPayload()
 	require.NoError(t, err)
-	assert.Equal(t, "UserPromptSubmit", payload.ToolName)
+	require.NotNil(t, payload)
+	assert.Equal(t, "Fix the failing test in main_test.go", payload.Prompt.Value)
+	assert.Equal(t, privacy.OriginUser, payload.Prompt.Label.Origin)
+	assert.Equal(t, "Fix the failing test in main_test.go", event.FullContent)
 }
 
 func TestParseHookEvent_Stop(t *testing.T) {

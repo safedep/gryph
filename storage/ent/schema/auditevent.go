@@ -39,7 +39,7 @@ func (AuditEvent) Fields() []ent.Field {
 		field.String("working_directory").
 			Optional(),
 		field.Enum("action_type").
-			Values("file_read", "file_write", "file_delete", "command_exec", "network_request", "tool_use", "session_start", "session_end", "notification", "subagent_start", "subagent_stop", "unknown"),
+			Values("file_read", "file_write", "file_delete", "command_exec", "network_request", "tool_use", "session_start", "session_end", "notification", "subagent_start", "subagent_stop", "user_prompt", "unknown"),
 		field.String("tool_name").
 			Optional(),
 		field.Enum("result_status").

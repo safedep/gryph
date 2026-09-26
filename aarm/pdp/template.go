@@ -41,6 +41,8 @@ type templateContext struct {
 	ClassificationsSeen []string
 	EntitiesSeen        []string
 	SemanticDrift       float64
+	IntentAvailable     bool
+	ActionsSinceIntent  int
 }
 
 type templateRule struct {
@@ -92,5 +94,7 @@ func newTemplateContext(snapshot *model.ContextSnapshot) templateContext {
 		ClassificationsSeen: snapshot.ClassificationsSeen,
 		EntitiesSeen:        snapshot.EntitiesSeen,
 		SemanticDrift:       snapshot.SemanticDrift,
+		IntentAvailable:     snapshot.IntentAvailable,
+		ActionsSinceIntent:  snapshot.ActionsSinceIntent,
 	}
 }

@@ -2,6 +2,7 @@ package pdp
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -11,11 +12,12 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/google/cel-go/cel"
-	"github.com/safedep/dry/log"
 	celast "github.com/google/cel-go/common/ast"
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/safedep/gryph/core/privacy"
@@ -106,6 +108,9 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 
 	var winnerRule *compiledRule
 	paths := &actionPaths{action: action}
+	// condErr is the first condition error. The loop still runs the other
+	// rules, so that a block rule decides even when another rule fails.
+	var condErr error
 
 	for i := range p.rules {
 		rule := p.rules[i]
@@ -126,13 +131,14 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 			}
 			if activations == nil {
 				activations = map[string]any{
-					"action":  actionActivation(action),
+					"action":  actionActivation(action, paths),
 					"context": contextActivation(snapshot),
 				}
 			}
 			ok, err := rule.conditionMatches(evalCtx, activations)
 			if err != nil {
-				return nil, err
+				condErr = cmp.Or(condErr, err)
+				continue
 			}
 			if !ok {
 				continue
@@ -160,6 +166,13 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 			}
 			winnerRule = &p.rules[i]
 		}
+	}
+
+	if condErr != nil {
+		if !gates(result.Decision) {
+			return nil, condErr
+		}
+		log.Warnf("pdp: a condition failed, and a %s rule decides: %v", result.Decision, condErr)
 	}
 
 	if freshSessionDeferred && len(result.MatchedRuleIDs) == 0 {
@@ -195,6 +208,14 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 	}
 
 	return result, nil
+}
+
+// gates reports whether a decision stops the action or makes it wait for an
+// approval. A failed condition can only make a decision stricter, so a
+// matched gate stands. An agent can make a condition fail with a long
+// command, and under fail_mode open the error would drop the gate.
+func gates(d model.Decision) bool {
+	return d == model.DecisionBlock || d == model.DecisionEscalate || d == model.DecisionDefer
 }
 
 // storedMessage renders the message from the stored action. The stored
@@ -306,6 +327,9 @@ func contextRefsEmpty(refs []string, snapshot *model.ContextSnapshot) bool {
 	return true
 }
 
+// contextFieldEmpty reports whether a context field has no data yet. The
+// intent fields are never empty. A session with no intent is a fact that a
+// rule can act on, and the fresh-session defer must not hide it.
 func contextFieldEmpty(field string, s *model.ContextSnapshot) bool {
 	switch field {
 	case "total_actions":
@@ -455,9 +479,20 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 	return cr, nil
 }
 
+// matchesActionType reports whether a rule selects the action type. A rule
+// with no action_types selects every action, but not a user prompt. A prompt
+// is not an action, and a broad rule, such as a cap on total_actions, must
+// not stop the user from typing. A rule selects prompts by name.
+func matchesActionType(types []string, t model.ActionType) bool {
+	if len(types) == 0 {
+		return t != model.ActionUserPrompt
+	}
+	return containsFold(types, string(t))
+}
+
 func (r compiledRule) matches(action *model.Action, paths *actionPaths) bool {
 	match := r.rule.Match
-	if len(match.ActionTypes) > 0 && !containsFold(match.ActionTypes, string(action.Type)) {
+	if !matchesActionType(match.ActionTypes, action.Type) {
 		return false
 	}
 	if len(match.ToolNames) > 0 && !containsFold(match.ToolNames, action.Tool) {
@@ -609,7 +644,7 @@ func compileCondition(env *cel.Env, ruleID, expr string) (cel.Program, []string,
 	if ast.OutputType() != cel.BoolType {
 		return nil, nil, fmt.Errorf("rule %q condition: output type %s, want bool", ruleID, ast.OutputType())
 	}
-	prg, err := env.Program(ast, cel.CostLimit(10000), cel.InterruptCheckFrequency(100))
+	prg, err := env.Program(ast, cel.CostLimit(celCostLimit), cel.InterruptCheckFrequency(100))
 	if err != nil {
 		return nil, nil, fmt.Errorf("rule %q condition program: %w", ruleID, err)
 	}
@@ -672,7 +707,32 @@ func phaseOrUnknown(p model.ActionPhase) model.ActionPhase {
 	return p
 }
 
-func actionActivation(action *model.Action) map[string]any {
+// celPromptContentMax bounds the prompt content that a CEL condition reads.
+// A CEL string function costs about the length of its input, and matches()
+// costs about the length times the regex length. content_patterns still
+// match the whole prompt, because they run outside CEL.
+const celPromptContentMax = 8 << 10
+
+// celCostLimit bounds the work of one condition. A 90-character regex on a
+// prompt at celPromptContentMax costs about 19000 and runs in under 1 ms.
+// The limit leaves room for a regex about five times that long.
+const celCostLimit = 100000
+
+// paramsContent gives a prompt rule at most celPromptContentMax bytes of the
+// prompt, cut on a rune boundary. It reports whether it cut the prompt.
+func paramsContent(action *model.Action) (string, bool) {
+	content := action.Parameters.Content
+	if action.Type != model.ActionUserPrompt || len(content) <= celPromptContentMax {
+		return content, false
+	}
+	limit := celPromptContentMax
+	for limit > 0 && !utf8.RuneStart(content[limit]) {
+		limit--
+	}
+	return content[:limit], true
+}
+
+func actionActivation(action *model.Action, paths *actionPaths) map[string]any {
 	if action == nil {
 		action = &model.Action{}
 	}
@@ -680,6 +740,7 @@ func actionActivation(action *model.Action) map[string]any {
 	if classifications == nil {
 		classifications = []string{}
 	}
+	content, cut := paramsContent(action)
 	return map[string]any{
 		"type":                 string(action.Type),
 		"tool":                 action.Tool,
@@ -690,10 +751,11 @@ func actionActivation(action *model.Action) map[string]any {
 		"injection_score":      float64(action.InjectionScore),
 		"data_classifications": classifications,
 		"phase":                string(phaseOrUnknown(action.Phase)),
-		"content_truncated":    action.ContentTruncated,
+		"content_truncated":    action.ContentTruncated || cut,
 		"human_principal":      action.HumanPrincipal,
 		"service_identity":     action.ServiceIdentity,
 		"role_scope":           action.RoleScope,
+		"gryph_hook":           paths.runsGryphHook(),
 		"params": map[string]any{
 			"path":          action.Parameters.Path,
 			"command":       action.Parameters.Command,
@@ -702,7 +764,7 @@ func actionActivation(action *model.Action) map[string]any {
 			"size_bytes":    action.Parameters.SizeBytes,
 			"lines_added":   action.Parameters.LinesAdded,
 			"lines_removed": action.Parameters.LinesRemoved,
-			"content":       action.Parameters.Content,
+			"content":       content,
 		},
 	}
 }
@@ -723,5 +785,7 @@ func contextActivation(snapshot *model.ContextSnapshot) map[string]any {
 		"classifications_seen": snapshot.ClassificationsSeen,
 		"entities_seen":        snapshot.EntitiesSeen,
 		"semantic_drift":       snapshot.SemanticDrift,
+		"intent_available":     snapshot.IntentAvailable,
+		"actions_since_intent": snapshot.ActionsSinceIntent,
 	}
 }

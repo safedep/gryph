@@ -18,6 +18,7 @@ import (
 // docs/agent-enforcement-coverage.md.
 var Hooks = []events.HookSpec{
 	{Type: "PreToolUse", Phase: events.PhasePre, Blocking: true},
+	{Type: "UserPromptSubmit", Phase: events.PhasePre, Blocking: true, Prompt: true},
 	{Type: "PostToolUse", Phase: events.PhasePost},
 	{Type: "PostToolUseFailure", Phase: events.PhasePost},
 	{Type: "SessionStart", Phase: events.PhaseUnknown},
@@ -440,7 +441,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 
 	// Validate that all expected hooks are installed
 	if status.Installed {
-		for _, hookType := range HookTypes {
+		for _, hookType := range agent.RequiredHookTypeNames(Hooks) {
 			found := false
 			for _, h := range status.Hooks {
 				if h == hookType {

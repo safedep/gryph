@@ -602,3 +602,19 @@ func TestHookResponse_Stderr(t *testing.T) {
 	guidance := NewGuidanceResponse("advisory note")
 	assert.Equal(t, "advisory note", guidance.Stderr())
 }
+
+func TestParseHookEvent_UserPromptSubmit(t *testing.T) {
+	data := loadFixture(t, "user_prompt_submit.json")
+	event, err := testAdapter(t).ParseEvent(context.Background(), "UserPromptSubmit", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionUserPrompt, event.ActionType)
+	assert.Equal(t, events.HookType("UserPromptSubmit"), event.HookType)
+	assert.Equal(t, "/home/user/project", event.WorkingDirectory)
+	payload, err := event.GetUserPromptPayload()
+	require.NoError(t, err)
+	require.NotNil(t, payload)
+	assert.Equal(t, "Add a retry to the upload function", payload.Prompt.Value)
+	assert.Equal(t, privacy.OriginUser, payload.Prompt.Label.Origin)
+}

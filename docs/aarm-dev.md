@@ -155,9 +155,20 @@ Conditions read two maps. `action.*` fields come from `actionActivation`:
 `context.*` fields come from `contextActivation`: `total_actions`,
 `files_read`, `files_written`, `commands_executed`, `network_requests`,
 `errors`, `tools_used`, `session_duration_ms`, `classifications_seen`,
-`entities_seen`, `semantic_drift`.
+`entities_seen`, `semantic_drift`, `intent_available`,
+`actions_since_intent`. `Snapshot` computes the intent fields with the pending
+entry: a pending intent sets `intent_available` and resets the count, and a
+pending action adds one. `contextFieldEmpty` never reports an intent field as
+empty, so the fresh-session defer does not hide a missing intent.
 
-Conditions run under a 100 ms timeout and a CEL cost limit. `message` is a Go
+Conditions run under a 100 ms timeout and a CEL cost limit (`celCostLimit`,
+100000). A 90-character `matches()` regex on an 8 KiB prompt costs about
+19000. When a condition fails, the PDP still runs the other rules. A
+`block`, `escalate` or `defer` decision wins over the error (`gates`),
+because a failed condition can only make a decision stricter. With no such
+decision, the error goes to the caller, and `fail_mode` decides. So under
+`fail_mode: closed`, a matched `escalate` still asks for an approval and
+does not become a block. `message` is a Go
 `text/template` with `missingkey=error`. The template data is `.Action`,
 `.Context`, and `.Rule`.
 
@@ -192,7 +203,22 @@ Self-protection blocks agent changes to Gryph's own control surfaces (policy,
 config, database, signing keys, agent hook configs). The rule
 `gryph-builtin-protected-files` covers `file_write`, `file_delete`, and
 `command_exec`. The rule `gryph-builtin-protected-reads` covers `file_read`
-and `command_exec` with `file_access: [read]`. It protects the database, its
+and `command_exec` with `file_access: [read]`. The rule
+`gryph-builtin-hook-command` blocks a `command_exec` that runs
+`gryph _hook`, through `action.gryph_hook` (`shellcmd.Analysis.GryphHook`).
+The check is best effort. The walker calls `runsGryphHook` on each call that
+it visits, in the same single pass that finds the paths. So the linear
+wrapper parsing and the call budget cover it, and the check reaches wrappers,
+`command`, `find -exec`, `bash -c`, and `eval` through the normal walk. The
+walker decodes ANSI-C quoting (`$'...'`) and expands braces first. A call
+counts when its program is gryph, or a word that the walker cannot resolve
+(a variable or a command substitution), and one argument is the literal word
+`_hook`. A word that can only become `_hook` when the shell runs the command
+does not count: a variable, a glob, `~`, an empty word, `xargs gryph`, a
+function, or an `eval` or `sh -c` script that the walker cannot resolve. A
+command that the parser rejects does not count. A `_hook` word in the
+arguments of another program does not count.
+The intent fields of the session context depend on it. It protects the database, its
 SQLite side files, and the receipt signing key. For a command, the PDP matches
 the paths that `aarm/shellcmd` parses from the command line. The PDP also
 resolves the action path (`~`, `..`, a relative path, a trailing slash)

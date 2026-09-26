@@ -179,6 +179,11 @@ type SubagentStopPayload struct {
 	LastAssistantMessage privacy.Text `json:"last_assistant_message,omitzero"`
 }
 
+// UserPromptPayload represents the payload for user_prompt events.
+type UserPromptPayload struct {
+	Prompt privacy.Text `json:"prompt"`
+}
+
 // toolUseDisplayFields lists Input keys checked in priority order by DisplayTarget.
 var toolUseDisplayFields = []string{
 	"url", "query", "command", "file_path", "path",
@@ -334,6 +339,8 @@ func NewPayload(t ActionType) any {
 		return &SubagentStartPayload{}
 	case ActionSubagentStop:
 		return &SubagentStopPayload{}
+	case ActionUserPrompt:
+		return &UserPromptPayload{}
 	default:
 		return nil
 	}
@@ -413,4 +420,25 @@ func (e *Event) ContentDigest() string {
 	default:
 		return privacy.Digest(strings.Join(digests, "\n"))
 	}
+}
+
+// SetPrompt sets the payload of a user_prompt event. The prompt text has the
+// origin user. FullContent carries the whole prompt for content rules.
+func (e *Event) SetPrompt(prompt string) error {
+	e.FullContent = prompt
+	return e.SetPayload(UserPromptPayload{
+		Prompt: privacy.Text{Value: prompt, Label: privacy.Label{Origin: privacy.OriginUser}},
+	})
+}
+
+// GetUserPromptPayload unmarshals the payload as a UserPromptPayload.
+func (e *Event) GetUserPromptPayload() (*UserPromptPayload, error) {
+	if e.ActionType != ActionUserPrompt {
+		return nil, nil
+	}
+	var payload UserPromptPayload
+	if err := json.Unmarshal(e.Payload, &payload); err != nil {
+		return nil, err
+	}
+	return &payload, nil
 }

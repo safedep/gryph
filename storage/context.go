@@ -23,6 +23,9 @@ const (
 	// UpdateContextEntryResult sets the outcome.
 	contextResultStatusPending = "pending"
 
+	contextKindAction = "action"
+	contextKindIntent = "intent"
+
 	// contextListMaxLimit caps list queries when callers pass limit <= 0.
 	contextListMaxLimit = 1000
 )
@@ -348,6 +351,33 @@ func (s *SQLiteStore) UpdateContextEntryResult(ctx context.Context, entryID uuid
 	return nil
 }
 
+// SetContextIntent makes an intent entry the latest intent of its session.
+// It never moves the latest intent back to an older entry. An unknown entry
+// or an entry of another kind changes nothing.
+func (s *SQLiteStore) SetContextIntent(ctx context.Context, entryID uuid.UUID) error {
+	entry, err := s.client.ContextEntry.Get(ctx, entryID)
+	if ent.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: get context entry: %w", err)
+	}
+	if entry.Kind != contextKindIntent {
+		return nil
+	}
+
+	s.contextWriteMu.Lock()
+	defer s.contextWriteMu.Unlock()
+	_, err = s.db.ExecContext(ctx, `
+UPDATE context_states SET last_intent_seq = ?, last_intent_at = ?
+WHERE session_id = ? AND (last_intent_seq IS NULL OR last_intent_seq < ?)`,
+		entry.Sequence, entry.Timestamp.UTC(), entry.SessionID, entry.Sequence)
+	if err != nil {
+		return fmt.Errorf("storage: set context intent: %w", err)
+	}
+	return nil
+}
+
 // GetContextState returns the state row of a session joined with the
 // session counters. It returns (nil, nil) when the session has neither a
 // session row nor a state row.
@@ -363,7 +393,29 @@ func (s *SQLiteStore) GetContextState(ctx context.Context, sessionID uuid.UUID) 
 	if state == nil && sess == nil {
 		return nil, nil
 	}
-	return joinContextState(sessionID, state, sess), nil
+	row := joinContextState(sessionID, state, sess)
+	if err := s.countActionsSinceIntent(ctx, row); err != nil {
+		return nil, err
+	}
+	return row, nil
+}
+
+func (s *SQLiteStore) countActionsSinceIntent(ctx context.Context, row *ContextStateRow) error {
+	if row.LastIntentSeq == nil {
+		return nil
+	}
+	n, err := s.client.ContextEntry.Query().
+		Where(
+			contextentry.SessionIDEQ(row.SessionID),
+			contextentry.KindEQ(contextKindAction),
+			contextentry.SequenceGT(*row.LastIntentSeq),
+		).
+		Count(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: count actions since intent: %w", err)
+	}
+	row.ActionsSinceIntent = n
+	return nil
 }
 
 // GetContextStateByPrefix returns the state row whose session_id (as text)
@@ -416,6 +468,9 @@ func (s *SQLiteStore) QueryAllContextStates(ctx context.Context, limit int) ([]*
 	out := make([]*ContextStateRow, len(states))
 	for i, st := range states {
 		out[i] = joinContextState(st.SessionID, st, byID[st.SessionID])
+		if err := s.countActionsSinceIntent(ctx, out[i]); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }

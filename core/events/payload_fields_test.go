@@ -23,10 +23,12 @@ func TestPayloadStringFields(t *testing.T) {
 		"NotificationPayload":  {"Message", "Type"},
 		"SubagentStartPayload": {"AgentID", "AgentType"},
 		"SubagentStopPayload":  {"AgentID", "AgentType", "AgentTranscriptPath"},
+		"UserPromptPayload":    nil,
 	}
 	for _, at := range []ActionType{
 		ActionFileRead, ActionFileWrite, ActionFileDelete, ActionCommandExec, ActionToolUse,
 		ActionSessionStart, ActionSessionEnd, ActionNotification, ActionSubagentStart, ActionSubagentStop,
+		ActionUserPrompt,
 	} {
 		typ := reflect.TypeOf(NewPayload(at)).Elem()
 		t.Run(typ.Name(), func(t *testing.T) {

@@ -80,7 +80,9 @@ func (a *Adapter) Hooks() []events.HookSpec { return Hooks }
   service reads the phase from this table. It does not guess from the name.
 - `Blocking` is true when a block from Gryph stops the operation. Only a `pre`
   hook can be blocking.
-- `Prompt` is true when the hook carries a user prompt.
+- `Prompt` is true when the hook carries a user prompt. Parse it into an
+  `ActionUserPrompt` event with `event.SetPrompt`. The install is valid without
+  a prompt hook, and `gryph doctor` warns when it is missing.
 - Set `event.HookType` in `ParseEvent` to the declared name. A hook that the
   table does not declare gets phase `unknown`.
 - Set `event.ToolCallID` when the agent sends a tool call identifier. The

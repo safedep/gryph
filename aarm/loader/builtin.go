@@ -18,6 +18,7 @@ const BuiltinRuleIDPrefix = "gryph-builtin-"
 const (
 	builtinProtectedFilesRuleID = BuiltinRuleIDPrefix + "protected-files"
 	builtinProtectedReadsRuleID = BuiltinRuleIDPrefix + "protected-reads"
+	builtinHookCommandRuleID    = BuiltinRuleIDPrefix + "hook-command"
 )
 
 // BuiltinSource emits the embedded self-protection rules. It is constructed by
@@ -79,6 +80,7 @@ func (s *BuiltinSource) Load(_ context.Context) ([]*pdp.Policy, error) {
 	if len(s.ReadGlobs) > 0 {
 		rules = append(rules, s.protectedReadsRule())
 	}
+	rules = append(rules, hookCommandRule())
 	return []*pdp.Policy{{Rules: rules}}, nil
 }
 
@@ -110,5 +112,25 @@ func (s *BuiltinSource) protectedReadsRule() pdp.Rule {
 			FilePatterns: append([]string(nil), s.ReadGlobs...),
 			FileAccess:   []string{string(shellcmd.AccessRead)},
 		},
+	}
+}
+
+// hookCommandMessage covers a call of gryph, or of a program that the shell
+// check cannot resolve, with the literal argument "_hook".
+const hookCommandMessage = "Blocked by Gryph self-protection: the command runs gryph _hook. Only an agent hook may run it."
+
+// hookCommandRule blocks an agent shell command that runs "gryph _hook". The
+// command can record a forged event, such as a user prompt that resets
+// context.actions_since_intent.
+func hookCommandRule() pdp.Rule {
+	return pdp.Rule{
+		ID:          builtinHookCommandRuleID,
+		Description: "Block agent shell commands that run the Gryph hook entry point, gryph _hook. The shell check is best effort.",
+		Action:      model.DecisionBlock,
+		Severity:    model.SeverityCritical,
+		Tags:        []string{"self-protection", "builtin"},
+		Message:     hookCommandMessage,
+		Match:       pdp.Match{ActionTypes: []string{string(model.ActionCommandExec)}},
+		Condition:   "action.gryph_hook == true",
 	}
 }

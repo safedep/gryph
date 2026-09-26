@@ -2,6 +2,7 @@ package decision
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -89,6 +90,35 @@ func TestLabelEvent_Levels(t *testing.T) {
 			if tc.sensitive {
 				assert.True(t, p.ContentPreview.Label.HasClass(privacy.ClassSecret))
 			}
+		})
+	}
+}
+
+func TestLabelEvent_PromptKeptAtFullOnly(t *testing.T) {
+	const prompt = "Deploy with password hunter2"
+	cases := []struct {
+		level     config.LoggingLevel
+		sensitive bool
+		want      bool
+	}{
+		{config.LoggingFull, false, true},
+		{config.LoggingStandard, false, false},
+		{config.LoggingMinimal, false, false},
+		{config.LoggingFull, true, false},
+	}
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%s sensitive=%v", tc.level, tc.sensitive), func(t *testing.T) {
+			event := events.NewEvent(uuid.New(), "test-agent", events.ActionUserPrompt)
+			require.NoError(t, event.SetPrompt(prompt))
+			event.IsSensitive = tc.sensitive
+
+			label(event, nil, nil, tc.level)
+
+			p := decode[events.UserPromptPayload](t, event)
+			assert.Equal(t, tc.want, p.Prompt.Value == prompt)
+			assert.Equal(t, !tc.want, p.Prompt.Label.Stripped)
+			assert.Equal(t, privacy.Digest(prompt), p.Prompt.Label.Digest)
+			assert.Equal(t, privacy.OriginUser, p.Prompt.Label.Origin)
 		})
 	}
 }

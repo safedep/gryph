@@ -1,0 +1,12 @@
+# gryph install writes the Claude Code UserPromptSubmit hook, and doctor
+# reports the hooks as valid.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+grep 'gryph _hook claude-code UserPromptSubmit' $HOME/.claude/settings.json
+
+exec gryph doctor --no-color
+stdout '\[ok\]\s+Claude Code hooks'

@@ -1,7 +1,9 @@
 package shellcmd
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -433,6 +435,98 @@ func TestSQLFiles(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.sql, func(t *testing.T) {
 			assert.Equal(t, tc.want, sqlFiles(sqlTokens(tc.sql)))
+		})
+	}
+}
+
+func TestAnalyze_GryphHook(t *testing.T) {
+	cases := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		{"direct", `gryph _hook claude-code UserPromptSubmit`, true},
+		{"stdin", `gryph _hook claude-code UserPromptSubmit < p.json`, true},
+		{"full path", `/usr/local/bin/gryph _hook x y`, true},
+		{"windows binary", `gryph.exe _hook codex UserPromptSubmit`, true},
+		{"quoted words", `g"ry"ph '_hook' x y`, true},
+		{"env wrapper", `env gryph _hook x y`, true},
+		{"wrapper chain", `env -i sudo -u root nice -n 5 gryph _hook x y`, true},
+		{"exec with a name", `exec -a x gryph _hook x y`, true},
+		{"command wrapper", `command gryph _hook x y`, true},
+		{"bash -c", `bash -c 'gryph _hook x y'`, true},
+		{"eval", `eval gryph _hook x y`, true},
+		{"find -exec", `find . -name x -exec gryph _hook x y \;`, true},
+		{"find -execdir in bash -c", `find . -execdir bash -c 'gryph _hook x y' \;`, true},
+		{"brace expansion", `gryph _{hook,x} x y`, true},
+		{"ANSI-C quoting", `gryph $'\x5fhook' x y`, true},
+		{"ANSI-C octal program", `$'\147ryph' _hook x y`, true},
+		{"variable program", `$G _hook x y`, true},
+		{"quoted variable program", `"$G" _hook x y`, true},
+		{"substitution program", `$(which gryph) _hook x y`, true},
+		{"file test", `[ -f "$F" ] && cat "$F"`, false},
+		{"if test", `if [ "$A" = b ]; then echo y; fi`, false},
+		{"env with variables", `env GOOS="$OS" go build -o "$OUT" .`, false},
+		{"timeout with variables", `timeout "$T" make "$TARGET"`, false},
+		{"nice with variables", `nice -n "$N" go test "$PKG"`, false},
+		{"eval of an emitter", `eval "$(/opt/homebrew/bin/brew shellenv)"`, false},
+		{"variable path program", `$GOPATH/bin/golangci-lint run ./...`, false},
+		{"default value program", `${PYTHON:-python3} -m pytest`, false},
+		{"gryph with a variable argument", `gryph query --session "$SID"`, false},
+		{"grep for the word", `grep -rn register_hook "$SRC"`, false},
+		{"other gryph command", `gryph query --since 1h`, false},
+		{"commit message", `git commit -m "fix gryph _hook"`, false},
+		{"search for the hook word", `grep -rn _hook cli/`, false},
+		{"variable argument", `gryph "$H" x y`, false},
+		{"glob argument", `gryph _hoo? x y`, false},
+		{"variable splits into the command", `G="gryph _hook x y"; $G`, false},
+		{"eval of a variable", `eval "$S"`, false},
+		{"bash -c of a variable", `bash -c "$S"`, false},
+		{"xargs", `echo _hook | xargs gryph`, false},
+		{"parse failure", `gryph _hook x ) (`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, Analyze(tc.command, Env{WorkingDir: "/work", Home: "/home/u"}).GryphHook)
+		})
+	}
+}
+
+func TestAnalyze_GryphHookWrapperChainIsFast(t *testing.T) {
+	env := Env{WorkingDir: "/work", Home: "/home/u"}
+	for _, wrapper := range []string{"nice", "sudo -u root", "env", "timeout 1", "command", "xargs"} {
+		for tail, want := range map[string]bool{"gryph _hook x y": true, "rm x": false} {
+			t.Run(wrapper+" "+tail, func(t *testing.T) {
+				start := time.Now()
+				a := Analyze(strings.Repeat(wrapper+" ", 60)+tail, env)
+				assert.Less(t, time.Since(start), time.Second)
+				assert.Equal(t, want, a.GryphHook)
+			})
+		}
+	}
+}
+
+func BenchmarkAnalyze_GryphHookWrapperChain(b *testing.B) {
+	env := Env{WorkingDir: "/work", Home: "/home/u"}
+	command := strings.Repeat("sudo -u root ", 60) + "rm x"
+	for b.Loop() {
+		Analyze(command, env)
+	}
+}
+
+func TestAnalyze_ANSICQuotedPath(t *testing.T) {
+	cases := []struct {
+		command string
+		want    string
+	}{
+		{`rm $'\x2econfig/x'`, "/work/.config/x"},
+		{`rm $'a%d\tb'`, "/work/a%d\tb"},
+		{`rm $'a\x00b'`, "/work/a"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.command, func(t *testing.T) {
+			a := Analyze(tc.command, Env{WorkingDir: "/work"})
+			assert.Equal(t, []Target{{Path: tc.want, Access: AccessRemove}}, a.Targets)
 		})
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
 )
 
@@ -107,6 +108,7 @@ func newEntry(event *events.Event, action *model.Action) *model.ContextEntry {
 		InjectionScore:  action.InjectionScore,
 		ContentDigest:   event.ContentDigest(),
 		Result:          entryEventResult(event),
+		Origin:          entryOrigin(event),
 	}
 }
 
@@ -117,6 +119,15 @@ func entryEventResult(event *events.Event) model.ResultStatus {
 		return ""
 	}
 	return model.ResultStatus(event.ResultStatus)
+}
+
+// entryOrigin returns the origin that the event content claims. A user
+// prompt has the origin user.
+func entryOrigin(event *events.Event) privacy.Origin {
+	if event.ActionType == events.ActionUserPrompt {
+		return privacy.OriginUser
+	}
+	return ""
 }
 
 func extractParameters(event *events.Event) (model.Parameters, error) {
@@ -179,6 +190,13 @@ func extractParameters(event *events.Event) (model.Parameters, error) {
 		populateWellKnownParams(&params, params.Raw)
 		return params, nil
 
+	case events.ActionUserPrompt:
+		p, err := event.GetUserPromptPayload()
+		if err != nil || p == nil {
+			return model.Parameters{}, err
+		}
+		return model.Parameters{Content: p.Prompt.Value}, nil
+
 	default:
 		return model.Parameters{}, nil
 	}
@@ -219,6 +237,8 @@ func normalizeActionType(actionType events.ActionType) model.ActionType {
 		return model.ActionSubagentStart
 	case events.ActionSubagentStop:
 		return model.ActionSubagentStop
+	case events.ActionUserPrompt:
+		return model.ActionUserPrompt
 	default:
 		return model.ActionUnknown
 	}

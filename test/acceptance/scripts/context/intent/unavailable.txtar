@@ -1,0 +1,31 @@
+# Command Code has no prompt hook. Its sessions never have an intent, and a
+# rule on context.intent_available sees false. The session ID c6c9ef25 derives
+# from the agent session ID s-cc.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin pre.json
+exec gryph _hook command-code PreToolUse
+stderr 'no-intent-warning'
+
+exec gryph policy context --session c6c9ef25 --format json --no-color
+stdout '"intent_available": false,'
+stdout '"actions_since_intent": 0'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-no-intent
+    action: warn
+    match:
+      action_types: [command_exec]
+    condition: "!context.intent_available"
+    message: "no-intent-warning: this session has no user prompt"
+-- pre.json --
+{"session_id": "s-cc", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "shell_command",
+ "tool_input": {"command": "go test ./..."}, "tool_use_id": "tu-1"}
