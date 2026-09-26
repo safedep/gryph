@@ -6,6 +6,7 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"mvdan.cc/sh/v3/shell"
@@ -242,7 +243,7 @@ func trimNPMVersion(pkg string) string {
 // in the name.
 func trimPyPIVersion(pkg string) string {
 	if name, ref, ok := strings.Cut(pkg, "@"); ok {
-		if strings.TrimSpace(name) != name || !pypiVersion.MatchString(ref) {
+		if strings.TrimSpace(name) != name || !isPyPIVersion(ref) {
 			return pkg
 		}
 		pkg = name
@@ -259,11 +260,27 @@ var (
 	npmTag      = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
 	npmRange    = regexp.MustCompile(`^[\^~<>=v *]*[0-9*xX][0-9A-Za-z.+*| <>=^~-]*$`)
 	npmArchive  = regexp.MustCompile(`(?i)[.](tgz|tar.gz|tar)$`)
-	pypiVersion = regexp.MustCompile(`(?i)^(latest|v?([0-9]+!)?[0-9]+(\.[0-9]+)*` +
+	pypiVersion = regexp.MustCompile(`^(latest|(?i:v?([0-9]+!)?[0-9]+(\.[0-9]+)*` +
 		`([-_.]?(a|b|c|rc|alpha|beta|pre|preview)[-_.]?[0-9]*)?` +
 		`(-[0-9]+|[-_.]?(post|rev|r)[-_.]?[0-9]*)?` +
-		`([-_.]?dev[-_.]?[0-9]*)?(\+[a-z0-9]+([-_.][a-z0-9]+)*)?)$`)
+		`([-_.]?dev[-_.]?[0-9]*)?(\+[a-z0-9]+([-_.][a-z0-9]+)*)?))$`)
+	digitRun = regexp.MustCompile(`[0-9]+`)
 )
+
+// isPyPIVersion reports whether uv reads ref as a version or the "latest"
+// tag. uv reads only the lower-case "latest", and it parses each number as
+// a u64, so a number that does not fit makes ref a path.
+func isPyPIVersion(ref string) bool {
+	if !pypiVersion.MatchString(ref) {
+		return false
+	}
+	for _, n := range digitRun.FindAllString(ref, -1) {
+		if _, err := strconv.ParseUint(n, 10, 64); err != nil {
+			return false
+		}
+	}
+	return true
+}
 
 func trimImageVersion(image string) string {
 	image, _, _ = strings.Cut(image, "@")
