@@ -14,6 +14,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/google/cel-go/cel"
+	"github.com/safedep/dry/log"
 	celast "github.com/google/cel-go/common/ast"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
@@ -189,13 +190,24 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 		result.FullMessage = full
 		result.Message = full
 		if stored != action {
-			if result.Message, err = winnerRule.renderMessage(stored, snapshot); err != nil {
-				return nil, err
-			}
+			result.Message = winnerRule.storedMessage(stored, snapshot)
 		}
 	}
 
 	return result, nil
+}
+
+// storedMessage renders the message from the stored action. The stored
+// action lacks the values that Gryph strips, so a template that works on the
+// full action can fail here. The decision must not depend on the logging
+// level, so a failed render gives a fixed message and not an error.
+func (r compiledRule) storedMessage(stored *model.Action, snapshot *model.ContextSnapshot) string {
+	msg, err := r.renderMessage(stored, snapshot)
+	if err != nil {
+		log.Warnf("pdp: rule %s: render the stored message: %v", r.rule.ID, err)
+		return "rule " + r.rule.ID
+	}
+	return msg
 }
 
 // detectConflict returns true when more than one rule matched at the

@@ -471,6 +471,7 @@ func TestPolicy_StoredMessageFollowsLoggingLevel(t *testing.T) {
 	cases := []struct {
 		name        string
 		level       string
+		failMode    string
 		rule        string
 		payload     []byte
 		leak        string
@@ -509,6 +510,21 @@ func TestPolicy_StoredMessageFollowsLoggingLevel(t *testing.T) {
 			wantBlocked: true,
 		},
 		{
+			name:     "a stored render error keeps the block under fail_mode open",
+			level:    "full",
+			failMode: "open",
+			rule: `    action: block
+    match: { action_types: [file_write] }
+    message: "refused write starting {{slice .Action.Params.Content 0 4}}"`,
+			payload:     claudePreToolUse(t, "Write", map[string]any{"file_path": "/home/user/project/.env", "content": secret}),
+			leak:        secret[:4],
+			decision:    "block",
+			exportArgs:  []string{"export", "--sensitive"},
+			wantStatus:  events.ResultBlocked,
+			wantStored:  "rule leak-rule",
+			wantBlocked: true,
+		},
+		{
 			name:  "sensitive write drops the content from the warn message",
 			level: "full",
 			rule: `    action: warn
@@ -526,6 +542,10 @@ func TestPolicy_StoredMessageFollowsLoggingLevel(t *testing.T) {
 			env := newTestEnvWithPolicy(t, "version: \"1\"\nrules:\n  - id: leak-rule\n"+tc.rule+"\n")
 			_, _, err := env.run("config", "set", "logging.level", tc.level)
 			require.NoError(t, err)
+			if tc.failMode != "" {
+				_, _, err = env.run("config", "set", "policy.fail_mode", tc.failMode)
+				require.NoError(t, err)
+			}
 
 			stdout, stderr, runErr := env.runHookCapturingStd("claude-code", "PreToolUse", tc.payload)
 			if tc.wantBlocked {

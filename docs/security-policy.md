@@ -194,7 +194,9 @@ tool-input parameters. So a stored message never holds a value that the
 stored event does not keep. For example, at `logging.level: minimal` the rule
 message `blocked fetch to {{.Action.Params.URL}}` reaches the agent with the
 URL, and the store keeps `blocked fetch to`. The redactor also runs on the
-stored `error_message`.
+stored `error_message`. A template can fail on the stored action, for example
+`{{index .Action.Params.Args 0}}` when the args are removed. Then the store
+keeps `rule <id>`, and the decision does not change.
 
 ## Decisions
 

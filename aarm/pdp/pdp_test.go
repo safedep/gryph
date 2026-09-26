@@ -308,6 +308,35 @@ rules:
 	}
 }
 
+func TestPDP_EvaluateStoredRenderErrorKeepsDecision(t *testing.T) {
+	for _, message := range []string{
+		"blocked {{index .Action.Params.Args 0}}",
+		"refused {{slice .Action.Params.Content 0 4}}",
+	} {
+		t.Run(message, func(t *testing.T) {
+			engine, err := New(mustPolicy(t, `
+version: "1"
+rules:
+  - id: r1
+    action: block
+    match:
+      action_types: [tool_use]
+    message: "`+message+`"
+`))
+			require.NoError(t, err)
+
+			full := &model.Action{Type: model.ActionToolUse, Tool: "mcp", Parameters: model.Parameters{Args: []string{"curl"}, Content: "zq7Rk2"}}
+			stored := &model.Action{Type: model.ActionToolUse, Tool: "mcp"}
+
+			got, err := engine.EvaluateStored(context.Background(), full, stored, nil)
+			require.NoError(t, err)
+			assert.Equal(t, model.DecisionBlock, got.Decision)
+			assert.NotEmpty(t, got.FullMessage)
+			assert.Equal(t, "rule r1", got.Message)
+		})
+	}
+}
+
 func TestParsePolicy_RejectsInvalidRules(t *testing.T) {
 	tests := []struct {
 		name   string
