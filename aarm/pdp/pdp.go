@@ -350,9 +350,10 @@ func contextRefsEmpty(refs []string, snapshot *model.ContextSnapshot) bool {
 }
 
 // contextFieldEmpty reports whether a context field has no data yet. The
-// intent, tag and origin fields are never empty. A session with no intent or
-// no tag is a fact that a rule can act on, and the fresh-session defer must
-// not hide it.
+// intent, tag, origin, egress host and entry fields are never empty. A
+// session with no intent, no tag or no earlier entry is a fact that a rule
+// can act on, and the fresh-session defer must not hide it. A rule such as
+// "block a write after a .pem read" must allow the first write of a session.
 func contextFieldEmpty(field string, s *model.ContextSnapshot) bool {
 	switch field {
 	case "total_actions":

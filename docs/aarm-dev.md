@@ -167,8 +167,9 @@ directory of the audit event, and then cuts it to its last 1024 bytes. `Snapshot
 fields with the pending entry: a pending intent sets `intent_available` and
 resets the count, and a pending action adds one. The pending origin joins
 `origins_seen`. The pending entry has no tags yet, because the PDP decides
-all rules in one pass. `contextFieldEmpty` never reports an intent, tag or
-origin field as empty, so the fresh-session defer does not hide these facts.
+all rules in one pass. `contextFieldEmpty` never reports an intent, tag,
+origin, `egress_hosts` or `entries` field as empty, so the fresh-session
+defer does not hide these facts.
 
 `action.kind`, `action.origin`, `action.source` and `action.sources` come
 from the event. `events.OriginSources` gives `sources`: the adapter claim, or

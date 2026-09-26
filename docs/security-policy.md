@@ -541,9 +541,9 @@ Two trigger types produce a synthetic defer decision even without an explicit
 - `fresh_session_insufficient_context` fires when a rule's CEL condition
   references context fields that are still zero or empty AND the session is
   younger than `policy.defer.fresh_session_seconds` (default 60). The action
-  defers rather than evaluating against an unfilled snapshot. The intent
-  fields never trigger it. A session with no intent is a fact, not missing
-  data.
+  defers rather than evaluating against an unfilled snapshot. The intent,
+  tag, origin, `egress_hosts` and `entries` fields never trigger it. A
+  session with no intent or no earlier entry is a fact, not missing data.
 - `conflicting_policies` fires when multiple rules match at the winning
   severity tier with materially different rendered messages. Each decision
   lives at its own tier under the precedence scheme, so the practical case

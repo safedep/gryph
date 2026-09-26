@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
@@ -199,4 +200,27 @@ rules:
     message: "to {{index .Action.Hosts 0}} reading {{range .Action.ReadPaths}}{{.}}{{end}}"
 `))
 	assert.NoError(t, err, "an index error on empty data can pass at runtime")
+}
+
+func TestShouldDeferFreshSession_EgressAndEntryFieldsAreKnown(t *testing.T) {
+	for _, condition := range []string{
+		`"evil.example" in context.egress_hosts`,
+		`context.entries.exists(e, e.tool == "Read")`,
+	} {
+		t.Run(condition, func(t *testing.T) {
+			engine, err := New(&Policy{Version: "1", Rules: []Rule{{
+				ID:        "context-rule",
+				Action:    model.DecisionBlock,
+				Match:     Match{ActionTypes: []string{"command_exec"}},
+				Condition: condition,
+			}}}, WithDeferConfig(DeferConfig{Enabled: true, FreshSessionSeconds: 300}))
+			require.NoError(t, err)
+
+			res, err := engine.Evaluate(context.Background(),
+				&model.Action{Type: model.ActionCommandExec, Parameters: model.Parameters{Command: "ls"}},
+				&model.ContextSnapshot{SessionStartedAt: time.Now()})
+			require.NoError(t, err)
+			assert.Equal(t, model.DecisionAllow, res.Decision, "a fresh session with no entry is a fact, not missing data")
+		})
+	}
 }
