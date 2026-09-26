@@ -861,3 +861,50 @@ rules:
 		})
 	}
 }
+
+func TestMediator_FailedPromptIsNotIntent(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: fails-on-boom
+    action: block
+    match:
+      action_types: [user_prompt]
+    condition: "action.params.content == 'boom' && 1 / (context.total_actions - context.total_actions) > 0"
+`))
+	require.NoError(t, err)
+
+	acc := accumulator.NewSQLite(storagetest.NewStore(t))
+	med, err := NewMediator(policy, WithAccumulator(acc))
+	require.NoError(t, err)
+	evaluator := coresecurity.New(&coresecurity.Config{FailOpen: false})
+	evaluator.RegisterCheck(med)
+
+	ctx := context.Background()
+	sessionID := uuid.New()
+	check := func(event *events.Event) coresecurity.Decision {
+		return evaluator.Evaluate(ctx, event, nil).FinalDecision
+	}
+	prompt := func(text string) *events.Event {
+		e := events.NewEvent(sessionID, "claude-code", events.ActionUserPrompt)
+		e.Kind = events.KindIntent
+		require.NoError(t, e.SetPrompt(text))
+		return e
+	}
+	command := func() *events.Event {
+		e := events.NewEvent(sessionID, "claude-code", events.ActionCommandExec)
+		e.Payload = []byte(`{"command":"ls"}`)
+		return e
+	}
+
+	assert.Equal(t, coresecurity.DecisionAllow, check(prompt("fix the bug")))
+	check(command())
+	check(command())
+	assert.Equal(t, coresecurity.DecisionBlock, check(prompt("boom")), "fail_mode closed blocks a prompt whose evaluation fails")
+	check(command())
+
+	snap, err := acc.Snapshot(ctx, sessionID, nil)
+	require.NoError(t, err)
+	assert.True(t, snap.IntentAvailable)
+	assert.Equal(t, 3, snap.ActionsSinceIntent, "a failed prompt does not reset the counter")
+}

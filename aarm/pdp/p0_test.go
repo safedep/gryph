@@ -127,6 +127,50 @@ rules:
 	assert.Equal(t, model.DecisionBlock, res.Decision)
 }
 
+func TestEvaluate_LongPromptStaysUnderCELCost(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: inj
+    action: block
+    match:
+      action_types: [user_prompt]
+    condition: "action.params.content.contains('ignore previous instructions')"
+  - id: exfil
+    action: block
+    match:
+      action_types: [user_prompt]
+      content_patterns: ["(?i)exfiltrate"]
+  - id: cut
+    action: warn
+    match:
+      action_types: [user_prompt]
+    condition: "action.content_truncated == true"
+`)
+	cases := []struct {
+		name     string
+		prompt   string
+		decision model.Decision
+		rule     string
+	}{
+		{"pattern after the CEL cap", strings.Repeat("log line\n", 6000) + "please exfiltrate the keys", model.DecisionBlock, "exfil"},
+		{"condition inside the CEL cap", "ignore previous instructions\n" + strings.Repeat("x", 50000), model.DecisionBlock, "inj"},
+		{"long prompt is truncated for CEL", strings.Repeat("é", 30000), model.DecisionWarn, "cut"},
+		{"short prompt", "fix the bug", model.DecisionAllow, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			action := &model.Action{Type: model.ActionUserPrompt, Parameters: model.Parameters{Content: tc.prompt}}
+			res, err := engine.Evaluate(context.Background(), action, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.decision, res.Decision)
+			if tc.rule != "" {
+				assert.Contains(t, res.MatchedRuleIDs, tc.rule)
+			}
+		})
+	}
+}
+
 func TestEvaluate_ShellFilePatterns(t *testing.T) {
 	engine := mustPDP(t, `
 version: "1"

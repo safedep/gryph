@@ -84,12 +84,15 @@ func entryRow(e *model.ContextEntry) *storage.ContextEntryRow {
 // stateDelta computes what the entry adds to the session state. Only an
 // action adds to tools_used, as with the counters. An intent becomes the
 // latest intent only when it reaches the agent. An escalated intent waits
-// for the approval, and ConfirmIntent sets it on approve.
+// for the approval, and ConfirmIntent sets it on approve. A failed
+// evaluation has no decision, and fail_mode closed then blocks the prompt.
+// So a failed entry never becomes the latest intent. Under fail_mode open
+// the prompt runs, and the next intent resets the counters.
 func stateDelta(e *model.ContextEntry) *storage.ContextStateDelta {
 	delta := &storage.ContextStateDelta{
 		Classifications: privacy.Strings(e.Classifications),
 		Tags:            e.Tags,
-		Intent:          entryKind(e) == events.KindIntent && reachesAgent(e.Decision),
+		Intent:          entryKind(e) == events.KindIntent && e.Result != model.ResultError && reachesAgent(e.Decision),
 	}
 	if entryKind(e) == events.KindAction && e.Tool != "" {
 		delta.Tools = []string{e.Tool}

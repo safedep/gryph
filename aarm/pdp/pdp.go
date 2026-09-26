@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/google/cel-go/cel"
@@ -686,6 +687,27 @@ func phaseOrUnknown(p model.ActionPhase) model.ActionPhase {
 	return p
 }
 
+// celPromptContentMax bounds the prompt content that a CEL condition reads.
+// A CEL string function costs about the length of its input, so a pasted
+// prompt of about 34 KB goes over the cost limit. The error then stops every
+// rule for the prompt. content_patterns still match the whole prompt,
+// because they run outside CEL.
+const celPromptContentMax = 8 << 10
+
+// paramsContent gives a prompt rule at most celPromptContentMax bytes of the
+// prompt, cut on a rune boundary. It reports whether it cut the prompt.
+func paramsContent(action *model.Action) (string, bool) {
+	content := action.Parameters.Content
+	if action.Type != model.ActionUserPrompt || len(content) <= celPromptContentMax {
+		return content, false
+	}
+	limit := celPromptContentMax
+	for limit > 0 && !utf8.RuneStart(content[limit]) {
+		limit--
+	}
+	return content[:limit], true
+}
+
 func actionActivation(action *model.Action, paths *actionPaths) map[string]any {
 	if action == nil {
 		action = &model.Action{}
@@ -694,6 +716,7 @@ func actionActivation(action *model.Action, paths *actionPaths) map[string]any {
 	if classifications == nil {
 		classifications = []string{}
 	}
+	content, cut := paramsContent(action)
 	return map[string]any{
 		"type":                 string(action.Type),
 		"tool":                 action.Tool,
@@ -704,7 +727,7 @@ func actionActivation(action *model.Action, paths *actionPaths) map[string]any {
 		"injection_score":      float64(action.InjectionScore),
 		"data_classifications": classifications,
 		"phase":                string(phaseOrUnknown(action.Phase)),
-		"content_truncated":    action.ContentTruncated,
+		"content_truncated":    action.ContentTruncated || cut,
 		"human_principal":      action.HumanPrincipal,
 		"service_identity":     action.ServiceIdentity,
 		"role_scope":           action.RoleScope,
@@ -717,7 +740,7 @@ func actionActivation(action *model.Action, paths *actionPaths) map[string]any {
 			"size_bytes":    action.Parameters.SizeBytes,
 			"lines_added":   action.Parameters.LinesAdded,
 			"lines_removed": action.Parameters.LinesRemoved,
-			"content":       action.Parameters.Content,
+			"content":       content,
 		},
 	}
 }
