@@ -20,6 +20,11 @@ import (
 // concrete cause.
 var ErrSnapshot = errors.New("accumulator snapshot")
 
+// ErrAppend is the sentinel returned (wrapped) when the Context Accumulator
+// fails to write an entry and the decision lets the action run. Without the
+// entry, later rules read incomplete session state, so the fail mode decides.
+var ErrAppend = errors.New("accumulator append")
+
 // Accumulator records the session context and produces the point-in-time
 // snapshot that the PDP reads.
 //
@@ -35,8 +40,10 @@ var ErrSnapshot = errors.New("accumulator snapshot")
 //
 // Implementations must be safe for concurrent calls across sessions. A
 // Snapshot error propagates to the Mediator and is subject to the security
-// evaluator's fail-open / fail-closed policy. The Mediator only logs an
-// Append or RecordResult error, so the decision stands.
+// evaluator's fail-open / fail-closed policy. An Append error propagates
+// the same way when the action runs. The Mediator only logs an Append error
+// when the action does not run, and it only logs a RecordResult error. So an
+// accumulator error never turns a block into an allow under fail_mode open.
 type Accumulator interface {
 	Snapshot(ctx context.Context, sessionID uuid.UUID, pending *model.ContextEntry) (*model.ContextSnapshot, error)
 	Append(ctx context.Context, entry *model.ContextEntry) error

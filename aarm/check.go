@@ -2,6 +2,7 @@ package aarm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -287,8 +288,7 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 
 	snapshot, err := m.accum.Snapshot(ctx, action.SessionID, entry)
 	if err != nil {
-		m.appendFailedEntry(ctx, entry)
-		return nil, fmt.Errorf("aarm: %w: %w", accumulator.ErrSnapshot, err)
+		return nil, errors.Join(fmt.Errorf("aarm: %w: %w", accumulator.ErrSnapshot, err), m.appendFailedEntry(ctx, entry))
 	}
 	if sess != nil && snapshot != nil {
 		owned := *snapshot
@@ -299,25 +299,26 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 	stored := m.receiptAction(event, action)
 	decision, err := m.pdp.EvaluateStored(ctx, action, stored, snapshot)
 	if err != nil {
-		m.appendFailedEntry(ctx, entry)
-		return nil, err
+		return nil, errors.Join(err, m.appendFailedEntry(ctx, entry))
 	}
 
 	if r := entryResult(decision.Decision); r != "" {
 		entry.Result = r
 	}
-	m.appendEntry(ctx, entry, decision)
+	appendErr := m.appendEntry(ctx, entry, decision)
 
 	// Drop the full match buffer so no later serialization of the action can
 	// leak full content.
 	action.Parameters.ContentFull = ""
 
 	if decision.Decision == model.DecisionEscalate {
-		return m.handleEscalate(ctx, action, stored, snapshot, decision)
+		res, err := m.handleEscalate(ctx, action, stored, snapshot, decision)
+		return withAppendErr(res, err, appendErr)
 	}
 
 	if decision.Decision == model.DecisionDefer {
-		return m.handleDefer(ctx, stored, snapshot, decision)
+		res, err := m.handleDefer(ctx, stored, snapshot, decision)
+		return withAppendErr(res, err, appendErr)
 	}
 
 	result := pep.Apply(decision)
@@ -335,14 +336,29 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 			PolicyHash: m.policyHash,
 		})
 		if rerr != nil {
-			return result, rerr
+			return withAppendErr(result, rerr, appendErr)
 		}
 		if rec != nil {
 			result.AarmSequence = rec.Sequence
 		}
 	}
 
-	return result, nil
+	return withAppendErr(result, nil, appendErr)
+}
+
+// withAppendErr adds the append error to the check error when the result
+// lets the action run. The session state then misses the entry, and later
+// rules that read it fail open. So the fail mode decides. A block only logs
+// the append error, so a block never becomes an allow under fail_mode open.
+func withAppendErr(result *coresecurity.CheckResult, err, appendErr error) (*coresecurity.CheckResult, error) {
+	if appendErr == nil || err != nil {
+		return result, errors.Join(err, appendErr)
+	}
+	if result == nil || result.Decision == coresecurity.DecisionBlock {
+		log.Warnf("%v", appendErr)
+		return result, nil
+	}
+	return result, appendErr
 }
 
 // receiptAction returns the action as the receipt records it. A stripped
@@ -364,22 +380,24 @@ func (m *Mediator) receiptAction(event *events.Event, action *model.Action) *mod
 }
 
 // appendEntry records the decision on the entry and writes it once, after
-// the evaluation. A failed append only logs. The decision stands, so an
-// append error never turns a block into an allow under fail_mode open.
-func (m *Mediator) appendEntry(ctx context.Context, entry *model.ContextEntry, decision *model.EvaluationResult) {
+// the evaluation. It returns a failed append wrapped with
+// accumulator.ErrAppend. The caller decides if the error reaches the fail mode.
+func (m *Mediator) appendEntry(ctx context.Context, entry *model.ContextEntry, decision *model.EvaluationResult) error {
 	entry.Decision = decision.Decision
 	entry.MatchedRuleIDs = decision.MatchedRuleIDs
 	if err := m.accum.Append(ctx, entry); err != nil {
-		log.Warnf("aarm: accumulator append: %v", err)
+		return fmt.Errorf("aarm: %w: %w", accumulator.ErrAppend, err)
 	}
+	return nil
 }
 
 // appendFailedEntry writes the entry of an action that has no decision
 // because the snapshot or the evaluation failed. The fail mode can still
-// allow the action, so its classes must reach the session state.
-func (m *Mediator) appendFailedEntry(ctx context.Context, entry *model.ContextEntry) {
+// allow the action, so its classes must reach the session state. The caller
+// already returns an error, so the append error joins it.
+func (m *Mediator) appendFailedEntry(ctx context.Context, entry *model.ContextEntry) error {
 	entry.Result = model.ResultError
-	m.appendEntry(ctx, entry, &model.EvaluationResult{})
+	return m.appendEntry(ctx, entry, &model.EvaluationResult{})
 }
 
 // entryResult is the result that the first insert of an entry records. The
@@ -423,7 +441,9 @@ func (m *Mediator) enforceIdentity(ctx context.Context, action *model.Action, en
 		Severity:       model.SeverityHigh,
 	}
 	entry.Result = model.ResultBlocked
-	m.appendEntry(ctx, entry, decision)
+	if err := m.appendEntry(ctx, entry, decision); err != nil {
+		log.Warnf("%v", err)
+	}
 	rec, rerr := m.receipt.Record(ctx, &receipt.RecordInput{
 		SessionID:    action.SessionID,
 		ActionID:     action.ID,

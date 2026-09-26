@@ -1197,6 +1197,9 @@ func (l *lazyPolicyCheck) Check(ctx context.Context, event *events.Event, sess *
 		if errors.Is(checkErr, accumulator.ErrSnapshot) {
 			l.recordAarmFailure(event, SelfAuditActionContextSnapshotError, "accumulator snapshot", checkErr)
 		}
+		if errors.Is(checkErr, accumulator.ErrAppend) {
+			l.recordAarmFailure(event, SelfAuditActionContextAppendError, "accumulator append", checkErr)
+		}
 		if errors.Is(checkErr, receipt.ErrInsert) {
 			l.recordAarmFailure(event, SelfAuditActionReceiptInsertError, "receipt insert", checkErr)
 		}

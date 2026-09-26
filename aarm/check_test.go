@@ -180,12 +180,74 @@ rules:
 	require.Equal(t, 1, spy.appendCalls)
 	assert.Equal(t, model.ResultBlocked, spy.lastEntry.Result, "a blocked entry is written with its terminal result")
 	assert.Zero(t, spy.recordResultCalls, "the entry is written once")
+}
 
-	spy.appendErr = errors.New("database is locked")
-	event.ID = uuid.New()
-	res, err = med.Check(context.Background(), event, nil)
-	require.NoError(t, err, "a failed append must not fail the check")
-	assert.Equal(t, coresecurity.DecisionBlock, res.Decision, "a failed append must not turn a block into an allow")
+func TestMediator_AppendErrorFailMode(t *testing.T) {
+	cases := []struct {
+		name     string
+		action   string
+		approval approval.Decision
+		wantErr  bool
+	}{
+		{name: "allow", action: "allow", wantErr: true},
+		{name: "warn", action: "warn", wantErr: true},
+		{name: "approved escalate", action: "escalate", approval: approval.DecisionApprove, wantErr: true},
+		{name: "block", action: "block"},
+		{name: "denied escalate", action: "escalate", approval: approval.DecisionDeny},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: writes
+    action: ` + tc.action + `
+    match: { action_types: [file_write] }
+    message: "writes"
+`))
+			require.NoError(t, err)
+
+			spy := &spyAccumulator{appendErr: errors.New("database is locked")}
+			med, err := NewMediator(policy,
+				WithAccumulator(spy),
+				WithApprovalService(&fakeApprovalService{outcome: &approval.Outcome{
+					Decision: tc.approval, Approver: "tester", DecidedAt: time.Now().UTC(),
+				}}),
+			)
+			require.NoError(t, err)
+
+			event := &events.Event{
+				ID:         uuid.New(),
+				SessionID:  uuid.New(),
+				Timestamp:  time.Now(),
+				ActionType: events.ActionFileWrite,
+				AgentName:  "claude-code",
+				Payload:    []byte(`{"path":"main.go"}`),
+			}
+
+			res, err := med.Check(context.Background(), event, nil)
+			require.Equal(t, 1, spy.appendCalls)
+			if !tc.wantErr {
+				require.NoError(t, err, "a failed append must not fail a check that stops the action")
+				assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
+				return
+			}
+			require.ErrorIs(t, err, accumulator.ErrAppend)
+
+			for _, failOpen := range []bool{false, true} {
+				evaluator := coresecurity.New(&coresecurity.Config{FailOpen: failOpen})
+				evaluator.RegisterCheck(med)
+				event.ID = uuid.New()
+				want := coresecurity.DecisionBlock
+				if failOpen {
+					want = coresecurity.DecisionAllow
+				}
+				assert.Equal(t, want, evaluator.Evaluate(context.Background(), event, nil).FinalDecision,
+					"fail_open=%v decides an action that runs without its entry", failOpen)
+			}
+		})
+	}
 }
 
 func TestMediator_FailedDecisionAppendsEntry(t *testing.T) {
@@ -219,7 +281,7 @@ rules:
 `))
 			require.NoError(t, err)
 
-			spy := &spyAccumulator{snapshotErr: tc.snapshotErr}
+			spy := &spyAccumulator{snapshotErr: tc.snapshotErr, appendErr: errors.New("database is locked")}
 			adapter := mediation.NewHookAdapter(mediation.WithClassifier(classify.NewHeuristic()))
 			med, err := NewMediator(policy, WithAccumulator(spy), WithAdapter(adapter))
 			require.NoError(t, err)
@@ -238,6 +300,7 @@ rules:
 			if tc.wantErr != nil {
 				assert.ErrorIs(t, err, tc.wantErr)
 			}
+			assert.ErrorIs(t, err, accumulator.ErrAppend, "the check error carries the failed append")
 			require.Equal(t, 1, spy.appendCalls, "an action without a decision still gets a context entry")
 			assert.Equal(t, model.ResultError, spy.lastEntry.Result)
 			assert.Empty(t, spy.lastEntry.Decision)
