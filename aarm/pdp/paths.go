@@ -103,12 +103,13 @@ func (r compiledRule) selects(access shellcmd.Access) bool {
 
 // matchesTarget matches a shell target. A guessed read matches only the
 // file patterns, because the walker does not know whether the command reads
-// a directory tree. A read of the home directory or one of its parents also
-// matches only the file patterns, as for a file_read action.
+// a directory tree. A read of the home directory or one of its parents,
+// not through a glob, also matches only the file patterns, as for a
+// file_read action.
 func (r compiledRule) matchesTarget(t shellcmd.Target) bool {
-	treeRead := t.Access == shellcmd.AccessRead && !t.Guess && !isHomeOrParent(t.Path)
+	treeRead := t.Access == shellcmd.AccessRead && !t.Guess && (t.Glob != "" || !isHomeOrParent(t.Path))
 	if t.Access == shellcmd.AccessRead && t.Glob != "" {
-		return globsOverlap(t.Glob, r.filePatterns) || (treeRead && globsOverlap(t.Glob, r.containerPatterns))
+		return globsOverlap(t.Glob, r.filePatterns, t.MatchDot) || (treeRead && globsOverlap(t.Glob, r.containerPatterns, t.MatchDot))
 	}
 	if matchesAnyPath(r.filePatterns, t.Path) {
 		return true
@@ -135,11 +136,13 @@ func isHomeOrParent(p string) bool {
 
 // globsOverlap reports whether a shell glob and one of the patterns can
 // match the same path. It compares the paths one segment at a time, and a
-// "**" segment matches any number of segments.
-func globsOverlap(glob string, patterns []string) bool {
+// "**" segment matches any number of segments. With matchDot, a leading
+// wildcard of a glob segment can match a leading dot.
+func globsOverlap(glob string, patterns []string, matchDot bool) bool {
 	globSegs := strings.Split(glob, "/")
+	meet := func(g, p string) bool { return segmentsOverlap(g, p, matchDot) }
 	for _, p := range patterns {
-		if intersects(globSegs, strings.Split(p, "/"), isDoubleStar, segmentsOverlap) {
+		if intersects(globSegs, strings.Split(p, "/"), isDoubleStar, meet) {
 			return true
 		}
 	}
@@ -152,13 +155,13 @@ func isDoubleStar(seg string) bool { return seg == "**" }
 // segment can match the same name. A segment with a brace can match
 // anything, so the result is true. The shell does not let a leading "*",
 // "?", or class match a leading dot, so such a glob segment does not meet a
-// pattern segment that starts with a literal dot.
-func segmentsOverlap(glob, pattern string) bool {
+// pattern segment that starts with a literal dot, unless matchDot is set.
+func segmentsOverlap(glob, pattern string, matchDot bool) bool {
 	if strings.Contains(glob, "{") || strings.Contains(pattern, "{") {
 		return true
 	}
 	g, p := globTokens(glob), globTokens(pattern)
-	if len(g) > 0 && len(p) > 0 && isWildToken(g[0]) && !isWildToken(p[0]) && literal(p[0]) == "." {
+	if !matchDot && len(g) > 0 && len(p) > 0 && isWildToken(g[0]) && !isWildToken(p[0]) && literal(p[0]) == "." {
 		return false
 	}
 	return intersects(g, p, isStarToken, tokensMeet)

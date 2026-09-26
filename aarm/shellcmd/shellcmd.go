@@ -52,6 +52,9 @@ type Target struct {
 	// command may read the path, but it may not read every file in a
 	// directory that the path names.
 	Guess bool
+	// MatchDot marks a glob that comes from a find -name test. find lets a
+	// leading "*", "?", or class match a leading dot. The shell does not.
+	MatchDot bool
 }
 
 // Analysis is what a command does to paths and hosts.
@@ -175,12 +178,13 @@ func union(a, b dirs) dirs {
 }
 
 type walker struct {
-	env     Env
-	depth   int
-	calls   int
-	targets []Target
-	hosts   []string
-	failed  bool
+	env      Env
+	depth    int
+	calls    int
+	targets  []Target
+	hosts    []string
+	failed   bool
+	matchDot bool
 }
 
 func (w *walker) script(src string, cwds dirs) (dirs, error) {
@@ -671,9 +675,11 @@ func (w *walker) find(args []string, cwds dirs) {
 			w.addAll(roots, AccessRemove, cwds)
 		case "-exec", "-ok":
 			end := findActionEnd(args, i)
+			w.matchDot = true
 			for _, root := range roots {
 				w.call(substitute(args[i+1:end], strings.TrimSuffix(root, "/")+found), cwds)
 			}
+			w.matchDot = false
 			i = end
 		case "-execdir", "-okdir":
 			end := findActionEnd(args, i)
@@ -686,19 +692,30 @@ func (w *walker) find(args []string, cwds dirs) {
 }
 
 // findName returns "/" and the pattern of the -name test of a find
-// command. It returns an empty string when there is no such test, when the
-// test is negated, or when an -o operator can select other files.
+// command. It returns an empty string when there is no such test before the
+// first action, when the test is negated, or when an -o operator can select
+// other files. find runs an action on each file before the tests that come
+// after it, and the words of an action are not tests.
 func findName(args []string) string {
 	name := ""
-	for i, a := range args {
+	acted := false
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		switch {
+		case isFindAction(a):
+			acted = true
+			i = findActionEnd(args, i)
 		case a == "-o" || a == "-or":
 			return ""
-		case a == "-name" && name == "" && i+1 < len(args) && (i == 0 || (args[i-1] != "!" && args[i-1] != "-not")):
+		case a == "-name" && !acted && name == "" && i+1 < len(args) && (i == 0 || (args[i-1] != "!" && args[i-1] != "-not")):
 			name = "/" + args[i+1]
 		}
 	}
 	return name
+}
+
+func isFindAction(a string) bool {
+	return a == "-exec" || a == "-ok" || a == "-execdir" || a == "-okdir"
 }
 
 // execdir analyzes the command of -execdir. find runs it from the
@@ -912,6 +929,7 @@ func (w *walker) targetsOf(value string, access Access, cwds dirs) []Target {
 		t := Target{Path: resolve(value, cwd, w.env.Home), Access: access}
 		if glob != "" && access == AccessRead {
 			t.Glob = resolve(glob, cwd, w.env.Home)
+			t.MatchDot = w.matchDot
 		}
 		out = append(out, t)
 	}

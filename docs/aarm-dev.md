@@ -212,7 +212,7 @@ over-match. A `file_read` of a directory that holds a protected path at any
 depth also matches. A `file_read` or a shell read of the home directory or
 one of its parents (`isHomeOrParent`) matches the file patterns only, not a
 directory that holds a pattern, because a search of home is a common
-command. The rules have no agent
+command. A glob below home, such as `~/.c*`, does not get this exemption. The rules have no agent
 names and no command regexes.
 
 `aarm/shellcmd` walks the parsed command tree. It tracks the set of working
@@ -267,9 +267,11 @@ the value after `=` of an option, and each tail of a short option
 (`guessWords`) is a read with `Target.Guess` set. `git` records the same
 guessed reads relative to the last `-C` directory, and a read of each `-C`,
 `--git-dir`, and `--work-tree` directory. For `find -exec`, `{}` is any path
-under a root. When one `-name` test selects the files, and no `-o` or
-negation can select others, `{}` ends with that name pattern, so `find .
--name '*.go' -exec grep x {} +` does not read `.env`. The PDP matches a guessed read
+under a root. When one `-name` test before the first action selects the
+files, and no `-o` or negation can select others, `{}` ends with that name
+pattern, so `find . -name '*.go' -exec grep x {} +` does not read `.env`.
+`findName` skips the words of each action. The glob of `{}` has
+`Target.MatchDot` set, because `find -name '*.env'` matches `.env`. The PDP matches a guessed read
 against the file patterns only, not against a directory that holds a
 pattern. `nonReadCommands` lists
 the commands that read no file content, such as `ls` and `stat`. The walker

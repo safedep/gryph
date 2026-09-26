@@ -439,7 +439,7 @@ func TestGlobsOverlap(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.glob+" "+tc.pattern, func(t *testing.T) {
-			assert.Equal(t, tc.want, globsOverlap(tc.glob, []string{tc.pattern}))
+			assert.Equal(t, tc.want, globsOverlap(tc.glob, []string{tc.pattern}, false))
 		})
 	}
 }
@@ -536,6 +536,10 @@ rules:
 		{"find . -name '.e*' -exec cat {} +", model.DecisionBlock},
 		{"find . -name '*.go' -exec grep -l TODO {} +", model.DecisionAllow},
 		{"find . -type f -name '*.md' -exec wc -l {} \\;", model.DecisionAllow},
+		{"find . -name '*.go' -exec grep -o TODO {} +", model.DecisionAllow},
+		{"find . -name '*.env' -exec cat {} +", model.DecisionBlock},
+		{"find . -name '*' -exec cat {} +", model.DecisionBlock},
+		{"find . -type f -exec cat {} + -name '*.go'", model.DecisionBlock},
 		{"sqlite3 app.db \"select * from t where name like '%.env%'\"", model.DecisionAllow},
 	}
 	for _, tc := range cases {
