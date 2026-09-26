@@ -55,6 +55,10 @@ type Target struct {
 	// MatchDot marks a glob that comes from a find -name test. find lets a
 	// leading "*", "?", or class match a leading dot. The shell does not.
 	MatchDot bool
+	// Flat marks a read of only the files that the path or the glob names,
+	// as in "cat ~/.*" or "grep -n PATH ~/.*". The command does not read
+	// the files in a directory that it names.
+	Flat bool
 }
 
 // Analysis is what a command does to paths and hosts.
@@ -429,7 +433,7 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 			w.addAll(ops[1:], AccessRead, cwds)
 		}
 	case "awk", "gawk", "mawk":
-		w.scriptTool(parseArgs(rest, awkOptions), []string{"-f", "--file"}, nil, cwds)
+		w.scriptTool(parseArgs(rest, awkOptions), []string{"-f", "--file"}, nil, true, cwds)
 	case "dd":
 		for _, a := range rest {
 			if v, ok := strings.CutPrefix(a, "of="); ok {
@@ -442,9 +446,12 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	case "find":
 		w.find(rest, cwds)
 	case "grep", "egrep", "fgrep", "rg":
-		w.scriptTool(parseArgs(rest, grepOptions), []string{"-f", "--file"}, []string{"-e", "--regexp"}, cwds)
+		p := parseArgs(rest, grepOptions)
+		flat := name != "rg" && !p.has("-r", "-R", "--recursive", "--dereference-recursive") &&
+			!slices.Contains(p.value("-d", "--directories"), "recurse")
+		w.scriptTool(p, []string{"-f", "--file"}, []string{"-e", "--regexp"}, flat, cwds)
 	case "jq":
-		w.scriptTool(parseArgs(rest, jqOptions), []string{"-f", "--from-file"}, nil, cwds)
+		w.scriptTool(parseArgs(rest, jqOptions), []string{"-f", "--from-file"}, nil, true, cwds)
 	case "tar":
 		w.tar(rest, cwds)
 	case "zip":
@@ -477,7 +484,7 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 		w.openssl(rest, cwds)
 	default:
 		if opts, ok := readCommands[name]; ok {
-			w.addAll(parseArgs(rest, opts).operands, AccessRead, cwds)
+			w.addReads(parseArgs(rest, opts).operands, true, cwds)
 		} else if opts, ok := editCommands[name]; ok {
 			w.addAll(parseArgs(rest, opts).operands, AccessWrite, cwds)
 		} else if !nonReadCommands[name] {
@@ -860,6 +867,17 @@ func relativeSource(src string) string {
 func (w *walker) addAll(values []string, access Access, cwds dirs) {
 	for _, v := range values {
 		w.add(v, access, cwds)
+	}
+}
+
+// addReads records each value as a read. A flat read reads only the files
+// that each value names.
+func (w *walker) addReads(values []string, flat bool, cwds dirs) {
+	for _, v := range values {
+		for _, t := range w.targetsOf(v, AccessRead, cwds) {
+			t.Flat = flat
+			w.addTarget(t)
+		}
 	}
 }
 

@@ -126,7 +126,7 @@ func TestAnalyze_GuessedReads(t *testing.T) {
 	a := Analyze(`paste ~/.env && cat x && ls y`, env)
 	assert.Equal(t, []Target{
 		{Path: "/home/u/.env", Access: AccessRead, Guess: true},
-		{Path: "/work/x", Access: AccessRead},
+		{Path: "/work/x", Access: AccessRead, Flat: true},
 	}, a.Targets)
 
 	glob := Analyze(`paste .e*`, env)

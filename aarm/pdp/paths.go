@@ -101,13 +101,13 @@ func (r compiledRule) selects(access shellcmd.Access) bool {
 	return slices.Contains(r.fileAccess, access)
 }
 
-// matchesTarget matches a shell target. A guessed read matches only the
-// file patterns, because the walker does not know whether the command reads
-// a directory tree. A read of the home directory or one of its parents,
+// matchesTarget matches a shell target. A guessed read or a flat read
+// matches only the file patterns, because the command does not read every
+// file in a directory. A read of the home directory or one of its parents,
 // not through a glob, also matches only the file patterns, as for a
 // file_read action.
 func (r compiledRule) matchesTarget(t shellcmd.Target) bool {
-	treeRead := t.Access == shellcmd.AccessRead && !t.Guess && (t.Glob != "" || !isHomeOrParent(t.Path))
+	treeRead := t.Access == shellcmd.AccessRead && !t.Guess && !t.Flat && (t.Glob != "" || !isHomeOrParent(t.Path))
 	if t.Access == shellcmd.AccessRead && t.Glob != "" {
 		return globsOverlap(t.Glob, r.filePatterns, t.MatchDot) || (treeRead && globsOverlap(t.Glob, r.containerPatterns, t.MatchDot))
 	}

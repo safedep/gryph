@@ -273,7 +273,10 @@ pattern, so `find . -name '*.go' -exec grep x {} +` does not read `.env`.
 `findName` skips the words of each action. The glob of `{}` has
 `Target.MatchDot` set, because `find -name '*.env'` matches `.env`. The PDP matches a guessed read
 against the file patterns only, not against a directory that holds a
-pattern. `nonReadCommands` lists
+pattern. A read with `Target.Flat` set matches the same way. The walker
+sets it for a command that reads only the files it names: the
+`readCommands` table, `grep` without a recursive option, `awk`, `jq`, and a
+copy without a recursive option. `nonReadCommands` lists
 the commands that read no file content, such as `ls` and `stat`. The walker
 expands a brace list such as `a.{db,x}` before it records a path. A sequence
 such as `{1..9}`, or a word that expands to more than 64 words, becomes the

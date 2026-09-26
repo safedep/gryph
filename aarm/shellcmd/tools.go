@@ -409,13 +409,13 @@ var remoteShellOptions = map[string]options{
 // program or pattern, such as grep or awk. The program comes from a file
 // option or an expression option instead when either is set, and then every
 // operand is a file.
-func (w *walker) scriptTool(p parsedArgs, fileFlags, exprFlags []string, cwds dirs) {
-	w.addAll(p.value(fileFlags...), AccessRead, cwds)
+func (w *walker) scriptTool(p parsedArgs, fileFlags, exprFlags []string, flat bool, cwds dirs) {
+	w.addReads(p.value(fileFlags...), true, cwds)
 	ops := p.operands
 	if !p.has(fileFlags...) && !p.has(exprFlags...) && len(ops) > 0 {
 		ops = ops[1:]
 	}
-	w.addAll(ops, AccessRead, cwds)
+	w.addReads(ops, flat, cwds)
 }
 
 // localCopy handles cp, mv, install, and ln. An ln with one operand makes
@@ -428,7 +428,7 @@ func (w *walker) localCopy(tool copyTool, args []string, cwds dirs) {
 		return
 	}
 	if tool.readsSources {
-		w.addAll(sources, AccessRead, cwds)
+		w.addReads(sources, !p.has(tool.flags.recursive...), cwds)
 	}
 	if tool.removeSources {
 		w.addAll(sources, AccessRemove, cwds)
