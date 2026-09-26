@@ -151,10 +151,15 @@ func TestSQLiteAccumulator_WindowLegacyRows(t *testing.T) {
 func TestFitBytes(t *testing.T) {
 	text := func(v string) privacy.Text { return privacy.Text{Value: v} }
 	entry := func(kind events.Kind, values ...string) model.WindowEntry {
-		e := model.WindowEntry{Entry: model.ContextEntry{Kind: kind}}
+		e := model.WindowEntry{Entry: model.ContextEntry{Kind: kind, Sequence: 1}}
 		for _, v := range values {
 			e.Content = append(e.Content, text(v))
 		}
+		return e
+	}
+	one := int64(1)
+	withSeq := func(e model.WindowEntry, seq int64) model.WindowEntry {
+		e.Entry.Sequence = seq
 		return e
 	}
 	values := func(w *model.Window) [][]string {
@@ -173,6 +178,7 @@ func TestFitBytes(t *testing.T) {
 		name          string
 		entries       []model.WindowEntry
 		maxBytes      int
+		pinned        *int64
 		want          [][]string
 		wantTruncated bool
 	}{
@@ -186,7 +192,26 @@ func TestFitBytes(t *testing.T) {
 			name:     "the latest intent keeps its content first",
 			entries:  []model.WindowEntry{entry(events.KindIntent, "refactor the loader"), entry(events.KindAction, "aaaa"), entry(events.KindAction, "bbbb")},
 			maxBytes: 23,
+			pinned:   &one,
 			want:     [][]string{{"refactor the loader"}, {""}, {"bbbb"}}, wantTruncated: true,
+		},
+		{
+			name: "a blocked prompt newer than the pinned intent does not get the budget first",
+			entries: []model.WindowEntry{
+				withSeq(entry(events.KindIntent, strings.Repeat("a", 40)), 1),
+				withSeq(entry(events.KindAction), 2),
+				withSeq(entry(events.KindIntent, strings.Repeat("b", 40)), 3),
+				withSeq(entry(events.KindAction), 4),
+			},
+			maxBytes: 50,
+			pinned:   &one,
+			want:     [][]string{{strings.Repeat("a", 40)}, nil, {""}, nil}, wantTruncated: true,
+		},
+		{
+			name:     "no pinned intent",
+			entries:  []model.WindowEntry{entry(events.KindIntent, "aaaa"), withSeq(entry(events.KindAction, "bbbb"), 2)},
+			maxBytes: 4,
+			want:     [][]string{{""}, {"bbbb"}}, wantTruncated: true,
 		},
 		{
 			name:     "one large value does not empty the smaller values",
@@ -204,7 +229,7 @@ func TestFitBytes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := &model.Window{Entries: tt.entries}
-			assert.Equal(t, tt.wantTruncated, fitBytes(w, tt.maxBytes))
+			assert.Equal(t, tt.wantTruncated, fitBytes(w, tt.maxBytes, tt.pinned))
 			assert.Equal(t, tt.want, values(w))
 		})
 	}

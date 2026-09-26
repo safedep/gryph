@@ -3,7 +3,6 @@ package config
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -113,6 +112,9 @@ const MaxCELEntries = 1000
 
 // MaxWindowEntries bounds a window, so one call cannot load a whole session.
 const MaxWindowEntries = 1000
+
+// DefaultWindowMaxBytes is the default byte bound of a window.
+const DefaultWindowMaxBytes = 65536
 
 // SelfProtectionConfig toggles the built-in rules that block agent writes to
 // Gryph's policy files, database, keys, and the agents' hook configs. Honored
@@ -376,7 +378,10 @@ func Load(configPath string) (*Config, error) {
 func clampContext(cfg *ContextConfig) {
 	clampInt("policy.context.cel_entries", &cfg.CELEntries, 1, MaxCELEntries)
 	clampInt("policy.context.window_max_entries", &cfg.WindowMaxEntries, 1, MaxWindowEntries)
-	clampInt("policy.context.window_max_bytes", &cfg.WindowMaxBytes, 0, math.MaxInt)
+	if cfg.WindowMaxBytes < 0 {
+		log.Warnf("config: policy.context.window_max_bytes %d is negative. Gryph uses %d", cfg.WindowMaxBytes, DefaultWindowMaxBytes)
+		cfg.WindowMaxBytes = DefaultWindowMaxBytes
+	}
 }
 
 func clampInt(key string, v *int, lo, hi int) {

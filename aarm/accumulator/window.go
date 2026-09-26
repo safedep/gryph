@@ -38,7 +38,7 @@ func (a *SQLiteAccumulator) Window(ctx context.Context, sessionID uuid.UUID, spe
 	if err != nil {
 		return nil, err
 	}
-	intent, err := a.latestIntent(ctx, sessionID, kinds, rows)
+	intent, pinned, err := a.latestIntent(ctx, sessionID, kinds, rows)
 	if err != nil {
 		return nil, err
 	}
@@ -55,30 +55,30 @@ func (a *SQLiteAccumulator) Window(ctx context.Context, sessionID uuid.UUID, spe
 		if err := a.loadContent(ctx, w); err != nil {
 			return nil, err
 		}
-		w.Truncated = fitBytes(w, spec.MaxBytes)
+		w.Truncated = fitBytes(w, spec.MaxBytes, pinned)
 	}
 	return w, nil
 }
 
-// latestIntent returns the latest intent that reached the agent when rows
-// do not hold it and the kinds allow it.
-func (a *SQLiteAccumulator) latestIntent(ctx context.Context, sessionID uuid.UUID, kinds []string, rows []*storage.ContextEntryRow) (*storage.ContextEntryRow, error) {
+// latestIntent returns the sequence of the latest intent that reached the
+// agent, and its row when rows do not hold it and the kinds allow it.
+func (a *SQLiteAccumulator) latestIntent(ctx context.Context, sessionID uuid.UUID, kinds []string, rows []*storage.ContextEntryRow) (*storage.ContextEntryRow, *int64, error) {
 	if len(kinds) > 0 && !slices.Contains(kinds, string(events.KindIntent)) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	state, err := a.store.GetContextState(ctx, sessionID)
 	if err != nil || state == nil || state.LastIntentSeq == nil {
-		return nil, err
+		return nil, nil, err
 	}
 	seq := *state.LastIntentSeq
 	if slices.ContainsFunc(rows, func(r *storage.ContextEntryRow) bool { return r.Sequence == seq }) {
-		return nil, nil
+		return nil, &seq, nil
 	}
 	found, err := a.store.QueryContextEntries(ctx, &storage.ContextEntryFilter{SessionID: &sessionID, Sequence: &seq, Limit: 1})
 	if err != nil || len(found) == 0 {
-		return nil, err
+		return nil, nil, err
 	}
-	return found[0], nil
+	return found[0], &seq, nil
 }
 
 func (a *SQLiteAccumulator) loadContent(ctx context.Context, w *model.Window) error {
@@ -131,22 +131,22 @@ func projectContent(e *events.Event) []privacy.Text {
 }
 
 // fitBytes keeps the content values that fit maxBytes and empties the
-// rest. The latest intent comes first, then the entries from the newest to
-// the oldest. A value that does not fit is emptied, and the next smaller
+// rest. The pinned intent, the latest intent that reached the agent, comes
+// first. A blocked prompt is not pinned. Then come the entries from the
+// newest to the oldest. A value that does not fit is emptied, and the next smaller
 // values can still use the budget. Labels and entries do not count. It
 // reports whether it removed a value. A maxBytes of zero or less keeps
 // everything.
-func fitBytes(w *model.Window, maxBytes int) bool {
+func fitBytes(w *model.Window, maxBytes int, pinned *int64) bool {
 	if maxBytes <= 0 {
 		return false
 	}
 	order := make([]int, 0, len(w.Entries))
 	intent := -1
-	for i := len(w.Entries) - 1; i >= 0; i-- {
-		if w.Entries[i].Entry.Kind == events.KindIntent {
-			intent = i
-			break
-		}
+	if pinned != nil {
+		intent = slices.IndexFunc(w.Entries, func(e model.WindowEntry) bool {
+			return e.Entry.Kind == events.KindIntent && e.Entry.Sequence == *pinned
+		})
 	}
 	if intent >= 0 {
 		order = append(order, intent)

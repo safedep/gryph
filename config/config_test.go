@@ -682,5 +682,5 @@ func TestLoad_ClampsWindowLimits(t *testing.T) {
 	require.NoError(t, err, "an out-of-range value must not turn the policy off")
 	assert.True(t, cfg.Policy.Enabled)
 	assert.Equal(t, 1, cfg.Policy.Context.WindowMaxEntries)
-	assert.Equal(t, 0, cfg.Policy.Context.WindowMaxBytes)
+	assert.Equal(t, DefaultWindowMaxBytes, cfg.Policy.Context.WindowMaxBytes, "a negative byte bound must not remove the limit")
 }
