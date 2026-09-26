@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/session"
 )
 
 // CheckResult represents the result of a single security check.
@@ -40,8 +41,9 @@ type CheckResult struct {
 type Check interface {
 	// Name returns the unique identifier for this check.
 	Name() string
-	// Check evaluates the event and returns a result.
-	Check(ctx context.Context, event *events.Event) (*CheckResult, error)
+	// Check evaluates the event and returns a result. sess is the session
+	// the event belongs to, and it is nil when the caller has none.
+	Check(ctx context.Context, event *events.Event, sess *session.Session) (*CheckResult, error)
 	// Enabled returns whether this check is currently active.
 	Enabled() bool
 }

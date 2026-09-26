@@ -87,7 +87,7 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 		return nil, err
 	}
 
-	result := l.evaluator.Evaluate(session.WithSession(ctx, sess), event)
+	result := l.evaluator.Evaluate(ctx, event, sess)
 	if !result.IsAllowed() {
 		l.recordBlocked(ctx, sess, event, result)
 		return &HookResponse{Decision: VerdictOf(security.DecisionBlock), Reason: result.BlockReason}, nil

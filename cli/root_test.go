@@ -7,6 +7,7 @@ import (
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
+	"github.com/safedep/gryph/core/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +23,7 @@ type testCheck struct {
 
 func (c *testCheck) Name() string  { return c.name }
 func (c *testCheck) Enabled() bool { return true }
-func (c *testCheck) Check(ctx context.Context, _ *events.Event) (*security.CheckResult, error) {
+func (c *testCheck) Check(ctx context.Context, _ *events.Event, _ *session.Session) (*security.CheckResult, error) {
 	return &security.CheckResult{
 		Decision:  c.decision,
 		Reason:    c.reason,
@@ -55,7 +56,7 @@ func TestRegisterCheckFactory_RegisteredCheckIsInvoked(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, app.Security)
 
-	result := app.Security.Evaluate(context.Background(), &events.Event{})
+	result := app.Security.Evaluate(context.Background(), &events.Event{}, nil)
 	assert.False(t, result.IsAllowed(), "registered factory's blocking check should block evaluation")
 	assert.Equal(t, "factory-registered block for test", result.BlockReason)
 	assert.Equal(t, "extension-block", result.BlockedBy)
@@ -72,7 +73,7 @@ func TestRegisterCheckFactory_NilFactoryReturnIsIgnored(t *testing.T) {
 	require.NoError(t, err)
 
 	// Only the built-in PlaceholderCheck should be active; it always allows.
-	result := app.Security.Evaluate(context.Background(), &events.Event{})
+	result := app.Security.Evaluate(context.Background(), &events.Event{}, nil)
 	assert.True(t, result.IsAllowed(), "nil factory return should not register any check")
 }
 
@@ -86,7 +87,7 @@ func TestRegisterCheckFactory_NilFunctionIsIgnored(t *testing.T) {
 	app, err := NewApp(config.Default())
 	require.NoError(t, err)
 
-	result := app.Security.Evaluate(context.Background(), &events.Event{})
+	result := app.Security.Evaluate(context.Background(), &events.Event{}, nil)
 	assert.True(t, result.IsAllowed())
 }
 
@@ -99,7 +100,7 @@ func TestNewApp_NoFactoriesStillBuildsCleanly(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, app.Security)
 
-	result := app.Security.Evaluate(context.Background(), &events.Event{})
+	result := app.Security.Evaluate(context.Background(), &events.Event{}, nil)
 	assert.True(t, result.IsAllowed())
 }
 
@@ -122,7 +123,7 @@ func TestRegisterCheckFactory_MultipleFactoriesAllInvoked(t *testing.T) {
 	app, err := NewApp(config.Default())
 	require.NoError(t, err)
 
-	result := app.Security.Evaluate(context.Background(), &events.Event{})
+	result := app.Security.Evaluate(context.Background(), &events.Event{}, nil)
 	assert.False(t, result.IsAllowed())
 	assert.Equal(t, "factory-b-block", result.BlockedBy)
 }

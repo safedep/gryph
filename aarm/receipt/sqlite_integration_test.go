@@ -64,7 +64,7 @@ rules:
 		AgentName:  "claude-code",
 		ToolName:   "Write",
 		Payload:    []byte(`{"path":"/etc/hosts"}`),
-	})
+	}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionAllow, res.Decision)
 
@@ -118,7 +118,7 @@ rules:
 		Payload:    []byte(`{"path":"/work/app.go"}`),
 	}
 
-	res, err := med.Check(context.Background(), evt)
+	res, err := med.Check(context.Background(), evt, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
 	assert.Equal(t, sessionID, res.AarmSessionID)
@@ -156,7 +156,7 @@ rules: []
 		AgentName:  "claude-code",
 		ToolName:   "Read",
 		Payload:    []byte(`{"path":"/work/x"}`),
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	rows, err := store.QueryReceipts(context.Background(), &storage.ReceiptFilter{SessionID: &sessionID})
@@ -189,7 +189,7 @@ rules: []
 		AgentName:  "claude-code",
 		ToolName:   "Read",
 		Payload:    []byte(`{"path":"/work/x"}`),
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	rows, err := store.QueryReceipts(context.Background(), &storage.ReceiptFilter{SessionID: &sessionID})
@@ -227,7 +227,7 @@ rules:
 		AgentName:  "claude-code",
 		ToolName:   "Read",
 		Payload:    []byte(`{"path":"/x"}`),
-	})
+	}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionGuidance, res.Decision)
 	require.NotEqual(t, uuid.Nil, res.AarmActionID)

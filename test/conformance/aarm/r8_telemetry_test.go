@@ -15,12 +15,12 @@ func TestR8_BatchExport(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	first := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), first)
+	_, err := ref.Mediator.Check(context.Background(), first, nil)
 	require.NoError(t, err)
 	for i := 0; i < 4; i++ {
 		next := loadEventFixture(t, "command_exec_safe")
 		next.SessionID = first.SessionID
-		_, err := ref.Mediator.Check(context.Background(), next)
+		_, err := ref.Mediator.Check(context.Background(), next, nil)
 		require.NoError(t, err)
 	}
 	rows, err := ref.Store.QueryReceipts(context.Background(), &storage.ReceiptFilter{SessionID: &first.SessionID, Limit: -1})
@@ -33,11 +33,11 @@ func TestR8_FilterByDecision(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	safe := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), safe)
+	_, err := ref.Mediator.Check(context.Background(), safe, nil)
 	require.NoError(t, err)
 	bad := loadEventFixture(t, "command_exec_destructive")
 	bad.SessionID = safe.SessionID
-	_, err = ref.Mediator.Check(context.Background(), bad)
+	_, err = ref.Mediator.Check(context.Background(), bad, nil)
 	require.NoError(t, err)
 
 	rows, err := ref.Store.QueryReceipts(context.Background(), &storage.ReceiptFilter{
@@ -62,7 +62,7 @@ func TestR8_SchemaDocumented(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	rows := mustReceipts(t, ref, ev.SessionID)
 	require.NotEmpty(t, rows)

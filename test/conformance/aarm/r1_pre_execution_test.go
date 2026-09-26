@@ -15,7 +15,7 @@ func TestR1_DeniedActionsDoNotExecute(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_destructive")
-	res, err := ref.Mediator.Check(context.Background(), ev)
+	res, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision, "rm -rf must be blocked")
@@ -44,7 +44,7 @@ func TestR1_NoBypassMode(t *testing.T) {
 	// invocation.
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_destructive")
-	res, err := ref.Mediator.Check(context.Background(), ev)
+	res, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	require.NotNil(t, res, "mediator must return a decision; there is no bypass path")
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
@@ -55,7 +55,7 @@ func TestR1_DecisionsRecordedWithPolicyAndReason(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_destructive")
-	res, err := ref.Mediator.Check(context.Background(), ev)
+	res, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 

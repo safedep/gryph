@@ -22,7 +22,7 @@ func TestR5_ReceiptForEveryAction(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	res, err := ref.Mediator.Check(context.Background(), ev)
+	res, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	assert.NotZero(t, res.AarmSequence, "every mediated action must produce a receipt sequence")
@@ -33,7 +33,7 @@ func TestR5_ContentBulletActionFields(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	rows := mustReceipts(t, ref, ev.SessionID)
 	require.NotEmpty(t, rows)
@@ -48,7 +48,7 @@ func TestR5_ContentBulletContextSnapshot(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	rows := mustReceipts(t, ref, ev.SessionID)
 	require.NotEmpty(t, rows)
@@ -62,7 +62,7 @@ func TestR5_ContentBulletIdentity(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	rows := mustReceipts(t, ref, ev.SessionID)
 	require.NotEmpty(t, rows)
@@ -77,7 +77,7 @@ func TestR5_ContentBulletDecision(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_destructive")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	rows := mustReceipts(t, ref, ev.SessionID)
 	require.NotEmpty(t, rows)
@@ -128,7 +128,7 @@ func TestR5_ContentBulletOutcome(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_destructive")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	rows := mustReceipts(t, ref, ev.SessionID)
 	require.NotEmpty(t, rows)
@@ -143,7 +143,7 @@ func TestR5_SignatureBulletSecureAlgorithm(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	rows := mustReceipts(t, ref, ev.SessionID)
 	require.NotEmpty(t, rows)
@@ -158,7 +158,7 @@ func TestR5_SignatureBulletCanonicalSerialization(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	rows := mustReceipts(t, ref, ev.SessionID)
 	require.NotEmpty(t, rows)
@@ -264,12 +264,12 @@ func TestR5_ShouldChainGrowsAppendOnly(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	first := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), first)
+	_, err := ref.Mediator.Check(context.Background(), first, nil)
 	require.NoError(t, err)
 	for i := 0; i < 2; i++ {
 		next := loadEventFixture(t, "command_exec_safe")
 		next.SessionID = first.SessionID
-		_, err := ref.Mediator.Check(context.Background(), next)
+		_, err := ref.Mediator.Check(context.Background(), next, nil)
 		require.NoError(t, err)
 	}
 	rows, err := ref.Store.QueryReceipts(context.Background(), &storage.ReceiptFilter{SessionID: &first.SessionID})

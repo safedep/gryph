@@ -37,9 +37,8 @@ type DeferConfig struct {
 
 // PDP evaluates actions against policy rules.
 type PDP struct {
-	rules        []compiledRule
-	deferCfg     DeferConfig
-	sessionStart func(ctx context.Context) (time.Time, bool)
+	rules    []compiledRule
+	deferCfg DeferConfig
 }
 
 // Option configures optional PDP behavior.
@@ -49,15 +48,6 @@ type Option func(*PDP)
 func WithDeferConfig(cfg DeferConfig) Option {
 	return func(p *PDP) {
 		p.deferCfg = cfg
-	}
-}
-
-// WithSessionStartFn supplies a callback that returns the session start time
-// used by the fresh-session trigger. Returning (zero, false) disables the
-// fresh-session check for that evaluation.
-func WithSessionStartFn(fn func(ctx context.Context) (time.Time, bool)) Option {
-	return func(p *PDP) {
-		p.sessionStart = fn
 	}
 }
 
@@ -117,7 +107,7 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 			continue
 		}
 		if rule.hasCondition {
-			if !freshSessionDeferred && p.shouldDeferFreshSession(ctx, rule, snapshot) {
+			if !freshSessionDeferred && p.shouldDeferFreshSession(rule, snapshot) {
 				freshSessionDeferred = true
 				freshDeferRule = rule.rule.ID
 				continue
@@ -250,23 +240,20 @@ func (m matchedTier) fingerprint() string {
 // evaluating its CEL condition. Fires only when defer is enabled, the rule's
 // referenced context fields are zero or empty in the snapshot, and the session
 // is younger than FreshSessionSeconds.
-func (p *PDP) shouldDeferFreshSession(ctx context.Context, rule compiledRule, snapshot *model.ContextSnapshot) bool {
+func (p *PDP) shouldDeferFreshSession(rule compiledRule, snapshot *model.ContextSnapshot) bool {
 	if !p.deferCfg.Enabled {
 		return false
 	}
 	if p.deferCfg.FreshSessionSeconds <= 0 {
 		return false
 	}
-	if p.sessionStart == nil {
-		return false
-	}
 	if len(rule.contextRefs) == 0 {
 		return false
 	}
-	start, ok := p.sessionStart(ctx)
-	if !ok || start.IsZero() {
+	if snapshot == nil || snapshot.SessionStartedAt.IsZero() {
 		return false
 	}
+	start := snapshot.SessionStartedAt
 	if time.Since(start) >= time.Duration(p.deferCfg.FreshSessionSeconds)*time.Second {
 		return false
 	}

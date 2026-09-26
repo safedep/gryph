@@ -343,3 +343,24 @@ func TestComputeHash_SortedKeysMatter(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, bytes.Equal(ha, hb), "key insertion order must not affect hash")
 }
+
+// TestSnapshotMap_KeySet pins the receipt snapshot keys. The map is hashed
+// into every receipt, so a new key changes the receipt hash format.
+func TestSnapshotMap_KeySet(t *testing.T) {
+	m := snapshotMap(&model.ContextSnapshot{
+		TotalActions:        1,
+		ToolsUsed:           []string{"Bash"},
+		ClassificationsSeen: []string{"secret"},
+		EntitiesSeen:        []string{"path:/a"},
+		SessionStartedAt:    time.Now(),
+	})
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	assert.ElementsMatch(t, []string{
+		"total_actions", "files_read", "files_written", "commands_executed",
+		"network_requests", "errors", "session_duration", "semantic_drift",
+		"tools_used", "classifications_seen", "entities_seen",
+	}, keys)
+}

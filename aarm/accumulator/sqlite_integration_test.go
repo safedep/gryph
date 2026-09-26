@@ -51,18 +51,18 @@ rules:
 	ctx := context.Background()
 
 	for i := 0; i < 2; i++ {
-		res, err := med.Check(ctx, makeEvent())
+		res, err := med.Check(ctx, makeEvent(), nil)
 		require.NoError(t, err)
 		assert.Equal(t, coresecurity.DecisionAllow, res.Decision,
 			"first %d commands must not trip the >=3 threshold", i+1)
 	}
 
-	res, err := med.Check(ctx, makeEvent())
+	res, err := med.Check(ctx, makeEvent(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionGuidance, res.Decision,
 		"third command_exec must trip context.commands_executed >= 3")
 
-	res, err = med.Check(ctx, makeEvent())
+	res, err = med.Check(ctx, makeEvent(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionGuidance, res.Decision)
 
@@ -102,7 +102,7 @@ rules:
 			AgentName:  "claude-code",
 			ToolName:   "Bash",
 			Payload:    []byte(`{"command":"ls"}`),
-		})
+		}, nil)
 		require.NoError(t, err)
 	}
 
@@ -114,7 +114,7 @@ rules:
 		AgentName:  "claude-code",
 		ToolName:   "Bash",
 		Payload:    []byte(`{"command":"ls"}`),
-	})
+	}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionAllow, res.Decision,
 		"new session must not inherit other session's counters")

@@ -6,6 +6,7 @@ import (
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/session"
 )
 
 // Config holds configuration options for the security evaluator.
@@ -38,7 +39,7 @@ func (e *Evaluator) RegisterCheck(check Check) {
 
 // Evaluate runs all registered checks against the event and returns an aggregated result.
 // Checks are evaluated in order, and evaluation stops immediately on a Block decision.
-func (e *Evaluator) Evaluate(ctx context.Context, event *events.Event) *Result {
+func (e *Evaluator) Evaluate(ctx context.Context, event *events.Event, sess *session.Session) *Result {
 	result := NewAllowResult()
 
 	for _, check := range e.checks {
@@ -46,7 +47,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, event *events.Event) *Result {
 			continue
 		}
 
-		checkResult, err := check.Check(ctx, event)
+		checkResult, err := check.Check(ctx, event, sess)
 		if err != nil {
 			if e.config.FailOpen {
 				log.Warnf("check %s failed with error: %v, but failing open", check.Name(), err)

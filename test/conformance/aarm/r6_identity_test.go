@@ -17,7 +17,7 @@ func TestR6_HumanPrincipalCaptured(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 
 	rows := mustReceipts(t, ref, ev.SessionID)
@@ -30,7 +30,7 @@ func TestR6_ServiceIdentityCaptured(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 
 	rows := mustReceipts(t, ref, ev.SessionID)
@@ -48,7 +48,7 @@ func TestR6_AgentIdentityCaptured(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 
 	rows := mustReceipts(t, ref, ev.SessionID)
@@ -61,7 +61,7 @@ func TestR6_RoleScopeCaptured(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 
 	rows := mustReceipts(t, ref, ev.SessionID)
@@ -74,7 +74,7 @@ func TestR6_SessionIdentityCaptured(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 
 	rows := mustReceipts(t, ref, ev.SessionID)
@@ -89,7 +89,7 @@ func TestR6_IdentityCapturedAtMediation(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	rows := mustReceipts(t, ref, ev.SessionID)
 	require.NotEmpty(t, rows)
@@ -135,7 +135,7 @@ func TestR6_DenyOnMissingIdentity(t *testing.T) {
 	// per-action HumanPrincipal, but the policy rule itself surfaces the
 	// block via PDP. The end-to-end check should propagate the block.
 	ev := loadEventFixture(t, "file_write_prod")
-	res, err := ref.Mediator.Check(context.Background(), ev)
+	res, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
@@ -146,7 +146,7 @@ func TestR6_IdentityRecordedOnReceipt(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	ev := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), ev)
+	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 	rows := mustReceipts(t, ref, ev.SessionID)
 	require.NotEmpty(t, rows)
