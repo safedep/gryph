@@ -710,9 +710,25 @@ func TestIsScheme(t *testing.T) {
 		{"9p", false},
 		{"+x", false},
 		{"h", false},
+		{"", false},
 		{"ht tp", false},
 	}
 	for _, tt := range tests {
 		assert.Equal(t, tt.want, isScheme(tt.in), tt.in)
+	}
+}
+
+func TestAnalyze_MalformedInputDoesNotPanic(t *testing.T) {
+	for _, command := range []string{
+		"git -c url.insteadOf=x status",
+		"git -c url.pushInsteadOf=x push",
+		"nc :1234",
+		"curl :/x",
+	} {
+		t.Run(command, func(t *testing.T) {
+			var a Analysis
+			assert.NotPanics(t, func() { a = AnalyzeCommand(command, nil, "/w") })
+			assert.True(t, a.Parsed, "the fix handles the input, so the recover path does not run")
+		})
 	}
 }

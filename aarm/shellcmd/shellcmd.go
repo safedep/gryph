@@ -110,8 +110,17 @@ type Env struct {
 }
 
 // Analyze returns the paths that command uses and the hosts it contacts.
-func Analyze(command string, env Env) Analysis {
+func Analyze(command string, env Env) (a Analysis) {
 	w := &walker{env: env}
+	// The hook runs the analysis on every agent command. A bug in a tool
+	// handler must not stop the hook, so a panic keeps what the walk found
+	// and marks the command as not parsed.
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warnf("shellcmd: analysis panic: %v", r)
+			a = Analysis{Targets: w.targets, Hosts: w.hosts, GryphHook: w.gryphHook}
+		}
+	}()
 	start := dirs{env.WorkingDir}
 	if _, err := w.script(command, start); err != nil {
 		w.failed = true

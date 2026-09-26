@@ -1578,8 +1578,9 @@ func (w *walker) gitConfig(key, value string, known bool) {
 			w.addNetworkHost(value)
 		}
 	case section == "url" && (strings.HasSuffix(lower, ".insteadof") || strings.HasSuffix(lower, ".pushinsteadof")):
-		base := key[len("url."):strings.LastIndex(key, ".")]
-		w.addNetworkHost(base)
+		if last := strings.LastIndex(key, "."); last > len("url.") {
+			w.addNetworkHost(key[len("url."):last])
+		}
 	}
 }
 
@@ -1721,7 +1722,10 @@ func splitRemote(value string) (host, p string, ok bool) {
 // isScheme reports whether s is a URL scheme. A single letter is a Windows
 // drive, not a scheme.
 func isScheme(s string) bool {
-	if first := s[0] | 0x20; len(s) < 2 || first < 'a' || first > 'z' {
+	if len(s) < 2 {
+		return false
+	}
+	if first := s[0] | 0x20; first < 'a' || first > 'z' {
 		return false
 	}
 	for _, r := range strings.ToLower(s) {
