@@ -862,13 +862,6 @@ func (a *Adapter) markSensitivePath(event *events.Event, path string) {
 	event.IsSensitive = a.privacyChecker.IsSensitivePath(path)
 }
 
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}
-
 // HookDecision represents the decision for a Cursor hook.
 type HookDecision int
 

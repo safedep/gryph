@@ -387,13 +387,6 @@ func (a *Adapter) markSensitivePaths(event *events.Event, actionType events.Acti
 	}
 }
 
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}
-
 type HookResponse struct {
 	Decision HookDecision
 	Message  string
