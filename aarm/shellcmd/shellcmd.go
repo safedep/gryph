@@ -681,38 +681,42 @@ func skipOptions(args []string) []string {
 // A recursive copy of a directory into the working directory or home, such
 // as "cp -r dotfiles/.claude ~/", writes new files into DEST/NAME. So that
 // path is a tree write. For other destinations it stays a plain write,
-// because a backup such as "cp -r ~/.claude /tmp/backup" is common.
+// because a backup such as "cp -r ~/.claude /tmp/backup" is common. The
+// walker resolves DEST for each working directory, so "cd /tmp/backup &&
+// cp -r ~/.claude ." stays a backup.
 func (w *walker) addDest(dest string, sources []string, p parsedArgs, flags copyFlags, cwds dirs) {
 	if dest == "" {
 		return
 	}
 	w.add(dest, destAccess(p, sources, flags), cwds)
 	relative := p.has(flags.relative...)
-	tree := !relative && p.has(flags.recursive...) && w.isCwdOrHome(dest)
-	for _, src := range sources {
-		if _, remotePath, remote := splitRemote(src); remote {
-			src = remotePath
+	recursive := !relative && p.has(flags.recursive...)
+	for _, cwd := range cwds {
+		tree := recursive && w.isCwdOrHome(resolve(dest, cwd, w.env.Home))
+		for _, src := range sources {
+			if _, remotePath, remote := splitRemote(src); remote {
+				src = remotePath
+			}
+			if src == "" {
+				continue
+			}
+			name := path.Base(src)
+			if relative {
+				name = relativeSource(expandHome(src, w.env.Home))
+			}
+			access := AccessWrite
+			contents := strings.HasSuffix(src, "/.") || (flags.slashContents && strings.HasSuffix(src, "/"))
+			if tree && !contents && mayBeDirectory(src) {
+				access = AccessWriteTree
+			}
+			w.add(strings.TrimSuffix(dest, "/")+"/"+name, access, dirs{cwd})
 		}
-		if src == "" {
-			continue
-		}
-		name := path.Base(src)
-		if relative {
-			name = relativeSource(expandHome(src, w.env.Home))
-		}
-		access := AccessWrite
-		contents := strings.HasSuffix(src, "/.") || (flags.slashContents && strings.HasSuffix(src, "/"))
-		if tree && !contents && mayBeDirectory(src) {
-			access = AccessWriteTree
-		}
-		w.add(strings.TrimSuffix(dest, "/")+"/"+name, access, cwds)
 	}
 }
 
-func (w *walker) isCwdOrHome(dest string) bool {
-	d := path.Clean(expandHome(dest, w.env.Home))
-	return d == "." || (w.env.Home != "" && d == path.Clean(w.env.Home)) ||
-		(w.env.WorkingDir != "" && d == path.Clean(w.env.WorkingDir))
+func (w *walker) isCwdOrHome(dir string) bool {
+	return (w.env.Home != "" && dir == path.Clean(w.env.Home)) ||
+		(w.env.WorkingDir != "" && dir == path.Clean(w.env.WorkingDir))
 }
 
 // relativeSource returns the part of a source path that a relative copy

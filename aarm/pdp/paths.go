@@ -38,9 +38,9 @@ func (a *actionPaths) commandTargets() []shellcmd.Target {
 // command changes, matches the rule's file patterns. A file delete or a
 // shell removal of a directory that contains a matching path also matches.
 // A tree write also matches when it writes into the directory that holds a
-// matching path. A tree write into a parent of that directory does not
-// match, because a copy or an extract into the project root or into home is
-// a common command.
+// matching path, or into an ancestor below the "**" of a relative pattern.
+// A tree write into another parent does not match, because a copy or an
+// extract into the project root or into home is a common command.
 func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) bool {
 	if matchesAnyPath(r.filePatterns, action.Parameters.Path) {
 		return true
@@ -58,7 +58,7 @@ func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) boo
 				return true
 			}
 		case shellcmd.AccessWriteTree:
-			if matchesAnyPath(r.parentPatterns, t.Path) {
+			if matchesAnyPath(r.treePatterns, t.Path) {
 				return true
 			}
 		}
@@ -83,6 +83,21 @@ func containerPatterns(patterns []string) []string {
 		}
 		if strings.HasPrefix(pattern, "/") {
 			out = append(out, "/")
+		}
+	}
+	return out
+}
+
+// treePatterns returns the globs that a tree write matches: the directory
+// that holds each pattern, and each ancestor below the leading "**" of a
+// relative pattern. So a copy of "dotfiles/.codeium" into home matches
+// "**/.codeium/windsurf/hooks.json". An absolute pattern gives only its
+// directory, so a tree write into home or "/" does not match.
+func treePatterns(patterns []string) []string {
+	out := parentPatterns(patterns)
+	for _, pattern := range patterns {
+		if !path.IsAbs(pattern) {
+			out = append(out, containerPatterns([]string{pattern})...)
 		}
 	}
 	return out

@@ -88,7 +88,7 @@ func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 	t.Setenv("HOME", home)
 	cfgDir := home + "/.config/safedep/gryph"
 
-	docs, err := NewBuiltinSource("**/.cc/settings.json", "**/.agent/hooks/**", cfgDir+"/**").Load(context.Background())
+	docs, err := NewBuiltinSource("**/.cc/settings.json", "**/.agent/hooks/**", "**/.deep/sub/hooks.json", cfgDir+"/**").Load(context.Background())
 	require.NoError(t, err)
 	require.Len(t, docs, 1)
 	engine, err := pdp.New(docs[0])
@@ -151,6 +151,11 @@ func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 		{"rsync config directory into home", model.ActionCommandExec, "", `rsync -a /tmp/stage/.cc ~/`, true},
 		{"cp config directory into working directory", model.ActionCommandExec, "", `cd ~ && cp -R dotfiles/.cc .`, true},
 		{"cp config directory to a backup", model.ActionCommandExec, "", `cp -r ~/.cc /tmp/backup`, false},
+		{"cp config directory to a backup after cd", model.ActionCommandExec, "", `cd /tmp/backup && cp -r ~/.cc .`, false},
+		{"rsync config directory to a backup after cd", model.ActionCommandExec, "", `cd /tmp/backup && rsync -a ~/.cc .`, false},
+		{"cp deep config directory into home", model.ActionCommandExec, "", `cp -r dotfiles/.deep ~/`, true},
+		{"cp hooks parent directory into home", model.ActionCommandExec, "", `cp -r dotfiles/.agent ~/`, true},
+		{"cp deep config directory to a backup", model.ActionCommandExec, "", `cp -r ~/.deep /tmp/backup`, false},
 		{"cp config directory with a slash into home", model.ActionCommandExec, "", `cp -r dotfiles/.cc/ ~/`, true},
 		{"cp config directory into the absolute working directory", model.ActionCommandExec, "", `cp -r dotfiles/.cc /work/`, true},
 		{"rsync config directory contents into home", model.ActionCommandExec, "", `rsync -a dotfiles/.cc/ ~/`, false},
