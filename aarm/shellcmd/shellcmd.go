@@ -707,8 +707,8 @@ var networkTools = flagSet("curl", "wget", "nc", "ncat", "netcat", "socat", "ssh
 var namingTools = flagSet("go", "make", "npm", "npx", "pnpm", "yarn", "cargo", "pip", "pip3", "uv",
 	"poetry", "bundle", "gem", "mvn", "gradle", "man", "apt", "apt-get", "brew", "dnf", "yum", "docker",
 	"podman", "kubectl", "helm", "pytest", "unittest", "tox", "nox", "jest", "vitest", "mocha", "bun",
-	"deno", "cmake", "ctest", "ninja", "meson", "bazel", "pkill", "pgrep", "killall", "file", "which",
-	"whereis")
+	"deno", "cmake", "ctest", "ninja", "meson", "bazel", "pkill", "pgrep", "pidof", "killall", "service",
+	"file", "which", "whereis", "hash", "info", "tldr", "whatis", "apropos")
 
 // networkWords records UnknownHost when a command that the walker does not
 // know can run a network tool with a host that Gryph cannot see. An absolute
@@ -925,8 +925,13 @@ var wrappers = map[string]wrapperSpec{
 		"-X", "--const-print-style", "-O", "-S", "--summary-sort-by")},
 	"ltrace": {values: flagSet("-o", "--output", "-e", "-p", "-s", "-u", "-a", "--align", "-n", "--indent",
 		"-F", "--config", "-D", "--debug", "-x", "-L", "-l", "--library", "-A")},
-	"busybox": {},
-	"toybox":  {},
+	"busybox":      {},
+	"toybox":       {},
+	"sshpass":      {values: flagSet("-f", "-d", "-p", "-P")},
+	"proxychains":  {values: flagSet("-f")},
+	"proxychains4": {values: flagSet("-f")},
+	"torsocks":     {values: flagSet("-u", "--user", "-p", "--pass", "-a", "--address", "-P", "--port")},
+	"firejail":     {},
 }
 
 // program returns the index of the program word in args and the working

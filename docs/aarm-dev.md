@@ -392,7 +392,11 @@ takes the word after each option as the value of that option, so `journalctl
 -u ssh` and `mytool -v curl x` do not give `?`. A relative path or a package
 name does not count, such as `./cmd/host` or `curlimages/curl`. The tools in
 `namingTools` (`go`, `make`, `npm`, `docker`, `man`, test runners, `pkill`,
-`file`, and others) skip this check. A host with a glob character is a host that Gryph cannot read. Hosts
+`pidof`, `service`, `file`, and others) skip this check. A wrapper that is not
+in the `wrappers` table and has an option before the tool, such as `mytool -q
+curl x`, does not give `?`. The table has the common network wrappers
+(`sshpass`, `proxychains`, `torsocks`, `firejail`), so the walker reads the
+inner call and gets the real host. A host with a glob character is a host that Gryph cannot read. Hosts
 are lower case, without the port.
 
 `xargs` without a replace string adds an unresolved word at the end of its
