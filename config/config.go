@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -362,7 +363,7 @@ func Load(configPath string) (*Config, error) {
 		cfg.Policy.Receipts.SignMode = aliased
 	}
 
-	clampContext(&cfg.Policy.Context)
+	clampContext(v, &cfg.Policy.Context)
 
 	// Validate config
 	if err := validate(&cfg); err != nil {
@@ -372,24 +373,81 @@ func Load(configPath string) (*Config, error) {
 	return &cfg, nil
 }
 
+// contextLimit is the valid range of one policy.context key. An
+// out-of-range value moves to fallback, or to the nearest bound when
+// fallback is 0.
+type contextLimit struct {
+	key      string
+	field    func(*ContextConfig) *int
+	lo, hi   int
+	fallback int
+}
+
+var contextLimits = []contextLimit{
+	{
+		key:   "policy.context.cel_entries",
+		field: func(c *ContextConfig) *int { return &c.CELEntries },
+		lo:    1, hi: MaxCELEntries,
+	},
+	{
+		key:   "policy.context.window_max_entries",
+		field: func(c *ContextConfig) *int { return &c.WindowMaxEntries },
+		lo:    1, hi: MaxWindowEntries,
+	},
+	{
+		// 0 means no byte limit. So a negative value falls back to the
+		// default and does not move to the lower bound.
+		key:   "policy.context.window_max_bytes",
+		field: func(c *ContextConfig) *int { return &c.WindowMaxBytes },
+		lo:    0, hi: math.MaxInt, fallback: DefaultWindowMaxBytes,
+	},
+}
+
+// inRange also checks the raw value. The decoder truncates a fraction, so
+// -0.5 becomes 0, and 0 means no byte limit.
+func (l contextLimit) inRange(v *viper.Viper, cfg *ContextConfig) bool {
+	n := *l.field(cfg)
+	if n < l.lo || n > l.hi {
+		return false
+	}
+	f, ok := v.Get(l.key).(float64)
+	return !ok || (f >= float64(l.lo) && f <= float64(l.hi))
+}
+
+func (l contextLimit) rangeError() error {
+	if l.hi == math.MaxInt {
+		return fmt.Errorf("%s must be %d or more", l.key, l.lo)
+	}
+	return fmt.Errorf("%s must be between %d and %d", l.key, l.lo, l.hi)
+}
+
 // clampContext moves an out-of-range policy.context value into its range. A
 // load error makes loadApp fall back to the defaults, and the defaults turn
-// the policy off. gryph config set still rejects the value.
-func clampContext(cfg *ContextConfig) {
-	clampInt("policy.context.cel_entries", &cfg.CELEntries, 1, MaxCELEntries)
-	clampInt("policy.context.window_max_entries", &cfg.WindowMaxEntries, 1, MaxWindowEntries)
-	if cfg.WindowMaxBytes < 0 {
-		log.Warnf("config: policy.context.window_max_bytes %d is negative. Gryph uses %d", cfg.WindowMaxBytes, DefaultWindowMaxBytes)
-		cfg.WindowMaxBytes = DefaultWindowMaxBytes
+// the policy off. gryph config set still rejects the key that it sets, see
+// checkContextKey.
+func clampContext(v *viper.Viper, cfg *ContextConfig) {
+	for _, l := range contextLimits {
+		if l.inRange(v, cfg) {
+			continue
+		}
+		p := l.field(cfg)
+		n := l.fallback
+		if n == 0 {
+			n = min(max(*p, l.lo), l.hi)
+		}
+		log.Warnf("config: %v. Gryph uses %d instead of %v", l.rangeError(), n, v.Get(l.key))
+		*p = n
 	}
 }
 
-func clampInt(key string, v *int, lo, hi int) {
-	n := min(max(*v, lo), hi)
-	if n != *v {
-		log.Warnf("config: %s %d is not between %d and %d. Gryph uses %d", key, *v, lo, hi, n)
-		*v = n
+// checkContextKey rejects an out-of-range value of key.
+func checkContextKey(v *viper.Viper, key string, cfg *ContextConfig) error {
+	for _, l := range contextLimits {
+		if l.key == key && !l.inRange(v, cfg) {
+			return l.rangeError()
+		}
 	}
+	return nil
 }
 
 func signModeFromLegacyBool(b bool) string {

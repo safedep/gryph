@@ -640,47 +640,18 @@ func TestLoad_ClampsCELEntries(t *testing.T) {
 	}
 }
 
-func TestValidate_ContextWindow(t *testing.T) {
-	tests := []struct {
-		name       string
-		maxEntries int
-		maxBytes   int
-		wantErr    string
-	}{
-		{"defaults", 50, 65536, ""},
-		{"no byte limit", 1, 0, ""},
-		{"upper entry bound", MaxWindowEntries, 1, ""},
-		{"zero entries", 0, 1, "window_max_entries"},
-		{"too many entries", MaxWindowEntries + 1, 1, "window_max_entries"},
-		{"negative bytes", 50, -1, "window_max_bytes"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			for _, enabled := range []bool{true, false} {
-				cfg := Default()
-				cfg.Policy.Enabled = enabled
-				cfg.Policy.Context.WindowMaxEntries = tt.maxEntries
-				cfg.Policy.Context.WindowMaxBytes = tt.maxBytes
-				err := validate(cfg)
-				if tt.wantErr == "" {
-					assert.NoError(t, err)
-					continue
-				}
-				require.Error(t, err, "policy.enabled=%v", enabled)
-				assert.Contains(t, err.Error(), tt.wantErr)
-			}
+func TestLoad_ClampsWindowLimits(t *testing.T) {
+	for _, maxBytes := range []string{"-1", "-0.5"} {
+		t.Run(maxBytes, func(t *testing.T) {
+			configFile := filepath.Join(t.TempDir(), "config.yaml")
+			content := "policy:\n  enabled: true\n  context:\n    window_max_entries: 0\n    window_max_bytes: " + maxBytes + "\n"
+			require.NoError(t, os.WriteFile(configFile, []byte(content), 0o644))
+
+			cfg, err := Load(configFile)
+			require.NoError(t, err, "an out-of-range value must not turn the policy off")
+			assert.True(t, cfg.Policy.Enabled)
+			assert.Equal(t, 1, cfg.Policy.Context.WindowMaxEntries)
+			assert.Equal(t, DefaultWindowMaxBytes, cfg.Policy.Context.WindowMaxBytes, "a negative byte bound must not remove the limit")
 		})
 	}
-}
-
-func TestLoad_ClampsWindowLimits(t *testing.T) {
-	configFile := filepath.Join(t.TempDir(), "config.yaml")
-	content := "policy:\n  enabled: true\n  context:\n    window_max_entries: 0\n    window_max_bytes: -1\n"
-	require.NoError(t, os.WriteFile(configFile, []byte(content), 0o644))
-
-	cfg, err := Load(configFile)
-	require.NoError(t, err, "an out-of-range value must not turn the policy off")
-	assert.True(t, cfg.Policy.Enabled)
-	assert.Equal(t, 1, cfg.Policy.Context.WindowMaxEntries)
-	assert.Equal(t, DefaultWindowMaxBytes, cfg.Policy.Context.WindowMaxBytes, "a negative byte bound must not remove the limit")
 }

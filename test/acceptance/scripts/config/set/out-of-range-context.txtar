@@ -1,0 +1,24 @@
+# An out-of-range policy.context value in the file does not block a set of
+# another key. A set of an out-of-range value still exits 2.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph config set policy.enabled true
+stdout 'Set policy.enabled'
+
+exec gryph config set policy.context.window_max_entries 50
+stdout 'Set policy.context.window_max_entries'
+
+execexit 2 gryph config set policy.context.window_max_entries 0
+stderr 'window_max_entries must be between 1 and 1000'
+
+exec gryph config get policy.context.window_max_entries
+stdout '50'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: false
+  context:
+    window_max_entries: 0
+    window_max_bytes: -1

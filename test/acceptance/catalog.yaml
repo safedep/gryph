@@ -230,6 +230,13 @@
   guarantee: "gryph config set on a known key writes the file. On an unknown key it exits 2, names the unknown key on stderr, and leaves the file unchanged."
   labels: [config]
 
+- id: config/set/out-of-range-context
+  title: "config set works when the file holds an out-of-range policy.context value"
+  category: config
+  tier: P1
+  guarantee: "An out-of-range policy.context value in the file does not block gryph config set on another key. A set of an out-of-range policy.context value exits 2."
+  labels: [config, policy]
+
 - id: config/env/override-wins
   title: "a GRYPH_ environment variable overrides the config file"
   category: config
