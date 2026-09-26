@@ -59,6 +59,10 @@ type Target struct {
 	// as in "cat ~/.*" or "grep -n PATH ~/.*". The command does not read
 	// the files in a directory that it names.
 	Flat bool
+	// Shallow marks a read of the path and of the files directly in it, as
+	// in "diff -N DIR other". GNU diff compares the files one level down in
+	// a directory operand without "-r".
+	Shallow bool
 	// Named marks the tree write of a directory that a recursive copy
 	// creates under the source name, as DEST/NAME in "cp -r dotfiles/.claude
 	// ~/". The copy can write any path in that tree.
@@ -489,7 +493,8 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	default:
 		if opts, ok := readCommands[name]; ok {
 			p := parseArgs(rest, opts)
-			w.addReads(p.operands, !p.has(recursiveReads[name]...), cwds)
+			recursive := p.has(recursiveReads[name]...)
+			w.addReads(p.operands, !recursive, shallowReads[name] && !recursive, cwds)
 		} else if opts, ok := editCommands[name]; ok {
 			w.addAll(parseArgs(rest, opts).operands, AccessWrite, cwds)
 		} else if !nonReadCommands[name] {
@@ -876,11 +881,13 @@ func (w *walker) addAll(values []string, access Access, cwds dirs) {
 }
 
 // addReads records each value as a read. A flat read reads only the files
-// that each value names.
-func (w *walker) addReads(values []string, flat bool, cwds dirs) {
+// that each value names. A shallow read also reads the files directly in a
+// directory that a value names.
+func (w *walker) addReads(values []string, flat, shallow bool, cwds dirs) {
 	for _, v := range values {
 		for _, t := range w.targetsOf(v, AccessRead, cwds) {
 			t.Flat = flat
+			t.Shallow = shallow
 			w.addTarget(t)
 		}
 	}

@@ -277,7 +277,10 @@ pattern. A read with `Target.Flat` set matches the same way. The walker
 sets it for a command that reads only the files it names: the
 `readCommands` table unless a `recursiveReads` option is set, as in
 `diff -r`, `grep` without a recursive option, `awk`, `jq`, and a
-copy without a recursive option. `nonReadCommands` lists
+copy without a recursive option. GNU diff without `-r` still reads the
+files directly in a directory operand, so the walker also sets
+`Target.Shallow` for `shallowReads`. The PDP matches a shallow read against
+the directory that holds a pattern. `nonReadCommands` lists
 the commands that read no file content, such as `ls` and `stat`. The walker
 expands a brace list such as `a.{db,x}` before it records a path. A sequence
 such as `{1..9}`, or a word that expands to more than 64 words, becomes the

@@ -196,6 +196,10 @@ var recursiveReads = map[string][]string{
 	"zcat": {"-r", "--recursive"},
 }
 
+// shallowReads are the read commands that read the files directly in a
+// directory operand without a recursive option.
+var shallowReads = flagSet("diff")
+
 // editCommands write every file operand. An option that writes a file,
 // such as "vim -w", is not in the value table, so its file is an operand.
 var editCommands = map[string]options{
@@ -417,12 +421,12 @@ var remoteShellOptions = map[string]options{
 // option or an expression option instead when either is set, and then every
 // operand is a file.
 func (w *walker) scriptTool(p parsedArgs, fileFlags, exprFlags []string, flat bool, cwds dirs) {
-	w.addReads(p.value(fileFlags...), true, cwds)
+	w.addReads(p.value(fileFlags...), true, false, cwds)
 	ops := p.operands
 	if !p.has(fileFlags...) && !p.has(exprFlags...) && len(ops) > 0 {
 		ops = ops[1:]
 	}
-	w.addReads(ops, flat, cwds)
+	w.addReads(ops, flat, false, cwds)
 }
 
 // localCopy handles cp, mv, install, and ln. An ln with one operand makes
@@ -435,7 +439,7 @@ func (w *walker) localCopy(tool copyTool, args []string, cwds dirs) {
 		return
 	}
 	if tool.readsSources {
-		w.addReads(sources, !p.has(tool.flags.recursive...), cwds)
+		w.addReads(sources, !p.has(tool.flags.recursive...), false, cwds)
 	}
 	if tool.removeSources {
 		w.addAll(sources, AccessRemove, cwds)

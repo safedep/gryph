@@ -122,7 +122,8 @@ func (r compiledRule) matchesTarget(t shellcmd.Target) bool {
 	case shellcmd.AccessRemove:
 		return matchesAnyPath(r.containerPatterns, t.Path)
 	case shellcmd.AccessRead:
-		return treeRead && matchesAnyPath(r.containerPatterns, t.Path)
+		return (treeRead && matchesAnyPath(r.containerPatterns, t.Path)) ||
+			(t.Shallow && matchesAnyPath(r.treePatterns, t.Path))
 	case shellcmd.AccessWrite:
 		return t.Named && matchesAnyPath(r.containerPatterns, path.Dir(t.Path)) && matchesAnyPath(r.namedTreePatterns, t.Path)
 	case shellcmd.AccessWriteTree:
