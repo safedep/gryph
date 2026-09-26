@@ -294,3 +294,20 @@ func TestRenderPolicyContextWindow_CutsToolOnRuneBoundary(t *testing.T) {
 	assert.True(t, utf8.ValidString(buf.String()))
 	assert.Contains(t, buf.String(), strings.Repeat("\u00e9", 30)+"...")
 }
+
+func TestRenderContextTables_EscapeStoredValues(t *testing.T) {
+	evil := "evil\x1b]0;title\x07\nforged"
+	var buf bytes.Buffer
+	renderContextStateTable(&buf, tui.NewColorizer(false), policyContextStateView{
+		ToolsUsed:   []string{evil},
+		TagsSeen:    map[string]int64{evil: 1},
+		OriginsSeen: []string{"mcp:" + evil},
+	})
+	renderContextEntriesTable(&buf, tui.NewColorizer(false), []policyContextEntryView{
+		{Sequence: 1, Kind: evil, ActionType: evil, Tool: evil, Decision: evil, ResultStatus: evil},
+	})
+	out := buf.String()
+	assert.NotContains(t, out, "\x1b")
+	assert.NotContains(t, out, "\x07")
+	assert.NotContains(t, out, "\nforged")
+}

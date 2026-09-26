@@ -287,13 +287,13 @@ func renderContextStateTable(w io.Writer, c *tui.Colorizer, v policyContextState
 		_, _ = fmt.Fprintf(w, "  %-12s %d\n", c.Dim("errors"), v.Errors)
 	}
 	if len(v.ToolsUsed) > 0 {
-		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tools"), strings.Join(v.ToolsUsed, ", "))
+		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tools"), escapeJoin(v.ToolsUsed))
 	}
 	if len(v.TagsSeen) > 0 {
-		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tags"), strings.Join(slices.Sorted(maps.Keys(v.TagsSeen)), ", "))
+		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tags"), escapeJoin(slices.Sorted(maps.Keys(v.TagsSeen))))
 	}
 	if len(v.OriginsSeen) > 0 {
-		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("origins"), strings.Join(v.OriginsSeen, ", "))
+		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("origins"), escapeJoin(v.OriginsSeen))
 	}
 	if v.IntentAvailable {
 		_, _ = fmt.Fprintf(w, "  %-12s %d actions since the last prompt\n", c.Dim("intent"), v.ActionsSinceIntent)
@@ -313,8 +313,19 @@ func renderContextEntriesTable(w io.Writer, c *tui.Colorizer, entries []policyCo
 		c.Dim("seq"), c.Dim("kind"), c.Dim("action_type"), c.Dim("tool"), c.Dim("decision"), c.Dim("result"), c.Dim("id"))
 	for _, e := range entries {
 		_, _ = fmt.Fprintf(w, "  %-5d  %-11s  %-14s  %-12s  %-8s  %-9s  %s\n",
-			e.Sequence, e.Kind, e.ActionType, tui.TruncateString(e.Tool, 12), e.Decision, e.ResultStatus, tui.FormatShortID(e.ID))
+			e.Sequence, tui.EscapeLine(e.Kind), tui.EscapeLine(e.ActionType), tui.TruncateString(tui.EscapeLine(e.Tool), 12),
+			tui.EscapeLine(e.Decision), tui.EscapeLine(e.ResultStatus), tui.FormatShortID(e.ID))
 	}
+}
+
+// escapeJoin escapes each stored value for one terminal line, because an
+// agent or an MCP server chooses tool names and origins.
+func escapeJoin(values []string) string {
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = tui.EscapeLine(v)
+	}
+	return strings.Join(out, ", ")
 }
 
 func renderContextStatesTable(w io.Writer, c *tui.Colorizer, states []policyContextStateView) {
