@@ -349,3 +349,19 @@ func TestManagerSet_RemovesStaleLegacyConfig(t *testing.T) {
 	assert.FileExists(t, filepath.Join(dir, configFileName))
 	assert.NoFileExists(t, stale)
 }
+
+func TestManager_Set_RejectsInvalidValue(t *testing.T) {
+	configFile := filepath.Join(t.TempDir(), "config.yml")
+	mgr, err := NewManager(configFile)
+	require.NoError(t, err)
+	require.NoError(t, mgr.Set("policy.enabled", true))
+
+	err = mgr.Set("policy.context.cel_entries", 5001)
+	require.ErrorIs(t, err, ErrInvalidValue)
+	assert.Equal(t, 100, mgr.Get("policy.context.cel_entries"), "the old value stays")
+
+	data, err := os.ReadFile(configFile)
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "5001")
+	require.NoError(t, mgr.Set("policy.context.cel_entries", 200))
+}

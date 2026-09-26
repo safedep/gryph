@@ -43,6 +43,9 @@ func TestAcceptance(t *testing.T) {
 	// variable: cp $ACCEPTANCE_TESTDATA/upgrade/... $WORK/...
 	testdata, err := filepath.Abs("testdata")
 	require.NoError(t, err)
+	// Scripts install the shipped example policies from this directory.
+	examples, err := filepath.Abs("../../examples")
+	require.NoError(t, err)
 
 	const root = "scripts"
 	files, err := discoverScriptFiles(root)
@@ -76,6 +79,7 @@ func TestAcceptance(t *testing.T) {
 				Setup: func(env *testscript.Env) error {
 					env.Setenv("PATH", binDir+string(os.PathListSeparator)+env.Getenv("PATH"))
 					env.Setenv("ACCEPTANCE_TESTDATA", testdata)
+					env.Setenv("ACCEPTANCE_EXAMPLES", examples)
 					// The status and doctor commands run an async update check
 					// against the GitHub API. Forward proxy and TLS settings so
 					// the check works in proxied environments. The check fails

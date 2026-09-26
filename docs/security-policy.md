@@ -54,7 +54,7 @@ Self-protection is best effort. It blocks file writes and deletes to protected p
 - On macOS, a path in a different letter case. The file system ignores case, and the match does not.
 - The Gryph commands that print the audit data, such as `gryph query`, `gryph export`, and `gryph cat`.
 
-The rule `gryph-builtin-hook-command` is best effort. It catches only a literal `gryph _hook` call. It checks each call in the command, also inside wrappers (`env`, `sudo`, `exec`, `command`, and others), `find -exec`, `bash -c`, and `eval`. Gryph decodes ANSI-C quoting (`$'\x5fhook'`) and expands braces before the check. A call blocks when its program is gryph, or a variable or a command substitution, and one argument is the literal word `_hook`. So `gryph _hook claude-code UserPromptSubmit`, `bash -c 'gryph _hook x y'`, and `$G _hook x y` block. A word that can only become `_hook` when the shell runs the command does not block. So `gryph query --session "$SID"`, `gryph _hoo? x y`, `echo _hook | xargs gryph`, and `eval "$S"` pass. A word such as `_hook` in the arguments of another program, as in `grep -rn _hook cli/`, does not block.
+The rule `gryph-builtin-hook-command` is best effort. It catches only a literal `gryph _hook` call. It checks each call in the command, also inside wrappers (`env`, `sudo`, `exec`, `command`, `setsid`, `strace`, `parallel`, and others), `find -exec`, `bash -c` (also after a flag group such as `-euo pipefail`), a here-document or a here-string with literal text that a shell reads, `eval`, `watch`, `flock`, `su -c`, `runuser`, and `script`. Gryph decodes ANSI-C quoting (`$'\x5fhook'`) and expands braces before the check. A call blocks when its program is gryph, or a variable or a command substitution, and one argument is the literal word `_hook`. So `gryph _hook claude-code UserPromptSubmit`, `bash -c 'gryph _hook x y'`, and `$G _hook x y` block. A word that can only become `_hook` when the shell runs the command does not block. So `gryph query --session "$SID"`, `gryph _hoo? x y`, `echo _hook | xargs gryph`, and `eval "$S"` pass. A word such as `_hook` in the arguments of another program, as in `grep -rn _hook cli/`, does not block.
 
 The read rule also blocks a file read of each directory that holds the database or the signing key, at any depth, below the home directory. This blocks a `Grep`, `Glob`, or `LS` tool call on the data directory, the config directory, their `safedep` parents, `~/.config`, and `~/.local/share`. On macOS, these are the `~/Library` directories that hold them. A read of one file in these directories, such as `policy.yaml`, passes. A file read of the home directory, or of a parent of it, passes. So does a shell read of it, such as `grep -r x ~` or `tar -C ~ -czf home.tgz .`. A tool that searches the whole home directory can read the protected files, so this is a limit of the read rule. A `sqlite3` command that names a file with a SQL expression is also a limit.
 
@@ -105,7 +105,7 @@ Run `gryph policy test --action file_write --path /repo/prod/config.yaml` to see
 
 An empty `match` block matches every action. Combine with `scope` to narrow further.
 
-For a `command_exec` action, Gryph parses the shell command and finds the paths it changes: redirect targets (`>`, `>>`), `tee`, `cp` / `mv` / `install` / `ln` destinations, `rm` / `unlink`, `truncate`, `chmod` / `chown`, `sed -i` / `perl -i`, `dd of=`, editors (`vim`, `vi`, `nvim`, `ex`, `nano`), `sort -o`, `gzip`, `bzip2`, `xz`, `zip`, `7z`, `tar`, `unzip`, and the output files of `curl` and `wget`. A recursive copy of a directory, a copy of directory contents, an archive extract, and a recursive download can write paths in the destination directory that the command line does not show. They match a pattern only when the destination is the directory that holds the pattern, or a path that the pattern matches. A parent directory does not match. So `tar xzf node_modules.tgz` or `unzip -o dist.zip` in the project root, and `cp -r dotfiles/nvim ~/.config/`, do not block under self-protection or under a rule on `**/.env`. A recursive copy of a directory into a directory that holds a protected path still matches when the copy creates that path, so `cp -r dotfiles/devin ~/.config/` blocks under a rule on `**/.config/devin/config.json`. `tar xzf a.tgz -C ~/.config/safedep/gryph` blocks. For `find`, `-delete` changes the search roots, and `-exec` runs its command on any path under the roots. `-execdir` runs its command from any directory under the roots, so a relative path it changes counts as a change to the roots. Gryph looks inside wrappers such as `sudo`, `env`, `nice`, and `timeout`. It skips the wrapper options and their values, and it takes the first remaining word as the program. Gryph also looks inside `bash -c` (also `bash -lc`) and `eval`, and follows a literal `cd`, also through `eval`, `command cd`, and `builtin cd`. A `cd` inside a subshell, a pipe, or `bash -c` does not carry over. A command after `&&`, `||`, or in an `if` or loop body may not run, so Gryph checks the paths from every working directory it could have. `file_patterns` matches these paths. A delete or move of a directory also matches every pattern under that directory. The same is true for a `file_delete` action. A read, such as `cat` or `find -exec cat`, does not match by default. A command that does not parse records no paths, so it does not match.
+For a `command_exec` action, Gryph parses the shell command and finds the paths it changes: redirect targets (`>`, `>>`), `tee`, `cp` / `mv` / `install` / `ln` destinations, `rm` / `unlink`, `truncate`, `chmod` / `chown`, `sed -i` / `perl -i`, `dd of=`, editors (`vim`, `vi`, `nvim`, `ex`, `nano`), `sort -o`, `gzip`, `bzip2`, `xz`, `zip`, `7z`, `tar`, `unzip`, and the output files of `curl` and `wget`. A recursive copy of a directory, a copy of directory contents, an archive extract, and a recursive download can write paths in the destination directory that the command line does not show. They match a pattern only when the destination is the directory that holds the pattern, or a path that the pattern matches. A parent directory does not match. So `tar xzf node_modules.tgz` or `unzip -o dist.zip` in the project root, and `cp -r dotfiles/nvim ~/.config/`, do not block under self-protection or under a rule on `**/.env`. A recursive copy of a directory into a directory that holds a protected path still matches when the copy creates that path, so `cp -r dotfiles/devin ~/.config/` blocks under a rule on `**/.config/devin/config.json`. `tar xzf a.tgz -C ~/.config/safedep/gryph` blocks. For `find`, `-delete` changes the search roots, and `-exec` runs its command on any path under the roots. `-execdir` runs its command from any directory under the roots, so a relative path it changes counts as a change to the roots. Gryph looks inside wrappers such as `sudo`, `env`, `nice`, `timeout`, `setsid`, and `strace`. It skips the wrapper options and their values, and it takes the first remaining word as the program. Gryph also looks inside `bash -c` (also `bash -lc` and `bash -euo pipefail -c`), a here-document or a here-string that a shell reads, `eval`, `watch`, `flock`, `su -c`, `runuser`, `script`, and `parallel`, and follows a literal `cd`, also through `eval`, `command cd`, and `builtin cd`. A `cd` inside a subshell, a pipe, or `bash -c` does not carry over. A command after `&&`, `||`, or in an `if` or loop body may not run, so Gryph checks the paths from every working directory it could have. `file_patterns` matches these paths. A delete or move of a directory also matches every pattern under that directory. The same is true for a `file_delete` action. A read, such as `cat` or `find -exec cat`, does not match by default. A command that does not parse records no paths, so it does not match.
 
 Gryph also finds the paths a command reads: input redirects (`<`), the sources of `cp`, `mv`, `rsync`, and `scp`, `dd if=`, and the file operands of read commands such as `cat`, `head`, `tail`, `grep`, `sed` and `awk` without `-i`, `tar`, `base64`, `strings`, `xxd`, and `sqlite3`. A rule with `file_access: [read]` matches these paths. A shell read of a directory also matches when the directory is a literal parent in a pattern, because a copy or a recursive read, such as `cp -r dir` or `grep -r x dir`, reads every file in it. For example, a read of `/data` or `/data/gryph` matches `/data/gryph/audit.db`, and a read of `conf` matches `**/conf/.env`. A pattern segment with a glob character is not a literal parent. So `**/.env` does not match a recursive read of a directory, such as `grep -r x .` or `tar czf out.tgz .`, even when the directory holds a `.env` file. A read through a glob matches when the glob and a pattern can match the same path: `cat dir/*` matches `dir/secret.txt`, `cat .e*` matches `**/.env`, and `cat dir/*.md` does not. A glob that can name a directory that holds a matching path also matches, so `cp -r dir/* /out` matches `dir/sub/secret.txt`. As in bash without `dotglob`, a shell glob segment that starts with `*`, `?`, or a bracket class does not match a name that starts with a dot. So `cat *` does not match `**/.env`, and `cat .e*` and `cat */.e*` do. Gryph knows bracket classes such as `[]a]`, `[!a]`, and `[[:alpha:]]`. A class that does not close matches any name. A pattern segment with a brace, such as `*.{yml,yaml}`, matches every glob segment. For a `file_read` action, a rule that selects `read` also matches a read of a directory that holds a matching path at any depth. A read of the home directory or one of its parents, by a `file_read` action or by a shell command such as `grep -r x ~`, matches the file patterns only. A glob below home, such as `cp -r ~/.c* /out`, does not get this exemption. A flat read matches the file patterns only, because it reads only the files that it names. The flat reads are the read commands such as `cat`, `head`, `wc` and `md5sum`, `diff` and `zcat` without `-r`, `grep` without `-r`, `-R` or `-d recurse`, `awk`, `jq`, and `cp` without `-r`, `-R` or `-a`. So `grep -n PATH ~/.*` and `cat ~/.*` do not match a directory such as `~/.config`, and `grep -rn PATH ~/.*` and `rg PATH ~/.*` do. For `find -exec`, Gryph uses the `-name` pattern when one `-name` test before the first action selects the files. So `find . -name '*.go' -exec grep x {} +` does not match `**/.env`, and `find . -exec cat {} +` does. Unlike the shell, `find -name` lets a leading `*` match a dot, so `find . -name '*.env' -exec cat {} +` matches `**/.env`.
 
@@ -126,7 +126,7 @@ Gryph resolves the action path before it matches: it expands `~`, joins a relati
 
 This rule blocks `cat .env`, `cat config/.e*`, and a `file_read` of `.env`. It does not block `grep -r x .` or `cat *`. To block a recursive read of a directory that holds the file, add a pattern with a literal parent, such as `/repo/config/.env`.
 
-The parse is best effort. It can match more than the command changes, and it can miss a change. Gryph does not run the command, so it cannot resolve an unknown variable, a command substitution, a script file, input to `xargs`, or an encoded payload. Gryph records only the paths that it can resolve. It does not fail closed on a command that it cannot parse or cannot resolve. For example, `rm -rf ~/.cc ) (`, `curl -w @format.txt`, `tar -xPf a.tar`, and a `7z` command that Gryph does not know do not block.
+The parse is best effort. It can match more than the command changes, and it can miss a change. Gryph does not run the command, so it cannot resolve an unknown variable, a command substitution, a script file, a process substitution, input to `xargs` or `parallel`, or an encoded payload. Gryph records only the paths that it can resolve. It does not fail closed on a command that it cannot parse or cannot resolve. For example, `rm -rf ~/.cc ) (`, `curl -w @format.txt`, `tar -xPf a.tar`, and a `7z` command that Gryph does not know do not block. For `xargs -I{}` and `parallel`, Gryph puts the glob `*` in place of the replace string, so `xargs -I{} cp {} dir/{}` writes `dir/*`.
 
 ### Scope
 
@@ -168,6 +168,8 @@ action.kind                        intent, action, or observation
 action.origin                      where the content came from, as the adapter claims it
 action.source                      the MCP server of an mcp origin
 action.sources                     every MCP server that the tool name can name
+action.hosts                       hosts of the shell command and the URL, "?" for a host that Gryph cannot read
+action.read_paths / write_paths    paths that the action reads, and writes or removes
 action.human_principal             captured identity, see Identity capture
 action.service_identity            CI / service identity, see Identity capture
 action.role_scope                  OS uid/gid + asserted scopes
@@ -175,11 +177,11 @@ action.gryph_hook                  true when a shell command runs gryph _hook
 context.{total_actions, files_read, files_written, commands_executed,
          network_requests, errors, tools_used, session_duration_ms,
          classifications_seen, tags_seen, tag_seq, origins_seen,
-         entities_seen, semantic_drift, intent_available,
+         entities_seen, egress_hosts, entries, intent_available,
          actions_since_intent}
 ```
 
-`action.data_classifications` carries labels like `secret`, `pii`, `source_code`, `config`, `git_internal`, `external_url`. `context.classifications_seen` is the running union across the session. `semantic_drift` is reserved and reads as `0.0` today.
+`action.data_classifications` carries labels like `secret`, `pii`, `source_code`, `config`, `git_internal`, `external_url`. `context.classifications_seen` is the running union across the session.
 
 The counters count actions, and the current event is in them. A pre and post hook pair for one tool call is one action: the post event is an observation of the pre event, and it does not add to a counter. A post event with no recorded pre event is an action. A blocked action counts. `errors` counts actions and observations with an error result.
 
@@ -204,6 +206,29 @@ The intent fields trust the prompt events that reach `gryph _hook`. The hook inp
 - A rule with no `action_types`.
 
 A rule that must stop prompts must list `user_prompt` in `action_types`. Gryph logs a warning at policy load, and `gryph policy validate` prints one, for a rule that names one of these tool names.
+
+`action.hosts` is best effort. It holds `?` for a network tool whose operand Gryph cannot read (`curl $URL`, `curl -K file`, `curl --resolve`, `wget -i file`, `socat`, `ssh -F file`, `ssh -o ProxyCommand=...`, `ssh -D`), for a network tool that `xargs` or `parallel` gives input arguments, and for shell code that Gryph cannot read (`eval "$X"`, `bash -c "$X"`, `... | sh`, `bash <(...)`, `bash /dev/stdin`, `source <(...)`, `su user`). It holds `?` for a shell option that Gryph does not know, because the option can hide the script. It holds `?` for a command that Gryph does not know when an argument is an absolute path to a network tool, or when the first operand is the bare name of a network tool, such as `mytool curl x.example`. A later word or an option value, such as `systemctl status ssh` or `journalctl -u ssh`, does not count. A relative path or a package name, such as `go test ./internal/ssh` or `docker pull curlimages/curl`, does not count, and build, package, test and process tools such as `go`, `make`, `npm`, `docker`, `man`, `pytest`, `pkill`, `service` and `file` do not give `?` in this way. It holds `?` for a git fetch or push to a named remote, for a git config variable such as `GIT_CONFIG_GLOBAL`, and for `GIT_SSH` with a program other than `ssh`. It also holds the proxy, jump, and forward hosts of `ssh -J`, `-W`, `-L`, and `-R`, of `ssh -o ProxyJump`, `-o HostName`, and `-o LocalForward`, of `curl -x` and `--connect-to`, of a proxy variable such as `ALL_PROXY` or `https_proxy`, of `GIT_SSH_COMMAND` and `git -c core.sshCommand`, of `git -c http.proxy` and `-c https.proxy`, and of a `git -c url.<base>.insteadOf` rewrite. It does not hold a proxy or a host alias from a config file that the command does not name, such as `~/.ssh/config`, `~/.curlrc`, `~/.wgetrc`, a git config file, or the ssh command of `rsync -e`. Gryph records a read of a sourced regular file, such as `source ./env.sh`. It does not read the code in the file, so the hosts of that code are not in `action.hosts`. It is empty for a program that opens a connection itself, such as a Python script, `npm publish` or `gh gist create`, and for a tool with no URL, such as WebSearch or most MCP tools. So an egress allow list on `action.hosts` is a check on the command, not a network control. `glob()` and `file_patterns` are case-sensitive.
+
+`context.entities_seen` holds the `path:`, `host:` and `mcp:` keys of the session, including the current action and blocked actions. The `path:` keys come from the action path and from the read and write paths of a shell command. A guessed read of a command that Gryph does not know, such as `./...` in `go test ./...`, is not a key. Each kind of key (`path`, `host`, `mcp`) holds at most 500 keys, so a session with many paths still records a new host. `context.egress_hosts` holds the hosts that earlier actions contacted. A blocked or deferred action contacted no host, so it adds none. An escalated action adds its hosts only with its post event, after an approval.
+
+`context.entries` is the entry log: the latest entries of the session, oldest first. `policy.context.cel_entries` sets the count (default 100, at most 1000). `gryph config set` rejects a value out of this range. A config file or environment variable with such a value loads with a warning, and Gryph uses the nearest bound. Gryph loads the log only when a rule reads it. Each item is a map with `seq`, `kind`, `action_type`, `tool`, `path`, `command`, `host`, `mcp_server`, `origin`, `classes`, `tags`, `decision` and `result`. `command` is the stored command, after redaction. No item holds content. Gryph cleans `path` before a rule reads it. It expands `~`, joins a relative path with the working directory of the event, and removes `.`, `..`, and repeated slashes. So `/root/.ssh/./id_rsa` and `/root//.ssh/id_rsa` reach a rule as `/root/.ssh/id_rsa`. Gryph reads at most 65,536 characters of a path. A longer path keeps its first and last 32,768 characters, with a `/` between them. The log cuts `command` to its first 1024 bytes, the clean `path` to its last 1024 bytes, and `tool`, `host` and `mcp_server` to 256 bytes, so that padding cannot push a rule over its limits. `glob(path, pattern)` matches one path against one doublestar pattern:
+
+```yaml
+- id: write-after-key-read
+  action: block
+  match:
+    action_types: [file_write]
+  condition: 'context.entries.exists(e, e.action_type == "file_read" && glob(e.path, "**/*.pem"))'
+```
+
+`glob()` does not match a directory that holds a matching path. A `file_patterns` rule with `file_access: [read]` does. So use `file_patterns`, not `glob()` over `action.read_paths`, to match a shell read of a secret, such as `tar c ~/.ssh`.
+
+`context.semantic_drift` is removed. `gryph policy validate` and `gryph policy install` reject a
+policy that reads it or `.Context.SemanticDrift`. An installed policy that reads it still loads
+with a warning, and the value is always zero. The same two commands reject a `message` template that
+names an unknown field, such as `{{.Context.Drift}}`, and a `glob()` call with an invalid literal
+pattern, such as `"["`. An installed policy with either loads with a warning. When a message template
+fails to render for an action, the rule still decides, and the message is `rule <id>`.
 
 ### Facts and tags
 
@@ -255,7 +280,7 @@ In a message template, `{{index .Context.TagSeq "secret_read"}}` gives 0 for a m
 
 A tag name starts with a lower-case letter, holds lower-case letters, digits, `_` and `-`, and has at most 63 characters. `gryph policy validate` and `gryph policy install` reject any other name. An installed policy with another name still loads with a warning, so an upgrade does not stop your hooks.
 
-This policy tags a secret read by path or by content, and blocks a network command after it:
+`examples/policies/secret-exfiltration.yaml` ships this pattern as an example, not a built-in. Install it with `gryph policy install`. This policy tags a secret read by path or by content, and blocks a network command after it:
 
 ```yaml
 - id: tag-secret-read
@@ -282,8 +307,8 @@ This policy tags a secret read by path or by content, and blocks a network comma
   action: block
   severity: high
   match:
-    action_types: [command_exec]
-  condition: '"secret_read" in context.tags_seen && action.params.command.contains("curl")'
+    action_types: [command_exec, network_request, tool_use]
+  condition: '"secret_read" in context.tags_seen && size(action.hosts) > 0'
   message: "Blocked: network access after a secret read in this session."
 ```
 
@@ -381,6 +406,20 @@ Do these steps each time you change a policy file.
    ```
 
    Add `--file <path>` to dry-run a draft file plus the built-in rules, before you install it.
+
+   A rule on the session context needs a context. `--context-file <yaml>` reads one. Its keys are the `context.*` names, and an unknown key is an error. `--kind` and `--origin` set the action facts, and the output lists the tags of every matched rule:
+
+   ```yaml
+   # ctx.yaml
+   tags_seen: [secret_read]
+   tag_seq: {secret_read: 1}
+   entries:
+     - {seq: 1, kind: action, action_type: file_read, path: /work/.env}
+   ```
+
+   ```bash
+   gryph policy test --action command_exec --command "curl https://x.example" --context-file ctx.yaml
+   ```
 
    Test three cases per rule: an action that must match, an action that must not match, and an action near the boundary of the rule.
 
@@ -505,9 +544,9 @@ Two trigger types produce a synthetic defer decision even without an explicit
 - `fresh_session_insufficient_context` fires when a rule's CEL condition
   references context fields that are still zero or empty AND the session is
   younger than `policy.defer.fresh_session_seconds` (default 60). The action
-  defers rather than evaluating against an unfilled snapshot. The intent
-  fields never trigger it. A session with no intent is a fact, not missing
-  data.
+  defers rather than evaluating against an unfilled snapshot. The intent,
+  tag, origin, `egress_hosts` and `entries` fields never trigger it. A
+  session with no intent or no earlier entry is a fact, not missing data.
 - `conflicting_policies` fires when multiple rules match at the winning
   severity tier with materially different rendered messages. Each decision
   lives at its own tier under the precedence scheme, so the practical case

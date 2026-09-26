@@ -249,10 +249,15 @@ type ContextSnapshot struct {
 	ClassificationsSeen []string
 	// TagsSeen maps each tag that a rule put on an earlier entry to the
 	// sequence of the first entry that has it.
-	TagsSeen      map[string]int64
-	OriginsSeen   []string
-	EntitiesSeen  []string
-	SemanticDrift float64
+	TagsSeen     map[string]int64
+	OriginsSeen  []string
+	EntitiesSeen []string
+	// EgressHosts are the hosts that earlier actions contacted. The pending
+	// action is not in it, because a rule decides whether it may.
+	EgressHosts []string
+	// Entries are the latest stored entries, oldest first. The Mediator
+	// loads them only when a rule reads context.entries.
+	Entries []EntryFacts
 
 	// IntentAvailable is true when the session has at least one intent
 	// entry. An agent with no prompt hook never has one.
@@ -315,4 +320,29 @@ type ContextEntry struct {
 	// The entry never holds the content.
 	ContentDigest string
 	Result        ResultStatus
+
+	// Hosts and Entities feed the session state. The entry stores neither,
+	// and the hash does not cover them. Target.Host is the first host.
+	// Entities holds path:, host: and mcp: keys.
+	Hosts    []string
+	Entities []string
+}
+
+// EntryFacts is one item of context.entries. Path and Command come from the
+// audit event of the entry. Command is the stored command, after redaction.
+// No item holds content.
+type EntryFacts struct {
+	Seq        int64
+	Kind       string
+	ActionType string
+	Tool       string
+	Path       string
+	Command    string
+	Host       string
+	MCPServer  string
+	Origin     string
+	Classes    []string
+	Tags       []string
+	Decision   string
+	Result     string
 }

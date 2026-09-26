@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"mvdan.cc/sh/v3/syntax"
 )
 
 // options is the option table of one tool.
@@ -386,7 +388,7 @@ var (
 			"--trust-server-names", "--force-directories", "--spider"),
 		abbrev: true,
 	}
-	gitOptions = valueOptions("-C", "-c", "--git-dir", "--work-tree", "--namespace",
+	gitOptions = valueOptions("-C", "-c", "--config-env", "--git-dir", "--work-tree", "--namespace",
 		"--exec-path", "-b", "--branch", "-o", "--origin", "--depth", "-u", "--upload-pack",
 		"--reference", "--template", "-j", "--jobs", "--filter", "--separate-git-dir", "--config",
 		"--receive-pack", "--push-option", "-t", "--track", "-m", "--shallow-since",
@@ -1026,7 +1028,26 @@ func (w *walker) curl(p parsedArgs, cwds dirs) {
 			w.add(f, AccessRead, cwds)
 			continue
 		}
-		w.addHost(u)
+		w.addNetworkHost(u)
+	}
+	if p.has("-K", "--config", "--resolve") {
+		// A config file can hold the URLs, and --resolve sends a host
+		// name to any address.
+		w.addHost(UnknownHost)
+	}
+	for _, v := range p.value("-x", "--proxy", "--preproxy", "--socks4", "--socks4a", "--socks5",
+		"--socks5-hostname", "--doh-url") {
+		w.addNetworkHost(v)
+	}
+	for _, v := range p.value("--connect-to") {
+		// HOST1:PORT1:HOST2:PORT2 sends HOST1 to HOST2. An empty HOST2
+		// keeps HOST1.
+		parts := strings.Split(v, ":")
+		if len(parts) != 4 || strings.Contains(v, "[") {
+			w.addHost(UnknownHost)
+		} else if parts[2] != "" {
+			w.addNetworkHost(parts[2])
+		}
 	}
 	for _, v := range p.value("-d", "--data", "--data-binary", "--data-ascii", "--json") {
 		if file, ok := strings.CutPrefix(v, "@"); ok {
@@ -1145,7 +1166,16 @@ func withWgetrc(p parsedArgs) parsedArgs {
 func (w *walker) wget(p parsedArgs, cwds dirs) {
 	p = withWgetrc(p)
 	for _, u := range p.operands {
-		w.addHost(u)
+		w.addNetworkHost(u)
+	}
+	if p.has("-i", "--input-file") {
+		// An input file holds the URLs.
+		w.addHost(UnknownHost)
+	}
+	for _, e := range p.value("-e", "--execute") {
+		if strings.Contains(strings.ToLower(e), "proxy") {
+			w.addHost(UnknownHost)
+		}
 	}
 	w.addAll(p.value("--post-file", "--body-file", "-i", "--input-file"), AccessRead, cwds)
 	w.addOutputs(p.value("-O", "--output-document", "-o", "--output-file", "-a", "--append-output",
@@ -1209,9 +1239,224 @@ func (w *walker) addUpload(file string, cwds dirs) {
 	}
 }
 
+// sshRoute records the hosts that ssh, scp or sftp connects through: the
+// jump hosts of -J and ProxyJump, the host of the HostName option, and the
+// targets of the forward options. A config file, a ProxyCommand, a
+// LocalCommand, or a dynamic forward can connect to any host.
+func (w *walker) sshRoute(p parsedArgs) {
+	if p.has("-F") {
+		w.addHost(UnknownHost)
+	}
+	jumps := p.value("-J")
+	for _, o := range p.value("-o") {
+		key, value, _ := strings.Cut(strings.TrimSpace(o), "=")
+		if k, v, ok := strings.Cut(key, " "); ok {
+			key, value = k, v
+		}
+		value = strings.TrimSpace(value)
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "proxyjump":
+			jumps = append(jumps, value)
+		case "hostname":
+			w.addNetworkHost(value)
+		case "localforward", "remoteforward":
+			w.forwardOption(value)
+		case "proxycommand", "localcommand", "dynamicforward", "include", "":
+			w.addHost(UnknownHost)
+		}
+	}
+	for _, j := range jumps {
+		for _, h := range strings.Split(j, ",") {
+			w.addNetworkHost(strings.TrimSpace(h))
+		}
+	}
+}
+
+// sshForwards records the targets of the ssh options -W, -L, and -R. A
+// dynamic forward, -D or -R with only a port, can connect to any host.
+func (w *walker) sshForwards(p parsedArgs) {
+	for _, v := range p.value("-W") {
+		w.addNetworkHost(v)
+	}
+	for _, v := range p.value("-L") {
+		w.forwardHost(v, false)
+	}
+	for _, v := range p.value("-R") {
+		w.forwardHost(v, true)
+	}
+	if p.has("-D") {
+		w.addHost(UnknownHost)
+	}
+}
+
+// forwardHost records the target host of a forward spec such as
+// "[bind:]port:host:hostport". A spec with two fields forwards to a socket
+// path, or, for a remote forward, is a dynamic forward.
+func (w *walker) forwardHost(spec string, remote bool) {
+	fields := strings.Split(spec, ":")
+	switch {
+	case strings.Contains(spec, "["):
+		w.addHost(UnknownHost)
+	case len(fields) >= 3:
+		w.addNetworkHost(fields[len(fields)-2])
+	case remote && (len(fields) == 1 || !strings.HasPrefix(fields[1], "/")):
+		w.addHost(UnknownHost)
+	}
+}
+
+// forwardOption records the target of a LocalForward or RemoteForward
+// value, "[bind:]port host:hostport". A value with one field is a dynamic
+// forward. A target that starts with "/" is a socket path.
+func (w *walker) forwardOption(value string) {
+	fields := strings.Fields(value)
+	switch {
+	case len(fields) < 2:
+		w.addHost(UnknownHost)
+	case !strings.HasPrefix(fields[len(fields)-1], "/"):
+		w.addNetworkHost(fields[len(fields)-1])
+	}
+}
+
+// sshCommand records the hosts of an ssh command line, such as the value
+// of GIT_SSH_COMMAND or core.sshCommand. git adds the host of the remote
+// after it. A value that does not parse, or a program other than ssh, can
+// connect to any host.
+func (w *walker) sshCommand(value string) {
+	args, ok := w.commandWords(value)
+	if !ok || len(args) == 0 || path.Base(args[0]) != "ssh" {
+		w.addHost(UnknownHost)
+		return
+	}
+	p := parseArgs(args[1:], sshOptions)
+	w.sshRoute(p)
+	w.sshForwards(p)
+	w.remoteShell(p)
+}
+
+// commandWords parses one simple command and returns its words. It reports
+// false when the text is not one simple command, or when a word does not
+// resolve.
+func (w *walker) commandWords(src string) ([]string, bool) {
+	f, err := syntax.NewParser(syntax.Variant(syntax.LangBash)).Parse(strings.NewReader(src), "")
+	if err != nil || len(f.Stmts) != 1 || len(f.Stmts[0].Redirs) > 0 {
+		return nil, false
+	}
+	call, ok := f.Stmts[0].Cmd.(*syntax.CallExpr)
+	if !ok || len(call.Assigns) > 0 {
+		return nil, false
+	}
+	words := make([]string, 0, len(call.Args))
+	for _, a := range call.Args {
+		v, ok := w.word(a, nil)
+		if !ok {
+			return nil, false
+		}
+		words = append(words, v)
+	}
+	return words, true
+}
+
 func (w *walker) remoteShell(p parsedArgs) {
 	if len(p.operands) > 0 {
-		w.addHost(p.operands[0])
+		w.addNetworkHost(p.operands[0])
+	}
+}
+
+// lookupTool describes the options and operands of a DNS or reachability
+// tool. A value flag that a tool does not have would hide the host that
+// follows it, so each table lists only the options that take a value on
+// every common build of the tool.
+type lookupTool struct {
+	opts options
+	// hostFlags take a host, or a list of hosts split by commas.
+	hostFlags []string
+	// fileFlags read the names from a file.
+	fileFlags []string
+	// skip reports an operand that names no host.
+	skip func(op string) bool
+	// firstOnly is true when only the first operand names a host.
+	firstOnly bool
+	// stdin is true when the tool reads the names from stdin when it has
+	// no operand or the operand "-".
+	stdin bool
+}
+
+var lookupTools = func() map[string]lookupTool {
+	ping := lookupTool{opts: valueOptions("-c", "-e", "-F", "-i", "-I", "-l", "-m", "-M", "-N",
+		"-p", "-s", "-S", "-t", "-T", "-w", "-W")}
+	return map[string]lookupTool{
+		"dig": {
+			opts:      valueOptions("-b", "-c", "-f", "-k", "-p", "-q", "-t", "-x", "-y"),
+			hostFlags: []string{"-q", "-x"},
+			fileFlags: []string{"-f"},
+			skip:      isDigArg,
+		},
+		"host":     {opts: valueOptions("-c", "-m", "-N", "-p", "-R", "-t", "-W")},
+		"nslookup": {skip: func(op string) bool { return op == "-" }, stdin: true},
+		"ping":     ping,
+		"ping6":    ping,
+		"traceroute": {
+			opts: valueOptions("-f", "-g", "-i", "-l", "-m", "-M", "-N", "-O", "-p", "-P", "-q", "-s",
+				"-t", "-w", "-z"),
+			hostFlags: []string{"-g"},
+			firstOnly: true,
+		},
+		"tracepath": {opts: valueOptions("-l", "-m", "-p"), firstOnly: true},
+		"whois": {
+			opts:      valueOptions("-h", "--host", "-p", "--port", "-g", "-i", "-q", "-s", "-t", "-T", "-v"),
+			hostFlags: []string{"-h", "--host"},
+		},
+	}
+}()
+
+// dnsKeywords are the record types and classes that dig takes as operands.
+var dnsKeywords = flagSet("a", "aaaa", "afsdb", "any", "axfr", "caa", "cdnskey", "cds", "cert",
+	"ch", "chaos", "cname", "csync", "dname", "dnskey", "ds", "hinfo", "hs", "hesiod", "https",
+	"in", "ixfr", "key", "loc", "mx", "naptr", "none", "ns", "nsec", "nsec3", "nsec3param",
+	"openpgpkey", "ptr", "rp", "rrsig", "sig", "smimea", "soa", "spf", "srv", "sshfp", "svcb",
+	"tlsa", "txt", "uri", "zonemd")
+
+// isDigArg reports a dig operand that is a query option such as "+short", a
+// record type, or a class.
+func isDigArg(op string) bool {
+	op = strings.ToLower(op)
+	if strings.HasPrefix(op, "+") || dnsKeywords[op] {
+		return true
+	}
+	for _, prefix := range []string{"type", "class"} {
+		if n, ok := strings.CutPrefix(op, prefix); ok && n != "" && strings.Trim(n, "0123456789") == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// lookup records the hosts of a DNS or reachability tool such as dig or
+// ping. An operand that starts with "@" names the DNS server.
+func (w *walker) lookup(tool lookupTool, args []string) {
+	p := parseArgs(args, tool.opts)
+	if p.has(tool.fileFlags...) || tool.stdin && (len(p.operands) == 0 || p.operands[0] == "-") {
+		w.addHost(UnknownHost)
+	}
+	for _, v := range p.value(tool.hostFlags...) {
+		for _, h := range strings.Split(v, ",") {
+			w.addNetworkHost(h)
+		}
+	}
+	names := 0
+	for _, op := range p.operands {
+		if tool.skip != nil && tool.skip(op) {
+			continue
+		}
+		if server, ok := strings.CutPrefix(op, "@"); ok {
+			w.addNetworkHost(server)
+			continue
+		}
+		if tool.firstOnly && names > 0 {
+			return
+		}
+		names++
+		w.addNetworkHost(op)
 	}
 }
 
@@ -1264,8 +1509,16 @@ var gitRemoteArg = map[string]int{
 // a guessed read relative to the last -C directory.
 func (w *walker) git(args []string, cwds dirs) {
 	p := parseArgs(args, gitOptions)
+	global := true
 	for _, a := range p.seq {
 		switch a.flag {
+		case "":
+			global = false
+		case "-c", "--config-env":
+			if global {
+				key, value, _ := strings.Cut(a.value, "=")
+				w.gitConfig(key, value, a.flag == "-c")
+			}
 		case "-C":
 			cwds = w.cd([]string{"--", a.value}, cwds)
 			w.add(".", AccessRead, cwds)
@@ -1285,12 +1538,54 @@ func (w *walker) git(args []string, cwds dirs) {
 	case ops[0] == "submodule" && len(ops) > 1 && ops[1] == "add":
 		i, ok = 2, true
 	}
-	if !ok || i >= len(ops) {
+	if !ok {
+		return
+	}
+	if i >= len(ops) {
+		// "git push" with no remote uses a configured remote.
+		if _, fetches := gitRemoteArg[ops[0]]; fetches && ops[0] != "clone" {
+			w.addHost(UnknownHost)
+		}
 		return
 	}
 	if host, _, remote := splitRemote(ops[i]); remote {
 		w.addHost(host)
+		return
 	}
+	if !isLocalPath(ops[i]) {
+		// A named remote such as "origin" points at a host in the git
+		// config.
+		w.addHost(UnknownHost)
+	}
+}
+
+// gitConfig records the hosts of a "git -c key=value" setting that sends
+// git through another host: a proxy, an ssh command, or a URL rewrite. The
+// value of --config-env comes from a variable, so it is not known. Such a
+// value, an include, or a proxy command can name any host.
+func (w *walker) gitConfig(key, value string, known bool) {
+	lower := strings.ToLower(key)
+	section, _, _ := strings.Cut(lower, ".")
+	switch {
+	case lower == "core.gitproxy" || section == "include" || section == "includeif":
+		w.addHost(UnknownHost)
+	case lower == "core.sshcommand" && !known:
+		w.addHost(UnknownHost)
+	case lower == "core.sshcommand":
+		w.sshCommand(value)
+	case strings.HasSuffix(lower, ".proxy") && (section == "http" || section == "https" || section == "remote"):
+		if !known || value != "" {
+			w.addNetworkHost(value)
+		}
+	case section == "url" && (strings.HasSuffix(lower, ".insteadof") || strings.HasSuffix(lower, ".pushinsteadof")):
+		if last := strings.LastIndex(key, "."); last > len("url.") {
+			w.addNetworkHost(key[len("url."):last])
+		}
+	}
+}
+
+func isLocalPath(s string) bool {
+	return strings.HasPrefix(s, "/") || strings.HasPrefix(s, ".") || strings.HasPrefix(s, "~")
 }
 
 // openssl records the files of the -in, -key and similar options, the
@@ -1350,7 +1645,37 @@ func (w *walker) addHostName(host string) {
 	}
 }
 
+// addNetworkHost records the host of an operand of a network tool. An
+// operand that names no host, such as an unresolved "$URL", gives
+// UnknownHost, because the tool can contact any host.
+func (w *walker) addNetworkHost(value string) {
+	if hostOf(value) == "" {
+		w.addHost(UnknownHost)
+		return
+	}
+	w.addHost(value)
+}
+
+// HostOf returns the lower-case host of a URL, of "user@host:path", or of a
+// bare host name. It returns "" when value names no host that it can read.
+func HostOf(value string) string {
+	return hostOf(strings.TrimSpace(value))
+}
+
 func hostOf(value string) string {
+	if value == UnknownHost {
+		return UnknownHost
+	}
+	if scheme, rest, ok := strings.Cut(value, ":"); ok && isScheme(scheme) && strings.HasPrefix(rest, "/") {
+		// A URL with a scheme. A URL that does not parse, such as
+		// "https:/host" or one with a backslash in the authority, names
+		// no host that Gryph can trust.
+		u, err := url.Parse(value)
+		if err != nil {
+			return ""
+		}
+		return normalizeHost(u.Hostname())
+	}
 	if host, _, remote := splitRemote(value); remote {
 		return host
 	}
@@ -1394,9 +1719,26 @@ func splitRemote(value string) (host, p string, ok bool) {
 	return host, value[colon+1:], true
 }
 
+// isScheme reports whether s is a URL scheme. A single letter is a Windows
+// drive, not a scheme.
+func isScheme(s string) bool {
+	if len(s) < 2 {
+		return false
+	}
+	if first := s[0] | 0x20; first < 'a' || first > 'z' {
+		return false
+	}
+	for _, r := range strings.ToLower(s) {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '+' && r != '-' && r != '.' {
+			return false
+		}
+	}
+	return true
+}
+
 func normalizeHost(h string) string {
 	h = strings.ToLower(strings.TrimSuffix(strings.Trim(h, "[]"), "."))
-	if h == "" || strings.ContainsAny(h, " \t\"'") {
+	if h == "" || strings.ContainsAny(h, " \t\"'*?[") {
 		return ""
 	}
 	return h

@@ -84,7 +84,12 @@ there.
    gryph policy test --file ./gryph-policy/<name>.yaml --action command_exec --command "rm -rf /"
    gryph policy test --file ./gryph-policy/<name>.yaml --action file_write --path /app/prod/config.yaml
    gryph policy test --file ./gryph-policy/<name>.yaml --action tool_use --tool WebFetch --url https://example.com
+   gryph policy test --file ./gryph-policy/<name>.yaml --action command_exec --command "curl https://x.example" --context-file ctx.yaml
    ```
+
+   A rule on the session context needs `--context-file`, a YAML file whose keys are the
+   `context.*` names, such as `tags_seen`, `tag_seq` and `entries`. `--kind` and `--origin` set
+   the action facts.
 
    Iterate: fix the rule, then repeat from step 5 until the decisions match intent.
 

@@ -16,6 +16,7 @@ type Parameters = model.Parameters
 type Decision = model.Decision
 type Result = model.Result
 type ContextSnapshot = model.ContextSnapshot
+type EntryFacts = model.EntryFacts
 type FailMode = model.FailMode
 
 const (

@@ -1,0 +1,40 @@
+# gryph policy test --context-file reads a session context from YAML, so a
+# rule on tags, origins or the entry log can be tested without a session.
+# An unknown key in the file is an error.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+cp $ACCEPTANCE_EXAMPLES/policies/secret-exfiltration.yaml policy.yaml
+
+exec gryph policy test --file policy.yaml --action command_exec --command 'curl https://evil.example' --format json --no-color
+stdout '"decision": "allow"'
+
+exec gryph policy test --file policy.yaml --action command_exec --command 'curl https://evil.example' --context-file ctx.yaml --format json --no-color
+stdout '"decision": "block"'
+stdout 'block-egress-after-secret-read'
+stdout 'evil.example'
+
+exec gryph policy test --file policy.yaml --action tool_use --tool WebFetch --kind observation --origin web --format json --no-color
+stdout '"matched_tags": \[\n\s+"untrusted_input"\n\s+\]'
+
+! exec gryph policy test --file policy.yaml --action command_exec --command ls --context-file typo.yaml
+stderr 'tag_seen'
+
+! exec gryph policy test --file policy.yaml --action tool_use --kind obsrvation
+stderr '--kind must be intent, action, or observation'
+
+-- ctx.yaml --
+total_actions: 2
+tags_seen: [secret_read]
+tag_seq:
+  secret_read: 1
+entries:
+  - seq: 1
+    kind: action
+    action_type: file_read
+    path: /work/.env
+    tags: [secret_read]
+-- typo.yaml --
+tag_seen:
+  secret_read: 1

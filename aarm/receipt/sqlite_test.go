@@ -3,6 +3,7 @@ package receipt
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"sync"
 	"testing"
 	"time"
@@ -360,7 +361,20 @@ func TestSnapshotMap_KeySet(t *testing.T) {
 	}
 	assert.ElementsMatch(t, []string{
 		"total_actions", "files_read", "files_written", "commands_executed",
-		"network_requests", "errors", "session_duration", "semantic_drift",
-		"tools_used", "classifications_seen", "entities_seen",
+		"network_requests", "errors", "session_duration",
+		"tools_used", "classifications_seen", "entities_seen", "egress_hosts",
 	}, keys)
+}
+
+func TestSnapshotMap_HoldsNoPathOrHost(t *testing.T) {
+	m := snapshotMap(&model.ContextSnapshot{
+		EntitiesSeen: []string{"path:/work/secret-merger.txt", "host:evil.example"},
+		EgressHosts:  []string{"evil.example"},
+	})
+	assert.Equal(t, 2, m["entities_seen"])
+	assert.Equal(t, 1, m["egress_hosts"])
+	data, err := json.Marshal(m)
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "secret-merger")
+	assert.NotContains(t, string(data), "evil.example")
 }

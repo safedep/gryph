@@ -13,7 +13,7 @@ func TestR7_SemanticDistanceComputed(t *testing.T) {
 
 func TestR7_SemanticDistanceSurfacedToPolicy(t *testing.T) {
 	aarm.Requires(t, aarm.R7, aarm.SHOULD, "Semantic distance surfaced to policy")
-	aarm.Skip(t, aarm.OutOfScope, "semantic_drift remains 0 by design until embeddings are wired")
+	aarm.Skip(t, aarm.OutOfScope, "no component computes a semantic distance, and context.semantic_drift is removed")
 }
 
 func TestR7_SemanticDistanceLoggedOnReceipt(t *testing.T) {

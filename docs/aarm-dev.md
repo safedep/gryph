@@ -158,13 +158,18 @@ Conditions read two maps. `action.*` fields come from `actionActivation`:
 `context.*` fields come from `contextActivation`: `total_actions`,
 `files_read`, `files_written`, `commands_executed`, `network_requests`,
 `errors`, `tools_used`, `session_duration_ms`, `classifications_seen`,
-`tags_seen`, `tag_seq`, `origins_seen`, `entities_seen`, `semantic_drift`,
-`intent_available`, `actions_since_intent`. `Snapshot` computes the intent
+`tags_seen`, `tag_seq`, `origins_seen`, `entities_seen`, `egress_hosts`, `entries`,
+`intent_available`, `actions_since_intent`. `entities_seen` takes its paths
+from `model.Action.EntityPaths`, which leaves out guessed reads. The store
+caps each entity kind on its own (`addCappedByKind`). `QueryEntryFacts`
+cleans the path of each entry with `shellcmd.ResolvePath` and the working
+directory of the audit event, and then cuts it to its last 1024 bytes. `Snapshot` computes the intent
 fields with the pending entry: a pending intent sets `intent_available` and
 resets the count, and a pending action adds one. The pending origin joins
 `origins_seen`. The pending entry has no tags yet, because the PDP decides
-all rules in one pass. `contextFieldEmpty` never reports an intent, tag or
-origin field as empty, so the fresh-session defer does not hide these facts.
+all rules in one pass. `contextFieldEmpty` never reports an intent, tag,
+origin, `egress_hosts` or `entries` field as empty, so the fresh-session
+defer does not hide these facts.
 
 `action.kind`, `action.origin`, `action.source` and `action.sources` come
 from the event. `events.OriginSources` gives `sources`: the adapter claim, or
@@ -180,11 +185,33 @@ origin and the other values the origin `agent`. A post event sets
 `FullContent` from the tool response through `Event.ObserveOutput`, so
 `content_patterns` and the injection scorer read what the agent received.
 
+`action.hosts`, `action.read_paths` and `action.write_paths` come from
+`Action.Hosts`, `ReadPaths` and `WritePaths` (`aarm/model/targets.go`), which
+read `Action.Shell` and the URL. `newEntry` stores the first host in
+`Target.Host` and passes every host and the `path:`, `host:` and `mcp:` keys to
+the state as `Hosts` and `Entities`. The entry table stores neither list.
+
+`PDP.NeedsEntries` reports whether a rule reads `context.entries`. Only then
+does the Mediator call `Accumulator.Entries`, which reads
+`Store.QueryEntryFacts`: the latest `policy.context.cel_entries` entries,
+joined with `audit_events` for the path and the stored command. The CEL
+function `glob` uses the `file_patterns` matcher. `pdp.CheckStrict` rejects a
+rule that reads a field in `removedContextFields`, such as
+`context.semantic_drift`, also through an alias. It also rejects a message
+template that names a field the template data does not have, and a `glob()`
+call with an invalid literal pattern (`invalidGlobLiteral`). `gryph policy
+validate` and `install` call it. `unknownTemplateField` walks every `if` and
+`else` branch of the template, and the pipelines of `range` and `with`. A
+template that still fails at render time gives the message `rule <id>`
+(`messageOrFallback`), so the decision stands. A policy load only warns, and
+the field reads as zero. The receipt snapshot keeps `semantic_drift` at zero,
+so the receipt hash format does not change.
+
 `EvaluationResult.MatchedTags` is the sorted union of the tags of every
 matched rule. `appendEntry` stores it on the entry, and the accumulator adds
 each new tag to `tags_seen` with the entry sequence.
 
-Conditions run under a 100 ms timeout and a CEL cost limit (`celCostLimit`,
+Conditions run under a 100 ms timeout and a CEL cost limit (`conditionCostLimit`,
 100000). A 90-character `matches()` regex on an 8 KiB prompt costs about
 19000. When a condition fails, the PDP still runs the other rules. A
 `block`, `escalate` or `defer` decision wins over the error (`gates`),
@@ -241,6 +268,22 @@ does not count: a variable, a glob, `~`, an empty word, `xargs gryph`, a
 function, or an `eval` or `sh -c` script that the walker cannot resolve. A
 command that the parser rejects does not count. A `_hook` word in the
 arguments of another program does not count.
+The tools in `launchers` (`watch`, `flock`, `su`, `runuser`, `script`) run
+their command through the normal walk. `parallel` runs its command once for
+each literal input after `:::` (`parseParallel`). Other inputs are unresolved
+words.
+
+`shellArgs` reads the options of a shell. Each `o` or `O` in a short option
+group takes the next word, as in `bash -euo pipefail -c`. An option that it
+does not know sets `shellCall.unknown`. The walker then records `?` and does
+not guess which word is the script. The walker tracks the
+standard input of each statement (`walker.stdin`): the literal text of a
+here-document or a here-string, a redirected file, or unknown input such as a
+pipe. A shell that reads its script from standard input, or from
+`/dev/stdin`, parses literal text as a nested script. A pipe and unknown input
+give `?`. A process substitution resolves to `/dev/fd/63`, as in bash. A script operand of a shell or `source` that names a file
+descriptor (`isDescriptorPath`) gives `?`. A regular script file does not.
+
 The intent fields of the session context depend on it. It protects the database, its
 SQLite side files, and the receipt signing key. For a command, the PDP matches
 the paths that `aarm/shellcmd` parses from the command line. The PDP also
@@ -338,8 +381,29 @@ such as `{1..9}`, or a word that expands to more than 64 words, becomes the
 glob `*`. A host comes from a URL anywhere in a word, from
 the operands of `curl`, `wget`, `ssh`, `sftp`, `nc`, and similar tools, from an
 scp-style `host:path` in `scp`, `rsync`, and the remote of a `git` command,
-from `openssl -connect`, and from a `/dev/tcp/host/port` redirect. Hosts are
-lower case, without the port.
+from `openssl -connect`, and from a `/dev/tcp/host/port` redirect. The ssh
+route adds the hosts of `-J`, `-W`, `-L`, `-R`, and the `-o` options. The ssh
+command of `GIT_SSH_COMMAND` and `git -c core.sshCommand` goes through the
+same route (`sshCommand`). `gitConfig` reads the proxy and `insteadOf` keys
+of `git -c`. For a command that the walker does not know, an absolute path
+to a network tool in any argument gives `?` (`networkWords`). A bare network
+tool name gives `?` only as the first operand (`firstOperand`). The walker
+takes the word after each option as the value of that option, so `journalctl
+-u ssh` and `mytool -v curl x` do not give `?`. A relative path or a package
+name does not count, such as `./cmd/host` or `curlimages/curl`. The tools in
+`namingTools` (`go`, `make`, `npm`, `docker`, `man`, test runners, `pkill`,
+`pidof`, `service`, `file`, and others) skip this check. A wrapper that is not
+in the `wrappers` table and has an option before the tool, such as `mytool -q
+curl x`, does not give `?`. The table has the common network wrappers
+(`sshpass`, `proxychains`, `torsocks`, `firejail`), so the walker reads the
+inner call and gets the real host. A host with a glob character is a host that Gryph cannot read. Hosts
+are lower case, without the port.
+
+`xargs` without a replace string adds an unresolved word at the end of its
+command. With a replace string (`-I`, `-i`, `--replace`), the walker puts the
+glob `*` in place of the string in each word, as for `find -exec`. So
+`xargs -I{} cp {} dir/{}` is a tree write of `dir`, and `xargs -I{} curl {}`
+gives `?`. `parallel` does the same with `{}` and its other replace strings.
 
 A write or remove target also comes from the file operands of an editor
 (`vim`, `vi`, `nvim`, `ex`, `nano`), `sort -o`, the archive of `zip` (also

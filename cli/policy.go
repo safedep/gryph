@@ -1,15 +1,18 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +30,7 @@ import (
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/receipt"
+	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/privacy"
@@ -540,7 +544,7 @@ func reportPolicyValidation(cmd *cobra.Command, app *App) error {
 	if err != nil {
 		return ErrConfig("failed to validate policy", err)
 	}
-	if err := pdp.CheckTagNames(policy); err != nil {
+	if err := pdp.CheckStrict(policy); err != nil {
 		return ErrConfig("failed to validate policy", err)
 	}
 
@@ -572,7 +576,7 @@ func renderPolicyWarnings(out io.Writer, c *tui.Colorizer, policy *pdp.Policy) e
 func reportFileValidation(cmd *cobra.Command, app *App, path string) error {
 	policy, err := pdp.LoadPolicyFile(path)
 	if err == nil {
-		err = pdp.CheckTagNames(policy)
+		err = pdp.CheckStrict(policy)
 	}
 	if err != nil {
 		return ErrConfig("failed to validate policy file", err)
@@ -634,6 +638,9 @@ func newPolicyTestCmd() *cobra.Command {
 		filesWritten int
 		commandsExec int
 		errorsCount  int
+		contextFile  string
+		kind         string
+		origin       string
 	)
 
 	cmd := &cobra.Command{
@@ -667,10 +674,18 @@ func newPolicyTestCmd() *cobra.Command {
 			if at == "" {
 				at = model.ActionToolUse
 			}
+			if !slices.Contains([]string{string(events.KindIntent), string(events.KindAction), string(events.KindObservation)}, kind) {
+				return ErrConfig("invalid flags", fmt.Errorf("--kind must be intent, action, or observation, not %q", kind))
+			}
+			if origin != "" && !slices.Contains(privacy.AllOrigins, privacy.Origin(origin)) {
+				return ErrConfig("invalid flags", fmt.Errorf("--origin must be one of %v, not %q", privacy.AllOrigins, origin))
+			}
 
 			got := identity.NewDefaultCapturer().Capture(context.Background())
 			action := &aarmsec.Action{
 				Type:            at,
+				Kind:            events.Kind(kind),
+				Origin:          privacy.Origin(origin),
 				Tool:            tool,
 				Agent:           agentName,
 				WorkingDir:      workingDir,
@@ -684,12 +699,30 @@ func newPolicyTestCmd() *cobra.Command {
 					URL:     url,
 				},
 			}
-			snapshot := &aarmsec.ContextSnapshot{
-				TotalActions:     totalActions,
-				FilesRead:        filesRead,
-				FilesWritten:     filesWritten,
-				CommandsExecuted: commandsExec,
-				Errors:           errorsCount,
+			if at == model.ActionCommandExec {
+				shell := shellcmd.AnalyzeCommand(command, nil, workingDir)
+				action.Shell = &shell
+			}
+			snapshot := &aarmsec.ContextSnapshot{}
+			if contextFile != "" {
+				snapshot, err = readContextFile(contextFile)
+				if err != nil {
+					return err
+				}
+			}
+			for flag, v := range map[string]struct {
+				dst *int
+				val int
+			}{
+				"context-total-actions":     {&snapshot.TotalActions, totalActions},
+				"context-files-read":        {&snapshot.FilesRead, filesRead},
+				"context-files-written":     {&snapshot.FilesWritten, filesWritten},
+				"context-commands-executed": {&snapshot.CommandsExecuted, commandsExec},
+				"context-errors":            {&snapshot.Errors, errorsCount},
+			} {
+				if cmd.Flags().Changed(flag) {
+					*v.dst = v.val
+				}
 			}
 
 			result, err := engine.Evaluate(context.Background(), action, snapshot)
@@ -705,6 +738,7 @@ func newPolicyTestCmd() *cobra.Command {
 				Message:        result.Message,
 				Severity:       string(result.Severity),
 				Tags:           result.Tags,
+				MatchedTags:    result.MatchedTags,
 			}
 
 			if format == "json" {
@@ -733,6 +767,9 @@ func newPolicyTestCmd() *cobra.Command {
 	cmd.Flags().IntVar(&filesWritten, "context-files-written", 0, "context files written count")
 	cmd.Flags().IntVar(&commandsExec, "context-commands-executed", 0, "context commands executed count")
 	cmd.Flags().IntVar(&errorsCount, "context-errors", 0, "context error count")
+	cmd.Flags().StringVar(&contextFile, "context-file", "", "YAML file with the session context, such as tags_seen and entries. The context flags override its counters")
+	cmd.Flags().StringVar(&kind, "kind", string(events.KindAction), "action kind: intent, action, or observation")
+	cmd.Flags().StringVar(&origin, "origin", "", "origin of the content, such as web or mcp")
 
 	return cmd
 }
@@ -745,6 +782,104 @@ type policyTestView struct {
 	Message        string            `json:"message,omitempty"`
 	Severity       string            `json:"severity,omitempty"`
 	Tags           []string          `json:"tags,omitempty"`
+	MatchedTags    []string          `json:"matched_tags,omitempty"`
+}
+
+// contextFileEntry is one entry of context.entries in a context file.
+type contextFileEntry struct {
+	Seq        int64    `yaml:"seq"`
+	Kind       string   `yaml:"kind"`
+	ActionType string   `yaml:"action_type"`
+	Tool       string   `yaml:"tool"`
+	Path       string   `yaml:"path"`
+	Command    string   `yaml:"command"`
+	Host       string   `yaml:"host"`
+	MCPServer  string   `yaml:"mcp_server"`
+	Origin     string   `yaml:"origin"`
+	Classes    []string `yaml:"classes"`
+	Tags       []string `yaml:"tags"`
+	Decision   string   `yaml:"decision"`
+	Result     string   `yaml:"result"`
+}
+
+// contextFile is the session context that policy test --context-file reads.
+// Its keys are the context.* CEL names.
+type contextFile struct {
+	TotalActions        int                `yaml:"total_actions"`
+	FilesRead           int                `yaml:"files_read"`
+	FilesWritten        int                `yaml:"files_written"`
+	CommandsExecuted    int                `yaml:"commands_executed"`
+	NetworkRequests     int                `yaml:"network_requests"`
+	Errors              int                `yaml:"errors"`
+	ToolsUsed           []string           `yaml:"tools_used"`
+	ClassificationsSeen []string           `yaml:"classifications_seen"`
+	SessionDurationMs   int64              `yaml:"session_duration_ms"`
+	TagsSeen            []string           `yaml:"tags_seen"`
+	TagSeq              map[string]int64   `yaml:"tag_seq"`
+	OriginsSeen         []string           `yaml:"origins_seen"`
+	EntitiesSeen        []string           `yaml:"entities_seen"`
+	EgressHosts         []string           `yaml:"egress_hosts"`
+	IntentAvailable     bool               `yaml:"intent_available"`
+	ActionsSinceIntent  int                `yaml:"actions_since_intent"`
+	Entries             []contextFileEntry `yaml:"entries"`
+}
+
+// readContextFile reads a context file. An unknown key is an error, so a
+// typo does not pass as an empty field.
+func readContextFile(path string) (*aarmsec.ContextSnapshot, error) {
+	expanded, err := expandUserPath(path)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(expanded)
+	if err != nil {
+		return nil, ErrConfig("failed to read context file", err)
+	}
+	var f contextFile
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&f); err != nil && !errors.Is(err, io.EOF) {
+		return nil, ErrConfig("failed to parse context file", err)
+	}
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return nil, ErrConfig("failed to parse context file", fmt.Errorf("the file must hold one YAML document"))
+	}
+	tags := maps.Clone(f.TagSeq)
+	if tags == nil {
+		tags = map[string]int64{}
+	}
+	for _, t := range f.TagsSeen {
+		if _, ok := tags[t]; !ok {
+			tags[t] = 0
+		}
+	}
+	s := &aarmsec.ContextSnapshot{
+		TotalActions:        f.TotalActions,
+		FilesRead:           f.FilesRead,
+		FilesWritten:        f.FilesWritten,
+		CommandsExecuted:    f.CommandsExecuted,
+		NetworkRequests:     f.NetworkRequests,
+		Errors:              f.Errors,
+		ToolsUsed:           f.ToolsUsed,
+		ClassificationsSeen: f.ClassificationsSeen,
+		SessionDuration:     time.Duration(f.SessionDurationMs) * time.Millisecond,
+		TagsSeen:            tags,
+		OriginsSeen:         f.OriginsSeen,
+		EntitiesSeen:        f.EntitiesSeen,
+		EgressHosts:         f.EgressHosts,
+		IntentAvailable:     f.IntentAvailable,
+		ActionsSinceIntent:  f.ActionsSinceIntent,
+	}
+	for _, e := range f.Entries {
+		s.Entries = append(s.Entries, aarmsec.EntryFacts{
+			Seq: e.Seq, Kind: e.Kind, ActionType: e.ActionType, Tool: e.Tool,
+			Path: e.Path, Command: e.Command, Host: e.Host, MCPServer: e.MCPServer,
+			Origin: e.Origin, Classes: e.Classes, Tags: e.Tags,
+			Decision: e.Decision, Result: e.Result,
+		})
+	}
+	return s, nil
 }
 
 func actionSummary(a *aarmsec.Action) map[string]string {
@@ -879,6 +1014,9 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 	var opts []aarmsec.MediatorOption
 	if store != nil {
 		opts = append(opts, aarmsec.WithAccumulator(accumulator.NewSQLite(store)))
+		if cfg != nil {
+			opts = append(opts, aarmsec.WithCELEntries(cfg.Policy.Context.CELEntries))
+		}
 		var recOpts []receipt.GeneratorOption
 		if cfg != nil && cfg.Policy.Receipts.EffectiveSignMode() != config.SignModeNever {
 			signer, signErr := loadReceiptSignerFromConfig(cfg, paths)

@@ -94,6 +94,7 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 // The entry copies the kind, the phase, and the tool call link from the
 // event, and takes the content digest from the content labels.
 func newEntry(event *events.Event, action *model.Action) *model.ContextEntry {
+	hosts := action.Hosts()
 	return &model.ContextEntry{
 		ID:              action.ID,
 		SessionID:       action.SessionID,
@@ -110,8 +111,28 @@ func newEntry(event *events.Event, action *model.Action) *model.ContextEntry {
 		ContentDigest:   event.ContentDigest(),
 		Result:          entryEventResult(event),
 		Origin:          action.Origin,
-		Target:          entryTarget(action),
+		Target:          entryTarget(action, hosts),
+		Hosts:           hosts,
+		Entities:        entities(action, hosts),
 	}
+}
+
+// entities returns the path:, host: and mcp: keys of the action. The path
+// keys come from model.Action.EntityPaths.
+func entities(action *model.Action, hosts []string) []string {
+	var keys []string
+	for _, p := range action.EntityPaths() {
+		keys = append(keys, "path:"+p)
+	}
+	for _, h := range hosts {
+		keys = append(keys, "host:"+h)
+	}
+	if action.Origin == privacy.OriginMCP {
+		if server := entryTarget(action, hosts).MCPServer; server != "" {
+			keys = append(keys, "mcp:"+server)
+		}
+	}
+	return keys
 }
 
 // entryKind is the kind that the decision service set, or the kind that
@@ -123,20 +144,27 @@ func entryKind(event *events.Event) model.EntryKind {
 	return events.KindOf(event, event.LinkedEventID != uuid.Nil)
 }
 
-// entryTarget names the MCP server and tool of an MCP entry. The server
-// author chooses the tool name, so a server claim from the adapter wins.
-// The tool name gives the server only when the adapter makes no claim.
-func entryTarget(action *model.Action) model.DerivedTarget {
+// entryTarget names the first host of the action, and the MCP server and
+// tool of an MCP entry. The server author chooses the tool name, so a server
+// claim from the adapter wins. The tool name gives the server only when the
+// adapter makes no claim.
+func entryTarget(action *model.Action, hosts []string) model.DerivedTarget {
+	var target model.DerivedTarget
+	if len(hosts) > 0 {
+		target.Host = hosts[0]
+	}
 	if action.Origin != privacy.OriginMCP {
-		return model.DerivedTarget{}
+		return target
 	}
 	if action.Source != "" {
-		return model.DerivedTarget{MCPServer: action.Source, MCPTool: events.TrimMCPTool(action.Source, action.Tool)}
+		target.MCPServer, target.MCPTool = action.Source, events.TrimMCPTool(action.Source, action.Tool)
+		return target
 	}
+	target.MCPTool = action.Tool
 	if server, tool, ok := events.SplitMCPTool(action.Tool); ok && server != "" {
-		return model.DerivedTarget{MCPServer: server, MCPTool: tool}
+		target.MCPServer, target.MCPTool = server, tool
 	}
-	return model.DerivedTarget{MCPTool: action.Tool}
+	return target
 }
 
 // entryEventResult is the result that a post event reports. A pre event has

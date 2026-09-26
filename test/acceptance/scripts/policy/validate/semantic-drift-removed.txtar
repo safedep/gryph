@@ -1,0 +1,54 @@
+# context.semantic_drift is removed. Policy validation rejects a policy that
+# reads it, also through an alias, with a message that names the field. An
+# installed policy that reads it still loads and reads it as zero, so an
+# upgrade never locks the agent out.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+! exec gryph policy validate --file drift.yaml
+stderr 'context.semantic_drift was removed'
+! exec gryph policy validate --file alias.yaml
+stderr 'context.semantic_drift was removed'
+
+stdin read.json
+exec gryph _hook claude-code PreToolUse
+stdin write_env.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'legacy-drift 0'
+
+! exec gryph policy validate
+stderr 'context.semantic_drift was removed'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: legacy-drift-env-write
+    action: block
+    match:
+      action_types: [file_write]
+      file_patterns: ["**/.env"]
+    condition: "context.semantic_drift < 0.5 && context.total_actions > 0"
+    message: "legacy-drift {{.Context.SemanticDrift}}"
+-- read.json --
+{"session_id": "s-drift", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "/home/user/project/main.go"}, "tool_use_id": "tu-1"}
+-- write_env.json --
+{"session_id": "s-drift", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Write",
+ "tool_input": {"file_path": "/home/user/project/.env", "content": "x"}, "tool_use_id": "tu-2"}
+-- drift.yaml --
+version: "1"
+rules:
+  - id: drift
+    action: block
+    condition: "context.semantic_drift > 0.5"
+-- alias.yaml --
+version: "1"
+rules:
+  - id: drift-alias
+    action: block
+    condition: "[context].exists(c, c.semantic_drift > 0.5)"

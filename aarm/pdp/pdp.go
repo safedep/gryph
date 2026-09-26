@@ -18,6 +18,9 @@ import (
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/google/cel-go/cel"
 	celast "github.com/google/cel-go/common/ast"
+	"github.com/google/cel-go/common/operators"
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
@@ -45,6 +48,7 @@ type DeferConfig struct {
 type PDP struct {
 	rules    []compiledRule
 	deferCfg DeferConfig
+	timeout  time.Duration
 }
 
 // Option configures optional PDP behavior.
@@ -68,11 +72,11 @@ func New(policy *Policy, opts ...Option) (*PDP, error) {
 		return nil, err
 	}
 	if policy != nil {
-		if err := CheckTagNames(policy); err != nil {
-			log.Warnf("pdp: %v. The policy loads, but gryph policy validate rejects the tag", err)
+		if err := cmp.Or(CheckTagNames(policy), strictError(compiled)); err != nil {
+			log.Warnf("pdp: %v. The policy loads, but gryph policy validate rejects it", err)
 		}
 	}
-	p := &PDP{rules: compiled}
+	p := &PDP{rules: compiled, timeout: conditionTimeout}
 	for _, opt := range opts {
 		opt(p)
 	}
@@ -98,7 +102,7 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	evalCtx, cancel := context.WithTimeout(ctx, conditionTimeout)
+	evalCtx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
 
 	var activations map[string]any
@@ -206,14 +210,10 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 	}
 
 	if winnerRule != nil {
-		full, err := winnerRule.renderMessage(action, snapshot)
-		if err != nil {
-			return nil, err
-		}
-		result.FullMessage = full
-		result.Message = full
+		result.FullMessage = winnerRule.messageOrFallback(action, snapshot)
+		result.Message = result.FullMessage
 		if stored != action {
-			result.Message = winnerRule.storedMessage(stored, snapshot)
+			result.Message = winnerRule.messageOrFallback(stored, snapshot)
 		}
 	}
 
@@ -228,14 +228,15 @@ func gates(d model.Decision) bool {
 	return d == model.DecisionBlock || d == model.DecisionEscalate || d == model.DecisionDefer
 }
 
-// storedMessage renders the message from the stored action. The stored
-// action lacks the values that Gryph strips, so a template that works on the
-// full action can fail here. The decision must not depend on the logging
-// level, so a failed render gives a fixed message and not an error.
-func (r compiledRule) storedMessage(stored *model.Action, snapshot *model.ContextSnapshot) string {
-	msg, err := r.renderMessage(stored, snapshot)
+// messageOrFallback renders the rule message. A failed render gives a fixed
+// message and not an error, because the decision must not depend on the
+// message. A template can fail only on some actions: the stored action lacks
+// the values that Gryph strips, and a branch that validation does not run
+// can name an unknown field.
+func (r compiledRule) messageOrFallback(action *model.Action, snapshot *model.ContextSnapshot) string {
+	msg, err := r.renderMessage(action, snapshot)
 	if err != nil {
-		log.Warnf("pdp: rule %s: render the stored message: %v", r.rule.ID, err)
+		log.Warnf("pdp: rule %s: render the message: %v", r.rule.ID, err)
 		return "rule " + r.rule.ID
 	}
 	return msg
@@ -346,9 +347,10 @@ func contextRefsEmpty(refs []string, snapshot *model.ContextSnapshot) bool {
 }
 
 // contextFieldEmpty reports whether a context field has no data yet. The
-// intent, tag and origin fields are never empty. A session with no intent or
-// no tag is a fact that a rule can act on, and the fresh-session defer must
-// not hide it.
+// intent, tag, origin, egress host and entry fields are never empty. A
+// session with no intent, no tag or no earlier entry is a fact that a rule
+// can act on, and the fresh-session defer must not hide it. A rule such as
+// "block a write after a .pem read" must allow the first write of a session.
 func contextFieldEmpty(field string, s *model.ContextSnapshot) bool {
 	switch field {
 	case "total_actions":
@@ -372,7 +374,7 @@ func contextFieldEmpty(field string, s *model.ContextSnapshot) bool {
 	case "entities_seen":
 		return len(s.EntitiesSeen) == 0
 	case "semantic_drift":
-		return s.SemanticDrift == 0
+		return true
 	default:
 		return false
 	}
@@ -423,6 +425,10 @@ type compiledRule struct {
 	hasCondition       bool
 	hasMessageTemplate bool
 	contextRefs        []string
+	// strictErr is a problem that validation rejects but a policy load only
+	// warns on, such as a removed context field or an unknown template
+	// field. The rule still loads.
+	strictErr error
 }
 
 func compileRules(rules []Rule) ([]compiledRule, error) {
@@ -477,13 +483,18 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 	}
 
 	if strings.TrimSpace(rule.Condition) != "" {
-		prg, refs, err := compileCondition(env, rule.ID, rule.Condition)
+		prg, ast, err := compileCondition(env, rule.ID, rule.Condition)
 		if err != nil {
 			return cr, err
 		}
 		cr.condition = prg
 		cr.hasCondition = true
-		cr.contextRefs = refs
+		cr.contextRefs = collectContextRefs(ast)
+		if field := removedFieldRef(ast); field != "" {
+			cr.strictErr = fmt.Errorf("rule %q condition: context.%s was removed. Remove it from the condition", rule.ID, field)
+		} else if pattern := invalidGlobLiteral(ast); pattern != "" {
+			cr.strictErr = fmt.Errorf("rule %q condition: glob pattern %q is invalid", rule.ID, pattern)
+		}
 	}
 
 	if strings.TrimSpace(rule.Message) != "" {
@@ -491,8 +502,20 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 		if err != nil {
 			return cr, fmt.Errorf("rule %q message template: %w", rule.ID, err)
 		}
+		// A field that the template data does not have fails every render
+		// that reaches it, so validation rejects it. A load only warns, so
+		// that a template typo in one rule does not stop every hook after an
+		// upgrade.
+		if field := unknownTemplateField(tmpl); field != "" {
+			cr.strictErr = fmt.Errorf("rule %q message template: can't evaluate field %s", rule.ID, field)
+		}
 		cr.message = tmpl
 		cr.hasMessageTemplate = true
+		for _, f := range removedContextFields {
+			if cr.strictErr == nil && f.templateRE.MatchString(rule.Message) {
+				cr.strictErr = fmt.Errorf("rule %q message template: .Context.%s was removed. Remove it from the message", rule.ID, f.template)
+			}
+		}
 	}
 
 	return cr, nil
@@ -655,7 +678,18 @@ func validateGlobPatterns(field, ruleID string, patterns []string) error {
 	return nil
 }
 
-func compileCondition(env *cel.Env, ruleID, expr string) (cel.Program, []string, error) {
+// conditionCostLimit bounds the CEL cost of a condition. A 90-character
+// matches() regex on a prompt at celPromptContentMax costs about 19000 and
+// runs in under 1 ms, and the limit leaves room for a regex about five times
+// that long. A condition that reads context.entries walks up to
+// config.MaxCELEntries entries, and the storage bounds the size of each entry
+// field, so it gets entriesCostLimit. The 100 ms timeout bounds both.
+const (
+	conditionCostLimit = 100_000
+	entriesCostLimit   = 5_000_000
+)
+
+func compileCondition(env *cel.Env, ruleID, expr string) (cel.Program, *cel.Ast, error) {
 	ast, issues := env.Compile(expr)
 	if issues.Err() != nil {
 		return nil, nil, fmt.Errorf("rule %q condition: %w", ruleID, issues.Err())
@@ -663,12 +697,15 @@ func compileCondition(env *cel.Env, ruleID, expr string) (cel.Program, []string,
 	if ast.OutputType() != cel.BoolType {
 		return nil, nil, fmt.Errorf("rule %q condition: output type %s, want bool", ruleID, ast.OutputType())
 	}
-	prg, err := env.Program(ast, cel.CostLimit(celCostLimit), cel.InterruptCheckFrequency(100))
+	costLimit := uint64(conditionCostLimit)
+	if readsEntries(collectContextRefs(ast)) {
+		costLimit = entriesCostLimit
+	}
+	prg, err := env.Program(ast, cel.CostLimit(costLimit), cel.InterruptCheckFrequency(100))
 	if err != nil {
 		return nil, nil, fmt.Errorf("rule %q condition program: %w", ruleID, err)
 	}
-	refs := collectContextRefs(ast)
-	return prg, refs, nil
+	return prg, ast, nil
 }
 
 // collectContextRefs walks the compiled CEL AST and returns the immediate
@@ -684,21 +721,26 @@ func collectContextRefs(ast *cel.Ast) []string {
 		return nil
 	}
 	seen := map[string]struct{}{}
+	idents, accesses := 0, 0
 	visitor := celast.NewExprVisitor(func(e celast.Expr) {
-		if e.Kind() != celast.SelectKind {
-			return
+		switch e.Kind() {
+		case celast.IdentKind:
+			if e.AsIdent() == "context" {
+				idents++
+			}
+		default:
+			if operand, field, ok := fieldAccess(e); ok && isContextIdent(operand) {
+				seen[field] = struct{}{}
+				accesses++
+			}
 		}
-		sel := e.AsSelect()
-		operand := sel.Operand()
-		if operand == nil || operand.Kind() != celast.IdentKind {
-			return
-		}
-		if operand.AsIdent() != "context" {
-			return
-		}
-		seen[sel.FieldName()] = struct{}{}
 	})
 	celast.PreOrderVisit(native.Expr(), visitor)
+	if idents > accesses {
+		// The condition uses context in a way that names no field, such
+		// as [context].exists(c, c.entries...). It may read any field.
+		seen[anyContextField] = struct{}{}
+	}
 	if len(seen) == 0 {
 		return nil
 	}
@@ -710,12 +752,134 @@ func collectContextRefs(ast *cel.Ast) []string {
 	return out
 }
 
+// fieldAccess returns the operand and the field name of a select such as
+// x.f or x.?f, or of an index with a string literal such as x["f"].
+func fieldAccess(e celast.Expr) (celast.Expr, string, bool) {
+	switch e.Kind() {
+	case celast.SelectKind:
+		sel := e.AsSelect()
+		return sel.Operand(), sel.FieldName(), true
+	case celast.CallKind:
+		call := e.AsCall()
+		switch call.FunctionName() {
+		case operators.Index, operators.OptIndex, operators.OptSelect:
+		default:
+			return nil, "", false
+		}
+		args := call.Args()
+		if len(args) != 2 || args[1].Kind() != celast.LiteralKind {
+			return nil, "", false
+		}
+		if name, ok := args[1].AsLiteral().(types.String); ok {
+			return args[0], string(name), true
+		}
+	}
+	return nil, "", false
+}
+
+// removedField is a context field that older policies can name. No
+// component computes it, so a rule on it can never fire as written. A policy
+// load keeps it at zero and warns. Validation rejects it.
+type removedField struct {
+	cel        string
+	template   string
+	templateRE *regexp.Regexp
+}
+
+var removedContextFields = []removedField{
+	{cel: "semantic_drift", template: "SemanticDrift", templateRE: regexp.MustCompile(`\.SemanticDrift\b`)},
+}
+
+// strictError returns the first strict validation error of the rules.
+func strictError(rules []compiledRule) error {
+	for _, r := range rules {
+		if r.strictErr != nil {
+			return r.strictErr
+		}
+	}
+	return nil
+}
+
+// removedFieldRef returns a removed context field that the condition reads
+// on any value. Only context has these fields, so this also finds a read
+// through an alias, as in [context].exists(c, c.semantic_drift > 0).
+func removedFieldRef(ast *cel.Ast) string {
+	native := ast.NativeRep()
+	if native == nil {
+		return ""
+	}
+	var found string
+	celast.PreOrderVisit(native.Expr(), celast.NewExprVisitor(func(e celast.Expr) {
+		_, field, ok := fieldAccess(e)
+		if ok && found == "" && slices.ContainsFunc(removedContextFields, func(f removedField) bool { return f.cel == field }) {
+			found = field
+		}
+	}))
+	return found
+}
+
+// invalidGlobLiteral returns the first literal pattern of a glob() call that
+// does not compile. celGlob fails on it at runtime, so validation rejects it.
+func invalidGlobLiteral(ast *cel.Ast) string {
+	native := ast.NativeRep()
+	if native == nil {
+		return ""
+	}
+	var found string
+	celast.PreOrderVisit(native.Expr(), celast.NewExprVisitor(func(e celast.Expr) {
+		if found != "" || e.Kind() != celast.CallKind || e.AsCall().FunctionName() != "glob" {
+			return
+		}
+		args := e.AsCall().Args()
+		if len(args) != 2 || args[1].Kind() != celast.LiteralKind {
+			return
+		}
+		if pat, ok := args[1].AsLiteral().(types.String); ok && !doublestar.ValidatePattern(string(pat)) {
+			found = string(pat)
+		}
+	}))
+	return found
+}
+
+// anyContextField is the reference of a condition that may read any context
+// field.
+const anyContextField = "*"
+
+func isContextIdent(e celast.Expr) bool {
+	return e != nil && e.Kind() == celast.IdentKind && e.AsIdent() == "context"
+}
+
 func conditionEnv() (*cel.Env, error) {
 	return cel.NewEnv(
 		cel.Variable("action", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("context", cel.MapType(cel.StringType, cel.DynType)),
 		cel.OptionalTypes(),
+		cel.Function("glob",
+			cel.Overload("glob_string_string", []*cel.Type{cel.StringType, cel.StringType}, cel.BoolType,
+				cel.BinaryBinding(celGlob))),
 	)
+}
+
+// globPathMaxBytes bounds the path of glob(). CEL gives glob() a fixed cost,
+// and the timeout cannot stop one long match, so a padded path must not reach
+// the matcher. It is PATH_MAX.
+const globPathMaxBytes = 4096
+
+// celGlob implements glob(path, pattern). It matches one path against one
+// pattern with the matcher of file_patterns.
+func celGlob(path, pattern ref.Val) ref.Val {
+	p, ok1 := path.(types.String)
+	pat, ok2 := pattern.(types.String)
+	if !ok1 || !ok2 {
+		return types.NewErr("glob: want (string, string)")
+	}
+	if len(p) > globPathMaxBytes {
+		return types.NewErr("glob: path is longer than %d bytes", globPathMaxBytes)
+	}
+	if !doublestar.ValidatePattern(string(pat)) {
+		return types.NewErr("glob: invalid pattern %q", string(pat))
+	}
+	return types.Bool(matchesAnyPath([]string{string(pat)}, string(p)))
 }
 
 // phaseOrUnknown normalizes the empty ActionPhase zero value to PhaseUnknown
@@ -733,11 +897,6 @@ func phaseOrUnknown(p model.ActionPhase) model.ActionPhase {
 // referenced files can be long. content_patterns still match the whole
 // prompt, because they run outside CEL.
 const celPromptContentMax = 8 << 10
-
-// celCostLimit bounds the work of one condition. A 90-character regex on a
-// prompt at celPromptContentMax costs about 19000 and runs in under 1 ms.
-// The limit leaves room for a regex about five times that long.
-const celCostLimit = 100000
 
 // paramsContent gives a prompt rule the prompt that the agent gets, with the
 // referenced file content, up to celPromptContentMax bytes cut on a rune
@@ -787,6 +946,9 @@ func actionActivation(action *model.Action, paths *actionPaths) map[string]any {
 		"origin":               string(action.Origin),
 		"source":               action.Source,
 		"sources":              nonNil(action.Sources),
+		"hosts":                action.Hosts(),
+		"read_paths":           action.ReadPaths(),
+		"write_paths":          action.WritePaths(),
 		"params": map[string]any{
 			"path":          action.Parameters.Path,
 			"command":       action.Parameters.Command,
@@ -817,8 +979,10 @@ func contextActivation(snapshot *model.ContextSnapshot) map[string]any {
 		"tags_seen":            tagNames(snapshot.TagsSeen),
 		"tag_seq":              tagSeq(snapshot.TagsSeen),
 		"origins_seen":         nonNil(snapshot.OriginsSeen),
-		"entities_seen":        snapshot.EntitiesSeen,
-		"semantic_drift":       snapshot.SemanticDrift,
+		"entities_seen":        nonNil(snapshot.EntitiesSeen),
+		"semantic_drift":       0.0,
+		"egress_hosts":         nonNil(snapshot.EgressHosts),
+		"entries":              entryMaps(snapshot.Entries),
 		"intent_available":     snapshot.IntentAvailable,
 		"actions_since_intent": snapshot.ActionsSinceIntent,
 	}
@@ -842,4 +1006,42 @@ func nonNil(s []string) []string {
 		return []string{}
 	}
 	return s
+}
+
+// entryMaps turns the entry log into CEL maps.
+func entryMaps(entries []model.EntryFacts) []map[string]any {
+	out := make([]map[string]any, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, map[string]any{
+			"seq":         e.Seq,
+			"kind":        e.Kind,
+			"action_type": e.ActionType,
+			"tool":        e.Tool,
+			"path":        e.Path,
+			"command":     e.Command,
+			"host":        e.Host,
+			"mcp_server":  e.MCPServer,
+			"origin":      e.Origin,
+			"classes":     nonNil(e.Classes),
+			"tags":        nonNil(e.Tags),
+			"decision":    e.Decision,
+			"result":      e.Result,
+		})
+	}
+	return out
+}
+
+// NeedsEntries reports whether a rule reads context.entries. The Mediator
+// loads the entry log only then.
+func (p *PDP) NeedsEntries() bool {
+	for _, r := range p.rules {
+		if readsEntries(r.contextRefs) {
+			return true
+		}
+	}
+	return false
+}
+
+func readsEntries(refs []string) bool {
+	return slices.Contains(refs, "entries") || slices.Contains(refs, anyContextField)
 }

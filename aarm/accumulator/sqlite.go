@@ -88,12 +88,20 @@ func entryRow(e *model.ContextEntry) *storage.ContextEntryRow {
 // for the approval, and ConfirmIntent sets it on approve. A failed
 // evaluation has no decision, and fail_mode closed then blocks the prompt.
 // So a failed entry never becomes the latest intent. Under fail_mode open
-// the prompt runs, and the next intent resets the counters.
+// the prompt runs, and the next intent resets the counters. A pre action adds
+// its egress hosts only when it reaches the agent. A blocked or deferred
+// action contacted no host, and an escalated action waits for an approval
+// that can deny it. A post action already ran, so it adds its hosts at any
+// decision. An approved escalation adds its hosts with its post action.
 func stateDelta(e *model.ContextEntry) *storage.ContextStateDelta {
 	delta := &storage.ContextStateDelta{
 		Classifications: privacy.Strings(e.Classifications),
 		Tags:            e.Tags,
 		Intent:          entryKind(e) == events.KindIntent && e.Result != model.ResultError && reachesAgent(e.Decision),
+		Entities:        e.Entities,
+	}
+	if reachesAgent(e.Decision) || e.Phase == model.PhasePost {
+		delta.EgressHosts = e.Hosts
 	}
 	if entryKind(e) == events.KindAction && e.Tool != "" {
 		delta.Tools = []string{e.Tool}
@@ -184,6 +192,7 @@ func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID, p
 		TagsSeen:            maps.Clone(state.TagsSeen),
 		OriginsSeen:         slices.Clone(state.OriginsSeen),
 		EntitiesSeen:        slices.Clone(state.EntitiesSeen),
+		EgressHosts:         slices.Clone(state.EgressHosts),
 		IntentAvailable:     state.LastIntentSeq != nil,
 		ActionsSinceIntent:  state.ActionsSinceIntent,
 	}
@@ -207,6 +216,7 @@ func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID, p
 		snap.ToolsUsed = addNew(snap.ToolsUsed, delta.Tools)
 		snap.ClassificationsSeen = addNew(snap.ClassificationsSeen, delta.Classifications)
 		snap.OriginsSeen = addNew(snap.OriginsSeen, delta.Origins)
+		snap.EntitiesSeen = addNew(snap.EntitiesSeen, delta.Entities)
 		switch entryKind(pending) {
 		case events.KindIntent:
 			snap.IntentAvailable = true
@@ -227,4 +237,34 @@ func addNew(set, values []string) []string {
 		}
 	}
 	return set
+}
+
+// Entries implements Accumulator.
+func (a *SQLiteAccumulator) Entries(ctx context.Context, sessionID uuid.UUID, limit int) ([]model.EntryFacts, error) {
+	if a == nil || a.store == nil {
+		return nil, fmt.Errorf("accumulator: store is not initialized")
+	}
+	rows, err := a.store.QueryEntryFacts(ctx, sessionID, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]model.EntryFacts, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, model.EntryFacts{
+			Seq:        r.Sequence,
+			Kind:       r.Kind,
+			ActionType: r.ActionType,
+			Tool:       r.Tool,
+			Path:       r.Path,
+			Command:    r.Command,
+			Host:       r.Host,
+			MCPServer:  r.MCPServer,
+			Origin:     r.Origin,
+			Classes:    r.Classifications,
+			Tags:       r.Tags,
+			Decision:   r.Decision,
+			Result:     r.ResultStatus,
+		})
+	}
+	return out, nil
 }

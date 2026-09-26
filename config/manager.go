@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -96,7 +97,15 @@ func (m *Manager) Set(key string, value interface{}) error {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
+	old := m.v.Get(key)
 	m.v.Set(key, value)
+	// A value that the loader rejects makes loadApp fall back to the
+	// defaults on every hook, which turns the policy off. So it never
+	// reaches the file.
+	if err := validateSettings(m.v); err != nil {
+		m.v.Set(key, old)
+		return fmt.Errorf("%w: %w", ErrInvalidValue, err)
+	}
 
 	configMap := m.v.AllSettings()
 	data, err := yaml.Marshal(configMap)
@@ -175,4 +184,16 @@ func ParseValue(value string) interface{} {
 		return parts
 	}
 	return value
+}
+
+// ErrInvalidValue is the error of a Set whose value makes the config
+// invalid.
+var ErrInvalidValue = errors.New("invalid config value")
+
+func validateSettings(v *viper.Viper) error {
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		return err
+	}
+	return validate(&cfg)
 }

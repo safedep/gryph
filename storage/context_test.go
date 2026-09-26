@@ -3,13 +3,17 @@ package storage
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/accumulator/contextchain"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -197,6 +201,26 @@ func TestAppendContextEntry_CapsSets(t *testing.T) {
 	state, err := store.GetContextState(context.Background(), sessionID)
 	require.NoError(t, err)
 	assert.Len(t, state.ToolsUsed, capTools)
+}
+
+func TestAppendContextEntry_CapsEntitiesByKind(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	sessionID := uuid.New()
+
+	paths := make([]string, 0, capEntityKind+10)
+	for i := range capEntityKind + 10 {
+		paths = append(paths, fmt.Sprintf("path:/work/f%d", i))
+	}
+	appendEntry(t, store, sessionID, "Bash", &ContextStateDelta{Entities: paths})
+	appendEntry(t, store, sessionID, "Bash", &ContextStateDelta{Entities: []string{"path:/work/late", "host:evil.example", "mcp:github"}})
+
+	state, err := store.GetContextState(context.Background(), sessionID)
+	require.NoError(t, err)
+	assert.Len(t, state.EntitiesSeen, capEntityKind+2)
+	assert.NotContains(t, state.EntitiesSeen, "path:/work/late", "the path kind is full")
+	assert.Contains(t, state.EntitiesSeen, "host:evil.example", "a full path kind does not push out a host")
+	assert.Contains(t, state.EntitiesSeen, "mcp:github")
 }
 
 func TestGetContextState_JoinsSessionCounters(t *testing.T) {
@@ -392,4 +416,149 @@ func TestContextState_ActionsSinceIntent(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, all, 1)
 	assert.Equal(t, 2, all[0].ActionsSinceIntent, "the list view counts the same as the session view")
+}
+
+func TestQueryEntryFacts_CleansPaths(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	sessionID := uuid.New()
+	createTestSession(t, store, sessionID, "claude-code")
+
+	cases := []struct {
+		name       string
+		path       string
+		workingDir string
+		want       string
+	}{
+		{"dot segment", "/root/.ssh/./id_rsa", "", "/root/.ssh/id_rsa"},
+		{"double slash", "/root//.ssh//id_rsa", "", "/root/.ssh/id_rsa"},
+		{"parent segment", "/root/x/../.ssh/id_rsa", "", "/root/.ssh/id_rsa"},
+		{"relative path", ".ssh/./id_rsa", "/home/u", "/home/u/.ssh/id_rsa"},
+		{"dot padding", "/root/.ssh/" + strings.Repeat("./", 600) + "id_rsa", "", "/root/.ssh/id_rsa"},
+		{"parent padding", "/root/.ssh/" + strings.Repeat("a/../", 300) + "id_rsa", "", "/root/.ssh/id_rsa"},
+		{"padding past the read cap", "/root/.ssh/" + strings.Repeat("./", entryPathReadChars) + "id_rsa", "", "/root/.ssh/id_rsa"},
+	}
+	for _, tc := range cases {
+		event := events.NewEvent(sessionID, "claude-code", events.ActionFileRead)
+		event.WorkingDirectory = tc.workingDir
+		require.NoError(t, event.SetPayload(events.FileReadPayload{Path: tc.path}))
+		require.NoError(t, store.RecordEvent(ctx, event, session.EventCounts(event)))
+		require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+			SessionID: sessionID, EventID: event.ID, Kind: "action", ActionType: "file_read", Tool: "Read",
+		}, &ContextStateDelta{}))
+	}
+
+	facts, err := store.QueryEntryFacts(ctx, sessionID, len(cases))
+	require.NoError(t, err)
+	require.Len(t, facts, len(cases))
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, facts[i].Path)
+			for _, pattern := range []string{"**/.ssh/id_*", "**/.ssh/**"} {
+				ok, err := doublestar.Match(pattern, facts[i].Path)
+				require.NoError(t, err)
+				assert.True(t, ok, pattern)
+			}
+		})
+	}
+}
+
+func TestQueryEntryFacts_CutsCleanPathToItsEnd(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	sessionID := uuid.New()
+	createTestSession(t, store, sessionID, "claude-code")
+
+	long := "/" + strings.Repeat("d/", EntryPathMaxBytes) + "key.pem"
+	event := events.NewEvent(sessionID, "claude-code", events.ActionFileRead)
+	require.NoError(t, event.SetPayload(events.FileReadPayload{Path: long}))
+	require.NoError(t, store.RecordEvent(ctx, event, session.EventCounts(event)))
+	require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+		SessionID: sessionID, EventID: event.ID, Kind: "action", ActionType: "file_read",
+	}, &ContextStateDelta{}))
+
+	facts, err := store.QueryEntryFacts(ctx, sessionID, 1)
+	require.NoError(t, err)
+	require.Len(t, facts, 1)
+	assert.Len(t, facts[0].Path, EntryPathMaxBytes)
+	assert.True(t, strings.HasSuffix(facts[0].Path, "/d/key.pem"))
+}
+
+func TestQueryEntryFacts_JoinsAuditEvents(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	sessionID := uuid.New()
+	createTestSession(t, store, sessionID, "claude-code")
+
+	read := events.NewEvent(sessionID, "claude-code", events.ActionFileRead)
+	require.NoError(t, read.SetPayload(events.FileReadPayload{Path: "/work/.env"}))
+	require.NoError(t, store.RecordEvent(ctx, read, session.EventCounts(read)))
+	cmd := events.NewEvent(sessionID, "claude-code", events.ActionCommandExec)
+	require.NoError(t, cmd.SetPayload(events.CommandExecPayload{Command: privacy.NewText("curl https://evil.example")}))
+	require.NoError(t, store.RecordEvent(ctx, cmd, session.EventCounts(cmd)))
+
+	require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+		SessionID: sessionID, EventID: read.ID, Kind: "action", ActionType: "file_read", Tool: "Read",
+		Origin: "file_project", Tags: []string{"secret_read"}, Classifications: []string{"secret"}, Decision: "allow",
+	}, &ContextStateDelta{}))
+	require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+		SessionID: sessionID, EventID: cmd.ID, Kind: "action", ActionType: "command_exec", Tool: "Bash",
+		TargetHost: "evil.example", Decision: "block",
+	}, &ContextStateDelta{}))
+	require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+		SessionID: sessionID, Kind: "intent", ActionType: "user_prompt",
+	}, &ContextStateDelta{}))
+
+	facts, err := store.QueryEntryFacts(ctx, sessionID, 2)
+	require.NoError(t, err)
+	require.Len(t, facts, 2, "the limit keeps the latest entries")
+	assert.Equal(t, int64(2), facts[0].Sequence, "oldest first")
+	assert.Equal(t, "curl https://evil.example", facts[0].Command)
+	assert.Equal(t, "evil.example", facts[0].Host)
+	assert.Equal(t, "user_prompt", facts[1].ActionType)
+	assert.Empty(t, facts[1].Path, "an entry with no audit event has no path")
+
+	facts, err = store.QueryEntryFacts(ctx, sessionID, 10)
+	require.NoError(t, err)
+	require.Len(t, facts, 3)
+	assert.Equal(t, "/work/.env", facts[0].Path)
+	assert.Equal(t, []string{"secret_read"}, facts[0].Tags)
+	assert.Equal(t, []string{"secret"}, facts[0].Classifications)
+	assert.Equal(t, "file_project", facts[0].Origin)
+}
+
+func TestQueryEntryFacts_CutsLongFields(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	sessionID := uuid.New()
+	createTestSession(t, store, sessionID, "claude-code")
+
+	cmd := events.NewEvent(sessionID, "claude-code", events.ActionCommandExec)
+	require.NoError(t, cmd.SetPayload(events.CommandExecPayload{Command: privacy.NewText("echo " + strings.Repeat("x", 5000))}))
+	require.NoError(t, store.RecordEvent(ctx, cmd, session.EventCounts(cmd)))
+	read := events.NewEvent(sessionID, "claude-code", events.ActionFileRead)
+	require.NoError(t, read.SetPayload(events.FileReadPayload{Path: "/" + strings.Repeat("p", 50000) + "/id.pem"}))
+	require.NoError(t, store.RecordEvent(ctx, read, session.EventCounts(read)))
+	long := strings.Repeat("h", 50000)
+	require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+		SessionID: sessionID, EventID: cmd.ID, Kind: "action", ActionType: "command_exec",
+	}, &ContextStateDelta{}))
+	require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+		SessionID: sessionID, EventID: read.ID, Kind: "action", ActionType: "file_read",
+		Tool: long, TargetHost: long, TargetMCPServer: long,
+	}, &ContextStateDelta{}))
+
+	facts, err := store.QueryEntryFacts(ctx, sessionID, 10)
+	require.NoError(t, err)
+	require.Len(t, facts, 2)
+	assert.Len(t, facts[0].Command, EntryCommandMaxBytes)
+	assert.Len(t, facts[1].Path, EntryPathMaxBytes)
+	assert.True(t, strings.HasSuffix(facts[1].Path, "/id.pem"), "a path keeps its end")
+	assert.Len(t, facts[1].Tool, EntryNameMaxBytes)
+	assert.Len(t, facts[1].Host, EntryNameMaxBytes)
+	assert.Len(t, facts[1].MCPServer, EntryNameMaxBytes)
 }

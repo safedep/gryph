@@ -81,6 +81,9 @@ rules:
 type spyAccumulator struct {
 	appendErr         error
 	snapshotErr       error
+	entriesErr        error
+	entries           []model.EntryFacts
+	entriesCalls      int
 	appendCalls       int
 	snapshotCalls     int
 	recordResultCalls int
@@ -95,6 +98,14 @@ func (s *spyAccumulator) Append(_ context.Context, e *model.ContextEntry) error 
 	s.appendCalls++
 	s.lastEntry = e
 	return s.appendErr
+}
+
+func (s *spyAccumulator) Entries(context.Context, uuid.UUID, int) ([]model.EntryFacts, error) {
+	s.entriesCalls++
+	if s.entriesErr != nil {
+		return nil, s.entriesErr
+	}
+	return s.entries, nil
 }
 
 func (s *spyAccumulator) RecordResult(_ context.Context, _ uuid.UUID, r model.Result) error {
@@ -269,6 +280,7 @@ func TestMediator_FailedDecisionAppendsEntry(t *testing.T) {
 		name        string
 		condition   string
 		snapshotErr error
+		entriesErr  error
 		wantErr     error
 	}{
 		{
@@ -276,6 +288,12 @@ func TestMediator_FailedDecisionAppendsEntry(t *testing.T) {
 			condition:   "true",
 			snapshotErr: errors.New("database is locked"),
 			wantErr:     accumulator.ErrSnapshot,
+		},
+		{
+			name:       "entry log error",
+			condition:  "context.entries.size() >= 0",
+			entriesErr: errors.New("database is locked"),
+			wantErr:    accumulator.ErrSnapshot,
 		},
 		{
 			name:      "evaluation error",
@@ -295,7 +313,7 @@ rules:
 `))
 			require.NoError(t, err)
 
-			spy := &spyAccumulator{snapshotErr: tc.snapshotErr, appendErr: errors.New("database is locked")}
+			spy := &spyAccumulator{snapshotErr: tc.snapshotErr, entriesErr: tc.entriesErr, appendErr: errors.New("database is locked")}
 			adapter := mediation.NewHookAdapter(mediation.WithClassifier(classify.NewHeuristic()))
 			med, err := NewMediator(policy, WithAccumulator(spy), WithAdapter(adapter))
 			require.NoError(t, err)
@@ -996,6 +1014,40 @@ rules:
 			res, err := med.Check(context.Background(), event, nil)
 			require.NoError(t, err)
 			assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
+		})
+	}
+}
+
+func TestMediator_LoadsEntriesOnlyWhenARuleReadsThem(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		condition string
+		wantLoads int
+	}{
+		{"rule reads entries", `context.entries.exists(e, e.tool == "WebFetch")`, 1},
+		{"rule reads counters only", `context.total_actions >= 0`, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: r
+    action: block
+    match: { action_types: [command_exec] }
+    condition: '` + tc.condition + `'
+`))
+			require.NoError(t, err)
+			spy := &spyAccumulator{entries: []model.EntryFacts{{Seq: 1, Tool: "WebFetch"}}, snapshot: &model.ContextSnapshot{}}
+			med, err := NewMediator(policy, WithAccumulator(spy))
+			require.NoError(t, err)
+
+			event := &events.Event{ID: uuid.New(), SessionID: uuid.New(), Timestamp: time.Now(),
+				ActionType: events.ActionCommandExec, AgentName: "claude-code", Payload: []byte(`{"command":{"value":"ls"}}`)}
+			res, err := med.Check(context.Background(), event, nil)
+			require.NoError(t, err)
+			assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
+			assert.Equal(t, tc.wantLoads, spy.entriesCalls)
+			assert.Nil(t, spy.snapshot.Entries, "the Mediator does not change the snapshot of the accumulator")
 		})
 	}
 }

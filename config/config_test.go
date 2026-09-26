@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -612,4 +613,29 @@ storage:
 	assert.Equal(t, LoggingMinimal, cfg.Logging.Level)
 	assert.Equal(t, 7, cfg.Storage.RetentionDays)
 	assert.Equal(t, LoggingMinimal, cfg.Agents["cursor"].LoggingLevel)
+}
+
+func TestLoad_ClampsCELEntries(t *testing.T) {
+	cases := []struct {
+		value int
+		want  int
+	}{
+		{0, 1},
+		{-5, 1},
+		{1001, MaxCELEntries},
+		{5000, MaxCELEntries},
+		{250, 250},
+	}
+	for _, tc := range cases {
+		t.Run(strconv.Itoa(tc.value), func(t *testing.T) {
+			configFile := filepath.Join(t.TempDir(), "config.yaml")
+			content := "policy:\n  enabled: true\n  context:\n    cel_entries: " + strconv.Itoa(tc.value) + "\n"
+			require.NoError(t, os.WriteFile(configFile, []byte(content), 0o644))
+
+			cfg, err := Load(configFile)
+			require.NoError(t, err, "an out-of-range value must not turn the policy off")
+			assert.True(t, cfg.Policy.Enabled)
+			assert.Equal(t, tc.want, cfg.Policy.Context.CELEntries)
+		})
+	}
 }

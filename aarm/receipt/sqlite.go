@@ -194,7 +194,10 @@ func (g *SQLiteGenerator) UpdateDecision(ctx context.Context, sessionID uuid.UUI
 }
 
 // snapshotMap copies snapshot fields into the JSON-friendly map persisted on
-// the receipt row.
+// the receipt row. The receipt hash covers the map, and the verifier reads
+// the stored map, so a key change affects new receipts only. The map holds
+// counts, not the entity list, because the list holds paths and hosts, and
+// a hash-chained receipt can never drop them.
 func snapshotMap(s *model.ContextSnapshot) map[string]interface{} {
 	if s == nil {
 		return nil
@@ -207,16 +210,14 @@ func snapshotMap(s *model.ContextSnapshot) map[string]interface{} {
 		"network_requests":  s.NetworkRequests,
 		"errors":            s.Errors,
 		"session_duration":  int64(s.SessionDuration),
-		"semantic_drift":    s.SemanticDrift,
+		"entities_seen":     len(s.EntitiesSeen),
+		"egress_hosts":      len(s.EgressHosts),
 	}
 	if len(s.ToolsUsed) > 0 {
 		m["tools_used"] = append([]string(nil), s.ToolsUsed...)
 	}
 	if len(s.ClassificationsSeen) > 0 {
 		m["classifications_seen"] = append([]string(nil), s.ClassificationsSeen...)
-	}
-	if len(s.EntitiesSeen) > 0 {
-		m["entities_seen"] = append([]string(nil), s.EntitiesSeen...)
 	}
 	return m
 }
