@@ -442,7 +442,9 @@ The decision service owns the activity counters on `sessions`
 pre and post pair for one tool call counts once. A blocked action counts.
 `errors` counts actions and observations with an error result.
 `blocked_actions` and `sensitive_actions` count events of every kind, because
-a rule can block or flag an observation. The event
+a rule can block or flag an observation. `sensitive_actions` does not count an
+observation that links to its pre-event, so a sensitive tool call counts once.
+The event
 sequence comes from `sessions.event_count`, because the counters no longer
 count every event. The context tables store no counters.
 
