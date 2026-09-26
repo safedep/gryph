@@ -185,6 +185,19 @@ CEL evaluation runs sandboxed with a 100 ms timeout.
 
 The rendered message is delivered to the agent on stderr for block and guidance decisions.
 
+Gryph renders the message two times. The agent and the approval prompt get
+the message rendered from the full action. The receipt and the
+`error_message` of the stored event get the message rendered from the stored
+action. When the logging level or a sensitive path removes the content of the
+event, the stored action has no URL, no line counts, no write content, and no
+tool-input parameters. So a stored message never holds a value that the
+stored event does not keep. For example, at `logging.level: minimal` the rule
+message `blocked fetch to {{.Action.Params.URL}}` reaches the agent with the
+URL, and the store keeps `blocked fetch to`. The redactor also runs on the
+stored `error_message`. A template can fail on the stored action, for example
+`{{index .Action.Params.Args 0}}` when the args are removed. Then the store
+keeps `rule <id>`, and the decision does not change.
+
 ## Decisions
 
 | Decision | What happens | Exit code |
@@ -443,7 +456,7 @@ policy:
     enabled: true
 ```
 
-`classify` labels paths and URLs. `injection_score` scans tool-use content for prompt-injection markers and returns a float between 0 and 1. Use them in conditions:
+`classify` labels paths and URLs. An `extra_patterns` key that is not a built-in class, such as `customer_data`, is a custom label. A condition such as `'customer_data' in action.data_classifications` matches it. It does not become a content label. `injection_score` scans tool-use content for prompt-injection markers and returns a float between 0 and 1. Use them in conditions:
 
 Defer fires automatically on insufficient context (fresh sessions whose
 counters have not filled in yet) and on conflicting policies (multiple rules

@@ -9,6 +9,7 @@ import (
 	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 )
 
 type HookInput struct {
@@ -237,7 +238,7 @@ func parseUserPromptSubmit(sessionID uuid.UUID, agentSessionID string, rawData [
 
 	promptInput := map[string]string{"prompt": input.Prompt}
 	if data, err := json.Marshal(promptInput); err == nil {
-		payload.Input = data
+		payload.Input = privacy.NewText(string(data))
 	}
 
 	if err := event.SetPayload(payload); err != nil {
@@ -318,14 +319,14 @@ func (a *Adapter) buildToolPayload(event *events.Event, actionType events.Action
 		}
 
 		if fullContent != "" {
-			payload.ContentPreview = truncateString(fullContent, 200)
+			payload.ContentPreview = privacy.Preview(fullContent, 200)
 			event.FullContent = fullContent
 		}
 		if fullOldStr != "" {
-			payload.OldString = truncateString(fullOldStr, 200)
+			payload.OldString = privacy.Preview(fullOldStr, 200)
 		}
 		if fullNewStr != "" {
-			payload.NewString = truncateString(fullNewStr, 200)
+			payload.NewString = privacy.Preview(fullNewStr, 200)
 		}
 
 		if err := event.SetPayload(payload); err != nil {
@@ -334,9 +335,9 @@ func (a *Adapter) buildToolPayload(event *events.Event, actionType events.Action
 
 		if a.loggingLevel.IsAtLeast(config.LoggingFull) {
 			if fullOldStr != "" || fullNewStr != "" {
-				event.DiffContent = utils.GenerateDiff(filePath, fullOldStr, fullNewStr)
+				event.DiffContent = privacy.NewText(utils.GenerateDiff(filePath, fullOldStr, fullNewStr))
 			} else if fullContent != "" {
-				event.DiffContent = utils.GenerateDiff(filePath, "", fullContent)
+				event.DiffContent = privacy.NewText(utils.GenerateDiff(filePath, "", fullContent))
 			}
 		}
 		return nil
@@ -344,10 +345,10 @@ func (a *Adapter) buildToolPayload(event *events.Event, actionType events.Action
 	case events.ActionCommandExec:
 		payload := events.CommandExecPayload{}
 		if cmd, ok := toolInput["command"].(string); ok {
-			payload.Command = cmd
+			payload.Command = privacy.NewText(cmd)
 		}
 		if responseStr, ok := toolResponse.(string); ok {
-			payload.Output = truncateString(responseStr, 500)
+			payload.Output = privacy.Preview(responseStr, 500)
 		}
 		return event.SetPayload(payload)
 
@@ -356,11 +357,11 @@ func (a *Adapter) buildToolPayload(event *events.Event, actionType events.Action
 			ToolName: event.ToolName,
 		}
 		if input, err := json.Marshal(toolInput); err == nil {
-			payload.Input = input
+			payload.Input = privacy.NewText(string(input))
 		}
 		if toolResponse != nil {
 			if resp, err := json.Marshal(toolResponse); err == nil {
-				payload.Output = resp
+				payload.Output = privacy.NewText(string(resp))
 			}
 		}
 		return event.SetPayload(payload)
@@ -384,13 +385,6 @@ func (a *Adapter) markSensitivePaths(event *events.Event, actionType events.Acti
 			event.IsSensitive = a.privacyChecker.IsSensitivePath(cmd)
 		}
 	}
-}
-
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
 }
 
 type HookResponse struct {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/safedep/gryph/aarm/identity"
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -107,9 +108,9 @@ func TestMCPAdapterSessionFallback(t *testing.T) {
 	assert.Equal(t, "demo", action.Project)
 }
 
-type fakeClassifier struct{ labels []string }
+type fakeClassifier struct{ labels []privacy.Class }
 
-func (f fakeClassifier) Classify(_ *model.Action) []string { return f.labels }
+func (f fakeClassifier) Classify(_ *model.Action) []privacy.Class { return f.labels }
 
 type fakeScorer struct{ score float32 }
 
@@ -170,7 +171,7 @@ func TestMCPAdapterMetaEmptyDoesNotOverride(t *testing.T) {
 
 func TestMCPAdapterRunsClassifierAndScorer(t *testing.T) {
 	a := NewMCPAdapter(
-		WithClassifier(fakeClassifier{labels: []string{"secret"}}),
+		WithClassifier(fakeClassifier{labels: []privacy.Class{"secret"}}),
 		WithInjectionScorer(fakeScorer{score: 0.42}),
 	)
 	req := &MCPToolCall{
@@ -178,6 +179,6 @@ func TestMCPAdapterRunsClassifierAndScorer(t *testing.T) {
 	}
 	action, err := a.Normalize(context.Background(), req, nil)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"secret"}, action.DataClassifications)
+	assert.Equal(t, []privacy.Class{privacy.ClassSecret}, action.DataClassifications)
 	assert.InDelta(t, 0.42, action.InjectionScore, 1e-6)
 }

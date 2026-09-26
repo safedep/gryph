@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/cli"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
@@ -369,7 +370,7 @@ func seedWithCommands(env *testEnv) {
 			evt.Timestamp = time.Now().UTC().Add(-time.Duration(len(commands)-i) * time.Minute)
 			evt.ResultStatus = events.ResultSuccess
 			evt.ToolName = "Bash"
-			payload := &events.CommandExecPayload{Command: cmd}
+			payload := &events.CommandExecPayload{Command: privacy.NewText(cmd)}
 			require.NoError(env.t, evt.SetPayload(payload))
 			require.NoError(env.t, store.SaveEvent(ctx, evt))
 		}
@@ -502,7 +503,7 @@ func seedMixedActions(env *testEnv) {
 				payload := &events.FileWritePayload{Path: fmt.Sprintf("/tmp/project/file%d.go", i), LinesAdded: 10, LinesRemoved: 2}
 				require.NoError(env.t, evt.SetPayload(payload))
 			case events.ActionCommandExec:
-				payload := &events.CommandExecPayload{Command: "go build"}
+				payload := &events.CommandExecPayload{Command: privacy.NewText("go build")}
 				require.NoError(env.t, evt.SetPayload(payload))
 			}
 			require.NoError(env.t, store.SaveEvent(ctx, evt))

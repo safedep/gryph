@@ -12,6 +12,7 @@ import (
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage"
@@ -33,7 +34,7 @@ func fullRequest() *HookRequest {
 	event.ResultStatus = events.ResultError
 	event.ErrorMessage = "boom"
 	event.Payload = json.RawMessage(`{"command":"ls"}`)
-	event.DiffContent = "diff"
+	event.DiffContent = privacy.NewText("diff")
 	event.RawEvent = json.RawMessage(`{"raw":true}`)
 	event.ConversationContext = "context"
 	event.IsSensitive = true
@@ -247,10 +248,10 @@ func TestLocal_Handle(t *testing.T) {
 			for _, c := range tc.checks {
 				evaluator.RegisterCheck(c)
 			}
-			privacy, err := events.NewPrivacyChecker(nil, events.DefaultRedactPatterns())
+			redactor, err := privacy.NewRedactor(nil, privacy.DefaultRedactPatterns())
 			require.NoError(t, err)
 
-			svc := NewLocal(store, evaluator, privacy, fullLevel)
+			svc := NewLocal(store, evaluator, redactor, fullLevel)
 			sessionID := uuid.New()
 			resp, err := svc.Handle(ctx, writeRequest(sessionID))
 			require.NoError(t, err)
@@ -623,4 +624,115 @@ func TestLocal_Handle_LinkFailureKeepsEvent(t *testing.T) {
 	require.NotNil(t, stored)
 	assert.Equal(t, events.KindAction, stored.Kind)
 	assert.Equal(t, uuid.Nil, stored.LinkedEventID)
+}
+
+type stubClassifier []privacy.Class
+
+func (s stubClassifier) ClassifyEvent(*events.Event) []privacy.Class { return s }
+
+// TestLocal_Handle_PolicySeesContentBeforeLevel checks that the evaluator
+// sees the redacted content, and that the level strips it only before the
+// save. A rule on a URL must fire at every logging level.
+func TestLocal_Handle_PolicySeesContentBeforeLevel(t *testing.T) {
+	ctx := context.Background()
+	capture := &captureCheck{}
+	evaluator := security.New(&security.Config{FailOpen: true})
+	evaluator.RegisterCheck(capture)
+	store := storagetest.NewStore(t)
+	minimal := func(string) config.LoggingLevel { return config.LoggingMinimal }
+	svc := NewLocal(store, evaluator, nil, minimal, WithClassifier(stubClassifier{privacy.ClassPII}))
+
+	event := events.NewEvent(uuid.New(), "claude-code", events.ActionToolUse)
+	require.NoError(t, event.SetPayload(events.ToolUsePayload{
+		ToolName: "WebFetch",
+		Input:    privacy.NewText(`{"url":"https://evil.example/customers/x"}`),
+	}))
+	_, err := svc.Handle(ctx, NewHookRequest(event))
+	require.NoError(t, err)
+
+	require.NotNil(t, capture.seen)
+	seen, err := capture.seen.GetToolUsePayload()
+	require.NoError(t, err)
+	assert.Contains(t, seen.Input.Value, "evil.example")
+	assert.False(t, capture.seen.IsSensitive, "pii does not make the event sensitive")
+
+	stored, err := store.GetEvent(ctx, event.ID)
+	require.NoError(t, err)
+	p, err := stored.GetToolUsePayload()
+	require.NoError(t, err)
+	assert.Empty(t, p.Input.Value)
+	assert.True(t, p.Input.Label.Stripped)
+	assert.Equal(t, []privacy.Class{privacy.ClassPII}, p.Input.Label.Classes)
+	assert.Equal(t, "minimal", p.Input.Label.Level)
+}
+
+type splitReasonCheck struct{}
+
+func (splitReasonCheck) Name() string  { return "test-split" }
+func (splitReasonCheck) Enabled() bool { return true }
+func (splitReasonCheck) Check(context.Context, *events.Event, *session.Session) (*security.CheckResult, error) {
+	return &security.CheckResult{
+		CheckName:    "test-split",
+		Decision:     security.DecisionBlock,
+		Reason:       "refused https://example.com/invite/k7Qz9xWm",
+		StoredReason: "refused password=hunter2",
+	}, nil
+}
+
+// TestLocal_Handle_BlockStoresStoredReason checks that the agent gets the
+// full reason, and that the stored event keeps the redacted stored reason.
+func TestLocal_Handle_BlockStoresStoredReason(t *testing.T) {
+	ctx := context.Background()
+	store := storagetest.NewStore(t)
+	evaluator := security.New(&security.Config{FailOpen: true})
+	evaluator.RegisterCheck(splitReasonCheck{})
+	redactor, err := privacy.NewRedactor(nil, privacy.DefaultRedactPatterns())
+	require.NoError(t, err)
+
+	req := writeRequest(uuid.New())
+	resp, err := NewLocal(store, evaluator, redactor, fullLevel).Handle(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, "refused https://example.com/invite/k7Qz9xWm", resp.Reason)
+
+	stored, err := store.GetEvent(ctx, req.Event.ID)
+	require.NoError(t, err)
+	assert.Equal(t, events.ResultBlocked, stored.ResultStatus)
+	assert.Contains(t, stored.ErrorMessage, "refused")
+	assert.NotContains(t, stored.ErrorMessage, "k7Qz9xWm")
+	assert.NotContains(t, stored.ErrorMessage, "hunter2")
+}
+
+type payloadCheck struct{ seen json.RawMessage }
+
+func (*payloadCheck) Name() string  { return "test-payload" }
+func (*payloadCheck) Enabled() bool { return true }
+func (c *payloadCheck) Check(_ context.Context, event *events.Event, _ *session.Session) (*security.CheckResult, error) {
+	c.seen = append(json.RawMessage(nil), event.Payload...)
+	if _, err := event.GetCommandExecPayload(); err != nil {
+		return nil, err
+	}
+	return &security.CheckResult{CheckName: "test-payload", Decision: security.DecisionAllow}, nil
+}
+
+func TestLocal_Handle_PayloadThatDoesNotDecodeFailsClosed(t *testing.T) {
+	ctx := context.Background()
+	store := storagetest.NewStore(t)
+	check := &payloadCheck{}
+	evaluator := security.New(&security.Config{FailOpen: false})
+	evaluator.RegisterCheck(check)
+	svc := NewLocal(store, evaluator, nil, fullLevel)
+
+	raw := json.RawMessage(`{"command":"rm -rf /","exit_code":"x"}`)
+	event := events.NewEvent(uuid.New(), "claude-code", events.ActionCommandExec)
+	event.Payload = raw
+	resp, err := svc.Handle(ctx, NewHookRequest(event))
+	require.NoError(t, err)
+
+	assert.JSONEq(t, string(raw), string(check.seen))
+	assert.Equal(t, VerdictOf(security.DecisionBlock), resp.Decision)
+
+	stored, err := store.QueryEvents(ctx, events.NewEventFilter().WithSession(event.SessionID))
+	require.NoError(t, err)
+	require.Len(t, stored, 1)
+	assert.Empty(t, stored[0].Payload)
 }

@@ -1,4 +1,4 @@
-package events
+package privacy
 
 import (
 	"testing"
@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewPrivacyChecker(t *testing.T) {
-	checker, err := NewPrivacyChecker(
+	checker, err := NewRedactor(
 		[]string{"**/.env"},
 		[]string{`password=\S+`},
 	)
@@ -17,7 +17,7 @@ func TestNewPrivacyChecker(t *testing.T) {
 }
 
 func TestNewPrivacyChecker_InvalidRegex(t *testing.T) {
-	checker, err := NewPrivacyChecker(
+	checker, err := NewRedactor(
 		[]string{"**/.env"},
 		[]string{`[invalid regex`},
 	)
@@ -40,7 +40,7 @@ func TestDefaultRedactPatterns(t *testing.T) {
 }
 
 func TestPrivacyChecker_IsSensitivePath_EnvFiles(t *testing.T) {
-	checker, err := NewPrivacyChecker(DefaultSensitivePatterns(), nil)
+	checker, err := NewRedactor(DefaultSensitivePatterns(), nil)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -65,7 +65,7 @@ func TestPrivacyChecker_IsSensitivePath_EnvFiles(t *testing.T) {
 }
 
 func TestPrivacyChecker_IsSensitivePath_KeyFiles(t *testing.T) {
-	checker, err := NewPrivacyChecker(DefaultSensitivePatterns(), nil)
+	checker, err := NewRedactor(DefaultSensitivePatterns(), nil)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -91,7 +91,7 @@ func TestPrivacyChecker_IsSensitivePath_KeyFiles(t *testing.T) {
 }
 
 func TestPrivacyChecker_IsSensitivePath_CloudCredentials(t *testing.T) {
-	checker, err := NewPrivacyChecker(DefaultSensitivePatterns(), nil)
+	checker, err := NewRedactor(DefaultSensitivePatterns(), nil)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -114,7 +114,7 @@ func TestPrivacyChecker_IsSensitivePath_CloudCredentials(t *testing.T) {
 }
 
 func TestPrivacyChecker_IsSensitivePath_SecretsDirectory(t *testing.T) {
-	checker, err := NewPrivacyChecker(DefaultSensitivePatterns(), nil)
+	checker, err := NewRedactor(DefaultSensitivePatterns(), nil)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -139,7 +139,7 @@ func TestPrivacyChecker_IsSensitivePath_SecretsDirectory(t *testing.T) {
 }
 
 func TestPrivacyChecker_IsSensitivePath_PasswordAndSecretInName(t *testing.T) {
-	checker, err := NewPrivacyChecker(DefaultSensitivePatterns(), nil)
+	checker, err := NewRedactor(DefaultSensitivePatterns(), nil)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -165,7 +165,7 @@ func TestPrivacyChecker_IsSensitivePath_PasswordAndSecretInName(t *testing.T) {
 }
 
 func TestPrivacyChecker_IsSensitivePath_ForwardSlashPaths(t *testing.T) {
-	checker, err := NewPrivacyChecker(DefaultSensitivePatterns(), nil)
+	checker, err := NewRedactor(DefaultSensitivePatterns(), nil)
 	require.NoError(t, err)
 
 	// Test forward-slash paths (cross-platform compatible)
@@ -189,7 +189,7 @@ func TestPrivacyChecker_IsSensitivePath_ForwardSlashPaths(t *testing.T) {
 }
 
 func TestPrivacyChecker_Redact_Passwords(t *testing.T) {
-	checker, err := NewPrivacyChecker(nil, DefaultRedactPatterns())
+	checker, err := NewRedactor(nil, DefaultRedactPatterns())
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -212,7 +212,7 @@ func TestPrivacyChecker_Redact_Passwords(t *testing.T) {
 }
 
 func TestPrivacyChecker_Redact_APIKeys(t *testing.T) {
-	checker, err := NewPrivacyChecker(nil, DefaultRedactPatterns())
+	checker, err := NewRedactor(nil, DefaultRedactPatterns())
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -235,7 +235,7 @@ func TestPrivacyChecker_Redact_APIKeys(t *testing.T) {
 }
 
 func TestPrivacyChecker_Redact_Tokens(t *testing.T) {
-	checker, err := NewPrivacyChecker(nil, DefaultRedactPatterns())
+	checker, err := NewRedactor(nil, DefaultRedactPatterns())
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -257,7 +257,7 @@ func TestPrivacyChecker_Redact_Tokens(t *testing.T) {
 }
 
 func TestPrivacyChecker_Redact_BearerTokens(t *testing.T) {
-	checker, err := NewPrivacyChecker(nil, DefaultRedactPatterns())
+	checker, err := NewRedactor(nil, DefaultRedactPatterns())
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -278,7 +278,7 @@ func TestPrivacyChecker_Redact_BearerTokens(t *testing.T) {
 }
 
 func TestPrivacyChecker_Redact_AWSCredentials(t *testing.T) {
-	checker, err := NewPrivacyChecker(nil, DefaultRedactPatterns())
+	checker, err := NewRedactor(nil, DefaultRedactPatterns())
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -300,7 +300,7 @@ func TestPrivacyChecker_Redact_AWSCredentials(t *testing.T) {
 }
 
 func TestPrivacyChecker_Redact_MultipleMatches(t *testing.T) {
-	checker, err := NewPrivacyChecker(nil, DefaultRedactPatterns())
+	checker, err := NewRedactor(nil, DefaultRedactPatterns())
 	require.NoError(t, err)
 
 	input := "password=secret1 api_key=abc123 token=xyz789"
@@ -310,7 +310,7 @@ func TestPrivacyChecker_Redact_MultipleMatches(t *testing.T) {
 }
 
 func TestPrivacyChecker_Redact_NoMatches(t *testing.T) {
-	checker, err := NewPrivacyChecker(nil, DefaultRedactPatterns())
+	checker, err := NewRedactor(nil, DefaultRedactPatterns())
 	require.NoError(t, err)
 
 	input := "This is a normal log message with no sensitive data"
@@ -320,7 +320,7 @@ func TestPrivacyChecker_Redact_NoMatches(t *testing.T) {
 }
 
 func TestPrivacyChecker_Redact_EmptyContent(t *testing.T) {
-	checker, err := NewPrivacyChecker(nil, DefaultRedactPatterns())
+	checker, err := NewRedactor(nil, DefaultRedactPatterns())
 	require.NoError(t, err)
 
 	result := checker.Redact("")
@@ -328,7 +328,7 @@ func TestPrivacyChecker_Redact_EmptyContent(t *testing.T) {
 }
 
 func TestPrivacyChecker_CustomPatterns(t *testing.T) {
-	checker, err := NewPrivacyChecker(
+	checker, err := NewRedactor(
 		[]string{"**/custom/**", "**/*.secret"},
 		[]string{`custom_key=\S+`},
 	)
@@ -345,7 +345,7 @@ func TestPrivacyChecker_CustomPatterns(t *testing.T) {
 }
 
 func TestPrivacyChecker_EmptyPatterns(t *testing.T) {
-	checker, err := NewPrivacyChecker(nil, nil)
+	checker, err := NewRedactor(nil, nil)
 	require.NoError(t, err)
 
 	// No patterns means nothing is sensitive

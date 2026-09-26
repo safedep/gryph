@@ -29,8 +29,10 @@ import (
 	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	coresecurity "github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
+	"github.com/safedep/gryph/decision"
 	"github.com/safedep/gryph/schema"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
@@ -880,19 +882,11 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 		}))
 
 		var classifier classify.Classifier
-		if policyCfg.Classify.Enabled {
-			secretPaths := cfg.Privacy.SensitivePaths
-			if len(secretPaths) == 0 {
-				secretPaths = events.DefaultSensitivePatterns()
-			}
-			classifyOpts := []classify.HeuristicOption{classify.WithSecretPaths(secretPaths)}
-			if len(policyCfg.Classify.ExtraPatterns) > 0 {
-				classifyOpts = append(classifyOpts, classify.WithExtraPatterns(policyCfg.Classify.ExtraPatterns))
-			}
-			classifier = classify.NewHeuristic(classifyOpts...)
+		if h := newClassifier(cfg); h != nil {
+			classifier = h
 		}
 		if !policyCfg.Classify.FailOpen {
-			classifier = classify.NewFailSafe(classifier, classify.LabelUnknownSensitive)
+			classifier = classify.NewFailSafe(classifier, privacy.ClassUnknownSensitive)
 		}
 
 		var adapterOpts []mediation.CommonOption
@@ -913,6 +907,9 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 		adapterOpts = append(adapterOpts, mediation.WithIdentityCapturer(identityCapturer))
 
 		opts = append(opts, aarmsec.WithAdapter(mediation.NewHookAdapter(adapterOpts...)))
+		opts = append(opts, aarmsec.WithContentStrip(func(e *events.Event) bool {
+			return decision.StripsContent(e, cfg.GetAgentLoggingLevel(e.AgentName))
+		}))
 		opts = append(opts, aarmsec.WithIdentityConfig(aarmsec.IdentityConfig{
 			Enabled:               policyCfg.Identity.Enabled,
 			RequireHumanPrincipal: policyCfg.Identity.RequireHumanPrincipal,
@@ -1284,6 +1281,32 @@ func testPolicyLoader(app *App, file string) (*loader.Loader, error) {
 	}
 	sources := appendBuiltinSource([]loader.Source{loader.NewFileSource(p)}, appConfig(app), appPaths(app))
 	return loader.New(sources...), nil
+}
+
+// newClassifier builds the heuristic classifier from the config. It returns
+// nil when classification is off. The mediator and the decision service
+// share it.
+func newClassifier(cfg *config.Config) *classify.Heuristic {
+	if cfg == nil {
+		return nil
+	}
+	policyCfg := cfg.EffectivePolicy()
+	if !policyCfg.Classify.Enabled {
+		return nil
+	}
+	secretPaths := cfg.Privacy.SensitivePaths
+	if len(secretPaths) == 0 {
+		secretPaths = privacy.DefaultSensitivePatterns()
+	}
+	opts := []classify.HeuristicOption{classify.WithSecretPaths(secretPaths)}
+	if len(policyCfg.Classify.ExtraPatterns) > 0 {
+		extra := make(map[privacy.Class][]string, len(policyCfg.Classify.ExtraPatterns))
+		for class, patterns := range policyCfg.Classify.ExtraPatterns {
+			extra[privacy.Class(class)] = patterns
+		}
+		opts = append(opts, classify.WithExtraPatterns(extra))
+	}
+	return classify.NewHeuristic(opts...)
 }
 
 func selfProtectionSource(cfg *config.Config, paths *config.Paths) *loader.BuiltinSource {

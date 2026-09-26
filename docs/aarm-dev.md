@@ -15,8 +15,9 @@ guidance decision, and records a tamper-evident receipt. The requirement set
 The layer implements the `core/security.Check` interface. `cli/root.go`
 registers `lazyPolicyCheck` (in `cli/policy.go`) with the security `Evaluator`.
 The hook side in `cli/hook.go` parses the agent payload and calls
-`decision.Service.Handle`. The in-process `decision.Local` redacts, applies
-the logging level, upserts the session, and calls `app.Security.Evaluate`,
+`decision.Service.Handle`. The in-process `decision.Local` labels each
+content value, redacts, applies the logging level (see
+[content-labels.md](./content-labels.md)), upserts the session, and calls `app.Security.Evaluate`,
 which calls the check. The session is an explicit argument to `Evaluate` and
 `Check`, not a context value. `cli/hook.go` then renders the response.
 
@@ -30,11 +31,9 @@ which calls the check. The session is an explicit argument to `Evaluate` and
 - `decision.Local` takes the agent name from `Event.AgentName` only. The
   request has no second agent field, so a caller cannot select a logging level
   for an agent other than the event agent.
-- Known gap: `decision.Local` applies the logging level before it calls
-  `Evaluate`. At `logging.level: minimal` the level strips the tool input and
-  the write content, so policy rules do not see them. For a sensitive event
-  the level strips the payload content and `FullContent` at every level,
-  `full` included. PR #68 moves the strip after the evaluation.
+- `decision.Local` applies the logging level after it calls `Evaluate`, so
+  policy rules see the tool input and the write content at every level. The
+  level strips only what Gryph stores.
 
 ## Request flow
 
@@ -71,7 +70,7 @@ write the execution outcome to the accumulator row and the receipt row.
 | `aarm/receipt` | Append-only, hash-chained receipt log. Hashing, Ed25519 signing, chain verify, JSONL export, log verify. |
 | `aarm/approval` | Approval Service for `escalate`. `Nop` (deny) and `CLIPrompt`. |
 | `aarm/identity` | Captures human principal, service identity, role scope at the mediation boundary. |
-| `aarm/classify` | Heuristic data classifier (secret, pii, source_code, ...). Fail-safe wrapper defaults to `unknown_sensitive`. |
+| `aarm/classify` | Heuristic data classifier. It returns `privacy.Class` values (secret, pii, source_code, ...). Fail-safe wrapper defaults to `unknown_sensitive`. The decision service uses the heuristic without the wrapper for content labels. |
 | `aarm/injectscore` | Heuristic prompt-injection score for tool-use actions. |
 | `aarm/canonical` | Deterministic JSON with recursively sorted keys. Shared by every hash. |
 | `aarm/testchain` | Property-test scaffolding shared by receipt and context chain tests. Not production code. |
@@ -99,7 +98,9 @@ and accumulator read it. Key fields:
   event from the adapter's `Hooks()` table, and mediation copies it.
 
 `model.EvaluationResult` is the PDP output: `Decision`, `MatchedRuleIDs`,
-`Message`, `Severity`, `Tags`, `DeferReason`.
+`Message`, `FullMessage`, `Severity`, `Tags`, `DeferReason`. `Message` is the
+stored message. `FullMessage` goes only to the agent and to the approval
+prompt. `AgentMessage` returns `FullMessage`, or `Message` when it is empty.
 
 ## Policy schema and evaluation
 
@@ -394,6 +395,20 @@ verifier, or every existing chain fails verification.
   outcome but does not recompute the hash. The hash input collapses the outcome
   back to `escalate` via `DeriveInsertDecision` so the chain stays verifiable.
 - The row stores `error_message`, but the hash excludes it.
+- The receipt follows the logging level. `WithContentStrip` installs the rule
+  (`decision.StripsContent`). When the stored event loses its content,
+  `receiptAction` drops the URL, the line counts, and the tool-input
+  parameters from the receipt. The PDP and the approval prompt still see the
+  full action.
+- The stored message follows the same rule. The Mediator calls
+  `EvaluateStored` with the full action and the `receiptAction` result. The
+  PDP renders `FullMessage` from the full action and `Message` from the
+  stored action. The receipt hashes and stores `Message`. `pep.Apply` puts
+  `FullMessage` in `CheckResult.Reason` for the agent and `Message` in
+  `CheckResult.StoredReason`. The evaluator copies it to
+  `Result.StoredBlockReason`, and `decision.Local` redacts it and stores it
+  as the event `error_message`. A check that does not set `StoredReason`
+  stores its `Reason`.
 - Export with `gryph policy receipts export`. Verify a chain with
   `gryph policy receipts verify-log`.
 

@@ -13,6 +13,7 @@ import (
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,7 +52,7 @@ type fixtureEnvelope struct {
 	HumanPrincipal  string                 `json:"human_principal,omitempty"`
 	RoleScope       string                 `json:"role_scope,omitempty"`
 	InjectionScore  float32                `json:"injection_score,omitempty"`
-	Classifications []string               `json:"data_classifications,omitempty"`
+	Classifications []privacy.Class        `json:"data_classifications,omitempty"`
 	Params          map[string]interface{} `json:"params,omitempty"`
 }
 
@@ -242,7 +243,7 @@ func extractParamsFromEvent(ev *events.Event) (model.Parameters, error) {
 			SizeBytes:    p.SizeBytes,
 			LinesAdded:   p.LinesAdded,
 			LinesRemoved: p.LinesRemoved,
-			Content:      p.ContentPreview,
+			Content:      p.ContentPreview.Value,
 		}, nil
 	case events.ActionFileDelete:
 		p, err := ev.GetFileDeletePayload()
@@ -256,9 +257,9 @@ func extractParamsFromEvent(ev *events.Event) (model.Parameters, error) {
 			return model.Parameters{}, err
 		}
 		return model.Parameters{
-			Command: p.Command,
+			Command: p.Command.Value,
 			Args:    p.Args,
-			Content: p.StdoutPreview,
+			Content: p.StdoutPreview.Value,
 		}, nil
 	case events.ActionToolUse:
 		p, err := ev.GetToolUsePayload()
@@ -266,8 +267,8 @@ func extractParamsFromEvent(ev *events.Event) (model.Parameters, error) {
 			return model.Parameters{}, err
 		}
 		var raw map[string]any
-		if len(p.Input) > 0 {
-			if err := json.Unmarshal(p.Input, &raw); err != nil {
+		if len(p.Input.Value) > 0 {
+			if err := json.Unmarshal([]byte(p.Input.Value), &raw); err != nil {
 				return model.Parameters{Raw: nil}, nil
 			}
 		}

@@ -177,8 +177,8 @@ func (c *CLIPrompt) renderRequest(w io.Writer, r *Request) {
 		if len(r.Rule.MatchedRuleIDs) > 0 {
 			_, _ = fmt.Fprintf(w, "  rules:   %s\n", strings.Join(r.Rule.MatchedRuleIDs, ", "))
 		}
-		if r.Rule.Message != "" {
-			_, _ = fmt.Fprintf(w, "  message: %s\n", r.Rule.Message)
+		if msg := r.Rule.AgentMessage(); msg != "" {
+			_, _ = fmt.Fprintf(w, "  message: %s\n", msg)
 		}
 	}
 	_, _ = fmt.Fprintln(w, strings.Repeat("-", 48))

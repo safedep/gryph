@@ -137,7 +137,7 @@ func init() {
 	// auditevent.AgentNameValidator is a validator for the "agent_name" field. It is called by the builders before save.
 	auditevent.AgentNameValidator = auditeventDescAgentName.Validators[0].(func(string) error)
 	// auditeventDescIsSensitive is the schema descriptor for is_sensitive field.
-	auditeventDescIsSensitive := auditeventFields[16].Descriptor()
+	auditeventDescIsSensitive := auditeventFields[17].Descriptor()
 	// auditevent.DefaultIsSensitive holds the default value on creation for the is_sensitive field.
 	auditevent.DefaultIsSensitive = auditeventDescIsSensitive.Default.(bool)
 	// auditeventDescID is the schema descriptor for id field.

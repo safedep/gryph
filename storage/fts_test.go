@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,7 +33,7 @@ func TestBuildSearchableText(t *testing.T) {
 			name: "command_exec extracts command",
 			event: &events.Event{
 				ActionType: events.ActionCommandExec,
-				Payload:    mustMarshalFTS(events.CommandExecPayload{Command: "go test ./..."}),
+				Payload:    mustMarshalFTS(events.CommandExecPayload{Command: privacy.NewText("go test ./...")}),
 			},
 			contains: []string{"go test"},
 		},
@@ -87,7 +88,7 @@ func TestSQLiteStore_FTSIndexAndSearch(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	cmdPayload, _ := json.Marshal(events.CommandExecPayload{Command: "go test ./..."})
+	cmdPayload, _ := json.Marshal(events.CommandExecPayload{Command: privacy.NewText("go test ./...")})
 	err = store.SaveEvent(ctx, &events.Event{
 		ID:           uuid.New(),
 		SessionID:    sessionID,
@@ -268,7 +269,7 @@ func TestSQLiteStore_SearchEventsSecurityInputs(t *testing.T) {
 	createTestSession(t, store, sessionID, "claude-code")
 
 	// Index an event so the FTS table is not empty
-	payload, _ := json.Marshal(events.CommandExecPayload{Command: "rm -rf /tmp/test"})
+	payload, _ := json.Marshal(events.CommandExecPayload{Command: privacy.NewText("rm -rf /tmp/test")})
 	require.NoError(t, store.SaveEvent(ctx, &events.Event{
 		ID: uuid.New(), SessionID: sessionID, Sequence: 1,
 		Timestamp: time.Now().UTC(), AgentName: "claude-code",

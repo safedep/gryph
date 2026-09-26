@@ -7,6 +7,7 @@ import (
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 )
 
 const (
@@ -18,13 +19,13 @@ const (
 
 // Adapter implements the agent.Adapter interface for Cursor.
 type Adapter struct {
-	privacyChecker *events.PrivacyChecker
+	privacyChecker *privacy.Redactor
 	loggingLevel   config.LoggingLevel
 	contentHash    bool
 }
 
 // New creates a new Cursor adapter.
-func New(privacyChecker *events.PrivacyChecker, loggingLevel config.LoggingLevel, contentHash bool) *Adapter {
+func New(privacyChecker *privacy.Redactor, loggingLevel config.LoggingLevel, contentHash bool) *Adapter {
 	return &Adapter{privacyChecker: privacyChecker, loggingLevel: loggingLevel, contentHash: contentHash}
 }
 
@@ -141,7 +142,7 @@ func renderAllowResponse(hookType string) []byte {
 }
 
 // Register adds this adapter to the given registry.
-func Register(registry *agent.Registry, privacyChecker *events.PrivacyChecker, loggingLevel config.LoggingLevel, contentHash bool) {
+func Register(registry *agent.Registry, privacyChecker *privacy.Redactor, loggingLevel config.LoggingLevel, contentHash bool) {
 	registry.Register(New(privacyChecker, loggingLevel, contentHash))
 }
 

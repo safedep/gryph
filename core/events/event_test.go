@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,7 +41,7 @@ func TestEvent_SetPayload_CommandExec(t *testing.T) {
 	event := NewEvent(uuid.New(), "claude-code", ActionCommandExec)
 
 	payload := CommandExecPayload{
-		Command:     "npm install",
+		Command:     privacy.NewText("npm install"),
 		Description: "Install dependencies",
 		ExitCode:    0,
 		DurationMs:  1500,
@@ -54,7 +55,7 @@ func TestEvent_SetPayload_CommandExec(t *testing.T) {
 	var decoded CommandExecPayload
 	err = json.Unmarshal(event.Payload, &decoded)
 	require.NoError(t, err)
-	assert.Equal(t, payload.Command, decoded.Command)
+	assert.Equal(t, payload.Command.Value, decoded.Command.Value)
 	assert.Equal(t, payload.Description, decoded.Description)
 	assert.Equal(t, payload.ExitCode, decoded.ExitCode)
 	assert.Equal(t, payload.DurationMs, decoded.DurationMs)
@@ -86,7 +87,7 @@ func TestEvent_SetPayload_FileWrite(t *testing.T) {
 	payload := FileWritePayload{
 		Path:           "/home/user/project/main.go",
 		SizeBytes:      2048,
-		ContentPreview: "package main\n\nfunc main() {}",
+		ContentPreview: privacy.NewText("package main\n\nfunc main() {}"),
 		LinesAdded:     10,
 		LinesRemoved:   5,
 	}
@@ -99,7 +100,7 @@ func TestEvent_SetPayload_FileWrite(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, payload.Path, decoded.Path)
 	assert.Equal(t, payload.SizeBytes, decoded.SizeBytes)
-	assert.Equal(t, payload.ContentPreview, decoded.ContentPreview)
+	assert.Equal(t, payload.ContentPreview.Value, decoded.ContentPreview.Value)
 	assert.Equal(t, payload.LinesAdded, decoded.LinesAdded)
 	assert.Equal(t, payload.LinesRemoved, decoded.LinesRemoved)
 }
@@ -108,7 +109,7 @@ func TestEvent_GetCommandExecPayload(t *testing.T) {
 	event := NewEvent(uuid.New(), "claude-code", ActionCommandExec)
 
 	payload := CommandExecPayload{
-		Command:     "go build",
+		Command:     privacy.NewText("go build"),
 		Description: "Build project",
 		ExitCode:    0,
 		Args:        []string{"-o", "bin/app"},
@@ -119,7 +120,7 @@ func TestEvent_GetCommandExecPayload(t *testing.T) {
 	retrieved, err := event.GetCommandExecPayload()
 	require.NoError(t, err)
 	require.NotNil(t, retrieved)
-	assert.Equal(t, payload.Command, retrieved.Command)
+	assert.Equal(t, payload.Command.Value, retrieved.Command.Value)
 	assert.Equal(t, payload.Description, retrieved.Description)
 	assert.Equal(t, payload.ExitCode, retrieved.ExitCode)
 	assert.Equal(t, payload.Args, retrieved.Args)
@@ -200,8 +201,8 @@ func TestEvent_GetFileWritePayload(t *testing.T) {
 
 	payload := FileWritePayload{
 		Path:       "/home/user/file.txt",
-		OldString:  "old content",
-		NewString:  "new content",
+		OldString:  privacy.NewText("old content"),
+		NewString:  privacy.NewText("new content"),
 		LinesAdded: 5,
 	}
 	err := event.SetPayload(payload)
@@ -211,8 +212,8 @@ func TestEvent_GetFileWritePayload(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, retrieved)
 	assert.Equal(t, payload.Path, retrieved.Path)
-	assert.Equal(t, payload.OldString, retrieved.OldString)
-	assert.Equal(t, payload.NewString, retrieved.NewString)
+	assert.Equal(t, payload.OldString.Value, retrieved.OldString.Value)
+	assert.Equal(t, payload.NewString.Value, retrieved.NewString.Value)
 	assert.Equal(t, payload.LinesAdded, retrieved.LinesAdded)
 }
 
@@ -236,7 +237,7 @@ func TestEvent_JSONSerialization(t *testing.T) {
 	event.DurationMs = 500
 	event.IsSensitive = false
 
-	payload := CommandExecPayload{Command: "ls -la", ExitCode: 0}
+	payload := CommandExecPayload{Command: privacy.NewText("ls -la"), ExitCode: 0}
 	err := event.SetPayload(payload)
 	require.NoError(t, err)
 
@@ -290,8 +291,8 @@ func TestEvent_PayloadTypes(t *testing.T) {
 			actionType: ActionToolUse,
 			payload: ToolUsePayload{
 				ToolName:      "WebSearch",
-				Input:         json.RawMessage(`{"query": "golang testing"}`),
-				OutputPreview: "Search results...",
+				Input:         privacy.NewText(string(json.RawMessage(`{"query": "golang testing"}`))),
+				OutputPreview: privacy.NewText("Search results..."),
 			},
 		},
 		{
@@ -532,10 +533,10 @@ func TestEvent_RawEventStorage(t *testing.T) {
 
 func TestEvent_DiffContent(t *testing.T) {
 	event := NewEvent(uuid.New(), "claude-code", ActionFileWrite)
-	event.DiffContent = "--- a/file.go\n+++ b/file.go\n@@ -1,3 +1,4 @@\n+// new comment"
+	event.DiffContent = privacy.NewText("--- a/file.go\n+++ b/file.go\n@@ -1,3 +1,4 @@\n+// new comment")
 
-	assert.Contains(t, event.DiffContent, "---")
-	assert.Contains(t, event.DiffContent, "+++")
+	assert.Contains(t, event.DiffContent.Value, "---")
+	assert.Contains(t, event.DiffContent.Value, "+++")
 }
 
 func TestEvent_ConversationContext(t *testing.T) {
@@ -574,7 +575,7 @@ func TestToolUsePayload_DisplayTarget(t *testing.T) {
 			name: "WebFetch url",
 			payload: ToolUsePayload{
 				ToolName: "WebFetch",
-				Input:    json.RawMessage(`{"url":"https://example.com","prompt":"summarize"}`),
+				Input:    privacy.NewText(string(json.RawMessage(`{"url":"https://example.com","prompt":"summarize"}`))),
 			},
 			expected: "https://example.com",
 		},
@@ -582,7 +583,7 @@ func TestToolUsePayload_DisplayTarget(t *testing.T) {
 			name: "WebSearch query",
 			payload: ToolUsePayload{
 				ToolName: "WebSearch",
-				Input:    json.RawMessage(`{"query":"golang testing best practices"}`),
+				Input:    privacy.NewText(string(json.RawMessage(`{"query":"golang testing best practices"}`))),
 			},
 			expected: "golang testing best practices",
 		},
@@ -590,7 +591,7 @@ func TestToolUsePayload_DisplayTarget(t *testing.T) {
 			name: "Task description",
 			payload: ToolUsePayload{
 				ToolName: "Task",
-				Input:    json.RawMessage(`{"description":"explore auth module","subagent_type":"Explore"}`),
+				Input:    privacy.NewText(string(json.RawMessage(`{"description":"explore auth module","subagent_type":"Explore"}`))),
 			},
 			expected: "explore auth module",
 		},
@@ -598,7 +599,7 @@ func TestToolUsePayload_DisplayTarget(t *testing.T) {
 			name: "TodoWrite subject",
 			payload: ToolUsePayload{
 				ToolName: "TodoWrite",
-				Input:    json.RawMessage(`{"subject":"Fix login bug"}`),
+				Input:    privacy.NewText(string(json.RawMessage(`{"subject":"Fix login bug"}`))),
 			},
 			expected: "Fix login bug",
 		},
@@ -611,7 +612,7 @@ func TestToolUsePayload_DisplayTarget(t *testing.T) {
 			name: "empty input object",
 			payload: ToolUsePayload{
 				ToolName: "Unknown",
-				Input:    json.RawMessage(`{}`),
+				Input:    privacy.NewText(string(json.RawMessage(`{}`))),
 			},
 			expected: "",
 		},
@@ -619,7 +620,7 @@ func TestToolUsePayload_DisplayTarget(t *testing.T) {
 			name: "invalid JSON",
 			payload: ToolUsePayload{
 				ToolName: "Unknown",
-				Input:    json.RawMessage(`not json`),
+				Input:    privacy.NewText(string(json.RawMessage(`not json`))),
 			},
 			expected: "",
 		},
@@ -627,7 +628,7 @@ func TestToolUsePayload_DisplayTarget(t *testing.T) {
 			name: "non-string value skipped",
 			payload: ToolUsePayload{
 				ToolName: "Custom",
-				Input:    json.RawMessage(`{"url":123,"query":"fallback"}`),
+				Input:    privacy.NewText(string(json.RawMessage(`{"url":123,"query":"fallback"}`))),
 			},
 			expected: "fallback",
 		},
@@ -635,7 +636,7 @@ func TestToolUsePayload_DisplayTarget(t *testing.T) {
 			name: "empty string skipped",
 			payload: ToolUsePayload{
 				ToolName: "Custom",
-				Input:    json.RawMessage(`{"url":"","query":"actual value"}`),
+				Input:    privacy.NewText(string(json.RawMessage(`{"url":"","query":"actual value"}`))),
 			},
 			expected: "actual value",
 		},
@@ -643,7 +644,7 @@ func TestToolUsePayload_DisplayTarget(t *testing.T) {
 			name: "first priority wins",
 			payload: ToolUsePayload{
 				ToolName: "Multi",
-				Input:    json.RawMessage(`{"query":"q","url":"u"}`),
+				Input:    privacy.NewText(string(json.RawMessage(`{"query":"q","url":"u"}`))),
 			},
 			expected: "u",
 		},
@@ -660,7 +661,7 @@ func TestEvent_GetToolUsePayload(t *testing.T) {
 	event := NewEvent(uuid.New(), "claude-code", ActionToolUse)
 	payload := ToolUsePayload{
 		ToolName: "WebFetch",
-		Input:    json.RawMessage(`{"url":"https://example.com"}`),
+		Input:    privacy.NewText(string(json.RawMessage(`{"url":"https://example.com"}`))),
 	}
 	err := event.SetPayload(payload)
 	require.NoError(t, err)

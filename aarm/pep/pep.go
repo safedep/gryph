@@ -2,6 +2,8 @@
 package pep
 
 import (
+	"cmp"
+
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/model"
 	coresecurity "github.com/safedep/gryph/core/security"
@@ -11,6 +13,8 @@ import (
 // the PEP boundary. The aarm package re-exports it so adapters and CLI
 // wrappers can refer to a single source of truth.
 const CheckName = "aarm-pdp"
+
+const blockedByPolicy = "Blocked by policy"
 
 // Apply converts a PDP decision into a security.CheckResult. MatchedRuleIDs,
 // Severity, and Tags from the PDP are propagated so audit, receipts, and UX
@@ -28,15 +32,18 @@ func Apply(result *model.EvaluationResult) *coresecurity.CheckResult {
 		Tags:           result.Tags,
 	}
 
-	message := result.Message
-	if message == "" && result.Decision == model.DecisionBlock {
-		message = "Blocked by policy"
+	message := result.AgentMessage()
+	stored := result.Message
+	if result.Decision == model.DecisionBlock {
+		message = cmp.Or(message, blockedByPolicy)
+		stored = cmp.Or(stored, blockedByPolicy)
 	}
 
 	switch result.Decision {
 	case model.DecisionBlock:
 		out.Decision = coresecurity.DecisionBlock
 		out.Reason = message
+		out.StoredReason = stored
 	case model.DecisionGuidance, model.DecisionWarn:
 		out.Decision = coresecurity.DecisionGuidance
 		out.Guidance = message
@@ -52,10 +59,9 @@ func Apply(result *model.EvaluationResult) *coresecurity.CheckResult {
 		log.Warnf("aarm/pep: defer decision reached PEP without deferral handling (matched_rules=%v); treating as block to avoid silent allow",
 			result.MatchedRuleIDs)
 		out.Decision = coresecurity.DecisionBlock
-		if message == "" {
-			message = "Action deferred but deferral was not routed; configuration bug"
-		}
-		out.Reason = message
+		const unrouted = "Action deferred but deferral was not routed; configuration bug"
+		out.Reason = cmp.Or(message, unrouted)
+		out.StoredReason = cmp.Or(stored, unrouted)
 	default:
 		out.Decision = coresecurity.DecisionAllow
 	}

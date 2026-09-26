@@ -9,6 +9,7 @@ import (
 	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 )
 
 // HookInput represents the common fields in all Claude Code hook inputs.
@@ -360,7 +361,7 @@ func parseSubagentStop(sessionID uuid.UUID, agentSessionID string, base HookInpu
 		AgentID:              input.AgentID,
 		AgentType:            input.AgentType,
 		AgentTranscriptPath:  input.AgentTranscriptPath,
-		LastAssistantMessage: truncateString(input.LastAssistantMessage, 500),
+		LastAssistantMessage: privacy.Preview(input.LastAssistantMessage, 500),
 	}
 
 	if err := event.SetPayload(payload); err != nil {
@@ -421,14 +422,14 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		}
 
 		if fullContent != "" {
-			payload.ContentPreview = truncateString(fullContent, 200)
+			payload.ContentPreview = privacy.Preview(fullContent, 200)
 			event.FullContent = fullContent
 		}
 		if fullOldStr != "" {
-			payload.OldString = truncateString(fullOldStr, 200)
+			payload.OldString = privacy.Preview(fullOldStr, 200)
 		}
 		if fullNewStr != "" {
-			payload.NewString = truncateString(fullNewStr, 200)
+			payload.NewString = privacy.Preview(fullNewStr, 200)
 		}
 		// Edit writes carry their content in new_string; feed it to the matcher.
 		if event.FullContent == "" && fullNewStr != "" {
@@ -441,23 +442,23 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 
 		if a.loggingLevel.IsAtLeast(config.LoggingFull) {
 			if fullOldStr != "" || fullNewStr != "" {
-				event.DiffContent = utils.GenerateDiff(filePath, fullOldStr, fullNewStr)
+				event.DiffContent = privacy.NewText(utils.GenerateDiff(filePath, fullOldStr, fullNewStr))
 			} else if fullContent != "" {
-				event.DiffContent = utils.GenerateDiff(filePath, "", fullContent)
+				event.DiffContent = privacy.NewText(utils.GenerateDiff(filePath, "", fullContent))
 			}
 		}
 
 	case events.ActionCommandExec:
 		payload := events.CommandExecPayload{}
 		if cmd, ok := toolInput["command"].(string); ok {
-			payload.Command = cmd
+			payload.Command = privacy.NewText(cmd)
 		}
 		if desc, ok := toolInput["description"].(string); ok {
 			payload.Description = desc
 		}
 		if toolResponse != nil {
 			if output, ok := toolResponse["output"].(string); ok {
-				payload.Output = truncateString(output, 500)
+				payload.Output = privacy.Preview(output, 500)
 			}
 			if exitCode, ok := toolResponse["exitCode"].(float64); ok {
 				payload.ExitCode = int(exitCode)
@@ -472,11 +473,11 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 			ToolName: toolName,
 		}
 		if input, err := json.Marshal(toolInput); err == nil {
-			payload.Input = input
+			payload.Input = privacy.NewText(string(input))
 		}
 		if toolResponse != nil {
 			if resp, err := json.Marshal(toolResponse); err == nil {
-				payload.Output = resp
+				payload.Output = privacy.NewText(string(resp))
 			}
 		}
 		if err := event.SetPayload(payload); err != nil {

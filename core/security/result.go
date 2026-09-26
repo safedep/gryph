@@ -10,8 +10,10 @@ import (
 type Result struct {
 	// FinalDecision is the overall decision after evaluating all checks.
 	FinalDecision Decision
-	// BlockReason is the reason if the action was blocked.
+	// BlockReason is the reason if the action was blocked. The agent gets it.
 	BlockReason string
+	// StoredBlockReason is the reason that the stored event records.
+	StoredBlockReason string
 	// BlockedBy is the name of the check that blocked the action.
 	BlockedBy string
 	// Guidance contains aggregated guidance from all checks.

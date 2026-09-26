@@ -14,6 +14,10 @@ type CheckResult struct {
 	Decision Decision
 	// Reason is required for Block decisions, explaining why the action was blocked.
 	Reason string
+	// StoredReason is the block reason that the stored event records. Empty
+	// means Reason. A check that renders its reason from the action content
+	// sets it, so the agent gets the full reason and the store does not.
+	StoredReason string
 	// Guidance is optional advisory text for the agent.
 	Guidance string
 	// CheckName identifies which check produced this result.

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -223,7 +224,7 @@ rules:
 	t.Run("data classification membership matches", func(t *testing.T) {
 		action := &model.Action{
 			Type:                model.ActionToolUse,
-			DataClassifications: []string{"secret"},
+			DataClassifications: []privacy.Class{"secret"},
 		}
 		got, err := engine.Evaluate(context.Background(), action, nil)
 		require.NoError(t, err)
@@ -268,6 +269,72 @@ rules:
 	assert.Equal(t, model.DecisionBlock, got.Decision)
 	assert.Equal(t, []string{"warn-env", "block-env"}, got.MatchedRuleIDs)
 	assert.Equal(t, "block", got.Message)
+}
+
+func TestPDP_EvaluateStoredRendersTwoMessages(t *testing.T) {
+	const secretURL = "https://example.com/invite/k7Qz9xWm"
+	policy := mustPolicy(t, `
+version: "1"
+rules:
+  - id: block-fetch
+    action: block
+    match:
+      action_types: [tool_use]
+    message: "blocked fetch to {{.Action.Params.URL}}"
+`)
+	engine, err := New(policy)
+	require.NoError(t, err)
+
+	full := &model.Action{Type: model.ActionToolUse, Tool: "WebFetch", Parameters: model.Parameters{URL: secretURL}}
+	stored := &model.Action{Type: model.ActionToolUse, Tool: "WebFetch"}
+
+	cases := []struct {
+		name       string
+		stored     *model.Action
+		wantStored string
+	}{
+		{"same action", full, "blocked fetch to " + secretURL},
+		{"stripped action", stored, "blocked fetch to"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := engine.EvaluateStored(context.Background(), full, tc.stored, nil)
+			require.NoError(t, err)
+			assert.Equal(t, model.DecisionBlock, got.Decision)
+			assert.Equal(t, "blocked fetch to "+secretURL, got.FullMessage)
+			assert.Equal(t, "blocked fetch to "+secretURL, got.AgentMessage())
+			assert.Equal(t, tc.wantStored, got.Message)
+		})
+	}
+}
+
+func TestPDP_EvaluateStoredRenderErrorKeepsDecision(t *testing.T) {
+	for _, message := range []string{
+		"blocked {{index .Action.Params.Args 0}}",
+		"refused {{slice .Action.Params.Content 0 4}}",
+	} {
+		t.Run(message, func(t *testing.T) {
+			engine, err := New(mustPolicy(t, `
+version: "1"
+rules:
+  - id: r1
+    action: block
+    match:
+      action_types: [tool_use]
+    message: "`+message+`"
+`))
+			require.NoError(t, err)
+
+			full := &model.Action{Type: model.ActionToolUse, Tool: "mcp", Parameters: model.Parameters{Args: []string{"curl"}, Content: "zq7Rk2"}}
+			stored := &model.Action{Type: model.ActionToolUse, Tool: "mcp"}
+
+			got, err := engine.EvaluateStored(context.Background(), full, stored, nil)
+			require.NoError(t, err)
+			assert.Equal(t, model.DecisionBlock, got.Decision)
+			assert.NotEmpty(t, got.FullMessage)
+			assert.Equal(t, "rule r1", got.Message)
+		})
+	}
 }
 
 func TestParsePolicy_RejectsInvalidRules(t *testing.T) {

@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/storage/ent/aarmcontextaction"
 	"github.com/safedep/gryph/storage/ent/aarmcontextstate"
 	"github.com/safedep/gryph/storage/ent/aarmdeferredaction"
@@ -6251,6 +6252,7 @@ type AuditEventMutation struct {
 	error_message        *string
 	payload              *map[string]interface{}
 	diff_content         *string
+	diff_label           *privacy.Label
 	raw_event            *map[string]interface{}
 	conversation_context *string
 	is_sensitive         *bool
@@ -6972,6 +6974,55 @@ func (m *AuditEventMutation) ResetDiffContent() {
 	delete(m.clearedFields, auditevent.FieldDiffContent)
 }
 
+// SetDiffLabel sets the "diff_label" field.
+func (m *AuditEventMutation) SetDiffLabel(pr privacy.Label) {
+	m.diff_label = &pr
+}
+
+// DiffLabel returns the value of the "diff_label" field in the mutation.
+func (m *AuditEventMutation) DiffLabel() (r privacy.Label, exists bool) {
+	v := m.diff_label
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDiffLabel returns the old "diff_label" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldDiffLabel(ctx context.Context) (v privacy.Label, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDiffLabel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDiffLabel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDiffLabel: %w", err)
+	}
+	return oldValue.DiffLabel, nil
+}
+
+// ClearDiffLabel clears the value of the "diff_label" field.
+func (m *AuditEventMutation) ClearDiffLabel() {
+	m.diff_label = nil
+	m.clearedFields[auditevent.FieldDiffLabel] = struct{}{}
+}
+
+// DiffLabelCleared returns if the "diff_label" field was cleared in this mutation.
+func (m *AuditEventMutation) DiffLabelCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldDiffLabel]
+	return ok
+}
+
+// ResetDiffLabel resets all changes to the "diff_label" field.
+func (m *AuditEventMutation) ResetDiffLabel() {
+	m.diff_label = nil
+	delete(m.clearedFields, auditevent.FieldDiffLabel)
+}
+
 // SetRawEvent sets the "raw_event" field.
 func (m *AuditEventMutation) SetRawEvent(value map[string]interface{}) {
 	m.raw_event = &value
@@ -7461,7 +7512,7 @@ func (m *AuditEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuditEventMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 23)
 	if m.session != nil {
 		fields = append(fields, auditevent.FieldSessionID)
 	}
@@ -7500,6 +7551,9 @@ func (m *AuditEventMutation) Fields() []string {
 	}
 	if m.diff_content != nil {
 		fields = append(fields, auditevent.FieldDiffContent)
+	}
+	if m.diff_label != nil {
+		fields = append(fields, auditevent.FieldDiffLabel)
 	}
 	if m.raw_event != nil {
 		fields = append(fields, auditevent.FieldRawEvent)
@@ -7562,6 +7616,8 @@ func (m *AuditEventMutation) Field(name string) (ent.Value, bool) {
 		return m.Payload()
 	case auditevent.FieldDiffContent:
 		return m.DiffContent()
+	case auditevent.FieldDiffLabel:
+		return m.DiffLabel()
 	case auditevent.FieldRawEvent:
 		return m.RawEvent()
 	case auditevent.FieldConversationContext:
@@ -7615,6 +7671,8 @@ func (m *AuditEventMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldPayload(ctx)
 	case auditevent.FieldDiffContent:
 		return m.OldDiffContent(ctx)
+	case auditevent.FieldDiffLabel:
+		return m.OldDiffLabel(ctx)
 	case auditevent.FieldRawEvent:
 		return m.OldRawEvent(ctx)
 	case auditevent.FieldConversationContext:
@@ -7732,6 +7790,13 @@ func (m *AuditEventMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDiffContent(v)
+		return nil
+	case auditevent.FieldDiffLabel:
+		v, ok := value.(privacy.Label)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDiffLabel(v)
 		return nil
 	case auditevent.FieldRawEvent:
 		v, ok := value.(map[string]interface{})
@@ -7874,6 +7939,9 @@ func (m *AuditEventMutation) ClearedFields() []string {
 	if m.FieldCleared(auditevent.FieldDiffContent) {
 		fields = append(fields, auditevent.FieldDiffContent)
 	}
+	if m.FieldCleared(auditevent.FieldDiffLabel) {
+		fields = append(fields, auditevent.FieldDiffLabel)
+	}
 	if m.FieldCleared(auditevent.FieldRawEvent) {
 		fields = append(fields, auditevent.FieldRawEvent)
 	}
@@ -7932,6 +8000,9 @@ func (m *AuditEventMutation) ClearField(name string) error {
 		return nil
 	case auditevent.FieldDiffContent:
 		m.ClearDiffContent()
+		return nil
+	case auditevent.FieldDiffLabel:
+		m.ClearDiffLabel()
 		return nil
 	case auditevent.FieldRawEvent:
 		m.ClearRawEvent()
@@ -8003,6 +8074,9 @@ func (m *AuditEventMutation) ResetField(name string) error {
 		return nil
 	case auditevent.FieldDiffContent:
 		m.ResetDiffContent()
+		return nil
+	case auditevent.FieldDiffLabel:
+		m.ResetDiffLabel()
 		return nil
 	case auditevent.FieldRawEvent:
 		m.ResetRawEvent()

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 )
@@ -739,17 +741,44 @@ func (p *TablePresenter) formatResultStatus(status string) string {
 }
 
 func (p *TablePresenter) renderPayloadDetail(tw *tableWriter, payload any) {
-	switch v := payload.(type) {
-	case map[string]any:
-		for key, val := range v {
-			tw.printf("  %-16s %v\n", key, val)
-		}
-	default:
-		data, err := json.MarshalIndent(v, "  ", "  ")
-		if err == nil {
-			tw.printf("  %s\n", string(data))
-		}
+	fields, ok := payload.(map[string]any)
+	if !ok {
+		fields = payloadFields(payload)
 	}
+	for _, key := range slices.Sorted(maps.Keys(fields)) {
+		tw.printf("  %-16s %v\n", key, fields[key])
+	}
+}
+
+// payloadFields flattens a typed payload for display. A content value shows
+// as its text, and a stripped value shows as a marker. Tool input and output
+// show as their JSON text.
+func payloadFields(payload any) map[string]any {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil
+	}
+	for key, val := range fields {
+		obj, ok := val.(map[string]any)
+		if !ok || len(obj) != 2 {
+			continue
+		}
+		text, hasValue := obj["value"].(string)
+		label, hasLabel := obj["label"].(map[string]any)
+		if !hasValue || !hasLabel {
+			continue
+		}
+		if stripped, _ := label["stripped"].(bool); stripped && text == "" {
+			fields[key] = "[stripped]"
+			continue
+		}
+		fields[key] = text
+	}
+	return fields
 }
 
 // Cost table widths equal the sum of the printf column widths plus the

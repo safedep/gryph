@@ -9,6 +9,7 @@ import (
 	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 )
 
 // HookInput represents the common fields in all Command Code hook inputs.
@@ -280,14 +281,14 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 		}
 
 		if fullContent != "" {
-			payload.ContentPreview = truncateString(fullContent, 200)
+			payload.ContentPreview = privacy.Preview(fullContent, 200)
 			event.FullContent = fullContent
 		}
 		if fullOldStr != "" {
-			payload.OldString = truncateString(fullOldStr, 200)
+			payload.OldString = privacy.Preview(fullOldStr, 200)
 		}
 		if fullNewStr != "" {
-			payload.NewString = truncateString(fullNewStr, 200)
+			payload.NewString = privacy.Preview(fullNewStr, 200)
 		}
 		// Edit writes carry their content in new_value; feed it to the matcher.
 		if event.FullContent == "" && fullNewStr != "" {
@@ -300,16 +301,16 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 
 		if a.loggingLevel.IsAtLeast(config.LoggingFull) {
 			if fullOldStr != "" || fullNewStr != "" {
-				event.DiffContent = utils.GenerateDiff(filePath, fullOldStr, fullNewStr)
+				event.DiffContent = privacy.NewText(utils.GenerateDiff(filePath, fullOldStr, fullNewStr))
 			} else if fullContent != "" {
-				event.DiffContent = utils.GenerateDiff(filePath, "", fullContent)
+				event.DiffContent = privacy.NewText(utils.GenerateDiff(filePath, "", fullContent))
 			}
 		}
 
 	case events.ActionCommandExec:
 		payload := events.CommandExecPayload{}
 		if cmd, ok := toolInput["command"].(string); ok {
-			payload.Command = cmd
+			payload.Command = privacy.NewText(cmd)
 		}
 		// shell_command splits argv into an optional args array.
 		if args, ok := toolInput["args"].([]interface{}); ok && len(args) > 0 {
@@ -320,12 +321,12 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 				}
 			}
 			if len(strArgs) > 0 {
-				payload.Command = strings.TrimSpace(payload.Command + " " + strings.Join(strArgs, " "))
+				payload.Command = privacy.NewText(strings.TrimSpace(payload.Command.Value + " " + strings.Join(strArgs, " ")))
 			}
 		}
 		if toolResponse != nil {
 			if output, ok := toolResponse["output"].(string); ok {
-				payload.Output = truncateString(output, 500)
+				payload.Output = privacy.Preview(output, 500)
 			}
 			if exitCode, ok := toolResponse["exitCode"].(float64); ok {
 				payload.ExitCode = int(exitCode)
@@ -340,11 +341,11 @@ func (a *Adapter) buildPayload(event *events.Event, actionType events.ActionType
 			ToolName: toolName,
 		}
 		if input, err := json.Marshal(toolInput); err == nil {
-			payload.Input = input
+			payload.Input = privacy.NewText(string(input))
 		}
 		if toolResponse != nil {
 			if resp, err := json.Marshal(toolResponse); err == nil {
-				payload.Output = resp
+				payload.Output = privacy.NewText(string(resp))
 			}
 		}
 		if err := event.SetPayload(payload); err != nil {

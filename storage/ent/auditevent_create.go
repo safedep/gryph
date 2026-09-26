@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/session"
 )
@@ -160,6 +161,20 @@ func (_c *AuditEventCreate) SetDiffContent(v string) *AuditEventCreate {
 func (_c *AuditEventCreate) SetNillableDiffContent(v *string) *AuditEventCreate {
 	if v != nil {
 		_c.SetDiffContent(*v)
+	}
+	return _c
+}
+
+// SetDiffLabel sets the "diff_label" field.
+func (_c *AuditEventCreate) SetDiffLabel(v privacy.Label) *AuditEventCreate {
+	_c.mutation.SetDiffLabel(v)
+	return _c
+}
+
+// SetNillableDiffLabel sets the "diff_label" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableDiffLabel(v *privacy.Label) *AuditEventCreate {
+	if v != nil {
+		_c.SetDiffLabel(*v)
 	}
 	return _c
 }
@@ -482,6 +497,10 @@ func (_c *AuditEventCreate) createSpec() (*AuditEvent, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DiffContent(); ok {
 		_spec.SetField(auditevent.FieldDiffContent, field.TypeString, value)
 		_node.DiffContent = value
+	}
+	if value, ok := _c.mutation.DiffLabel(); ok {
+		_spec.SetField(auditevent.FieldDiffLabel, field.TypeJSON, value)
+		_node.DiffLabel = value
 	}
 	if value, ok := _c.mutation.RawEvent(); ok {
 		_spec.SetField(auditevent.FieldRawEvent, field.TypeJSON, value)

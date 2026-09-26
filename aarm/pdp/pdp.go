@@ -14,9 +14,11 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/google/cel-go/cel"
+	"github.com/safedep/dry/log"
 	celast "github.com/google/cel-go/common/ast"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
+	"github.com/safedep/gryph/core/privacy"
 )
 
 const conditionTimeout = 100 * time.Millisecond
@@ -69,8 +71,17 @@ func New(policy *Policy, opts ...Option) (*PDP, error) {
 	return p, nil
 }
 
-// Evaluate computes the final decision and matched rule IDs.
+// Evaluate computes the final decision and matched rule IDs. It renders the
+// rule message from the action.
 func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *model.ContextSnapshot) (*model.EvaluationResult, error) {
+	return p.EvaluateStored(ctx, action, action, snapshot)
+}
+
+// EvaluateStored evaluates the action as Evaluate does. It renders
+// FullMessage from the action and Message from stored, the action as the
+// receipt records it. A template can name a parameter that the stored action
+// drops, so the stored message must not come from the full action.
+func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, snapshot *model.ContextSnapshot) (*model.EvaluationResult, error) {
 	result := &model.EvaluationResult{Decision: model.DecisionAllow, MatchedRuleIDs: []string{}}
 	if action == nil {
 		return result, nil
@@ -172,14 +183,31 @@ func (p *PDP) Evaluate(ctx context.Context, action *model.Action, snapshot *mode
 	}
 
 	if winnerRule != nil {
-		msg, err := winnerRule.renderMessage(action, snapshot)
+		full, err := winnerRule.renderMessage(action, snapshot)
 		if err != nil {
 			return nil, err
 		}
-		result.Message = msg
+		result.FullMessage = full
+		result.Message = full
+		if stored != action {
+			result.Message = winnerRule.storedMessage(stored, snapshot)
+		}
 	}
 
 	return result, nil
+}
+
+// storedMessage renders the message from the stored action. The stored
+// action lacks the values that Gryph strips, so a template that works on the
+// full action can fail here. The decision must not depend on the logging
+// level, so a failed render gives a fixed message and not an error.
+func (r compiledRule) storedMessage(stored *model.Action, snapshot *model.ContextSnapshot) string {
+	msg, err := r.renderMessage(stored, snapshot)
+	if err != nil {
+		log.Warnf("pdp: rule %s: render the stored message: %v", r.rule.ID, err)
+		return "rule " + r.rule.ID
+	}
+	return msg
 }
 
 // detectConflict returns true when more than one rule matched at the
@@ -648,7 +676,7 @@ func actionActivation(action *model.Action) map[string]any {
 	if action == nil {
 		action = &model.Action{}
 	}
-	classifications := action.DataClassifications
+	classifications := privacy.Strings(action.DataClassifications)
 	if classifications == nil {
 		classifications = []string{}
 	}

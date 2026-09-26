@@ -10,6 +10,7 @@ import (
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage"
@@ -26,11 +27,18 @@ type ResultRecorder interface {
 type Local struct {
 	store        storage.Store
 	evaluator    *security.Evaluator
-	privacy      *events.PrivacyChecker
+	redactor     *privacy.Redactor
 	loggingLevel func(agent string) config.LoggingLevel
 	recorder     func() ResultRecorder
 	onSessionEnd func(*session.Session)
 	hookSpec     HookSpecLookup
+	classifier   Classifier
+}
+
+// Classifier returns the classes of the content an event holds. The
+// aarm/classify heuristic implements it.
+type Classifier interface {
+	ClassifyEvent(event *events.Event) []privacy.Class
 }
 
 // HookSpecLookup returns the declared spec of an agent's hook type.
@@ -66,13 +74,21 @@ func WithHookSpecs(lookup HookSpecLookup) LocalOption {
 	}
 }
 
+// WithClassifier installs the classifier that sets the classes of each
+// content label.
+func WithClassifier(c Classifier) LocalOption {
+	return func(l *Local) {
+		l.classifier = c
+	}
+}
+
 // NewLocal creates the in-process decision service.
-func NewLocal(store storage.Store, evaluator *security.Evaluator, privacy *events.PrivacyChecker,
+func NewLocal(store storage.Store, evaluator *security.Evaluator, redactor *privacy.Redactor,
 	loggingLevel func(agent string) config.LoggingLevel, opts ...LocalOption) *Local {
 	l := &Local{
 		store:        store,
 		evaluator:    evaluator,
-		privacy:      privacy,
+		redactor:     redactor,
 		loggingLevel: loggingLevel,
 	}
 	for _, opt := range opts {
@@ -89,10 +105,11 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 
 	event := req.event()
 
-	// Order matters: redact configured patterns before the level filter strips
-	// fields, so we never persist or log unredacted user content.
-	redactEvent(event, l.privacy)
-	applyLoggingLevel(event, l.loggingLevel(event.AgentName))
+	var classes []privacy.Class
+	if l.classifier != nil {
+		classes = l.classifier.ClassifyEvent(event)
+	}
+	labelEvent(event, l.redactor, classes)
 
 	sess, err := l.loadSession(ctx, event)
 	if err != nil {
@@ -102,6 +119,7 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 	l.classify(ctx, event)
 
 	result := l.evaluator.Evaluate(ctx, event, sess)
+	applyLevel(event, l.loggingLevel(event.AgentName))
 	if !result.IsAllowed() {
 		l.recordBlocked(ctx, sess, event, result)
 		return &HookResponse{Decision: VerdictOf(security.DecisionBlock), Reason: result.BlockReason}, nil
@@ -185,9 +203,16 @@ func (l *Local) loadSession(ctx context.Context, event *events.Event) (*session.
 	return sess, nil
 }
 
+// recordBlocked saves the blocked event with the stored block reason. The
+// agent gets the full reason. The stored reason comes from the action that
+// the receipt records, so it does not hold content that applyLevel removed.
+// The redactor runs on it again, because a check can put any text in it.
 func (l *Local) recordBlocked(ctx context.Context, sess *session.Session, event *events.Event, result *security.Result) {
 	event.ResultStatus = events.ResultBlocked
-	event.ErrorMessage = result.BlockReason
+	event.ErrorMessage = result.StoredBlockReason
+	if l.redactor != nil {
+		event.ErrorMessage = l.redactor.Redact(event.ErrorMessage)
+	}
 	event.Sequence = sess.TotalActions + 1
 
 	if err := l.store.SaveEvent(ctx, event); err != nil {

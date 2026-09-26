@@ -110,7 +110,7 @@ func eventToDetailView(reg *agent.Registry, e *events.Event) *tui.EventDetailVie
 		ResultStatus:     string(e.ResultStatus),
 		ErrorMessage:     e.ErrorMessage,
 		IsSensitive:      e.IsSensitive,
-		DiffContent:      e.DiffContent,
+		DiffContent:      e.DiffContent.Value,
 		RawEvent:         e.RawEvent,
 		ConvContext:      e.ConversationContext,
 	}

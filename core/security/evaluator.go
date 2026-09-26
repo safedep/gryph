@@ -1,6 +1,7 @@
 package security
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 
@@ -56,6 +57,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, event *events.Event, sess *ses
 
 			result.FinalDecision = DecisionBlock
 			result.BlockReason = fmt.Sprintf("check %s failed: %v", check.Name(), err)
+			result.StoredBlockReason = result.BlockReason
 			result.BlockedBy = check.Name()
 			result.Error = err
 
@@ -68,6 +70,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, event *events.Event, sess *ses
 		case DecisionBlock:
 			result.FinalDecision = DecisionBlock
 			result.BlockReason = checkResult.Reason
+			result.StoredBlockReason = cmp.Or(checkResult.StoredReason, checkResult.Reason)
 			result.BlockedBy = checkResult.CheckName
 			return result
 		case DecisionGuidance:

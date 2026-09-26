@@ -21,7 +21,7 @@ core/           Domain models (events, sessions, audit, security) - most stable
 config/         Viper-based configuration
 storage/        SQLite + ent ORM
 agent/          Adapter pattern (claudecode/, cursor/ and more)
-decision/       Decision service: redact, evaluate, and record one hook event
+decision/       Decision service: label, redact, evaluate, and record one hook event
 cli/            Cobra commands as an App pattern
 tui/            Output formatters (table, json, csv)
 ```
@@ -79,6 +79,7 @@ tui/            Output formatters (table, json, csv)
 - `docs/e2e.md` - Writing and running E2E tests (`test/cli/`)
 - `docs/agent-adapter.md` - Adding a new agent adapter
 - `docs/aarm-dev.md` - AARM / policy layer (`aarm/`, `cli/policy.go`)
+- `docs/content-labels.md` - Content labels, redaction, and logging levels (`core/privacy`, `decision/label.go`)
 
 ## IMPORTANT
 

@@ -9,6 +9,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/core/privacy"
 )
 
 // AuditEvent holds the schema definition for the AuditEvent entity.
@@ -53,6 +54,9 @@ func (AuditEvent) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				dialect.SQLite: "text",
 			}),
+		field.JSON("diff_label", privacy.Label{}).
+			Optional().
+			Comment("Content label of diff_content"),
 		field.JSON("raw_event", map[string]interface{}{}).
 			Optional(),
 		field.Text("conversation_context").

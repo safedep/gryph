@@ -99,12 +99,12 @@ a file_write action or if diff was not captured.`,
 			if event.IsSensitive {
 				view.Available = false
 				view.Message = "[SENSITIVE - content not logged]"
-			} else if event.DiffContent == "" {
+			} else if event.DiffContent.Value == "" {
 				view.Available = false
 				view.Message = "Diff not captured (logging level may have been minimal or standard)"
 			} else {
 				view.Available = true
-				view.Content = event.DiffContent
+				view.Content = event.DiffContent.Value
 			}
 
 			return app.Presenter.RenderDiff(view)

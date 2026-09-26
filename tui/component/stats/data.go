@@ -272,10 +272,10 @@ func computeStats(ctx context.Context, store storage.Store, since, until *time.T
 				} else {
 					data.FailedCommands++
 				}
-				cs, ok := cmdStats[p.Command]
+				cs, ok := cmdStats[p.Command.Value]
 				if !ok {
-					cs = &CommandStat{Command: p.Command}
-					cmdStats[p.Command] = cs
+					cs = &CommandStat{Command: p.Command.Value}
+					cmdStats[p.Command.Value] = cs
 				}
 				cs.Count++
 				if p.ExitCode != 0 {

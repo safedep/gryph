@@ -49,8 +49,8 @@ func buildSearchableText(event *events.Event) string {
 	if event.ErrorMessage != "" {
 		parts = append(parts, event.ErrorMessage)
 	}
-	if event.DiffContent != "" {
-		parts = append(parts, event.DiffContent)
+	if event.DiffContent.Value != "" {
+		parts = append(parts, event.DiffContent.Value)
 	}
 	if event.ConversationContext != "" {
 		parts = append(parts, event.ConversationContext)
@@ -86,24 +86,24 @@ func extractPayloadText(event *events.Event) string {
 		}
 	case events.ActionCommandExec:
 		if p, err := event.GetCommandExecPayload(); err == nil && p != nil {
-			parts = append(parts, p.Command)
+			parts = append(parts, p.Command.Value)
 			if p.Description != "" {
 				parts = append(parts, p.Description)
 			}
-			if p.StdoutPreview != "" {
-				parts = append(parts, p.StdoutPreview)
+			if p.StdoutPreview.Value != "" {
+				parts = append(parts, p.StdoutPreview.Value)
 			}
-			if p.StderrPreview != "" {
-				parts = append(parts, p.StderrPreview)
+			if p.StderrPreview.Value != "" {
+				parts = append(parts, p.StderrPreview.Value)
 			}
 		}
 	case events.ActionToolUse:
 		if p, err := event.GetToolUsePayload(); err == nil && p != nil {
 			parts = append(parts, p.ToolName)
-			if p.OutputPreview != "" {
-				parts = append(parts, p.OutputPreview)
+			if p.OutputPreview.Value != "" {
+				parts = append(parts, p.OutputPreview.Value)
 			}
-			extractRawJSONStrings(p.Input, &parts)
+			extractRawJSONStrings(json.RawMessage(p.Input.Value), &parts)
 		}
 	case events.ActionNotification:
 		if p, err := event.GetNotificationPayload(); err == nil && p != nil {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,9 +23,9 @@ func loadFixture(t *testing.T, name string) []byte {
 	return data
 }
 
-func testPrivacyChecker(t *testing.T) *events.PrivacyChecker {
+func testPrivacyChecker(t *testing.T) *privacy.Redactor {
 	t.Helper()
-	pc, err := events.NewPrivacyChecker(events.DefaultSensitivePatterns(), nil)
+	pc, err := privacy.NewRedactor(privacy.DefaultSensitivePatterns(), nil)
 	require.NoError(t, err)
 	return pc
 }
@@ -55,7 +56,7 @@ func TestParseHookEvent_PreToolUseBash(t *testing.T) {
 
 	payload, err := event.GetCommandExecPayload()
 	require.NoError(t, err)
-	assert.Equal(t, "npm install", payload.Command)
+	assert.Equal(t, "npm install", payload.Command.Value)
 	assert.Equal(t, "Install dependencies", payload.Description)
 }
 
@@ -74,7 +75,7 @@ func TestParseHookEvent_PreToolUseWrite(t *testing.T) {
 	payload, err := event.GetFileWritePayload()
 	require.NoError(t, err)
 	assert.Equal(t, "/home/user/project/src/main.go", payload.Path)
-	assert.Contains(t, payload.ContentPreview, "package main")
+	assert.Contains(t, payload.ContentPreview.Value, "package main")
 }
 
 func TestParseHookEvent_FullContentAndHookType(t *testing.T) {
@@ -354,9 +355,9 @@ func TestParseHookEvent_PostToolUseResponseTypes(t *testing.T) {
 			if tc.hasOutput {
 				payload, err := event.GetToolUsePayload()
 				require.NoError(t, err)
-				assert.NotEmpty(t, payload.Output)
+				assert.NotEmpty(t, payload.Output.Value)
 				if tc.checkOutput != nil {
-					tc.checkOutput(t, payload.Output)
+					tc.checkOutput(t, json.RawMessage(payload.Output.Value))
 				}
 			}
 		})
@@ -405,7 +406,7 @@ func TestParseHookEvent_SubagentStop(t *testing.T) {
 	assert.Equal(t, "aeaa22c674a7c3c34", payload.AgentID)
 	assert.Equal(t, "Explore", payload.AgentType)
 	assert.Contains(t, payload.AgentTranscriptPath, "subagents/agent-aeaa22c674a7c3c34.jsonl")
-	assert.Equal(t, "Done. Found 3 matching files in src/.", payload.LastAssistantMessage)
+	assert.Equal(t, "Done. Found 3 matching files in src/.", payload.LastAssistantMessage.Value)
 }
 
 func TestParseHookEvent_PreToolUseBash_SubagentAttribution(t *testing.T) {
@@ -425,7 +426,7 @@ func TestParseHookEvent_PreToolUseBash_SubagentAttribution(t *testing.T) {
 
 	payload, err := event.GetCommandExecPayload()
 	require.NoError(t, err)
-	assert.Equal(t, "grep -r 'TODO' src/", payload.Command)
+	assert.Equal(t, "grep -r 'TODO' src/", payload.Command.Value)
 }
 
 func TestParseHookEvent_PreToolUseBash_MainAgentNoSubagentID(t *testing.T) {
@@ -528,9 +529,9 @@ func TestParseHookEvent_DiffGeneration_FullLevel(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
-	assert.NotEmpty(t, event.DiffContent, "DiffContent should be populated at full logging level")
-	assert.Contains(t, event.DiffContent, "--- a/")
-	assert.Contains(t, event.DiffContent, "+++ b/")
+	assert.NotEmpty(t, event.DiffContent.Value, "DiffContent should be populated at full logging level")
+	assert.Contains(t, event.DiffContent.Value, "--- a/")
+	assert.Contains(t, event.DiffContent.Value, "+++ b/")
 }
 
 func TestParseHookEvent_NoDiff_StandardLevel(t *testing.T) {
@@ -541,7 +542,7 @@ func TestParseHookEvent_NoDiff_StandardLevel(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
-	assert.Empty(t, event.DiffContent, "DiffContent should be empty at standard logging level")
+	assert.Empty(t, event.DiffContent.Value, "DiffContent should be empty at standard logging level")
 }
 
 func TestToolNameMapping(t *testing.T) {

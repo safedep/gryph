@@ -786,6 +786,16 @@ func DiffContentContainsFold(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldContainsFold(FieldDiffContent, v))
 }
 
+// DiffLabelIsNil applies the IsNil predicate on the "diff_label" field.
+func DiffLabelIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldDiffLabel))
+}
+
+// DiffLabelNotNil applies the NotNil predicate on the "diff_label" field.
+func DiffLabelNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldDiffLabel))
+}
+
 // RawEventIsNil applies the IsNil predicate on the "raw_event" field.
 func RawEventIsNil() predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldIsNull(FieldRawEvent))

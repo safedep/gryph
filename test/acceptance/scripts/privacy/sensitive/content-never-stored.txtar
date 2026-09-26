@@ -1,5 +1,5 @@
 # A write to a sensitive path is flagged. Its content never reaches storage,
-# even at logging level full. Export excludes the event unless --sensitive is
+# even at logging level full. Its label does. Export excludes the event unless --sensitive is
 # set, and even then never carries the content.
 env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
@@ -20,9 +20,14 @@ stdout '\.env'
 exec gryph export --since 1h
 stderr 'No events to export.'
 
-# --sensitive includes the event but never its content.
+# --sensitive includes the event but never its content. The content keeps
+# its label with the secret class and the stripped flag. The label digest of
+# the secret stays on the machine.
 exec gryph export --since 1h --sensitive
 stdout '"is_sensitive":true'
+stdout '"stripped":true'
+stdout '"classes":\["secret"\]'
+! stdout '"digest"'
 ! stdout 'SUPERSECRET123VALUE'
 ! stdout 'hunter2'
 stderr 'Exported 1 events'

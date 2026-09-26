@@ -42,6 +42,8 @@ const (
 	FieldPayload = "payload"
 	// FieldDiffContent holds the string denoting the diff_content field in the database.
 	FieldDiffContent = "diff_content"
+	// FieldDiffLabel holds the string denoting the diff_label field in the database.
+	FieldDiffLabel = "diff_label"
 	// FieldRawEvent holds the string denoting the raw_event field in the database.
 	FieldRawEvent = "raw_event"
 	// FieldConversationContext holds the string denoting the conversation_context field in the database.
@@ -89,6 +91,7 @@ var Columns = []string{
 	FieldErrorMessage,
 	FieldPayload,
 	FieldDiffContent,
+	FieldDiffLabel,
 	FieldRawEvent,
 	FieldConversationContext,
 	FieldIsSensitive,

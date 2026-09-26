@@ -136,7 +136,7 @@ for validation. Sensitive events are excluded by default.`,
 			// Encode events as JSONL directly
 			enc := json.NewEncoder(writer)
 			for _, e := range evts {
-				if err := enc.Encode(e); err != nil {
+				if err := enc.Encode(e.ForExport()); err != nil {
 					return err
 				}
 			}

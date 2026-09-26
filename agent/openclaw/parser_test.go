@@ -9,6 +9,7 @@ import (
 
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -21,9 +22,9 @@ func loadFixture(t *testing.T, name string) []byte {
 	return data
 }
 
-func testPrivacyChecker(t *testing.T) *events.PrivacyChecker {
+func testPrivacyChecker(t *testing.T) *privacy.Redactor {
 	t.Helper()
-	pc, err := events.NewPrivacyChecker(events.DefaultSensitivePatterns(), nil)
+	pc, err := privacy.NewRedactor(privacy.DefaultSensitivePatterns(), nil)
 	require.NoError(t, err)
 	return pc
 }
@@ -71,7 +72,7 @@ func TestParseHookEvent_BeforeToolCall_Write(t *testing.T) {
 	payload, err := event.GetFileWritePayload()
 	require.NoError(t, err)
 	assert.Equal(t, "/home/user/project/src/main.go", payload.Path)
-	assert.Contains(t, payload.ContentPreview, "package main")
+	assert.Contains(t, payload.ContentPreview.Value, "package main")
 }
 
 func TestParseHookEvent_BeforeToolCall_Exec(t *testing.T) {
@@ -87,7 +88,7 @@ func TestParseHookEvent_BeforeToolCall_Exec(t *testing.T) {
 
 	payload, err := event.GetCommandExecPayload()
 	require.NoError(t, err)
-	assert.Equal(t, "npm install", payload.Command)
+	assert.Equal(t, "npm install", payload.Command.Value)
 	assert.Equal(t, "Install dependencies", payload.Description)
 }
 
@@ -343,9 +344,9 @@ func TestParseHookEvent_DiffGeneration_FullLevel(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
-	assert.NotEmpty(t, event.DiffContent, "DiffContent should be populated at full logging level")
-	assert.Contains(t, event.DiffContent, "--- a/")
-	assert.Contains(t, event.DiffContent, "+++ b/")
+	assert.NotEmpty(t, event.DiffContent.Value, "DiffContent should be populated at full logging level")
+	assert.Contains(t, event.DiffContent.Value, "--- a/")
+	assert.Contains(t, event.DiffContent.Value, "+++ b/")
 }
 
 func TestParseHookEvent_NoDiff_StandardLevel(t *testing.T) {
@@ -356,7 +357,7 @@ func TestParseHookEvent_NoDiff_StandardLevel(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, event)
 
-	assert.Empty(t, event.DiffContent, "DiffContent should be empty at standard logging level")
+	assert.Empty(t, event.DiffContent.Value, "DiffContent should be empty at standard logging level")
 }
 
 func TestNewGuidanceResponse(t *testing.T) {

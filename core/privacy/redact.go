@@ -1,4 +1,4 @@
-package events
+package privacy
 
 import (
 	"encoding/json"
@@ -7,14 +7,15 @@ import (
 	"strings"
 )
 
-// PrivacyChecker determines if paths are sensitive and handles content redaction.
-type PrivacyChecker struct {
+// Redactor decides whether a path is sensitive and removes secrets from
+// content with the configured patterns.
+type Redactor struct {
 	sensitivePatterns []string
 	redactPatterns    []*regexp.Regexp
 }
 
-// NewPrivacyChecker creates a new PrivacyChecker with the given patterns.
-func NewPrivacyChecker(sensitivePatterns []string, redactPatterns []string) (*PrivacyChecker, error) {
+// NewRedactor compiles the sensitive-path globs and the redaction regexps.
+func NewRedactor(sensitivePatterns []string, redactPatterns []string) (*Redactor, error) {
 	compiled := make([]*regexp.Regexp, 0, len(redactPatterns))
 	for _, pattern := range redactPatterns {
 		re, err := regexp.Compile(pattern)
@@ -25,7 +26,7 @@ func NewPrivacyChecker(sensitivePatterns []string, redactPatterns []string) (*Pr
 		compiled = append(compiled, re)
 	}
 
-	return &PrivacyChecker{
+	return &Redactor{
 		sensitivePatterns: sensitivePatterns,
 		redactPatterns:    compiled,
 	}, nil
@@ -66,7 +67,7 @@ func DefaultRedactPatterns() []string {
 }
 
 // IsSensitivePath checks if the given path matches any sensitive pattern.
-func (p *PrivacyChecker) IsSensitivePath(path string) bool {
+func (p *Redactor) IsSensitivePath(path string) bool {
 	// Normalize path separators
 	normalizedPath := filepath.ToSlash(path)
 
@@ -80,7 +81,7 @@ func (p *PrivacyChecker) IsSensitivePath(path string) bool {
 }
 
 // Redact applies redaction patterns to the content, replacing matches with [REDACTED].
-func (p *PrivacyChecker) Redact(content string) string {
+func (p *Redactor) Redact(content string) string {
 	result := content
 	for _, re := range p.redactPatterns {
 		result = re.ReplaceAllString(result, "[REDACTED]")
@@ -94,7 +95,7 @@ func (p *PrivacyChecker) Redact(content string) string {
 // JSON delimiters and produce invalid JSON if Redact were applied to the raw
 // bytes. If the input is not valid JSON, falls back to byte-level string
 // redaction.
-func (p *PrivacyChecker) RedactJSON(content []byte) []byte {
+func (p *Redactor) RedactJSON(content []byte) []byte {
 	if len(content) == 0 {
 		return content
 	}
@@ -113,7 +114,7 @@ func (p *PrivacyChecker) RedactJSON(content []byte) []byte {
 	return out
 }
 
-func (p *PrivacyChecker) redactValue(v any) any {
+func (p *Redactor) redactValue(v any) any {
 	switch t := v.(type) {
 	case string:
 		return p.Redact(t)

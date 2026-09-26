@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,9 +23,9 @@ func loadFixture(t *testing.T, name string) []byte {
 	return data
 }
 
-func testPrivacyChecker(t *testing.T) *events.PrivacyChecker {
+func testPrivacyChecker(t *testing.T) *privacy.Redactor {
 	t.Helper()
-	pc, err := events.NewPrivacyChecker(events.DefaultSensitivePatterns(), nil)
+	pc, err := privacy.NewRedactor(privacy.DefaultSensitivePatterns(), nil)
 	require.NoError(t, err)
 	return pc
 }
@@ -68,7 +69,7 @@ func TestParseHookEvent_PreToolUse_Bash(t *testing.T) {
 
 	payload, err := event.GetCommandExecPayload()
 	require.NoError(t, err)
-	assert.Equal(t, "npm install", payload.Command)
+	assert.Equal(t, "npm install", payload.Command.Value)
 }
 
 func TestParseHookEvent_PostToolUse_Bash(t *testing.T) {
@@ -85,8 +86,8 @@ func TestParseHookEvent_PostToolUse_Bash(t *testing.T) {
 
 	payload, err := event.GetCommandExecPayload()
 	require.NoError(t, err)
-	assert.Equal(t, "npm install", payload.Command)
-	assert.Contains(t, payload.Output, "added 150 packages")
+	assert.Equal(t, "npm install", payload.Command.Value)
+	assert.Contains(t, payload.Output.Value, "added 150 packages")
 }
 
 func TestParseHookEvent_UserPromptSubmit(t *testing.T) {

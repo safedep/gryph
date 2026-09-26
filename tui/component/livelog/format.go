@@ -89,7 +89,7 @@ func extractTargetDetail(e *events.Event, maxTarget int) (string, string) {
 	case events.ActionCommandExec:
 		if p, err := e.GetCommandExecPayload(); err == nil && p != nil {
 			detail := lipgloss.NewStyle().Foreground(colorDim).Render(tui.FormatExitCode(p.ExitCode))
-			return tui.TruncateString(p.Command, maxTarget), detail
+			return tui.TruncateString(p.Command.Value, maxTarget), detail
 		}
 	case events.ActionToolUse:
 		if p, err := e.GetToolUsePayload(); err == nil && p != nil {

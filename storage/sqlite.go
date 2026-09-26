@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage/ent"
 	"github.com/safedep/gryph/storage/ent/auditevent"
@@ -171,8 +172,9 @@ func (s *SQLiteStore) SaveEvent(ctx context.Context, event *events.Event) error 
 	if payload != nil {
 		create.SetPayload(payload)
 	}
-	if event.DiffContent != "" {
-		create.SetDiffContent(event.DiffContent)
+	if !event.DiffContent.IsZero() {
+		create.SetDiffContent(event.DiffContent.Value)
+		create.SetDiffLabel(event.DiffContent.Label)
 	}
 	if rawEvent != nil {
 		create.SetRawEvent(rawEvent)
@@ -901,7 +903,7 @@ func entToEvent(e *ent.AuditEvent) *events.Event {
 		ToolName:            e.ToolName,
 		ResultStatus:        events.ResultStatus(e.ResultStatus),
 		ErrorMessage:        e.ErrorMessage,
-		DiffContent:         e.DiffContent,
+		DiffContent:         privacy.Text{Value: e.DiffContent, Label: e.DiffLabel},
 		ConversationContext: e.ConversationContext,
 		IsSensitive:         e.IsSensitive,
 		SubagentID:          e.SubagentID,
@@ -1052,7 +1054,7 @@ func buildEventPredicates(filter *events.EventFilter) []predicate.AuditEvent {
 		pattern := filter.CommandPattern
 		predicates = append(predicates, predicate.AuditEvent(func(s *entsql.Selector) {
 			s.Where(entsql.P(func(b *entsql.Builder) {
-				b.WriteString("json_extract(payload, '$.command') GLOB ")
+				b.WriteString(payloadCommandSQL + " GLOB ")
 				b.Arg(pattern)
 			}))
 		}))
@@ -1139,7 +1141,7 @@ func buildEventSubQueryPredicate(filter *session.SessionFilter) predicate.Sessio
 				b.Arg(filter.FilePattern)
 			}
 			if filter.CommandPattern != "" {
-				b.WriteString(" AND json_extract(payload, '$.command') GLOB ")
+				b.WriteString(" AND " + payloadCommandSQL + " GLOB ")
 				b.Arg(filter.CommandPattern)
 			}
 			b.WriteString(")")
@@ -1149,3 +1151,8 @@ func buildEventSubQueryPredicate(filter *session.SessionFilter) predicate.Sessio
 
 // Ensure SQLiteStore implements Store
 var _ Store = (*SQLiteStore)(nil)
+
+// payloadCommandSQL reads the command text of a command_exec payload. A row
+// from before content labels holds the command as a string. A newer row
+// holds a privacy.Text object with the command in "value".
+const payloadCommandSQL = "COALESCE(json_extract(payload, '$.command.value'), json_extract(payload, '$.command'))"
