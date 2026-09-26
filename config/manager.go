@@ -202,5 +202,8 @@ func validateSettings(v *viper.Viper, key string) error {
 		return err
 	}
 	clampContext(v, &cfg.Policy.Context)
-	return validate(&cfg)
+	if err := validate(&cfg); err != nil {
+		return err
+	}
+	return errors.Join(exportProfileErrors(&cfg)...)
 }

@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/spf13/viper"
 )
 
@@ -76,6 +77,47 @@ type Config struct {
 	Display DisplayConfig `mapstructure:"display"`
 	Streams StreamsConfig `mapstructure:"streams"`
 	Policy  PolicyConfig  `mapstructure:"policy"`
+	Export  ExportConfig  `mapstructure:"export"`
+}
+
+// ExportConfig holds the user export profiles, by name.
+type ExportConfig struct {
+	Profiles map[string]ExportProfileConfig `mapstructure:"profiles"`
+}
+
+// ExportProfileConfig is one user export profile. See privacy.ExportProfile.
+type ExportProfileConfig struct {
+	Default string               `mapstructure:"default"`
+	Rules   []privacy.ExportRule `mapstructure:"rules"`
+}
+
+// ExportProfile returns the export profile with the name. An empty name
+// gives the built-in default profile. Names ignore case, because the config
+// loader stores every map key in lower case.
+//
+// An invalid user profile, or a user profile with a built-in name, returns
+// an error and never a weaker profile. Load only warns about such a
+// profile, so one bad export rule does not reset the hook config.
+func (c *Config) ExportProfile(name string) (privacy.ExportProfile, error) {
+	name = strings.ToLower(name)
+	if name == "" {
+		name = privacy.ProfileDefault
+	}
+	builtin, isBuiltin := privacy.BuiltinProfiles()[name]
+	pc, isUser := c.Export.Profiles[name]
+	switch {
+	case isBuiltin && isUser:
+		return privacy.ExportProfile{}, fmt.Errorf("export.profiles.%s: the name is a built-in profile", name)
+	case isBuiltin:
+		return builtin, nil
+	case !isUser:
+		return privacy.ExportProfile{}, fmt.Errorf("unknown export profile %q", name)
+	}
+	p := privacy.ExportProfile{Name: name, Default: privacy.Treatment(pc.Default), Rules: pc.Rules}
+	if err := p.Validate(); err != nil {
+		return privacy.ExportProfile{}, err
+	}
+	return p, nil
 }
 
 // PolicyConfig holds Gryph policy-layer settings.
@@ -276,6 +318,9 @@ type StreamTargetConfig struct {
 	Type    string         `mapstructure:"type"`
 	Enabled bool           `mapstructure:"enabled"`
 	Config  map[string]any `mapstructure:"config"`
+	// ExportProfile names the export profile of the target. Empty gives
+	// the built-in default profile.
+	ExportProfile string `mapstructure:"export_profile"`
 }
 
 // Paths holds resolved filesystem paths.
@@ -368,6 +413,9 @@ func Load(configPath string) (*Config, error) {
 	// Validate config
 	if err := validate(&cfg); err != nil {
 		return nil, err
+	}
+	for _, err := range exportProfileErrors(&cfg) {
+		log.Warnf("config: %v. Gryph does not export with this profile.", err)
 	}
 
 	return &cfg, nil

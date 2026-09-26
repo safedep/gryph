@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"regexp"
+	"slices"
 
 	"github.com/safedep/gryph/aarm/model"
 )
@@ -171,6 +173,23 @@ func validatePolicyDeferConfig(cfg DeferConfig) error {
 		return fmt.Errorf("policy.defer.auto_resolve_on_timeout must be %q (AARM R4 forbids implicit allow on timeout)", DeferAutoResolveDeny)
 	}
 	return nil
+}
+
+// exportProfileErrors returns an error for each invalid export profile and
+// for each stream target that names a profile that ExportProfile rejects.
+func exportProfileErrors(cfg *Config) []error {
+	var errs []error
+	for _, name := range slices.Sorted(maps.Keys(cfg.Export.Profiles)) {
+		if _, err := cfg.ExportProfile(name); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	for i, t := range cfg.Streams.Targets {
+		if _, err := cfg.ExportProfile(t.ExportProfile); err != nil {
+			errs = append(errs, fmt.Errorf("streams.targets[%d]: %w", i, err))
+		}
+	}
+	return errs
 }
 
 func validateStreamTargets(targets []StreamTargetConfig) error {

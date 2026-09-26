@@ -1,11 +1,13 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -654,4 +656,140 @@ func TestLoad_ClampsWindowLimits(t *testing.T) {
 			assert.Equal(t, DefaultWindowMaxBytes, cfg.Policy.Context.WindowMaxBytes, "a negative byte bound must not remove the limit")
 		})
 	}
+}
+
+func TestValidate_ExportProfiles(t *testing.T) {
+	rule := func(then privacy.Treatment, classes []privacy.Class, origins []privacy.Origin) privacy.ExportRule {
+		return privacy.ExportRule{Classes: classes, Origins: origins, Then: then}
+	}
+	tests := []struct {
+		name     string
+		profiles map[string]ExportProfileConfig
+		target   string
+		wantErr  string
+	}{
+		{"no profiles", nil, "", ""},
+		{"valid profile", map[string]ExportProfileConfig{"team": {Default: "digest", Rules: []privacy.ExportRule{
+			rule(privacy.TreatRedact, nil, []privacy.Origin{privacy.OriginUser}),
+		}}}, "team", ""},
+		{"built-in target profile", nil, privacy.ProfileMetadata, ""},
+		{"built-in name", map[string]ExportProfileConfig{"full": {Default: "drop"}}, "", "export.profiles.full: the name is a built-in profile"},
+		{"unknown default", map[string]ExportProfileConfig{"team": {Default: "hide"}}, "", `unknown default treatment "hide"`},
+		{"empty default", map[string]ExportProfileConfig{"team": {}}, "", `unknown default treatment ""`},
+		{"unknown treatment", map[string]ExportProfileConfig{"team": {Default: "include", Rules: []privacy.ExportRule{
+			rule("hide", []privacy.Class{privacy.ClassSecret}, nil),
+		}}}, "", `unknown treatment "hide"`},
+		{"unknown class", map[string]ExportProfileConfig{"team": {Default: "include", Rules: []privacy.ExportRule{
+			rule(privacy.TreatDrop, []privacy.Class{"password"}, nil),
+		}}}, "", `unknown class "password"`},
+		{"unknown origin", map[string]ExportProfileConfig{"team": {Default: "include", Rules: []privacy.ExportRule{
+			rule(privacy.TreatDrop, nil, []privacy.Origin{"email"}),
+		}}}, "", `unknown origin "email"`},
+		{"rule without classes or origins", map[string]ExportProfileConfig{"team": {Default: "include", Rules: []privacy.ExportRule{
+			rule(privacy.TreatDrop, nil, nil),
+		}}}, "", "a rule needs classes or origins"},
+		{"unknown target profile", nil, "nope", `streams.targets[0]: unknown export profile "nope"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Export.Profiles = tt.profiles
+			cfg.Streams.Targets = []StreamTargetConfig{{Name: "out", Type: "stdout", Enabled: true, ExportProfile: tt.target}}
+			require.NoError(t, validate(cfg), "an export profile error never fails the whole config")
+			err := errors.Join(exportProfileErrors(cfg)...)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+func TestLoad_InvalidExportProfile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, os.WriteFile(path, []byte(`
+logging:
+  level: minimal
+policy:
+  enabled: true
+export:
+  profiles:
+    team:
+      default: include
+      rules:
+        - classes: [credentials]
+          then: drop
+    full:
+      default: drop
+    ok:
+      default: digest
+streams:
+  targets:
+    - name: out
+      type: stdout
+      enabled: true
+      export_profile: team
+`), 0o600))
+
+	cfg, err := Load(path)
+	require.NoError(t, err, "one bad export profile does not reset the hook config")
+	assert.Equal(t, LoggingMinimal, cfg.Logging.Level)
+	assert.True(t, cfg.Policy.Enabled)
+
+	_, err = cfg.ExportProfile("team")
+	assert.ErrorContains(t, err, `unknown class "credentials"`)
+	_, err = cfg.ExportProfile(cfg.Streams.Targets[0].ExportProfile)
+	assert.Error(t, err, "a target never falls back to a weaker profile")
+	_, err = cfg.ExportProfile(privacy.ProfileFull)
+	assert.ErrorContains(t, err, "the name is a built-in profile", "a user profile never loses to a built-in profile with its name")
+
+	ok, err := cfg.ExportProfile("ok")
+	require.NoError(t, err)
+	assert.Equal(t, privacy.TreatDigest, ok.Default)
+	_, err = cfg.ExportProfile("")
+	assert.NoError(t, err)
+}
+
+func TestLoad_ExportProfiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, os.WriteFile(path, []byte(`
+export:
+  profiles:
+    team:
+      default: digest
+      rules:
+        - classes: [secret, pii]
+          then: drop
+        - origins: [user]
+          then: redact
+streams:
+  targets:
+    - name: out
+      type: stdout
+      enabled: true
+      export_profile: team
+`), 0o600))
+
+	cfg, err := Load(path)
+	require.NoError(t, err)
+
+	team, err := cfg.ExportProfile(cfg.Streams.Targets[0].ExportProfile)
+	require.NoError(t, err)
+	assert.Equal(t, privacy.ExportProfile{Name: "team", Default: privacy.TreatDigest, Rules: []privacy.ExportRule{
+		{Classes: []privacy.Class{privacy.ClassSecret, privacy.ClassPII}, Then: privacy.TreatDrop},
+		{Origins: []privacy.Origin{privacy.OriginUser}, Then: privacy.TreatRedact},
+	}}, team)
+
+	upper, err := cfg.ExportProfile("Team")
+	require.NoError(t, err)
+	assert.Equal(t, team, upper, "profile names ignore case")
+
+	def, err := cfg.ExportProfile("")
+	require.NoError(t, err)
+	assert.Equal(t, privacy.ProfileDefault, def.Name)
+
+	_, err = cfg.ExportProfile("nope")
+	assert.ErrorContains(t, err, `unknown export profile "nope"`)
 }

@@ -9,18 +9,20 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/spf13/cobra"
 )
 
 // NewExportCmd creates the export command.
 func NewExportCmd() *cobra.Command {
 	var (
-		since     string
-		until     string
-		agent     string
-		output    string
-		session   string
-		sensitive bool
+		since         string
+		until         string
+		agent         string
+		output        string
+		session       string
+		sensitive     bool
+		exportProfile string
 	)
 
 	cmd := &cobra.Command{
@@ -30,10 +32,12 @@ func NewExportCmd() *cobra.Command {
 
 Exports audit events as raw JSON Lines for external analysis, auditing, and
 pipeline consumption. Each line is a complete Event object with a $schema field
-for validation. Sensitive events are excluded by default.`,
-		Example: `  gryph export                                    # last 1h, non-sensitive, JSONL to stdout
-  gryph export --since "1w" -o audit.jsonl        # last week to file
-  gryph export --agent claude-code --sensitive     # include sensitive events`,
+for validation. An export profile decides what happens to each content value.
+The default profile drops secret, pii and unknown_sensitive content and
+digests user prompts. It exports every event, and never drops a whole event.`,
+		Example: `  gryph export                                        # last 1h, default profile, JSONL to stdout
+  gryph export --since "1w" -o audit.jsonl            # last week to file
+  gryph export --export-profile metadata              # labels and digests only`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
@@ -99,15 +103,16 @@ for validation. Sensitive events are excluded by default.`,
 				return err
 			}
 
-			// Filter sensitive events unless --sensitive is set
-			if !sensitive {
-				filtered := make([]*events.Event, 0, len(evts))
-				for _, e := range evts {
-					if !e.IsSensitive {
-						filtered = append(filtered, e)
-					}
+			profileName := exportProfile
+			if sensitive {
+				if cmd.Flags().Changed("export-profile") {
+					return ErrConfig("invalid flags", fmt.Errorf("--sensitive cannot be combined with --export-profile"))
 				}
-				evts = filtered
+				profileName = privacy.ProfileFull
+			}
+			profile, err := app.ExportProfile(profileName)
+			if err != nil {
+				return ErrConfig("invalid export profile", err)
 			}
 
 			if len(evts) == 0 {
@@ -136,7 +141,7 @@ for validation. Sensitive events are excluded by default.`,
 			// Encode events as JSONL directly
 			enc := json.NewEncoder(writer)
 			for _, e := range evts {
-				if err := enc.Encode(e.ForExport()); err != nil {
+				if err := enc.Encode(e.ForExport(profile)); err != nil {
 					return err
 				}
 			}
@@ -151,7 +156,11 @@ for validation. Sensitive events are excluded by default.`,
 	cmd.Flags().StringVar(&agent, "agent", "", "filter by agent")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "write to file (default: stdout)")
 	cmd.Flags().StringVar(&session, "session", "", "filter by session ID (prefix match)")
-	cmd.Flags().BoolVar(&sensitive, "sensitive", false, "include sensitive events")
+	cmd.Flags().StringVar(&exportProfile, "export-profile", privacy.ProfileDefault, "export profile: default, metadata, full, or a profile under export.profiles")
+	cmd.Flags().BoolVar(&sensitive, "sensitive", false, "same as --export-profile full")
+	if err := cmd.Flags().MarkDeprecated("sensitive", "use --export-profile full"); err != nil {
+		log.Warnf("export: deprecate --sensitive: %v", err)
+	}
 
 	return cmd
 }

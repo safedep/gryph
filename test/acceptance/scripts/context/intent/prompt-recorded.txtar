@@ -2,7 +2,8 @@
 # intent entry. The intent does not count as an action. The next action sees
 # the intent in the session context. The session ID 05336580 derives from the
 # agent session ID s-intent. The default standard level stores the label and
-# the digest of the prompt only. The full level stores the prompt.
+# the digest of the prompt only. The export holds no digest of the stripped
+# prompt. The full level stores the prompt.
 env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
 env XDG_DATA_HOME=$WORK/home/.local/share
@@ -16,7 +17,8 @@ exec gryph query --action prompt --format json --no-color
 stdout -count=1 '"ActionType": "user_prompt"'
 
 exec gryph export --since 1h
-stdout '"prompt":\{"value":"","label":\{"origin":"user","stripped":true,"level":"standard"'
+stdout '"prompt":\{"value":"","label":\{"origin":"user","stripped":true,"level":"standard"\}\}'
+! stdout '"digest":"sha256:'
 ! stdout 'Add a retry to the upload function'
 
 exec gryph policy context --session 05336580 --format json --no-color
@@ -29,7 +31,7 @@ stdout '"actions_since_intent": 1'
 env GRYPH_LOGGING_LEVEL=full
 stdin prompt_full.json
 exec gryph _hook claude-code UserPromptSubmit
-exec gryph export --since 1h
+exec gryph export --since 1h --export-profile full
 stdout '"prompt":\{"value":"Rename the config loader","label":\{[^}]*"origin":"user"[^}]*"level":"full"'
 
 -- home/.config/safedep/gryph/config.yml --

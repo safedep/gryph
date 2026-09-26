@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -86,6 +87,19 @@ func newStreamSyncCmd() *cobra.Command {
 			}
 
 			syncer := stream.NewSyncer(app.Store, registry)
+			var profileErrs []error
+			for _, tc := range app.Config.Streams.Targets {
+				profile, err := app.ExportProfile(tc.ExportProfile)
+				if err != nil {
+					err = fmt.Errorf("target %s: %w", tc.Name, err)
+					syncer.SetProfileError(tc.Name, err)
+					if tc.Enabled {
+						profileErrs = append(profileErrs, err)
+					}
+					continue
+				}
+				syncer.SetProfile(tc.Name, profile)
+			}
 			result, err := syncer.Sync(ctx, syncOpts...)
 			if err != nil {
 				return err
@@ -101,10 +115,13 @@ func newStreamSyncCmd() *cobra.Command {
 						fmt.Fprintf(os.Stderr, "[%s] error: %v\n", tr.TargetName, tr.Error)
 					}
 				}
-				return nil
+			} else if err := app.Presenter.RenderStreamSync(buildStreamSyncView(result)); err != nil {
+				return err
 			}
-
-			return app.Presenter.RenderStreamSync(buildStreamSyncView(result))
+			if len(profileErrs) > 0 {
+				return ErrConfig("invalid export profile", errors.Join(profileErrs...))
+			}
+			return nil
 		},
 	}
 
