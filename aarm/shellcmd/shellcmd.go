@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -208,6 +209,30 @@ type walker struct {
 	failed    bool
 	matchDot  bool
 	gryphHook bool
+	// stdin is the input of the statement that the walker is in.
+	stdin stdinSource
+}
+
+// stdinKind tells what a command reads from its standard input.
+type stdinKind int
+
+const (
+	// stdinPipe is the output of another command in a pipe, or the input
+	// of the agent. Gryph cannot see it. The hook check treats it as a
+	// script file, because the command in the pipe can write a file too.
+	stdinPipe stdinKind = iota
+	// stdinUnknown is a here-document or a here-string that Gryph cannot
+	// resolve, or a file descriptor such as a process substitution.
+	stdinUnknown
+	// stdinText is the literal text of a here-document or a here-string.
+	stdinText
+	// stdinFile is a file of an input redirect.
+	stdinFile
+)
+
+type stdinSource struct {
+	kind stdinKind
+	text string
 }
 
 func (w *walker) script(src string, cwds dirs) (dirs, error) {
@@ -248,6 +273,7 @@ func (w *walker) stmt(s *syntax.Stmt, cwds dirs) dirs {
 		w.subshells(r.Word, cwds)
 		w.redirect(r, cwds)
 	}
+	defer w.setStdin(w.stdinOf(s.Redirs, cwds))()
 	after := w.command(s.Cmd, cwds)
 	if s.Background || s.Coprocess {
 		return cwds
@@ -274,9 +300,12 @@ func (w *walker) command(cmd syntax.Command, cwds dirs) dirs {
 			left := w.stmt(c.X, cwds)
 			return union(left, w.stmt(c.Y, left))
 		default:
-			// Each side of a pipe runs in its own subshell.
+			// Each side of a pipe runs in its own subshell. The right side
+			// reads the output of the left side.
 			w.stmt(c.X, cwds)
+			restore := w.setStdin(stdinSource{kind: stdinPipe})
 			w.stmt(c.Y, cwds)
+			restore()
 			return cwds
 		}
 	case *syntax.Subshell:
@@ -321,6 +350,85 @@ func (w *walker) subshells(node syntax.Node, cwds dirs) {
 		}
 		return true
 	})
+}
+
+// setStdin sets the input of the statements that follow, and returns a
+// function that restores the input before it.
+func (w *walker) setStdin(src stdinSource) func() {
+	prev := w.stdin
+	w.stdin = src
+	return func() { w.stdin = prev }
+}
+
+// stdinOf returns the input that the redirects of a statement give. The last
+// input redirect wins. A statement with no input redirect keeps the input of
+// the statement around it.
+func (w *walker) stdinOf(redirs []*syntax.Redirect, cwds dirs) stdinSource {
+	src := w.stdin
+	for _, r := range redirs {
+		if r.N != nil && r.N.Value != "0" {
+			continue
+		}
+		switch r.Op {
+		case syntax.Hdoc, syntax.DashHdoc:
+			src = stdinSource{kind: stdinUnknown}
+			if text, ok := literalText(r.Hdoc); ok {
+				src = stdinSource{kind: stdinText, text: text}
+			}
+		case syntax.WordHdoc:
+			src = stdinSource{kind: stdinUnknown}
+			if text, ok := w.word(r.Word, cwds); ok {
+				src = stdinSource{kind: stdinText, text: text + "\n"}
+			}
+		case syntax.RdrIn, syntax.RdrInOut:
+			src = stdinSource{kind: stdinFile}
+			if v, ok := w.word(r.Word, cwds); ok && isDescriptorPath(v) {
+				src = stdinSource{kind: stdinUnknown}
+			}
+		}
+	}
+	return src
+}
+
+// literalText returns the text of a here-document body that has no
+// expansion. It keeps each backslash, because the nested parse reads the
+// body as a script.
+func literalText(word *syntax.Word) (string, bool) {
+	if word == nil {
+		return "", true
+	}
+	var b strings.Builder
+	for _, part := range word.Parts {
+		lit, ok := part.(*syntax.Lit)
+		if !ok {
+			return "", false
+		}
+		b.WriteString(lit.Value)
+	}
+	return b.String(), true
+}
+
+// isDescriptorPath reports whether a path names an open file descriptor,
+// such as /dev/stdin, /dev/fd/63 of a process substitution, or
+// /proc/self/fd/0. A script read from such a path is the output of another
+// command.
+func isDescriptorPath(p string) bool {
+	p = path.Clean(p)
+	if p == "/dev/stdin" || strings.HasPrefix(p, "/dev/fd/") {
+		return true
+	}
+	rest, ok := strings.CutPrefix(p, "/proc/")
+	if !ok {
+		return false
+	}
+	_, fd, ok := strings.Cut(rest, "/")
+	return ok && strings.HasPrefix(fd, "fd/")
+}
+
+// isStdinPath reports whether a path names file descriptor 0.
+func isStdinPath(p string) bool {
+	p = path.Clean(p)
+	return p == "/dev/stdin" || p == "/dev/fd/0" || strings.HasPrefix(p, "/proc/") && strings.HasSuffix(p, "/fd/0")
 }
 
 func (w *walker) redirect(r *syntax.Redirect, cwds dirs) {
@@ -502,6 +610,7 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	case "source", ".":
 		if ops := operands(rest); len(ops) > 0 {
 			w.add(ops[0], AccessRead, cwds)
+			w.scriptFile(ops[0], cwds)
 		}
 	case "curl":
 		w.curl(parseArgs(rest, curlOptions), cwds)
@@ -513,6 +622,9 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 			w.sshRoute(p)
 		}
 		w.remoteShell(p)
+		if name == "ssh" {
+			w.sshForwards(p)
+		}
 	case "nc", "ncat", "netcat":
 		w.netcat(rest)
 	case "socat":
@@ -533,6 +645,7 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 			w.lookup(tool, rest)
 		} else if !nonReadCommands[name] {
 			w.guessReads(guessWords(rest), cwds)
+			w.networkWords(rest)
 		}
 	}
 	return cwds
@@ -547,7 +660,14 @@ func (w *walker) delegate(name string, rest []string, cwds dirs) (dirs, bool) {
 		w.wrapper(name, spec, rest, cwds)
 		return cwds, true
 	}
+	if _, ok := launchers[name]; ok {
+		w.launcher(name, rest, cwds)
+		return cwds, true
+	}
 	switch name {
+	case "parallel":
+		w.parallel(rest, cwds)
+		return cwds, true
 	case "command", "builtin":
 		// These run a command in the current shell, so "command cd" changes
 		// the working directory.
@@ -559,10 +679,25 @@ func (w *walker) delegate(name string, rest []string, cwds dirs) (dirs, bool) {
 		}
 		return w.nested(strings.Join(rest, " "), cwds), true
 	}
-	if shells[name] && w.shell(rest, cwds) {
+	if shells[name] {
+		w.shell(name, rest, cwds)
 		return cwds, true
 	}
 	return cwds, false
+}
+
+// networkTools are the programs that contact a host that their arguments
+// name.
+var networkTools = flagSet("curl", "wget", "nc", "ncat", "netcat", "socat", "ssh", "scp", "sftp",
+	"telnet", "ftp", "rsync", "git", "dig", "nslookup", "host", "ping")
+
+// networkWords records UnknownHost when an argument of a command that the
+// walker does not know names a network tool. The command can run the tool
+// with a host that Gryph cannot see.
+func (w *walker) networkWords(args []string) {
+	if slices.ContainsFunc(args, func(a string) bool { return networkTools[path.Base(a)] }) {
+		w.addHost(UnknownHost)
+	}
 }
 
 // gryphHookCommand is the hidden Gryph subcommand that agent hooks run.
@@ -659,7 +794,7 @@ func xargsReplace(opts []string) string {
 	return repl
 }
 
-// proxyAssign records the proxy of a shell assignment such as
+// proxyAssign records the hosts of a shell assignment such as
 // "ALL_PROXY=host curl ...".
 func (w *walker) proxyAssign(a *syntax.Assign, cwds dirs) {
 	if a.Name == nil || a.Value == nil {
@@ -669,11 +804,21 @@ func (w *walker) proxyAssign(a *syntax.Assign, cwds dirs) {
 	w.proxyEnv(a.Name.Value, v)
 }
 
-// proxyEnv records the host of a proxy variable such as ALL_PROXY or
-// https_proxy, because a network tool then connects to the proxy.
+// proxyEnv records the hosts of a variable that sends a network tool
+// through another host: a proxy variable such as ALL_PROXY or https_proxy,
+// and the ssh command of git. A git config variable can set a proxy or an
+// ssh command that Gryph cannot see.
 func (w *walker) proxyEnv(name, value string) {
-	name = strings.ToLower(name)
-	if strings.HasSuffix(name, "_proxy") && name != "no_proxy" {
+	switch name = strings.ToLower(name); {
+	case name == "git_ssh_command":
+		w.sshCommand(value)
+	case name == "git_ssh":
+		if path.Base(value) != "ssh" {
+			w.addHost(UnknownHost)
+		}
+	case name == "git_proxy_command" || strings.HasPrefix(name, "git_config") && name != "git_config_nosystem":
+		w.addHost(UnknownHost)
+	case strings.HasSuffix(name, "_proxy") && name != "no_proxy":
 		w.addNetworkHost(value)
 	}
 }
@@ -712,6 +857,12 @@ var wrappers = map[string]wrapperSpec{
 	"chrt": {values: flagSet("-T", "--sched-runtime", "-P", "--sched-period", "-D", "--sched-deadline"),
 		operands: 1},
 	"taskset": {operands: 1},
+	"setsid":  {},
+	"strace": {values: flagSet("-o", "--output", "-e", "-p", "--attach", "-s", "--string-limit", "-u", "--user",
+		"-E", "--env", "-a", "--columns", "-b", "--detach-on", "-I", "--interruptible", "-P", "--trace-path",
+		"-X", "--const-print-style", "-O", "-S", "--summary-sort-by")},
+	"ltrace": {values: flagSet("-o", "--output", "-e", "-p", "-s", "-u", "-a", "--align", "-n", "--indent",
+		"-F", "--config", "-D", "--debug", "-x", "-L", "-l", "--library", "-A")},
 	"busybox": {},
 	"toybox":  {},
 }
@@ -773,51 +924,465 @@ func isAssignment(word string) bool {
 // shells are the shells whose "-c SCRIPT" the walker parses.
 var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true}
 
-// shell analyzes the script of "sh -c SCRIPT" and reports whether it did.
-// Gryph cannot see a script in an unresolved word, as in sh -c "$X", or a
-// script that the shell reads from stdin, as in "curl ... | sh". Such a
-// script can contact any host.
-func (w *walker) shell(args []string, cwds dirs) bool {
-	i, inline, stdin := shellArgs(args)
+// shell analyzes the script of a shell. Gryph cannot see a script in an
+// unresolved word, as in sh -c "$X", or a script that the shell reads from
+// the output of another command, as in "curl ... | sh" or "bash <(curl
+// ...)". Such a script can contact any host. The walker parses a
+// here-document or a here-string that it can resolve. An option that the
+// walker does not know can take the next word as its value, so the walker
+// cannot tell which word is the script.
+func (w *walker) shell(name string, args []string, cwds dirs) {
+	sc := shellArgs(name, args)
 	switch {
-	case inline && i >= 0 && args[i] != "":
-		w.nested(args[i], cwds)
-		return true
-	case inline || stdin:
+	case sc.unknown:
 		w.addHost(UnknownHost)
+	case sc.inline:
+		w.inlineScript(args, sc.script, cwds)
+	case sc.script >= 0:
+		w.scriptFile(args[sc.script], cwds)
+	default:
+		w.stdinScript(cwds)
 	}
-	return false
 }
 
-// shellArgs reads the arguments of a shell. It returns the index of the
-// first operand, or -1 when there is none. With -c, that operand is the
-// script, and inline is true. The -c flag can be part of a flag group, as in
-// "bash -lc". Without -c, the shell reads its script from stdin when it has
-// -s or no operand.
-func shellArgs(args []string) (index int, inline, stdin bool) {
-	hasC, hasS := false, false
+// inlineScript analyzes the script at args[i]. An index out of range or an
+// unresolved word is a script that Gryph cannot see.
+func (w *walker) inlineScript(args []string, i int, cwds dirs) {
+	if i < 0 || i >= len(args) || args[i] == "" {
+		w.addHost(UnknownHost)
+		return
+	}
+	w.nested(args[i], cwds)
+}
+
+// scriptFile analyzes a script that a shell or "source" reads from a file.
+// Gryph does not read a regular file. A file that names standard input
+// holds the input of the statement. Another file descriptor holds the
+// output of a command that Gryph cannot see.
+func (w *walker) scriptFile(file string, cwds dirs) {
+	switch {
+	case isStdinPath(file):
+		w.stdinScript(cwds)
+	case isDescriptorPath(file):
+		w.addHost(UnknownHost)
+	}
+}
+
+// stdinScript analyzes a script that a shell reads from its standard input.
+func (w *walker) stdinScript(cwds dirs) {
+	switch w.stdin.kind {
+	case stdinText:
+		w.nested(w.stdin.text, cwds)
+	case stdinPipe, stdinUnknown:
+		w.addHost(UnknownHost)
+	}
+}
+
+// shellCall is how a shell gets its script.
+type shellCall struct {
+	// script is the index of the first operand, or -1 when there is none.
+	// With inline, it is the script. Else it is the script file.
+	script int
+	// inline is true with -c.
+	inline bool
+	// unknown is true for an option that the walker does not know.
+	unknown bool
+}
+
+// shellLongOptions are the long options of the shells. A true value marks
+// an option that takes the next word as its value. zsh takes any option
+// name as a long option, so for zsh an unknown long option is a flag.
+var shellLongOptions = map[string]bool{
+	"--rcfile": true, "--init-file": true, "--emulate": true,
+	"--norc": false, "--noprofile": false, "--login": false, "--posix": false, "--noediting": false,
+	"--restricted": false, "--verbose": false, "--version": false, "--help": false, "--debugger": false,
+	"--dump-strings": false, "--dump-po-strings": false, "--pretty-print": false,
+}
+
+// shellArgs reads the arguments of a shell. A short option group can hold
+// many flags, as in "bash -lc". Each "o" or "O" in a group takes the next
+// word as its value, as in "bash -euo pipefail -c SCRIPT". The first word
+// that is not an option ends the options. Without -c, the shell reads its
+// script from stdin when it has -s or no operand.
+func shellArgs(name string, args []string) shellCall {
+	sc := shellCall{script: -1}
+	stdin := false
+	i := 0
+	for ; i < len(args); i++ {
+		a := args[i]
+		if a == "--" || a == "-" {
+			i++
+			break
+		}
+		if !isShellOption(a) {
+			break
+		}
+		if long, _, hasValue := strings.Cut(a, "="); strings.HasPrefix(long, "--") {
+			takesValue, known := shellLongOptions[long]
+			switch {
+			case takesValue && !hasValue:
+				i++
+			case !known && name != "zsh":
+				sc.unknown = true
+			}
+			continue
+		}
+		for _, c := range a[1:] {
+			switch {
+			case c == 'o' || c == 'O':
+				i++
+			case c == 'c' && a[0] == '-':
+				sc.inline = true
+			case c == 's' && a[0] == '-':
+				stdin = true
+			case (c < 'a' || c > 'z') && (c < 'A' || c > 'Z'):
+				sc.unknown = true
+			}
+		}
+	}
+	if i < len(args) && (sc.inline || !stdin) {
+		sc.script = i
+	}
+	return sc
+}
+
+// isShellOption reports whether a shell argument is an option. A shell
+// takes "+o" as well as "-o".
+func isShellOption(a string) bool {
+	return len(a) > 1 && (a[0] == '-' || a[0] == '+')
+}
+
+// launch is what a launcher tool runs.
+type launch struct {
+	// cmd is the index of the first word of the command, or -1.
+	cmd int
+	// join is true when the tool joins the command words into one shell
+	// script, as eval does.
+	join bool
+	// script is the index of the word that holds a shell script, or -1.
+	script int
+	// scriptText is the script in that word, without an option name.
+	scriptText string
+	// stdin is true when the tool runs a shell that reads its script from
+	// standard input.
+	stdin bool
+}
+
+func noLaunch() launch { return launch{cmd: -1, script: -1} }
+
+// launchers are the tools that run a command or a shell script that their
+// arguments give, but not in the way of a plain wrapper.
+var launchers = map[string]func(args []string) launch{
+	"watch": watchLaunch, "flock": flockLaunch, "su": suLaunch(false), "runuser": suLaunch(true),
+	"script": scriptLaunch,
+}
+
+// launcher analyzes the command or the script that a launcher runs.
+func (w *walker) launcher(name string, args []string, cwds dirs) {
+	if w.depth >= maxDepth {
+		return
+	}
+	w.depth++
+	defer func() { w.depth-- }()
+
+	l := launchers[name](args)
+	switch {
+	case l.script >= 0:
+		if args[l.script] == "" {
+			w.addHost(UnknownHost)
+		} else {
+			w.nested(l.scriptText, cwds)
+		}
+	case l.cmd >= 0 && l.join:
+		w.call(append([]string{"eval"}, args[l.cmd:]...), cwds)
+	case l.cmd >= 0:
+		w.call(args[l.cmd:], cwds)
+	case l.stdin:
+		w.stdinScript(cwds)
+	}
+	if name == "script" {
+		w.scriptLogs(args, cwds)
+	}
+}
+
+// optionScan is the result of scanOptions.
+type optionScan struct {
+	// operands are the indexes of the operands.
+	operands []int
+	// seen holds each option name that the arguments set.
+	seen map[string]bool
+	// values maps an option name to the index of the word that holds its
+	// last value, and the value.
+	values map[string]flagIndex
+}
+
+type flagIndex struct {
+	index int
+	value string
+}
+
+// scanOptions reads the options of a tool with a getopt table. A short
+// option in values takes the rest of its word, or the next word. A long
+// option takes "=value", or the next word when it is in values. With
+// stopAtOperand, the first operand ends the options, as with a "+" getopt
+// table. Else the options can follow the operands.
+func scanOptions(args []string, values map[string]bool, stopAtOperand bool) optionScan {
+	o := optionScan{seen: map[string]bool{}, values: map[string]flagIndex{}}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
-		case a == "-o" || a == "+o" || a == "-O" || a == "+O" || a == "--rcfile" || a == "--init-file":
-			i++
 		case a == "--":
-			if i+1 < len(args) {
-				return i + 1, hasC, hasS && !hasC
+			for j := i + 1; j < len(args); j++ {
+				o.operands = append(o.operands, j)
 			}
-			return -1, hasC, !hasC
+			return o
 		case strings.HasPrefix(a, "--"):
-			continue
-		case strings.HasPrefix(a, "-") || strings.HasPrefix(a, "+"):
-			if strings.HasPrefix(a, "-") {
-				hasC = hasC || strings.Contains(a[1:], "c")
-				hasS = hasS || strings.Contains(a[1:], "s")
+			name, v, hasValue := strings.Cut(a, "=")
+			o.seen[name] = true
+			switch {
+			case hasValue:
+				o.values[name] = flagIndex{i, v}
+			case values[name] && i+1 < len(args):
+				i++
+				o.values[name] = flagIndex{i, args[i]}
+			}
+		case strings.HasPrefix(a, "-") && a != "-":
+			for j := 1; j < len(a); j++ {
+				flag := "-" + a[j:j+1]
+				o.seen[flag] = true
+				if !values[flag] {
+					continue
+				}
+				if v := a[j+1:]; v != "" {
+					o.values[flag] = flagIndex{i, v}
+				} else if i+1 < len(args) {
+					i++
+					o.values[flag] = flagIndex{i, args[i]}
+				}
+				break
 			}
 		default:
-			return i, hasC, hasS && !hasC
+			if stopAtOperand {
+				for j := i; j < len(args); j++ {
+					o.operands = append(o.operands, j)
+				}
+				return o
+			}
+			o.operands = append(o.operands, i)
 		}
 	}
-	return -1, hasC, !hasC
+	return o
+}
+
+// scriptValue returns the launch of the script in the value of the first of
+// flags that the arguments set.
+func (o optionScan) scriptValue(flags ...string) (launch, bool) {
+	for _, f := range flags {
+		if v, ok := o.values[f]; ok {
+			l := noLaunch()
+			l.script, l.scriptText = v.index, v.value
+			return l, true
+		}
+	}
+	return launch{}, false
+}
+
+var watchValues = flagSet("-n", "--interval", "-q", "--equexit", "-s", "--shotsdir")
+
+// watchLaunch reads "watch [options] command". watch joins the command
+// words and runs them with "sh -c", unless -x runs them as they are.
+func watchLaunch(args []string) launch {
+	o := scanOptions(args, watchValues, true)
+	l := noLaunch()
+	if len(o.operands) > 0 {
+		l.cmd = o.operands[0]
+		l.join = !o.seen["-x"] && !o.seen["--exec"]
+	}
+	return l
+}
+
+var flockValues = flagSet("-w", "--wait", "--timeout", "-E", "--conflict-exit-code")
+
+// flockLaunch reads "flock [options] FILE command..." and "flock [options]
+// FILE -c SCRIPT".
+func flockLaunch(args []string) launch {
+	o := scanOptions(args, flockValues, true)
+	l := noLaunch()
+	if len(o.operands) < 2 {
+		return l
+	}
+	next := o.operands[1]
+	if args[next] == "-c" || args[next] == "--command" {
+		if next+1 < len(args) {
+			l.script, l.scriptText = next+1, args[next+1]
+		}
+		return l
+	}
+	l.cmd = next
+	return l
+}
+
+var suValues = flagSet("-c", "--command", "--session-command", "-g", "--group", "-G", "--supp-group",
+	"-s", "--shell", "-w", "--whitelist-environment", "-u", "--user")
+
+// suLaunch reads su and runuser. -c runs a script with the shell of the
+// user. "runuser -u USER command" runs the command. Else the tool starts a
+// shell that reads its script from standard input.
+func suLaunch(runuser bool) func(args []string) launch {
+	return func(args []string) launch {
+		o := scanOptions(args, suValues, false)
+		if l, ok := o.scriptValue("-c", "--command", "--session-command"); ok {
+			return l
+		}
+		l := noLaunch()
+		if runuser && (o.seen["-u"] || o.seen["--user"]) {
+			if len(o.operands) > 0 {
+				l.cmd = o.operands[0]
+			}
+			return l
+		}
+		l.stdin = true
+		return l
+	}
+}
+
+var scriptValues = flagSet("-c", "--command", "-E", "--echo", "-I", "--log-in", "-O", "--log-out",
+	"-B", "--log-io", "-T", "--log-timing", "-m", "--logging-format", "-o", "--output-limit")
+
+// scriptLogs are the options of script that name a log file.
+var scriptLogs = []string{"-I", "--log-in", "-O", "--log-out", "-B", "--log-io", "-T", "--log-timing"}
+
+// scriptLaunch reads "script -c COMMAND [file]" and the BSD form "script
+// [file [command ...]]". Without a command, script starts a shell that
+// reads its script from standard input.
+func scriptLaunch(args []string) launch {
+	o := scanOptions(args, scriptValues, false)
+	if l, ok := o.scriptValue("-c", "--command"); ok {
+		return l
+	}
+	l := noLaunch()
+	if len(o.operands) > 1 {
+		l.cmd = o.operands[1]
+		return l
+	}
+	l.stdin = true
+	return l
+}
+
+// scriptLogs records the typescript file and the log files of script as
+// writes.
+func (w *walker) scriptLogs(args []string, cwds dirs) {
+	o := scanOptions(args, scriptValues, false)
+	if len(o.operands) > 0 {
+		w.add(args[o.operands[0]], AccessWrite, cwds)
+	}
+	for _, f := range scriptLogs {
+		if v, ok := o.values[f]; ok {
+			w.add(v.value, AccessWrite, cwds)
+		}
+	}
+}
+
+// parallelSeparators start the input arguments of GNU parallel.
+var parallelSeparators = flagSet(":::", "::::", ":::+", "::::+")
+
+// parallelReplace matches a GNU parallel replacement string, such as "{}",
+// "{.}", or "{1}".
+var parallelReplace = regexp.MustCompile(`\{[^{}]*\}`)
+
+// parallelValues are the GNU parallel options that take a value.
+var parallelValues = flagSet("-j", "--jobs", "-P", "--max-procs", "-N", "-n", "--max-args", "-L",
+	"--max-lines", "-I", "-S", "--sshlogin", "--slf", "--sshloginfile", "-a", "--arg-file", "-d",
+	"--delimiter", "-E", "--eof", "-C", "--colsep", "--timeout", "--delay", "--joblog", "--results",
+	"--res", "--tmpdir", "--workdir", "--wd", "-s", "--max-chars", "--tag-string", "--tagstring",
+	"--basefile", "--bf", "--return", "--memfree", "--load", "--halt", "--retries", "--block",
+	"--recstart", "--recend", "--env")
+
+// parallelCall is how GNU parallel gets its commands.
+type parallelCall struct {
+	// cmd is the command, with an unresolved word in place of the input
+	// arguments. It starts with the options.
+	cmd []string
+	// hasCommand is false when parallel runs each input as a command.
+	hasCommand bool
+	// inputs are the input words after the first separator.
+	inputs []string
+	// literal is true when parallel adds each input, as one word, at the end
+	// of the command: there is no replace string, every separator is ":::",
+	// and the walker resolves every input.
+	literal bool
+}
+
+// parseParallel splits the arguments of GNU parallel at the first input
+// separator.
+func parseParallel(args []string) parallelCall {
+	end := slices.IndexFunc(args, func(a string) bool { return parallelSeparators[a] })
+	if end < 0 {
+		end = len(args)
+	}
+	pc := parallelCall{
+		cmd:        slices.Clone(args[:end]),
+		hasCommand: len(scanOptions(args[:end], parallelValues, true).operands) > 0,
+	}
+	repl := xargsReplace(pc.cmd)
+	replaced := false
+	for i, a := range pc.cmd {
+		if parallelReplace.MatchString(a) || repl != "" && strings.Contains(a, repl) {
+			pc.cmd[i] = ""
+			replaced = true
+		}
+	}
+	if !replaced {
+		pc.cmd = append(pc.cmd, "")
+	}
+	pc.literal = !replaced
+	for _, a := range args[end:] {
+		switch {
+		case a == ":::":
+		case parallelSeparators[a] || a == "":
+			pc.literal = false
+		default:
+			pc.inputs = append(pc.inputs, a)
+		}
+	}
+	return pc
+}
+
+// parallel analyzes GNU parallel. It adds the input arguments to the
+// command. The walker runs the command once for each literal input. Else the
+// inputs are unresolved words in it.
+// With no command, parallel runs each input as a shell command. -S runs the
+// commands on other hosts.
+func (w *walker) parallel(args []string, cwds dirs) {
+	pc := parseParallel(args)
+	if slices.ContainsFunc(pc.cmd, func(a string) bool {
+		return a == "-S" || strings.HasPrefix(a, "--sshlogin") || strings.HasPrefix(a, "--slf")
+	}) {
+		w.addHost(UnknownHost)
+	}
+	spec := wrapperSpec{values: parallelValues}
+	if pc.hasCommand && pc.literal && len(pc.inputs) > 0 {
+		for _, in := range pc.inputs {
+			cmd := slices.Clone(pc.cmd)
+			cmd[len(cmd)-1] = in
+			w.wrapper("parallel", spec, cmd, cwds)
+		}
+		return
+	}
+	w.wrapper("parallel", spec, pc.cmd, cwds)
+	if pc.hasCommand {
+		return
+	}
+	if len(pc.inputs) == 0 {
+		w.stdinScript(cwds)
+	}
+	for _, in := range pc.inputs {
+		if in == "" {
+			w.addHost(UnknownHost)
+			continue
+		}
+		w.nested(in, cwds)
+	}
 }
 
 // find records the changes of a find command. -delete removes the search
@@ -1186,11 +1751,18 @@ func (w *walker) wordPart(b *strings.Builder, part syntax.WordPart, quoted bool,
 		default:
 			return false
 		}
+	case *syntax.ProcSubst:
+		// The shell passes the path of a pipe that holds the output of
+		// the process substitution.
+		b.WriteString(procSubstPath)
 	default:
 		return false
 	}
 	return true
 }
+
+// procSubstPath is the path that bash gives a process substitution.
+const procSubstPath = "/dev/fd/63"
 
 // ansiC decodes the escapes of an ANSI-C quoted word, $'...'. With no
 // arguments, expand.Format reads "%" as a literal. The shell ends the word at

@@ -38,7 +38,7 @@
   title: "builtin self-protection blocks writes to gryph and hook config"
   category: policy
   tier: P0
-  guarantee: "With policy enabled, an agent write to the gryph config directory or an agent hook config file is blocked by the builtin rules."
+  guarantee: "With policy enabled, an agent write to the gryph config directory or an agent hook config file is blocked by the builtin rules. A shell command that removes the config directory in bash -euo pipefail -c is blocked too."
   labels: [policy, self-protection]
 
 - id: policy/self-protection/command-code-hookcfg-blocked
@@ -59,7 +59,7 @@
   title: "builtin self-protection blocks agent shell commands that run gryph _hook"
   category: policy
   tier: P0
-  guarantee: "With policy enabled, an agent shell command that runs gryph _hook with a literal _hook argument, directly, in a nested shell, or through ANSI-C quoting, is blocked at exit 2, so it cannot forge a user prompt. Another gryph command passes, also with a variable argument. A grep for a word that holds _hook passes."
+  guarantee: "With policy enabled, an agent shell command that runs gryph _hook with a literal _hook argument, directly, in a nested shell (also after a flag group such as -euo pipefail), or through ANSI-C quoting, is blocked at exit 2, so it cannot forge a user prompt. Another gryph command passes, also with a variable argument. A grep for a word that holds _hook passes."
   labels: [policy, self-protection, intent]
 
 - id: policy/file-access/read-rule-matches-shell-reads

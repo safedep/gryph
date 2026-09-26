@@ -159,7 +159,11 @@ Conditions read two maps. `action.*` fields come from `actionActivation`:
 `files_read`, `files_written`, `commands_executed`, `network_requests`,
 `errors`, `tools_used`, `session_duration_ms`, `classifications_seen`,
 `tags_seen`, `tag_seq`, `origins_seen`, `entities_seen`, `egress_hosts`, `entries`,
-`intent_available`, `actions_since_intent`. `Snapshot` computes the intent
+`intent_available`, `actions_since_intent`. `entities_seen` takes its paths
+from `model.Action.EntityPaths`, which leaves out guessed reads. The store
+caps each entity kind on its own (`addCappedByKind`). `QueryEntryFacts`
+cleans the path of each entry with `shellcmd.ResolvePath` and the working
+directory of the audit event, and then cuts it to its last 1024 bytes. `Snapshot` computes the intent
 fields with the pending entry: a pending intent sets `intent_available` and
 resets the count, and a pending action adds one. The pending origin joins
 `origins_seen`. The pending entry has no tags yet, because the PDP decides
@@ -258,6 +262,22 @@ does not count: a variable, a glob, `~`, an empty word, `xargs gryph`, a
 function, or an `eval` or `sh -c` script that the walker cannot resolve. A
 command that the parser rejects does not count. A `_hook` word in the
 arguments of another program does not count.
+The tools in `launchers` (`watch`, `flock`, `su`, `runuser`, `script`) run
+their command through the normal walk. `parallel` runs its command once for
+each literal input after `:::` (`parseParallel`). Other inputs are unresolved
+words.
+
+`shellArgs` reads the options of a shell. Each `o` or `O` in a short option
+group takes the next word, as in `bash -euo pipefail -c`. An option that it
+does not know sets `shellCall.unknown`. The walker then records `?` and does
+not guess which word is the script. The walker tracks the
+standard input of each statement (`walker.stdin`): the literal text of a
+here-document or a here-string, a redirected file, or unknown input such as a
+pipe. A shell that reads its script from standard input, or from
+`/dev/stdin`, parses literal text as a nested script. A pipe and unknown input
+give `?`. A process substitution resolves to `/dev/fd/63`, as in bash. A script operand of a shell or `source` that names a file
+descriptor (`isDescriptorPath`) gives `?`. A regular script file does not.
+
 The intent fields of the session context depend on it. It protects the database, its
 SQLite side files, and the receipt signing key. For a command, the PDP matches
 the paths that `aarm/shellcmd` parses from the command line. The PDP also
@@ -355,8 +375,14 @@ such as `{1..9}`, or a word that expands to more than 64 words, becomes the
 glob `*`. A host comes from a URL anywhere in a word, from
 the operands of `curl`, `wget`, `ssh`, `sftp`, `nc`, and similar tools, from an
 scp-style `host:path` in `scp`, `rsync`, and the remote of a `git` command,
-from `openssl -connect`, and from a `/dev/tcp/host/port` redirect. Hosts are
-lower case, without the port.
+from `openssl -connect`, and from a `/dev/tcp/host/port` redirect. The ssh
+route adds the hosts of `-J`, `-W`, `-L`, `-R`, and the `-o` options. The ssh
+command of `GIT_SSH_COMMAND` and `git -c core.sshCommand` goes through the
+same route (`sshCommand`). `gitConfig` reads the proxy and `insteadOf` keys
+of `git -c`. For a command that the walker does not know, an argument that
+names a network tool gives `?` (`networkWords`). A wrapper trial skips this
+check (`walker.trial`), because a trial start can be an option value such as
+the `5` of `timeout 5 curl`. Hosts are lower case, without the port.
 
 A write or remove target also comes from the file operands of an editor
 (`vim`, `vi`, `nvim`, `ex`, `nano`), `sort -o`, the archive of `zip` (also

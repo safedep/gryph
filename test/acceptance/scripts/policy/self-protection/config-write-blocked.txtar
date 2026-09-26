@@ -1,11 +1,13 @@
 # The builtin self-protection rules block agent writes to gryph control files
-# and to agent hook configuration. No user policy file is present, so only the
-# builtin rules can fire.
+# and to agent hook configuration. A shell command that removes the config
+# directory in "bash -euo pipefail -c" is blocked too. The "o" in the flag
+# group takes "pipefail" as its value, so the script stays visible. No user
+# policy file is present, so only the builtin rules can fire.
 env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
 env XDG_DATA_HOME=$WORK/home/.local/share
 
-expandenv write_policy.json write_hookcfg.json
+expandenv write_policy.json write_hookcfg.json rm_flag_group.json
 
 stdin write_policy.json
 execexit 2 gryph _hook claude-code PreToolUse
@@ -15,8 +17,12 @@ stdin write_hookcfg.json
 execexit 2 gryph _hook claude-code PreToolUse
 stderr 'self-protection'
 
+stdin rm_flag_group.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
 exec gryph query --status blocked --format json --no-color
-stdout -count=2 '"ResultStatus": "blocked"'
+stdout -count=3 '"ResultStatus": "blocked"'
 
 -- home/.config/safedep/gryph/config.yml --
 policy:
@@ -45,4 +51,15 @@ policy:
     "content": "{}"
   },
   "tool_use_id": "tool-use-sp2"
+}
+-- rm_flag_group.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "bash -euo pipefail -c 'rm -rf ${XDG_CONFIG_HOME}/safedep/gryph'"
+  },
+  "tool_use_id": "tool-use-sp3"
 }

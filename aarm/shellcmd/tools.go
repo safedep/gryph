@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"mvdan.cc/sh/v3/syntax"
 )
 
 // options is the option table of one tool.
@@ -386,7 +388,7 @@ var (
 			"--trust-server-names", "--force-directories", "--spider"),
 		abbrev: true,
 	}
-	gitOptions = valueOptions("-C", "-c", "--git-dir", "--work-tree", "--namespace",
+	gitOptions = valueOptions("-C", "-c", "--config-env", "--git-dir", "--work-tree", "--namespace",
 		"--exec-path", "-b", "--branch", "-o", "--origin", "--depth", "-u", "--upload-pack",
 		"--reference", "--template", "-j", "--jobs", "--filter", "--separate-git-dir", "--config",
 		"--receive-pack", "--push-option", "-t", "--track", "-m", "--shallow-since",
@@ -1238,8 +1240,9 @@ func (w *walker) addUpload(file string, cwds dirs) {
 }
 
 // sshRoute records the hosts that ssh, scp or sftp connects through: the
-// jump hosts of -J and ProxyJump, and the host of the HostName option. A
-// config file or a ProxyCommand can connect to any host.
+// jump hosts of -J and ProxyJump, the host of the HostName option, and the
+// targets of the forward options. A config file, a ProxyCommand, a
+// LocalCommand, or a dynamic forward can connect to any host.
 func (w *walker) sshRoute(p parsedArgs) {
 	if p.has("-F") {
 		w.addHost(UnknownHost)
@@ -1250,12 +1253,15 @@ func (w *walker) sshRoute(p parsedArgs) {
 		if k, v, ok := strings.Cut(key, " "); ok {
 			key, value = k, v
 		}
+		value = strings.TrimSpace(value)
 		switch strings.ToLower(strings.TrimSpace(key)) {
 		case "proxyjump":
 			jumps = append(jumps, value)
 		case "hostname":
-			w.addNetworkHost(strings.TrimSpace(value))
-		case "proxycommand", "":
+			w.addNetworkHost(value)
+		case "localforward", "remoteforward":
+			w.forwardOption(value)
+		case "proxycommand", "localcommand", "dynamicforward", "include", "":
 			w.addHost(UnknownHost)
 		}
 	}
@@ -1264,6 +1270,90 @@ func (w *walker) sshRoute(p parsedArgs) {
 			w.addNetworkHost(strings.TrimSpace(h))
 		}
 	}
+}
+
+// sshForwards records the targets of the ssh options -W, -L, and -R. A
+// dynamic forward, -D or -R with only a port, can connect to any host.
+func (w *walker) sshForwards(p parsedArgs) {
+	for _, v := range p.value("-W") {
+		w.addNetworkHost(v)
+	}
+	for _, v := range p.value("-L") {
+		w.forwardHost(v, false)
+	}
+	for _, v := range p.value("-R") {
+		w.forwardHost(v, true)
+	}
+	if p.has("-D") {
+		w.addHost(UnknownHost)
+	}
+}
+
+// forwardHost records the target host of a forward spec such as
+// "[bind:]port:host:hostport". A spec with two fields forwards to a socket
+// path, or, for a remote forward, is a dynamic forward.
+func (w *walker) forwardHost(spec string, remote bool) {
+	fields := strings.Split(spec, ":")
+	switch {
+	case strings.Contains(spec, "["):
+		w.addHost(UnknownHost)
+	case len(fields) >= 3:
+		w.addNetworkHost(fields[len(fields)-2])
+	case remote && (len(fields) == 1 || !strings.HasPrefix(fields[1], "/")):
+		w.addHost(UnknownHost)
+	}
+}
+
+// forwardOption records the target of a LocalForward or RemoteForward
+// value, "[bind:]port host:hostport". A value with one field is a dynamic
+// forward. A target that starts with "/" is a socket path.
+func (w *walker) forwardOption(value string) {
+	fields := strings.Fields(value)
+	switch {
+	case len(fields) < 2:
+		w.addHost(UnknownHost)
+	case !strings.HasPrefix(fields[len(fields)-1], "/"):
+		w.addNetworkHost(fields[len(fields)-1])
+	}
+}
+
+// sshCommand records the hosts of an ssh command line, such as the value
+// of GIT_SSH_COMMAND or core.sshCommand. git adds the host of the remote
+// after it. A value that does not parse, or a program other than ssh, can
+// connect to any host.
+func (w *walker) sshCommand(value string) {
+	args, ok := w.commandWords(value)
+	if !ok || len(args) == 0 || path.Base(args[0]) != "ssh" {
+		w.addHost(UnknownHost)
+		return
+	}
+	p := parseArgs(args[1:], sshOptions)
+	w.sshRoute(p)
+	w.sshForwards(p)
+	w.remoteShell(p)
+}
+
+// commandWords parses one simple command and returns its words. It reports
+// false when the text is not one simple command, or when a word does not
+// resolve.
+func (w *walker) commandWords(src string) ([]string, bool) {
+	f, err := syntax.NewParser(syntax.Variant(syntax.LangBash)).Parse(strings.NewReader(src), "")
+	if err != nil || len(f.Stmts) != 1 || len(f.Stmts[0].Redirs) > 0 {
+		return nil, false
+	}
+	call, ok := f.Stmts[0].Cmd.(*syntax.CallExpr)
+	if !ok || len(call.Assigns) > 0 {
+		return nil, false
+	}
+	words := make([]string, 0, len(call.Args))
+	for _, a := range call.Args {
+		v, ok := w.word(a, nil)
+		if !ok {
+			return nil, false
+		}
+		words = append(words, v)
+	}
+	return words, true
 }
 
 func (w *walker) remoteShell(p parsedArgs) {
@@ -1419,8 +1509,16 @@ var gitRemoteArg = map[string]int{
 // a guessed read relative to the last -C directory.
 func (w *walker) git(args []string, cwds dirs) {
 	p := parseArgs(args, gitOptions)
+	global := true
 	for _, a := range p.seq {
 		switch a.flag {
+		case "":
+			global = false
+		case "-c", "--config-env":
+			if global {
+				key, value, _ := strings.Cut(a.value, "=")
+				w.gitConfig(key, value, a.flag == "-c")
+			}
 		case "-C":
 			cwds = w.cd([]string{"--", a.value}, cwds)
 			w.add(".", AccessRead, cwds)
@@ -1458,6 +1556,30 @@ func (w *walker) git(args []string, cwds dirs) {
 		// A named remote such as "origin" points at a host in the git
 		// config.
 		w.addHost(UnknownHost)
+	}
+}
+
+// gitConfig records the hosts of a "git -c key=value" setting that sends
+// git through another host: a proxy, an ssh command, or a URL rewrite. The
+// value of --config-env comes from a variable, so it is not known. Such a
+// value, an include, or a proxy command can name any host.
+func (w *walker) gitConfig(key, value string, known bool) {
+	lower := strings.ToLower(key)
+	section, _, _ := strings.Cut(lower, ".")
+	switch {
+	case lower == "core.gitproxy" || section == "include" || section == "includeif":
+		w.addHost(UnknownHost)
+	case lower == "core.sshcommand" && !known:
+		w.addHost(UnknownHost)
+	case lower == "core.sshcommand":
+		w.sshCommand(value)
+	case strings.HasSuffix(lower, ".proxy") && (section == "http" || section == "https" || section == "remote"):
+		if !known || value != "" {
+			w.addNetworkHost(value)
+		}
+	case section == "url" && (strings.HasSuffix(lower, ".insteadof") || strings.HasSuffix(lower, ".pushinsteadof")):
+		base := key[len("url."):strings.LastIndex(key, ".")]
+		w.addNetworkHost(base)
 	}
 }
 

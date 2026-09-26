@@ -21,6 +21,10 @@ stdin ansi.json
 execexit 2 gryph _hook claude-code PreToolUse
 stderr 'runs gryph _hook'
 
+stdin group.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
 stdin query.json
 exec gryph _hook claude-code PreToolUse
 ! stderr 'self-protection'
@@ -57,4 +61,7 @@ policy:
  "tool_input": {"command": "grep -rn register_hook \"$SRC\""}, "tool_use_id": "f5"}
 -- variable.json --
 {"session_id": "s-forge", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
- "tool_input": {"command": "gryph query --session \"$SID\""}, "tool_use_id": "f6"}
+ "tool_input": {"command": "gryph query --session \"$SID\""}, "tool_use_id": "f7"}
+-- group.json --
+{"session_id": "s-forge", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "bash -euo pipefail -c 'gryph _hook claude-code UserPromptSubmit < p.json'"}, "tool_use_id": "f6"}

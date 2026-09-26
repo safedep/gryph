@@ -24,13 +24,27 @@ func (a *Action) Hosts() []string {
 // ReadPaths returns the paths that the action reads: the path of a file read
 // and the read targets of a shell command.
 func (a *Action) ReadPaths() []string {
+	return a.readPaths(true)
+}
+
+// EntityPaths returns the paths that the session context records for the
+// action: the action path, and the read and write targets of a shell
+// command. It leaves out the guessed reads of a command that the walker does
+// not know, such as the package patterns of "go test ./...". They are not
+// files, and they would fill the capped entity set.
+func (a *Action) EntityPaths() []string {
+	paths := append([]string{a.Parameters.Path}, a.readPaths(false)...)
+	return compact(append(paths, a.WritePaths()...))
+}
+
+func (a *Action) readPaths(guesses bool) []string {
 	var paths []string
 	if a.Type == ActionFileRead {
 		paths = append(paths, a.Parameters.Path)
 	}
 	if a.Shell != nil {
 		for _, t := range a.Shell.Targets {
-			if t.Access == shellcmd.AccessRead {
+			if t.Access == shellcmd.AccessRead && (guesses || !t.Guess) {
 				paths = append(paths, cmp.Or(t.Glob, t.Path))
 			}
 		}

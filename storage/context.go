@@ -7,12 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/accumulator/contextchain"
+	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/safedep/gryph/storage/ent"
 	"github.com/safedep/gryph/storage/ent/contextentry"
 	"github.com/safedep/gryph/storage/ent/contextstate"
@@ -38,8 +41,11 @@ const (
 	capClassifications = 100
 	capTags            = 200
 	capOrigins         = 100
-	capEntities        = 500
 	capEgressHosts     = 500
+	// capEntityKind bounds the entities of one kind, the prefix before ":"
+	// such as "path" or "host". Each kind has its own cap, so the paths of
+	// a long session cannot push a new host out of the set.
+	capEntityKind = 500
 )
 
 // AppendContextEntry inserts an entry, computes its place in the per-session
@@ -213,7 +219,7 @@ FROM context_states WHERE session_id = ?`, row.SessionID).Scan(
 		cur.ToolsUsed = addCapped(cur.ToolsUsed, delta.Tools, capTools)
 		cur.ClassificationsSeen = addCapped(cur.ClassificationsSeen, delta.Classifications, capClassifications)
 		cur.OriginsSeen = addCapped(cur.OriginsSeen, delta.Origins, capOrigins)
-		cur.EntitiesSeen = addCapped(cur.EntitiesSeen, delta.Entities, capEntities)
+		cur.EntitiesSeen = addCappedByKind(cur.EntitiesSeen, delta.Entities, capEntityKind)
 		cur.EgressHosts = addCapped(cur.EgressHosts, delta.EgressHosts, capEgressHosts)
 		for _, tag := range delta.Tags {
 			if _, ok := cur.TagsSeen[tag]; !ok && len(cur.TagsSeen) < capTags {
@@ -325,6 +331,30 @@ func addCapped(set, values []string, capacity int) []string {
 		set = append(set, v)
 	}
 	return set
+}
+
+// addCappedByKind appends each value that set does not hold yet, until the
+// values of its kind reach the cap. The kind of a value is the text before
+// the first ":".
+func addCappedByKind(set, values []string, capacity int) []string {
+	counts := map[string]int{}
+	for _, v := range set {
+		counts[entityKind(v)]++
+	}
+	for _, v := range values {
+		kind := entityKind(v)
+		if v == "" || slices.Contains(set, v) || counts[kind] >= capacity {
+			continue
+		}
+		set = append(set, v)
+		counts[kind]++
+	}
+	return set
+}
+
+func entityKind(entity string) string {
+	kind, _, _ := strings.Cut(entity, ":")
+	return kind
 }
 
 // UpdateContextEntryResult sets the outcome of an entry. The chain hash does
@@ -709,21 +739,46 @@ const (
 	EntryNameMaxBytes    = 256
 )
 
+// entryPathReadChars bounds the characters of a path that the query reads.
+// Gryph cleans the path before it cuts it to EntryPathMaxBytes, because a
+// padded path such as "/root/.ssh/./././id_rsa" must reach a rule clean. A
+// longer path keeps its first and last halves, with a "/" between them.
+const entryPathReadChars = 64 * 1024
+
+// entryPathSQL is the path of the audit event.
+const entryPathSQL = `COALESCE(json_extract(ae.payload, '$.path'), '')`
+
 // entryFactsSQL reads the latest entries of a session, newest first. The
-// audit event gives the path and the stored command.
+// audit event gives the path, its working directory, and the stored command.
 const entryFactsSQL = `SELECT ce.sequence, ce.kind, ce.action_type, substr(COALESCE(ce.tool, ''), 1, ?),
-	substr(COALESCE(json_extract(ae.payload, '$.path'), ''), -?), substr(COALESCE(` + payloadCommandSQL + `, ''), 1, ?),
+	CASE WHEN length(` + entryPathSQL + `) <= ? THEN ` + entryPathSQL + `
+		ELSE substr(` + entryPathSQL + `, 1, ?) || '/' || substr(` + entryPathSQL + `, -?) END,
+	COALESCE(ae.working_directory, ''), substr(COALESCE(` + payloadCommandSQL + `, ''), 1, ?),
 	substr(COALESCE(ce.target_host, ''), 1, ?), substr(COALESCE(ce.target_mcp_server, ''), 1, ?), COALESCE(ce.origin, ''),
 	COALESCE(ce.classifications, 'null'), COALESCE(ce.tags, 'null'), COALESCE(ce.decision, ''), ce.result_status
 FROM context_entries ce LEFT JOIN audit_events ae ON ae.id = ce.event_id
 WHERE ce.session_id = ? ORDER BY ce.sequence DESC LIMIT ?`
+
+// lastBytes returns the last n bytes of s. It does not start inside a
+// UTF-8 character.
+func lastBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	s = s[len(s)-n:]
+	for s != "" && !utf8.RuneStart(s[0]) {
+		s = s[1:]
+	}
+	return s
+}
 
 // QueryEntryFacts implements ContextStore.
 func (s *SQLiteStore) QueryEntryFacts(ctx context.Context, sessionID uuid.UUID, limit int) ([]*EntryFactsRow, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
-	rows, err := s.db.QueryContext(ctx, entryFactsSQL, EntryNameMaxBytes, EntryPathMaxBytes, EntryCommandMaxBytes,
+	rows, err := s.db.QueryContext(ctx, entryFactsSQL, EntryNameMaxBytes,
+		entryPathReadChars, entryPathReadChars/2, entryPathReadChars/2, EntryCommandMaxBytes,
 		EntryNameMaxBytes, EntryNameMaxBytes, sessionID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("storage: query entry facts: %w", err)
@@ -737,11 +792,12 @@ func (s *SQLiteStore) QueryEntryFacts(ctx context.Context, sessionID uuid.UUID, 
 	var out []*EntryFactsRow
 	for rows.Next() {
 		var r EntryFactsRow
-		var classes, tags string
-		if err := rows.Scan(&r.Sequence, &r.Kind, &r.ActionType, &r.Tool, &r.Path, &r.Command,
+		var classes, tags, workingDir string
+		if err := rows.Scan(&r.Sequence, &r.Kind, &r.ActionType, &r.Tool, &r.Path, &workingDir, &r.Command,
 			&r.Host, &r.MCPServer, &r.Origin, &classes, &tags, &r.Decision, &r.ResultStatus); err != nil {
 			return nil, fmt.Errorf("storage: scan entry facts: %w", err)
 		}
+		r.Path = lastBytes(shellcmd.ResolvePath(r.Path, workingDir), EntryPathMaxBytes)
 		if err := json.Unmarshal([]byte(classes), &r.Classifications); err != nil {
 			return nil, fmt.Errorf("storage: decode entry classes: %w", err)
 		}
