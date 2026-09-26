@@ -3,6 +3,7 @@ package mediation
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -382,4 +383,37 @@ rules:
 			assert.Equal(t, model.DecisionBlock, res.Decision)
 		})
 	}
+}
+
+func TestHookAdapter_LargePromptKeepsEveryRule(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: condition
+    action: warn
+    match:
+      action_types: [user_prompt]
+    condition: 'action.params.content.contains("ignore previous instructions") || action.content_truncated'
+  - id: pattern
+    action: block
+    match:
+      action_types: [user_prompt]
+      content_patterns: ["AKIA[0-9A-Z]{16}"]
+`))
+	require.NoError(t, err)
+	engine, err := pdp.New(policy)
+	require.NoError(t, err)
+
+	event := events.NewEvent(uuid.New(), "gemini", events.ActionUserPrompt)
+	require.NoError(t, event.SetPrompt("explain @big.txt", privacy.OriginUser))
+	event.FullContent = "explain @big.txt\n--- Content from referenced files ---\nContent from @big.txt:\n" +
+		strings.Repeat("x", 64<<10) + "\nAKIAABCDEFGHIJKLMNOP\n--- End of content ---"
+
+	action, _, err := NewHookAdapter().Normalize(context.Background(), event, nil)
+	require.NoError(t, err)
+
+	res, err := engine.Evaluate(context.Background(), action, &model.ContextSnapshot{IntentAvailable: true})
+	require.NoError(t, err)
+	assert.Equal(t, model.DecisionBlock, res.Decision)
+	assert.ElementsMatch(t, []string{"condition", "pattern"}, res.MatchedRuleIDs)
 }
