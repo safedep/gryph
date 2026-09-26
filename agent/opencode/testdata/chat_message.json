@@ -1,0 +1,7 @@
+{
+  "hook_type": "chat.message",
+  "session_id": "ses_opencode_abc",
+  "message_id": "msg_1",
+  "prompt": "Add a retry to the upload function",
+  "cwd": "/home/user/project"
+}

@@ -15,31 +15,6 @@ export default function (pi: ExtensionAPI) {
     });
   });
 
-  pi.on("input", async (event, ctx) => {
-    if (!event.text) return;
-    const result = sendToGryphWithExitCode("input", {
-      session_id: ctx.sessionManager.getSessionFile() ?? "ephemeral",
-      cwd: ctx.cwd,
-      text: event.text,
-      source: event.source,
-    }, promptTimeoutMs);
-
-    // Exit code 2 means block. "handled" consumes the input, so the agent never sees it.
-    if (result.exitCode === 2) {
-      const message = `[gryph] prompt blocked: ${(result.stderr && result.stderr.trim()) || "Blocked by security policy"}`;
-      if (ctx.hasUI) {
-        ctx.ui.notify(message, "error");
-      } else {
-        console.error(message);
-      }
-      return { action: "handled" };
-    }
-
-    if (result.exitCode === 1) {
-      console.error(`[gryph] hook error: ${(result.stderr && result.stderr.trim()) || "unknown error"}`);
-    }
-  });
-
   pi.on("tool_call", async (event, ctx) => {
     const result = sendToGryphWithExitCode("tool_call", {
       session_id: ctx.sessionManager.getSessionFile() ?? "ephemeral",
@@ -91,7 +66,7 @@ function sendToGryph(hookType: string, data: Record<string, unknown>) {
     timestamp: new Date().toISOString(),
   });
 
-  const child = spawn("__GRYPH_COMMAND__", ["_hook", "pi-agent", hookType], {
+  const child = spawn("gryph", ["_hook", "pi-agent", hookType], {
     stdio: ["pipe", "pipe", "pipe"],
   });
 
@@ -106,11 +81,7 @@ function sendToGryph(hookType: string, data: Record<string, unknown>) {
 // Fail-open design: if the hook binary is missing, unexecutable, or times out, the tool
 // is allowed to proceed. This ensures a broken gryph installation doesn't freeze the agent.
 // Exit codes: 0 = allow, 1 = error (allow + log), 2 = block.
-// promptTimeoutMs is shorter than the tool call timeout, because the Pi TUI
-// waits on every prompt.
-const promptTimeoutMs = 10000;
-
-function sendToGryphWithExitCode(hookType: string, data: Record<string, unknown>, timeoutMs = 30000): {
+function sendToGryphWithExitCode(hookType: string, data: Record<string, unknown>): {
   exitCode: number;
   stderr: string;
 } {
@@ -120,9 +91,12 @@ function sendToGryphWithExitCode(hookType: string, data: Record<string, unknown>
     timestamp: new Date().toISOString(),
   });
 
+  // Timeout in milliseconds - prevents agent from freezing if _hook hangs
+  const timeoutMs = 30000;
+
   // Use spawnSync for synchronous execution to get exit code reliably
   // This ensures we block tool execution until the hook decision is received
-  const result = spawnSync("__GRYPH_COMMAND__", ["_hook", "pi-agent", hookType], {
+  const result = spawnSync("gryph", ["_hook", "pi-agent", hookType], {
     input: payload,
     stdio: ["pipe", "pipe", "pipe"],
     timeout: timeoutMs,

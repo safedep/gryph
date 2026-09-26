@@ -83,6 +83,8 @@ func (a *Adapter) Hooks() []events.HookSpec { return Hooks }
 - `Prompt` is true when the hook carries a user prompt. Parse it into an
   `ActionUserPrompt` event with `event.SetPrompt`. The install is valid without
   a prompt hook, and `gryph doctor` warns when it is missing.
+- `MinVersion` is the first agent version that fires the hook. `gryph doctor`
+  warns when the detected version is older.
 - Set `event.HookType` in `ParseEvent` to the declared name. A hook that the
   table does not declare gets phase `unknown`.
 - Set `event.ToolCallID` when the agent sends a tool call identifier. The

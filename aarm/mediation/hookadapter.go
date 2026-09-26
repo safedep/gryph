@@ -121,13 +121,13 @@ func entryEventResult(event *events.Event) model.ResultStatus {
 	return model.ResultStatus(event.ResultStatus)
 }
 
-// entryOrigin returns the origin that the event content claims. A user
-// prompt has the origin user.
+// entryOrigin returns the origin that the event content claims. A prompt
+// with no claimed origin has the origin unknown.
 func entryOrigin(event *events.Event) privacy.Origin {
-	if event.ActionType == events.ActionUserPrompt {
-		return privacy.OriginUser
+	if event.ActionType == events.ActionUserPrompt && event.Origin == "" {
+		return privacy.OriginUnknown
 	}
-	return ""
+	return event.Origin
 }
 
 func extractParameters(event *events.Event) (model.Parameters, error) {

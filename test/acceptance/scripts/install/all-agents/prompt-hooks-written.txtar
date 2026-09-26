@@ -1,0 +1,32 @@
+# One gryph install writes the prompt hook of every agent that has one.
+# Cursor detection on Linux needs a cursor binary on PATH, so the script
+# provides a stub. The Cursor assertion runs on Linux only.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+mkdir $HOME/.cursor
+mkdir $HOME/.gemini
+mkdir $HOME/.codex
+mkdir $HOME/.config/devin
+mkdir $HOME/.config/opencode
+mkdir $HOME/.codeium/windsurf
+mkdir $HOME/.pi/agent
+chmod 755 bin/cursor
+env PATH=$WORK/bin${:}$PATH
+
+exec gryph install
+
+grep 'gryph _hook claude-code UserPromptSubmit' $HOME/.claude/settings.json
+grep 'gryph _hook gemini BeforeAgent' $HOME/.gemini/settings.json
+grep 'gryph _hook codex UserPromptSubmit' $HOME/.codex/hooks.json
+grep 'gryph _hook devin UserPromptSubmit' $HOME/.config/devin/config.json
+grep 'gryph _hook windsurf pre_user_prompt' $HOME/.codeium/windsurf/hooks.json
+grep '"chat.message"' $HOME/.config/opencode/plugins/gryph.js
+grep 'pi.on\("input"' $HOME/.pi/agent/extensions/gryph-hooks.ts
+[linux] grep 'gryph _hook cursor beforeSubmitPrompt' $HOME/.cursor/hooks.json
+
+-- bin/cursor --
+#!/bin/sh
+echo "1.0.0"

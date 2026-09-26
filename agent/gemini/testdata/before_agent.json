@@ -1,0 +1,8 @@
+{
+  "session_id": "gemini-session-abc",
+  "transcript_path": "/home/user/.gemini/tmp/abc/chats/session-1.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "BeforeAgent",
+  "timestamp": "2026-09-25T10:00:00Z",
+  "prompt": "Add a retry to the upload function"
+}

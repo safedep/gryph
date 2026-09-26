@@ -709,8 +709,9 @@ func phaseOrUnknown(p model.ActionPhase) model.ActionPhase {
 
 // celPromptContentMax bounds the prompt content that a CEL condition reads.
 // A CEL string function costs about the length of its input, and matches()
-// costs about the length times the regex length. content_patterns still
-// match the whole prompt, because they run outside CEL.
+// costs about the length times the regex length. A Gemini prompt with its
+// referenced files can be long. content_patterns still match the whole
+// prompt, because they run outside CEL.
 const celPromptContentMax = 8 << 10
 
 // celCostLimit bounds the work of one condition. A 90-character regex on a
@@ -718,11 +719,17 @@ const celPromptContentMax = 8 << 10
 // The limit leaves room for a regex about five times that long.
 const celCostLimit = 100000
 
-// paramsContent gives a prompt rule at most celPromptContentMax bytes of the
-// prompt, cut on a rune boundary. It reports whether it cut the prompt.
+// paramsContent gives a prompt rule the prompt that the agent gets, with the
+// referenced file content, up to celPromptContentMax bytes cut on a rune
+// boundary. The stored prompt of an agent can hold only the typed part, and a
+// user can type text that the agent then cuts from it. It reports whether it
+// cut the prompt.
 func paramsContent(action *model.Action) (string, bool) {
-	content := action.Parameters.Content
-	if action.Type != model.ActionUserPrompt || len(content) <= celPromptContentMax {
+	if action.Type != model.ActionUserPrompt {
+		return action.Parameters.Content, false
+	}
+	content := matchContent(action.Parameters)
+	if len(content) <= celPromptContentMax {
 		return content, false
 	}
 	limit := celPromptContentMax

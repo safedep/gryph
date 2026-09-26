@@ -21,6 +21,11 @@ type HookInput struct {
 	Timestamp      string `json:"timestamp"`
 }
 
+type BeforeAgentInput struct {
+	HookInput
+	Prompt string `json:"prompt"`
+}
+
 type BeforeToolInput struct {
 	HookInput
 	ToolName  string                 `json:"tool_name"`
@@ -75,6 +80,8 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	var event *events.Event
 	var err error
 	switch eventName {
+	case "BeforeAgent":
+		event, err = parseBeforeAgent(sessionID, agentSessionID, rawData)
 	case "BeforeTool":
 		event, err = a.parseBeforeTool(sessionID, agentSessionID, baseInput, rawData)
 	case "AfterTool":
@@ -165,6 +172,59 @@ func (a *Adapter) parseAfterTool(sessionID uuid.UUID, agentSessionID string, bas
 
 	a.markSensitivePaths(event, actionType, input.ToolInput)
 
+	return event, nil
+}
+
+// Gemini CLI appends the files and MCP resources that the user names with @
+// in a block between these lines. The block holds file content, not what the
+// user typed.
+const (
+	referencedFilesStart = "\n--- Content from referenced files ---\n"
+	referencedFilesEnd   = "\n--- End of content ---"
+)
+
+// typedPrompt removes the referenced files block that Gemini CLI appends.
+// A user can type the start line, so the text is cut only when the start
+// line is followed by a file block and the text ends with the end line.
+// A file can also hold the start line, so the cut is at the first block.
+// A fake block that the user types before the real block removes user text
+// from the intent. It never puts file content in the intent.
+func typedPrompt(prompt string) string {
+	trimmed := strings.TrimRight(prompt, "\n ")
+	if !strings.HasSuffix(trimmed, referencedFilesEnd) {
+		return trimmed
+	}
+	for offset := 0; ; {
+		i := strings.Index(trimmed[offset:], referencedFilesStart)
+		if i < 0 {
+			return trimmed
+		}
+		i += offset
+		offset = i + len(referencedFilesStart)
+		if strings.HasPrefix(trimmed[offset:], "Content from @") {
+			return strings.TrimRight(trimmed[:i], "\n ")
+		}
+	}
+}
+
+func parseBeforeAgent(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {
+	var input BeforeAgentInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse BeforeAgent input: %w", err)
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionUserPrompt)
+	event.AgentSessionID = agentSessionID
+	event.WorkingDirectory = input.Cwd
+	event.TranscriptPath = input.TranscriptPath
+	event.RawEvent = rawData
+	if err := event.SetPrompt(typedPrompt(input.Prompt), privacy.OriginUser); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+	// Gemini CLI reads the referenced files without a BeforeTool hook, and a
+	// user can type the block lines. So content rules match the whole text
+	// that the model gets.
+	event.FullContent = input.Prompt
 	return event, nil
 }
 

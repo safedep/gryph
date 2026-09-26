@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -9,10 +10,12 @@ import (
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/internal/selfupdate"
 	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
+	"golang.org/x/mod/semver"
 )
 
 // NewDoctorCmd creates the doctor command.
@@ -114,6 +117,10 @@ Performs various health checks:
 						hookCheck.Status = tui.CheckWarn
 						hookCheck.Message = "Prompt hook not installed: " + strings.Join(missing, ", ")
 						hookCheck.Suggestion = "Run 'gryph install --force --agent " + adapter.Name() + "' to record prompts"
+					} else if old := hooksAboveVersion(adapter.Hooks(), detection.Version); len(old) > 0 {
+						hookCheck.Status = tui.CheckWarn
+						hookCheck.Message = fmt.Sprintf("%s %s is older than these hooks need: %s", adapter.DisplayName(), detection.Version, strings.Join(old, ", "))
+						hookCheck.Suggestion = "Upgrade " + adapter.DisplayName()
 					} else {
 						hookCheck.Status = tui.CheckOK
 						hookCheck.Message = "All hooks installed and valid"
@@ -160,6 +167,36 @@ Performs various health checks:
 	}
 
 	return cmd
+}
+
+// hooksAboveVersion returns the hooks, with their minimum version, that the
+// detected agent version is too old to fire. An unknown version gives none.
+func hooksAboveVersion(hooks []events.HookSpec, version string) []string {
+	current := canonicalVersion(version)
+	if current == "" {
+		return nil
+	}
+	var old []string
+	for _, h := range hooks {
+		if h.MinVersion != "" && semver.Compare(current, canonicalVersion(h.MinVersion)) < 0 {
+			old = append(old, fmt.Sprintf("%s (needs %s)", h.Type, h.MinVersion))
+		}
+	}
+	return old
+}
+
+// canonicalVersion returns v as a canonical semver string, or "" when v is
+// not a version. It drops a prerelease, so a preview or a nightly of the
+// minimum version counts as that version.
+func canonicalVersion(v string) string {
+	v, _, _ = strings.Cut(strings.TrimSpace(v), "-")
+	if !strings.HasPrefix(v, "v") {
+		v = "v" + v
+	}
+	if !semver.IsValid(v) {
+		return ""
+	}
+	return semver.Canonical(v)
 }
 
 // missingPromptHooks returns the prompt hooks that the adapter declares but

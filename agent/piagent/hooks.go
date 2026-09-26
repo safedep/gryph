@@ -17,6 +17,13 @@ import (
 //go:embed plugin.ts
 var pluginTS []byte
 
+// legacyPluginDigests are the SHA-256 digests of the plugin files that
+// Gryph v0.3.7 to v0.9.0 installed. These plugins block like the current
+// plugin, but have no prompt hook.
+var legacyPluginDigests = []string{
+	"6a99732b3cefb3ed4a8a21e2ba962d7ea4696a22492a95c6f0b4fe6ccd780b60",
+}
+
 func processedPlugin() []byte {
 	return bytes.ReplaceAll(pluginTS, []byte(utils.GryphCommandPlaceholder), []byte(utils.GryphCommand()))
 }
@@ -25,6 +32,7 @@ func processedPlugin() []byte {
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
 var Hooks = []events.HookSpec{
+	{Type: "input", Phase: events.PhasePre, Blocking: true, Prompt: true, MinVersion: "0.47.0"},
 	{Type: "tool_call", Phase: events.PhasePre, Blocking: true},
 	{Type: "tool_result", Phase: events.PhasePost},
 	{Type: "session_start", Phase: events.PhaseUnknown},
@@ -188,17 +196,9 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 		return status, nil
 	}
 
-	expectedContent := string(processedPlugin())
-	if string(data) == expectedContent {
-		status.Installed = true
-		status.Valid = true
-		status.Hooks = HookTypes
-	} else {
-		status.Installed = true
-		status.Valid = false
-		status.Hooks = HookTypes
-		status.Issues = append(status.Issues, "extension content differs from expected (may have been modified)")
-	}
+	agent.SetPluginStatus(status, data, processedPlugin(), legacyPluginDigests, Hooks,
+		func(hookType string) string { return `pi.on("` + hookType + `"` },
+		"extension content differs from expected (may have been modified)")
 
 	return status, nil
 }

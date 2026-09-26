@@ -1,7 +1,7 @@
 import { execFileSync } from "child_process";
 import { appendFileSync } from "fs";
 
-export const GryphPlugin = async ({ directory, client }) => {
+export const GryphPlugin = async ({ directory }) => {
   const debugFilePath = process.env.GRYPH_OPENCODE_DEBUG_FILE_PATH || "";
 
   function invokeGryph(hookType, payload) {
@@ -12,7 +12,7 @@ export const GryphPlugin = async ({ directory, client }) => {
       } catch (_) {}
     }
     try {
-      execFileSync("__GRYPH_COMMAND__", ["_hook", "opencode", hookType], {
+      execFileSync("gryph", ["_hook", "opencode", hookType], {
         input: JSON.stringify(payload),
         stdio: ["pipe", "pipe", "pipe"],
         timeout: 5000,
@@ -24,41 +24,11 @@ export const GryphPlugin = async ({ directory, client }) => {
     }
   }
 
-  // A subagent session has a parent. Its prompt comes from the model, not
-  // from the user. A failed lookup cannot tell the two apart, so Gryph
-  // must not record the prompt as user intent.
-  async function parentSession(sessionID) {
-    try {
-      const res = await client.session.get({ path: { id: sessionID } });
-      if (!res?.data) return { parentID: "", lookupFailed: true };
-      return { parentID: res.data.parentID || "", lookupFailed: false };
-    } catch (_) {
-      return { parentID: "", lookupFailed: true };
-    }
-  }
-
   return {
-    "chat.message": async (input, output) => {
-      const prompt = (output.parts || [])
-        .filter((part) => part.type === "text" && !part.synthetic)
-        .map((part) => part.text)
-        .join("\n");
-      if (!prompt) return;
-      const parent = await parentSession(input.sessionID);
-      invokeGryph("chat.message", {
-        hook_type: "chat.message",
-        session_id: input.sessionID,
-        parent_session_id: parent.parentID,
-        parent_lookup_failed: parent.lookupFailed,
-        prompt,
-        cwd: directory,
-      });
-    },
     "tool.execute.before": async (input, output) => {
       invokeGryph("tool.execute.before", {
         hook_type: "tool.execute.before",
         session_id: input.sessionID,
-        call_id: input.callID,
         tool: input.tool,
         args: output.args,
         cwd: directory,
@@ -69,7 +39,6 @@ export const GryphPlugin = async ({ directory, client }) => {
         invokeGryph("tool.execute.after", {
           hook_type: "tool.execute.after",
           session_id: input.sessionID,
-          call_id: input.callID,
           tool: input.tool,
           result: {
             title: output.title,

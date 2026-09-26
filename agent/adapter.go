@@ -2,9 +2,12 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"path"
+	"slices"
 
+	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/core/events"
 )
 
@@ -197,6 +200,25 @@ func RequiredHookTypeNames(specs []events.HookSpec) []string {
 		}
 	}
 	return names
+}
+
+// SetPluginStatus fills status for a plugin file that Gryph generates.
+// marker returns the text that the plugin holds for one hook type. A plugin
+// is valid only when it equals expected, or when its SHA-256 digest is in
+// legacyDigests. A legacy plugin can lack the prompt hooks, so doctor warns
+// about them. Any other content can skip a block, so the plugin is invalid,
+// with the issue text stale.
+func SetPluginStatus(status *HookStatus, content, expected []byte, legacyDigests []string, specs []events.HookSpec, marker func(hookType string) string, stale string) {
+	status.Installed = true
+	for _, s := range specs {
+		if bytes.Contains(content, []byte(marker(string(s.Type)))) {
+			status.Hooks = append(status.Hooks, string(s.Type))
+		}
+	}
+	status.Valid = bytes.Equal(content, expected) || slices.Contains(legacyDigests, utils.HashContent(string(content)))
+	if !status.Valid {
+		status.Issues = append(status.Issues, stale)
+	}
 }
 
 // HomeConfigGlob returns a glob for a path under the user's home directory.

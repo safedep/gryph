@@ -40,6 +40,12 @@ type ToolResultInput struct {
 	IsError    bool                   `json:"is_error"`
 }
 
+type InputEventInput struct {
+	HookInput
+	Text   string `json:"text"`
+	Source string `json:"source"`
+}
+
 type SessionInput struct {
 	HookInput
 }
@@ -72,6 +78,8 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	var err error
 
 	switch eventName {
+	case "input":
+		event, err = parseInput(sessionID, agentSessionID, rawData)
 	case "tool_call":
 		event, err = a.parseToolCall(sessionID, agentSessionID, baseInput, rawData)
 	case "tool_result":
@@ -109,6 +117,29 @@ func resolveSessionID(rawSessionID string) uuid.UUID {
 	}
 
 	return uuid.New()
+}
+
+// parseInput records a Pi input event. Input with source "extension" comes
+// from extension code, not from a person, so it has the origin agent.
+func parseInput(sessionID uuid.UUID, agentSessionID string, rawData []byte) (*events.Event, error) {
+	var input InputEventInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse input event: %w", err)
+	}
+
+	origin := privacy.OriginUser
+	if input.Source == "extension" {
+		origin = privacy.OriginAgent
+	}
+
+	event := events.NewEvent(sessionID, AgentName, events.ActionUserPrompt)
+	event.AgentSessionID = agentSessionID
+	event.WorkingDirectory = input.Cwd
+	event.RawEvent = rawData
+	if err := event.SetPrompt(input.Text, origin); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
+	return event, nil
 }
 
 func (a *Adapter) parseToolCall(sessionID uuid.UUID, agentSessionID string, base HookInput, rawData []byte) (*events.Event, error) {

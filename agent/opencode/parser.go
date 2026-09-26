@@ -23,6 +23,14 @@ type ToolEventInput struct {
 	Cwd       string                 `json:"cwd"`
 }
 
+type ChatMessageInput struct {
+	SessionID          string `json:"session_id"`
+	ParentSessionID    string `json:"parent_session_id"`
+	ParentLookupFailed bool   `json:"parent_lookup_failed"`
+	Prompt             string `json:"prompt"`
+	Cwd                string `json:"cwd"`
+}
+
 type SessionEventInput struct {
 	HookType   string                 `json:"hook_type"`
 	Properties map[string]interface{} `json:"properties"`
@@ -50,6 +58,8 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	var event *events.Event
 	var err error
 	switch hookType {
+	case "chat.message":
+		event, err = parseChatMessage(rawData)
 	case "tool.execute.before":
 		event, err = a.parseToolEvent(hookType, rawData, false)
 	case "tool.execute.after":
@@ -74,6 +84,28 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 		event.HookType = events.HookType(hookType)
 	}
 
+	return event, nil
+}
+
+// parseChatMessage records a chat message. The message of a subagent session,
+// which has a parent, comes from the model, so it has the origin agent.
+func parseChatMessage(rawData []byte) (*events.Event, error) {
+	var input ChatMessageInput
+	if err := json.Unmarshal(rawData, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse chat message input: %w", err)
+	}
+
+	event := events.NewEvent(resolveSessionID(input.SessionID), AgentName, events.ActionUserPrompt)
+	event.AgentSessionID = input.SessionID
+	event.WorkingDirectory = input.Cwd
+	event.RawEvent = rawData
+	origin := privacy.OriginUser
+	if input.ParentSessionID != "" || input.ParentLookupFailed {
+		origin = privacy.OriginAgent
+	}
+	if err := event.SetPrompt(input.Prompt, origin); err != nil {
+		return nil, fmt.Errorf("failed to set payload: %w", err)
+	}
 	return event, nil
 }
 

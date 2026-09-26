@@ -393,9 +393,30 @@
   guarantee: "gryph install --agent claude-code writes a UserPromptSubmit hook entry, and doctor reports the hooks as valid."
   labels: [install, prompt]
 
+- id: health/doctor/plugin-changed
+  title: "doctor flags a changed plugin that keeps the hook names"
+  category: health
+  tier: P1
+  guarantee: "gryph doctor reports an OpenCode plugin as invalid unless it equals the current plugin or a known released plugin, and suggests install --force."
+  labels: [doctor]
+
 - id: health/doctor/prompt-hook-missing
   title: "doctor warns when the prompt hook is missing"
   category: health
   tier: P2
   guarantee: "An install without the prompt hook stays valid. Doctor warns that the prompt hook is not installed and suggests a reinstall."
   labels: [doctor, prompt]
+
+- id: context/intent/agent-matrix
+  title: "every agent's prompt hook records and blocks a prompt"
+  category: context
+  tier: P1
+  guarantee: "Claude Code, Cursor, Gemini CLI, Codex, Devin, Windsurf, OpenCode and Pi record a prompt as a user_prompt event, and a content rule on user_prompt blocks it with the agent's block response."
+  labels: [context, intent, prompt, protocols]
+
+- id: install/all-agents/prompt-hooks-written
+  title: "install writes the prompt hook of every agent"
+  category: install
+  tier: P1
+  guarantee: "One gryph install writes the prompt hook of every agent that has one: UserPromptSubmit, beforeSubmitPrompt, BeforeAgent, pre_user_prompt, chat.message and the Pi input event."
+  labels: [install, prompt]

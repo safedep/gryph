@@ -381,3 +381,36 @@ func TestNewGuidanceResponse(t *testing.T) {
 	assert.Equal(t, "allow", result["decision"])
 	assert.Equal(t, "security advisory", result["reason"])
 }
+
+func TestParseHookEvent_ChatMessage(t *testing.T) {
+	event, err := testAdapter(t).ParseEvent(context.Background(), "chat.message", loadFixture(t, "chat_message.json"))
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionUserPrompt, event.ActionType)
+	assert.Equal(t, "ses_opencode_abc", event.AgentSessionID)
+	assert.Equal(t, "/home/user/project", event.WorkingDirectory)
+	p, err := event.GetUserPromptPayload()
+	require.NoError(t, err)
+	assert.Equal(t, "Add a retry to the upload function", p.Prompt.Value)
+	assert.Equal(t, privacy.OriginUser, p.Prompt.Label.Origin)
+}
+
+func TestParseHookEvent_ChatMessage_Subagent(t *testing.T) {
+	event, err := testAdapter(t).ParseEvent(context.Background(), "chat.message", loadFixture(t, "chat_message_subagent.json"))
+	require.NoError(t, err)
+	p, err := event.GetUserPromptPayload()
+	require.NoError(t, err)
+	assert.Equal(t, privacy.OriginAgent, p.Prompt.Label.Origin, "the model writes the prompt of a subagent session")
+	assert.Equal(t, events.KindObservation, events.KindOf(event, false))
+}
+
+func TestParseHookEvent_ChatMessage_ParentLookupFailed(t *testing.T) {
+	raw := []byte(`{"hook_type":"chat.message","session_id":"ses_x","parent_session_id":"","parent_lookup_failed":true,"prompt":"hello","cwd":"/p"}`)
+	event, err := testAdapter(t).ParseEvent(context.Background(), "chat.message", raw)
+	require.NoError(t, err)
+	p, err := event.GetUserPromptPayload()
+	require.NoError(t, err)
+	assert.Equal(t, privacy.OriginAgent, p.Prompt.Label.Origin, "a failed parent lookup must not become user intent")
+	assert.Equal(t, events.KindObservation, events.KindOf(event, false))
+}
