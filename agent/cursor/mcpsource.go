@@ -236,24 +236,33 @@ func trimNPMVersion(pkg string) string {
 }
 
 // trimPyPIVersion removes a version specifier, extras or markers. After "@",
-// only a version or "latest" is trimmed. Any other reference, as in
-// "good @ https://x/good.whl" or "good@good-1.0-py3-none-any.whl", runs code
-// from another place, so the whole spec stays in the name.
+// only "latest" or a PEP 440 version is trimmed. uv reads any other reference,
+// and every spaced "name @ X", as a direct reference that runs code from
+// another place, as in "good @ 1.0" or "good@1evil". So the whole spec stays
+// in the name.
 func trimPyPIVersion(pkg string) string {
-	if _, ref, ok := strings.Cut(pkg, "@"); ok && !pypiVersion.MatchString(strings.TrimSpace(ref)) {
-		return pkg
+	if name, ref, ok := strings.Cut(pkg, "@"); ok {
+		if strings.TrimSpace(name) != name || !pypiVersion.MatchString(ref) {
+			return pkg
+		}
+		pkg = name
 	}
-	if i := strings.IndexAny(pkg, "=<>!~[@; "); i > 0 {
+	if i := strings.IndexAny(pkg, "=<>!~[; "); i > 0 {
 		return pkg[:i]
 	}
 	return pkg
 }
 
+// npmArchive copies the archive pattern of npm-package-arg. Its "tar.gz"
+// dot matches any character, so "1.tarxgz" is an archive too.
 var (
 	npmTag      = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
 	npmRange    = regexp.MustCompile(`^[\^~<>=v *]*[0-9*xX][0-9A-Za-z.+*| <>=^~-]*$`)
-	npmArchive  = regexp.MustCompile(`(?i)\.(tgz|tar|tar\.gz)$`)
-	pypiVersion = regexp.MustCompile(`^(latest|v?[0-9][0-9A-Za-z.!+_-]*)$`)
+	npmArchive  = regexp.MustCompile(`(?i)[.](tgz|tar.gz|tar)$`)
+	pypiVersion = regexp.MustCompile(`(?i)^(latest|v?([0-9]+!)?[0-9]+(\.[0-9]+)*` +
+		`([-_.]?(a|b|c|rc|alpha|beta|pre|preview)[-_.]?[0-9]*)?` +
+		`(-[0-9]+|[-_.]?(post|rev|r)[-_.]?[0-9]*)?` +
+		`([-_.]?dev[-_.]?[0-9]*)?(\+[a-z0-9]+([-_.][a-z0-9]+)*)?)$`)
 )
 
 func trimImageVersion(image string) string {
