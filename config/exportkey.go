@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/internal/securefile"
 )
 
 const exportKeySize = 32
@@ -22,7 +23,9 @@ func (c *Config) ExportKeyFile() string {
 // LoadOrCreateExportKey reads the export key at path. When the file does
 // not exist, it writes a new random key with mode 0600. The key never
 // leaves the machine. Two processes that create the key at the same time
-// get the same key, because only the first hard link wins.
+// get the same key, because only the first hard link wins. On Unix it
+// refuses a key file that is a symbolic link, that another user owns, or
+// that grants access to the group or to others.
 func LoadOrCreateExportKey(path string) ([]byte, error) {
 	key, err := readExportKey(path)
 	if !errors.Is(err, fs.ErrNotExist) {
@@ -67,9 +70,9 @@ func LoadOrCreateExportKey(path string) ([]byte, error) {
 }
 
 func readExportKey(path string) ([]byte, error) {
-	key, err := os.ReadFile(path)
+	key, err := securefile.ReadFile("export key", path)
 	if err != nil {
-		return nil, fmt.Errorf("read export key: %w", err)
+		return nil, err
 	}
 	if len(key) != exportKeySize {
 		return nil, fmt.Errorf("export key %s: want %d bytes, got %d", path, exportKeySize, len(key))
