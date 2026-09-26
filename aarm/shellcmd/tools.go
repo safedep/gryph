@@ -780,10 +780,13 @@ func tarOldStyle(args []string) []string {
 var sqliteOptions = valueOptions("-cmd", "-init", "-separator", "-newline", "-nullvalue",
 	"-vfs", "-maxsize", "-mmap", "-pagecache", "-lookaside", "-heap")
 
-// sqlite records every operand of sqlite3 as a read, because the database
-// can follow options that sqlite3 parses with a single dash. It also records
-// the -init file, and each file that the SQL of an operand or of -cmd opens.
+// sqlite records the first operand of sqlite3 as a read of the database.
+// The database can follow an option that sqlite3 parses with a single dash
+// and that the table does not know, so each later operand is a guessed read.
+// It also records the -init file, and each file that the SQL of an operand
+// or of -cmd opens.
 func (w *walker) sqlite(args []string, cwds dirs) {
+	database := true
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		flag := "-" + strings.TrimLeft(a, "-")
@@ -794,8 +797,11 @@ func (w *walker) sqlite(args []string, cwds dirs) {
 				w.sqliteValue(flag, args[i], cwds)
 			}
 		case strings.HasPrefix(a, "-"):
-		default:
+		case database:
+			database = false
 			w.add(filePath(a), AccessRead, cwds)
+		default:
+			w.guessReads([]string{filePath(a)}, cwds)
 			w.sqliteText(a, cwds)
 		}
 	}
@@ -810,15 +816,7 @@ func (w *walker) sqliteValue(flag, value string, cwds dirs) {
 	}
 }
 
-var (
-	sqliteToken = regexp.MustCompile(`'(?:[^']|'')*'|"[^"]*"|[^\s;]+`)
-	// sqliteFileCall finds each SQL construct that opens a file named by an
-	// expression.
-	sqliteFileCall = regexp.MustCompile(`(?i)\b(?:attach\b(?:\s+database\b)?|(?:readfile|fsdir|load_extension)\s*\()`)
-	// sqliteLiteralArg matches a file name that is one string literal,
-	// followed by the word or character that ends the argument.
-	sqliteLiteralArg = regexp.MustCompile(`(?i)^\s*('(?:[^']|'')*')\s*(?:as\b|[,)])`)
-)
+var sqliteToken = regexp.MustCompile(`'(?:[^']|'')*'|"[^"]*"|[^\s;]+`)
 
 // sqliteFileCommands are the dot commands of sqlite3 that read a file
 // operand. sqliteShellCommands run the rest of the line as a shell command.
@@ -839,10 +837,9 @@ func isSqliteDotCommand(word string, commands []string) bool {
 
 // sqliteText records the files that SQL text or a dot command opens with
 // .open, .read, .import, .restore, .load, ATTACH, readfile(), fsdir(), or
-// load_extension(). When the SQL names the file with an expression other
-// than one string literal, the walker records a read of any path. It also
-// analyzes the command of .shell and .system.
+// load_extension(). It also analyzes the command of .shell and .system.
 func (w *walker) sqliteText(text string, cwds dirs) {
+	var sql []string
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(line)
 		tokens := sqliteToken.FindAllString(line, -1)
@@ -856,22 +853,119 @@ func (w *walker) sqliteText(text string, cwds dirs) {
 					w.add(filePath(sqliteUnquote(tok)), AccessRead, cwds)
 				}
 			}
+		case !strings.HasPrefix(line, "."):
+			sql = append(sql, line)
 		}
 	}
-	for _, loc := range sqliteFileCall.FindAllStringIndex(text, -1) {
-		if m := sqliteLiteralArg.FindStringSubmatch(text[loc[1]:]); m != nil {
-			w.add(filePath(sqliteUnquote(m[1])), AccessRead, cwds)
-		} else {
-			w.addAnyRead()
-		}
-	}
+	w.addAll(sqlFiles(sqlTokens(strings.Join(sql, "\n"))), AccessRead, cwds)
 }
 
-// addAnyRead records a read of a file that the walker cannot name, such as
-// the result of a SQL expression. The glob can match any path, so the read
-// fails closed.
-func (w *walker) addAnyRead() {
-	w.addTarget(Target{Path: "/", Access: AccessRead, Glob: "/**"})
+// sqlToken is one SQL token. A string literal keeps its quotes. A quoted
+// name is bare, so "readfile" and readfile are the same word.
+type sqlToken struct {
+	text    string
+	literal bool
+}
+
+// sqlTokens splits SQL into tokens. It drops white space and comments.
+func sqlTokens(sql string) []sqlToken {
+	var out []sqlToken
+	for i := 0; i < len(sql); {
+		c := sql[i]
+		switch {
+		case c == ' ' || c == '\t' || c == '\n' || c == '\r':
+			i++
+		case strings.HasPrefix(sql[i:], "--"):
+			end := strings.IndexByte(sql[i:], '\n')
+			if end < 0 {
+				return out
+			}
+			i += end
+		case strings.HasPrefix(sql[i:], "/*"):
+			end := strings.Index(sql[i+2:], "*/")
+			if end < 0 {
+				return out
+			}
+			i += end + 4
+		case c == '\'':
+			end := quoteEnd(sql, i, '\'')
+			out = append(out, sqlToken{text: sql[i:end], literal: true})
+			i = end
+		case c == '"' || c == '`' || c == '[':
+			closer := map[byte]byte{'"': '"', '`': '`', '[': ']'}[c]
+			end := quoteEnd(sql, i, closer)
+			out = append(out, sqlToken{text: strings.Trim(sql[i:end], string(c)+string(closer))})
+			i = end
+		case strings.IndexByte("(),;", c) >= 0:
+			out = append(out, sqlToken{text: sql[i : i+1]})
+			i++
+		default:
+			end := i + 1
+			for end < len(sql) && strings.IndexByte(" \t\n\r(),;'\"`[", sql[end]) < 0 && !strings.HasPrefix(sql[end:], "--") && !strings.HasPrefix(sql[end:], "/*") {
+				end++
+			}
+			out = append(out, sqlToken{text: sql[i:end]})
+			i = end
+		}
+	}
+	return out
+}
+
+// quoteEnd returns the index after the quote that closes the quote at
+// sql[start]. A doubled quote does not close it. An open quote runs to the
+// end.
+func quoteEnd(sql string, start int, closer byte) int {
+	for i := start + 1; i < len(sql); i++ {
+		if sql[i] != closer {
+			continue
+		}
+		if i+1 < len(sql) && sql[i+1] == closer && closer != ']' {
+			i++
+			continue
+		}
+		return i + 1
+	}
+	return len(sql)
+}
+
+// sqlFileFunctions are the SQL functions that open the file of their first
+// argument.
+var sqlFileFunctions = []string{"readfile", "fsdir", "load_extension"}
+
+// sqlFiles returns the files that ATTACH at the start of a statement, or a
+// call of a file function, names with one string literal. A file that an
+// expression names is not known, so it adds nothing.
+func sqlFiles(tokens []sqlToken) []string {
+	var out []string
+	start := true
+	for i, tok := range tokens {
+		word := strings.ToLower(tok.text)
+		switch {
+		case tok.literal:
+		case start && word == "attach":
+			arg := i + 1
+			if arg < len(tokens) && !tokens[arg].literal && strings.EqualFold(tokens[arg].text, "database") {
+				arg++
+			}
+			out = appendLiteralArg(out, tokens, arg, "as")
+		case slices.Contains(sqlFileFunctions, word) && i+1 < len(tokens) && tokens[i+1].text == "(":
+			out = appendLiteralArg(out, tokens, i+2, ",", ")")
+		}
+		start = !tok.literal && tok.text == ";"
+	}
+	return out
+}
+
+// appendLiteralArg appends the string literal at tokens[i] when the token
+// after it is one of ends.
+func appendLiteralArg(out []string, tokens []sqlToken, i int, ends ...string) []string {
+	if i+1 >= len(tokens) || !tokens[i].literal || tokens[i+1].literal {
+		return out
+	}
+	if !slices.ContainsFunc(ends, func(e string) bool { return strings.EqualFold(tokens[i+1].text, e) }) {
+		return out
+	}
+	return append(out, filePath(sqliteUnquote(tokens[i].text)))
 }
 
 func sqliteUnquote(s string) string {

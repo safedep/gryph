@@ -514,3 +514,39 @@ func mustPDPPolicy(t *testing.T, match string) *Policy {
 	require.NoError(t, err)
 	return p
 }
+
+func TestEvaluate_ReadRuleOnNormalCommands(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: no-env-reads
+    action: block
+    match:
+      action_types: [command_exec]
+      file_patterns: ["**/.env"]
+      file_access: [read]
+`)
+	cases := []struct {
+		command string
+		want    model.Decision
+	}{
+		{"cat .env", model.DecisionBlock},
+		{"find . -exec cat {} +", model.DecisionBlock},
+		{"find . ! -name '*.go' -exec cat {} +", model.DecisionBlock},
+		{"find . -name '.e*' -exec cat {} +", model.DecisionBlock},
+		{"find . -name '*.go' -exec grep -l TODO {} +", model.DecisionAllow},
+		{"find . -type f -name '*.md' -exec wc -l {} \\;", model.DecisionAllow},
+		{"sqlite3 app.db \"select * from t where name like '%.env%'\"", model.DecisionAllow},
+	}
+	for _, tc := range cases {
+		t.Run(tc.command, func(t *testing.T) {
+			action := &model.Action{
+				Type: model.ActionCommandExec, WorkingDir: "/work",
+				Parameters: model.Parameters{Command: tc.command},
+			}
+			res, err := engine.Evaluate(context.Background(), action, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, res.Decision)
+		})
+	}
+}

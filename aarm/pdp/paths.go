@@ -103,10 +103,12 @@ func (r compiledRule) selects(access shellcmd.Access) bool {
 
 // matchesTarget matches a shell target. A guessed read matches only the
 // file patterns, because the walker does not know whether the command reads
-// a directory tree.
+// a directory tree. A read of the home directory or one of its parents also
+// matches only the file patterns, as for a file_read action.
 func (r compiledRule) matchesTarget(t shellcmd.Target) bool {
+	treeRead := t.Access == shellcmd.AccessRead && !t.Guess && !isHomeOrParent(t.Path)
 	if t.Access == shellcmd.AccessRead && t.Glob != "" {
-		return globsOverlap(t.Glob, r.filePatterns) || (!t.Guess && globsOverlap(t.Glob, r.containerPatterns))
+		return globsOverlap(t.Glob, r.filePatterns) || (treeRead && globsOverlap(t.Glob, r.containerPatterns))
 	}
 	if matchesAnyPath(r.filePatterns, t.Path) {
 		return true
@@ -115,7 +117,7 @@ func (r compiledRule) matchesTarget(t shellcmd.Target) bool {
 	case shellcmd.AccessRemove:
 		return matchesAnyPath(r.containerPatterns, t.Path)
 	case shellcmd.AccessRead:
-		return !t.Guess && matchesAnyPath(r.containerPatterns, t.Path)
+		return treeRead && matchesAnyPath(r.containerPatterns, t.Path)
 	case shellcmd.AccessWriteTree:
 		return matchesAnyPath(r.parentPatterns, t.Path)
 	}

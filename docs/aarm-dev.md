@@ -207,10 +207,12 @@ time, and one character at a time in a segment. A shell glob segment that
 starts with `*`, `?`, or a class does not meet a pattern segment that starts
 with a literal dot, as in bash without `dotglob`. `globTokens` knows a
 leading `]` in a class and `[:name:]`, `[=c=]`, and `[.c.]`. A class that
-does not close makes the rest of the segment a star, so the check fails
-closed. A `file_read` of a directory
-that holds a protected path at any depth also matches, but a `file_read` of
-the home directory or one of its parents does not. The rules have no agent
+does not close makes the rest of the segment a star, so the check can only
+over-match. A `file_read` of a directory that holds a protected path at any
+depth also matches. A `file_read` or a shell read of the home directory or
+one of its parents (`isHomeOrParent`) matches the file patterns only, not a
+directory that holds a pattern, because a search of home is a common
+command. The rules have no agent
 names and no command regexes.
 
 `aarm/shellcmd` walks the parsed command tree. It tracks the set of working
@@ -249,18 +251,25 @@ A read target comes from an input redirect, the source of a copy or a move,
 the file operands of a fixed list of read commands (`cat`, `head`, `grep`,
 `sed` without `-i`, `sort`, `tar`, `sqlite3`, and others), the files that `curl`
 and `wget` upload, and a `file:` URL of `curl` or `sqlite3`. For `sqlite3`,
-the walker also reads the `-init` file and the files that `.open`, `.read`,
-`.import`, `.restore`, `.load`, or `ATTACH` names in an operand or a `-cmd`
-value, and the file of `readfile()`, `fsdir()`, and `load_extension()`. When
-`ATTACH` or one of these functions names the file with an expression other
-than one string literal, the walker records a read of the glob `/**`
-(`addAnyRead`), which matches every pattern. It analyzes the command of
-`.shell` and `.system` as a nested script. `tar` applies each `-C` to the
+the first operand is a read of the database, and each later operand is a
+guessed read. The walker also reads the `-init` file and the files that
+`.open`, `.read`, `.import`, `.restore`, or `.load` names in an operand or a
+`-cmd` value. `sqlTokens` splits the SQL into tokens. It skips string
+literals and `--` and `/* */` comments, and it makes a quoted name bare.
+`sqlFiles` then reads the file of `ATTACH` at the start of a statement, and
+of a call of `readfile()`, `fsdir()`, or `load_extension()`, only when one
+single-quoted string names the file. When an expression names the file, the
+walker records nothing. So the word `attach` in a string, a comment, or a
+column name adds no read. It analyzes the command of `.shell` and `.system`
+as a nested script. `tar` applies each `-C` to the
 members after it. For a command that the walker does not know, each operand,
 the value after `=` of an option, and each tail of a short option
 (`guessWords`) is a read with `Target.Guess` set. `git` records the same
 guessed reads relative to the last `-C` directory, and a read of each `-C`,
-`--git-dir`, and `--work-tree` directory. The PDP matches a guessed read
+`--git-dir`, and `--work-tree` directory. For `find -exec`, `{}` is any path
+under a root. When one `-name` test selects the files, and no `-o` or
+negation can select others, `{}` ends with that name pattern, so `find .
+-name '*.go' -exec grep x {} +` does not read `.env`. The PDP matches a guessed read
 against the file patterns only, not against a directory that holds a
 pattern. `nonReadCommands` lists
 the commands that read no file content, such as `ls` and `stat`. The walker

@@ -658,11 +658,13 @@ func shellScript(args []string) (string, bool) {
 // find records the changes of a find command. -delete removes the search
 // roots. -exec and the related actions run a command on each file found, so
 // the walker analyzes that command with "{}" set to any path under a root.
+// When a -name test selects the files, "{}" ends with that name pattern.
 func (w *walker) find(args []string, cwds dirs) {
 	roots := findRoots(args)
 	if len(roots) == 0 {
 		roots = []string{"."}
 	}
+	found := "/**" + findName(args)
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-delete":
@@ -670,7 +672,7 @@ func (w *walker) find(args []string, cwds dirs) {
 		case "-exec", "-ok":
 			end := findActionEnd(args, i)
 			for _, root := range roots {
-				w.call(substitute(args[i+1:end], strings.TrimSuffix(root, "/")+"/**"), cwds)
+				w.call(substitute(args[i+1:end], strings.TrimSuffix(root, "/")+found), cwds)
 			}
 			i = end
 		case "-execdir", "-okdir":
@@ -681,6 +683,22 @@ func (w *walker) find(args []string, cwds dirs) {
 			i = end
 		}
 	}
+}
+
+// findName returns "/" and the pattern of the -name test of a find
+// command. It returns an empty string when there is no such test, when the
+// test is negated, or when an -o operator can select other files.
+func findName(args []string) string {
+	name := ""
+	for i, a := range args {
+		switch {
+		case a == "-o" || a == "-or":
+			return ""
+		case a == "-name" && name == "" && i+1 < len(args) && (i == 0 || (args[i-1] != "!" && args[i-1] != "-not")):
+			name = "/" + args[i+1]
+		}
+	}
+	return name
 }
 
 // execdir analyzes the command of -execdir. find runs it from the
