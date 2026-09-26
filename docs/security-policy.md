@@ -225,7 +225,9 @@ A rule that must stop prompts must list `user_prompt` in `action_types`. Gryph l
 
 `context.semantic_drift` is removed. `gryph policy validate` and `gryph policy install` reject a
 policy that reads it or `.Context.SemanticDrift`. An installed policy that reads it still loads
-with a warning, and the value is always zero.
+with a warning, and the value is always zero. The same two commands reject a `message` template that
+names an unknown field, such as `{{.Context.Drift}}`. An installed policy with such a template loads
+with a warning.
 
 ### Facts and tags
 

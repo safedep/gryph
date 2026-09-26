@@ -72,7 +72,7 @@ func New(policy *Policy, opts ...Option) (*PDP, error) {
 		return nil, err
 	}
 	if policy != nil {
-		if err := cmp.Or(CheckTagNames(policy), removedFieldError(compiled)); err != nil {
+		if err := cmp.Or(CheckTagNames(policy), strictError(compiled)); err != nil {
 			log.Warnf("pdp: %v. The policy loads, but gryph policy validate rejects it", err)
 		}
 	}
@@ -428,9 +428,10 @@ type compiledRule struct {
 	hasCondition       bool
 	hasMessageTemplate bool
 	contextRefs        []string
-	// removed is the validation error of a rule that reads a removed
-	// context field. The rule still loads.
-	removed error
+	// strictErr is a problem that validation rejects but a policy load only
+	// warns on, such as a removed context field or an unknown template
+	// field. The rule still loads.
+	strictErr error
 }
 
 func compileRules(rules []Rule) ([]compiledRule, error) {
@@ -493,7 +494,7 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 		cr.hasCondition = true
 		cr.contextRefs = collectContextRefs(ast)
 		if field := removedFieldRef(ast); field != "" {
-			cr.removed = fmt.Errorf("rule %q condition: context.%s was removed. Remove it from the condition", rule.ID, field)
+			cr.strictErr = fmt.Errorf("rule %q condition: context.%s was removed. Remove it from the condition", rule.ID, field)
 		}
 	}
 
@@ -503,16 +504,18 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 			return cr, fmt.Errorf("rule %q message template: %w", rule.ID, err)
 		}
 		// A field that the template data does not have fails every
-		// evaluation, so it fails validation. Other errors on empty data,
-		// such as an index out of range, can pass at runtime.
+		// render, so validation rejects it. A load only warns, so that a
+		// template typo in one rule does not stop every hook after an
+		// upgrade. Other errors on empty data, such as an index out of
+		// range, can pass at runtime.
 		if err := tmpl.Execute(io.Discard, templateData{}); err != nil && strings.Contains(err.Error(), "can't evaluate field") {
-			return cr, fmt.Errorf("rule %q message template: %w", rule.ID, err)
+			cr.strictErr = fmt.Errorf("rule %q message template: %w", rule.ID, err)
 		}
 		cr.message = tmpl
 		cr.hasMessageTemplate = true
 		for _, f := range removedContextFields {
-			if cr.removed == nil && f.templateRE.MatchString(rule.Message) {
-				cr.removed = fmt.Errorf("rule %q message template: .Context.%s was removed. Remove it from the message", rule.ID, f.template)
+			if cr.strictErr == nil && f.templateRE.MatchString(rule.Message) {
+				cr.strictErr = fmt.Errorf("rule %q message template: .Context.%s was removed. Remove it from the message", rule.ID, f.template)
 			}
 		}
 	}
@@ -789,12 +792,11 @@ var removedContextFields = []removedField{
 	{cel: "semantic_drift", template: "SemanticDrift", templateRE: regexp.MustCompile(`\.SemanticDrift\b`)},
 }
 
-// removedFieldError returns the error of the first rule that reads a removed
-// context field.
-func removedFieldError(rules []compiledRule) error {
+// strictError returns the first strict validation error of the rules.
+func strictError(rules []compiledRule) error {
 	for _, r := range rules {
-		if r.removed != nil {
-			return r.removed
+		if r.strictErr != nil {
+			return r.strictErr
 		}
 	}
 	return nil

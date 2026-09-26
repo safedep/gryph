@@ -182,13 +182,17 @@ func TestCollectContextRefs_Forms(t *testing.T) {
 }
 
 func TestValidate_TemplateUnknownField(t *testing.T) {
-	_, err := ParsePolicy([]byte(`
+	policy, err := ParsePolicy([]byte(`
 version: "1"
 rules:
   - id: drift-message
     action: warn
     message: "drift {{.Context.Drift}}"
 `))
+	require.NoError(t, err, "a load only warns, so an upgrade does not stop the hooks")
+	_, err = New(policy)
+	require.NoError(t, err)
+	err = CheckStrict(policy)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "can't evaluate field")
 

@@ -159,7 +159,7 @@ func CheckTagNames(policy *Policy) error {
 
 // CheckStrict returns the first problem that gryph policy validate and
 // gryph policy install reject, but that a policy load only warns on: a bad
-// tag name or a removed context field. A policy that fails to load stops
+// tag name, a removed context field, or an unknown template field. A policy that fails to load stops
 // every hook under fail_mode closed, so an upgrade must not cause that.
 func CheckStrict(policy *Policy) error {
 	if err := CheckTagNames(policy); err != nil {
@@ -169,7 +169,7 @@ func CheckStrict(policy *Policy) error {
 	if err != nil {
 		return fmt.Errorf("pdp: compile policy: %w", err)
 	}
-	return removedFieldError(compiled)
+	return strictError(compiled)
 }
 
 var fileAccessValues = []shellcmd.Access{shellcmd.AccessRead, shellcmd.AccessWrite, shellcmd.AccessRemove}
