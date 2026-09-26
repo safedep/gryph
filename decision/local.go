@@ -198,6 +198,9 @@ func (l *Local) loadSession(ctx context.Context, event *events.Event) (*session.
 
 	if sess.TranscriptPath == "" && event.TranscriptPath != "" {
 		sess.TranscriptPath = event.TranscriptPath
+		if err := l.store.UpdateSession(ctx, sess); err != nil {
+			log.Warnf("failed to update session transcript path: %v", err)
+		}
 	}
 
 	return sess, nil
@@ -213,50 +216,25 @@ func (l *Local) recordBlocked(ctx context.Context, sess *session.Session, event 
 	if l.redactor != nil {
 		event.ErrorMessage = l.redactor.Redact(event.ErrorMessage)
 	}
-	event.Sequence = sess.TotalActions + 1
 
-	if err := l.store.SaveEvent(ctx, event); err != nil {
+	if err := l.recordEvent(ctx, sess, event); err != nil {
 		log.Errorf("failed to save blocked event: %v", err)
-	}
-
-	sess.TotalActions++
-	sess.BlockedActions++
-	if event.IsSensitive {
-		sess.SensitiveActions++
-	}
-
-	if err := l.store.UpdateSession(ctx, sess); err != nil {
-		log.Errorf("failed to update session for blocked event: %v", err)
 	}
 }
 
+// recordEvent saves the event, adds it to the stored session counters, and
+// mirrors the change on the in-memory session.
+func (l *Local) recordEvent(ctx context.Context, sess *session.Session, event *events.Event) error {
+	if err := l.store.RecordEvent(ctx, event, session.EventCounts(event)); err != nil {
+		return err
+	}
+	sess.CountEvent(event)
+	return nil
+}
+
 func (l *Local) recordAllowed(ctx context.Context, sess *session.Session, event *events.Event) error {
-	event.Sequence = sess.TotalActions + 1
-
-	if err := l.store.SaveEvent(ctx, event); err != nil {
+	if err := l.recordEvent(ctx, sess, event); err != nil {
 		return fmt.Errorf("failed to save event: %w", err)
-	}
-
-	sess.TotalActions++
-	switch event.ActionType {
-	case events.ActionFileRead:
-		sess.FilesRead++
-	case events.ActionFileWrite:
-		sess.FilesWritten++
-	case events.ActionCommandExec:
-		sess.CommandsExecuted++
-	}
-
-	if event.ResultStatus == events.ResultError {
-		sess.Errors++
-	}
-
-	if event.IsSensitive {
-		sess.SensitiveActions++
-	}
-
-	if err := l.store.UpdateSession(ctx, sess); err != nil {
-		return fmt.Errorf("failed to update session: %w", err)
 	}
 
 	if event.ActionType == events.ActionSessionEnd {

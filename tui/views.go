@@ -167,7 +167,6 @@ type EventDetailView struct {
 	Payload          any             `json:"payload,omitempty"`
 	DiffContent      string          `json:"diff_content,omitempty"`
 	RawEvent         json.RawMessage `json:"raw_event,omitempty"`
-	ConvContext      string          `json:"conversation_context,omitempty"`
 }
 
 // InstallView represents installation results.

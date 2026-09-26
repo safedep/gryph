@@ -59,11 +59,6 @@ func (AuditEvent) Fields() []ent.Field {
 			Comment("Content label of diff_content"),
 		field.JSON("raw_event", map[string]interface{}{}).
 			Optional(),
-		field.Text("conversation_context").
-			Optional().
-			SchemaType(map[string]string{
-				dialect.SQLite: "text",
-			}),
 		field.Bool("is_sensitive").
 			Default(false),
 		field.String("subagent_id").

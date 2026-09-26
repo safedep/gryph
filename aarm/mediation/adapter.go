@@ -28,9 +28,10 @@ type InjectionScorer interface {
 	Score(action *model.Action) float32
 }
 
-// Adapter normalizes an event into a canonical action.
+// Adapter normalizes an event into a canonical action and the context
+// entry that records it.
 type Adapter interface {
-	Normalize(ctx context.Context, event *events.Event, sess *session.Session) (*model.Action, error)
+	Normalize(ctx context.Context, event *events.Event, sess *session.Session) (*model.Action, *model.ContextEntry, error)
 }
 
 // Common collects the optional dependencies every adapter needs to enrich a

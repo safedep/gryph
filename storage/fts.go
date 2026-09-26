@@ -52,9 +52,6 @@ func buildSearchableText(event *events.Event) string {
 	if event.DiffContent.Value != "" {
 		parts = append(parts, event.DiffContent.Value)
 	}
-	if event.ConversationContext != "" {
-		parts = append(parts, event.ConversationContext)
-	}
 
 	payloadText := extractPayloadText(event)
 	if payloadText != "" {

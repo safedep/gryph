@@ -240,12 +240,9 @@ func seedNRecentEvents(n int) func(env *testEnv) {
 				evt.ToolName = "Read"
 				payload := &events.FileReadPayload{Path: fmt.Sprintf("/tmp/project/file%d.go", i)}
 				require.NoError(env.t, evt.SetPayload(payload))
-				require.NoError(env.t, store.SaveEvent(ctx, evt))
+				require.NoError(env.t, store.RecordEvent(ctx, evt, session.EventCounts(evt)))
 			}
 
-			sess.TotalActions = n
-			sess.FilesRead = n
-			require.NoError(env.t, store.UpdateSession(ctx, sess))
 		})
 	}
 }
@@ -268,11 +265,9 @@ func seedMixedAgentEvents(env *testEnv) {
 				evt.ToolName = "Read"
 				payload := &events.FileReadPayload{Path: fmt.Sprintf("/tmp/project/file%d.go", i)}
 				require.NoError(env.t, evt.SetPayload(payload))
-				require.NoError(env.t, store.SaveEvent(ctx, evt))
+				require.NoError(env.t, store.RecordEvent(ctx, evt, session.EventCounts(evt)))
 			}
 
-			sess.TotalActions = 3
-			require.NoError(env.t, store.UpdateSession(ctx, sess))
 		}
 	})
 }
@@ -298,7 +293,7 @@ func seedTodayAndYesterdayEvents(env *testEnv) {
 			evt.ToolName = "Read"
 			payload := &events.FileReadPayload{Path: fmt.Sprintf("/tmp/project/old%d.go", i)}
 			require.NoError(env.t, evt.SetPayload(payload))
-			require.NoError(env.t, store.SaveEvent(ctx, evt))
+			require.NoError(env.t, store.RecordEvent(ctx, evt, session.EventCounts(evt)))
 		}
 
 		// Today events
@@ -310,11 +305,9 @@ func seedTodayAndYesterdayEvents(env *testEnv) {
 			evt.ToolName = "Read"
 			payload := &events.FileReadPayload{Path: fmt.Sprintf("/tmp/project/new%d.go", i)}
 			require.NoError(env.t, evt.SetPayload(payload))
-			require.NoError(env.t, store.SaveEvent(ctx, evt))
+			require.NoError(env.t, store.RecordEvent(ctx, evt, session.EventCounts(evt)))
 		}
 
-		sess.TotalActions = 5
-		require.NoError(env.t, store.UpdateSession(ctx, sess))
 	})
 }
 
@@ -341,11 +334,9 @@ func seedWithPaths(env *testEnv) {
 			evt.ToolName = "Read"
 			payload := &events.FileReadPayload{Path: p}
 			require.NoError(env.t, evt.SetPayload(payload))
-			require.NoError(env.t, store.SaveEvent(ctx, evt))
+			require.NoError(env.t, store.RecordEvent(ctx, evt, session.EventCounts(evt)))
 		}
 
-		sess.TotalActions = len(paths)
-		require.NoError(env.t, store.UpdateSession(ctx, sess))
 	})
 }
 
@@ -372,12 +363,9 @@ func seedWithCommands(env *testEnv) {
 			evt.ToolName = "Bash"
 			payload := &events.CommandExecPayload{Command: privacy.NewText(cmd)}
 			require.NoError(env.t, evt.SetPayload(payload))
-			require.NoError(env.t, store.SaveEvent(ctx, evt))
+			require.NoError(env.t, store.RecordEvent(ctx, evt, session.EventCounts(evt)))
 		}
 
-		sess.TotalActions = len(commands)
-		sess.CommandsExecuted = len(commands)
-		require.NoError(env.t, store.UpdateSession(ctx, sess))
 	})
 }
 
@@ -407,12 +395,9 @@ func seedWithErrors(env *testEnv) {
 			}
 			payload := &events.FileReadPayload{Path: fmt.Sprintf("/tmp/project/file%d.go", i)}
 			require.NoError(env.t, evt.SetPayload(payload))
-			require.NoError(env.t, store.SaveEvent(ctx, evt))
+			require.NoError(env.t, store.RecordEvent(ctx, evt, session.EventCounts(evt)))
 		}
 
-		sess.TotalActions = len(statuses)
-		sess.Errors = 2
-		require.NoError(env.t, store.UpdateSession(ctx, sess))
 	})
 }
 
@@ -433,11 +418,9 @@ func seedOldEvents(env *testEnv) {
 			evt.ToolName = "Read"
 			payload := &events.FileReadPayload{Path: fmt.Sprintf("/tmp/project/old%d.go", i)}
 			require.NoError(env.t, evt.SetPayload(payload))
-			require.NoError(env.t, store.SaveEvent(ctx, evt))
+			require.NoError(env.t, store.RecordEvent(ctx, evt, session.EventCounts(evt)))
 		}
 
-		sess.TotalActions = 5
-		require.NoError(env.t, store.UpdateSession(ctx, sess))
 	})
 }
 
@@ -460,11 +443,9 @@ func seedOldAndRecentEvents(env *testEnv) {
 			evt.ToolName = "Read"
 			payload := &events.FileReadPayload{Path: fmt.Sprintf("/tmp/project/recent%d.go", i)}
 			require.NoError(env.t, evt.SetPayload(payload))
-			require.NoError(env.t, store.SaveEvent(ctx, evt))
+			require.NoError(env.t, store.RecordEvent(ctx, evt, session.EventCounts(evt)))
 		}
 
-		sess.TotalActions = 3
-		require.NoError(env.t, store.UpdateSession(ctx, sess))
 	})
 }
 
@@ -506,14 +487,9 @@ func seedMixedActions(env *testEnv) {
 				payload := &events.CommandExecPayload{Command: privacy.NewText("go build")}
 				require.NoError(env.t, evt.SetPayload(payload))
 			}
-			require.NoError(env.t, store.SaveEvent(ctx, evt))
+			require.NoError(env.t, store.RecordEvent(ctx, evt, session.EventCounts(evt)))
 		}
 
-		sess.TotalActions = len(actions)
-		sess.FilesRead = 2
-		sess.FilesWritten = 2
-		sess.CommandsExecuted = 1
-		require.NoError(env.t, store.UpdateSession(ctx, sess))
 	})
 }
 
@@ -526,7 +502,6 @@ func seed3Sessions(env *testEnv) {
 			sess := session.NewSessionWithID(sessID, agentName)
 			sess.StartedAt = time.Now().UTC().Add(-time.Duration(3-idx) * time.Hour)
 			sess.WorkingDirectory = "/tmp/project"
-			sess.TotalActions = idx + 1
 			require.NoError(env.t, store.SaveSession(ctx, sess))
 
 			for i := 0; i < idx+1; i++ {
@@ -537,7 +512,7 @@ func seed3Sessions(env *testEnv) {
 				evt.ToolName = "Read"
 				payload := &events.FileReadPayload{Path: fmt.Sprintf("/tmp/project/file%d.go", i)}
 				require.NoError(env.t, evt.SetPayload(payload))
-				require.NoError(env.t, store.SaveEvent(ctx, evt))
+				require.NoError(env.t, store.RecordEvent(ctx, evt, session.EventCounts(evt)))
 			}
 		}
 	})
@@ -565,11 +540,9 @@ func seedSensitiveEvents(normal, sensitive int) func(env *testEnv) {
 				}
 				payload := &events.FileReadPayload{Path: fmt.Sprintf("/tmp/project/file%d.go", i)}
 				require.NoError(env.t, evt.SetPayload(payload))
-				require.NoError(env.t, store.SaveEvent(ctx, evt))
+				require.NoError(env.t, store.RecordEvent(ctx, evt, session.EventCounts(evt)))
 			}
 
-			sess.TotalActions = total
-			require.NoError(env.t, store.UpdateSession(ctx, sess))
 		})
 	}
 }
@@ -592,11 +565,9 @@ func seedEventsOlderThan1h(n int) func(env *testEnv) {
 				evt.ToolName = "Read"
 				payload := &events.FileReadPayload{Path: fmt.Sprintf("/tmp/project/old%d.go", i)}
 				require.NoError(env.t, evt.SetPayload(payload))
-				require.NoError(env.t, store.SaveEvent(ctx, evt))
+				require.NoError(env.t, store.RecordEvent(ctx, evt, session.EventCounts(evt)))
 			}
 
-			sess.TotalActions = n
-			require.NoError(env.t, store.UpdateSession(ctx, sess))
 		})
 	}
 }

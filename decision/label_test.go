@@ -25,7 +25,6 @@ func newLabelEvent(t *testing.T, actionType events.ActionType, payload any) *eve
 	event := events.NewEvent(uuid.New(), "test-agent", actionType)
 	event.RawEvent = []byte(`{"test": "raw"}`)
 	event.DiffContent = privacy.NewText("--- a/file\n+++ b/file\n")
-	event.ConversationContext = "user said something"
 	require.NoError(t, event.SetPayload(payload))
 	return event
 }
@@ -75,7 +74,6 @@ func TestLabelEvent_Levels(t *testing.T) {
 			assert.Equal(t, !tc.wantDiff, event.DiffContent.Label.Stripped)
 			assert.Equal(t, privacy.Digest("--- a/file\n+++ b/file\n"), event.DiffContent.Label.Digest)
 			assert.Equal(t, tc.wantRaw, event.RawEvent != nil)
-			assert.Equal(t, tc.wantRaw, event.ConversationContext != "")
 
 			p := decode[events.FileWritePayload](t, event)
 			assert.Equal(t, "/work/main.go", p.Path)
@@ -218,14 +216,12 @@ func TestLabelEvent_ToolUseAndSubagent(t *testing.T) {
 func TestLabelEvent_RedactsPlainFields(t *testing.T) {
 	event := newLabelEvent(t, events.ActionCommandExec, events.CommandExecPayload{Command: privacy.NewText("ls")})
 	event.RawEvent = []byte(`{"tool_input":{"command":"export token=abc123"}}`)
-	event.ConversationContext = "password=hunter2"
 	event.ErrorMessage = "error: bad value token=abc123"
 
 	label(event, testRedactor(t), nil, config.LoggingFull)
 
 	assert.NotContains(t, string(event.RawEvent), "abc123")
 	assert.True(t, json.Valid(event.RawEvent))
-	assert.NotContains(t, event.ConversationContext, "hunter2")
 	assert.NotContains(t, event.ErrorMessage, "abc123")
 }
 

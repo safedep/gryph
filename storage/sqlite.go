@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -90,16 +91,23 @@ func (s *SQLiteStore) Init(ctx context.Context) error {
 // createSchema runs the ent migration with retries. Concurrent hook
 // processes race on a fresh database: both diff an empty schema and both
 // issue CREATE TABLE, and the loser fails with "already exists". A retry
-// re-diffs against the schema the winner created and no-ops. Losing the
-// race must never lose an audit event.
+// re-diffs against the schema the winner created and no-ops. A hook that
+// waits past busy_timeout for another writer also retries. Losing the race
+// must never lose an audit event.
+//
+// The migration never drops a column or an index. A table rebuild holds the
+// write lock for seconds on a large database, and an older binary would drop
+// the columns of a newer one. A retired column stays in place, unused.
 func (s *SQLiteStore) createSchema(ctx context.Context) error {
 	const attempts = 5
 	var err error
 	for i := 0; i < attempts; i++ {
 		if err = s.client.Schema.Create(ctx); err == nil {
-			return nil
+			if err = s.dropRetiredTables(ctx); err == nil {
+				return nil
+			}
 		}
-		if !strings.Contains(err.Error(), "already exists") {
+		if !retryableSchemaError(err) {
 			return err
 		}
 		select {
@@ -109,6 +117,98 @@ func (s *SQLiteStore) createSchema(ctx context.Context) error {
 		}
 	}
 	return err
+}
+
+func retryableSchemaError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "already exists") ||
+		strings.Contains(msg, "database is locked") ||
+		strings.Contains(msg, "SQLITE_BUSY")
+}
+
+// retiredTables are tables that no ent schema declares any more. The
+// migration drops them after Schema.Create. The entry log is not copied.
+var retiredTables = []string{"aarm_context_actions", "aarm_context_states"}
+
+// dropRetiredTables drops the retired tables in one writer transaction. It
+// first copies the old context state, because an upgrade can happen while a
+// session runs, and its rules must keep the classes, the tools and the
+// network count that the session already has. A read checks for the tables
+// first, so a hook on a migrated database takes no write lock here.
+func (s *SQLiteStore) dropRetiredTables(ctx context.Context) error {
+	found, err := anyTableExists(ctx, s.db, retiredTables...)
+	if err != nil || !found {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin retired table drop: %w", err)
+	}
+	if err := dropRetiredTablesTx(ctx, tx); err != nil {
+		if rerr := tx.Rollback(); rerr != nil {
+			return errors.Join(err, rerr)
+		}
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit retired table drop: %w", err)
+	}
+	return nil
+}
+
+func dropRetiredTablesTx(ctx context.Context, tx *sql.Tx) error {
+	found, err := anyTableExists(ctx, tx, "aarm_context_states")
+	if err != nil {
+		return err
+	}
+	if found {
+		if err := copyRetiredContextStateTx(ctx, tx); err != nil {
+			return err
+		}
+	}
+	for _, table := range retiredTables {
+		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
+			return fmt.Errorf("drop retired table %s: %w", table, err)
+		}
+	}
+	return nil
+}
+
+type rowQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func anyTableExists(ctx context.Context, q rowQuerier, names ...string) (bool, error) {
+	for _, name := range names {
+		var n int
+		if err := q.QueryRowContext(ctx,
+			`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, name).Scan(&n); err != nil {
+			return false, fmt.Errorf("check table %s: %w", name, err)
+		}
+		if n > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// copyRetiredContextStateTx copies one row per session. The other counters
+// were already on sessions before the context tables were retired.
+func copyRetiredContextStateTx(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO context_states (session_id, last_entry_at, tools_used, classifications_seen, entities_seen)
+SELECT session_id, last_action_at, tools_used, classifications_seen, entities_seen
+FROM aarm_context_states WHERE true
+ON CONFLICT(session_id) DO NOTHING`); err != nil {
+		return fmt.Errorf("copy retired context state: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+UPDATE sessions SET network_requests = max(network_requests,
+    (SELECT old.network_requests FROM aarm_context_states old WHERE old.session_id = sessions.id))
+WHERE id IN (SELECT session_id FROM aarm_context_states)`); err != nil {
+		return fmt.Errorf("copy retired network requests: %w", err)
+	}
+	return nil
 }
 
 // DB returns the underlying database connection.
@@ -126,11 +226,82 @@ func (s *SQLiteStore) Close() error {
 
 // SaveEvent persists a new audit event.
 func (s *SQLiteStore) SaveEvent(ctx context.Context, event *events.Event) error {
+	create, err := eventCreate(s.client, event)
+	if err != nil {
+		return err
+	}
+	if _, err := create.Save(ctx); err != nil {
+		return fmt.Errorf("failed to save event: %w", err)
+	}
+
+	// Index in FTS (best-effort)
+	_ = s.indexEvent(ctx, event)
+
+	return nil
+}
+
+// RecordEvent implements SessionStore. The transaction takes the write lock
+// at BEGIN (_txlock=immediate), so parallel hook processes on one session
+// get distinct sequences and lose no counter update.
+func (s *SQLiteStore) RecordEvent(ctx context.Context, event *events.Event, counts session.Counts) error {
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin event transaction: %w", err)
+	}
+	if err := recordEventTx(ctx, tx.Client(), event, counts); err != nil {
+		if rerr := tx.Rollback(); rerr != nil {
+			return errors.Join(err, rerr)
+		}
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit event: %w", err)
+	}
+
+	// Index in FTS (best-effort)
+	_ = s.indexEvent(ctx, event)
+
+	return nil
+}
+
+func recordEventTx(ctx context.Context, client *ent.Client, event *events.Event, counts session.Counts) error {
+	sess, err := client.Session.Get(ctx, event.SessionID)
+	if err != nil {
+		return fmt.Errorf("failed to get session for event: %w", err)
+	}
+	event.Sequence = entToSession(sess).RecordedEvents() + 1
+
+	create, err := eventCreate(client, event)
+	if err != nil {
+		return err
+	}
+	if _, err := create.Save(ctx); err != nil {
+		return fmt.Errorf("failed to save event: %w", err)
+	}
+
+	_, err = client.Session.UpdateOneID(event.SessionID).
+		SetEventCount(event.Sequence).
+		AddTotalActions(counts.TotalActions).
+		AddFilesRead(counts.FilesRead).
+		AddFilesWritten(counts.FilesWritten).
+		AddCommandsExecuted(counts.CommandsExecuted).
+		AddNetworkRequests(counts.NetworkRequests).
+		AddErrors(counts.Errors).
+		AddSensitiveActions(counts.SensitiveActions).
+		AddBlockedActions(counts.BlockedActions).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update session counters: %w", err)
+	}
+	return nil
+}
+
+func eventCreate(client *ent.Client, event *events.Event) (*ent.AuditEventCreate, error) {
 	// Convert payload to map
 	var payload map[string]interface{}
 	if len(event.Payload) > 0 {
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
-			return fmt.Errorf("failed to unmarshal payload: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
 		}
 	}
 
@@ -138,12 +309,12 @@ func (s *SQLiteStore) SaveEvent(ctx context.Context, event *events.Event) error 
 	var rawEvent map[string]interface{}
 	if len(event.RawEvent) > 0 {
 		if err := json.Unmarshal(event.RawEvent, &rawEvent); err != nil {
-			return fmt.Errorf("failed to unmarshal raw event: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal raw event: %w", err)
 		}
 	}
 
 	// Build the create query
-	create := s.client.AuditEvent.Create().
+	create := client.AuditEvent.Create().
 		SetID(event.ID).
 		SetSessionID(event.SessionID).
 		SetSequence(event.Sequence).
@@ -179,9 +350,6 @@ func (s *SQLiteStore) SaveEvent(ctx context.Context, event *events.Event) error 
 	if rawEvent != nil {
 		create.SetRawEvent(rawEvent)
 	}
-	if event.ConversationContext != "" {
-		create.SetConversationContext(event.ConversationContext)
-	}
 	if event.SubagentID != "" {
 		create.SetSubagentID(event.SubagentID)
 	}
@@ -201,15 +369,7 @@ func (s *SQLiteStore) SaveEvent(ctx context.Context, event *events.Event) error 
 		create.SetLinkedEventID(event.LinkedEventID)
 	}
 
-	_, err := create.Save(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to save event: %w", err)
-	}
-
-	// Index in FTS (best-effort)
-	_ = s.indexEvent(ctx, event)
-
-	return nil
+	return create, nil
 }
 
 // GetEvent retrieves an event by ID.
@@ -389,6 +549,8 @@ func (s *SQLiteStore) SaveSession(ctx context.Context, sess *session.Session) er
 		SetFilesRead(sess.FilesRead).
 		SetFilesWritten(sess.FilesWritten).
 		SetCommandsExecuted(sess.CommandsExecuted).
+		SetNetworkRequests(sess.NetworkRequests).
+		SetEventCount(sess.EventCount).
 		SetErrors(sess.Errors).
 		SetSensitiveActions(sess.SensitiveActions).
 		SetBlockedActions(sess.BlockedActions)
@@ -423,14 +585,7 @@ func (s *SQLiteStore) SaveSession(ctx context.Context, sess *session.Session) er
 
 // UpdateSession updates an existing session.
 func (s *SQLiteStore) UpdateSession(ctx context.Context, sess *session.Session) error {
-	update := s.client.Session.UpdateOneID(sess.ID).
-		SetTotalActions(sess.TotalActions).
-		SetFilesRead(sess.FilesRead).
-		SetFilesWritten(sess.FilesWritten).
-		SetCommandsExecuted(sess.CommandsExecuted).
-		SetErrors(sess.Errors).
-		SetSensitiveActions(sess.SensitiveActions).
-		SetBlockedActions(sess.BlockedActions)
+	update := s.client.Session.UpdateOneID(sess.ID)
 
 	// Update optional fields
 	if sess.AgentVersion != "" {
@@ -892,25 +1047,24 @@ func getDir(path string) string {
 // entToEvent converts an ent AuditEvent to a domain Event.
 func entToEvent(e *ent.AuditEvent) *events.Event {
 	event := &events.Event{
-		ID:                  e.ID,
-		SessionID:           e.SessionID,
-		Sequence:            e.Sequence,
-		Timestamp:           e.Timestamp,
-		AgentName:           e.AgentName,
-		AgentVersion:        e.AgentVersion,
-		WorkingDirectory:    e.WorkingDirectory,
-		ActionType:          events.ActionType(e.ActionType),
-		ToolName:            e.ToolName,
-		ResultStatus:        events.ResultStatus(e.ResultStatus),
-		ErrorMessage:        e.ErrorMessage,
-		DiffContent:         privacy.Text{Value: e.DiffContent, Label: e.DiffLabel},
-		ConversationContext: e.ConversationContext,
-		IsSensitive:         e.IsSensitive,
-		SubagentID:          e.SubagentID,
-		SubagentType:        e.SubagentType,
-		Phase:               events.Phase(e.Phase),
-		Kind:                events.Kind(e.Kind),
-		ToolCallID:          e.ToolCallID,
+		ID:               e.ID,
+		SessionID:        e.SessionID,
+		Sequence:         e.Sequence,
+		Timestamp:        e.Timestamp,
+		AgentName:        e.AgentName,
+		AgentVersion:     e.AgentVersion,
+		WorkingDirectory: e.WorkingDirectory,
+		ActionType:       events.ActionType(e.ActionType),
+		ToolName:         e.ToolName,
+		ResultStatus:     events.ResultStatus(e.ResultStatus),
+		ErrorMessage:     e.ErrorMessage,
+		DiffContent:      privacy.Text{Value: e.DiffContent, Label: e.DiffLabel},
+		IsSensitive:      e.IsSensitive,
+		SubagentID:       e.SubagentID,
+		SubagentType:     e.SubagentType,
+		Phase:            events.Phase(e.Phase),
+		Kind:             events.Kind(e.Kind),
+		ToolCallID:       e.ToolCallID,
 	}
 
 	if e.LinkedEventID != nil {
@@ -951,6 +1105,8 @@ func entToSession(e *ent.Session) *session.Session {
 		FilesRead:        e.FilesRead,
 		FilesWritten:     e.FilesWritten,
 		CommandsExecuted: e.CommandsExecuted,
+		NetworkRequests:  e.NetworkRequests,
+		EventCount:       e.EventCount,
 		Errors:           e.Errors,
 		SensitiveActions: e.SensitiveActions,
 		BlockedActions:   e.BlockedActions,

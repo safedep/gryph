@@ -16,12 +16,12 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/safedep/gryph/storage/ent/aarmcontextaction"
-	"github.com/safedep/gryph/storage/ent/aarmcontextstate"
 	"github.com/safedep/gryph/storage/ent/aarmdeferredaction"
 	"github.com/safedep/gryph/storage/ent/aarmreceipt"
 	"github.com/safedep/gryph/storage/ent/auditevent"
 	"github.com/safedep/gryph/storage/ent/auditstreamcursor"
+	"github.com/safedep/gryph/storage/ent/contextentry"
+	"github.com/safedep/gryph/storage/ent/contextstate"
 	"github.com/safedep/gryph/storage/ent/eventstreamcursor"
 	"github.com/safedep/gryph/storage/ent/selfaudit"
 	"github.com/safedep/gryph/storage/ent/session"
@@ -32,10 +32,6 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
-	// AarmContextAction is the client for interacting with the AarmContextAction builders.
-	AarmContextAction *AarmContextActionClient
-	// AarmContextState is the client for interacting with the AarmContextState builders.
-	AarmContextState *AarmContextStateClient
 	// AarmDeferredAction is the client for interacting with the AarmDeferredAction builders.
 	AarmDeferredAction *AarmDeferredActionClient
 	// AarmReceipt is the client for interacting with the AarmReceipt builders.
@@ -44,6 +40,10 @@ type Client struct {
 	AuditEvent *AuditEventClient
 	// AuditStreamCursor is the client for interacting with the AuditStreamCursor builders.
 	AuditStreamCursor *AuditStreamCursorClient
+	// ContextEntry is the client for interacting with the ContextEntry builders.
+	ContextEntry *ContextEntryClient
+	// ContextState is the client for interacting with the ContextState builders.
+	ContextState *ContextStateClient
 	// EventStreamCursor is the client for interacting with the EventStreamCursor builders.
 	EventStreamCursor *EventStreamCursorClient
 	// SelfAudit is the client for interacting with the SelfAudit builders.
@@ -61,12 +61,12 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
-	c.AarmContextAction = NewAarmContextActionClient(c.config)
-	c.AarmContextState = NewAarmContextStateClient(c.config)
 	c.AarmDeferredAction = NewAarmDeferredActionClient(c.config)
 	c.AarmReceipt = NewAarmReceiptClient(c.config)
 	c.AuditEvent = NewAuditEventClient(c.config)
 	c.AuditStreamCursor = NewAuditStreamCursorClient(c.config)
+	c.ContextEntry = NewContextEntryClient(c.config)
+	c.ContextState = NewContextStateClient(c.config)
 	c.EventStreamCursor = NewEventStreamCursorClient(c.config)
 	c.SelfAudit = NewSelfAuditClient(c.config)
 	c.Session = NewSessionClient(c.config)
@@ -162,12 +162,12 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	return &Tx{
 		ctx:                ctx,
 		config:             cfg,
-		AarmContextAction:  NewAarmContextActionClient(cfg),
-		AarmContextState:   NewAarmContextStateClient(cfg),
 		AarmDeferredAction: NewAarmDeferredActionClient(cfg),
 		AarmReceipt:        NewAarmReceiptClient(cfg),
 		AuditEvent:         NewAuditEventClient(cfg),
 		AuditStreamCursor:  NewAuditStreamCursorClient(cfg),
+		ContextEntry:       NewContextEntryClient(cfg),
+		ContextState:       NewContextStateClient(cfg),
 		EventStreamCursor:  NewEventStreamCursorClient(cfg),
 		SelfAudit:          NewSelfAuditClient(cfg),
 		Session:            NewSessionClient(cfg),
@@ -190,12 +190,12 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	return &Tx{
 		ctx:                ctx,
 		config:             cfg,
-		AarmContextAction:  NewAarmContextActionClient(cfg),
-		AarmContextState:   NewAarmContextStateClient(cfg),
 		AarmDeferredAction: NewAarmDeferredActionClient(cfg),
 		AarmReceipt:        NewAarmReceiptClient(cfg),
 		AuditEvent:         NewAuditEventClient(cfg),
 		AuditStreamCursor:  NewAuditStreamCursorClient(cfg),
+		ContextEntry:       NewContextEntryClient(cfg),
+		ContextState:       NewContextStateClient(cfg),
 		EventStreamCursor:  NewEventStreamCursorClient(cfg),
 		SelfAudit:          NewSelfAuditClient(cfg),
 		Session:            NewSessionClient(cfg),
@@ -205,7 +205,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		AarmContextAction.
+//		AarmDeferredAction.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -228,8 +228,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AarmContextAction, c.AarmContextState, c.AarmDeferredAction, c.AarmReceipt,
-		c.AuditEvent, c.AuditStreamCursor, c.EventStreamCursor, c.SelfAudit, c.Session,
+		c.AarmDeferredAction, c.AarmReceipt, c.AuditEvent, c.AuditStreamCursor,
+		c.ContextEntry, c.ContextState, c.EventStreamCursor, c.SelfAudit, c.Session,
 	} {
 		n.Use(hooks...)
 	}
@@ -239,8 +239,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AarmContextAction, c.AarmContextState, c.AarmDeferredAction, c.AarmReceipt,
-		c.AuditEvent, c.AuditStreamCursor, c.EventStreamCursor, c.SelfAudit, c.Session,
+		c.AarmDeferredAction, c.AarmReceipt, c.AuditEvent, c.AuditStreamCursor,
+		c.ContextEntry, c.ContextState, c.EventStreamCursor, c.SelfAudit, c.Session,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -249,10 +249,6 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
-	case *AarmContextActionMutation:
-		return c.AarmContextAction.mutate(ctx, m)
-	case *AarmContextStateMutation:
-		return c.AarmContextState.mutate(ctx, m)
 	case *AarmDeferredActionMutation:
 		return c.AarmDeferredAction.mutate(ctx, m)
 	case *AarmReceiptMutation:
@@ -261,6 +257,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AuditEvent.mutate(ctx, m)
 	case *AuditStreamCursorMutation:
 		return c.AuditStreamCursor.mutate(ctx, m)
+	case *ContextEntryMutation:
+		return c.ContextEntry.mutate(ctx, m)
+	case *ContextStateMutation:
+		return c.ContextState.mutate(ctx, m)
 	case *EventStreamCursorMutation:
 		return c.EventStreamCursor.mutate(ctx, m)
 	case *SelfAuditMutation:
@@ -269,272 +269,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Session.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
-	}
-}
-
-// AarmContextActionClient is a client for the AarmContextAction schema.
-type AarmContextActionClient struct {
-	config
-}
-
-// NewAarmContextActionClient returns a client for the AarmContextAction from the given config.
-func NewAarmContextActionClient(c config) *AarmContextActionClient {
-	return &AarmContextActionClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `aarmcontextaction.Hooks(f(g(h())))`.
-func (c *AarmContextActionClient) Use(hooks ...Hook) {
-	c.hooks.AarmContextAction = append(c.hooks.AarmContextAction, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `aarmcontextaction.Intercept(f(g(h())))`.
-func (c *AarmContextActionClient) Intercept(interceptors ...Interceptor) {
-	c.inters.AarmContextAction = append(c.inters.AarmContextAction, interceptors...)
-}
-
-// Create returns a builder for creating a AarmContextAction entity.
-func (c *AarmContextActionClient) Create() *AarmContextActionCreate {
-	mutation := newAarmContextActionMutation(c.config, OpCreate)
-	return &AarmContextActionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of AarmContextAction entities.
-func (c *AarmContextActionClient) CreateBulk(builders ...*AarmContextActionCreate) *AarmContextActionCreateBulk {
-	return &AarmContextActionCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *AarmContextActionClient) MapCreateBulk(slice any, setFunc func(*AarmContextActionCreate, int)) *AarmContextActionCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &AarmContextActionCreateBulk{err: fmt.Errorf("calling to AarmContextActionClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*AarmContextActionCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &AarmContextActionCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for AarmContextAction.
-func (c *AarmContextActionClient) Update() *AarmContextActionUpdate {
-	mutation := newAarmContextActionMutation(c.config, OpUpdate)
-	return &AarmContextActionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *AarmContextActionClient) UpdateOne(_m *AarmContextAction) *AarmContextActionUpdateOne {
-	mutation := newAarmContextActionMutation(c.config, OpUpdateOne, withAarmContextAction(_m))
-	return &AarmContextActionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *AarmContextActionClient) UpdateOneID(id uuid.UUID) *AarmContextActionUpdateOne {
-	mutation := newAarmContextActionMutation(c.config, OpUpdateOne, withAarmContextActionID(id))
-	return &AarmContextActionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for AarmContextAction.
-func (c *AarmContextActionClient) Delete() *AarmContextActionDelete {
-	mutation := newAarmContextActionMutation(c.config, OpDelete)
-	return &AarmContextActionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *AarmContextActionClient) DeleteOne(_m *AarmContextAction) *AarmContextActionDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *AarmContextActionClient) DeleteOneID(id uuid.UUID) *AarmContextActionDeleteOne {
-	builder := c.Delete().Where(aarmcontextaction.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &AarmContextActionDeleteOne{builder}
-}
-
-// Query returns a query builder for AarmContextAction.
-func (c *AarmContextActionClient) Query() *AarmContextActionQuery {
-	return &AarmContextActionQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeAarmContextAction},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a AarmContextAction entity by its id.
-func (c *AarmContextActionClient) Get(ctx context.Context, id uuid.UUID) (*AarmContextAction, error) {
-	return c.Query().Where(aarmcontextaction.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *AarmContextActionClient) GetX(ctx context.Context, id uuid.UUID) *AarmContextAction {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *AarmContextActionClient) Hooks() []Hook {
-	return c.hooks.AarmContextAction
-}
-
-// Interceptors returns the client interceptors.
-func (c *AarmContextActionClient) Interceptors() []Interceptor {
-	return c.inters.AarmContextAction
-}
-
-func (c *AarmContextActionClient) mutate(ctx context.Context, m *AarmContextActionMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&AarmContextActionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&AarmContextActionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&AarmContextActionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&AarmContextActionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown AarmContextAction mutation op: %q", m.Op())
-	}
-}
-
-// AarmContextStateClient is a client for the AarmContextState schema.
-type AarmContextStateClient struct {
-	config
-}
-
-// NewAarmContextStateClient returns a client for the AarmContextState from the given config.
-func NewAarmContextStateClient(c config) *AarmContextStateClient {
-	return &AarmContextStateClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `aarmcontextstate.Hooks(f(g(h())))`.
-func (c *AarmContextStateClient) Use(hooks ...Hook) {
-	c.hooks.AarmContextState = append(c.hooks.AarmContextState, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `aarmcontextstate.Intercept(f(g(h())))`.
-func (c *AarmContextStateClient) Intercept(interceptors ...Interceptor) {
-	c.inters.AarmContextState = append(c.inters.AarmContextState, interceptors...)
-}
-
-// Create returns a builder for creating a AarmContextState entity.
-func (c *AarmContextStateClient) Create() *AarmContextStateCreate {
-	mutation := newAarmContextStateMutation(c.config, OpCreate)
-	return &AarmContextStateCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of AarmContextState entities.
-func (c *AarmContextStateClient) CreateBulk(builders ...*AarmContextStateCreate) *AarmContextStateCreateBulk {
-	return &AarmContextStateCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *AarmContextStateClient) MapCreateBulk(slice any, setFunc func(*AarmContextStateCreate, int)) *AarmContextStateCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &AarmContextStateCreateBulk{err: fmt.Errorf("calling to AarmContextStateClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*AarmContextStateCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &AarmContextStateCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for AarmContextState.
-func (c *AarmContextStateClient) Update() *AarmContextStateUpdate {
-	mutation := newAarmContextStateMutation(c.config, OpUpdate)
-	return &AarmContextStateUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *AarmContextStateClient) UpdateOne(_m *AarmContextState) *AarmContextStateUpdateOne {
-	mutation := newAarmContextStateMutation(c.config, OpUpdateOne, withAarmContextState(_m))
-	return &AarmContextStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *AarmContextStateClient) UpdateOneID(id int) *AarmContextStateUpdateOne {
-	mutation := newAarmContextStateMutation(c.config, OpUpdateOne, withAarmContextStateID(id))
-	return &AarmContextStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for AarmContextState.
-func (c *AarmContextStateClient) Delete() *AarmContextStateDelete {
-	mutation := newAarmContextStateMutation(c.config, OpDelete)
-	return &AarmContextStateDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *AarmContextStateClient) DeleteOne(_m *AarmContextState) *AarmContextStateDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *AarmContextStateClient) DeleteOneID(id int) *AarmContextStateDeleteOne {
-	builder := c.Delete().Where(aarmcontextstate.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &AarmContextStateDeleteOne{builder}
-}
-
-// Query returns a query builder for AarmContextState.
-func (c *AarmContextStateClient) Query() *AarmContextStateQuery {
-	return &AarmContextStateQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeAarmContextState},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a AarmContextState entity by its id.
-func (c *AarmContextStateClient) Get(ctx context.Context, id int) (*AarmContextState, error) {
-	return c.Query().Where(aarmcontextstate.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *AarmContextStateClient) GetX(ctx context.Context, id int) *AarmContextState {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *AarmContextStateClient) Hooks() []Hook {
-	return c.hooks.AarmContextState
-}
-
-// Interceptors returns the client interceptors.
-func (c *AarmContextStateClient) Interceptors() []Interceptor {
-	return c.inters.AarmContextState
-}
-
-func (c *AarmContextStateClient) mutate(ctx context.Context, m *AarmContextStateMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&AarmContextStateCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&AarmContextStateUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&AarmContextStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&AarmContextStateDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown AarmContextState mutation op: %q", m.Op())
 	}
 }
 
@@ -1086,6 +820,272 @@ func (c *AuditStreamCursorClient) mutate(ctx context.Context, m *AuditStreamCurs
 	}
 }
 
+// ContextEntryClient is a client for the ContextEntry schema.
+type ContextEntryClient struct {
+	config
+}
+
+// NewContextEntryClient returns a client for the ContextEntry from the given config.
+func NewContextEntryClient(c config) *ContextEntryClient {
+	return &ContextEntryClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `contextentry.Hooks(f(g(h())))`.
+func (c *ContextEntryClient) Use(hooks ...Hook) {
+	c.hooks.ContextEntry = append(c.hooks.ContextEntry, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `contextentry.Intercept(f(g(h())))`.
+func (c *ContextEntryClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ContextEntry = append(c.inters.ContextEntry, interceptors...)
+}
+
+// Create returns a builder for creating a ContextEntry entity.
+func (c *ContextEntryClient) Create() *ContextEntryCreate {
+	mutation := newContextEntryMutation(c.config, OpCreate)
+	return &ContextEntryCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ContextEntry entities.
+func (c *ContextEntryClient) CreateBulk(builders ...*ContextEntryCreate) *ContextEntryCreateBulk {
+	return &ContextEntryCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ContextEntryClient) MapCreateBulk(slice any, setFunc func(*ContextEntryCreate, int)) *ContextEntryCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ContextEntryCreateBulk{err: fmt.Errorf("calling to ContextEntryClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ContextEntryCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ContextEntryCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ContextEntry.
+func (c *ContextEntryClient) Update() *ContextEntryUpdate {
+	mutation := newContextEntryMutation(c.config, OpUpdate)
+	return &ContextEntryUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ContextEntryClient) UpdateOne(_m *ContextEntry) *ContextEntryUpdateOne {
+	mutation := newContextEntryMutation(c.config, OpUpdateOne, withContextEntry(_m))
+	return &ContextEntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ContextEntryClient) UpdateOneID(id uuid.UUID) *ContextEntryUpdateOne {
+	mutation := newContextEntryMutation(c.config, OpUpdateOne, withContextEntryID(id))
+	return &ContextEntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ContextEntry.
+func (c *ContextEntryClient) Delete() *ContextEntryDelete {
+	mutation := newContextEntryMutation(c.config, OpDelete)
+	return &ContextEntryDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ContextEntryClient) DeleteOne(_m *ContextEntry) *ContextEntryDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ContextEntryClient) DeleteOneID(id uuid.UUID) *ContextEntryDeleteOne {
+	builder := c.Delete().Where(contextentry.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ContextEntryDeleteOne{builder}
+}
+
+// Query returns a query builder for ContextEntry.
+func (c *ContextEntryClient) Query() *ContextEntryQuery {
+	return &ContextEntryQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeContextEntry},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ContextEntry entity by its id.
+func (c *ContextEntryClient) Get(ctx context.Context, id uuid.UUID) (*ContextEntry, error) {
+	return c.Query().Where(contextentry.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ContextEntryClient) GetX(ctx context.Context, id uuid.UUID) *ContextEntry {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ContextEntryClient) Hooks() []Hook {
+	return c.hooks.ContextEntry
+}
+
+// Interceptors returns the client interceptors.
+func (c *ContextEntryClient) Interceptors() []Interceptor {
+	return c.inters.ContextEntry
+}
+
+func (c *ContextEntryClient) mutate(ctx context.Context, m *ContextEntryMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ContextEntryCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ContextEntryUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ContextEntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ContextEntryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ContextEntry mutation op: %q", m.Op())
+	}
+}
+
+// ContextStateClient is a client for the ContextState schema.
+type ContextStateClient struct {
+	config
+}
+
+// NewContextStateClient returns a client for the ContextState from the given config.
+func NewContextStateClient(c config) *ContextStateClient {
+	return &ContextStateClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `contextstate.Hooks(f(g(h())))`.
+func (c *ContextStateClient) Use(hooks ...Hook) {
+	c.hooks.ContextState = append(c.hooks.ContextState, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `contextstate.Intercept(f(g(h())))`.
+func (c *ContextStateClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ContextState = append(c.inters.ContextState, interceptors...)
+}
+
+// Create returns a builder for creating a ContextState entity.
+func (c *ContextStateClient) Create() *ContextStateCreate {
+	mutation := newContextStateMutation(c.config, OpCreate)
+	return &ContextStateCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ContextState entities.
+func (c *ContextStateClient) CreateBulk(builders ...*ContextStateCreate) *ContextStateCreateBulk {
+	return &ContextStateCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ContextStateClient) MapCreateBulk(slice any, setFunc func(*ContextStateCreate, int)) *ContextStateCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ContextStateCreateBulk{err: fmt.Errorf("calling to ContextStateClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ContextStateCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ContextStateCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ContextState.
+func (c *ContextStateClient) Update() *ContextStateUpdate {
+	mutation := newContextStateMutation(c.config, OpUpdate)
+	return &ContextStateUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ContextStateClient) UpdateOne(_m *ContextState) *ContextStateUpdateOne {
+	mutation := newContextStateMutation(c.config, OpUpdateOne, withContextState(_m))
+	return &ContextStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ContextStateClient) UpdateOneID(id int) *ContextStateUpdateOne {
+	mutation := newContextStateMutation(c.config, OpUpdateOne, withContextStateID(id))
+	return &ContextStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ContextState.
+func (c *ContextStateClient) Delete() *ContextStateDelete {
+	mutation := newContextStateMutation(c.config, OpDelete)
+	return &ContextStateDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ContextStateClient) DeleteOne(_m *ContextState) *ContextStateDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ContextStateClient) DeleteOneID(id int) *ContextStateDeleteOne {
+	builder := c.Delete().Where(contextstate.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ContextStateDeleteOne{builder}
+}
+
+// Query returns a query builder for ContextState.
+func (c *ContextStateClient) Query() *ContextStateQuery {
+	return &ContextStateQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeContextState},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ContextState entity by its id.
+func (c *ContextStateClient) Get(ctx context.Context, id int) (*ContextState, error) {
+	return c.Query().Where(contextstate.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ContextStateClient) GetX(ctx context.Context, id int) *ContextState {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ContextStateClient) Hooks() []Hook {
+	return c.hooks.ContextState
+}
+
+// Interceptors returns the client interceptors.
+func (c *ContextStateClient) Interceptors() []Interceptor {
+	return c.inters.ContextState
+}
+
+func (c *ContextStateClient) mutate(ctx context.Context, m *ContextStateMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ContextStateCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ContextStateUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ContextStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ContextStateDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ContextState mutation op: %q", m.Op())
+	}
+}
+
 // EventStreamCursorClient is a client for the EventStreamCursor schema.
 type EventStreamCursorClient struct {
 	config
@@ -1504,12 +1504,11 @@ func (c *SessionClient) mutate(ctx context.Context, m *SessionMutation) (Value, 
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AarmContextAction, AarmContextState, AarmDeferredAction, AarmReceipt,
-		AuditEvent, AuditStreamCursor, EventStreamCursor, SelfAudit, Session []ent.Hook
+		AarmDeferredAction, AarmReceipt, AuditEvent, AuditStreamCursor, ContextEntry,
+		ContextState, EventStreamCursor, SelfAudit, Session []ent.Hook
 	}
 	inters struct {
-		AarmContextAction, AarmContextState, AarmDeferredAction, AarmReceipt,
-		AuditEvent, AuditStreamCursor, EventStreamCursor, SelfAudit,
-		Session []ent.Interceptor
+		AarmDeferredAction, AarmReceipt, AuditEvent, AuditStreamCursor, ContextEntry,
+		ContextState, EventStreamCursor, SelfAudit, Session []ent.Interceptor
 	}
 )

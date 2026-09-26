@@ -17,7 +17,10 @@ import (
 	"github.com/safedep/gryph/aarm/mediation"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/receipt"
+	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/privacy"
+	"github.com/safedep/gryph/core/security"
+	"github.com/safedep/gryph/decision"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/storage/storagetest"
 	"github.com/stretchr/testify/require"
@@ -119,7 +122,11 @@ func WithUUIDSource(s UUIDSource) Option {
 // Tests that need byte-stable receipt hashes use Receipts + Clock + UUIDs
 // directly. Tests that only need to drive the mediator use Mediator.
 type ReferenceBundle struct {
-	Mediator       *aarm.Mediator
+	Mediator *aarm.Mediator
+	// Service runs an event through the decision service with Mediator as
+	// the policy check, as a hook does. The session counters that the
+	// context reads change only on this path.
+	Service        decision.Service
 	Policy         *pdp.Policy
 	PolicyHash     []byte
 	Store          *storage.SQLiteStore
@@ -228,8 +235,13 @@ func NewReferenceMediator(t *testing.T, opts ...Option) *ReferenceBundle {
 	)
 	require.NoError(t, err, "construct reference mediator")
 
+	evaluator := security.New(&security.Config{FailOpen: false})
+	evaluator.RegisterCheck(med)
+	full := func(string) config.LoggingLevel { return config.LoggingFull }
+
 	return &ReferenceBundle{
 		Mediator:       med,
+		Service:        decision.NewLocal(store, evaluator, nil, full),
 		Policy:         policy,
 		PolicyHash:     policy.Hash(),
 		Store:          store,

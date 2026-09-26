@@ -111,6 +111,16 @@ func CommandsExecuted(v int) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldCommandsExecuted, v))
 }
 
+// NetworkRequests applies equality check predicate on the "network_requests" field. It's identical to NetworkRequestsEQ.
+func NetworkRequests(v int) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldNetworkRequests, v))
+}
+
+// EventCount applies equality check predicate on the "event_count" field. It's identical to EventCountEQ.
+func EventCount(v int) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldEventCount, v))
+}
+
 // Errors applies equality check predicate on the "errors" field. It's identical to ErrorsEQ.
 func Errors(v int) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldErrors, v))
@@ -779,6 +789,86 @@ func CommandsExecutedLT(v int) predicate.Session {
 // CommandsExecutedLTE applies the LTE predicate on the "commands_executed" field.
 func CommandsExecutedLTE(v int) predicate.Session {
 	return predicate.Session(sql.FieldLTE(FieldCommandsExecuted, v))
+}
+
+// NetworkRequestsEQ applies the EQ predicate on the "network_requests" field.
+func NetworkRequestsEQ(v int) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldNetworkRequests, v))
+}
+
+// NetworkRequestsNEQ applies the NEQ predicate on the "network_requests" field.
+func NetworkRequestsNEQ(v int) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldNetworkRequests, v))
+}
+
+// NetworkRequestsIn applies the In predicate on the "network_requests" field.
+func NetworkRequestsIn(vs ...int) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldNetworkRequests, vs...))
+}
+
+// NetworkRequestsNotIn applies the NotIn predicate on the "network_requests" field.
+func NetworkRequestsNotIn(vs ...int) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldNetworkRequests, vs...))
+}
+
+// NetworkRequestsGT applies the GT predicate on the "network_requests" field.
+func NetworkRequestsGT(v int) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldNetworkRequests, v))
+}
+
+// NetworkRequestsGTE applies the GTE predicate on the "network_requests" field.
+func NetworkRequestsGTE(v int) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldNetworkRequests, v))
+}
+
+// NetworkRequestsLT applies the LT predicate on the "network_requests" field.
+func NetworkRequestsLT(v int) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldNetworkRequests, v))
+}
+
+// NetworkRequestsLTE applies the LTE predicate on the "network_requests" field.
+func NetworkRequestsLTE(v int) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldNetworkRequests, v))
+}
+
+// EventCountEQ applies the EQ predicate on the "event_count" field.
+func EventCountEQ(v int) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldEventCount, v))
+}
+
+// EventCountNEQ applies the NEQ predicate on the "event_count" field.
+func EventCountNEQ(v int) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldEventCount, v))
+}
+
+// EventCountIn applies the In predicate on the "event_count" field.
+func EventCountIn(vs ...int) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldEventCount, vs...))
+}
+
+// EventCountNotIn applies the NotIn predicate on the "event_count" field.
+func EventCountNotIn(vs ...int) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldEventCount, vs...))
+}
+
+// EventCountGT applies the GT predicate on the "event_count" field.
+func EventCountGT(v int) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldEventCount, v))
+}
+
+// EventCountGTE applies the GTE predicate on the "event_count" field.
+func EventCountGTE(v int) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldEventCount, v))
+}
+
+// EventCountLT applies the LT predicate on the "event_count" field.
+func EventCountLT(v int) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldEventCount, v))
+}
+
+// EventCountLTE applies the LTE predicate on the "event_count" field.
+func EventCountLTE(v int) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldEventCount, v))
 }
 
 // ErrorsEQ applies the EQ predicate on the "errors" field.

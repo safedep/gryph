@@ -2,6 +2,7 @@ package aarm
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -9,12 +10,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/accumulator"
 	"github.com/safedep/gryph/aarm/approval"
+	"github.com/safedep/gryph/aarm/classify"
 	"github.com/safedep/gryph/aarm/identity"
 	"github.com/safedep/gryph/aarm/mediation"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/privacy"
 	coresecurity "github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
 	"github.com/stretchr/testify/assert"
@@ -73,19 +76,22 @@ rules:
 }
 
 type spyAccumulator struct {
+	appendErr         error
+	snapshotErr       error
 	appendCalls       int
 	snapshotCalls     int
 	recordResultCalls int
-	lastAction        *model.Action
+	lastEntry         *model.ContextEntry
+	lastPending       *model.ContextEntry
 	lastSessionID     uuid.UUID
 	lastResult        model.Result
 	snapshot          *model.ContextSnapshot
 }
 
-func (s *spyAccumulator) Append(_ context.Context, a *model.Action) error {
+func (s *spyAccumulator) Append(_ context.Context, e *model.ContextEntry) error {
 	s.appendCalls++
-	s.lastAction = a
-	return nil
+	s.lastEntry = e
+	return s.appendErr
 }
 
 func (s *spyAccumulator) RecordResult(_ context.Context, _ uuid.UUID, r model.Result) error {
@@ -94,9 +100,13 @@ func (s *spyAccumulator) RecordResult(_ context.Context, _ uuid.UUID, r model.Re
 	return nil
 }
 
-func (s *spyAccumulator) Snapshot(_ context.Context, id uuid.UUID) (*model.ContextSnapshot, error) {
+func (s *spyAccumulator) Snapshot(_ context.Context, id uuid.UUID, pending *model.ContextEntry) (*model.ContextSnapshot, error) {
 	s.snapshotCalls++
 	s.lastSessionID = id
+	s.lastPending = pending
+	if s.snapshotErr != nil {
+		return nil, s.snapshotErr
+	}
 	if s.snapshot != nil {
 		return s.snapshot, nil
 	}
@@ -134,7 +144,7 @@ rules:
 
 	assert.Equal(t, 1, spy.appendCalls)
 	assert.Equal(t, 1, spy.snapshotCalls)
-	require.NotNil(t, spy.lastAction)
+	require.NotNil(t, spy.lastEntry)
 	assert.Equal(t, sessID, spy.lastSessionID, "Snapshot must be queried by the action's session id")
 	assert.Equal(t, coresecurity.DecisionGuidance, res.Decision,
 		"PDP should observe the injected snapshot (files_written=15) and match the rule")
@@ -167,8 +177,143 @@ rules:
 	res, err := med.Check(context.Background(), event, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
-	assert.Equal(t, 1, spy.recordResultCalls, "a blocked action must record a terminal context result")
-	assert.Equal(t, model.ResultBlocked, spy.lastResult.Status)
+	require.Equal(t, 1, spy.appendCalls)
+	assert.Equal(t, model.ResultBlocked, spy.lastEntry.Result, "a blocked entry is written with its terminal result")
+	assert.Zero(t, spy.recordResultCalls, "the entry is written once")
+}
+
+func TestMediator_AppendErrorFailMode(t *testing.T) {
+	cases := []struct {
+		name     string
+		action   string
+		approval approval.Decision
+		wantErr  bool
+	}{
+		{name: "allow", action: "allow", wantErr: true},
+		{name: "warn", action: "warn", wantErr: true},
+		{name: "approved escalate", action: "escalate", approval: approval.DecisionApprove, wantErr: true},
+		{name: "block", action: "block"},
+		{name: "denied escalate", action: "escalate", approval: approval.DecisionDeny},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: writes
+    action: ` + tc.action + `
+    match: { action_types: [file_write] }
+    message: "writes"
+`))
+			require.NoError(t, err)
+
+			spy := &spyAccumulator{appendErr: errors.New("database is locked")}
+			rec := &spyReceiptGenerator{}
+			med, err := NewMediator(policy,
+				WithAccumulator(spy),
+				WithReceiptGenerator(rec),
+				WithMediatorConfig(MediatorConfig{LogAllEvaluations: true}),
+				WithApprovalService(&fakeApprovalService{outcome: &approval.Outcome{
+					Decision: tc.approval, Approver: "tester", DecidedAt: time.Now().UTC(),
+				}}),
+			)
+			require.NoError(t, err)
+
+			event := &events.Event{
+				ID:         uuid.New(),
+				SessionID:  uuid.New(),
+				Timestamp:  time.Now(),
+				ActionType: events.ActionFileWrite,
+				AgentName:  "claude-code",
+				Payload:    []byte(`{"path":"main.go"}`),
+			}
+
+			res, err := med.Check(context.Background(), event, nil)
+			require.Equal(t, 1, spy.appendCalls)
+			if !tc.wantErr {
+				require.NoError(t, err, "a failed append must not fail a check that stops the action")
+				assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
+				assert.Len(t, rec.records, 1, "a block keeps its receipt")
+				return
+			}
+			require.ErrorIs(t, err, accumulator.ErrAppend)
+			if tc.action != "escalate" {
+				assert.Empty(t, rec.records, "no receipt records an action that the fail mode can still block")
+			}
+
+			for _, failOpen := range []bool{false, true} {
+				evaluator := coresecurity.New(&coresecurity.Config{FailOpen: failOpen})
+				evaluator.RegisterCheck(med)
+				event.ID = uuid.New()
+				want := coresecurity.DecisionBlock
+				if failOpen {
+					want = coresecurity.DecisionAllow
+				}
+				assert.Equal(t, want, evaluator.Evaluate(context.Background(), event, nil).FinalDecision,
+					"fail_open=%v decides an action that runs without its entry", failOpen)
+			}
+		})
+	}
+}
+
+func TestMediator_FailedDecisionAppendsEntry(t *testing.T) {
+	cases := []struct {
+		name        string
+		condition   string
+		snapshotErr error
+		wantErr     error
+	}{
+		{
+			name:        "snapshot error",
+			condition:   "true",
+			snapshotErr: errors.New("database is locked"),
+			wantErr:     accumulator.ErrSnapshot,
+		},
+		{
+			name:      "evaluation error",
+			condition: "1 / (context.total_actions - context.total_actions) > 0",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: reads
+    action: warn
+    match: { action_types: [file_read] }
+    condition: "` + tc.condition + `"
+`))
+			require.NoError(t, err)
+
+			spy := &spyAccumulator{snapshotErr: tc.snapshotErr, appendErr: errors.New("database is locked")}
+			adapter := mediation.NewHookAdapter(mediation.WithClassifier(classify.NewHeuristic()))
+			med, err := NewMediator(policy, WithAccumulator(spy), WithAdapter(adapter))
+			require.NoError(t, err)
+
+			event := &events.Event{
+				ID:         uuid.New(),
+				SessionID:  uuid.New(),
+				Timestamp:  time.Now(),
+				ActionType: events.ActionFileRead,
+				AgentName:  "claude-code",
+				Payload:    []byte(`{"path":".env"}`),
+			}
+
+			_, err = med.Check(context.Background(), event, nil)
+			require.Error(t, err)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+			}
+			assert.ErrorIs(t, err, accumulator.ErrAppend, "the check error carries the failed append")
+			require.Equal(t, 1, spy.appendCalls, "an action without a decision still gets a context entry")
+			assert.Equal(t, model.ResultError, spy.lastEntry.Result)
+			assert.Empty(t, spy.lastEntry.Decision)
+			assert.Contains(t, spy.lastEntry.Classifications, privacy.ClassSecret)
+		})
+	}
 }
 
 var _ accumulator.Accumulator = (*spyAccumulator)(nil)
@@ -453,7 +598,10 @@ rules: []
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
 	assert.Contains(t, res.Reason, "no verifiable human principal")
 	assert.Equal(t, 1, auditCalls, "identity audit hook must fire once")
-	assert.Equal(t, 0, accum.appendCalls, "denied action must not contribute to context.total_actions")
+	assert.Equal(t, 1, accum.appendCalls, "a denied action is an attempt, so it gets a context entry")
+	require.NotNil(t, accum.lastEntry)
+	assert.Equal(t, model.DecisionBlock, accum.lastEntry.Decision)
+	assert.Equal(t, model.ResultBlocked, accum.lastEntry.Result)
 	assert.Equal(t, 0, accum.snapshotCalls, "denied action must not query the accumulator")
 	require.Len(t, rec.records, 1, "block must still produce a receipt")
 	assert.Equal(t, model.DecisionBlock, rec.records[0].Decision.Decision)

@@ -1,0 +1,32 @@
+# The context entry chain uses hash version 2. A change to a hashed fact of a
+# stored entry breaks the chain, and policy context --verify reports it.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin search.json
+exec gryph _hook claude-code PreToolUse
+stdin read.json
+exec gryph _hook claude-code PreToolUse
+
+exec gryph policy context --verify --all-sessions --format json --no-color
+stdout '"hash_version": 2'
+stdout '"broken": 0'
+
+# Change the tool of the first entry in the database file. The new name has
+# the same length, so the file stays a valid database.
+replace $XDG_DATA_HOME/safedep/gryph/audit.db WebSearch WebSearcx
+! exec gryph policy context --verify --all-sessions --no-color
+stdout 'Context chain verification: FAILED'
+stdout 'stored hash does not match recomputed hash'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: open
+-- search.json --
+{"session_id": "s-chain", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "WebSearch",
+ "tool_input": {"query": "gryph"}, "tool_use_id": "tu-1"}
+-- read.json --
+{"session_id": "s-chain", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "/home/user/project/README.md"}, "tool_use_id": "tu-2"}

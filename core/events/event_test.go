@@ -539,13 +539,6 @@ func TestEvent_DiffContent(t *testing.T) {
 	assert.Contains(t, event.DiffContent.Value, "+++")
 }
 
-func TestEvent_ConversationContext(t *testing.T) {
-	event := NewEvent(uuid.New(), "claude-code", ActionCommandExec)
-	event.ConversationContext = "User asked to build the project"
-
-	assert.Equal(t, "User asked to build the project", event.ConversationContext)
-}
-
 func TestEvent_MarshalJSON_SchemaField(t *testing.T) {
 	event := NewEvent(uuid.New(), "claude-code", ActionFileRead)
 

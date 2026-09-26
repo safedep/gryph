@@ -9,6 +9,7 @@ import (
 	aarm "github.com/safedep/gryph/aarm/conformance"
 	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/core/privacy"
+	"github.com/safedep/gryph/decision"
 	"github.com/safedep/gryph/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,15 +20,16 @@ func TestR2_PriorActionsAvailableInContext(t *testing.T) {
 
 	ref := aarm.NewReferenceMediator(t)
 	first := loadEventFixture(t, "command_exec_safe")
-	_, err := ref.Mediator.Check(context.Background(), first, nil)
+	_, err := ref.Service.Handle(context.Background(), decision.NewHookRequest(first))
 	require.NoError(t, err)
 
 	second := loadEventFixture(t, "command_exec_safe")
+	second.ID = uuid.New()
 	second.SessionID = first.SessionID
-	_, err = ref.Mediator.Check(context.Background(), second, nil)
+	_, err = ref.Service.Handle(context.Background(), decision.NewHookRequest(second))
 	require.NoError(t, err)
 
-	snap, err := ref.Accumulator.Snapshot(context.Background(), first.SessionID)
+	snap, err := ref.Accumulator.Snapshot(context.Background(), first.SessionID, nil)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, snap.TotalActions, 2, "two actions must accumulate into session context")
 	assert.GreaterOrEqual(t, snap.CommandsExecuted, 2)
@@ -41,7 +43,7 @@ func TestR2_ClassificationsTracked(t *testing.T) {
 	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 
-	snap, err := ref.Accumulator.Snapshot(context.Background(), ev.SessionID)
+	snap, err := ref.Accumulator.Snapshot(context.Background(), ev.SessionID, nil)
 	require.NoError(t, err)
 	assert.Contains(t, snap.ClassificationsSeen, string(privacy.ClassSecret),
 		"reading .env must populate classifications_seen with 'secret'")
@@ -59,7 +61,7 @@ func TestR2_FailSafeOnNoClassifier(t *testing.T) {
 	_, err := ref.Mediator.Check(context.Background(), ev, nil)
 	require.NoError(t, err)
 
-	snap, err := ref.Accumulator.Snapshot(context.Background(), ev.SessionID)
+	snap, err := ref.Accumulator.Snapshot(context.Background(), ev.SessionID, nil)
 	require.NoError(t, err)
 	assert.Contains(t, snap.ClassificationsSeen, string(privacy.ClassUnknownSensitive),
 		"actions with no other classification must surface as unknown_sensitive (fail-safe)")

@@ -36,7 +36,6 @@ func fullRequest() *HookRequest {
 	event.Payload = json.RawMessage(`{"command":"ls"}`)
 	event.DiffContent = privacy.NewText("diff")
 	event.RawEvent = json.RawMessage(`{"raw":true}`)
-	event.ConversationContext = "context"
 	event.IsSensitive = true
 	event.SubagentID = "sub-1"
 	event.SubagentType = "Explore"
@@ -235,7 +234,7 @@ func TestLocal_Handle(t *testing.T) {
 	}{
 		{name: "allow", wantDecision: VerdictOf(security.DecisionAllow), wantStatus: events.ResultSuccess, wantWritten: 1, wantPersisted: 1},
 		{name: "block", checks: []security.Check{blockCheck{}}, wantDecision: VerdictOf(security.DecisionBlock),
-			wantReason: "blocked by test", wantStatus: events.ResultBlocked, wantBlocked: 1, wantPersisted: 1},
+			wantReason: "blocked by test", wantStatus: events.ResultBlocked, wantBlocked: 1, wantWritten: 1, wantPersisted: 1},
 		{name: "guidance", checks: []security.Check{guidanceCheck{}}, wantDecision: VerdictOf(security.DecisionGuidance),
 			wantGuidance: "be careful", wantStatus: events.ResultSuccess, wantWritten: 1, wantPersisted: 1},
 	}
@@ -438,11 +437,11 @@ func (f *faultStore) SaveSession(ctx context.Context, sess *session.Session) err
 	return f.Store.SaveSession(ctx, sess)
 }
 
-func (f *faultStore) SaveEvent(ctx context.Context, event *events.Event) error {
+func (f *faultStore) RecordEvent(ctx context.Context, event *events.Event, counts session.Counts) error {
 	if f.failSaveEvent {
 		return errors.New("disk full")
 	}
-	return f.Store.SaveEvent(ctx, event)
+	return f.Store.RecordEvent(ctx, event, counts)
 }
 
 func TestLocal_Handle_StoreFaults(t *testing.T) {

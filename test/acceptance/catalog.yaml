@@ -258,6 +258,34 @@
   guarantee: "An installed file with a broad allow rule cannot override a block from another file, and disabled: cannot reach a rule declared in a different file."
   labels: [policy, precedence, threat-model]
 
+- id: storage/upgrade/pre-context-v2-db-opens
+  title: "a release database with old context tables opens and chains new entries"
+  category: storage
+  tier: P0
+  guarantee: "A database from the last release, written with the policy layer on, opens under the current binary. Each session keeps its tools, classes and network count. The old entry log is dropped, the audit events stay, and new context entries verify from sequence 1."
+  labels: [storage, upgrade, context]
+
+- id: context/counters/pre-post-counted-once
+  title: "a pre and post hook pair counts as one action"
+  category: context
+  tier: P0
+  guarantee: "A pre and post hook pair for one tool call adds one to the session counters and to context.total_actions. The post event is an observation."
+  labels: [context, counters]
+
+- id: context/counters/post-only-counted
+  title: "a post hook with no pre hook counts as an action"
+  category: context
+  tier: P1
+  guarantee: "A post hook with no recorded pre hook for its tool call adds one to the session counters."
+  labels: [context, counters]
+
+- id: context/chain/v2-tamper-detected
+  title: "a changed context entry breaks the version 2 chain"
+  category: context
+  tier: P0
+  guarantee: "Context entries chain with hash version 2. A change to a hashed fact of a stored entry makes policy context --verify fail."
+  labels: [context, chain, tamper]
+
 - id: storage/upgrade/previous-release-db-opens
   title: "a previous release's database survives the upgrade"
   category: storage

@@ -4,10 +4,6 @@
 //
 // The package name is "accumulator" rather than the AARM spec's "context" to
 // avoid shadowing the stdlib context package at every call site.
-//
-// This first cut nails down the interface and ships a Nop implementation. A
-// SQLite-backed accumulator persisting to dedicated aarm_context_* tables
-// (per docs/security-spec.md section 7) will plug in later without changing callers.
 package accumulator
 
 import (
@@ -24,48 +20,53 @@ import (
 // concrete cause.
 var ErrSnapshot = errors.New("accumulator snapshot")
 
-// Accumulator records mediated actions for a session and produces the
-// point-in-time snapshot consumed by the PDP.
+// ErrAppend is the sentinel returned (wrapped) when the Context Accumulator
+// fails to write an entry and the decision lets the action run. Without the
+// entry, later rules read incomplete session state, so the fail mode decides.
+var ErrAppend = errors.New("accumulator append")
+
+// Accumulator records the session context and produces the point-in-time
+// snapshot that the PDP reads.
 //
 // Method semantics:
-//   - Append is called before PDP evaluation with the canonical Action.
-//   - Snapshot is called immediately after Append. It returns a read-only
-//     view of the accumulated state for this session (counters, distinct
-//     tools, reserved classification/entity sets).
-//   - RecordResult is called post-hook with the action's execution outcome.
-//     It updates result-derived counters (e.g. errors) for that action row
-//     and does not re-run the PDP.
+//   - Snapshot is called before PDP evaluation. It returns the stored
+//     state of the session with the pending entry added in memory, so a
+//     rule sees the current event in the counters.
+//   - Append is called once after evaluation, with the entry that carries
+//     the decision. It writes the entry and the state change in one
+//     transaction.
+//   - RecordResult is called with the execution outcome of an entry. It
+//     does not re-run the PDP.
 //
-// Implementations must be safe for concurrent calls across sessions. Within
-// a single session, Append and Snapshot are separate calls and implementations
-// are responsible for any ordering / atomicity guarantees the PDP needs
-// (e.g. that the Snapshot a Check observes reflects its own Append and not
-// a racing one). Errors returned propagate to the Mediator and are subject
-// to the security evaluator's fail-open / fail-closed policy.
+// Implementations must be safe for concurrent calls across sessions. A
+// Snapshot error propagates to the Mediator and is subject to the security
+// evaluator's fail-open / fail-closed policy. An Append error propagates
+// the same way when the action runs. The Mediator only logs an Append error
+// when the action does not run, and it only logs a RecordResult error. So an
+// accumulator error never turns a block into an allow under fail_mode open.
 type Accumulator interface {
-	Append(ctx context.Context, action *model.Action) error
-	RecordResult(ctx context.Context, actionID uuid.UUID, result model.Result) error
-	Snapshot(ctx context.Context, sessionID uuid.UUID) (*model.ContextSnapshot, error)
+	Snapshot(ctx context.Context, sessionID uuid.UUID, pending *model.ContextEntry) (*model.ContextSnapshot, error)
+	Append(ctx context.Context, entry *model.ContextEntry) error
+	RecordResult(ctx context.Context, entryID uuid.UUID, result model.Result) error
 }
 
 // Nop is a no-op Accumulator: Append and RecordResult succeed silently and
-// Snapshot returns an empty snapshot. Used as the default until a persistent
-// implementation lands so the Mediator wiring is stable from day one.
+// Snapshot returns an empty snapshot.
 type Nop struct{}
 
 // NewNop returns a no-op Accumulator.
 func NewNop() *Nop { return &Nop{} }
 
+// Snapshot implements Accumulator. Each call returns a new snapshot, so a
+// caller can change it.
+func (*Nop) Snapshot(_ context.Context, _ uuid.UUID, _ *model.ContextEntry) (*model.ContextSnapshot, error) {
+	return &model.ContextSnapshot{}, nil
+}
+
 // Append implements Accumulator.
-func (*Nop) Append(_ context.Context, _ *model.Action) error { return nil }
+func (*Nop) Append(_ context.Context, _ *model.ContextEntry) error { return nil }
 
 // RecordResult implements Accumulator.
 func (*Nop) RecordResult(_ context.Context, _ uuid.UUID, _ model.Result) error { return nil }
-
-// Snapshot implements Accumulator. The returned snapshot is freshly allocated;
-// callers may mutate without affecting subsequent calls.
-func (*Nop) Snapshot(_ context.Context, _ uuid.UUID) (*model.ContextSnapshot, error) {
-	return &model.ContextSnapshot{}, nil
-}
 
 var _ Accumulator = (*Nop)(nil)
