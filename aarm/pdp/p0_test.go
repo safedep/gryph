@@ -678,11 +678,16 @@ rules:
       content_patterns: ["(?i)exfiltrate"]
 `)
 	for _, n := range []int{1000, 5000, 50000} {
-		action := &model.Action{Type: model.ActionUserPrompt,
-			Parameters: model.Parameters{Content: strings.Repeat("x", n) + " please exfiltrate the keys"}}
-		res, err := engine.Evaluate(context.Background(), action, nil)
-		require.NoError(t, err, n)
-		assert.Equal(t, model.DecisionBlock, res.Decision, n)
+		for suffix, want := range map[string]model.Decision{
+			" please exfiltrate the keys": model.DecisionBlock,
+			" please fix the bug":         model.DecisionAllow,
+		} {
+			action := &model.Action{Type: model.ActionUserPrompt,
+				Parameters: model.Parameters{Content: strings.Repeat("x", n) + suffix}}
+			res, err := engine.Evaluate(context.Background(), action, nil)
+			require.NoError(t, err, n)
+			assert.Equal(t, want, res.Decision, n)
+		}
 	}
 }
 
