@@ -29,6 +29,10 @@ const (
 	// Normal text, such as "acts as" in a README, often holds a weak phrase.
 	// Two hits stay below the threshold, so only a mix of phrases passes it.
 	MaxHitsPerWeakIndicator = 2
+	// MaxWeakScore caps the sum of all weak indicators below the documented
+	// threshold of 0.5. A README for an LLM app often names two weak phrases,
+	// so only a strong phrase can take the score past the threshold.
+	MaxWeakScore float32 = 0.45
 )
 
 // Scorer returns an injection-likelihood score in the range [0.0, 1.0] for an
@@ -46,7 +50,8 @@ type Scorer interface {
 // words. The first word can take s, ed or ing. The last word can take a
 // common suffix (s, es, d, ed, ly). Each match contributes PerMatchWeight,
 // up to MaxHitsPerIndicator for a strong indicator and
-// MaxHitsPerWeakIndicator for a weak one, capped at MaxScore.
+// MaxHitsPerWeakIndicator for a weak one. The weak indicators add at most
+// MaxWeakScore together, and the total is capped at MaxScore.
 type Heuristic struct {
 	indicators []indicator
 }
@@ -171,19 +176,15 @@ func (h *Heuristic) Score(action *model.Action) float32 {
 	}
 	strong, weak := normalize(content, true), normalize(content, false)
 
-	var score float32
+	var strongScore, weakScore float32
 	for _, ind := range h.indicators {
-		text := strong
 		if ind.weak {
-			text = weak
+			weakScore += PerMatchWeight * float32(len(ind.pattern.FindAllStringIndex(weak, ind.maxHits)))
+			continue
 		}
-		hits := len(ind.pattern.FindAllStringIndex(text, ind.maxHits))
-		score += PerMatchWeight * float32(hits)
-		if score >= MaxScore {
-			return MaxScore
-		}
+		strongScore += PerMatchWeight * float32(len(ind.pattern.FindAllStringIndex(strong, ind.maxHits)))
 	}
-	return score
+	return min(strongScore+min(weakScore, MaxWeakScore), MaxScore)
 }
 
 // scored reports whether the scorer reads the action. It reads a tool call,
