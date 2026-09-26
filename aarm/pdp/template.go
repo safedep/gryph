@@ -1,6 +1,13 @@
 package pdp
 
-import "github.com/safedep/gryph/aarm/model"
+import (
+	"reflect"
+	"strings"
+	"text/template"
+	"text/template/parse"
+
+	"github.com/safedep/gryph/aarm/model"
+)
 
 type templateData struct {
 	Action  templateAction
@@ -119,4 +126,84 @@ func newTemplateContext(snapshot *model.ContextSnapshot) templateContext {
 		IntentAvailable:     snapshot.IntentAvailable,
 		ActionsSinceIntent:  snapshot.ActionsSinceIntent,
 	}
+}
+
+// unknownTemplateField returns the first field path of the template that
+// templateData does not have, such as ".Context.Drift". It walks every branch
+// of if and else, so a field in a branch that empty data skips is found too.
+// Inside range and with the dot changes, so it checks only their pipelines.
+func unknownTemplateField(tmpl *template.Template) string {
+	if tmpl.Tree == nil {
+		return ""
+	}
+	var walk func(n parse.Node) string
+	walkAll := func(nodes ...parse.Node) string {
+		for _, n := range nodes {
+			if n == nil || reflect.ValueOf(n).IsNil() {
+				continue
+			}
+			if f := walk(n); f != "" {
+				return f
+			}
+		}
+		return ""
+	}
+	walk = func(n parse.Node) string {
+		switch n := n.(type) {
+		case *parse.ListNode:
+			for _, c := range n.Nodes {
+				if f := walk(c); f != "" {
+					return f
+				}
+			}
+		case *parse.ActionNode:
+			return walkAll(n.Pipe)
+		case *parse.PipeNode:
+			for _, c := range n.Cmds {
+				if f := walkAll(c); f != "" {
+					return f
+				}
+			}
+		case *parse.CommandNode:
+			return walkAll(n.Args...)
+		case *parse.IfNode:
+			return walkAll(n.Pipe, n.List, n.ElseList)
+		case *parse.RangeNode:
+			return walkAll(n.Pipe)
+		case *parse.WithNode:
+			return walkAll(n.Pipe)
+		case *parse.FieldNode:
+			if !hasFieldPath(reflect.TypeOf(templateData{}), n.Ident) {
+				return "." + strings.Join(n.Ident, ".")
+			}
+		}
+		return ""
+	}
+	return walk(tmpl.Root)
+}
+
+// hasFieldPath reports whether the type has the chain of fields or methods.
+// A map accepts any key.
+func hasFieldPath(t reflect.Type, path []string) bool {
+	for _, name := range path {
+		if _, ok := t.MethodByName(name); ok {
+			return true
+		}
+		if t.Kind() == reflect.Pointer {
+			t = t.Elem()
+		}
+		switch t.Kind() {
+		case reflect.Map:
+			return true
+		case reflect.Struct:
+			f, ok := t.FieldByName(name)
+			if !ok {
+				return false
+			}
+			t = f.Type
+		default:
+			return false
+		}
+	}
+	return true
 }

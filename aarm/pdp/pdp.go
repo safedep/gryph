@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"io"
 	"maps"
 	"path/filepath"
 	"regexp"
@@ -502,13 +501,12 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 		if err != nil {
 			return cr, fmt.Errorf("rule %q message template: %w", rule.ID, err)
 		}
-		// A field that the template data does not have fails every
-		// render, so validation rejects it. A load only warns, so that a
-		// template typo in one rule does not stop every hook after an
-		// upgrade. Other errors on empty data, such as an index out of
-		// range, can pass at runtime.
-		if err := tmpl.Execute(io.Discard, templateData{}); err != nil && strings.Contains(err.Error(), "can't evaluate field") {
-			cr.strictErr = fmt.Errorf("rule %q message template: %w", rule.ID, err)
+		// A field that the template data does not have fails every render
+		// that reaches it, so validation rejects it. A load only warns, so
+		// that a template typo in one rule does not stop every hook after an
+		// upgrade.
+		if field := unknownTemplateField(tmpl); field != "" {
+			cr.strictErr = fmt.Errorf("rule %q message template: can't evaluate field %s", rule.ID, field)
 		}
 		cr.message = tmpl
 		cr.hasMessageTemplate = true

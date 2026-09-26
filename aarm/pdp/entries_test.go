@@ -239,6 +239,24 @@ rules:
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "can't evaluate field")
 
+	for _, message := range []string{
+		"{{if .Action.Hosts}}{{.Context.Drift}}{{end}}",
+		"{{if .Action.Hosts}}ok{{else}}{{.Action.Nope}}{{end}}",
+		"{{with .Action.Hosts}}{{index . 0}}{{end}}{{.Rule.Nope}}",
+	} {
+		policy, err = ParsePolicy([]byte("version: \"1\"\nrules:\n  - id: branch\n    action: warn\n    message: '" + message + "'\n"))
+		require.NoError(t, err, message)
+		assert.ErrorContains(t, CheckStrict(policy), "can't evaluate field", message)
+	}
+	for _, message := range []string{
+		"{{range .Action.Hosts}}{{.}}{{end}} {{.Rule.ID}} {{.Context.TotalActions}}",
+		"{{with .Action.Params}}{{.Command}}{{end}}",
+	} {
+		policy, err = ParsePolicy([]byte("version: \"1\"\nrules:\n  - id: good\n    action: warn\n    message: '" + message + "'\n"))
+		require.NoError(t, err, message)
+		assert.NoError(t, CheckStrict(policy), message)
+	}
+
 	_, err = ParsePolicy([]byte(`
 version: "1"
 rules:
