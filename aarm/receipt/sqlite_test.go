@@ -408,8 +408,8 @@ func TestSQLiteGenerator_RecordWritesHashV2(t *testing.T) {
 	require.Len(t, r.ContentSalt, contentSaltSize)
 	command, err := canonical.MarshalJSON(map[string]interface{}{"command": in.Action.Parameters.Command})
 	require.NoError(t, err)
-	assert.Equal(t, commit(r.ContentSalt, command), r.CommandDigest, "the commitment covers the redacted value")
-	assert.Equal(t, commit(r.ContentSalt, []byte("https://api.example.com")), r.URLDigest)
+	assert.Equal(t, commit(commitKindCommand, r.ContentSalt, command), r.CommandDigest, "the commitment covers the redacted value")
+	assert.Equal(t, commit(commitKindURL, r.ContentSalt, []byte("https://api.example.com")), r.URLDigest)
 	assert.NotEqual(t, privacy.Digest(in.Action.Parameters.Command), r.CommandDigest, "a plain digest can be reversed")
 	assert.Empty(t, VerifyChain([]ChainRow{ChainRowFromReceipt(r)}))
 

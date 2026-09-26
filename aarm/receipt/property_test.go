@@ -197,8 +197,7 @@ func TestProperty_V2ContentRemovalVerifies(t *testing.T) {
 		rows := buildPropertyChain(t, uuid.New(), int(n))
 		for i := range rows {
 			if rows[i].Fields.HashVersion == HashV2 {
-				delete(rows[i].Fields.ActionPayload, "command")
-				rows[i].Fields.ActionPayload["url"] = privacy.RedactedValue
+				projectChainRow(&rows[i])
 			}
 		}
 		if breaks := VerifyChain(rows); len(breaks) != 0 {
@@ -208,6 +207,32 @@ func TestProperty_V2ContentRemovalVerifies(t *testing.T) {
 		return true
 	}
 	require.NoError(t, quick.Check(property, cfg))
+}
+
+func TestProperty_V2UnprojectedContentRemovalDetected(t *testing.T) {
+	cfg := testchain.PropertyConfig(t)
+	property := func(n testchain.ChainSize) bool {
+		rows := buildPropertyChain(t, uuid.New(), int(n))
+		last := &rows[len(rows)-1]
+		if last.Fields.HashVersion != HashV2 {
+			return true
+		}
+		delete(last.Fields.ActionPayload, "command")
+		last.Fields.ActionPayload["url"] = privacy.RedactedValue
+		return len(VerifyChain(rows)) > 0
+	}
+	require.NoError(t, quick.Check(property, cfg))
+}
+
+// projectChainRow removes the content as an export profile does: it
+// redacts the command and the URL, drops the args and the salt, and marks
+// the row projected.
+func projectChainRow(r *ChainRow) {
+	delete(r.Fields.ActionPayload, "args")
+	r.Fields.ActionPayload["command"] = privacy.RedactedValue
+	r.Fields.ActionPayload["url"] = privacy.RedactedValue
+	r.ContentSalt = nil
+	r.Projected = true
 }
 
 func TestProperty_AnyFieldTamperDetected(t *testing.T) {
