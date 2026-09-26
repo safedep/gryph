@@ -221,10 +221,11 @@ func (l launcher) matchSubcommand(args []string) int {
 }
 
 func trimNPMVersion(pkg string) string {
-	if i := strings.LastIndex(pkg, "@"); i > 0 {
-		return pkg[:i]
+	i := strings.LastIndex(pkg, "@")
+	if i <= 0 || strings.ContainsAny(pkg[i+1:], ":/") {
+		return pkg
 	}
-	return pkg
+	return pkg[:i]
 }
 
 func trimPyPIVersion(pkg string) string {
