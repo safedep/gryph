@@ -1,14 +1,14 @@
-package agent
+package decision
 
 import (
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 )
 
-// ApplyLoggingLevel strips fields from the event based on the configured
+// applyLoggingLevel strips fields from the event based on the configured
 // logging level. Must be called after parsing and before saving. Sensitive
 // events have their content stripped unconditionally regardless of level.
-func ApplyLoggingLevel(event *events.Event, level config.LoggingLevel) {
+func applyLoggingLevel(event *events.Event, level config.LoggingLevel) {
 	if event.IsSensitive {
 		event.RawEvent = nil
 		event.DiffContent = ""

@@ -6,17 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
-	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
-	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
-	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/security"
-	"github.com/safedep/gryph/core/session"
-	"github.com/safedep/gryph/utils/projectdetection"
+	"github.com/safedep/gryph/decision"
 	"github.com/spf13/cobra"
 )
 
@@ -53,7 +48,7 @@ func NewHookCmd() *cobra.Command {
 				return fmt.Errorf("failed to read stdin: %w", err)
 			}
 
-			hookErr := runHook(ctx, app, agentName, hookType, rawData)
+			hookErr := runHook(ctx, app.Registry, app.DecisionService(), agentName, hookType, rawData)
 			if hookErr != nil && !isExitError(hookErr) {
 				logHookError(ctx, app, agentName, hookType, len(rawData), rawData, hookErr)
 			}
@@ -65,9 +60,10 @@ func NewHookCmd() *cobra.Command {
 	return cmd
 }
 
-// runHook executes the core hook logic.
-func runHook(ctx context.Context, app *App, agentName, hookType string, rawData []byte) error {
-	adapter, ok := app.Registry.Get(agentName)
+// runHook parses the agent payload, gets a decision from the decision
+// service, and renders the response.
+func runHook(ctx context.Context, registry *agent.Registry, svc decision.Service, agentName, hookType string, rawData []byte) error {
+	adapter, ok := registry.Get(agentName)
 	if !ok {
 		return fmt.Errorf("unknown agent: %s", agentName)
 	}
@@ -77,134 +73,34 @@ func runHook(ctx context.Context, app *App, agentName, hookType string, rawData 
 		return fmt.Errorf("failed to parse event: %w", err)
 	}
 
-	// Order matters: redact configured patterns before the level filter strips
-	// fields, so we never persist or log unredacted user content.
-	agent.RedactEvent(event, app.PrivacyChecker)
-	agent.ApplyLoggingLevel(event, app.Config.GetAgentLoggingLevel(agentName))
-
-	sess, err := app.Store.GetSession(ctx, event.SessionID)
+	resp, err := svc.Handle(ctx, decision.NewHookRequest(event))
 	if err != nil {
-		return fmt.Errorf("failed to get session: %w", err)
+		return err
 	}
 
-	if sess == nil {
-		sess = session.NewSessionWithID(event.SessionID, agentName)
-		sess.AgentSessionID = event.AgentSessionID
-		sess.WorkingDirectory = event.WorkingDirectory
-		sess.TranscriptPath = event.TranscriptPath
-
-		if event.WorkingDirectory != "" {
-			if info, err := projectdetection.DetectProject(event.WorkingDirectory); err == nil && info != nil && info.Name != "" {
-				sess.ProjectName = info.Name
-			} else {
-				sess.ProjectName = filepath.Base(event.WorkingDirectory)
-			}
-		}
-
-		if err := app.Store.SaveSession(ctx, sess); err != nil {
-			existing, getErr := app.Store.GetSession(ctx, event.SessionID)
-			if getErr != nil || existing == nil {
-				return fmt.Errorf("failed to save session: %w", err)
-			}
-
-			sess = existing
-		}
-	}
-
-	if sess.TranscriptPath == "" && event.TranscriptPath != "" {
-		sess.TranscriptPath = event.TranscriptPath
-	}
-
-	securityResult := app.Security.Evaluate(session.WithSession(ctx, sess), event)
-	if !securityResult.IsAllowed() {
-		event.ResultStatus = events.ResultBlocked
-		event.ErrorMessage = securityResult.BlockReason
-		event.Sequence = sess.TotalActions + 1
-
-		if err := app.Store.SaveEvent(ctx, event); err != nil {
-			log.Errorf("failed to save blocked event: %v", err)
-		}
-
-		sess.TotalActions++
-		sess.BlockedActions++
-		if event.IsSensitive {
-			sess.SensitiveActions++
-		}
-
-		if err := app.Store.UpdateSession(ctx, sess); err != nil {
-			log.Errorf("failed to update session for blocked event: %v", err)
-		}
-
-		return sendResponse(adapter, hookType, agent.DecisionBlock, securityResult.BlockReason)
-	}
-
-	event.Sequence = sess.TotalActions + 1
-
-	if err := app.Store.SaveEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to save event: %w", err)
-	}
-
-	sess.TotalActions++
-	switch event.ActionType {
-	case events.ActionFileRead:
-		sess.FilesRead++
-	case events.ActionFileWrite:
-		sess.FilesWritten++
-	case events.ActionCommandExec:
-		sess.CommandsExecuted++
-	}
-
-	if event.ResultStatus == events.ResultError {
-		sess.Errors++
-	}
-
-	if event.IsSensitive {
-		sess.SensitiveActions++
-	}
-
-	if err := app.Store.UpdateSession(ctx, sess); err != nil {
-		return fmt.Errorf("failed to update session: %w", err)
-	}
-
-	if event.ActionType == events.ActionSessionEnd {
-		sess.End()
-		collectSessionCost(sess)
-		if err := app.Store.UpdateSession(ctx, sess); err != nil {
-			return fmt.Errorf("failed to end session: %w", err)
-		}
-	}
-
-	recordAllowedAarmResult(ctx, app, securityResult, event)
-
-	if securityResult.FinalDecision == security.DecisionGuidance {
-		return sendResponse(adapter, hookType, agent.DecisionGuidance, securityResult.AggregatedGuidance())
-	}
-	return sendResponse(adapter, hookType, agent.DecisionAllow, "")
+	hookDecision, detail := renderDecision(resp)
+	return sendResponse(adapter, hookType, hookDecision, detail)
 }
 
-// recordAllowedAarmResult fans out the post-hook execution outcome to the
-// AARM Mediator on the allow path. The wrapper only sees the hook's own
-// exit, so the recorded status is always ResultSuccess. Future post-hook
-// adapters surfacing real execution outcomes will plug in here.
-func recordAllowedAarmResult(ctx context.Context, app *App, result *security.Result, event *events.Event) {
-	if app == nil || result == nil {
-		return
+// renderDecision maps a service response to the agent decision. A decision
+// that this binary does not know comes from a newer service, and a missing
+// decision comes from a broken one. Both block.
+func renderDecision(resp *decision.HookResponse) (agent.HookDecision, string) {
+	if resp.Decision == "" {
+		return agent.DecisionBlock, "gryph: the decision service returned no decision"
 	}
-	med := app.AarmMediator()
-	if med == nil {
-		return
+	d, ok := resp.Decision.Decision()
+	if !ok {
+		return agent.DecisionBlock, fmt.Sprintf("gryph: unknown decision %q", string(resp.Decision))
 	}
-	actionID, sessionID, sequence := result.AarmRef()
-	if actionID == uuid.Nil && sequence == 0 {
-		return
-	}
-	outcome := model.Result{Status: model.ResultSuccess}
-	if event != nil && event.ResultStatus == events.ResultError {
-		outcome.Status = model.ResultError
-		outcome.Error = event.ErrorMessage
-	}
-	if err := med.RecordResult(ctx, actionID, sessionID, sequence, outcome); err != nil {
-		log.Warnf("aarm: post-hook record result: %v", err)
+
+	switch d {
+	case security.DecisionAllow:
+		return agent.DecisionAllow, ""
+	case security.DecisionGuidance:
+		return agent.DecisionGuidance, resp.Guidance
+	default:
+		return agent.DecisionBlock, resp.Reason
 	}
 }
 

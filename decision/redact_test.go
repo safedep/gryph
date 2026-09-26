@@ -1,4 +1,4 @@
-package agent
+package decision
 
 import (
 	"encoding/json"
@@ -26,7 +26,7 @@ func TestRedactEvent_FileWrite(t *testing.T) {
 		NewString:      "api_key=new",
 	}))
 
-	RedactEvent(event, checker)
+	redactEvent(event, checker)
 
 	assert.True(t, json.Valid(event.RawEvent), "RawEvent must remain valid JSON after redaction")
 	assert.Contains(t, string(event.RawEvent), "[REDACTED]")
@@ -56,7 +56,7 @@ func TestRedactEvent_CommandExec(t *testing.T) {
 		StderrPreview: "no leak here",
 	}))
 
-	RedactEvent(event, checker)
+	redactEvent(event, checker)
 
 	var result events.CommandExecPayload
 	require.NoError(t, json.Unmarshal(event.Payload, &result))
@@ -78,7 +78,7 @@ func TestRedactEvent_ToolUse(t *testing.T) {
 		OutputPreview: "secret=abc",
 	}))
 
-	RedactEvent(event, checker)
+	redactEvent(event, checker)
 
 	var result events.ToolUsePayload
 	require.NoError(t, json.Unmarshal(event.Payload, &result))
@@ -104,7 +104,7 @@ func TestRedactEvent_RedactsSensitive(t *testing.T) {
 		ContentPreview: "password=hunter2",
 	}))
 
-	RedactEvent(event, checker)
+	redactEvent(event, checker)
 
 	assert.Equal(t, "[REDACTED]", event.DiffContent)
 	var result events.FileWritePayload
@@ -120,7 +120,7 @@ func TestRedactEvent_NilChecker(t *testing.T) {
 		ContentPreview: "password=hunter2",
 	}))
 
-	RedactEvent(event, nil)
+	redactEvent(event, nil)
 
 	assert.Equal(t, "password=hunter2", event.DiffContent)
 }
@@ -136,7 +136,7 @@ func TestRedactEvent_SubagentStop(t *testing.T) {
 		LastAssistantMessage: "the deploy key is password=hunter2",
 	}))
 
-	RedactEvent(event, checker)
+	redactEvent(event, checker)
 
 	var p events.SubagentStopPayload
 	require.NoError(t, json.Unmarshal(event.Payload, &p))
@@ -153,7 +153,7 @@ func TestRedactEvent_SessionEnd(t *testing.T) {
 		Reason: "wrapped up, token=xyz789 was rotated",
 	}))
 
-	RedactEvent(event, checker)
+	redactEvent(event, checker)
 
 	var p events.SessionEndPayload
 	require.NoError(t, json.Unmarshal(event.Payload, &p))

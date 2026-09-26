@@ -14,8 +14,10 @@ guidance decision, and records a tamper-evident receipt. The requirement set
 
 The layer implements the `core/security.Check` interface. `cli/root.go`
 registers `lazyPolicyCheck` (in `cli/policy.go`) with the security `Evaluator`.
-Hook processing calls `app.Security.Evaluate` in `cli/hook.go`, which calls the
-check.
+The hook side in `cli/hook.go` parses the agent payload and calls
+`decision.Service.Handle`. The in-process `decision.Local` redacts, applies
+the logging level, upserts the session, and calls `app.Security.Evaluate`,
+which calls the check. `cli/hook.go` then renders the response.
 
 - `lazyPolicyCheck` defers policy load until the first hook event. A broken
   policy file must not lock the user out of `gryph policy validate` and `test`.
@@ -24,6 +26,14 @@ check.
   `config.PolicyConfig`, opens sources, and installs every optional component
   through `MediatorOption` values.
 - The `Mediator` is the AARM implementation of `security.Check`.
+- `decision.Local` takes the agent name from `Event.AgentName` only. The
+  request has no second agent field, so a caller cannot select a logging level
+  for an agent other than the event agent.
+- Known gap: `decision.Local` applies the logging level before it calls
+  `Evaluate`. At `logging.level: minimal` the level strips the tool input and
+  the write content, so policy rules do not see them. For a sensitive event
+  the level strips the payload content and `FullContent` at every level,
+  `full` included. PR #68 moves the strip after the evaluation.
 
 ## Request flow
 
@@ -41,7 +51,7 @@ hook event
   -> core/security.CheckResult
 ```
 
-Post-hook, `cli/hook.go` calls `Mediator.RecordResult` on the allow path to
+Post-hook, `decision.Local` calls `Mediator.RecordResult` on the allow path to
 write the execution outcome to the accumulator row and the receipt row.
 
 ## Package map

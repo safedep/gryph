@@ -1,4 +1,4 @@
-package agent
+package decision
 
 import (
 	"encoding/json"
@@ -31,7 +31,7 @@ func TestApplyLoggingLevel_Full_NotSensitive(t *testing.T) {
 	}
 	require.NoError(t, event.SetPayload(payload))
 
-	ApplyLoggingLevel(event, config.LoggingFull)
+	applyLoggingLevel(event, config.LoggingFull)
 
 	assert.NotNil(t, event.RawEvent)
 	assert.NotEmpty(t, event.DiffContent)
@@ -56,7 +56,7 @@ func TestApplyLoggingLevel_Full_Sensitive(t *testing.T) {
 	}
 	require.NoError(t, event.SetPayload(payload))
 
-	ApplyLoggingLevel(event, config.LoggingFull)
+	applyLoggingLevel(event, config.LoggingFull)
 
 	assert.Nil(t, event.RawEvent)
 	assert.Empty(t, event.DiffContent)
@@ -82,7 +82,7 @@ func TestApplyLoggingLevel_Standard_Sensitive(t *testing.T) {
 	}
 	require.NoError(t, event.SetPayload(payload))
 
-	ApplyLoggingLevel(event, config.LoggingStandard)
+	applyLoggingLevel(event, config.LoggingStandard)
 
 	assert.Nil(t, event.RawEvent)
 	assert.Empty(t, event.DiffContent)
@@ -107,7 +107,7 @@ func TestApplyLoggingLevel_Standard(t *testing.T) {
 	}
 	require.NoError(t, event.SetPayload(payload))
 
-	ApplyLoggingLevel(event, config.LoggingStandard)
+	applyLoggingLevel(event, config.LoggingStandard)
 
 	assert.Nil(t, event.RawEvent)
 	assert.Empty(t, event.DiffContent)
@@ -131,7 +131,7 @@ func TestApplyLoggingLevel_Minimal_FileWrite(t *testing.T) {
 	}
 	require.NoError(t, event.SetPayload(payload))
 
-	ApplyLoggingLevel(event, config.LoggingMinimal)
+	applyLoggingLevel(event, config.LoggingMinimal)
 
 	assert.Nil(t, event.RawEvent)
 	assert.Empty(t, event.DiffContent)
@@ -155,7 +155,7 @@ func TestApplyLoggingLevel_Minimal_CommandExec(t *testing.T) {
 	}
 	require.NoError(t, event.SetPayload(payload))
 
-	ApplyLoggingLevel(event, config.LoggingMinimal)
+	applyLoggingLevel(event, config.LoggingMinimal)
 
 	assert.Nil(t, event.RawEvent)
 
@@ -177,7 +177,7 @@ func TestApplyLoggingLevel_Minimal_ToolUse(t *testing.T) {
 	}
 	require.NoError(t, event.SetPayload(payload))
 
-	ApplyLoggingLevel(event, config.LoggingMinimal)
+	applyLoggingLevel(event, config.LoggingMinimal)
 
 	assert.Nil(t, event.RawEvent)
 	assert.Empty(t, event.DiffContent)
@@ -202,7 +202,7 @@ func TestApplyLoggingLevel_Minimal_FileRead(t *testing.T) {
 	originalPayload := make(json.RawMessage, len(event.Payload))
 	copy(originalPayload, event.Payload)
 
-	ApplyLoggingLevel(event, config.LoggingMinimal)
+	applyLoggingLevel(event, config.LoggingMinimal)
 
 	assert.Nil(t, event.RawEvent)
 	assert.Equal(t, json.RawMessage(originalPayload), event.Payload)
@@ -215,7 +215,7 @@ func TestApplyLoggingLevel_MinimalStripsSubagentStopMessage(t *testing.T) {
 		LastAssistantMessage: "secret summary of the repo",
 	}))
 
-	ApplyLoggingLevel(event, config.LoggingMinimal)
+	applyLoggingLevel(event, config.LoggingMinimal)
 
 	var p events.SubagentStopPayload
 	require.NoError(t, json.Unmarshal(event.Payload, &p))
@@ -229,7 +229,7 @@ func TestApplyLoggingLevel_MinimalStripsSessionEndReason(t *testing.T) {
 		Reason: "secret summary of the repo",
 	}))
 
-	ApplyLoggingLevel(event, config.LoggingMinimal)
+	applyLoggingLevel(event, config.LoggingMinimal)
 
 	var p events.SessionEndPayload
 	require.NoError(t, json.Unmarshal(event.Payload, &p))

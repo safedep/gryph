@@ -21,6 +21,7 @@ core/           Domain models (events, sessions, audit, security) - most stable
 config/         Viper-based configuration
 storage/        SQLite + ent ORM
 agent/          Adapter pattern (claudecode/, cursor/ and more)
+decision/       Decision service: redact, evaluate, and record one hook event
 cli/            Cobra commands as an App pattern
 tui/            Output formatters (table, json, csv)
 ```
@@ -29,6 +30,7 @@ tui/            Output formatters (table, json, csv)
 
 - `cmd/gryph/main.go` - Entry point
 - `cli/root.go` - App struct, dependency injection
+- `decision/service.go` - Boundary between the hook side and the decision service
 - `agent/adapter.go` - Agent adapter interface
 - `storage/storage.go` - Store interface
 
