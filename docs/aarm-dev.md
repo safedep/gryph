@@ -163,9 +163,12 @@ empty, so the fresh-session defer does not hide a missing intent.
 
 Conditions run under a 100 ms timeout and a CEL cost limit (`celCostLimit`,
 100000). A 90-character `matches()` regex on an 8 KiB prompt costs about
-19000. When a condition fails, the PDP still runs the other rules. A block
-decision wins over the error. With no block, the error goes to the caller,
-and `fail_mode` decides. `message` is a Go
+19000. When a condition fails, the PDP still runs the other rules. A
+`block`, `escalate` or `defer` decision wins over the error (`gates`),
+because a failed condition can only make a decision stricter. With no such
+decision, the error goes to the caller, and `fail_mode` decides. So under
+`fail_mode: closed`, a matched `escalate` still asks for an approval and
+does not become a block. `message` is a Go
 `text/template` with `missingkey=error`. The template data is `.Action`,
 `.Context`, and `.Rule`.
 

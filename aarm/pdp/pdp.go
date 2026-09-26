@@ -169,10 +169,10 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 	}
 
 	if condErr != nil {
-		if result.Decision != model.DecisionBlock {
+		if !gates(result.Decision) {
 			return nil, condErr
 		}
-		log.Warnf("pdp: a condition failed, and a block rule decides: %v", condErr)
+		log.Warnf("pdp: a condition failed, and a %s rule decides: %v", result.Decision, condErr)
 	}
 
 	if freshSessionDeferred && len(result.MatchedRuleIDs) == 0 {
@@ -208,6 +208,14 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 	}
 
 	return result, nil
+}
+
+// gates reports whether a decision stops the action or makes it wait for an
+// approval. A failed condition can only make a decision stricter, so a
+// matched gate stands. An agent can make a condition fail with a long
+// command, and under fail_mode open the error would drop the gate.
+func gates(d model.Decision) bool {
+	return d == model.DecisionBlock || d == model.DecisionEscalate || d == model.DecisionDefer
 }
 
 // storedMessage renders the message from the stored action. The stored

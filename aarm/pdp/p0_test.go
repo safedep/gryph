@@ -691,7 +691,7 @@ rules:
 	}
 }
 
-func TestEvaluate_BlockWinsOverConditionError(t *testing.T) {
+func TestEvaluate_GateWinsOverConditionError(t *testing.T) {
 	engine := mustPDP(t, `
 version: "1"
 rules:
@@ -705,11 +705,34 @@ rules:
     match:
       action_types: [command_exec]
       command_patterns: ["^curl"]
+  - id: push-needs-approval
+    action: escalate
+    match:
+      action_types: [command_exec]
+      command_patterns: ["^git push"]
+  - id: deploy-waits
+    action: defer
+    reason: deploy needs a reviewer
+    match:
+      action_types: [command_exec]
+      command_patterns: ["^deploy"]
 `)
-	res, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionCommandExec, Parameters: model.Parameters{Command: "curl x"}}, nil)
-	require.NoError(t, err)
-	assert.Equal(t, model.DecisionBlock, res.Decision)
+	cases := []struct {
+		command string
+		want    model.Decision
+	}{
+		{"curl x", model.DecisionBlock},
+		{"git push --force origin main", model.DecisionEscalate},
+		{"deploy prod", model.DecisionDefer},
+	}
+	for _, tc := range cases {
+		t.Run(tc.command, func(t *testing.T) {
+			res, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionCommandExec, Parameters: model.Parameters{Command: tc.command}}, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, res.Decision)
+		})
+	}
 
-	_, err = engine.Evaluate(context.Background(), &model.Action{Type: model.ActionCommandExec, Parameters: model.Parameters{Command: "ls"}}, nil)
-	require.Error(t, err, "with no block, the condition error decides through fail_mode")
+	_, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionCommandExec, Parameters: model.Parameters{Command: "ls"}}, nil)
+	require.Error(t, err, "with no gate, the condition error decides through fail_mode")
 }
