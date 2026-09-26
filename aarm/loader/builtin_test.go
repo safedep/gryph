@@ -344,6 +344,8 @@ func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 		{"rm home", model.ActionCommandExec, "", `rm -rf ~`, true},
 		{"rm config parent", model.ActionCommandExec, "", `rm -rf ~/.config`, true},
 		{"wrapper chain", model.ActionCommandExec, "", strings.Repeat("nice ", 60) + `rm ~/.cc/settings.json`, true},
+		{"xargs replace string into gryph config", model.ActionCommandExec, "", `echo x | xargs -I{} cp {} ~/.config/safedep/gryph/policies/{}`, true},
+		{"xargs replace string into tmp", model.ActionCommandExec, "", `echo x | xargs -I{} cp {} /tmp/{}`, false},
 		{"7z extract into config directory", model.ActionCommandExec, "", `7z x /tmp/evil.7z -o$HOME/.cc`, true},
 		{"7z add over settings", model.ActionCommandExec, "", `7z a ~/.cc/settings.json /tmp/x`, true},
 		{"7z unknown command", model.ActionCommandExec, "", `cd /tmp && 7z q /tmp/evil.7z`, false},

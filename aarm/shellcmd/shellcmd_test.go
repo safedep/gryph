@@ -82,6 +82,8 @@ func TestAnalyze_Changes(t *testing.T) {
 		{"script command", `script -qc 'rm -rf ~/.cc' /tmp/log`, []Target{{Path: "/home/u/.cc", Access: AccessRemove}, {Path: "/tmp/log", Access: AccessWrite}}},
 		{"bsd script command", `script -q /tmp/log rm -rf ~/.cc`, []Target{{Path: "/home/u/.cc", Access: AccessRemove}, {Path: "/tmp/log", Access: AccessWrite}}},
 		{"parallel runs each input", `parallel -j 4 ::: 'rm -rf ~/.cc'`, []Target{{Path: "/home/u/.cc", Access: AccessRemove}}},
+		{"xargs replace string in a path", `echo x | xargs -I{} cp {} ~/.cc/{}`, []Target{{Path: "/home/u/.cc", Access: AccessWriteTree}}},
+		{"parallel replace string in a path", `parallel cp {} ~/.cc/{} ::: a`, []Target{{Path: "/home/u/.cc", Access: AccessWriteTree}}},
 		// The shell does not expand a quoted or escaped "~". The walker expands
 		// it anyway, so it can over-block but never miss the home path.
 		{"escaped tilde expands", `rm \~/.cc/settings.json`, []Target{{Path: "/home/u/.cc/settings.json", Access: AccessRemove}}},

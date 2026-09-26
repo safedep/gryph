@@ -645,7 +645,7 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 			w.lookup(tool, rest)
 		} else if !nonReadCommands[name] {
 			w.guessReads(guessWords(rest), cwds)
-			w.networkWords(rest)
+			w.networkWords(name, rest)
 		}
 	}
 	return cwds
@@ -691,13 +691,29 @@ func (w *walker) delegate(name string, rest []string, cwds dirs) (dirs, bool) {
 var networkTools = flagSet("curl", "wget", "nc", "ncat", "netcat", "socat", "ssh", "scp", "sftp",
 	"telnet", "ftp", "rsync", "git", "dig", "nslookup", "host", "ping")
 
+// buildTools are build and package tools whose arguments often hold a
+// network tool name as a package or a path, as in "go test ./internal/ssh".
+// networkWords skips them.
+var buildTools = flagSet("go", "make", "npm", "npx", "pnpm", "yarn", "cargo", "pip", "pip3", "uv",
+	"poetry", "bundle", "gem", "mvn", "gradle", "man", "apt", "apt-get", "brew", "dnf", "yum", "docker",
+	"podman", "kubectl", "helm")
+
 // networkWords records UnknownHost when an argument of a command that the
-// walker does not know names a network tool. The command can run the tool
-// with a host that Gryph cannot see.
-func (w *walker) networkWords(args []string) {
-	if slices.ContainsFunc(args, func(a string) bool { return networkTools[path.Base(a)] }) {
+// walker does not know is a network tool: the bare tool name, or an
+// absolute path to it. The command can run the tool with a host that Gryph
+// cannot see. A relative path or a package name, such as "./cmd/host" or
+// "curlimages/curl", does not count.
+func (w *walker) networkWords(name string, args []string) {
+	if buildTools[name] {
+		return
+	}
+	if slices.ContainsFunc(args, isNetworkToolWord) {
 		w.addHost(UnknownHost)
 	}
+}
+
+func isNetworkToolWord(word string) bool {
+	return networkTools[word] || (path.IsAbs(word) && networkTools[path.Base(word)])
 }
 
 // gryphHookCommand is the hidden Gryph subcommand that agent hooks run.
@@ -755,10 +771,11 @@ func (w *walker) wrapper(name string, spec wrapperSpec, args []string, cwds dirs
 	w.call(cmd, cwds)
 }
 
-// xargsCommand returns the command that xargs runs, with an unresolved word
-// in place of the arguments that xargs reads at run time. With a replace
-// string, as in "xargs -I{} curl {}", each word that holds the string is
-// unresolved. Else xargs adds the arguments at the end.
+// xargsCommand returns the command that xargs runs. Without a replace
+// string, xargs adds the arguments that it reads at run time at the end, so
+// the walker adds an unresolved word. With a replace string, as in
+// "xargs -I{} cp {} dir/{}", the walker puts the glob "*" in place of the
+// string, as for "find -exec". So "dir/{}" becomes the glob target "dir/*".
 func xargsCommand(opts, cmd []string) []string {
 	repl := xargsReplace(opts)
 	if repl == "" {
@@ -766,9 +783,7 @@ func xargsCommand(opts, cmd []string) []string {
 	}
 	out := slices.Clone(cmd)
 	for i, a := range out {
-		if strings.Contains(a, repl) {
-			out[i] = ""
-		}
+		out[i] = strings.ReplaceAll(a, repl, "*")
 	}
 	return out
 }
@@ -1328,7 +1343,10 @@ func parseParallel(args []string) parallelCall {
 	replaced := false
 	for i, a := range pc.cmd {
 		if parallelReplace.MatchString(a) || repl != "" && strings.Contains(a, repl) {
-			pc.cmd[i] = ""
+			if repl != "" {
+				a = strings.ReplaceAll(a, repl, "*")
+			}
+			pc.cmd[i] = parallelReplace.ReplaceAllString(a, "*")
 			replaced = true
 		}
 	}

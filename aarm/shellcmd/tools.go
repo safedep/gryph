@@ -1734,7 +1734,7 @@ func isScheme(s string) bool {
 
 func normalizeHost(h string) string {
 	h = strings.ToLower(strings.TrimSuffix(strings.Trim(h, "[]"), "."))
-	if h == "" || strings.ContainsAny(h, " \t\"'") {
+	if h == "" || strings.ContainsAny(h, " \t\"'*?[") {
 		return ""
 	}
 	return h

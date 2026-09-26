@@ -380,9 +380,18 @@ route adds the hosts of `-J`, `-W`, `-L`, `-R`, and the `-o` options. The ssh
 command of `GIT_SSH_COMMAND` and `git -c core.sshCommand` goes through the
 same route (`sshCommand`). `gitConfig` reads the proxy and `insteadOf` keys
 of `git -c`. For a command that the walker does not know, an argument that
-names a network tool gives `?` (`networkWords`). A wrapper trial skips this
-check (`walker.trial`), because a trial start can be an option value such as
-the `5` of `timeout 5 curl`. Hosts are lower case, without the port.
+is the bare name of a network tool, or an absolute path to it, gives `?`
+(`networkWords`). A relative path or a package name does not count, such as
+`./cmd/host` or `curlimages/curl`. The build and package tools in
+`buildTools` (`go`, `make`, `npm`, `docker`, `man`, and others) skip this
+check. A host with a glob character is a host that Gryph cannot read. Hosts
+are lower case, without the port.
+
+`xargs` without a replace string adds an unresolved word at the end of its
+command. With a replace string (`-I`, `-i`, `--replace`), the walker puts the
+glob `*` in place of the string in each word, as for `find -exec`. So
+`xargs -I{} cp {} dir/{}` is a tree write of `dir`, and `xargs -I{} curl {}`
+gives `?`. `parallel` does the same with `{}` and its other replace strings.
 
 A write or remove target also comes from the file operands of an editor
 (`vim`, `vi`, `nvim`, `ex`, `nano`), `sort -o`, the archive of `zip` (also
