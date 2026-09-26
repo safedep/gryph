@@ -48,6 +48,7 @@ type DeferConfig struct {
 type PDP struct {
 	rules    []compiledRule
 	deferCfg DeferConfig
+	timeout  time.Duration
 }
 
 // Option configures optional PDP behavior.
@@ -75,7 +76,7 @@ func New(policy *Policy, opts ...Option) (*PDP, error) {
 			log.Warnf("pdp: %v. The policy loads, but gryph policy validate rejects it", err)
 		}
 	}
-	p := &PDP{rules: compiled}
+	p := &PDP{rules: compiled, timeout: conditionTimeout}
 	for _, opt := range opts {
 		opt(p)
 	}
@@ -101,7 +102,7 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	evalCtx, cancel := context.WithTimeout(ctx, conditionTimeout)
+	evalCtx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
 
 	var activations map[string]any

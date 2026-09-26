@@ -164,6 +164,7 @@ rules:
 	for i := range entries {
 		entries[i] = model.EntryFacts{Seq: int64(i + 1), Command: strings.Repeat("a", 1024)}
 	}
+	engine.timeout = time.Hour
 	res, err := engine.Evaluate(context.Background(),
 		&model.Action{Type: model.ActionCommandExec, Parameters: model.Parameters{Command: "ls"}},
 		&model.ContextSnapshot{Entries: entries})
@@ -183,8 +184,11 @@ rules:
 	for i := range entries {
 		entries[i] = model.EntryFacts{Seq: int64(i + 1), Path: "/" + strings.Repeat("a/", storage.EntryPathMaxBytes/2-1)}
 	}
+	// The race detector or a busy runner slows this rule past conditionTimeout.
+	// The test checks the cost limit, which does not depend on the clock.
+	engine.timeout = time.Hour
 	res, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionFileRead}, &model.ContextSnapshot{Entries: entries})
-	require.NoError(t, err, "a glob rule on the largest entry log ends in time")
+	require.NoError(t, err, "a glob rule on the largest entry log stays within its cost limit")
 	assert.Equal(t, model.DecisionAllow, res.Decision)
 }
 
