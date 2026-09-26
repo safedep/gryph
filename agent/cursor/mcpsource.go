@@ -220,19 +220,36 @@ func (l launcher) matchSubcommand(args []string) int {
 	return 0
 }
 
+// trimNPMVersion removes a version or a tag. npm reads any other spec, such
+// as "good@.", "good@x.tgz" or "good@file:/x", as code from another place,
+// so the spec stays in the name.
 func trimNPMVersion(pkg string) string {
 	i := strings.LastIndex(pkg, "@")
-	if i <= 0 || strings.ContainsAny(pkg[i+1:], ":/") {
+	if i <= 0 || isLocalSpec(pkg[i+1:]) || hasArchiveSuffix(pkg[i+1:]) {
 		return pkg
 	}
 	return pkg[:i]
 }
 
+// trimPyPIVersion removes a version specifier, extras or markers. A direct
+// reference, as in "good @ https://x/good.whl" or "good@./good.whl", runs
+// code from another place, so the whole spec stays in the name.
 func trimPyPIVersion(pkg string) string {
+	if _, ref, ok := strings.Cut(pkg, "@"); ok && isLocalSpec(strings.TrimSpace(ref)) {
+		return pkg
+	}
 	if i := strings.IndexAny(pkg, "=<>!~[@; "); i > 0 {
 		return pkg[:i]
 	}
 	return pkg
+}
+
+func isLocalSpec(spec string) bool {
+	return spec == "" || strings.ContainsAny(spec, `:/\`) || strings.HasPrefix(spec, ".")
+}
+
+func hasArchiveSuffix(spec string) bool {
+	return strings.HasSuffix(spec, ".tgz") || strings.HasSuffix(spec, ".tar") || strings.HasSuffix(spec, ".tar.gz")
 }
 
 func trimImageVersion(image string) string {
