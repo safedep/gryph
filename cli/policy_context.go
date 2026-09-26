@@ -550,7 +550,9 @@ func renderPolicyContextWindow(ctx context.Context, w io.Writer, c *tui.Colorize
 		return err
 	}
 	for _, e := range win.Entries {
-		if _, err := fmt.Fprintf(w, "  %-5d  %-11s  %-14s  %s\n", e.Entry.Sequence, e.Entry.Kind, e.Entry.ActionType, e.Entry.Tool); err != nil {
+		if _, err := fmt.Fprintf(w, "  %-5d  %-11s  %-14s  %s\n", e.Entry.Sequence,
+			tui.EscapeLine(string(e.Entry.Kind)), tui.EscapeLine(string(e.Entry.ActionType)),
+			tui.TruncateString(tui.EscapeLine(e.Entry.Tool), windowToolMaxLen)); err != nil {
 			return err
 		}
 		for _, t := range e.Content {
@@ -568,6 +570,10 @@ func renderPolicyContextWindow(ctx context.Context, w io.Writer, c *tui.Colorize
 }
 
 const windowContentIndent = "         "
+
+// windowToolMaxLen bounds the tool name on a window row. A hook sends the
+// name, so it can be long.
+const windowToolMaxLen = 64
 
 // windowContentText indents every line of a content value. A value that
 // Gryph did not store at the full level shows its digest.

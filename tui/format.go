@@ -137,6 +137,17 @@ func EscapeControl(s string) string {
 	}, s)
 }
 
+// EscapeLine replaces each control character with U+FFFD, a newline and a
+// tab included, so the value stays on one table row.
+func EscapeLine(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return '\uFFFD'
+		}
+		return r
+	}, s)
+}
+
 func VisibleLen(s string) int {
 	return len(ansiRegex.ReplaceAllString(s, ""))
 }

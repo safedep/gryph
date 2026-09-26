@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
@@ -247,4 +249,26 @@ func TestWindowContentText(t *testing.T) {
 			assert.Equal(t, tt.want, windowContentText(c, tt.text))
 		})
 	}
+}
+
+func TestRenderPolicyContextWindow_EscapesTool(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+	require.NoError(t, store.AppendContextEntry(ctx, &storage.ContextEntryRow{
+		SessionID:  sessionID,
+		Kind:       "action",
+		Timestamp:  time.Now().UTC(),
+		ActionType: string(events.ActionToolUse),
+		Tool:       "evil\x1b]0;title\x07\nforged row" + strings.Repeat("x", 100),
+	}, nil))
+
+	var buf bytes.Buffer
+	err := renderPolicyContextWindow(ctx, &buf, tui.NewColorizer(false), store, sessionID.String(), model.WindowSpec{MaxEntries: 10}, "table")
+	require.NoError(t, err)
+	out := buf.String()
+	assert.NotContains(t, out, "\x1b")
+	assert.NotContains(t, out, "\x07")
+	assert.Contains(t, out, "evil�]0;title��forged row")
+	assert.Len(t, strings.Split(strings.TrimSpace(out), "\n"), 2, "the tool name stays on one row")
 }
