@@ -88,7 +88,7 @@ func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 	t.Setenv("HOME", home)
 	cfgDir := home + "/.config/safedep/gryph"
 
-	docs, err := NewBuiltinSource("**/.cc/settings.json", "**/.agent/hooks/**", "**/.deep/sub/hooks.json", cfgDir+"/**").Load(context.Background())
+	docs, err := NewBuiltinSource("**/.cc/settings.json", "**/.agent/hooks/**", "**/.deep/sub/hooks.json", "**/.config/devin/config.json", cfgDir+"/**").Load(context.Background())
 	require.NoError(t, err)
 	require.Len(t, docs, 1)
 	engine, err := pdp.New(docs[0])
@@ -156,6 +156,11 @@ func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 		{"cp deep config directory into home", model.ActionCommandExec, "", `cp -r dotfiles/.deep ~/`, true},
 		{"cp hooks parent directory into home", model.ActionCommandExec, "", `cp -r dotfiles/.agent ~/`, true},
 		{"cp deep config directory to a backup", model.ActionCommandExec, "", `cp -r ~/.deep /tmp/backup`, false},
+		{"cp a dotfile directory into .config", model.ActionCommandExec, "", `cp -r dotfiles/nvim ~/.config/`, false},
+		{"tar extract into .config", model.ActionCommandExec, "", `tar xzf nvim.tgz -C ~/.config`, false},
+		{"rsync dotfiles into .config", model.ActionCommandExec, "", `rsync -a dotfiles/config/ ~/.config/`, false},
+		{"tar extract in .config", model.ActionCommandExec, "", `cd ~/.config && tar xf /tmp/theme.tar`, false},
+		{"cp a whole .config into home", model.ActionCommandExec, "", `cp -r dotfiles/.config ~/`, true},
 		{"cp config directory with a slash into home", model.ActionCommandExec, "", `cp -r dotfiles/.cc/ ~/`, true},
 		{"cp config directory into the absolute working directory", model.ActionCommandExec, "", `cp -r dotfiles/.cc /work/`, true},
 		{"rsync config directory contents into home", model.ActionCommandExec, "", `rsync -a dotfiles/.cc/ ~/`, false},

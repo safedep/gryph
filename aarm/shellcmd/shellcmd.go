@@ -44,6 +44,10 @@ type Target struct {
 	// command or the working directory gives enough information.
 	Path   string
 	Access Access
+	// Named marks the tree write of a directory that a recursive copy
+	// creates under the source name, as DEST/NAME in "cp -r dotfiles/.claude
+	// ~/". The copy can write any path in that tree.
+	Named bool
 }
 
 // Analysis is what a command does to paths and hosts.
@@ -704,12 +708,13 @@ func (w *walker) addDest(dest string, sources []string, p parsedArgs, flags copy
 			if relative {
 				name = relativeSource(expandHome(src, w.env.Home))
 			}
-			access := AccessWrite
+			target := strings.TrimSuffix(dest, "/") + "/" + name
 			contents := strings.HasSuffix(src, "/.") || (flags.slashContents && strings.HasSuffix(src, "/"))
-			if tree && !contents && mayBeDirectory(src) {
-				access = AccessWriteTree
+			if tree && !contents && mayBeDirectory(src) && !strings.ContainsAny(target, "*?[") {
+				w.addTarget(Target{Path: resolve(target, cwd, w.env.Home), Access: AccessWriteTree, Named: true})
+				continue
 			}
-			w.add(strings.TrimSuffix(dest, "/")+"/"+name, access, dirs{cwd})
+			w.add(target, AccessWrite, dirs{cwd})
 		}
 	}
 }

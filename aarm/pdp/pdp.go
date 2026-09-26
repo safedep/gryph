@@ -345,6 +345,7 @@ type compiledRule struct {
 	filePatterns       []string
 	containerPatterns  []string
 	treePatterns       []string
+	namedTreePatterns  []string
 	workingDirPatterns []string
 	hasCondition       bool
 	hasMessageTemplate bool
@@ -389,7 +390,8 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 		return cr, err
 	}
 	cr.containerPatterns = containerPatterns(cr.filePatterns)
-	cr.treePatterns = treePatterns(cr.filePatterns)
+	cr.treePatterns = parentPatterns(cr.filePatterns)
+	cr.namedTreePatterns = namedTreePatterns(cr.filePatterns)
 	if err := validateGlobPatterns("working_directory_patterns", rule.ID, cr.workingDirPatterns); err != nil {
 		return cr, err
 	}
