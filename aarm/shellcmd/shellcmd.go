@@ -10,6 +10,7 @@
 package shellcmd
 
 import (
+	"cmp"
 	"os"
 	"path"
 	"path/filepath"
@@ -705,7 +706,8 @@ var networkTools = flagSet("curl", "wget", "nc", "ncat", "netcat", "socat", "ssh
 // networkWords skips them.
 var buildTools = flagSet("go", "make", "npm", "npx", "pnpm", "yarn", "cargo", "pip", "pip3", "uv",
 	"poetry", "bundle", "gem", "mvn", "gradle", "man", "apt", "apt-get", "brew", "dnf", "yum", "docker",
-	"podman", "kubectl", "helm")
+	"podman", "kubectl", "helm", "pytest", "tox", "nox", "jest", "vitest", "mocha", "bun", "deno",
+	"cmake", "ctest", "ninja", "meson", "bazel")
 
 // networkWords records UnknownHost when an argument of a command that the
 // walker does not know is a network tool: the bare tool name, or an
@@ -713,12 +715,29 @@ var buildTools = flagSet("go", "make", "npm", "npx", "pnpm", "yarn", "cargo", "p
 // cannot see. A relative path or a package name, such as "./cmd/host" or
 // "curlimages/curl", does not count.
 func (w *walker) networkWords(name string, args []string) {
-	if buildTools[name] {
+	if buildTools[name] || buildTools[pythonModule(name, args)] {
 		return
 	}
 	if slices.ContainsFunc(args, isNetworkToolWord) {
 		w.addHost(UnknownHost)
 	}
+}
+
+// pythonModule returns the module that "python -m MODULE" runs, as in
+// "python -m pytest".
+func pythonModule(name string, args []string) string {
+	if !strings.HasPrefix(name, "python") {
+		return ""
+	}
+	for i, a := range args {
+		if a == "-m" && i+1 < len(args) {
+			return args[i+1]
+		}
+		if m, ok := strings.CutPrefix(a, "-m"); ok && m != "" {
+			return m
+		}
+	}
+	return ""
 }
 
 func isNetworkToolWord(word string) bool {
@@ -798,23 +817,17 @@ func xargsCommand(opts, cmd []string) []string {
 }
 
 // xargsReplace returns the replace string of the xargs options -I, -i or
-// --replace.
+// --replace. The option can be in a flag group, as in "-0I{}".
 func xargsReplace(opts []string) string {
 	repl := ""
-	for i, a := range opts {
-		switch {
-		case a == "-I":
-			if i+1 < len(opts) {
-				repl = opts[i+1]
-			}
-		case a == "-i" || a == "--replace":
-			repl = "{}"
-		case strings.HasPrefix(a, "--replace="):
-			repl = strings.TrimPrefix(a, "--replace=")
-		case strings.HasPrefix(a, "-I") || strings.HasPrefix(a, "-i"):
-			repl = a[2:]
+	wrappers["xargs"].parse(opts, func(flag, v string) {
+		switch flag {
+		case "-I":
+			repl = v
+		case "-i", "--replace":
+			repl = cmp.Or(v, "{}")
 		}
-	}
+	})
 	return repl
 }
 
@@ -852,6 +865,9 @@ type wrapperSpec struct {
 	// values are the options that take a value. An option that is not in
 	// the table takes no value.
 	values map[string]bool
+	// optional are the short options that take an optional value. The value
+	// is the rest of the word, as in "xargs -i%".
+	optional map[string]bool
 	// chdir are the options whose value is the working directory of the
 	// program.
 	chdir []string
@@ -877,7 +893,8 @@ var wrappers = map[string]wrapperSpec{
 	"stdbuf":  {values: flagSet("-i", "--input", "-o", "--output", "-e", "--error")},
 	"timeout": {values: flagSet("-s", "--signal", "-k", "--kill-after"), operands: 1},
 	"xargs": {values: flagSet("-a", "--arg-file", "-d", "--delimiter", "-E", "-I", "-L", "--max-lines",
-		"-n", "--max-args", "-P", "--max-procs", "-s", "--max-chars", "--process-slot-var")},
+		"-n", "--max-args", "-P", "--max-procs", "-s", "--max-chars", "--process-slot-var"),
+		optional: flagSet("-i", "-e", "-l")},
 	"chrt": {values: flagSet("-T", "--sched-runtime", "-P", "--sched-period", "-D", "--sched-deadline"),
 		operands: 1},
 	"taskset": {operands: 1},
@@ -893,9 +910,21 @@ var wrappers = map[string]wrapperSpec{
 
 // program returns the index of the program word in args and the working
 // directory that a chdir option sets. The index is len(args) when args
-// name no program. Options end at the first word that is not an option.
+// name no program.
 func (s wrapperSpec) program(args []string) (int, string) {
 	chdir := ""
+	start := s.parse(args, func(flag, v string) {
+		if slices.Contains(s.chdir, flag) {
+			chdir = v
+		}
+	})
+	return start, chdir
+}
+
+// parse calls visit for each option in args with its value, and returns
+// the index of the program word. Options end at the first word that is not
+// an option.
+func (s wrapperSpec) parse(args []string, visit func(flag, value string)) int {
 	skip := s.operands
 	options := true
 	for i := 0; i < len(args); i++ {
@@ -909,13 +938,16 @@ func (s wrapperSpec) program(args []string) (int, string) {
 				i++
 				v = args[i]
 			}
-			if slices.Contains(s.chdir, name) {
-				chdir = v
-			}
+			visit(name, v)
 		case options && strings.HasPrefix(a, "-"):
 			for j := 1; j < len(a); j++ {
 				flag := "-" + a[j:j+1]
+				if s.optional[flag] {
+					visit(flag, a[j+1:])
+					break
+				}
 				if !s.values[flag] {
+					visit(flag, "")
 					continue
 				}
 				v := a[j+1:]
@@ -923,9 +955,7 @@ func (s wrapperSpec) program(args []string) (int, string) {
 					i++
 					v = args[i]
 				}
-				if slices.Contains(s.chdir, flag) {
-					chdir = v
-				}
+				visit(flag, v)
 				break
 			}
 		case s.assigns && isAssignment(a):
@@ -934,10 +964,10 @@ func (s wrapperSpec) program(args []string) (int, string) {
 			skip--
 			options = false
 		default:
-			return i, chdir
+			return i
 		}
 	}
-	return len(args), chdir
+	return len(args)
 }
 
 func isAssignment(word string) bool {
