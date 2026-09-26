@@ -211,7 +211,7 @@ so the receipt hash format does not change.
 matched rule. `appendEntry` stores it on the entry, and the accumulator adds
 each new tag to `tags_seen` with the entry sequence.
 
-Conditions run under a 100 ms timeout and a CEL cost limit (`celCostLimit`,
+Conditions run under a 100 ms timeout and a CEL cost limit (`conditionCostLimit`,
 100000). A 90-character `matches()` regex on an 8 KiB prompt costs about
 19000. When a condition fails, the PDP still runs the other rules. A
 `block`, `escalate` or `defer` decision wins over the error (`gates`),
