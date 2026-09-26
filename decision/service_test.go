@@ -701,3 +701,38 @@ func TestLocal_Handle_BlockStoresStoredReason(t *testing.T) {
 	assert.NotContains(t, stored.ErrorMessage, "k7Qz9xWm")
 	assert.NotContains(t, stored.ErrorMessage, "hunter2")
 }
+
+type payloadCheck struct{ seen json.RawMessage }
+
+func (*payloadCheck) Name() string  { return "test-payload" }
+func (*payloadCheck) Enabled() bool { return true }
+func (c *payloadCheck) Check(_ context.Context, event *events.Event, _ *session.Session) (*security.CheckResult, error) {
+	c.seen = append(json.RawMessage(nil), event.Payload...)
+	if _, err := event.GetCommandExecPayload(); err != nil {
+		return nil, err
+	}
+	return &security.CheckResult{CheckName: "test-payload", Decision: security.DecisionAllow}, nil
+}
+
+func TestLocal_Handle_PayloadThatDoesNotDecodeFailsClosed(t *testing.T) {
+	ctx := context.Background()
+	store := storagetest.NewStore(t)
+	check := &payloadCheck{}
+	evaluator := security.New(&security.Config{FailOpen: false})
+	evaluator.RegisterCheck(check)
+	svc := NewLocal(store, evaluator, nil, fullLevel)
+
+	raw := json.RawMessage(`{"command":"rm -rf /","exit_code":"x"}`)
+	event := events.NewEvent(uuid.New(), "claude-code", events.ActionCommandExec)
+	event.Payload = raw
+	resp, err := svc.Handle(ctx, NewHookRequest(event))
+	require.NoError(t, err)
+
+	assert.JSONEq(t, string(raw), string(check.seen))
+	assert.Equal(t, VerdictOf(security.DecisionBlock), resp.Decision)
+
+	stored, err := store.QueryEvents(ctx, events.NewEventFilter().WithSession(event.SessionID))
+	require.NoError(t, err)
+	require.Len(t, stored, 1)
+	assert.Empty(t, stored[0].Payload)
+}

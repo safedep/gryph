@@ -63,9 +63,11 @@ evaluation. `labelEvent` (`decision/label.go`) runs before the evaluation:
    holds a JSON object or array keeps its structure. The redactor also
    applies to the raw event and to the error message.
 
-A payload that does not decode into the payload type of its action is
-dropped, with a warning in the log. Gryph cannot label, redact or strip
-such a payload, so it does not store it at any level.
+A payload that does not decode into the payload type of its action goes
+to the policy as it is. The policy cannot read it, so its fail mode decides,
+and `fail_mode: closed` blocks the action. Gryph cannot label, redact or
+strip such a payload, so it drops the payload after the evaluation, with a
+warning in the log, and does not store it at any level.
 
 The policy then evaluates the redacted event. It sees the content at every
 logging level, so a rule on a URL or on content still fires at `minimal`.

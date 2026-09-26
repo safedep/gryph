@@ -32,7 +32,7 @@ func labelEvent(event *events.Event, redactor *privacy.Redactor, classes []priva
 		event.IsSensitive = true
 	}
 
-	walkContent(event, func(_ string, t *privacy.Text) {
+	if err := walkContent(event, func(_ string, t *privacy.Text) {
 		if t.IsZero() {
 			return
 		}
@@ -48,7 +48,9 @@ func labelEvent(event *events.Event, redactor *privacy.Redactor, classes []priva
 		if end, ok := p.(*events.SessionEndPayload); ok && redactor != nil {
 			end.Reason = redactor.Redact(end.Reason)
 		}
-	})
+	}); err != nil {
+		log.Warnf("decision: label the %s payload that does not decode: %v", event.ActionType, err)
+	}
 
 	if redactor != nil {
 		if len(event.RawEvent) > 0 {
@@ -84,7 +86,7 @@ func applyLevel(event *events.Event, level config.LoggingLevel) {
 		}
 	}
 
-	walkContent(event, func(path string, t *privacy.Text) {
+	if err := walkContent(event, func(path string, t *privacy.Text) {
 		if path == "diff_content" {
 			strip(t, stripFull)
 			return
@@ -101,7 +103,10 @@ func applyLevel(event *events.Event, level config.LoggingLevel) {
 		case *events.SessionEndPayload:
 			p.Reason = ""
 		}
-	})
+	}); err != nil {
+		log.Warnf("decision: drop the %s payload that does not decode: %v", event.ActionType, err)
+		event.Payload = nil
+	}
 
 	if stripFull {
 		event.RawEvent = nil
@@ -114,19 +119,19 @@ func applyLevel(event *events.Event, level config.LoggingLevel) {
 
 // walkContent calls fn for the diff and for every content value of the
 // payload, then calls other with the decoded payload for its plain fields,
-// and writes the payload back. A payload that does not decode is dropped,
-// because Gryph cannot label, redact or strip it.
-func walkContent(event *events.Event, fn func(path string, t *privacy.Text), other func(payload any)) {
+// and writes the payload back. It returns the error of a payload that does
+// not decode. The label step keeps that payload, so the policy sees it and
+// its fail mode decides. applyLevel drops it, because Gryph cannot label,
+// redact or strip it in storage.
+func walkContent(event *events.Event, fn func(path string, t *privacy.Text), other func(payload any)) error {
 	fn("diff_content", &event.DiffContent)
 
 	payload := events.NewPayload(event.ActionType)
 	if payload == nil || len(event.Payload) == 0 {
-		return
+		return nil
 	}
 	if err := json.Unmarshal(event.Payload, payload); err != nil {
-		log.Warnf("decision: drop the %s payload that does not decode: %v", event.ActionType, err)
-		event.Payload = nil
-		return
+		return err
 	}
 	privacy.Walk(payload, fn)
 	other(payload)
@@ -134,9 +139,10 @@ func walkContent(event *events.Event, fn func(path string, t *privacy.Text), oth
 	data, err := json.Marshal(payload)
 	if err != nil {
 		log.Warnf("decision: marshal %s payload: %v", event.ActionType, err)
-		return
+		return nil
 	}
 	event.Payload = data
+	return nil
 }
 
 // redactText redacts the value. A value that holds a JSON object or array
