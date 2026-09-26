@@ -56,6 +56,14 @@ type AuditEvent struct {
 	SubagentID string `json:"subagent_id,omitempty"`
 	// Type of the subagent (e.g., Explore, Plan, general-purpose)
 	SubagentType string `json:"subagent_type,omitempty"`
+	// Execution phase of the source hook: pre, post or unknown
+	Phase string `json:"phase,omitempty"`
+	// Kind of the event in the session context: action or observation
+	Kind string `json:"kind,omitempty"`
+	// Agent identifier of the tool call, shared by its pre and post events
+	ToolCallID string `json:"tool_call_id,omitempty"`
+	// ID of the pre event of the same tool call, set on a linked post event
+	LinkedEventID *uuid.UUID `json:"linked_event_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the AuditEventQuery when eager-loading is set.
 	Edges        AuditEventEdges `json:"edges"`
@@ -87,13 +95,15 @@ func (*AuditEvent) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case auditevent.FieldLinkedEventID:
+			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case auditevent.FieldPayload, auditevent.FieldRawEvent:
 			values[i] = new([]byte)
 		case auditevent.FieldIsSensitive:
 			values[i] = new(sql.NullBool)
 		case auditevent.FieldSequence, auditevent.FieldDurationMs:
 			values[i] = new(sql.NullInt64)
-		case auditevent.FieldAgentName, auditevent.FieldAgentVersion, auditevent.FieldWorkingDirectory, auditevent.FieldActionType, auditevent.FieldToolName, auditevent.FieldResultStatus, auditevent.FieldErrorMessage, auditevent.FieldDiffContent, auditevent.FieldConversationContext, auditevent.FieldSubagentID, auditevent.FieldSubagentType:
+		case auditevent.FieldAgentName, auditevent.FieldAgentVersion, auditevent.FieldWorkingDirectory, auditevent.FieldActionType, auditevent.FieldToolName, auditevent.FieldResultStatus, auditevent.FieldErrorMessage, auditevent.FieldDiffContent, auditevent.FieldConversationContext, auditevent.FieldSubagentID, auditevent.FieldSubagentType, auditevent.FieldPhase, auditevent.FieldKind, auditevent.FieldToolCallID:
 			values[i] = new(sql.NullString)
 		case auditevent.FieldTimestamp:
 			values[i] = new(sql.NullTime)
@@ -233,6 +243,31 @@ func (_m *AuditEvent) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SubagentType = value.String
 			}
+		case auditevent.FieldPhase:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field phase", values[i])
+			} else if value.Valid {
+				_m.Phase = value.String
+			}
+		case auditevent.FieldKind:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field kind", values[i])
+			} else if value.Valid {
+				_m.Kind = value.String
+			}
+		case auditevent.FieldToolCallID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tool_call_id", values[i])
+			} else if value.Valid {
+				_m.ToolCallID = value.String
+			}
+		case auditevent.FieldLinkedEventID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field linked_event_id", values[i])
+			} else if value.Valid {
+				_m.LinkedEventID = new(uuid.UUID)
+				*_m.LinkedEventID = *value.S.(*uuid.UUID)
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -329,6 +364,20 @@ func (_m *AuditEvent) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("subagent_type=")
 	builder.WriteString(_m.SubagentType)
+	builder.WriteString(", ")
+	builder.WriteString("phase=")
+	builder.WriteString(_m.Phase)
+	builder.WriteString(", ")
+	builder.WriteString("kind=")
+	builder.WriteString(_m.Kind)
+	builder.WriteString(", ")
+	builder.WriteString("tool_call_id=")
+	builder.WriteString(_m.ToolCallID)
+	builder.WriteString(", ")
+	if v := _m.LinkedEventID; v != nil {
+		builder.WriteString("linked_event_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

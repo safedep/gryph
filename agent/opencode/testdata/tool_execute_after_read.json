@@ -1,6 +1,7 @@
 {
   "hook_type": "tool.execute.after",
   "session_id": "opencode-session-abc123",
+  "call_id": "call-opencode-1",
   "tool": "read",
   "result": {
     "title": "Read file",

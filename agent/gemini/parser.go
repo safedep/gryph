@@ -97,7 +97,7 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	}
 
 	if event != nil {
-		event.HookType = eventName
+		event.HookType = events.HookType(eventName)
 	}
 
 	return event, nil

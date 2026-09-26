@@ -68,6 +68,19 @@ func (AuditEvent) Fields() []ent.Field {
 		field.String("subagent_type").
 			Optional().
 			Comment("Type of the subagent (e.g., Explore, Plan, general-purpose)"),
+		field.String("phase").
+			Optional().
+			Comment("Execution phase of the source hook: pre, post or unknown"),
+		field.String("kind").
+			Optional().
+			Comment("Kind of the event in the session context: action or observation"),
+		field.String("tool_call_id").
+			Optional().
+			Comment("Agent identifier of the tool call, shared by its pre and post events"),
+		field.UUID("linked_event_id", uuid.UUID{}).
+			Optional().
+			Nillable().
+			Comment("ID of the pre event of the same tool call, set on a linked post event"),
 	}
 }
 
@@ -90,5 +103,6 @@ func (AuditEvent) Indexes() []ent.Index {
 		index.Fields("agent_name"),
 		index.Fields("action_type"),
 		index.Fields("result_status"),
+		index.Fields("session_id", "tool_call_id"),
 	}
 }

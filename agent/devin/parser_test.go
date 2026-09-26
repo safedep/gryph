@@ -44,7 +44,7 @@ func TestParseHookEvent_SessionStart(t *testing.T) {
 
 	assert.Equal(t, events.ActionSessionStart, event.ActionType)
 	assert.Equal(t, AgentName, event.AgentName)
-	assert.Equal(t, "SessionStart", event.HookType)
+	assert.Equal(t, events.HookType("SessionStart"), event.HookType)
 	assert.Equal(t, "devin-session-abc", event.AgentSessionID)
 
 	payload := events.SessionPayload{}

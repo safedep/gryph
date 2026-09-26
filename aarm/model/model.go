@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/core/events"
 )
 
 // ActionType is the canonical action category.
@@ -76,12 +77,12 @@ type Action struct {
 
 // ActionPhase records whether the source hook fired before the operation
 // executed (PhasePre, enforceable) or after (PhasePost, detection only).
-type ActionPhase string
+type ActionPhase = events.Phase
 
 const (
-	PhaseUnknown ActionPhase = "unknown"
-	PhasePre     ActionPhase = "pre"
-	PhasePost    ActionPhase = "post"
+	PhaseUnknown = events.PhaseUnknown
+	PhasePre     = events.PhasePre
+	PhasePost    = events.PhasePost
 )
 
 // Parameters carries normalized action payload fields.

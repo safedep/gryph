@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+
+	"github.com/safedep/gryph/core/events"
 )
 
 // Registry manages registered agent adapters.
@@ -67,6 +69,20 @@ func (r *Registry) HookConfigGlobs() []string {
 	}
 	slices.Sort(globs)
 	return slices.Compact(globs)
+}
+
+// HookSpec returns the declared spec of a hook type for an agent.
+func (r *Registry) HookSpec(agentName string, hookType events.HookType) (events.HookSpec, bool) {
+	adapter, ok := r.Get(agentName)
+	if !ok {
+		return events.HookSpec{}, false
+	}
+	for _, spec := range adapter.Hooks() {
+		if spec.Type == hookType {
+			return spec, true
+		}
+	}
+	return events.HookSpec{}, false
 }
 
 // DetectAll runs detection on all registered adapters.

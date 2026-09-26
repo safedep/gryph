@@ -11,6 +11,7 @@ import (
 
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/core/events"
 )
 
 //go:embed plugin.ts
@@ -20,12 +21,18 @@ func processedPlugin() []byte {
 	return bytes.ReplaceAll(pluginTS, []byte(utils.GryphCommandPlaceholder), []byte(utils.GryphCommand()))
 }
 
-var HookTypes = []string{
-	"tool_call",
-	"tool_result",
-	"session_start",
-	"session_shutdown",
+// Hooks declares the Pi Agent hooks Gryph installs and parses. Phase and
+// Blocking drive the enforcement coverage table in
+// docs/agent-enforcement-coverage.md.
+var Hooks = []events.HookSpec{
+	{Type: "tool_call", Phase: events.PhasePre, Blocking: true},
+	{Type: "tool_result", Phase: events.PhasePost},
+	{Type: "session_start", Phase: events.PhaseUnknown},
+	{Type: "session_shutdown", Phase: events.PhaseUnknown},
 }
+
+// HookTypes are the hook type names in Hooks, in install order.
+var HookTypes = agent.HookTypeNames(Hooks)
 
 const hookFileName = "gryph-hooks.ts"
 

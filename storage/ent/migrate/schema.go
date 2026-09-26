@@ -224,6 +224,10 @@ var (
 		{Name: "is_sensitive", Type: field.TypeBool, Default: false},
 		{Name: "subagent_id", Type: field.TypeString, Nullable: true},
 		{Name: "subagent_type", Type: field.TypeString, Nullable: true},
+		{Name: "phase", Type: field.TypeString, Nullable: true},
+		{Name: "kind", Type: field.TypeString, Nullable: true},
+		{Name: "tool_call_id", Type: field.TypeString, Nullable: true},
+		{Name: "linked_event_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "session_id", Type: field.TypeUUID},
 	}
 	// AuditEventsTable holds the schema information for the "audit_events" table.
@@ -234,7 +238,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "audit_events_sessions_events",
-				Columns:    []*schema.Column{AuditEventsColumns[18]},
+				Columns:    []*schema.Column{AuditEventsColumns[22]},
 				RefColumns: []*schema.Column{SessionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -248,7 +252,7 @@ var (
 			{
 				Name:    "auditevent_session_id",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[18]},
+				Columns: []*schema.Column{AuditEventsColumns[22]},
 			},
 			{
 				Name:    "auditevent_agent_name",
@@ -264,6 +268,11 @@ var (
 				Name:    "auditevent_result_status",
 				Unique:  false,
 				Columns: []*schema.Column{AuditEventsColumns[9]},
+			},
+			{
+				Name:    "auditevent_session_id_tool_call_id",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventsColumns[22], AuditEventsColumns[20]},
 			},
 		},
 	}

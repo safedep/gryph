@@ -65,7 +65,7 @@ func TestHookRequest_CarriesInMemoryEventFields(t *testing.T) {
 	event := req.event()
 
 	assert.Equal(t, "/tmp/transcript.jsonl", event.TranscriptPath)
-	assert.Equal(t, "PreToolUse", event.HookType)
+	assert.Equal(t, events.HookType("PreToolUse"), event.HookType)
 	assert.Equal(t, "full content", event.FullContent)
 
 	assert.Empty(t, req.Event.TranscriptPath, "each value has one source")
@@ -380,7 +380,7 @@ func TestLocal_Handle_InMemoryFieldsReachEvaluator(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotNil(t, capture.seen)
-	assert.Equal(t, "PreToolUse", capture.seen.HookType)
+	assert.Equal(t, events.HookType("PreToolUse"), capture.seen.HookType)
 	assert.Equal(t, "full body", capture.seen.FullContent)
 	assert.Equal(t, "/tmp/t.jsonl", capture.seen.TranscriptPath)
 }
@@ -417,6 +417,14 @@ type faultStore struct {
 	storage.Store
 	saveSessionRaces bool
 	failSaveEvent    bool
+	failLink         bool
+}
+
+func (f *faultStore) FindPreEventByToolCall(ctx context.Context, sessionID uuid.UUID, toolCallID string) (*events.Event, error) {
+	if f.failLink {
+		return nil, errors.New("database is locked")
+	}
+	return f.Store.FindPreEventByToolCall(ctx, sessionID, toolCallID)
 }
 
 func (f *faultStore) SaveSession(ctx context.Context, sess *session.Session) error {
@@ -511,4 +519,108 @@ func TestLocal_Handle_NotInitialized(t *testing.T) {
 	svc := NewLocal(nil, nil, nil, fullLevel)
 	_, err := svc.Handle(context.Background(), writeRequest(uuid.New()))
 	require.Error(t, err)
+}
+
+func testHookSpecs(_ string, hook events.HookType) (events.HookSpec, bool) {
+	switch hook {
+	case "PreToolUse":
+		return events.HookSpec{Type: hook, Phase: events.PhasePre, Blocking: true}, true
+	case "PostToolUse":
+		return events.HookSpec{Type: hook, Phase: events.PhasePost}, true
+	case "SessionStart":
+		return events.HookSpec{Type: hook, Phase: events.PhaseUnknown}, true
+	}
+	return events.HookSpec{}, false
+}
+
+func toolEvent(sessionID uuid.UUID, hook events.HookType, toolCallID string) *events.Event {
+	event := events.NewEvent(sessionID, "claude-code", events.ActionCommandExec)
+	event.HookType = hook
+	event.ToolCallID = toolCallID
+	event.Payload = json.RawMessage(`{"command":"ls"}`)
+	return event
+}
+
+func TestLocal_Handle_ClassifiesEvents(t *testing.T) {
+	ctx := context.Background()
+	store := storagetest.NewStore(t)
+	svc := NewLocal(store, security.New(&security.Config{FailOpen: true}), nil, fullLevel, WithHookSpecs(testHookSpecs))
+	sessionID := uuid.New()
+
+	pre := toolEvent(sessionID, "PreToolUse", "tu-1")
+	post := toolEvent(sessionID, "PostToolUse", "tu-1")
+	postOnly := toolEvent(sessionID, "PostToolUse", "tu-2")
+	noID := toolEvent(sessionID, "PostToolUse", "")
+	undeclared := toolEvent(sessionID, "Mystery", "")
+	otherSession := toolEvent(uuid.New(), "PostToolUse", "tu-1")
+	forged := toolEvent(sessionID, "PreToolUse", "tu-3")
+	forged.LinkedEventID = pre.ID
+
+	for _, e := range []*events.Event{pre, post, postOnly, noID, undeclared, otherSession, forged} {
+		_, err := svc.Handle(ctx, NewHookRequest(e))
+		require.NoError(t, err)
+	}
+
+	cases := []struct {
+		name       string
+		id         uuid.UUID
+		wantPhase  events.Phase
+		wantKind   events.Kind
+		wantLinked uuid.UUID
+	}{
+		{name: "pre hook is an action", id: pre.ID, wantPhase: events.PhasePre, wantKind: events.KindAction},
+		{name: "post hook with a recorded pre hook is an observation", id: post.ID,
+			wantPhase: events.PhasePost, wantKind: events.KindObservation, wantLinked: pre.ID},
+		{name: "post hook without a recorded pre hook is an action", id: postOnly.ID,
+			wantPhase: events.PhasePost, wantKind: events.KindAction},
+		{name: "post hook without a tool call id is an action", id: noID.ID,
+			wantPhase: events.PhasePost, wantKind: events.KindAction},
+		{name: "undeclared hook has phase unknown", id: undeclared.ID,
+			wantPhase: events.PhaseUnknown, wantKind: events.KindAction},
+		{name: "post hook does not link to another session", id: otherSession.ID,
+			wantPhase: events.PhasePost, wantKind: events.KindAction},
+		{name: "service ignores a link in the request", id: forged.ID,
+			wantPhase: events.PhasePre, wantKind: events.KindAction},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stored, err := store.GetEvent(ctx, tc.id)
+			require.NoError(t, err)
+			require.NotNil(t, stored)
+			assert.Equal(t, tc.wantPhase, stored.Phase)
+			assert.Equal(t, tc.wantKind, stored.Kind)
+			assert.Equal(t, tc.wantLinked, stored.LinkedEventID)
+		})
+	}
+}
+
+func TestLocal_Handle_PhaseReachesEvaluator(t *testing.T) {
+	capture := &captureCheck{}
+	evaluator := security.New(&security.Config{FailOpen: true})
+	evaluator.RegisterCheck(capture)
+
+	svc := NewLocal(storagetest.NewStore(t), evaluator, nil, fullLevel, WithHookSpecs(testHookSpecs))
+	_, err := svc.Handle(context.Background(), NewHookRequest(toolEvent(uuid.New(), "PreToolUse", "tu-1")))
+	require.NoError(t, err)
+
+	require.NotNil(t, capture.seen)
+	assert.Equal(t, events.PhasePre, capture.seen.Phase)
+	assert.Equal(t, events.KindAction, capture.seen.Kind)
+}
+
+func TestLocal_Handle_LinkFailureKeepsEvent(t *testing.T) {
+	ctx := context.Background()
+	store := &faultStore{Store: storagetest.NewStore(t), failLink: true}
+	svc := NewLocal(store, security.New(&security.Config{FailOpen: true}), nil, fullLevel, WithHookSpecs(testHookSpecs))
+
+	post := toolEvent(uuid.New(), "PostToolUse", "tu-1")
+	resp, err := svc.Handle(ctx, NewHookRequest(post))
+	require.NoError(t, err)
+	assert.Equal(t, VerdictOf(security.DecisionAllow), resp.Decision)
+
+	stored, err := store.GetEvent(ctx, post.ID)
+	require.NoError(t, err)
+	require.NotNil(t, stored)
+	assert.Equal(t, events.KindAction, stored.Kind)
+	assert.Equal(t, uuid.Nil, stored.LinkedEventID)
 }

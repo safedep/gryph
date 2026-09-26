@@ -52,6 +52,14 @@ const (
 	FieldSubagentID = "subagent_id"
 	// FieldSubagentType holds the string denoting the subagent_type field in the database.
 	FieldSubagentType = "subagent_type"
+	// FieldPhase holds the string denoting the phase field in the database.
+	FieldPhase = "phase"
+	// FieldKind holds the string denoting the kind field in the database.
+	FieldKind = "kind"
+	// FieldToolCallID holds the string denoting the tool_call_id field in the database.
+	FieldToolCallID = "tool_call_id"
+	// FieldLinkedEventID holds the string denoting the linked_event_id field in the database.
+	FieldLinkedEventID = "linked_event_id"
 	// EdgeSession holds the string denoting the session edge name in mutations.
 	EdgeSession = "session"
 	// Table holds the table name of the auditevent in the database.
@@ -86,6 +94,10 @@ var Columns = []string{
 	FieldIsSensitive,
 	FieldSubagentID,
 	FieldSubagentType,
+	FieldPhase,
+	FieldKind,
+	FieldToolCallID,
+	FieldLinkedEventID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -258,6 +270,26 @@ func BySubagentID(opts ...sql.OrderTermOption) OrderOption {
 // BySubagentType orders the results by the subagent_type field.
 func BySubagentType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubagentType, opts...).ToFunc()
+}
+
+// ByPhase orders the results by the phase field.
+func ByPhase(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPhase, opts...).ToFunc()
+}
+
+// ByKind orders the results by the kind field.
+func ByKind(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldKind, opts...).ToFunc()
+}
+
+// ByToolCallID orders the results by the tool_call_id field.
+func ByToolCallID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldToolCallID, opts...).ToFunc()
+}
+
+// ByLinkedEventID orders the results by the linked_event_id field.
+func ByLinkedEventID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLinkedEventID, opts...).ToFunc()
 }
 
 // BySessionField orders the results by session field.

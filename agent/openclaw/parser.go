@@ -80,7 +80,7 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 		return nil, err
 	}
 	if event != nil {
-		event.HookType = hookType
+		event.HookType = events.HookType(hookType)
 	}
 	return event, nil
 }

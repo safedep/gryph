@@ -10,21 +10,28 @@ import (
 
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/core/events"
 )
 
-var HookTypes = []string{
-	"pre_read_code",
-	"post_read_code",
-	"pre_write_code",
-	"post_write_code",
-	"pre_run_command",
-	"post_run_command",
-	"pre_mcp_tool_use",
-	"post_mcp_tool_use",
-	"pre_user_prompt",
-	"post_cascade_response",
-	"post_setup_worktree",
+// Hooks declares the Windsurf hooks Gryph installs and parses. Phase and
+// Blocking drive the enforcement coverage table in
+// docs/agent-enforcement-coverage.md.
+var Hooks = []events.HookSpec{
+	{Type: "pre_read_code", Phase: events.PhasePre, Blocking: true},
+	{Type: "post_read_code", Phase: events.PhasePost},
+	{Type: "pre_write_code", Phase: events.PhasePre, Blocking: true},
+	{Type: "post_write_code", Phase: events.PhasePost},
+	{Type: "pre_run_command", Phase: events.PhasePre, Blocking: true},
+	{Type: "post_run_command", Phase: events.PhasePost},
+	{Type: "pre_mcp_tool_use", Phase: events.PhasePre, Blocking: true},
+	{Type: "post_mcp_tool_use", Phase: events.PhasePost},
+	{Type: "pre_user_prompt", Phase: events.PhasePre, Blocking: true, Prompt: true},
+	{Type: "post_cascade_response", Phase: events.PhasePost},
+	{Type: "post_setup_worktree", Phase: events.PhasePost},
 }
+
+// HookTypes are the hook type names in Hooks, in install order.
+var HookTypes = agent.HookTypeNames(Hooks)
 
 type HooksConfig struct {
 	Hooks map[string][]HookCommand `json:"hooks"`

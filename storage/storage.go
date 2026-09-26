@@ -18,6 +18,10 @@ type EventStore interface {
 	// GetEvent retrieves an event by ID.
 	GetEvent(ctx context.Context, id uuid.UUID) (*events.Event, error)
 
+	// FindPreEventByToolCall returns the pre-phase event of a tool call in a
+	// session, or nil when Gryph did not record one.
+	FindPreEventByToolCall(ctx context.Context, sessionID uuid.UUID, toolCallID string) (*events.Event, error)
+
 	// GetEventByPrefix retrieves an event by ID prefix.
 	GetEventByPrefix(ctx context.Context, prefix string) (*events.Event, error)
 

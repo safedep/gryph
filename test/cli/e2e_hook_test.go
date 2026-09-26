@@ -987,3 +987,43 @@ func TestHook_Devin_DeterministicSessionID(t *testing.T) {
 
 	assert.Equal(t, evts[0].SessionID, evts[1].SessionID, "same session_id should produce same UUID")
 }
+
+func TestHook_PhaseAndToolCallLink(t *testing.T) {
+	env := newTestEnv(t)
+
+	pre, err := os.ReadFile("../../agent/claudecode/testdata/pre_tool_use_bash.json")
+	require.NoError(t, err)
+	post := []byte(`{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Bash",
+  "tool_input": {"command": "npm install"},
+  "tool_response": {"stdout": "ok", "exit_code": 0},
+  "tool_use_id": "tool-use-001"
+}`)
+
+	_, _, err = env.runHook("claude-code", "PreToolUse", pre)
+	require.NoError(t, err)
+	_, _, err = env.runHook("claude-code", "PostToolUse", post)
+	require.NoError(t, err)
+
+	store, cleanup := env.openStore()
+	defer cleanup()
+	sessionID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("test-session-123"))
+	evts, err := store.GetEventsBySession(context.Background(), sessionID)
+	require.NoError(t, err)
+	require.Len(t, evts, 2)
+
+	byPhase := map[events.Phase]*events.Event{}
+	for _, e := range evts {
+		byPhase[e.Phase] = e
+	}
+	require.Contains(t, byPhase, events.PhasePre)
+	require.Contains(t, byPhase, events.PhasePost)
+
+	assert.Equal(t, events.KindAction, byPhase[events.PhasePre].Kind)
+	assert.Equal(t, "tool-use-001", byPhase[events.PhasePre].ToolCallID)
+	assert.Equal(t, events.KindObservation, byPhase[events.PhasePost].Kind)
+	assert.Equal(t, byPhase[events.PhasePre].ID, byPhase[events.PhasePost].LinkedEventID)
+}

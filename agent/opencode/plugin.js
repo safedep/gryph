@@ -29,6 +29,7 @@ export const GryphPlugin = async ({ directory }) => {
       invokeGryph("tool.execute.before", {
         hook_type: "tool.execute.before",
         session_id: input.sessionID,
+        call_id: input.callID,
         tool: input.tool,
         args: output.args,
         cwd: directory,
@@ -39,6 +40,7 @@ export const GryphPlugin = async ({ directory }) => {
         invokeGryph("tool.execute.after", {
           hook_type: "tool.execute.after",
           session_id: input.sessionID,
+          call_id: input.callID,
           tool: input.tool,
           result: {
             title: output.title,

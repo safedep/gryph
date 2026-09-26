@@ -10,15 +10,22 @@ import (
 
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/core/events"
 )
 
-var HookTypes = []string{
-	"BeforeTool",
-	"AfterTool",
-	"SessionStart",
-	"SessionEnd",
-	"Notification",
+// Hooks declares the Gemini CLI hooks Gryph installs and parses. Phase and
+// Blocking drive the enforcement coverage table in
+// docs/agent-enforcement-coverage.md.
+var Hooks = []events.HookSpec{
+	{Type: "BeforeTool", Phase: events.PhasePre, Blocking: true},
+	{Type: "AfterTool", Phase: events.PhasePost},
+	{Type: "SessionStart", Phase: events.PhaseUnknown},
+	{Type: "SessionEnd", Phase: events.PhaseUnknown},
+	{Type: "Notification", Phase: events.PhaseUnknown},
 }
+
+// HookTypes are the hook type names in Hooks, in install order.
+var HookTypes = agent.HookTypeNames(Hooks)
 
 type SettingsHooks map[string][]HookMatcher
 

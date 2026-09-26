@@ -186,6 +186,18 @@ func (s *SQLiteStore) SaveEvent(ctx context.Context, event *events.Event) error 
 	if event.SubagentType != "" {
 		create.SetSubagentType(event.SubagentType)
 	}
+	if event.Phase != "" {
+		create.SetPhase(string(event.Phase))
+	}
+	if event.Kind != "" {
+		create.SetKind(string(event.Kind))
+	}
+	if event.ToolCallID != "" {
+		create.SetToolCallID(event.ToolCallID)
+	}
+	if event.LinkedEventID != uuid.Nil {
+		create.SetLinkedEventID(event.LinkedEventID)
+	}
 
 	_, err := create.Save(ctx)
 	if err != nil {
@@ -206,6 +218,29 @@ func (s *SQLiteStore) GetEvent(ctx context.Context, id uuid.UUID) (*events.Event
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get event: %w", err)
+	}
+
+	return entToEvent(entEvent), nil
+}
+
+// FindPreEventByToolCall retrieves the pre-phase event of a tool call.
+func (s *SQLiteStore) FindPreEventByToolCall(ctx context.Context, sessionID uuid.UUID, toolCallID string) (*events.Event, error) {
+	if toolCallID == "" {
+		return nil, nil
+	}
+	entEvent, err := s.client.AuditEvent.Query().
+		Where(
+			auditevent.SessionIDEQ(sessionID),
+			auditevent.ToolCallIDEQ(toolCallID),
+			auditevent.PhaseEQ(string(events.PhasePre)),
+		).
+		Order(auditevent.ByTimestamp()).
+		First(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find event by tool call: %w", err)
 	}
 
 	return entToEvent(entEvent), nil
@@ -871,8 +906,14 @@ func entToEvent(e *ent.AuditEvent) *events.Event {
 		IsSensitive:         e.IsSensitive,
 		SubagentID:          e.SubagentID,
 		SubagentType:        e.SubagentType,
+		Phase:               events.Phase(e.Phase),
+		Kind:                events.Kind(e.Kind),
+		ToolCallID:          e.ToolCallID,
 	}
 
+	if e.LinkedEventID != nil {
+		event.LinkedEventID = *e.LinkedEventID
+	}
 	if e.DurationMs != nil {
 		event.DurationMs = *e.DurationMs
 	}

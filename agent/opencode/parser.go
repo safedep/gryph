@@ -15,6 +15,7 @@ import (
 type ToolEventInput struct {
 	HookType  string                 `json:"hook_type"`
 	SessionID string                 `json:"session_id"`
+	CallID    string                 `json:"call_id"`
 	Tool      string                 `json:"tool"`
 	Args      map[string]interface{} `json:"args"`
 	Result    map[string]interface{} `json:"result"`
@@ -69,7 +70,7 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 	}
 
 	if event != nil {
-		event.HookType = hookType
+		event.HookType = events.HookType(hookType)
 	}
 
 	return event, nil
@@ -88,6 +89,7 @@ func (a *Adapter) parseToolEvent(hookType string, rawData []byte, isAfter bool) 
 	event := events.NewEvent(sessionID, AgentName, actionType)
 	event.ToolName = toolName
 	event.WorkingDirectory = input.Cwd
+	event.ToolCallID = input.CallID
 	event.RawEvent = rawData
 
 	var toolResponse map[string]interface{}

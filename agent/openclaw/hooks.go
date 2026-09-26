@@ -10,6 +10,7 @@ import (
 
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/core/events"
 )
 
 //go:embed plugin.ts
@@ -19,12 +20,18 @@ func processedPlugin() []byte {
 	return bytes.ReplaceAll(pluginTS, []byte(utils.GryphCommandPlaceholder), []byte(utils.GryphCommand()))
 }
 
-var HookTypes = []string{
-	"before_tool_call",
-	"after_tool_call",
-	"session_start",
-	"session_end",
+// Hooks declares the OpenClaw hooks Gryph installs and parses. Phase and
+// Blocking drive the enforcement coverage table in
+// docs/agent-enforcement-coverage.md.
+var Hooks = []events.HookSpec{
+	{Type: "before_tool_call", Phase: events.PhasePre, Blocking: true},
+	{Type: "after_tool_call", Phase: events.PhasePost},
+	{Type: "session_start", Phase: events.PhaseUnknown},
+	{Type: "session_end", Phase: events.PhaseUnknown},
 }
+
+// HookTypes are the hook type names in Hooks, in install order.
+var HookTypes = agent.HookTypeNames(Hooks)
 
 const pluginFileName = "index.ts"
 

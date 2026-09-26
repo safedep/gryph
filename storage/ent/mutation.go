@@ -6256,6 +6256,10 @@ type AuditEventMutation struct {
 	is_sensitive         *bool
 	subagent_id          *string
 	subagent_type        *string
+	phase                *string
+	kind                 *string
+	tool_call_id         *string
+	linked_event_id      *uuid.UUID
 	clearedFields        map[string]struct{}
 	session              *uuid.UUID
 	clearedsession       bool
@@ -7200,6 +7204,202 @@ func (m *AuditEventMutation) ResetSubagentType() {
 	delete(m.clearedFields, auditevent.FieldSubagentType)
 }
 
+// SetPhase sets the "phase" field.
+func (m *AuditEventMutation) SetPhase(s string) {
+	m.phase = &s
+}
+
+// Phase returns the value of the "phase" field in the mutation.
+func (m *AuditEventMutation) Phase() (r string, exists bool) {
+	v := m.phase
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPhase returns the old "phase" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldPhase(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPhase is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPhase requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPhase: %w", err)
+	}
+	return oldValue.Phase, nil
+}
+
+// ClearPhase clears the value of the "phase" field.
+func (m *AuditEventMutation) ClearPhase() {
+	m.phase = nil
+	m.clearedFields[auditevent.FieldPhase] = struct{}{}
+}
+
+// PhaseCleared returns if the "phase" field was cleared in this mutation.
+func (m *AuditEventMutation) PhaseCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldPhase]
+	return ok
+}
+
+// ResetPhase resets all changes to the "phase" field.
+func (m *AuditEventMutation) ResetPhase() {
+	m.phase = nil
+	delete(m.clearedFields, auditevent.FieldPhase)
+}
+
+// SetKind sets the "kind" field.
+func (m *AuditEventMutation) SetKind(s string) {
+	m.kind = &s
+}
+
+// Kind returns the value of the "kind" field in the mutation.
+func (m *AuditEventMutation) Kind() (r string, exists bool) {
+	v := m.kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKind returns the old "kind" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldKind(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKind: %w", err)
+	}
+	return oldValue.Kind, nil
+}
+
+// ClearKind clears the value of the "kind" field.
+func (m *AuditEventMutation) ClearKind() {
+	m.kind = nil
+	m.clearedFields[auditevent.FieldKind] = struct{}{}
+}
+
+// KindCleared returns if the "kind" field was cleared in this mutation.
+func (m *AuditEventMutation) KindCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldKind]
+	return ok
+}
+
+// ResetKind resets all changes to the "kind" field.
+func (m *AuditEventMutation) ResetKind() {
+	m.kind = nil
+	delete(m.clearedFields, auditevent.FieldKind)
+}
+
+// SetToolCallID sets the "tool_call_id" field.
+func (m *AuditEventMutation) SetToolCallID(s string) {
+	m.tool_call_id = &s
+}
+
+// ToolCallID returns the value of the "tool_call_id" field in the mutation.
+func (m *AuditEventMutation) ToolCallID() (r string, exists bool) {
+	v := m.tool_call_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolCallID returns the old "tool_call_id" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldToolCallID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolCallID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolCallID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolCallID: %w", err)
+	}
+	return oldValue.ToolCallID, nil
+}
+
+// ClearToolCallID clears the value of the "tool_call_id" field.
+func (m *AuditEventMutation) ClearToolCallID() {
+	m.tool_call_id = nil
+	m.clearedFields[auditevent.FieldToolCallID] = struct{}{}
+}
+
+// ToolCallIDCleared returns if the "tool_call_id" field was cleared in this mutation.
+func (m *AuditEventMutation) ToolCallIDCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldToolCallID]
+	return ok
+}
+
+// ResetToolCallID resets all changes to the "tool_call_id" field.
+func (m *AuditEventMutation) ResetToolCallID() {
+	m.tool_call_id = nil
+	delete(m.clearedFields, auditevent.FieldToolCallID)
+}
+
+// SetLinkedEventID sets the "linked_event_id" field.
+func (m *AuditEventMutation) SetLinkedEventID(u uuid.UUID) {
+	m.linked_event_id = &u
+}
+
+// LinkedEventID returns the value of the "linked_event_id" field in the mutation.
+func (m *AuditEventMutation) LinkedEventID() (r uuid.UUID, exists bool) {
+	v := m.linked_event_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLinkedEventID returns the old "linked_event_id" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldLinkedEventID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLinkedEventID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLinkedEventID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLinkedEventID: %w", err)
+	}
+	return oldValue.LinkedEventID, nil
+}
+
+// ClearLinkedEventID clears the value of the "linked_event_id" field.
+func (m *AuditEventMutation) ClearLinkedEventID() {
+	m.linked_event_id = nil
+	m.clearedFields[auditevent.FieldLinkedEventID] = struct{}{}
+}
+
+// LinkedEventIDCleared returns if the "linked_event_id" field was cleared in this mutation.
+func (m *AuditEventMutation) LinkedEventIDCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldLinkedEventID]
+	return ok
+}
+
+// ResetLinkedEventID resets all changes to the "linked_event_id" field.
+func (m *AuditEventMutation) ResetLinkedEventID() {
+	m.linked_event_id = nil
+	delete(m.clearedFields, auditevent.FieldLinkedEventID)
+}
+
 // ClearSession clears the "session" edge to the Session entity.
 func (m *AuditEventMutation) ClearSession() {
 	m.clearedsession = true
@@ -7261,7 +7461,7 @@ func (m *AuditEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuditEventMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 22)
 	if m.session != nil {
 		fields = append(fields, auditevent.FieldSessionID)
 	}
@@ -7316,6 +7516,18 @@ func (m *AuditEventMutation) Fields() []string {
 	if m.subagent_type != nil {
 		fields = append(fields, auditevent.FieldSubagentType)
 	}
+	if m.phase != nil {
+		fields = append(fields, auditevent.FieldPhase)
+	}
+	if m.kind != nil {
+		fields = append(fields, auditevent.FieldKind)
+	}
+	if m.tool_call_id != nil {
+		fields = append(fields, auditevent.FieldToolCallID)
+	}
+	if m.linked_event_id != nil {
+		fields = append(fields, auditevent.FieldLinkedEventID)
+	}
 	return fields
 }
 
@@ -7360,6 +7572,14 @@ func (m *AuditEventMutation) Field(name string) (ent.Value, bool) {
 		return m.SubagentID()
 	case auditevent.FieldSubagentType:
 		return m.SubagentType()
+	case auditevent.FieldPhase:
+		return m.Phase()
+	case auditevent.FieldKind:
+		return m.Kind()
+	case auditevent.FieldToolCallID:
+		return m.ToolCallID()
+	case auditevent.FieldLinkedEventID:
+		return m.LinkedEventID()
 	}
 	return nil, false
 }
@@ -7405,6 +7625,14 @@ func (m *AuditEventMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldSubagentID(ctx)
 	case auditevent.FieldSubagentType:
 		return m.OldSubagentType(ctx)
+	case auditevent.FieldPhase:
+		return m.OldPhase(ctx)
+	case auditevent.FieldKind:
+		return m.OldKind(ctx)
+	case auditevent.FieldToolCallID:
+		return m.OldToolCallID(ctx)
+	case auditevent.FieldLinkedEventID:
+		return m.OldLinkedEventID(ctx)
 	}
 	return nil, fmt.Errorf("unknown AuditEvent field %s", name)
 }
@@ -7540,6 +7768,34 @@ func (m *AuditEventMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSubagentType(v)
 		return nil
+	case auditevent.FieldPhase:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPhase(v)
+		return nil
+	case auditevent.FieldKind:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKind(v)
+		return nil
+	case auditevent.FieldToolCallID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolCallID(v)
+		return nil
+	case auditevent.FieldLinkedEventID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLinkedEventID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent field %s", name)
 }
@@ -7630,6 +7886,18 @@ func (m *AuditEventMutation) ClearedFields() []string {
 	if m.FieldCleared(auditevent.FieldSubagentType) {
 		fields = append(fields, auditevent.FieldSubagentType)
 	}
+	if m.FieldCleared(auditevent.FieldPhase) {
+		fields = append(fields, auditevent.FieldPhase)
+	}
+	if m.FieldCleared(auditevent.FieldKind) {
+		fields = append(fields, auditevent.FieldKind)
+	}
+	if m.FieldCleared(auditevent.FieldToolCallID) {
+		fields = append(fields, auditevent.FieldToolCallID)
+	}
+	if m.FieldCleared(auditevent.FieldLinkedEventID) {
+		fields = append(fields, auditevent.FieldLinkedEventID)
+	}
 	return fields
 }
 
@@ -7676,6 +7944,18 @@ func (m *AuditEventMutation) ClearField(name string) error {
 		return nil
 	case auditevent.FieldSubagentType:
 		m.ClearSubagentType()
+		return nil
+	case auditevent.FieldPhase:
+		m.ClearPhase()
+		return nil
+	case auditevent.FieldKind:
+		m.ClearKind()
+		return nil
+	case auditevent.FieldToolCallID:
+		m.ClearToolCallID()
+		return nil
+	case auditevent.FieldLinkedEventID:
+		m.ClearLinkedEventID()
 		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent nullable field %s", name)
@@ -7738,6 +8018,18 @@ func (m *AuditEventMutation) ResetField(name string) error {
 		return nil
 	case auditevent.FieldSubagentType:
 		m.ResetSubagentType()
+		return nil
+	case auditevent.FieldPhase:
+		m.ResetPhase()
+		return nil
+	case auditevent.FieldKind:
+		m.ResetKind()
+		return nil
+	case auditevent.FieldToolCallID:
+		m.ResetToolCallID()
+		return nil
+	case auditevent.FieldLinkedEventID:
+		m.ResetLinkedEventID()
 		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent field %s", name)

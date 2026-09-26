@@ -90,7 +90,7 @@ func (a *Adapter) parseHookEvent(hookType string, rawData []byte) (*events.Event
 		return nil, err
 	}
 	if event != nil {
-		event.HookType = eventName
+		event.HookType = events.HookType(eventName)
 	}
 	return event, nil
 }
@@ -118,6 +118,7 @@ func (a *Adapter) parseToolCall(sessionID uuid.UUID, agentSessionID string, base
 
 	actionType := getActionType(input.ToolName)
 	event := events.NewEvent(sessionID, AgentName, actionType)
+	event.ToolCallID = input.ToolCallID
 	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
 	event.WorkingDirectory = input.Cwd
@@ -140,6 +141,7 @@ func (a *Adapter) parseToolResult(sessionID uuid.UUID, agentSessionID string, ba
 
 	actionType := getActionType(input.ToolName)
 	event := events.NewEvent(sessionID, AgentName, actionType)
+	event.ToolCallID = input.ToolCallID
 	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
 	event.WorkingDirectory = input.Cwd

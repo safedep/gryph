@@ -27,10 +27,10 @@ type Service interface {
 type HookRequest struct {
 	// HookType is the hook name the adapter recorded on the event. It can
 	// differ from the CLI argument, which only selects the response format.
-	HookType       string       `json:"hook_type"`
-	Event          events.Event `json:"event"`
-	TranscriptPath string       `json:"transcript_path,omitempty"`
-	FullContent    string       `json:"full_content,omitempty"`
+	HookType       events.HookType `json:"hook_type"`
+	Event          events.Event    `json:"event"`
+	TranscriptPath string          `json:"transcript_path,omitempty"`
+	FullContent    string          `json:"full_content,omitempty"`
 }
 
 // HookResponse is the decision the hook side renders for the agent.

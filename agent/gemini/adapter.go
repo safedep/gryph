@@ -60,10 +60,11 @@ var _ agent.Adapter = (*Adapter)(nil)
 // blockingHookType is the one Gemini CLI hook with a JSON decision channel.
 const blockingHookType = "BeforeTool"
 
-// RenderResponse maps a decision to the Gemini CLI wire response. BeforeTool
-// carries a JSON decision on stdout. Other hooks receive an empty JSON
-// object on allow and advisory text on stderr for guidance. Block is exit 2
-// with the reason on stderr.
+// Hooks implements agent.Adapter.
+func (a *Adapter) Hooks() []events.HookSpec {
+	return Hooks
+}
+
 // HookConfigPaths returns the globs for the files that hold the Gryph hook configuration.
 func (a *Adapter) HookConfigPaths() []string {
 	return []string{
@@ -71,6 +72,10 @@ func (a *Adapter) HookConfigPaths() []string {
 	}
 }
 
+// RenderResponse maps a decision to the Gemini CLI wire response. BeforeTool
+// carries a JSON decision on stdout. Other hooks receive an empty JSON
+// object on allow and advisory text on stderr for guidance. Block is exit 2
+// with the reason on stderr.
 func (a *Adapter) RenderResponse(hookType string, decision agent.HookDecision, detail string) agent.HookResponse {
 	jsonHook := hookType == blockingHookType
 	switch decision {

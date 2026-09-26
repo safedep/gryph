@@ -30,7 +30,11 @@ type Local struct {
 	loggingLevel func(agent string) config.LoggingLevel
 	recorder     func() ResultRecorder
 	onSessionEnd func(*session.Session)
+	hookSpec     HookSpecLookup
 }
+
+// HookSpecLookup returns the declared spec of an agent's hook type.
+type HookSpecLookup func(agent string, hook events.HookType) (events.HookSpec, bool)
 
 var _ Service = (*Local)(nil)
 
@@ -51,6 +55,14 @@ func WithResultRecorder(fn func() ResultRecorder) LocalOption {
 func WithSessionEndHook(fn func(*session.Session)) LocalOption {
 	return func(l *Local) {
 		l.onSessionEnd = fn
+	}
+}
+
+// WithHookSpecs installs the lookup the service uses to set an event's
+// phase from the adapter's declared hooks.
+func WithHookSpecs(lookup HookSpecLookup) LocalOption {
+	return func(l *Local) {
+		l.hookSpec = lookup
 	}
 }
 
@@ -87,6 +99,8 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 		return nil, err
 	}
 
+	l.classify(ctx, event)
+
 	result := l.evaluator.Evaluate(ctx, event, sess)
 	if !result.IsAllowed() {
 		l.recordBlocked(ctx, sess, event, result)
@@ -103,6 +117,35 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 		return &HookResponse{Decision: VerdictOf(security.DecisionGuidance), Guidance: result.AggregatedGuidance()}, nil
 	}
 	return &HookResponse{Decision: VerdictOf(security.DecisionAllow)}, nil
+}
+
+// classify sets the event's phase from the adapter's hook spec, links a post
+// event to the pre event of the same tool call, and sets the kind. The
+// service is the only source of these fields, so it clears the values the
+// request carries. A failed link lookup keeps the event unlinked, because
+// the link is extra data and the event must still be recorded.
+func (l *Local) classify(ctx context.Context, event *events.Event) {
+	event.Phase = events.PhaseUnknown
+	event.LinkedEventID = uuid.Nil
+	if l.hookSpec != nil && event.HookType != "" {
+		if spec, ok := l.hookSpec(event.AgentName, event.HookType); ok {
+			event.Phase = spec.Phase
+		} else {
+			log.Warnf("decision: %s hook %q is not declared by the adapter", event.AgentName, event.HookType)
+		}
+	}
+
+	if event.Phase == events.PhasePost && event.ToolCallID != "" {
+		pre, err := l.store.FindPreEventByToolCall(ctx, event.SessionID, event.ToolCallID)
+		switch {
+		case err != nil:
+			log.Warnf("decision: link tool call %s: %v", event.ToolCallID, err)
+		case pre != nil:
+			event.LinkedEventID = pre.ID
+		}
+	}
+
+	event.Kind = events.KindOf(event, event.LinkedEventID != uuid.Nil)
 }
 
 func (l *Local) loadSession(ctx context.Context, event *events.Event) (*session.Session, error) {
