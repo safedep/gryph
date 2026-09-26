@@ -325,6 +325,12 @@ func (m *Mediator) Check(ctx context.Context, event *events.Event, sess *session
 	result.AarmActionID = action.ID
 	result.AarmSessionID = action.SessionID
 
+	// The fail mode can still block an action that runs without its entry.
+	// So no receipt records it as allowed.
+	if appendErr != nil && result.Decision != coresecurity.DecisionBlock {
+		return result, appendErr
+	}
+
 	if m.shouldRecordReceipt(decision) {
 		rec, rerr := m.receipt.Record(ctx, &receipt.RecordInput{
 			SessionID:  action.SessionID,

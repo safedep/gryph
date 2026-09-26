@@ -209,8 +209,11 @@ rules:
 			require.NoError(t, err)
 
 			spy := &spyAccumulator{appendErr: errors.New("database is locked")}
+			rec := &spyReceiptGenerator{}
 			med, err := NewMediator(policy,
 				WithAccumulator(spy),
+				WithReceiptGenerator(rec),
+				WithMediatorConfig(MediatorConfig{LogAllEvaluations: true}),
 				WithApprovalService(&fakeApprovalService{outcome: &approval.Outcome{
 					Decision: tc.approval, Approver: "tester", DecidedAt: time.Now().UTC(),
 				}}),
@@ -231,9 +234,13 @@ rules:
 			if !tc.wantErr {
 				require.NoError(t, err, "a failed append must not fail a check that stops the action")
 				assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
+				assert.Len(t, rec.records, 1, "a block keeps its receipt")
 				return
 			}
 			require.ErrorIs(t, err, accumulator.ErrAppend)
+			if tc.action != "escalate" {
+				assert.Empty(t, rec.records, "no receipt records an action that the fail mode can still block")
+			}
 
 			for _, failOpen := range []bool{false, true} {
 				evaluator := coresecurity.New(&coresecurity.Config{FailOpen: failOpen})

@@ -454,8 +454,10 @@ The Mediator writes the entry after the evaluation. A block or defer entry
 goes in with its result. When the append fails and the action runs (allow,
 warn, guidance, or an approved escalation), `Check` returns the error wrapped
 with `accumulator.ErrAppend`. Then `policy.fail_mode` decides, because later
-rules read a session state that misses the entry. When the action does not
-run, a failed append only logs, so a block stays a block. The CLI records
+rules read a session state that misses the entry. An allow or warn then
+writes no receipt, because the fail mode can still block the action. An
+escalation keeps its receipt, because it records the approval. When the
+action does not run, a failed append only logs, so a block stays a block. The CLI records
 `ErrAppend` as the `context_append_error` self-audit action.
 When the snapshot or the evaluation fails, the Mediator writes the entry with
 no decision and the result `error`. The fail mode can still allow the action,
