@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/safedep/gryph/internal/securefile"
 )
 
 const (
@@ -376,12 +378,10 @@ func parseLegacyPrivateKeyFile(data []byte) (*PrivateKeyFile, error) {
 }
 
 // ReadPrivateKeyFile loads and parses the private key file at path. On Unix
-// platforms it opens the file with O_NOFOLLOW and refuses to load when the
-// file mode is broader than 0600 or the owner is not the current user. The
-// open-then-stat-then-read sequence operates on a single file descriptor to
-// avoid a symlink-swap TOCTOU between perm check and read.
+// it refuses a symbolic link, a mode wider than 0600, or an owner that is
+// not the current user. See securefile.ReadFile.
 func ReadPrivateKeyFile(path string) (*PrivateKeyFile, error) {
-	data, err := readPrivateKeyFileSecure(path)
+	data, err := securefile.ReadFile("receipt private key", path)
 	if err != nil {
 		return nil, err
 	}

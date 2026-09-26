@@ -148,7 +148,9 @@ origin `user` and with origin `agent` also give different digests.
 The key is 32 random bytes in `export.key`, next to the database, with mode
 0600. Gryph creates it on the first export and never exports it. Another
 install cannot match the digests. When you delete the key, the new key
-gives new digests. The self-protection rules block an agent read, write or
+gives new digests. On Unix, Gryph refuses to read a key file that grants
+access to the group or to others, that another user owns, or that is a
+symbolic link. The error tells you the command that fixes the mode. The self-protection rules block an agent read, write or
 removal of `export.key`. An agent that reads the key can reverse a digest
 with a dictionary. An agent that writes a known key can do the same with
 later exports.
