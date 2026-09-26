@@ -72,7 +72,7 @@ write the execution outcome to the accumulator row and the receipt row.
 | `aarm/approval` | Approval Service for `escalate`. `Nop` (deny) and `CLIPrompt`. |
 | `aarm/identity` | Captures human principal, service identity, role scope at the mediation boundary. |
 | `aarm/classify` | Heuristic data classifier. It returns `privacy.Class` values (secret, pii, source_code, ...). Fail-safe wrapper defaults to `unknown_sensitive`. The decision service uses the heuristic without the wrapper for content labels. |
-| `aarm/injectscore` | Heuristic prompt-injection score for tool-use actions. |
+| `aarm/injectscore` | Heuristic prompt-injection score for tool calls, post events and intents. |
 | `aarm/canonical` | Deterministic JSON with recursively sorted keys. Shared by every hash. |
 | `aarm/testchain` | Property-test scaffolding shared by receipt and context chain tests. Not production code. |
 | `aarm/conformance` | Test-only helpers that attribute conformance tests to AARM requirements. |
@@ -89,8 +89,11 @@ and accumulator read it. Key fields:
 - `Parameters`: normalized `Path`, `Command`, `Args`, `URL`, `Content`.
   `ContentFull` holds content for `content_patterns` matching only. It is
   capped at 1 MiB. For content over the cap, the PDP matches the first 1 MiB
-  and sets `ContentTruncated`. A policy that needs full inspection must handle
-  `content_truncated`. `ContentFull` is never persisted and is cleared after
+  and sets `ContentTruncated`. `Event.ObserveOutput` reads each map key and each
+  string value of a tool response. It cuts them to the same cap, gives each
+  string a fair share, and sets
+  `Event.OutputTruncated`. Mediation copies it to `ContentTruncated`. A policy
+  that needs full inspection must handle `content_truncated`. `ContentFull` is never persisted and is cleared after
   evaluation.
 - Identity: `HumanPrincipal`, `ServiceIdentity`, `RoleScope`.
 - Risk signals: `DataClassifications`, `InjectionScore`.
@@ -155,11 +158,31 @@ Conditions read two maps. `action.*` fields come from `actionActivation`:
 `context.*` fields come from `contextActivation`: `total_actions`,
 `files_read`, `files_written`, `commands_executed`, `network_requests`,
 `errors`, `tools_used`, `session_duration_ms`, `classifications_seen`,
-`entities_seen`, `semantic_drift`, `intent_available`,
-`actions_since_intent`. `Snapshot` computes the intent fields with the pending
-entry: a pending intent sets `intent_available` and resets the count, and a
-pending action adds one. `contextFieldEmpty` never reports an intent field as
-empty, so the fresh-session defer does not hide a missing intent.
+`tags_seen`, `tag_seq`, `origins_seen`, `entities_seen`, `semantic_drift`,
+`intent_available`, `actions_since_intent`. `Snapshot` computes the intent
+fields with the pending entry: a pending intent sets `intent_available` and
+resets the count, and a pending action adds one. The pending origin joins
+`origins_seen`. The pending entry has no tags yet, because the PDP decides
+all rules in one pass. `contextFieldEmpty` never reports an intent, tag or
+origin field as empty, so the fresh-session defer does not hide these facts.
+
+`action.kind`, `action.origin`, `action.source` and `action.sources` come
+from the event. `events.OriginSources` gives `sources`: the adapter claim, or
+every server reading of an ambiguous `mcp__` tool name. The accumulator adds
+`mcp:<server>` to `origins_seen` for each one. The server author chooses the
+tool name, so the adapter claim always wins. `entryTarget` reads the server
+from the tool name only when the adapter makes no claim.
+`events.Event.ClaimOrigin` fills the origin from the tool name, the action
+type and the path when the adapter did not set it. The decision service calls
+it before the label step, and `mediation.Normalize` calls it again for a
+Mediator that runs alone. `labelEvent` gives the output values the event
+origin and the other values the origin `agent`. A post event sets
+`FullContent` from the tool response through `Event.ObserveOutput`, so
+`content_patterns` and the injection scorer read what the agent received.
+
+`EvaluationResult.MatchedTags` is the sorted union of the tags of every
+matched rule. `appendEntry` stores it on the entry, and the accumulator adds
+each new tag to `tags_seen` with the entry sequence.
 
 Conditions run under a 100 ms timeout and a CEL cost limit (`celCostLimit`,
 100000). A 90-character `matches()` regex on an 8 KiB prompt costs about

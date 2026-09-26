@@ -166,6 +166,7 @@ func (a *Adapter) parseAfterTool(sessionID uuid.UUID, agentSessionID string, bas
 	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, input.ToolResponse); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
+	event.ObserveOutput(input.ToolResponse)
 
 	event.ResultStatus = events.ResultSuccess
 	detectErrorsInResponse(event, input.ToolResponse)

@@ -104,6 +104,7 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 	}
 
 	event := req.event()
+	event.ClaimOrigin()
 
 	var classes []privacy.Class
 	if l.classifier != nil {

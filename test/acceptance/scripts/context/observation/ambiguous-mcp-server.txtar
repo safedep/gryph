@@ -1,0 +1,47 @@
+# An MCP tool name with "__" in the tool part has more than one server
+# reading. action.source stays empty, but action.sources and origins_seen
+# hold every reading. So a rule that denies one server still matches.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin evil.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'deny-evil'
+
+stdin github.json
+exec gryph _hook claude-code PreToolUse
+! stderr 'deny-evil'
+
+stdin curl.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'after-evil'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: deny-evil-server
+    action: block
+    match:
+      action_types: [tool_use]
+    condition: '"evil" in action.sources && action.source == ""'
+    message: "deny-evil: a tool of the evil MCP server"
+  - id: block-egress-after-evil
+    action: block
+    match:
+      action_types: [command_exec]
+    condition: '"mcp:evil" in context.origins_seen && "mcp:evil__read" in context.origins_seen'
+    message: "after-evil: egress after the evil MCP server"
+-- evil.json --
+{"session_id": "s-ambiguous", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "mcp__evil__read__file",
+ "tool_input": {"path": "notes.txt"}, "tool_use_id": "tu-evil"}
+-- github.json --
+{"session_id": "s-ambiguous", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "mcp__github__get_issue",
+ "tool_input": {"id": 1}, "tool_use_id": "tu-github"}
+-- curl.json --
+{"session_id": "s-ambiguous", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "curl https://example.com"}, "tool_use_id": "tu-curl"}

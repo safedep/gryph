@@ -115,13 +115,19 @@ type StopInput struct {
 	LoopCount int    `json:"loop_count"`
 }
 
+// MCPServer holds the fields that a Cursor MCP hook sends about the server:
+// the URL of a remote server or the command of a local server.
+type MCPServer struct {
+	URL     string `json:"url,omitempty"`
+	Command string `json:"command,omitempty"`
+}
+
 // BeforeMCPExecutionInput represents the input for beforeMCPExecution hooks.
 type BeforeMCPExecutionInput struct {
 	HookInput
+	MCPServer
 	ToolName  string                 `json:"tool_name"`
 	ToolInput map[string]interface{} `json:"tool_input"`
-	URL       string                 `json:"url,omitempty"`
-	Command   string                 `json:"command,omitempty"`
 	Cwd       string                 `json:"cwd,omitempty"`
 }
 
@@ -137,6 +143,7 @@ type AfterShellExecutionInput struct {
 // AfterMCPExecutionInput represents the input for afterMCPExecution hooks.
 type AfterMCPExecutionInput struct {
 	HookInput
+	MCPServer
 	ToolName   string                 `json:"tool_name"`
 	ToolInput  map[string]interface{} `json:"tool_input"`
 	ResultJSON map[string]interface{} `json:"result_json,omitempty"`
@@ -334,6 +341,7 @@ func (a *Adapter) parsePostToolUse(sessionID uuid.UUID, agentSessionID string, b
 	if err := a.buildPayload(event, actionType, input.ToolName, input.ToolInput, toolOutput); err != nil {
 		return nil, fmt.Errorf("failed to build payload: %w", err)
 	}
+	event.ObserveOutput(toolOutput)
 
 	return event, nil
 }
@@ -568,6 +576,8 @@ func parseBeforeMCPExecution(sessionID uuid.UUID, agentSessionID string, base Ho
 	event := events.NewEvent(sessionID, AgentName, events.ActionToolUse)
 	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
+	event.Origin = privacy.OriginMCP
+	event.OriginSource = input.source()
 	event.RawEvent = rawData
 	if input.Cwd != "" {
 		event.WorkingDirectory = input.Cwd
@@ -610,6 +620,7 @@ func parseAfterShellExecution(sessionID uuid.UUID, agentSessionID string, base H
 		Command: privacy.NewText(input.Command),
 		Output:  privacy.Preview(input.Output, 500),
 	}
+	event.ObserveOutput(input.Output)
 	if err := event.SetPayload(payload); err != nil {
 		return nil, fmt.Errorf("failed to set payload: %w", err)
 	}
@@ -626,6 +637,9 @@ func parseAfterMCPExecution(sessionID uuid.UUID, agentSessionID string, base Hoo
 	event := events.NewEvent(sessionID, AgentName, events.ActionToolUse)
 	event.AgentSessionID = agentSessionID
 	event.ToolName = input.ToolName
+	event.Origin = privacy.OriginMCP
+	event.OriginSource = input.source()
+	event.ObserveOutput(input.ResultJSON)
 	event.DurationMs = input.Duration
 	event.RawEvent = rawData
 	event.ResultStatus = events.ResultSuccess

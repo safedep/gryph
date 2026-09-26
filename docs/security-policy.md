@@ -161,15 +161,22 @@ Available variables:
 action.type / tool / operation / agent / working_dir / project
 action.params.{path, command, args, url, size_bytes, lines_added, lines_removed, content}
 action.data_classifications        list, set by the heuristic classifier
-action.injection_score             float 0..1, set for tool_use actions only
+action.injection_score             float 0..1, for tool calls, post events and intents.
+                                   Each match adds 0.15. A strong phrase adds at most 0.6,
+                                   and all weak phrases together add at most 0.45.
+action.kind                        intent, action, or observation
+action.origin                      where the content came from, as the adapter claims it
+action.source                      the MCP server of an mcp origin
+action.sources                     every MCP server that the tool name can name
 action.human_principal             captured identity, see Identity capture
 action.service_identity            CI / service identity, see Identity capture
 action.role_scope                  OS uid/gid + asserted scopes
 action.gryph_hook                  true when a shell command runs gryph _hook
 context.{total_actions, files_read, files_written, commands_executed,
          network_requests, errors, tools_used, session_duration_ms,
-         classifications_seen, entities_seen, semantic_drift,
-         intent_available, actions_since_intent}
+         classifications_seen, tags_seen, tag_seq, origins_seen,
+         entities_seen, semantic_drift, intent_available,
+         actions_since_intent}
 ```
 
 `action.data_classifications` carries labels like `secret`, `pii`, `source_code`, `config`, `git_internal`, `external_url`. `context.classifications_seen` is the running union across the session. `semantic_drift` is reserved and reads as `0.0` today.
@@ -197,6 +204,88 @@ The intent fields trust the prompt events that reach `gryph _hook`. The hook inp
 - A rule with no `action_types`.
 
 A rule that must stop prompts must list `user_prompt` in `action_types`. Gryph logs a warning at policy load, and `gryph policy validate` prints one, for a rule that names one of these tool names.
+
+### Facts and tags
+
+The session context records facts. Your policy decides what the facts mean.
+
+| Value | Set by | Notes |
+|---|---|---|
+| `kind`, `phase` | The adapter's `Hooks()` table | Fixed per hook |
+| `origin`, `source` | The adapter, as a claim | From the tool name and the path |
+| `data_classifications` | The built-in classifier | A closed set. A fact, not a decision |
+| `tags` | Only your tag rules | Gryph ships no tag rule |
+| The decision | Only your rules, plus self-protection | - |
+
+`action.origin` is one of `user`, `agent`, `file_project`, `file_external`, `command`, `web`, `mcp`, and `unknown`. A web tool (`WebFetch`, `WebSearch`, `browser_*`) or a network request gives `web`. An `mcp__<server>__<tool>` tool gives `mcp`, and `action.source` names the server. A read inside the working directory gives `file_project`, and any other read, including a `~` path, gives `file_external`. A read with no path or no working directory gives `unknown`. The origin is a claim about the path string, and Gryph does not resolve symbolic links. A shell command gives `command`, and a write gives `agent`. Gryph does not decide which origin is trusted.
+
+A server name can hold `__`, so a tool name such as `mcp__github__x__get` has no single reading. `action.source` is then empty, so a rule that trusts one server fails closed. `action.sources` lists every reading (`github` and `github__x`), and `context.origins_seen` gets `mcp:<server>` for each one. A rule that denies one server must match `action.sources`, not `action.source`:
+
+```yaml
+- id: deny-evil-server
+  action: block
+  match:
+    action_types: [tool_use]
+  condition: '"evil" in action.sources'
+```
+
+Claude Code and other agents that use `mcp__<server>__<tool>` names give the server name from the agent config. Windsurf sends the server name. A Cursor MCP hook sends no server name, so Gryph makes one from the server URL or command. When the adapter names the server, as Cursor and Windsurf do, `action.source` holds that name. The server author chooses the tool name, so an evil server can name a tool `mcp__github__get_issue`. Gryph then records the server that the adapter names, not the server in the tool name. On Cursor and Windsurf, match the server with `action.source` or `action.sources`, not with `action.tool.startsWith("mcp__<server>__")`.
+
+- A remote server gives its host, its port when the URL has one, and the first path segment, such as `mcp.example.com/evil` for `https://mcp.example.com/evil/sse`. A first segment `sse` or `mcp` names the transport, so `https://mcp.example.com/sse` gives `mcp.example.com`. Gryph removes a trailing dot from the host and removes the default port of the scheme (443 for `https`, 80 for `http`). So `https://evil.example.:443/sse` gives `evil.example`.
+- A local server gives its program as written. A program with no slash gives its name, such as `github-mcp-server` for `github-mcp-server stdio`. A program path stays whole, such as `/usr/local/bin/github-mcp-server` for `/usr/local/bin/github-mcp-server stdio`, because any directory can hold a program with a trusted name.
+- A launcher starts many servers, so Gryph uses the package, module, image or script that it starts. It skips the launcher flags and removes a version, tag or digest. Gryph removes only a version or a tag. For npm that is a dist-tag such as `latest` or a semver range such as `^1.2.0`. For PyPI it is the lower-case `latest` or a PEP 440 version after `@` with no space. Each number in the version must fit in 64 bits, as uv requires. A spaced `name @ X` is always a direct reference. Any other spec stays in the name, so it never matches the plain package name. Examples are an npm file path, archive, URL or alias (`good@.`, `good@x.TGZ`, `good@file:/tmp/x`, `good@npm:evil`) and a PyPI direct reference (`good@good-1.0-py3-none-any.whl`, `good@1evil`, `good @ 1.0`, `good @ git+https://x/good`). The launchers are `npx`, `pnpx`, `bunx`, `npm exec`, `pnpm dlx`, `yarn dlx`, `bun x`, `uvx`, `uv run`, `uv tool run`, `pipx run`, `python -m`, `node`, `deno run`, `docker run` and `podman run`. For example, `npx -y @evil/mcp-server@1.0` gives `@evil/mcp-server`, `python -m mcp_server_time` gives `mcp_server_time`, and `docker run -i --rm -e TOKEN ghcr.io/github/github-mcp-server:v1` gives `ghcr.io/github/github-mcp-server`. A script path stays as written.
+- A package flag (`-p` or `--package` for the npm launchers, `--from` or `--spec` for the Python launchers) names the package that holds the command. Any package can hold a command with a trusted name, so the flag value is the name. For example, `npx -p @evil/pkg github-mcp-server` gives `@evil/pkg`, and `uvx --from evil good` gives `evil`. Two or more package flags give the launcher name.
+
+The launcher parse is best effort. When Gryph cannot find the launcher operand, the name is the launcher, such as `npx` or `docker`. A `docker run` flag that Gryph does not know takes a value. A rule that trusts one Cursor server must not trust a launcher name, because each server that the launcher starts has that name.
+
+For a post event, `content_patterns` and the scorer read the tool output. They read each string value and each map key of the output, because a tool such as an MCP server controls its keys. So a rule on a post event matches what the agent received. Gryph keeps at most 1 MiB of the output. Over the cap, each string keeps a fair share, and `action.content_truncated` is true. A rule that needs the full output must handle `content_truncated`.
+
+`action.kind == "observation"` needs a linked pre event. The Gemini, Windsurf and OpenClaw adapters and the Cursor after hooks do not link a post event, so their post events have the kind `action`. To match what the agent received from every agent, use `action.phase == "post"`.
+
+A rule with `action: allow` and `tags` labels an event and does not change the decision, because `allow` has the lowest precedence. The context entry stores the tags of every rule that matched, at any decision. `context.tags_seen` lists the tags of earlier entries, and `context.tag_seq` maps each tag to the sequence of the first entry that has it. A rule cannot see the tags of the event under evaluation. `context.origins_seen` lists the origins of the session, with `mcp:<server>` for MCP. Tags do not make two rules conflict.
+
+A tag that the session does not have is not a key of `context.tag_seq`. Guard the lookup, or use an optional lookup:
+
+```
+"secret_read" in context.tag_seq && context.tag_seq["secret_read"] > 3
+context.tag_seq[?"secret_read"].orValue(0) > 3
+```
+
+In a message template, `{{index .Context.TagSeq "secret_read"}}` gives 0 for a missing tag.
+
+A tag name starts with a lower-case letter, holds lower-case letters, digits, `_` and `-`, and has at most 63 characters. `gryph policy validate` and `gryph policy install` reject any other name. An installed policy with another name still loads with a warning, so an upgrade does not stop your hooks.
+
+This policy tags a secret read by path or by content, and blocks a network command after it:
+
+```yaml
+- id: tag-secret-read
+  action: allow
+  tags: [secret_read]
+  match:
+    action_types: [file_read, command_exec]
+    file_patterns: ["**/.env", "**/.env.*", "**/*.pem", "**/.aws/credentials"]
+    file_access: [read]
+- id: tag-secret-content
+  action: allow
+  tags: [secret_read]
+  match:
+    action_types: [file_read, command_exec, tool_use]
+    content_patterns: ['AKIA[0-9A-Z]{16}', '-----BEGIN [A-Z ]*PRIVATE KEY-----']
+  condition: 'action.phase == "post"'
+- id: tag-untrusted-input
+  action: allow
+  tags: [untrusted_input]
+  match:
+    action_types: [tool_use, network_request]
+  condition: 'action.origin in ["web", "mcp"]'
+- id: block-egress-after-secret-read
+  action: block
+  severity: high
+  match:
+    action_types: [command_exec]
+  condition: '"secret_read" in context.tags_seen && action.params.command.contains("curl")'
+  message: "Blocked: network access after a secret read in this session."
+```
 
 `action.human_principal`, `action.service_identity`, and `action.role_scope` carry the AARM R6 identity fields. They are empty strings when capture is disabled or the resolver could not derive a value. See [Identity capture](#identity-capture).
 
@@ -490,7 +579,7 @@ policy:
     enabled: true
 ```
 
-`classify` labels paths and URLs. An `extra_patterns` key that is not a built-in class, such as `customer_data`, is a custom label. A condition such as `'customer_data' in action.data_classifications` matches it. It does not become a content label. `injection_score` scans tool-use content for prompt-injection markers and returns a float between 0 and 1. Use them in conditions:
+`classify` labels paths and URLs. An `extra_patterns` key that is not a built-in class, such as `customer_data`, is a custom label. A condition such as `'customer_data' in action.data_classifications` matches it. It does not become a content label. `injection_score` scans tool calls, post events and prompts for prompt-injection phrases and returns a float between 0 and 1. Each match adds 0.15. A strong phrase (`ignore previous instructions`, `disregard previous`, `forget instructions`) counts up to four matches, so four hits of one strong phrase give 0.6. A weak phrase (`you are now`, `system prompt`, `act as`, `prompt injection`) counts up to two matches, so it adds at most 0.3. All weak phrases together add at most 0.45. Normal text, such as a README for an LLM app, often holds weak phrases, so only a strong phrase can take the score past 0.5. A phrase matches at word boundaries. White space, a Unicode space, a dash, `*`, a backtick, `~`, `&nbsp;`, `&#160;` and `&#xa0;` separate words. `_` separates the words of a strong phrase. It does not separate the words of a weak phrase, so an identifier such as `system_prompt` does not match. Gryph removes each invisible format character (Unicode category Cf, such as a zero-width space or a soft hyphen) and each combining mark (category Mn) before it matches. It also changes common Cyrillic and Greek letters that look like ASCII letters, such as the Cyrillic small letter i (U+0456), to the ASCII letter. One filler word (`all`, `the`, `any`, `your`, `my`, `prior`, `above`) can come between two words, such as `ignore all previous instructions`. The first word can take `s`, `ed` or `ing`, such as `ignoring previous instructions`. The last word can take a common suffix, such as `system prompts` or `disregard previously`. Use them in conditions:
 
 Defer fires automatically on insufficient context (fresh sessions whose
 counters have not filled in yet) and on conflicting policies (multiple rules

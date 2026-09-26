@@ -1,0 +1,58 @@
+# A tag name starts with a lower-case letter and holds lower-case letters,
+# digits, underscores and hyphens, up to 63 characters. Policy validation
+# rejects any other name and names the rule and the tag. An installed policy
+# from before this check still loads and enforces, so an upgrade never
+# locks the agent out.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph policy validate --file good.yaml
+! exec gryph policy validate --file bad.yaml
+stderr 'rule "bad-tag" has invalid tag "Secret Read"'
+
+stdin read.json
+exec gryph _hook claude-code PreToolUse
+stdin write_env.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'legacy-block'
+
+! exec gryph policy validate
+stderr 'invalid tag "PII"'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: legacy-block-env-write
+    action: block
+    tags: [PII]
+    match:
+      action_types: [file_write]
+      file_patterns: ["**/.env"]
+    message: "legacy-block: no writes to .env"
+-- read.json --
+{"session_id": "s-legacy", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "/home/user/project/main.go"}, "tool_use_id": "tu-1"}
+-- write_env.json --
+{"session_id": "s-legacy", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Write",
+ "tool_input": {"file_path": "/home/user/project/.env", "content": "x"}, "tool_use_id": "tu-2"}
+-- good.yaml --
+version: "1"
+rules:
+  - id: good-tag
+    action: allow
+    tags: [secret_read, self-protection]
+    match:
+      action_types: [file_read]
+-- bad.yaml --
+version: "1"
+rules:
+  - id: bad-tag
+    action: allow
+    tags: ["Secret Read"]
+    match:
+      action_types: [file_read]

@@ -58,6 +58,9 @@ type Event struct {
 	// In-memory only (excluded from JSON, storage, logs); only the short
 	// ContentPreview is persisted. Empty for sensitive paths.
 	FullContent string `json:"-"`
+	// OutputTruncated is true when ObserveOutput cut the tool response to
+	// fit FullContent. Mediation copies it to action.content_truncated.
+	OutputTruncated bool `json:"-"`
 	// IsSensitive is true if path matched sensitive_paths pattern.
 	IsSensitive bool `json:"is_sensitive"`
 	// SubagentID is set when this event was performed by a subagent (empty for main agent).
@@ -76,8 +79,11 @@ type Event struct {
 	// a post event when Gryph recorded the pre event.
 	LinkedEventID uuid.UUID `json:"linked_event_id,omitempty,omitzero"`
 	// Origin is where the content of the event came from, as the adapter
-	// claims it. The context entry and the content labels store it.
+	// claims it. ClaimOrigin fills it from the event facts when the adapter
+	// does not. The context entry and the content labels store it.
 	Origin privacy.Origin `json:"-"`
+	// OriginSource names the MCP server when Origin is OriginMCP.
+	OriginSource string `json:"-"`
 }
 
 // NewEvent creates a new Event with a generated UUID and current timestamp.

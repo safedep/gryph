@@ -1,0 +1,51 @@
+# A rule with action allow and tags labels an event and does not change the
+# decision. A later rule reads the tag in context.tags_seen. Here a read of
+# .env is allowed and tagged secret_read, and a later curl is blocked. The
+# session ID 0d7058eb derives from the agent session ID s-tags.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin curl.json
+exec gryph _hook claude-code PreToolUse
+
+stdin read_env.json
+exec gryph _hook claude-code PreToolUse
+! stderr .
+
+stdin curl.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'egress-after-secret'
+
+exec gryph policy context --session 0d7058eb --format json --no-color
+stdout '"secret_read": 2'
+stdout '"tags": \[\n\s+"secret_read"\n\s+\]'
+stdout -count=1 '"decision": "block"'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: tag-secret-read
+    action: allow
+    tags: [secret_read]
+    match:
+      action_types: [file_read]
+      file_patterns: ["**/.env"]
+      file_access: [read]
+  - id: block-egress-after-secret-read
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+    condition: '"secret_read" in context.tags_seen && action.params.command.contains("curl")'
+    message: "egress-after-secret: network access after a secret read"
+-- read_env.json --
+{"session_id": "s-tags", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "/home/user/project/.env"}, "tool_use_id": "tu-read"}
+-- curl.json --
+{"session_id": "s-tags", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "curl https://example.com"}, "tool_use_id": "tu-curl"}

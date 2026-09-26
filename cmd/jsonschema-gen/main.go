@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/privacy"
@@ -51,9 +52,10 @@ type oneOf struct {
 }
 
 type items struct {
-	Type string   `json:"type,omitempty"`
-	Ref  string   `json:"$ref,omitempty"`
-	Enum []string `json:"enum,omitempty"`
+	Type    string   `json:"type,omitempty"`
+	Ref     string   `json:"$ref,omitempty"`
+	Enum    []string `json:"enum,omitempty"`
+	Pattern string   `json:"pattern,omitempty"`
 }
 
 type definition struct {
@@ -199,12 +201,12 @@ func generatePolicySchema() jsonSchema {
 			},
 			"tags": {
 				Type:        "array",
-				Description: "Free-form labels propagated to receipts (e.g. \"compliance\", \"pii\").",
-				Items:       &items{Type: "string"},
+				Description: "Labels for the event. Every matched rule adds its tags to the context entry, at any decision, and later rules read them in context.tags_seen. A rule with action allow and tags labels an event without changing the decision. gryph policy validate rejects a tag that does not match the pattern.",
+				Items:       &items{Type: "string", Pattern: pdp.TagNamePattern},
 			},
 			"message": {
 				Type:        "string",
-				Description: "Go text/template rendered when the rule matches. Available references: .Action (Type, Tool, Operation, Agent, WorkingDir, Project, Params), .Context (TotalActions, FilesRead, FilesWritten, CommandsExecuted, NetworkRequests, Errors, ToolsUsed, SessionDurationMs, ClassificationsSeen, EntitiesSeen, SemanticDrift), .Rule (ID, Description, Action, Severity, Tags).",
+				Description: "Go text/template rendered when the rule matches. Available references: .Action (Type, Tool, Operation, Agent, WorkingDir, Project, Kind, Origin, Source, Params), .Context (TotalActions, FilesRead, FilesWritten, CommandsExecuted, NetworkRequests, Errors, ToolsUsed, SessionDurationMs, ClassificationsSeen, TagsSeen, TagSeq, OriginsSeen, EntitiesSeen, SemanticDrift, IntentAvailable, ActionsSinceIntent), .Rule (ID, Description, Action, Severity, Tags).",
 			},
 			"match": {
 				Ref: "#/$defs/match",
@@ -214,7 +216,7 @@ func generatePolicySchema() jsonSchema {
 			},
 			"condition": {
 				Type:        "string",
-				Description: "CEL expression returning bool. Evaluated after `match` succeeds. Variables: action.{type,tool,operation,agent,working_dir,project,params.{path,command,args,url,size_bytes,lines_added,lines_removed,content}}, context.{total_actions,files_read,files_written,commands_executed,network_requests,errors,tools_used,session_duration_ms,classifications_seen,entities_seen,semantic_drift,intent_available,actions_since_intent}. Sandboxed; 100ms timeout.",
+				Description: "CEL expression returning bool. Evaluated after `match` succeeds. Variables: action.{type,tool,operation,agent,working_dir,project,kind,origin,source,params.{path,command,args,url,size_bytes,lines_added,lines_removed,content}}, context.{total_actions,files_read,files_written,commands_executed,network_requests,errors,tools_used,session_duration_ms,classifications_seen,tags_seen,tag_seq,origins_seen,entities_seen,semantic_drift,intent_available,actions_since_intent}. Sandboxed; 100ms timeout.",
 			},
 			"reason": {
 				Type:        "string",

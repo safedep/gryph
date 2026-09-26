@@ -20,6 +20,11 @@ var keptAtMinimal = map[string]bool{"command": true}
 // text, so the standard level keeps its label and digest only.
 var keptAtFullOnly = map[string]bool{"diff_content": true, "prompt": true}
 
+// outputFields are the content values that a tool returned. They take the
+// origin of the event. Every other value, except a prompt, is what the agent
+// wrote, so it takes the origin agent.
+var outputFields = map[string]bool{"output": true, "stdout_preview": true, "stderr_preview": true, "output_preview": true}
+
 // labelEvent runs the first label steps on every content value, in the order
 // of docs/content-labels.md: digest and size of the raw value, classes, and
 // redaction. The policy then evaluates the redacted event. applyLevel strips
@@ -37,10 +42,11 @@ func labelEvent(event *events.Event, redactor *privacy.Redactor, classes []priva
 		event.IsSensitive = true
 	}
 
-	if err := walkContent(event, func(_ string, t *privacy.Text) {
+	if err := walkContent(event, func(path string, t *privacy.Text) {
 		if t.IsZero() {
 			return
 		}
+		setOrigin(event, path, t)
 		if t.Label.Digest == "" && t.Value != "" {
 			t.Label.Digest = privacy.Digest(t.Value)
 			t.Label.Size = len(t.Value)
@@ -117,6 +123,24 @@ func applyLevel(event *events.Event, level config.LoggingLevel) {
 	}
 	if event.IsSensitive {
 		event.FullContent = ""
+	}
+}
+
+func setOrigin(event *events.Event, path string, t *privacy.Text) {
+	if t.Label.Origin != "" || event.Origin == "" {
+		return
+	}
+	if path == "prompt" {
+		t.Label.Origin = event.Origin
+		return
+	}
+	if !outputFields[path] {
+		t.Label.Origin = privacy.OriginAgent
+		return
+	}
+	t.Label.Origin = event.Origin
+	if event.Origin == privacy.OriginMCP {
+		t.Label.Source = event.OriginSource
 	}
 }
 

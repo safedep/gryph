@@ -60,8 +60,11 @@ evaluation. `labelEvent` (`decision/label.go`) runs before the evaluation:
 2. Set `Classes` from the classifier (`classify.Heuristic.ClassifyEvent`) and
    the sensitive-path check. The classifier reads the paths and the URL that
    `Event.Targets` returns.
-3. `Origin` and `Source` are claims from the adapter. No adapter sets them
-   yet.
+3. Set `Origin` and `Source` when the value has no origin yet. The tool
+   output (`output`, `stdout_preview`, `stderr_preview`, `output_preview`)
+   takes the event origin, and the MCP server for an `mcp` origin. Every
+   other value, such as the command, the tool input, or the content of a
+   write, takes `agent`. A prompt keeps the origin that `SetPrompt` gave it.
 4. Apply the redactor. Set `Redacted` when a pattern matched. A value that
    holds a JSON object or array keeps its structure. The redactor also
    applies to the raw event and to the error message.

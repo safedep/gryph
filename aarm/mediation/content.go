@@ -10,10 +10,14 @@ import (
 const contentMatchMaxBytes = 1 << 20 // 1 MiB
 
 // applyContentMatch sets the ContentFull match buffer of the action from the
-// event content, up to contentMatchMaxBytes. Over the cap it sets
-// ContentTruncated.
-func applyContentMatch(action *model.Action, fullContent string) {
-	if action == nil || fullContent == "" {
+// event content, up to contentMatchMaxBytes. It sets ContentTruncated over the
+// cap, or when the hook side already cut the content.
+func applyContentMatch(action *model.Action, fullContent string, cut bool) {
+	if action == nil {
+		return
+	}
+	action.ContentTruncated = cut
+	if fullContent == "" {
 		return
 	}
 	if len(fullContent) > contentMatchMaxBytes {

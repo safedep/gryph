@@ -715,7 +715,7 @@ rules:
 	assert.Equal(t, DeferReasonConflictingPolicies, got.DeferReason)
 }
 
-func TestPDP_ConflictTriggerFiresWhenTagsDiffer(t *testing.T) {
+func TestPDP_ConflictTriggerIgnoresTags(t *testing.T) {
 	policy := mustPolicy(t, `
 version: "1"
 rules:
@@ -740,10 +740,10 @@ rules:
 	require.NoError(t, err)
 	got, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionFileRead}, nil)
 	require.NoError(t, err)
-	// Same decision and severity, distinct tag sets count as a structural
-	// conflict.
-	assert.Equal(t, model.DecisionDefer, got.Decision)
-	assert.Equal(t, DeferReasonConflictingPolicies, got.DeferReason)
+	// Same decision and severity with distinct tag sets is no conflict.
+	// Tags label the event, and the result holds both sets.
+	assert.Equal(t, model.DecisionBlock, got.Decision)
+	assert.Equal(t, []string{"network", "secrets"}, got.MatchedTags)
 }
 
 func TestPDP_ConflictTriggerSameStructureDoesNotFire(t *testing.T) {

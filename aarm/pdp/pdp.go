@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -65,6 +66,11 @@ func New(policy *Policy, opts ...Option) (*PDP, error) {
 	compiled, err := compileRules(rules)
 	if err != nil {
 		return nil, err
+	}
+	if policy != nil {
+		if err := CheckTagNames(policy); err != nil {
+			log.Warnf("pdp: %v. The policy loads, but gryph policy validate rejects the tag", err)
+		}
 	}
 	p := &PDP{rules: compiled}
 	for _, opt := range opts {
@@ -146,13 +152,13 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 		}
 
 		result.MatchedRuleIDs = append(result.MatchedRuleIDs, rule.rule.ID)
+		result.MatchedTags = addTags(result.MatchedTags, rule.rule.Tags)
 		tier := precedence(rule.rule.Action)
 		if conflictDetection {
 			tiers[tier] = append(tiers[tier], matchedTier{
 				decision: rule.rule.Action,
 				ruleID:   rule.rule.ID,
 				severity: rule.rule.Severity,
-				tags:     rule.rule.Tags,
 			})
 		}
 		if tier > precedence(result.Decision) {
@@ -175,10 +181,13 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 		log.Warnf("pdp: a condition failed, and a %s rule decides: %v", result.Decision, condErr)
 	}
 
-	if freshSessionDeferred && len(result.MatchedRuleIDs) == 0 {
+	// An allow tag rule matches without a decision, so the defer checks the
+	// decision and not the count of matched rules.
+	if freshSessionDeferred && result.Decision == model.DecisionAllow {
 		return &model.EvaluationResult{
 			Decision:       model.DecisionDefer,
 			MatchedRuleIDs: []string{freshDeferRule},
+			MatchedTags:    result.MatchedTags,
 			Message:        DeferReasonFreshSession,
 			DeferReason:    DeferReasonFreshSession,
 		}, nil
@@ -189,6 +198,7 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 			return &model.EvaluationResult{
 				Decision:       model.DecisionDefer,
 				MatchedRuleIDs: ruleIDs,
+				MatchedTags:    result.MatchedTags,
 				Message:        DeferReasonConflictingPolicies,
 				DeferReason:    DeferReasonConflictingPolicies,
 			}, nil
@@ -231,11 +241,21 @@ func (r compiledRule) storedMessage(stored *model.Action, snapshot *model.Contex
 	return msg
 }
 
+// addTags adds the tags that set does not hold, and keeps set sorted.
+func addTags(set, tags []string) []string {
+	for _, t := range tags {
+		if i, found := slices.BinarySearch(set, t); !found {
+			set = slices.Insert(set, i, t)
+		}
+	}
+	return set
+}
+
 // detectConflict returns true when more than one rule matched at the
 // winning precedence tier with structurally different output. Same-tier
 // matches share a decision by construction (precedence is per-decision), so
-// the meaningful disagreement is between severity or tags. Two matches
-// conflict when their (severity, sorted-tags) fingerprint differs. Comparing
+// the meaningful disagreement is between severities. Two matches conflict
+// when their (decision, severity) fingerprint differs. Comparing
 // rendered messages would over-fire on trivially differing wording and
 // under-fire when two rules at the same tier disagree on severity but share
 // a message. The returned rule IDs are the matched rule IDs at the winning
@@ -274,16 +294,14 @@ type matchedTier struct {
 	decision model.Decision
 	ruleID   string
 	severity model.Severity
-	tags     []string
 }
 
 // fingerprint returns the structural identity of a matched rule used to
-// detect conflicts at the same precedence tier. Tags are sorted into a
-// stable order so author-side tag ordering does not flip the result.
+// detect conflicts at the same precedence tier. Tags are not part of it.
+// Tags label the event, and every matched rule adds its tags, so two rules
+// with different tags do not disagree.
 func (m matchedTier) fingerprint() string {
-	sortedTags := append([]string(nil), m.tags...)
-	sort.Strings(sortedTags)
-	return string(m.decision) + "|" + string(m.severity) + "|" + strings.Join(sortedTags, ",")
+	return string(m.decision) + "|" + string(m.severity)
 }
 
 // shouldDeferFreshSession reports whether the rule should defer instead of
@@ -328,8 +346,9 @@ func contextRefsEmpty(refs []string, snapshot *model.ContextSnapshot) bool {
 }
 
 // contextFieldEmpty reports whether a context field has no data yet. The
-// intent fields are never empty. A session with no intent is a fact that a
-// rule can act on, and the fresh-session defer must not hide it.
+// intent, tag and origin fields are never empty. A session with no intent or
+// no tag is a fact that a rule can act on, and the fresh-session defer must
+// not hide it.
 func contextFieldEmpty(field string, s *model.ContextSnapshot) bool {
 	switch field {
 	case "total_actions":
@@ -695,6 +714,7 @@ func conditionEnv() (*cel.Env, error) {
 	return cel.NewEnv(
 		cel.Variable("action", cel.MapType(cel.StringType, cel.DynType)),
 		cel.Variable("context", cel.MapType(cel.StringType, cel.DynType)),
+		cel.OptionalTypes(),
 	)
 }
 
@@ -763,6 +783,10 @@ func actionActivation(action *model.Action, paths *actionPaths) map[string]any {
 		"service_identity":     action.ServiceIdentity,
 		"role_scope":           action.RoleScope,
 		"gryph_hook":           paths.runsGryphHook(),
+		"kind":                 string(action.Kind),
+		"origin":               string(action.Origin),
+		"source":               action.Source,
+		"sources":              nonNil(action.Sources),
 		"params": map[string]any{
 			"path":          action.Parameters.Path,
 			"command":       action.Parameters.Command,
@@ -790,9 +814,32 @@ func contextActivation(snapshot *model.ContextSnapshot) map[string]any {
 		"tools_used":           snapshot.ToolsUsed,
 		"session_duration_ms":  snapshot.SessionDuration.Milliseconds(),
 		"classifications_seen": snapshot.ClassificationsSeen,
+		"tags_seen":            tagNames(snapshot.TagsSeen),
+		"tag_seq":              tagSeq(snapshot.TagsSeen),
+		"origins_seen":         nonNil(snapshot.OriginsSeen),
 		"entities_seen":        snapshot.EntitiesSeen,
 		"semantic_drift":       snapshot.SemanticDrift,
 		"intent_available":     snapshot.IntentAvailable,
 		"actions_since_intent": snapshot.ActionsSinceIntent,
 	}
+}
+
+// tagNames returns the sorted tag names of seen.
+func tagNames(seen map[string]int64) []string {
+	return slices.Sorted(maps.Keys(seen))
+}
+
+// tagSeq returns seen, or an empty map, so a CEL lookup never meets null.
+func tagSeq(seen map[string]int64) map[string]int64 {
+	if seen == nil {
+		return map[string]int64{}
+	}
+	return seen
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }

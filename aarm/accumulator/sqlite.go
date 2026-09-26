@@ -3,6 +3,7 @@ package accumulator
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -97,9 +98,7 @@ func stateDelta(e *model.ContextEntry) *storage.ContextStateDelta {
 	if entryKind(e) == events.KindAction && e.Tool != "" {
 		delta.Tools = []string{e.Tool}
 	}
-	if origin := originKey(e); origin != "" {
-		delta.Origins = []string{origin}
-	}
+	delta.Origins = originKeys(e)
 	return delta
 }
 
@@ -112,13 +111,22 @@ func reachesAgent(d model.Decision) bool {
 	}
 }
 
-// originKey names an origin in origins_seen. An MCP origin carries its
-// server, as "mcp:<server>".
-func originKey(e *model.ContextEntry) string {
-	if e.Origin == privacy.OriginMCP && e.Target.MCPServer != "" {
-		return "mcp:" + e.Target.MCPServer
+// originKeys names the origin of an entry in origins_seen. An MCP origin
+// carries its server, as "mcp:<server>". An ambiguous MCP tool name gives
+// one key for each server that it can name.
+func originKeys(e *model.ContextEntry) []string {
+	if e.Origin == "" {
+		return nil
 	}
-	return string(e.Origin)
+	servers := events.OriginSources(e.Origin, e.Target.MCPServer, e.Tool)
+	if len(servers) == 0 {
+		return []string{string(e.Origin)}
+	}
+	keys := make([]string, len(servers))
+	for i, server := range servers {
+		keys[i] = "mcp:" + server
+	}
+	return keys
 }
 
 func entryKind(e *model.ContextEntry) model.EntryKind {
@@ -173,6 +181,8 @@ func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID, p
 		Errors:              state.Errors,
 		ToolsUsed:           slices.Clone(state.ToolsUsed),
 		ClassificationsSeen: slices.Clone(state.ClassificationsSeen),
+		TagsSeen:            maps.Clone(state.TagsSeen),
+		OriginsSeen:         slices.Clone(state.OriginsSeen),
 		EntitiesSeen:        slices.Clone(state.EntitiesSeen),
 		IntentAvailable:     state.LastIntentSeq != nil,
 		ActionsSinceIntent:  state.ActionsSinceIntent,
@@ -196,6 +206,7 @@ func (a *SQLiteAccumulator) Snapshot(ctx context.Context, sessionID uuid.UUID, p
 		delta := stateDelta(pending)
 		snap.ToolsUsed = addNew(snap.ToolsUsed, delta.Tools)
 		snap.ClassificationsSeen = addNew(snap.ClassificationsSeen, delta.Classifications)
+		snap.OriginsSeen = addNew(snap.OriginsSeen, delta.Origins)
 		switch entryKind(pending) {
 		case events.KindIntent:
 			snap.IntentAvailable = true

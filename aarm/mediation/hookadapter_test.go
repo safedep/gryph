@@ -226,13 +226,13 @@ func TestHookAdapter_Normalize_AppliesClassifierAndScorer(t *testing.T) {
 		WithInjectionScorer(stubScorer{score: 0.6}),
 	)
 
-	t.Run("file_read gets classifications, no score", func(t *testing.T) {
+	t.Run("file_read gets classifications and the stub scorer result", func(t *testing.T) {
 		event := mustEvent(t, uuid.New(), uuid.New(), events.ActionFileRead, "Read", now,
 			events.FileReadPayload{Path: "/work/.env"})
 		action, _, err := adapter.Normalize(context.Background(), event, nil)
 		require.NoError(t, err)
 		assert.Equal(t, []privacy.Class{privacy.ClassSecret}, action.DataClassifications)
-		assert.Equal(t, float32(0), action.InjectionScore, "score is gated to tool_use only")
+		assert.Equal(t, float32(0.6), action.InjectionScore, "the scorer decides which actions it reads")
 	})
 
 	t.Run("tool_use gets classifications and score", func(t *testing.T) {
@@ -416,4 +416,49 @@ rules:
 	require.NoError(t, err)
 	assert.Equal(t, model.DecisionBlock, res.Decision)
 	assert.ElementsMatch(t, []string{"condition", "pattern"}, res.MatchedRuleIDs)
+}
+
+func TestHookAdapter_Normalize_MCPSources(t *testing.T) {
+	cases := []struct {
+		name        string
+		tool        string
+		source      string
+		wantSource  string
+		wantSources []string
+		wantServer  string
+		wantTool    string
+	}{
+		{"one reading", "mcp__github__get_issue", "", "github", []string{"github"}, "github", "get_issue"},
+		{"ambiguous tool name", "mcp__evil__read__file", "", "", []string{"evil", "evil__read"}, "", "mcp__evil__read__file"},
+		{"adapter claim", "server/tool", "server", "server", []string{"server"}, "server", "server/tool"},
+		{"adapter claim with its own prefix", "mcp__evil__get_issue", "evil", "evil", []string{"evil"}, "evil", "get_issue"},
+		{"adapter claim wins over the tool name", "mcp__github__get_issue", "evil", "evil", []string{"evil"}, "evil", "mcp__github__get_issue"},
+		{"not mcp", "Read", "", "", nil, "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			event := mustEvent(t, uuid.New(), uuid.New(), events.ActionToolUse, tc.tool, time.Now(), map[string]any{})
+			if tc.source != "" {
+				event.Origin, event.OriginSource = privacy.OriginMCP, tc.source
+			}
+			action, entry, err := NewHookAdapter().Normalize(context.Background(), event, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantSource, action.Source)
+			assert.Equal(t, tc.wantSources, action.Sources)
+			assert.Equal(t, tc.wantServer, entry.Target.MCPServer)
+			assert.Equal(t, tc.wantTool, entry.Target.MCPTool)
+		})
+	}
+}
+
+func TestHookAdapter_Normalize_ObservedOutputOverCap(t *testing.T) {
+	event := mustEvent(t, uuid.New(), uuid.New(), events.ActionCommandExec, "Bash", time.Now(),
+		events.CommandExecPayload{Command: privacy.NewText("make")})
+	event.Phase = events.PhasePost
+	event.ObserveOutput(map[string]any{"stderr": strings.Repeat("e", events.MaxObservedBytes), "stdout": "AKIAABCDEFGHIJKLMNOP"})
+
+	action, _, err := NewHookAdapter().Normalize(context.Background(), event, nil)
+	require.NoError(t, err)
+	assert.True(t, action.ContentTruncated)
+	assert.Contains(t, action.Parameters.ContentFull, "AKIAABCDEFGHIJKLMNOP")
 }

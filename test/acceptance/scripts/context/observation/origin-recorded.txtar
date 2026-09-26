@@ -1,0 +1,50 @@
+# The adapter claims the origin of content from the tool name and the path.
+# The context entry records it, origins_seen collects it, and a rule reads
+# it in action.origin and action.source. The session ID 3f10cfa3 derives
+# from the agent session ID s-origin.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin webfetch.json
+exec gryph _hook claude-code PostToolUse
+stdin mcp.json
+exec gryph _hook claude-code PostToolUse
+stderr 'untrusted-mcp'
+stdin read_external.json
+exec gryph _hook claude-code PreToolUse
+
+exec gryph policy context --session 3f10cfa3 --format json --no-color
+stdout '"origin": "web"'
+stdout '"origin": "mcp"'
+stdout '"mcp_server": "github"'
+stdout '"origin": "file_external"'
+stdout '"origins_seen": \[\n\s+"web",\n\s+"mcp:github",\n\s+"file_external"\n\s+\]'
+
+exec gryph export --since 1h
+stdout '"output":\{"value":".*?","label":\{"origin":"mcp","source":"github"'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+logging:
+  level: full
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: warn-untrusted-mcp
+    action: warn
+    match:
+      action_types: [tool_use]
+    condition: 'action.origin == "mcp" && action.source == "github"'
+    message: "untrusted-mcp: content from an MCP server"
+-- webfetch.json --
+{"session_id": "s-origin", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "WebFetch",
+ "tool_input": {"url": "https://example.com", "prompt": "summarize"}, "tool_response": {"result": "page text"}, "tool_use_id": "tu-web"}
+-- mcp.json --
+{"session_id": "s-origin", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "mcp__github__get_issue",
+ "tool_input": {"id": 1}, "tool_response": {"body": "issue text"}, "tool_use_id": "tu-mcp"}
+-- read_external.json --
+{"session_id": "s-origin", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "/tmp/other/notes.txt"}, "tool_use_id": "tu-read"}

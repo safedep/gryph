@@ -10,7 +10,7 @@ import (
 
 func TestApplyContentMatch_UnderCap(t *testing.T) {
 	a := &model.Action{}
-	applyContentMatch(a, "small body")
+	applyContentMatch(a, "small body", false)
 	assert.Equal(t, "small body", a.Parameters.ContentFull)
 	assert.False(t, a.ContentTruncated)
 }
@@ -18,16 +18,23 @@ func TestApplyContentMatch_UnderCap(t *testing.T) {
 func TestApplyContentMatch_OverCap(t *testing.T) {
 	a := &model.Action{}
 	big := strings.Repeat("x", contentMatchMaxBytes+100)
-	applyContentMatch(a, big)
+	applyContentMatch(a, big, false)
 	assert.Len(t, a.Parameters.ContentFull, contentMatchMaxBytes)
 	assert.True(t, a.ContentTruncated)
 }
 
 func TestApplyContentMatch_Empty(t *testing.T) {
 	a := &model.Action{}
-	applyContentMatch(a, "")
+	applyContentMatch(a, "", false)
 	assert.Empty(t, a.Parameters.ContentFull)
 	assert.False(t, a.ContentTruncated)
+}
+
+func TestApplyContentMatch_CutByHookSide(t *testing.T) {
+	a := &model.Action{}
+	applyContentMatch(a, "prefix", true)
+	assert.Equal(t, "prefix", a.Parameters.ContentFull)
+	assert.True(t, a.ContentTruncated)
 }
 
 func TestCoerceStringSlice(t *testing.T) {

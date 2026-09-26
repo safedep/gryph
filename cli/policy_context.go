@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -87,19 +89,21 @@ func newPolicyContextCmd() *cobra.Command {
 }
 
 type policyContextStateView struct {
-	SessionID           string   `json:"session_id"`
-	StartedAt           string   `json:"started_at,omitempty"`
-	LastEntryAt         string   `json:"last_entry_at,omitempty"`
-	TotalActions        int      `json:"total_actions"`
-	FilesRead           int      `json:"files_read"`
-	FilesWritten        int      `json:"files_written"`
-	CommandsExecuted    int      `json:"commands_executed"`
-	NetworkRequests     int      `json:"network_requests"`
-	Errors              int      `json:"errors"`
-	ToolsUsed           []string `json:"tools_used,omitempty"`
-	ClassificationsSeen []string `json:"classifications_seen,omitempty"`
-	IntentAvailable     bool     `json:"intent_available"`
-	ActionsSinceIntent  int      `json:"actions_since_intent"`
+	SessionID           string           `json:"session_id"`
+	StartedAt           string           `json:"started_at,omitempty"`
+	LastEntryAt         string           `json:"last_entry_at,omitempty"`
+	TotalActions        int              `json:"total_actions"`
+	FilesRead           int              `json:"files_read"`
+	FilesWritten        int              `json:"files_written"`
+	CommandsExecuted    int              `json:"commands_executed"`
+	NetworkRequests     int              `json:"network_requests"`
+	Errors              int              `json:"errors"`
+	ToolsUsed           []string         `json:"tools_used,omitempty"`
+	ClassificationsSeen []string         `json:"classifications_seen,omitempty"`
+	TagsSeen            map[string]int64 `json:"tags_seen,omitempty"`
+	OriginsSeen         []string         `json:"origins_seen,omitempty"`
+	IntentAvailable     bool             `json:"intent_available"`
+	ActionsSinceIntent  int              `json:"actions_since_intent"`
 }
 
 type policyContextEntryView struct {
@@ -109,6 +113,9 @@ type policyContextEntryView struct {
 	Timestamp    string   `json:"timestamp"`
 	ActionType   string   `json:"action_type"`
 	Tool         string   `json:"tool,omitempty"`
+	Origin       string   `json:"origin,omitempty"`
+	MCPServer    string   `json:"mcp_server,omitempty"`
+	Tags         []string `json:"tags,omitempty"`
 	Decision     string   `json:"decision,omitempty"`
 	MatchedRules []string `json:"matched_rule_ids,omitempty"`
 	ResultStatus string   `json:"result_status"`
@@ -200,6 +207,8 @@ func stateRowToView(s *storage.ContextStateRow) policyContextStateView {
 		Errors:              s.Errors,
 		ToolsUsed:           s.ToolsUsed,
 		ClassificationsSeen: s.ClassificationsSeen,
+		TagsSeen:            s.TagsSeen,
+		OriginsSeen:         s.OriginsSeen,
 		IntentAvailable:     s.LastIntentSeq != nil,
 		ActionsSinceIntent:  s.ActionsSinceIntent,
 	}
@@ -213,6 +222,9 @@ func entryRowToView(e *storage.ContextEntryRow) policyContextEntryView {
 		Timestamp:    e.Timestamp.Format(time.RFC3339),
 		ActionType:   e.ActionType,
 		Tool:         e.Tool,
+		Origin:       e.Origin,
+		MCPServer:    e.TargetMCPServer,
+		Tags:         e.Tags,
 		Decision:     e.Decision,
 		MatchedRules: e.MatchedRuleIDs,
 		ResultStatus: e.ResultStatus,
@@ -240,6 +252,12 @@ func renderContextStateTable(w io.Writer, c *tui.Colorizer, v policyContextState
 	}
 	if len(v.ToolsUsed) > 0 {
 		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tools"), strings.Join(v.ToolsUsed, ", "))
+	}
+	if len(v.TagsSeen) > 0 {
+		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("tags"), strings.Join(slices.Sorted(maps.Keys(v.TagsSeen)), ", "))
+	}
+	if len(v.OriginsSeen) > 0 {
+		_, _ = fmt.Fprintf(w, "  %-12s %s\n", c.Dim("origins"), strings.Join(v.OriginsSeen, ", "))
 	}
 	if v.IntentAvailable {
 		_, _ = fmt.Fprintf(w, "  %-12s %d actions since the last prompt\n", c.Dim("intent"), v.ActionsSinceIntent)

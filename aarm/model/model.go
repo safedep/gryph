@@ -69,6 +69,17 @@ type Action struct {
 	DataClassifications []privacy.Class
 	InjectionScore      float32
 
+	// Kind is the kind of the event in the session context. CEL reads it as
+	// action.kind.
+	Kind EntryKind
+	// Origin is where the content of the event came from, as the adapter
+	// claims it. Source names the MCP server of an MCP origin. Sources lists
+	// every server that the MCP tool name can name, so a deny rule matches
+	// when Source is empty.
+	Origin  privacy.Origin
+	Source  string
+	Sources []string
+
 	// Shell is the parsed shell command of a command_exec action. The
 	// mediator parses the command once, and the PDP reads the result. It is
 	// not part of the receipt.
@@ -204,6 +215,9 @@ type EvaluationResult struct {
 	FullMessage string
 	Severity    Severity
 	Tags        []string
+	// MatchedTags is the sorted union of the tags of every matched rule, at
+	// any decision. The context entry stores it.
+	MatchedTags []string
 
 	// DeferReason is set when Decision == DecisionDefer. Either the rule's
 	// reason field for explicit defer rules, or one of the synthetic reasons
@@ -233,8 +247,12 @@ type ContextSnapshot struct {
 	SessionDuration  time.Duration
 
 	ClassificationsSeen []string
-	EntitiesSeen        []string
-	SemanticDrift       float64
+	// TagsSeen maps each tag that a rule put on an earlier entry to the
+	// sequence of the first entry that has it.
+	TagsSeen      map[string]int64
+	OriginsSeen   []string
+	EntitiesSeen  []string
+	SemanticDrift float64
 
 	// IntentAvailable is true when the session has at least one intent
 	// entry. An agent with no prompt hook never has one.

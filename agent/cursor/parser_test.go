@@ -456,3 +456,135 @@ func TestGenerateContinueResponse_GuidanceCarriesMessage(t *testing.T) {
 	assert.Equal(t, true, result["continue"])
 	assert.Equal(t, "note this", result["user_message"])
 }
+
+func TestMCPSource(t *testing.T) {
+	cases := []struct {
+		url, command, want string
+	}{
+		{"https://MCP.Example.com/sse", "", "mcp.example.com"},
+		{"https://mcp.example.com/evil/sse", "", "mcp.example.com/evil"},
+		{"https://mcp.example.com/good/sse", "", "mcp.example.com/good"},
+		{"https://mcp.example.com/mcp", "", "mcp.example.com"},
+		{"http://localhost:3001/", "", "localhost:3001"},
+		{"https://evil.example./sse", "", "evil.example"},
+		{"https://evil.example:443/", "", "evil.example"},
+		{"https://Evil.Example.:443/sse", "", "evil.example"},
+		{"http://evil.example:80/x/sse", "", "evil.example/x"},
+		{"https://evil.example:80/", "", "evil.example:80"},
+		{"https://[::1]:443/sse", "", "[::1]"},
+		{"http://[::1]:8080/sse", "", "[::1]:8080"},
+		{"", "/usr/local/bin/github-mcp-server stdio", "/usr/local/bin/github-mcp-server"},
+		{"", "/tmp/evil/github-mcp-server", "/tmp/evil/github-mcp-server"},
+		{"", "./bin/server", "./bin/server"},
+		{"", "github-mcp-server stdio", "github-mcp-server"},
+		{"", "npx -y @evil/mcp-server", "@evil/mcp-server"},
+		{"", "npx -y @modelcontextprotocol/server-github@1.2.0", "@modelcontextprotocol/server-github"},
+		{"", "npx --package pkg -y mcp-bin --port 3", "pkg"},
+		{"", "npx -p @evil/pkg github-mcp-server", "@evil/pkg"},
+		{"", "npx --package=@evil/x@2.0 good-server", "@evil/x"},
+		{"", "npx -p good -p @evil/x good-server", "npx"},
+		{"", "npx good-server -p @evil/x", "good-server"},
+		{"", "npm exec --package=@evil/x -- good-server", "@evil/x"},
+		{"", "uvx --from evil good", "evil"},
+		{"", "uvx --from evil==1.0 good", "evil"},
+		{"", "pipx run --spec evil good", "evil"},
+		{"", "uvx -p 3.12 mcp-server-time", "mcp-server-time"},
+		{"", `"C:\Program Files\nodejs\npx.cmd" -y server-x`, "server-x"},
+		{"", "npx -y", "npx"},
+		{"", "bunx server-y@latest", "server-y"},
+		{"", "npx -y good@file:/tmp/evil", "good@file:/tmp/evil"},
+		{"", "npx -y good@https://evil.example/x.tgz", "good@https://evil.example/x.tgz"},
+		{"", "npx -y good@npm:evil", "good@npm:evil"},
+		{"", "npx -y @scope/good@1.2.3", "@scope/good"},
+		{"", "npx -y good@.", "good@."},
+		{"", "npx -y good@..", "good@.."},
+		{"", "npx -y good@.evil", "good@.evil"},
+		{"", "npx -y good@evil.tgz", "good@evil.tgz"},
+		{"", "npx -y good@evil.tar", "good@evil.tar"},
+		{"", "npx -y good@~/x", "good@~/x"},
+		{"", "npx -y good@~1.2.0", "good"},
+		{"", "npx -y good@^1.2.0", "good"},
+		{"", "npx -y good@beta", "good"},
+		{"", "uvx good@https://evil.example/good.whl", "good@https://evil.example/good.whl"},
+		{"", "uvx good@file:///tmp/good.whl", "good@file:///tmp/good.whl"},
+		{"", "uvx good@./good.whl", "good@./good.whl"},
+		{"", `uvx "good @ git+https://github.com/evil/good"`, "good @ git+https://github.com/evil/good"},
+		{"", `uvx --from "good @ https://evil.example/good.whl" good`, "good @ https://evil.example/good.whl"},
+		{"", `pipx run --spec "good @ https://evil.example/good.whl" good`, "good @ https://evil.example/good.whl"},
+		{"", "uvx good@1.0", "good"},
+		{"", "npx -y good@evil.TGZ", "good@evil.TGZ"},
+		{"", "npx -y good@evil.Tar", "good@evil.Tar"},
+		{"", "npx -y good@evil.TAR.GZ", "good@evil.TAR.GZ"},
+		{"", "npx -y good@1.tgz", "good@1.tgz"},
+		{"", "npx -y good@1.2.3-beta.1", "good"},
+		{"", "npx -y good@>=1.0", "good"},
+		{"", "npx -y good@1.x", "good"},
+		{"", "uvx good@good-1.0-py3-none-any.whl", "good@good-1.0-py3-none-any.whl"},
+		{"", `uvx "good @ good-1.0-py3-none-any.whl"`, "good @ good-1.0-py3-none-any.whl"},
+		{"", "uvx good@latest", "good"},
+		{"", "uvx good@1.0.0rc1", "good"},
+		{"", "npx -y good@1.tarxgz", "good@1.tarxgz"},
+		{"", "npx -y good@1.tar-gz", "good@1.tar-gz"},
+		{"", "uvx good@1evil", "good@1evil"},
+		{"", `uvx --from "good @ 1evil" good`, "good @ 1evil"},
+		{"", `uvx "good @ 1.0"`, "good @ 1.0"},
+		{"", `uvx "good @ latest"`, "good @ latest"},
+		{"", "uvx good@1.0.post1", "good"},
+		{"", "uvx good@v1.0", "good"},
+		{"", "uvx good[cli]@1.0", "good"},
+		{"", "uvx good@LATEST", "good@LATEST"},
+		{"", "uvx good@Latest", "good@Latest"},
+		{"", "uv tool run good@LATEST", "good@LATEST"},
+		{"", "uvx --from good@LATEST good", "good@LATEST"},
+		{"", "uvx good[cli]@LATEST", "good[cli]@LATEST"},
+		{"", "uvx good@99999999999999999999999", "good@99999999999999999999999"},
+		{"", "uvx good@1.0RC1", "good"},
+		{"", "uvx good>=1.0,<2", "good"},
+		{"", "uvx good[cli]", "good"},
+		{"", "pnpm dlx @scope/server", "@scope/server"},
+		{"", "npm exec -- @scope/server", "@scope/server"},
+		{"", "uvx mcp-server-git==0.6.2 --repository .", "mcp-server-git"},
+		{"", "uvx --from git+https://x/y mcp-server-fetch", "git+https://x/y"},
+		{"", "uv --directory /srv/weather run weather-server", "weather-server"},
+		{"", "uv tool run mcp-server-time", "mcp-server-time"},
+		{"", "pipx run mcp-server-sqlite[all]", "mcp-server-sqlite"},
+		{"", "python3.12 -u -m mcp_server_time --tz UTC", "mcp_server_time"},
+		{"", "python -m", "python"},
+		{"", "node --require ./hook.js /srv/evil/index.js", "/srv/evil/index.js"},
+		{"", "deno run --allow-net jsr:@scope/server", "jsr:@scope/server"},
+		{"", "docker run -i --rm -e GITHUB_TOKEN ghcr.io/github/github-mcp-server:v1", "ghcr.io/github/github-mcp-server"},
+		{"", "docker run -it --name x -v /a:/b localhost:5000/evil/mcp@sha256:abc", "localhost:5000/evil/mcp"},
+		{"", "docker run --env=A=1 --rm", "docker"},
+		{"", "docker ps", "docker"},
+		{"", `npx -y "@evil/mcp server"`, "@evil/mcp server"},
+		{"", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.url+tc.command, func(t *testing.T) {
+			assert.Equal(t, tc.want, MCPServer{URL: tc.url, Command: tc.command}.source())
+		})
+	}
+}
+
+func TestParseMCPExecution_Origin(t *testing.T) {
+	cases := []struct {
+		hook, server, want string
+	}{
+		{"beforeMCPExecution", `"url":"https://mcp.example.com/sse"`, "mcp.example.com"},
+		{"afterMCPExecution", `"url":"https://mcp.example.com/sse"`, "mcp.example.com"},
+		{"afterMCPExecution", `"command":"/usr/bin/github-mcp-server stdio"`, "/usr/bin/github-mcp-server"},
+		{"beforeMCPExecution", `"command":"npx -y @evil/mcp-server"`, "@evil/mcp-server"},
+		{"afterMCPExecution", `"url":"https://mcp.example.com/evil/sse"`, "mcp.example.com/evil"},
+		{"afterMCPExecution", `"duration":5`, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.hook+"/"+tc.want, func(t *testing.T) {
+			data := []byte(`{"conversation_id":"c","generation_id":"g","hook_event_name":"` + tc.hook + `",
+				"workspace_roots":["/work"],"tool_name":"search","tool_input":{"q":"x"},` + tc.server + `}`)
+			event, err := testAdapter(t).ParseEvent(context.Background(), tc.hook, data)
+			require.NoError(t, err)
+			assert.Equal(t, privacy.OriginMCP, event.Origin)
+			assert.Equal(t, tc.want, event.OriginSource)
+		})
+	}
+}

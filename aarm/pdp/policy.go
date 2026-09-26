@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -129,6 +130,30 @@ func validateRule(rule Rule) error {
 		}
 		if slices.Contains(rule.Match.FileAccess[:i], a) {
 			return fmt.Errorf("rule %q lists file_access %q more than once", rule.ID, a)
+		}
+	}
+	return nil
+}
+
+// TagNamePattern is the format of a tag name. Tags reach CEL and the export,
+// so they stay plain lower-case names. The hyphen stays valid, because
+// policies from before this check use it, such as the built-in
+// self-protection tag.
+const TagNamePattern = `^[a-z][a-z0-9_-]{0,62}$`
+
+var tagNameRE = regexp.MustCompile(TagNamePattern)
+
+// CheckTagNames returns an error for the first tag that does not match
+// TagNamePattern. gryph policy validate and gryph policy install call it.
+// Loading a policy only warns, because tags were free-form before this
+// check, and a policy that fails to load would stop every hook under
+// fail_mode closed.
+func CheckTagNames(policy *Policy) error {
+	for _, rule := range policy.Rules {
+		for _, tag := range rule.Tags {
+			if !tagNameRE.MatchString(tag) {
+				return fmt.Errorf("rule %q has invalid tag %q: a tag matches %s", rule.ID, tag, TagNamePattern)
+			}
 		}
 	}
 	return nil
