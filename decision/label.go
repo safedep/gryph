@@ -114,7 +114,8 @@ func applyLevel(event *events.Event, level config.LoggingLevel) {
 
 // walkContent calls fn for the diff and for every content value of the
 // payload, then calls other with the decoded payload for its plain fields,
-// and writes the payload back.
+// and writes the payload back. A payload that does not decode is dropped,
+// because Gryph cannot label, redact or strip it.
 func walkContent(event *events.Event, fn func(path string, t *privacy.Text), other func(payload any)) {
 	fn("diff_content", &event.DiffContent)
 
@@ -123,7 +124,8 @@ func walkContent(event *events.Event, fn func(path string, t *privacy.Text), oth
 		return
 	}
 	if err := json.Unmarshal(event.Payload, payload); err != nil {
-		log.Warnf("decision: unmarshal %s payload: %v", event.ActionType, err)
+		log.Warnf("decision: drop the %s payload that does not decode: %v", event.ActionType, err)
+		event.Payload = nil
 		return
 	}
 	privacy.Walk(payload, fn)

@@ -63,6 +63,10 @@ evaluation. `labelEvent` (`decision/label.go`) runs before the evaluation:
    holds a JSON object or array keeps its structure. The redactor also
    applies to the raw event and to the error message.
 
+A payload that does not decode into the payload type of its action is
+dropped, with a warning in the log. Gryph cannot label, redact or strip
+such a payload, so it does not store it at any level.
+
 The policy then evaluates the redacted event. It sees the content at every
 logging level, so a rule on a URL or on content still fires at `minimal`.
 The AARM receipt records the action with the rule of `decision.StripsContent`.

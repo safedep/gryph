@@ -273,3 +273,16 @@ func TestLabelEvent_LegacyPayload(t *testing.T) {
 	assert.Equal(t, "ls -la", p.Command.Value)
 	assert.Equal(t, privacy.Digest("ls -la"), p.Command.Label.Digest)
 }
+
+func TestLabelEvent_DropsPayloadThatDoesNotDecode(t *testing.T) {
+	for _, level := range []config.LoggingLevel{config.LoggingMinimal, config.LoggingFull} {
+		t.Run(string(level), func(t *testing.T) {
+			event := events.NewEvent(uuid.New(), "test-agent", events.ActionCommandExec)
+			event.Payload = []byte(`["token=abc123"]`)
+
+			label(event, testRedactor(t), nil, level)
+
+			assert.Nil(t, event.Payload)
+		})
+	}
+}
