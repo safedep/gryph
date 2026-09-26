@@ -163,8 +163,9 @@ func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	cfgDir := home + "/.config/safedep/gryph"
+	exportKey := home + "/.local/share/safedep/gryph/export.key"
 
-	docs, err := NewBuiltinSource("**/.cc/settings.json", "**/.agent/hooks/**", "**/.deep/sub/hooks.json", "**/.config/devin/config.json", cfgDir+"/**").Load(context.Background())
+	docs, err := NewBuiltinSource("**/.cc/settings.json", "**/.agent/hooks/**", "**/.deep/sub/hooks.json", "**/.config/devin/config.json", cfgDir+"/**", exportKey).Load(context.Background())
 	require.NoError(t, err)
 	require.Len(t, docs, 1)
 	engine, err := pdp.New(docs[0])
@@ -358,6 +359,10 @@ func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 		{"7z unknown command", model.ActionCommandExec, "", `cd /tmp && 7z q /tmp/evil.7z`, false},
 		{"7z list", model.ActionCommandExec, "", `7z l ~/.cc/a.7z`, false},
 		{"unzip into config directory", model.ActionCommandExec, "", `unzip /tmp/evil.zip -d ~/.cc`, true},
+		{"write export key", model.ActionFileWrite, exportKey, "", true},
+		{"delete export key", model.ActionFileDelete, exportKey, "", true},
+		{"redirect over export key", model.ActionCommandExec, "", `printf 'k' > ~/.local/share/safedep/gryph/export.key`, true},
+		{"rm export key", model.ActionCommandExec, "", `rm ~/.local/share/safedep/gryph/export.key`, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -384,9 +389,10 @@ func TestBuiltinSource_BlocksReadsOfProtectedPaths(t *testing.T) {
 	data := home + "/.local/share/safedep/gryph"
 	db := data + "/audit.db"
 	key := home + "/.config/safedep/gryph/keys/receipt.key"
+	exportKey := data + "/export.key"
 
 	docs, err := NewBuiltinSource("**/.cc/settings.json").
-		WithReadGlobs(db, db+"-wal", db+"-shm", db+"-journal", key).
+		WithReadGlobs(db, db+"-wal", db+"-shm", db+"-journal", key, exportKey).
 		Load(context.Background())
 	require.NoError(t, err)
 	require.Len(t, docs, 1)
@@ -510,6 +516,9 @@ func TestBuiltinSource_BlocksReadsOfProtectedPaths(t *testing.T) {
 		{"git -C of a project", model.ActionCommandExec, "", `git -C /work/repo diff`, false},
 		{"unknown command long option value", model.ActionCommandExec, "", `foo --file=` + db, true},
 		{"unknown command short option value", model.ActionCommandExec, "", `foo -f` + db, true},
+		{"read export key", model.ActionFileRead, exportKey, "", true},
+		{"cat export key", model.ActionCommandExec, "", `cat ~/.local/share/safedep/gryph/export.key`, true},
+		{"xxd export key", model.ActionCommandExec, "", `xxd ~/.local/share/safedep/gryph/export.key`, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

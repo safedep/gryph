@@ -102,6 +102,10 @@ func treatPlain(t privacy.Treatment, v string) string {
 	}
 }
 
+// contentHashContext binds the keyed content hash, so that it does not
+// match the keyed digest of a label.
+const contentHashContext = "content_hash"
+
 // projectContentHash keys the content hash of a file payload, or removes it
 // when keep is false. The hash is a plain sha256 of all of the content, so it
 // follows the digest rule of a label.
@@ -110,7 +114,7 @@ func projectContentHash(payload any, p privacy.ExportProfile, keep bool) {
 		if !keep {
 			return ""
 		}
-		return p.KeyedDigest(hash)
+		return p.KeyedDigest(contentHashContext, hash)
 	}
 	switch pl := payload.(type) {
 	case *FileReadPayload:

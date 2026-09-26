@@ -32,7 +32,7 @@ Gryph loads policy from three sources, in this order:
 
 1. **Global policy file** (`${ConfigDir}/policy.yaml`, optional). The single operator-owned file. On macOS this is `~/Library/Application Support/safedep/gryph/policy.yaml`; on Linux `~/.config/safedep/gryph/policy.yaml`. A missing file is not an error.
 2. **Policies directory** (`${ConfigDir}/policies/*.yaml` and `*.yml`, optional). Each file is a separate policy document. Files load in sorted name order and merge after the global file. A missing directory is not an error. This lets you author policy as many small, self-contained files instead of one large file.
-3. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, and agent hook configs from agent self-modification. A second rule, `gryph-builtin-protected-reads`, blocks agent reads of the database (with its `-wal`, `-shm`, and `-journal` files) and of the receipt signing key. A third rule, `gryph-builtin-hook-command`, blocks an agent shell command that runs `gryph _hook`. Such a command can record a forged event. An agent may read the policy files and the hook configs. Self-protection is best effort. See [Self-protection limits](#self-protection-limits).
+3. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, the export key, and agent hook configs from agent self-modification. A second rule, `gryph-builtin-protected-reads`, blocks agent reads of the database (with its `-wal`, `-shm`, and `-journal` files), of the receipt signing key, and of the export key (`export.key` next to the database). The export key keys the digests in an export. See [Content Labels](./content-labels.md#export). A third rule, `gryph-builtin-hook-command`, blocks an agent shell command that runs `gryph _hook`. Such a command can record a forged event. An agent may read the policy files and the hook configs. Self-protection is best effort. See [Self-protection limits](#self-protection-limits).
 
 With `policy.enabled: true` and no user files on disk, the merged policy contains built-in self-protection rules only.
 
@@ -40,7 +40,7 @@ Both the global file and the policies directory sit inside `${ConfigDir}`, so bo
 
 ### Self-protection limits
 
-Self-protection is best effort. It blocks file writes and deletes to protected paths, and shell commands that Gryph can parse as a change to a protected path. It blocks file reads of the database and the signing key, and shell commands that Gryph can parse as a read of them. It does not stop every bypass. A human or an agent can get past it in many ways, for example:
+Self-protection is best effort. It blocks file writes and deletes to protected paths, and shell commands that Gryph can parse as a change to a protected path. It blocks file reads of the database, the signing key and the export key, and shell commands that Gryph can parse as a read of them. It does not stop every bypass. A human or an agent can get past it in many ways, for example:
 
 - A command that builds the path at run time, such as a variable, a command substitution, or a base64 payload.
 - A script file or an interpreter (`python -c`, `node -e`) that writes the file or runs `gryph _hook`.

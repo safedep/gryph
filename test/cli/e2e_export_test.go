@@ -180,6 +180,12 @@ func TestExport(t *testing.T) {
 			},
 		},
 		{
+			name:   "same_text_prompt_and_command_default_profile",
+			args:   func(_ *testEnv) []string { return []string{"export"} },
+			setup:  hookPromptAndCommand,
+			assert: assertPromptDigestUnmatched,
+		},
+		{
 			name:  "default_since",
 			args:  func(_ *testEnv) []string { return []string{"export"} },
 			setup: seedEventsOlderThan1h(5),
@@ -253,6 +259,64 @@ func hookShortPrompt(env *testEnv) {
 	require.NoError(env.t, err)
 	_, _, err = env.runHook("claude-code", "UserPromptSubmit", payload)
 	require.NoError(env.t, err)
+}
+
+const deployText = "make deploy"
+
+// hookPromptAndCommand records the prompt "make deploy" and a Bash command
+// with the same text. The default profile digests the prompt and includes
+// the command.
+func hookPromptAndCommand(env *testEnv) {
+	prompt, err := json.Marshal(map[string]any{
+		"session_id":      "s-export-deploy",
+		"cwd":             env.tmpDir,
+		"hook_event_name": "UserPromptSubmit",
+		"prompt":          deployText,
+	})
+	require.NoError(env.t, err)
+	_, _, err = env.runHook("claude-code", "UserPromptSubmit", prompt)
+	require.NoError(env.t, err)
+
+	command, err := json.Marshal(map[string]any{
+		"session_id":      "s-export-deploy",
+		"cwd":             env.tmpDir,
+		"hook_event_name": "PostToolUse",
+		"tool_name":       "Bash",
+		"tool_input":      map[string]any{"command": deployText},
+		"tool_response":   map[string]any{"stdout": "", "stderr": "", "interrupted": false},
+		"tool_use_id":     "tu-deploy",
+	})
+	require.NoError(env.t, err)
+	_, _, err = env.runHook("claude-code", "PostToolUse", command)
+	require.NoError(env.t, err)
+}
+
+// assertPromptDigestUnmatched checks that the included command carries no
+// digest, and that no other digest in the export equals the prompt digest.
+func assertPromptDigestUnmatched(t *testing.T, _ *testEnv, stdout, _ string, err error) {
+	require.NoError(t, err)
+	var promptDigest string
+	commands := 0
+	for _, line := range strings.Split(strings.TrimSpace(stdout), "\n") {
+		var evt events.Event
+		require.NoError(t, json.Unmarshal([]byte(line), &evt))
+		switch evt.ActionType {
+		case events.ActionUserPrompt:
+			p, perr := evt.GetUserPromptPayload()
+			require.NoError(t, perr)
+			assert.Empty(t, p.Prompt.Value)
+			promptDigest = p.Prompt.Label.Digest
+		case events.ActionCommandExec:
+			p, perr := evt.GetCommandExecPayload()
+			require.NoError(t, perr)
+			assert.Equal(t, deployText, p.Command.Value)
+			assert.Empty(t, p.Command.Label.Digest, "an included value carries no digest")
+			commands++
+		}
+	}
+	assert.Equal(t, 1, commands)
+	require.True(t, strings.HasPrefix(promptDigest, "hmac-sha256:"))
+	assert.Equal(t, 1, strings.Count(stdout, promptDigest), "no other digest equals the prompt digest")
 }
 
 // assertNoPlainDigest checks that the export holds no plain sha256 of the

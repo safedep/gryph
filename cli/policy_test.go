@@ -164,6 +164,7 @@ func TestSelfProtectionGlobs_StaticSetNoRepoLocal(t *testing.T) {
 
 	assert.Contains(t, globs, filepath.ToSlash(tmp)+"/**")
 	assert.Contains(t, globs, "**/.claude/settings.json")
+	assert.Contains(t, globs, filepath.ToSlash(cfg.ExportKeyFile()))
 	assert.NotContains(t, globs, "**/.gryph-policy.yml")
 	assert.NotContains(t, globs, "**/.gryph-policy.yaml")
 }
@@ -180,6 +181,7 @@ func TestSelfProtectionReadGlobs(t *testing.T) {
 	assert.Equal(t, []string{
 		db, db + "-wal", db + "-shm", db + "-journal",
 		filepath.ToSlash(filepath.Join(tmp, "keys", "receipt.key")),
+		filepath.ToSlash(filepath.Join(tmp, "export.key")),
 	}, globs)
 	assert.NotContains(t, globs, "**/.claude/settings.json")
 	assert.Empty(t, selfProtectionReadGlobs(nil, paths))

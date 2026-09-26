@@ -1474,13 +1474,26 @@ func selfProtectionSource(cfg *config.Config, paths *config.Paths) *loader.Built
 }
 
 // selfProtectionReadGlobs returns the paths an agent must not read: the
-// database with its SQLite side files, and the receipt signing key. An agent
-// may read the policy files and the hook configs, so they are not here.
+// database with its SQLite side files, the receipt signing key and the
+// export key. An agent may read the policy files and the hook configs, so
+// they are not here.
 func selfProtectionReadGlobs(cfg *config.Config, paths *config.Paths) []string {
 	if cfg == nil {
 		return nil
 	}
-	return append(databaseGlobs(cfg), filepath.ToSlash(cfg.ResolveReceiptKeyPath(paths)))
+	return append(databaseGlobs(cfg), keyGlobs(cfg, paths)...)
+}
+
+// keyGlobs returns the secret keys of the install. An agent that reads the
+// receipt key can sign receipts. An agent that reads the export key, or
+// writes a known one, can reverse the keyed digests of an export with a
+// dictionary.
+func keyGlobs(cfg *config.Config, paths *config.Paths) []string {
+	globs := []string{filepath.ToSlash(cfg.ResolveReceiptKeyPath(paths))}
+	if cfg.GetDatabasePath() != "" {
+		globs = append(globs, filepath.ToSlash(cfg.ExportKeyFile()))
+	}
+	return globs
 }
 
 // databaseGlobs returns the database path and its SQLite side files. The
@@ -1501,10 +1514,8 @@ func selfProtectionGlobs(cfg *config.Config, paths *config.Paths) []string {
 	}
 	if cfg != nil {
 		globs = append(globs, databaseGlobs(cfg)...)
-		globs = append(globs,
-			filepath.ToSlash(cfg.ResolveReceiptKeyPath(paths)),
-			filepath.ToSlash(cfg.ResolveReceiptTrustStorePath(paths)),
-		)
+		globs = append(globs, keyGlobs(cfg, paths)...)
+		globs = append(globs, filepath.ToSlash(cfg.ResolveReceiptTrustStorePath(paths)))
 	}
 	globs = append(globs, hookConfigGlobs()...)
 	return globs

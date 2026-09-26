@@ -14,6 +14,7 @@ func TestExportProfile_Apply(t *testing.T) {
 	}
 	key := []byte("install-key")
 	builtin := BuiltinProfiles()
+	builtin["redact"] = ExportProfile{Name: "redact", Default: TreatRedact}
 	for name, p := range builtin {
 		builtin[name] = p.WithDigestKey(key)
 	}
@@ -26,12 +27,14 @@ func TestExportProfile_Apply(t *testing.T) {
 		wantLabel  bool
 		wantTreat  Treatment
 	}{
-		{"default includes command output", ProfileDefault, text("ok", OriginCommand), "ok", true, true, TreatInclude},
+		{"default includes command output without its digest", ProfileDefault, text("ok", OriginCommand), "ok", false, true, TreatInclude},
 		{"default digests a prompt", ProfileDefault, text("fix it", OriginUser), "", true, true, TreatDigest},
 		{"default drops a secret", ProfileDefault, text("k=v", OriginFileProject, ClassSecret), "", false, false, TreatDrop},
 		{"default drops pii before the prompt rule", ProfileDefault, text("jane", OriginUser, ClassPII), "", false, false, TreatDrop},
 		{"metadata digests everything", ProfileMetadata, text("ok", OriginCommand), "", true, true, TreatDigest},
 		{"full includes a secret without its digest", ProfileFull, text("k=v", OriginFileProject, ClassSecret), "k=v", false, true, TreatInclude},
+		{"full includes a value without its digest", ProfileFull, text("ok", OriginCommand), "ok", false, true, TreatInclude},
+		{"redact keeps the digest", "redact", text("ok", OriginWeb), RedactedValue, true, true, TreatRedact},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -60,10 +63,35 @@ func TestExportProfile_Apply(t *testing.T) {
 		assert.NotEqual(t, Digest("yes"), got.Label.Digest)
 		assert.NotContains(t, got.Label.Digest, Digest("yes")[len("sha256:"):])
 		assert.True(t, strings.HasPrefix(got.Label.Digest, KeyedDigestPrefix))
-		again, _ := builtin[ProfileMetadata].Apply(text("yes", OriginCommand))
-		assert.Equal(t, got.Label.Digest, again.Label.Digest, "one install matches its own values")
+		again, _ := builtin[ProfileDefault].Apply(text("yes", OriginUser))
+		assert.Equal(t, got.Label.Digest, again.Label.Digest, "one install matches its own values in one profile and origin")
 		other, _ := BuiltinProfiles()[ProfileDefault].WithDigestKey([]byte("other-key")).Apply(text("yes", OriginUser))
 		assert.NotEqual(t, got.Label.Digest, other.Label.Digest)
+	})
+
+	t.Run("the digest binds the profile and the origin", func(t *testing.T) {
+		base, _ := builtin[ProfileMetadata].Apply(text("yes", OriginCommand))
+		otherOrigin, _ := builtin[ProfileMetadata].Apply(text("yes", OriginWeb))
+		otherProfile, _ := builtin[ProfileDefault].Apply(text("yes", OriginUser))
+		asUser, _ := builtin[ProfileMetadata].Apply(text("yes", OriginUser))
+		require.NotEmpty(t, base.Label.Digest)
+		assert.NotEqual(t, base.Label.Digest, otherOrigin.Label.Digest)
+		assert.NotEqual(t, asUser.Label.Digest, otherProfile.Label.Digest)
+		renamed := builtin[ProfileMetadata]
+		renamed.Name = "archive"
+		got, _ := renamed.Apply(text("yes", OriginCommand))
+		assert.NotEqual(t, base.Label.Digest, got.Label.Digest)
+	})
+
+	t.Run("a digest does not match an included value with the same text", func(t *testing.T) {
+		prompt, _ := builtin[ProfileDefault].Apply(text("make deploy", OriginUser))
+		command, treatment := builtin[ProfileDefault].Apply(text("make deploy", OriginAgent))
+		assert.Equal(t, TreatInclude, treatment)
+		assert.Equal(t, "make deploy", command.Value)
+		assert.Empty(t, command.Label.Digest)
+		assert.NotEmpty(t, prompt.Label.Digest)
+		asAgent := builtin[ProfileDefault].KeyedDigest(string(OriginAgent), Digest("make deploy"))
+		assert.NotEqual(t, asAgent, prompt.Label.Digest)
 	})
 
 	t.Run("no digest leaves without a key", func(t *testing.T) {
@@ -116,13 +144,13 @@ func TestExportProfile_ApplyDigest(t *testing.T) {
 		{"truncated preview", Label{Truncated: true, Size: 21, Digest: digest}, false},
 		{"stripped", Label{Stripped: true, Size: 21, Digest: digest}, false},
 	}
-	full := BuiltinProfiles()[ProfileFull].WithDigestKey([]byte("key"))
+	redact := ExportProfile{Name: "r", Default: TreatRedact}.WithDigestKey([]byte("key"))
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, _ := full.Apply(Text{Value: "v", Label: tc.label})
-			assert.Equal(t, "v", got.Value)
+			got, _ := redact.Apply(Text{Value: "v", Label: tc.label})
+			assert.Equal(t, RedactedValue, got.Value)
 			if tc.keepDigest {
-				assert.Equal(t, full.KeyedDigest(digest), got.Label.Digest)
+				assert.Equal(t, redact.KeyedDigest("", digest), got.Label.Digest)
 				assert.Equal(t, 21, got.Label.Size)
 				return
 			}
