@@ -410,6 +410,7 @@ func TestBuiltinSource_BlocksReadsOfProtectedPaths(t *testing.T) {
 		{"read project file", model.ActionFileRead, "/work/README.md", "", false},
 		{"sqlite3", model.ActionCommandExec, "", `sqlite3 ~/.local/share/safedep/gryph/audit.db 'select * from audit_events'`, true},
 		{"cat", model.ActionCommandExec, "", `cat ~/.local/share/safedep/gryph/audit.db`, true},
+		{"bash flag group with option", model.ActionCommandExec, "", `bash -euo pipefail -c 'cat ~/.local/share/safedep/gryph/audit.db'`, true},
 		{"cp out", model.ActionCommandExec, "", `cp ~/.local/share/safedep/gryph/audit.db /tmp/x`, true},
 		{"base64 redirect", model.ActionCommandExec, "", `base64 < ~/.config/safedep/gryph/keys/receipt.key`, true},
 		{"glob over data directory", model.ActionCommandExec, "", `cat ~/.local/share/safedep/gryph/*`, true},
