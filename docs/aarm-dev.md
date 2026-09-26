@@ -212,10 +212,10 @@ The analysis is best effort. The hook runs on every agent tool call, so the
 walker must stay fast, and a false block costs more than a missed change.
 The walker records only the paths that it can resolve. When it cannot
 resolve a path, it records nothing. It does not record a broad target, such
-as a tree write of `/`, in place of an unknown path. The one exception is a
-command that the parser rejects, or a script nested in it such as the script
-of `bash -c`. Then `Analysis.Parsed` is false, every word of the rejected
-script is a read and a removal target, and the host list has `?`. Kernel
+as a tree write of `/`, in place of an unknown path. When the parser rejects
+a command, or a script nested in it such as the script of `bash -c`, `eval`,
+or `find -exec bash -c`, the walker records no targets and no hosts from the
+rejected script, and `Analysis.Parsed` is false. Kernel
 sandboxing is the planned control for commands that the walker cannot
 resolve.
 

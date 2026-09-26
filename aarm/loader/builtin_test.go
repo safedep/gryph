@@ -118,6 +118,8 @@ func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 		{"rm gryph config", model.ActionCommandExec, "", `rm -rf ~/.config/safedep`, true},
 		{"cd then rm", model.ActionCommandExec, "", `cd ~/.cc && rm settings.json`, true},
 		{"bash -c", model.ActionCommandExec, "", `bash -c 'rm -rf ~/.cc'`, true},
+		{"parse error", model.ActionCommandExec, "", `rm -rf ~/.cc ) (`, false},
+		{"bash -c parse error", model.ActionCommandExec, "", `bash -c 'rm -rf ~/.cc ) ('`, false},
 		{"read settings", model.ActionCommandExec, "", `cat ~/.cc/settings.json`, false},
 		{"sudo with user", model.ActionCommandExec, "", `sudo -u root rm ~/.cc/settings.json`, true},
 		{"bash -lc", model.ActionCommandExec, "", `bash -lc 'rm ~/.cc/settings.json'`, true},

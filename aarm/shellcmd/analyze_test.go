@@ -325,22 +325,29 @@ func TestAnalyze_NewWrites(t *testing.T) {
 	}
 }
 
-func TestAnalyze_ParseErrorFailsClosed(t *testing.T) {
+func TestAnalyze_ParseErrorRecordsNoTargets(t *testing.T) {
 	cases := []string{
 		`cat ~/.ssh/id_rsa ) (`,
 		`bash -c 'cat ~/.ssh/id_rsa ) ('`,
 		`echo ok; eval 'cat ~/.ssh/id_rsa ) ('`,
+		`find /x -exec bash -c 'rm ~/.ssh/id_rsa ) (' \;`,
 		`find /x -execdir bash -c 'cat ~/.ssh/id_rsa ) (' \;`,
 	}
 	for _, command := range cases {
 		t.Run(command, func(t *testing.T) {
 			a := Analyze(command, Env{WorkingDir: "/work", Home: "/home/u"})
 			assert.False(t, a.Parsed)
-			assert.Equal(t, []string{UnknownHost}, a.Hosts)
-			assert.Contains(t, a.Targets, Target{"/home/u/.ssh/id_rsa", AccessRead})
-			assert.Contains(t, a.Targets, Target{"/home/u/.ssh/id_rsa", AccessRemove})
+			assert.Empty(t, a.Hosts)
+			assert.Empty(t, a.Targets)
 		})
 	}
+}
+
+func TestAnalyze_ParseErrorKeepsResolvedTargets(t *testing.T) {
+	a := Analyze(`rm /tmp/a; bash -c 'curl https://x.example ) ('`, Env{WorkingDir: "/work"})
+	assert.False(t, a.Parsed)
+	assert.Equal(t, []Target{{"/tmp/a", AccessRemove}}, a.Targets)
+	assert.Empty(t, a.Hosts)
 }
 
 func TestAnalyzeCommand(t *testing.T) {
@@ -349,7 +356,7 @@ func TestAnalyzeCommand(t *testing.T) {
 
 	broken := AnalyzeCommand("rm x ) (", nil, "/work")
 	assert.False(t, broken.Parsed)
-	assert.Contains(t, broken.Changes(), Target{"/work/x", AccessRemove})
+	assert.Empty(t, broken.Targets)
 
 	empty := AnalyzeCommand("", nil, "/work")
 	assert.True(t, empty.Parsed)

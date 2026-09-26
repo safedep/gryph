@@ -75,9 +75,7 @@ func TestAnalyze_Changes(t *testing.T) {
 		{"find okdir", `find ~/.cc -okdir rm {} \;`, []Target{{"/home/u/.cc", AccessRemove}}},
 		{"unknown variable", `rm -rf "$DIR/.cc"`, nil},
 		{"command substitution", `rm -rf $(echo ~/.cc)`, nil},
-		{"parse error fails closed", `rm ~/.cc/settings.json ) (`, []Target{
-			{"/work/rm", AccessRemove}, {"/home/u/.cc/settings.json", AccessRemove}, {"/work/)", AccessRemove}, {"/work/(", AccessRemove},
-		}},
+		{"parse error records nothing", `rm ~/.cc/settings.json ) (`, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

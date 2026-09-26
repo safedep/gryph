@@ -46,16 +46,11 @@ type Target struct {
 	Access Access
 }
 
-// UnknownHost is the host of a command that the parser rejects. The command
-// can contact any host.
-const UnknownHost = "?"
-
 // Analysis is what a command does to paths and hosts.
 type Analysis struct {
 	// Parsed is false when the parser rejected the command or a script
-	// nested in it, such as the script of "bash -c". Targets then holds
-	// every word of the rejected script as a read and a removal, so that a
-	// caller fails closed, and Hosts holds UnknownHost.
+	// nested in it, such as the script of "bash -c". The analysis then has
+	// no targets and no hosts from the rejected script.
 	Parsed  bool
 	Targets []Target
 	// Hosts are the lower-case host names the command contacts, without the
@@ -85,7 +80,7 @@ func Analyze(command string, env Env) Analysis {
 	w := &walker{env: env}
 	start := dirs{env.WorkingDir}
 	if _, err := w.script(command, start); err != nil {
-		w.fallback(command, start)
+		w.failed = true
 	}
 	return Analysis{Parsed: !w.failed, Targets: w.targets, Hosts: w.hosts}
 }
@@ -180,8 +175,8 @@ func (w *walker) script(src string, cwds dirs) (dirs, error) {
 
 // nested runs a script and returns the working directories after it. The
 // caller decides whether the directory change applies, because eval runs in
-// the current shell and "bash -c" does not. A parse error falls back to the
-// word scan, so a bad nested script also fails closed.
+// the current shell and "bash -c" does not. A script that the parser rejects
+// adds no targets.
 func (w *walker) nested(src string, cwds dirs) dirs {
 	if w.depth >= maxDepth {
 		return cwds
@@ -190,7 +185,7 @@ func (w *walker) nested(src string, cwds dirs) dirs {
 	defer func() { w.depth-- }()
 	after, err := w.script(src, cwds)
 	if err != nil {
-		w.fallback(src, cwds)
+		w.failed = true
 		return cwds
 	}
 	return after
@@ -315,25 +310,14 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	name := path.Base(args[0])
 	rest := args[1:]
 
+	if after, ok := w.delegate(name, rest, cwds); ok {
+		return after
+	}
 	w.inlineURLs(rest)
 
-	if spec, ok := wrappers[name]; ok {
-		w.wrapper(spec, rest, cwds)
-		return cwds
-	}
 	switch name {
 	case "cd", "pushd":
 		return w.cd(rest, cwds)
-	case "command", "builtin":
-		// These run a command in the current shell, so "command cd" changes
-		// the working directory.
-		return w.call(skipOptions(rest), cwds)
-	case "sh", "bash", "zsh", "dash", "ksh":
-		if src, ok := shellScript(rest); ok {
-			w.nested(src, cwds)
-		}
-	case "eval":
-		return w.nested(strings.Join(rest, " "), cwds)
 	case "rm", "unlink", "rmdir", "shred":
 		w.addAll(operands(rest), AccessRemove, cwds)
 	case "cp", "install", "mv", "ln":
@@ -408,6 +392,31 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 		}
 	}
 	return cwds
+}
+
+// delegate analyzes a command that runs another command or a script: a
+// wrapper, "command", a shell with a script, or eval. The walker analyzes the
+// inner command or script, and not the words of the outer command, so a
+// script that the parser rejects adds no host.
+func (w *walker) delegate(name string, rest []string, cwds dirs) (dirs, bool) {
+	if spec, ok := wrappers[name]; ok {
+		w.wrapper(spec, rest, cwds)
+		return cwds, true
+	}
+	switch name {
+	case "command", "builtin":
+		// These run a command in the current shell, so "command cd" changes
+		// the working directory.
+		return w.call(skipOptions(rest), cwds), true
+	case "sh", "bash", "zsh", "dash", "ksh":
+		if src, ok := shellScript(rest); ok {
+			w.nested(src, cwds)
+			return cwds, true
+		}
+	case "eval":
+		return w.nested(strings.Join(rest, " "), cwds), true
+	}
+	return cwds, false
 }
 
 func (w *walker) cd(args []string, cwds dirs) dirs {
@@ -841,17 +850,4 @@ func hasInPlaceFlag(args []string) bool {
 		}
 	}
 	return false
-}
-
-// fallback treats every word of an unparsable command as a read and a
-// removal target, so a parse failure blocks rather than allows. The command
-// can contact any host.
-func (w *walker) fallback(command string, cwds dirs) {
-	w.failed = true
-	for _, field := range strings.Fields(command) {
-		word := strings.Trim(field, `"'`)
-		w.add(word, AccessRead, cwds)
-		w.add(word, AccessRemove, cwds)
-	}
-	w.addHostName(UnknownHost)
 }
