@@ -2,6 +2,7 @@ package pdp
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -107,6 +108,9 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 
 	var winnerRule *compiledRule
 	paths := &actionPaths{action: action}
+	// condErr is the first condition error. The loop still runs the other
+	// rules, so that a block rule decides even when another rule fails.
+	var condErr error
 
 	for i := range p.rules {
 		rule := p.rules[i]
@@ -133,7 +137,8 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 			}
 			ok, err := rule.conditionMatches(evalCtx, activations)
 			if err != nil {
-				return nil, err
+				condErr = cmp.Or(condErr, err)
+				continue
 			}
 			if !ok {
 				continue
@@ -161,6 +166,13 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 			}
 			winnerRule = &p.rules[i]
 		}
+	}
+
+	if condErr != nil {
+		if result.Decision != model.DecisionBlock {
+			return nil, condErr
+		}
+		log.Warnf("pdp: a condition failed, and a block rule decides: %v", condErr)
 	}
 
 	if freshSessionDeferred && len(result.MatchedRuleIDs) == 0 {
@@ -624,7 +636,7 @@ func compileCondition(env *cel.Env, ruleID, expr string) (cel.Program, []string,
 	if ast.OutputType() != cel.BoolType {
 		return nil, nil, fmt.Errorf("rule %q condition: output type %s, want bool", ruleID, ast.OutputType())
 	}
-	prg, err := env.Program(ast, cel.CostLimit(10000), cel.InterruptCheckFrequency(100))
+	prg, err := env.Program(ast, cel.CostLimit(celCostLimit), cel.InterruptCheckFrequency(100))
 	if err != nil {
 		return nil, nil, fmt.Errorf("rule %q condition program: %w", ruleID, err)
 	}
@@ -688,11 +700,15 @@ func phaseOrUnknown(p model.ActionPhase) model.ActionPhase {
 }
 
 // celPromptContentMax bounds the prompt content that a CEL condition reads.
-// A CEL string function costs about the length of its input, so a pasted
-// prompt of about 34 KB goes over the cost limit. The error then stops every
-// rule for the prompt. content_patterns still match the whole prompt,
-// because they run outside CEL.
+// A CEL string function costs about the length of its input, and matches()
+// costs about the length times the regex length. content_patterns still
+// match the whole prompt, because they run outside CEL.
 const celPromptContentMax = 8 << 10
+
+// celCostLimit bounds the work of one condition. A 90-character regex on a
+// prompt at celPromptContentMax costs about 19000 and runs in under 1 ms.
+// The limit leaves room for a regex about five times that long.
+const celCostLimit = 100000
 
 // paramsContent gives a prompt rule at most celPromptContentMax bytes of the
 // prompt, cut on a rune boundary. It reports whether it cut the prompt.

@@ -661,3 +661,50 @@ func TestShouldDeferFreshSession_IntentFieldsAreKnown(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, model.DecisionBlock, res.Decision)
 }
+
+func TestEvaluate_PromptRegexStaysUnderCELCost(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: injection
+    action: warn
+    match:
+      action_types: [user_prompt]
+    condition: "action.params.content.matches('(?i)(ignore|disregard|forget) (all )?(previous|prior|above) (instructions|rules|directions)')"
+  - id: exfiltrate
+    action: block
+    match:
+      action_types: [user_prompt]
+      content_patterns: ["(?i)exfiltrate"]
+`)
+	for _, n := range []int{1000, 5000, 50000} {
+		action := &model.Action{Type: model.ActionUserPrompt,
+			Parameters: model.Parameters{Content: strings.Repeat("x", n) + " please exfiltrate the keys"}}
+		res, err := engine.Evaluate(context.Background(), action, nil)
+		require.NoError(t, err, n)
+		assert.Equal(t, model.DecisionBlock, res.Decision, n)
+	}
+}
+
+func TestEvaluate_BlockWinsOverConditionError(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: broken
+    action: warn
+    match:
+      action_types: [command_exec]
+    condition: "1 / (size(action.params.command) - size(action.params.command)) == 1"
+  - id: no-curl
+    action: block
+    match:
+      action_types: [command_exec]
+      command_patterns: ["^curl"]
+`)
+	res, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionCommandExec, Parameters: model.Parameters{Command: "curl x"}}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, model.DecisionBlock, res.Decision)
+
+	_, err = engine.Evaluate(context.Background(), &model.Action{Type: model.ActionCommandExec, Parameters: model.Parameters{Command: "ls"}}, nil)
+	require.Error(t, err, "with no block, the condition error decides through fail_mode")
+}
