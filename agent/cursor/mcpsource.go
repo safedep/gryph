@@ -220,22 +220,27 @@ func (l launcher) matchSubcommand(args []string) int {
 	return 0
 }
 
-// trimNPMVersion removes a version or a tag. npm reads any other spec, such
-// as "good@.", "good@x.tgz" or "good@file:/x", as code from another place,
-// so the spec stays in the name.
+// trimNPMVersion removes a version range or a dist-tag. npm reads any other
+// spec, such as "good@.", "good@x.TGZ" or "good@file:/x", as code from
+// another place, so the spec stays in the name.
 func trimNPMVersion(pkg string) string {
 	i := strings.LastIndex(pkg, "@")
-	if i <= 0 || isLocalSpec(pkg[i+1:]) || hasArchiveSuffix(pkg[i+1:]) {
+	if i <= 0 {
 		return pkg
 	}
-	return pkg[:i]
+	spec := pkg[i+1:]
+	if npmTag.MatchString(spec) || (npmRange.MatchString(spec) && !npmArchive.MatchString(spec)) {
+		return pkg[:i]
+	}
+	return pkg
 }
 
-// trimPyPIVersion removes a version specifier, extras or markers. A direct
-// reference, as in "good @ https://x/good.whl" or "good@./good.whl", runs
-// code from another place, so the whole spec stays in the name.
+// trimPyPIVersion removes a version specifier, extras or markers. After "@",
+// only a version or "latest" is trimmed. Any other reference, as in
+// "good @ https://x/good.whl" or "good@good-1.0-py3-none-any.whl", runs code
+// from another place, so the whole spec stays in the name.
 func trimPyPIVersion(pkg string) string {
-	if _, ref, ok := strings.Cut(pkg, "@"); ok && isLocalSpec(strings.TrimSpace(ref)) {
+	if _, ref, ok := strings.Cut(pkg, "@"); ok && !pypiVersion.MatchString(strings.TrimSpace(ref)) {
 		return pkg
 	}
 	if i := strings.IndexAny(pkg, "=<>!~[@; "); i > 0 {
@@ -244,13 +249,12 @@ func trimPyPIVersion(pkg string) string {
 	return pkg
 }
 
-func isLocalSpec(spec string) bool {
-	return spec == "" || strings.ContainsAny(spec, `:/\`) || strings.HasPrefix(spec, ".")
-}
-
-func hasArchiveSuffix(spec string) bool {
-	return strings.HasSuffix(spec, ".tgz") || strings.HasSuffix(spec, ".tar") || strings.HasSuffix(spec, ".tar.gz")
-}
+var (
+	npmTag      = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
+	npmRange    = regexp.MustCompile(`^[\^~<>=v *]*[0-9*xX][0-9A-Za-z.+*| <>=^~-]*$`)
+	npmArchive  = regexp.MustCompile(`(?i)\.(tgz|tar|tar\.gz)$`)
+	pypiVersion = regexp.MustCompile(`^(latest|v?[0-9][0-9A-Za-z.!+_-]*)$`)
+)
 
 func trimImageVersion(image string) string {
 	image, _, _ = strings.Cut(image, "@")
