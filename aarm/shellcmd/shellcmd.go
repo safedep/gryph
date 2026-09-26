@@ -677,12 +677,18 @@ func skipOptions(args []string) []string {
 // a directory, the command writes each source name into it, so that path is
 // added as a write too. A relative copy, such as "cp --parents", writes the
 // whole source path under the destination.
+//
+// A recursive copy of a directory into the working directory or home, such
+// as "cp -r dotfiles/.claude ~/", writes new files into DEST/NAME. So that
+// path is a tree write. For other destinations it stays a plain write,
+// because a backup such as "cp -r ~/.claude /tmp/backup" is common.
 func (w *walker) addDest(dest string, sources []string, p parsedArgs, flags copyFlags, cwds dirs) {
 	if dest == "" {
 		return
 	}
 	w.add(dest, destAccess(p, sources, flags), cwds)
 	relative := p.has(flags.relative...)
+	tree := !relative && p.has(flags.recursive...) && w.isCwdOrHome(dest)
 	for _, src := range sources {
 		if _, remotePath, remote := splitRemote(src); remote {
 			src = remotePath
@@ -694,8 +700,17 @@ func (w *walker) addDest(dest string, sources []string, p parsedArgs, flags copy
 		if relative {
 			name = relativeSource(expandHome(src, w.env.Home))
 		}
-		w.add(strings.TrimSuffix(dest, "/")+"/"+name, AccessWrite, cwds)
+		access := AccessWrite
+		if tree && !copiesContents(src) && mayBeDirectory(src) {
+			access = AccessWriteTree
+		}
+		w.add(strings.TrimSuffix(dest, "/")+"/"+name, access, cwds)
 	}
+}
+
+func (w *walker) isCwdOrHome(dest string) bool {
+	d := strings.TrimSuffix(dest, "/")
+	return d == "." || (w.env.Home != "" && expandHome(d, w.env.Home) == w.env.Home)
 }
 
 // relativeSource returns the part of a source path that a relative copy

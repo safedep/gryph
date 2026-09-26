@@ -255,7 +255,11 @@ absolute member names of `tar -P`, `7z -spf`, or `unzip -:`, the files that
 `xz --files` names, the targets of a `7z` command that it does not know, or
 the files that a `curl -w @FILE` format names. `curl -w @FILE` is a read of
 `FILE`. A recursive copy of a source with an extension, such as `notes.txt`,
-is a write of the destination and of the source name in it. A plain download
+is a write of the destination and of the source name in it. A recursive
+copy of a directory into the working directory or home, such as `cp -r
+dotfiles/.claude ~/`, is also a tree write of the source name in the
+destination. A copy of a directory to another place, such as a backup, stays
+a plain write of that name. A plain download
 writes the URL file name in the `--output-dir` or `-P` directory. `cp
 --parents` and `rsync -R` write the whole source path under the destination.
 An `ln` with one operand writes the base name in the working directory.
