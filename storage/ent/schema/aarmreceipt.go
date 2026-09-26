@@ -68,6 +68,11 @@ func (AarmReceipt) Fields() []ent.Field {
 		field.String("human_principal").Optional(),
 		field.String("service_identity").Optional(),
 		field.String("role_scope").Optional(),
+
+		field.String("command_digest").Optional(),
+		field.String("url_digest").Optional(),
+		field.Int("hash_version").Optional(),
+		field.Bytes("content_salt").Optional().MaxLen(32),
 	}
 }
 

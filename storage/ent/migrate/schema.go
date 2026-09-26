@@ -84,6 +84,10 @@ var (
 		{Name: "human_principal", Type: field.TypeString, Nullable: true},
 		{Name: "service_identity", Type: field.TypeString, Nullable: true},
 		{Name: "role_scope", Type: field.TypeString, Nullable: true},
+		{Name: "command_digest", Type: field.TypeString, Nullable: true},
+		{Name: "url_digest", Type: field.TypeString, Nullable: true},
+		{Name: "hash_version", Type: field.TypeInt, Nullable: true},
+		{Name: "content_salt", Type: field.TypeBytes, Nullable: true, Size: 32},
 	}
 	// AarmReceiptsTable holds the schema information for the "aarm_receipts" table.
 	AarmReceiptsTable = &schema.Table{

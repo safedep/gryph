@@ -484,6 +484,8 @@ Every mediated action produces a receipt row in the event store. The default `po
 
 Receipts form a per-session hash chain (`hash`, `prev_hash`). The hash now also covers the SHA-256 of the active policy document (`policy_hash`), so an after-the-fact rule edit is visible at verify time. The chain detects tampering and lets you verify the audit trail off-host.
 
+A receipt hash covers a salted commitment of the command and of the URL, not their values. `gryph policy receipts export --export-profile <name>` applies an export profile to the command, the URL and the error message, and the export still verifies. The default profile removes a command that holds secret, pii or unknown_sensitive content, and the export then leaves out the salt too. Receipts from before this hash version cover the command itself. Export them with `--export-profile full` to verify them. The export prints a warning when a profile changed such a receipt. A rule message that quotes the command puts the command in every export, and the export prints a warning for it.
+
 Receipt rows carry the three identity fields (`human_principal`, `service_identity`, `role_scope`) captured at the mediation boundary. They surface in the `gryph policy receipts --format json` view and in the JSONL and CSV exports. Pre-Phase-6 rows have NULL identity columns and continue to verify cleanly: the hash recipe treats the empty string as the same length-prefixed zero bytes as the insert path.
 
 Signing defaults to `sign_mode: auto`: receipts carry an Ed25519 signature when a key file is present at the configured `key_path`, and skip the signature when no key is on disk. Pick the explicit mode that matches your operational policy:

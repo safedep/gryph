@@ -1,0 +1,63 @@
+# Gryph writes receipts with hash v2. The v2 hash reads salted commitments
+# of the command and the URL, not their values. An export profile can
+# remove the command and its salt from a receipt, and the export still
+# verifies. The commitment covers the stored command, after redaction, so
+# the token never reaches the export. A changed commitment, or a changed
+# command next to its salt, fails verification.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin bash_token.json
+exec gryph _hook claude-code PreToolUse
+stdin bash_npm_block.json
+execexit 2 gryph _hook claude-code PreToolUse
+
+exec gryph policy receipts export --format jsonl --export-profile metadata --output meta.jsonl
+grep '"hash_version":2' meta.jsonl
+grep '"command_digest":"sha256:[0-9a-f]{64}"' meta.jsonl
+grep '"projected":true' meta.jsonl
+! grep '"command":' meta.jsonl
+! grep '"content_salt"' meta.jsonl
+! grep 'abc123SECRET' meta.jsonl
+exec gryph policy receipts verify-log --input meta.jsonl
+stdout 'chain_breaks\s+0'
+
+exec gryph policy receipts export --format jsonl --export-profile full --output full.jsonl
+grep 'Authorization: \[REDACTED\]' full.jsonl
+grep '"content_salt":"[0-9a-f]{32}"' full.jsonl
+! grep 'abc123SECRET' full.jsonl
+exec gryph policy receipts verify-log --input full.jsonl
+stdout 'chain_breaks\s+0'
+
+replace full.jsonl '"command":"npm install"' '"command":"npm ci"'
+execexit 2 gryph policy receipts verify-log --input full.jsonl
+stdout 'the command does not match command_digest'
+
+replace meta.jsonl '"command_digest":"sha256:' '"command_digest":"sha256:00'
+execexit 2 gryph policy receipts verify-log --input meta.jsonl
+stderr 'chain break'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+  log_all_evaluations: true
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-block-npm-install
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+    message: "blocked-by-acceptance: npm install is not allowed"
+-- bash_token.json --
+{"session_id": "s-receipt-v2", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "curl -s -H \"Authorization: Bearer abc123SECRET\" https://api.example.com/v1"},
+ "tool_use_id": "tu-token"}
+-- bash_npm_block.json --
+{"session_id": "s-receipt-v2", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "npm install"}, "tool_use_id": "tu-npm"}

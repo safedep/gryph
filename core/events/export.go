@@ -22,23 +22,13 @@ func (e *Event) ForExport(p privacy.ExportProfile) *Event {
 	if !p.IncludesAll() {
 		out.RawEvent = nil
 	}
-	out.DiffContent = e.legacyLabel(e.DiffContent, "")
-	labels := []privacy.Label{out.DiffContent.Label}
+	payload, labels := e.exportLabels(&out.DiffContent)
 	out.DiffContent, _ = p.Apply(out.DiffContent)
-
-	payload, err := e.DecodePayload()
-	if err != nil {
-		log.Warnf("events: export %s payload: %v", e.ActionType, err)
-	}
 	if payload == nil && len(e.Payload) > 0 && !p.IncludesAll() {
 		out.Payload = nil
 	}
-	privacy.Walk(payload, func(path string, t *privacy.Text) {
-		*t = e.legacyLabel(*t, path)
-		labels = append(labels, t.Label)
-	})
 	plain := plainTreatment(p, e.IsSensitive, labels...)
-	out.ErrorMessage = treatPlain(plain, e.ErrorMessage)
+	out.ErrorMessage = plain.Plain(e.ErrorMessage)
 	if payload == nil {
 		return &out
 	}
@@ -56,6 +46,32 @@ func (e *Event) ForExport(p privacy.ExportProfile) *Event {
 	}
 	out.Payload = data
 	return &out
+}
+
+// PlainTreatment returns the treatment of a plain string that holds content
+// of the event, such as the command of a receipt. It is the most restrictive
+// treatment of any value in the event.
+func (e *Event) PlainTreatment(p privacy.ExportProfile) privacy.Treatment {
+	diff := e.DiffContent
+	_, labels := e.exportLabels(&diff)
+	return plainTreatment(p, e.IsSensitive, labels...)
+}
+
+// exportLabels decodes the payload, fills legacy labels in it and in diff,
+// and returns the payload with every label. The payload is nil when the
+// event has no typed payload or the payload does not decode.
+func (e *Event) exportLabels(diff *privacy.Text) (any, []privacy.Label) {
+	*diff = e.legacyLabel(*diff, "")
+	labels := []privacy.Label{diff.Label}
+	payload, err := e.DecodePayload()
+	if err != nil {
+		log.Warnf("events: export %s payload: %v", e.ActionType, err)
+	}
+	privacy.Walk(payload, func(path string, t *privacy.Text) {
+		*t = e.legacyLabel(*t, path)
+		labels = append(labels, t.Label)
+	})
+	return payload, labels
 }
 
 // legacyLabel fills a label that a row from before content labels lacks. A
@@ -91,17 +107,6 @@ func plainTreatment(p privacy.ExportProfile, sensitive bool, labels ...privacy.L
 	return treatment
 }
 
-func treatPlain(t privacy.Treatment, v string) string {
-	switch {
-	case v == "" || t == privacy.TreatInclude:
-		return v
-	case t == privacy.TreatRedact:
-		return privacy.RedactedValue
-	default:
-		return ""
-	}
-}
-
 // contentHashContext binds the keyed content hash, so that it does not
 // match the keyed digest of a label.
 const contentHashContext = "content_hash"
@@ -132,16 +137,16 @@ func projectPlainFields(payload any, t privacy.Treatment) {
 	}
 	switch p := payload.(type) {
 	case *FileReadPayload:
-		p.Pattern = treatPlain(t, p.Pattern)
+		p.Pattern = t.Plain(p.Pattern)
 	case *CommandExecPayload:
-		p.Description = treatPlain(t, p.Description)
+		p.Description = t.Plain(p.Description)
 		for i := range p.Args {
-			p.Args[i] = treatPlain(t, p.Args[i])
+			p.Args[i] = t.Plain(p.Args[i])
 		}
 	case *SessionEndPayload:
-		p.Reason = treatPlain(t, p.Reason)
+		p.Reason = t.Plain(p.Reason)
 	case *NotificationPayload:
-		p.Message = treatPlain(t, p.Message)
+		p.Message = t.Plain(p.Message)
 		p.Details = nil
 	}
 }

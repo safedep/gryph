@@ -45,6 +45,30 @@
 //  26. service_identity   (utf-8 bytes; empty when no CI / service identity)
 //  27. role_scope         (utf-8 bytes; empty when no OS credentials captured)
 //
+// # Hash versions
+//
+// The hash_version column selects the recipe. A row without the column is
+// v1. Gryph writes v2.
+//
+// v1 hashes fields 1 to 27 above.
+//
+// v2 hashes fields 1 to 27 in the same order, with one change: field 19
+// hashes action_payload without the command, args and url keys. Three
+// fields follow:
+//
+//  28. command_digest     (utf-8 bytes; commitment of the command and its args, empty when none)
+//  29. url_digest         (utf-8 bytes; commitment of the URL, empty when none)
+//  30. hash_version       (int64, 8 bytes BE)
+//
+// A commitment is "sha256:<hex>" of sha256(content_salt || value). The
+// command commitment reads the canonical JSON of the command and the args.
+// The values are the stored values, after write-time redaction. The row
+// holds a random content_salt, which the hash does not cover. An export
+// profile that removes the values also removes the salt, so a commitment of
+// a short secret cannot be reversed by brute force. The row still verifies.
+// When the values and the salt are present, the verifier recomputes each
+// commitment and compares it with the column.
+//
 // result_status contract
 //
 // At insert time, result_status is derived solely from the decision: it is
@@ -74,6 +98,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"maps"
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/canonical"
@@ -82,6 +107,20 @@ import (
 
 // HashSize is the byte length of a receipt hash (SHA-256).
 const HashSize = 32
+
+// Receipt hash versions. See the package doc.
+const (
+	HashV1 = 1
+	HashV2 = 2
+)
+
+// Content keys of action_payload. Hash v2 hashes their digests, not their
+// values.
+const (
+	payloadKeyCommand = "command"
+	payloadKeyArgs    = "args"
+	payloadKeyURL     = "url"
+)
 
 // resultStatusPending is the insert-time result_status assigned to any
 // non-block decision. The storage layer carries an equivalent constant
@@ -125,6 +164,9 @@ type HashInput struct {
 	HumanPrincipal     string
 	ServiceIdentity    string
 	RoleScope          string
+	CommandDigest      string
+	URLDigest          string
+	HashVersion        int
 }
 
 // DeriveInsertResultStatus returns the insert-time result_status implied by
@@ -193,6 +235,9 @@ type HashInputFields struct {
 	HumanPrincipal     string
 	ServiceIdentity    string
 	RoleScope          string
+	CommandDigest      string
+	URLDigest          string
+	HashVersion        int
 }
 
 // NewHashInput builds a *HashInput from the explicit row fields, applying the
@@ -240,6 +285,9 @@ func NewHashInput(f HashInputFields) *HashInput {
 		HumanPrincipal:     f.HumanPrincipal,
 		ServiceIdentity:    f.ServiceIdentity,
 		RoleScope:          f.RoleScope,
+		CommandDigest:      f.CommandDigest,
+		URLDigest:          f.URLDigest,
+		HashVersion:        f.HashVersion,
 	}
 }
 
@@ -248,6 +296,14 @@ func NewHashInput(f HashInputFields) *HashInput {
 func ComputeHash(in *HashInput) ([]byte, error) {
 	if in == nil {
 		return nil, fmt.Errorf("receipt: nil hash input")
+	}
+	v2 := false
+	switch in.HashVersion {
+	case 0, HashV1:
+	case HashV2:
+		v2 = true
+	default:
+		return nil, fmt.Errorf("receipt: unknown hash version %d", in.HashVersion)
 	}
 	var buf bytes.Buffer
 
@@ -314,7 +370,11 @@ func ComputeHash(in *HashInput) ([]byte, error) {
 		return nil, err
 	}
 
-	payload, err := canonical.MarshalJSON(in.ActionPayload)
+	hashedPayload := in.ActionPayload
+	if v2 {
+		hashedPayload = withoutContent(in.ActionPayload)
+	}
+	payload, err := canonical.MarshalJSON(hashedPayload)
 	if err != nil {
 		return nil, fmt.Errorf("receipt: canonicalize action_payload: %w", err)
 	}
@@ -347,8 +407,34 @@ func ComputeHash(in *HashInput) ([]byte, error) {
 		return nil, err
 	}
 
+	if v2 {
+		if err := writeString(&buf, in.CommandDigest); err != nil {
+			return nil, err
+		}
+		if err := writeString(&buf, in.URLDigest); err != nil {
+			return nil, err
+		}
+		if err := writeInt64(&buf, int64(in.HashVersion)); err != nil {
+			return nil, err
+		}
+	}
+
 	sum := sha256.Sum256(buf.Bytes())
 	return sum[:], nil
+}
+
+// withoutContent returns a copy of payload without the content keys. An
+// empty result is nil, because an export omits an empty payload, and the
+// verifier must hash the same bytes as the insert.
+func withoutContent(payload map[string]interface{}) map[string]interface{} {
+	out := maps.Clone(payload)
+	for _, key := range contentKeys {
+		delete(out, key)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func writeInt64(buf *bytes.Buffer, v int64) error {

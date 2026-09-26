@@ -325,6 +325,17 @@ type ReceiptRow struct {
 	HumanPrincipal  string
 	ServiceIdentity string
 	RoleScope       string
+
+	// CommandDigest and URLDigest commit to the command, with its args, and
+	// to the URL in ActionPayload. Hash v2 reads them in place of the
+	// values. ContentSalt is the salt of both commitments. The hash does not
+	// cover it.
+	CommandDigest string
+	URLDigest     string
+	ContentSalt   []byte
+	// HashVersion is the receipt hash recipe. Zero is a row from before
+	// the column, which uses v1.
+	HashVersion int
 }
 
 // DeferralStore persists pending deferrals so the operator-resolve and

@@ -2,6 +2,7 @@ package receipt
 
 import (
 	"bytes"
+	"fmt"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/testchain"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,6 +24,7 @@ import (
 //   2. Sequence is strictly monotonic, starts at 1, no gaps.
 //   3. ComputeHash(NewHashInput(row)) == row.Hash for every row.
 //   4. A tampered row produces at least one ChainBreak from VerifyChain.
+//   5. A v2 row verifies after an export profile removes its command and URL.
 //
 // Structural inputs (chain size, tamper case, field selectors) are
 // reproducible from the logged seed. UUID identifiers are crypto/rand
@@ -30,7 +33,8 @@ import (
 
 // buildPropertyChain constructs a clean hash chain of n rows for the given
 // session. The fields vary per row so any field-level tamper detection
-// actually fires. Each row's PrevHash is a fresh copy so per-row tamper
+// actually fires. The first half of the rows uses hash v1 and the rest v2,
+// as in a session that spans an upgrade. Each row's PrevHash is a fresh copy so per-row tamper
 // mutations stay localised to that row's PrevHash buffer (mutating it does
 // not also corrupt the previous row's Hash through a shared backing array).
 func buildPropertyChain(t *testing.T, sessionID uuid.UUID, n int) []ChainRow {
@@ -45,6 +49,8 @@ func buildPropertyChain(t *testing.T, sessionID uuid.UUID, n int) []ChainRow {
 		if prevHash != nil {
 			rowPrev = append([]byte(nil), prevHash...)
 		}
+		command := fmt.Sprintf("curl https://example.com/%d", i)
+		url := fmt.Sprintf("https://example.com/%d", i)
 		fields := HashInputFields{
 			Sequence:       seq,
 			PrevHash:       rowPrev,
@@ -61,16 +67,26 @@ func buildPropertyChain(t *testing.T, sessionID uuid.UUID, n int) []ChainRow {
 			Message:        "msg",
 			MatchedRuleIDs: []string{"r-1"},
 			Snapshot:       map[string]interface{}{"total_actions": i + 1},
-			ActionPayload:  map[string]interface{}{"path": "/tmp/x"},
+			ActionPayload:  map[string]interface{}{"path": "/tmp/x", "command": command, "url": url},
+			HashVersion:    HashV1,
+		}
+		var salt []byte
+		if i >= n/2 {
+			fields.HashVersion = HashV2
+			salt = bytes.Repeat([]byte{byte(i)}, contentSaltSize)
+			var err error
+			fields.CommandDigest, fields.URLDigest, err = contentDigests(salt, fields.ActionPayload)
+			require.NoError(t, err)
 		}
 		hash, err := ComputeHash(NewHashInput(fields))
 		require.NoError(t, err)
 		rows = append(rows, ChainRow{
-			SessionID: sessionID,
-			Sequence:  seq,
-			PrevHash:  rowPrev,
-			Hash:      hash,
-			Fields:    fields,
+			SessionID:   sessionID,
+			Sequence:    seq,
+			PrevHash:    rowPrev,
+			Hash:        hash,
+			Fields:      fields,
+			ContentSalt: salt,
 		})
 		prevHash = hash
 	}
@@ -118,14 +134,18 @@ func (tamperCase) Generate(rand *rand.Rand, _ int) reflect.Value {
 	return reflect.ValueOf(tamperCase{
 		Size:  size,
 		Row:   rand.Intn(size),
-		Field: rand.Intn(10),
+		Field: rand.Intn(tamperFields),
 	})
 }
 
-// tamperRow flips one of ten hash-input fields on r so VerifyChain must
-// report a break. The selector matches the tamperCase.Field enum.
+const tamperFields = 15
+
+// tamperRow flips one hash-input field on r so VerifyChain must report a
+// break. The selector matches the tamperCase.Field enum. A v1 row does not
+// hash the digests, so the digest cases change the value that v1 hashes.
 func tamperRow(r *ChainRow, field int) {
-	switch field % 10 {
+	v2 := r.Fields.HashVersion == HashV2
+	switch field % tamperFields {
 	case 0:
 		r.Fields.Agent = r.Fields.Agent + "-tampered"
 	case 1:
@@ -146,7 +166,73 @@ func tamperRow(r *ChainRow, field int) {
 		r.Fields.RecordedAtUnix++
 	case 9:
 		r.Fields.Snapshot = map[string]interface{}{"total_actions": 999}
+	case 10:
+		if v2 {
+			r.Fields.CommandDigest = privacy.Digest("tampered")
+		} else {
+			r.Fields.ActionPayload["command"] = "tampered"
+		}
+	case 11:
+		if v2 {
+			r.Fields.URLDigest = privacy.Digest("tampered")
+		} else {
+			r.Fields.ActionPayload["url"] = "tampered"
+		}
+	case 12:
+		if v2 {
+			r.Fields.HashVersion = HashV1
+		} else {
+			r.Fields.HashVersion = HashV2
+		}
+	case 13:
+		r.Fields.ActionPayload["path"] = "/tmp/tampered"
+	case 14:
+		r.Fields.ActionPayload["command"] = "rm -rf /"
 	}
+}
+
+func TestProperty_V2ContentRemovalVerifies(t *testing.T) {
+	cfg := testchain.PropertyConfig(t)
+	property := func(n testchain.ChainSize) bool {
+		rows := buildPropertyChain(t, uuid.New(), int(n))
+		for i := range rows {
+			if rows[i].Fields.HashVersion == HashV2 {
+				projectChainRow(&rows[i])
+			}
+		}
+		if breaks := VerifyChain(rows); len(breaks) != 0 {
+			t.Logf("unexpected breaks for n=%d: %+v", int(n), breaks)
+			return false
+		}
+		return true
+	}
+	require.NoError(t, quick.Check(property, cfg))
+}
+
+func TestProperty_V2UnprojectedContentRemovalDetected(t *testing.T) {
+	cfg := testchain.PropertyConfig(t)
+	property := func(n testchain.ChainSize) bool {
+		rows := buildPropertyChain(t, uuid.New(), int(n))
+		last := &rows[len(rows)-1]
+		if last.Fields.HashVersion != HashV2 {
+			return true
+		}
+		delete(last.Fields.ActionPayload, "command")
+		last.Fields.ActionPayload["url"] = privacy.RedactedValue
+		return len(VerifyChain(rows)) > 0
+	}
+	require.NoError(t, quick.Check(property, cfg))
+}
+
+// projectChainRow removes the content as an export profile does: it
+// redacts the command and the URL, drops the args and the salt, and marks
+// the row projected.
+func projectChainRow(r *ChainRow) {
+	delete(r.Fields.ActionPayload, "args")
+	r.Fields.ActionPayload["command"] = privacy.RedactedValue
+	r.Fields.ActionPayload["url"] = privacy.RedactedValue
+	r.ContentSalt = nil
+	r.Projected = true
 }
 
 func TestProperty_AnyFieldTamperDetected(t *testing.T) {
