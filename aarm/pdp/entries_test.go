@@ -107,6 +107,49 @@ rules:
 	assert.Contains(t, err.Error(), "invalid pattern")
 }
 
+func TestCheckStrict_InvalidGlobLiteral(t *testing.T) {
+	policy, err := ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: bad-glob
+    action: block
+    condition: 'glob(action.params.path, "[")'
+`))
+	require.NoError(t, err, "a load only warns")
+	err = CheckStrict(policy)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `glob pattern "["`)
+
+	policy, err = ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: good-glob
+    action: block
+    condition: 'glob(action.params.path, "**/*.pem")'
+`))
+	require.NoError(t, err)
+	assert.NoError(t, CheckStrict(policy))
+}
+
+func TestEvaluate_TemplateErrorKeepsDecision(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: hosts-message
+    action: block
+    match:
+      action_types: [network_request]
+    message: "{{if .Action.Hosts}}{{.Context.Drift}}{{end}}"
+`)
+	res, err := engine.Evaluate(context.Background(), &model.Action{
+		Type:       model.ActionNetworkRequest,
+		Parameters: model.Parameters{URL: "https://example.com"},
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, model.DecisionBlock, res.Decision)
+	assert.Equal(t, "rule hosts-message", res.Message)
+}
+
 func TestEvaluate_EntriesCostAtMaxSize(t *testing.T) {
 	engine := mustPDP(t, `
 version: "1"

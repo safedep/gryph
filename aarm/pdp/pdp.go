@@ -210,14 +210,10 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 	}
 
 	if winnerRule != nil {
-		full, err := winnerRule.renderMessage(action, snapshot)
-		if err != nil {
-			return nil, err
-		}
-		result.FullMessage = full
-		result.Message = full
+		result.FullMessage = winnerRule.messageOrFallback(action, snapshot)
+		result.Message = result.FullMessage
 		if stored != action {
-			result.Message = winnerRule.storedMessage(stored, snapshot)
+			result.Message = winnerRule.messageOrFallback(stored, snapshot)
 		}
 	}
 
@@ -232,14 +228,15 @@ func gates(d model.Decision) bool {
 	return d == model.DecisionBlock || d == model.DecisionEscalate || d == model.DecisionDefer
 }
 
-// storedMessage renders the message from the stored action. The stored
-// action lacks the values that Gryph strips, so a template that works on the
-// full action can fail here. The decision must not depend on the logging
-// level, so a failed render gives a fixed message and not an error.
-func (r compiledRule) storedMessage(stored *model.Action, snapshot *model.ContextSnapshot) string {
-	msg, err := r.renderMessage(stored, snapshot)
+// messageOrFallback renders the rule message. A failed render gives a fixed
+// message and not an error, because the decision must not depend on the
+// message. A template can fail only on some actions: the stored action lacks
+// the values that Gryph strips, and a branch that validation does not run
+// can name an unknown field.
+func (r compiledRule) messageOrFallback(action *model.Action, snapshot *model.ContextSnapshot) string {
+	msg, err := r.renderMessage(action, snapshot)
 	if err != nil {
-		log.Warnf("pdp: rule %s: render the stored message: %v", r.rule.ID, err)
+		log.Warnf("pdp: rule %s: render the message: %v", r.rule.ID, err)
 		return "rule " + r.rule.ID
 	}
 	return msg
@@ -495,6 +492,8 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 		cr.contextRefs = collectContextRefs(ast)
 		if field := removedFieldRef(ast); field != "" {
 			cr.strictErr = fmt.Errorf("rule %q condition: context.%s was removed. Remove it from the condition", rule.ID, field)
+		} else if pattern := invalidGlobLiteral(ast); pattern != "" {
+			cr.strictErr = fmt.Errorf("rule %q condition: glob pattern %q is invalid", rule.ID, pattern)
 		}
 	}
 
@@ -815,6 +814,29 @@ func removedFieldRef(ast *cel.Ast) string {
 		_, field, ok := fieldAccess(e)
 		if ok && found == "" && slices.ContainsFunc(removedContextFields, func(f removedField) bool { return f.cel == field }) {
 			found = field
+		}
+	}))
+	return found
+}
+
+// invalidGlobLiteral returns the first literal pattern of a glob() call that
+// does not compile. celGlob fails on it at runtime, so validation rejects it.
+func invalidGlobLiteral(ast *cel.Ast) string {
+	native := ast.NativeRep()
+	if native == nil {
+		return ""
+	}
+	var found string
+	celast.PreOrderVisit(native.Expr(), celast.NewExprVisitor(func(e celast.Expr) {
+		if found != "" || e.Kind() != celast.CallKind || e.AsCall().FunctionName() != "glob" {
+			return
+		}
+		args := e.AsCall().Args()
+		if len(args) != 2 || args[1].Kind() != celast.LiteralKind {
+			return
+		}
+		if pat, ok := args[1].AsLiteral().(types.String); ok && !doublestar.ValidatePattern(string(pat)) {
+			found = string(pat)
 		}
 	}))
 	return found

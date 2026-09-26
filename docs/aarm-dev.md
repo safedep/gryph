@@ -198,8 +198,11 @@ joined with `audit_events` for the path and the stored command. The CEL
 function `glob` uses the `file_patterns` matcher. `pdp.CheckStrict` rejects a
 rule that reads a field in `removedContextFields`, such as
 `context.semantic_drift`, also through an alias. It also rejects a message
-template that names a field the template data does not have. `gryph policy
-validate` and `install` call it. A policy load only warns, and the field
+template that names a field the template data does not have, and a `glob()`
+call with an invalid literal pattern (`invalidGlobLiteral`). `gryph policy
+validate` and `install` call it. A template that fails at render time, such
+as an unknown field in an `if` branch that validation does not run, gives
+the message `rule <id>` (`messageOrFallback`), so the decision stands. A policy load only warns, and the field
 reads as zero. The
 receipt snapshot keeps `semantic_drift` at zero, so the receipt hash format
 does not change.
