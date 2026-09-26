@@ -550,15 +550,23 @@ A row without the column is v1. `Record` writes v2.
 - v2 hashes the same fields in the same order. Field 19 hashes
   `action_payload` without the `command`, `args` and `url` keys. Fields 28
   (`command_digest`), 29 (`url_digest`) and 30 (`hash_version`) follow.
-- `command_digest` and `url_digest` are commitments:
-  `sha256:<hex>` of `sha256(content_salt || value)`. The command commitment
-  reads the canonical JSON of the command and the args. The values are the
-  stored values, after write-time redaction. Each row has a random 16-byte
-  `content_salt`, which the hash does not cover. An export profile never
-  changes the commitment columns.
-- The verifier recomputes each commitment when the value and the salt are
-  present, so a changed command fails verification. A value that an export
-  profile removed or redacted is not checked.
+- `command_digest` and `url_digest` are commitments: `sha256:<hex>` of
+  sha256 over four fields. The fields are the domain
+  `gryph.receipt.content.v2`, the kind (`command` or `url`), `content_salt`
+  and the value. Each field has an 8-byte big-endian length prefix, so bytes
+  cannot move from the value into the salt. The command commitment reads the
+  canonical JSON of the command and the args. The values are the stored
+  values, after write-time redaction. Each row with content has a random
+  16-byte `content_salt`, which the hash does not cover. An export profile
+  never changes the commitment columns.
+- The verifier checks the content of each v2 row:
+  - A row with `content_salt` must match both commitments exactly. The salt
+    must be 16 bytes, and a `url` must be a string.
+  - A row without `content_salt` may hold only the redacted marker in
+    `command` and `url`, and no `args`.
+  - Only a row that an export profile projected may have commitments without
+    `content_salt`. So a local row whose command or URL is removed or
+    redacted fails verification.
 - `gryph policy receipts export --export-profile` applies the profile to the
   command and the URL of each JSONL row. The command is a plain string, so it
   gets `Event.PlainTreatment` of its audit event. A receipt without an audit

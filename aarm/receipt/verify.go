@@ -145,7 +145,7 @@ func VerifyChain(rows []ChainRow) []ChainBreak {
 			})
 		}
 
-		if reason := checkContent(r.ContentSalt, r.Fields); reason != "" {
+		if reason := checkContent(r); reason != "" {
 			breaks = append(breaks, ChainBreak{
 				SessionID: r.SessionID,
 				Sequence:  r.Sequence,
