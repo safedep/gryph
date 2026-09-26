@@ -60,10 +60,10 @@ write the execution outcome to the accumulator row and the receipt row.
 | Package | Role |
 | --- | --- |
 | `aarm` | `Mediator`: the `security.Check`. Orchestrates every step. Re-exports model types. |
-| `aarm/model` | Shared data model: `Action`, `Parameters`, `Decision`, `EvaluationResult`, `ContextSnapshot`, `Result`, `Severity`. No dependencies on other aarm packages. |
+| `aarm/model` | Shared data model: `Action`, `Parameters`, `Decision`, `EvaluationResult`, `ContextSnapshot`, `Result`, `Severity`. Its only aarm dependency is `aarm/shellcmd`, for `Action.Shell`. `aarm/shellcmd` imports no Gryph package, and a test enforces it. |
 | `aarm/mediation` | `Adapter` interface plus `HookAdapter` and `MCPAdapter`. Normalizes agent events into `model.Action` and enriches with classify / injectscore / identity. |
 | `aarm/pdp` | Policy Decision Point. `Policy` / `Rule` schema, YAML parse, rule compile, `Evaluate`, CEL conditions, message templates, policy hash. |
-| `aarm/shellcmd` | Parses a shell command with `mvdan.cc/sh` and returns the paths it writes, moves, or deletes. The PDP matches `file_patterns` against them for `command_exec` actions. |
+| `aarm/shellcmd` | Parses a shell command with `mvdan.cc/sh`. `Analyze` returns the paths the command reads, writes, or removes, and the hosts it contacts. The mediator stores the result on `model.Action.Shell`. The PDP matches `file_patterns` against the write and remove targets for `command_exec` actions. |
 | `aarm/pep` | Policy Enforcement boundary. Maps `model.EvaluationResult` to `core/security.CheckResult`. |
 | `aarm/loader` | `Loader` merges policy `Source` values. `FileSource`, `DirSource` (the policies directory), and `BuiltinSource` (self-protection rules). |
 | `aarm/accumulator` | Context Accumulator interface. Per-session action memory feeding `context.*` CEL variables. `Nop` and SQLite implementations. |
@@ -198,10 +198,109 @@ the directory contains a protected path, for a shell command or a
 directories a command can run in: a `cd` in a subshell, a pipe, a
 substitution, or a background job does not carry over, and a `cd` that may not
 run (after `&&` or `||`, or in an `if` or loop body) adds a directory to the
-set. For a wrapper such as `sudo`, it tries each word after the wrapper as the
-start of the command, because it does not know every wrapper option that takes
-a value. The walk over-approximates. It prefers a false block to a missed
-change. The operator toggles it only through
+set. For a wrapper such as `sudo`, `env`, `nice`, or `timeout`, it parses the
+wrapper arguments the way the wrapper does. It skips the options, the values
+of the options in the `wrappers` table, `NAME=value` words for `env` and
+`sudo`, and the fixed operands (the duration of `timeout`, the priority of
+`chrt`, the mask of `taskset`). Then it analyzes only the first remaining word
+as the program. An option that is not in the table takes no value. So a chain
+of wrappers costs one call for each wrapper. The walker also counts the
+simple commands it visits in one analysis. At `maxCalls` (4096) it stops,
+keeps the targets it has, and sets `Parsed` to false, so a caller can see that
+the analysis is not complete.
+
+The analysis is best effort. The hook runs on every agent tool call, so the
+walker must stay fast, and a false block costs more than a missed change.
+The walker records only the paths that it can resolve. When it cannot
+resolve a path, it records nothing. It does not record a broad target, such
+as a tree write of `/`, in place of an unknown path. When the parser rejects
+a command, or a script nested in it such as the script of `bash -c`, `eval`,
+or `find -exec bash -c`, the walker records no targets and no hosts from the
+rejected script, and `Analysis.Parsed` is false. Kernel
+sandboxing is the planned control for commands that the walker cannot
+resolve.
+
+The mediator parses a command once, in `mediation.HookAdapter`, and stores the
+result on `model.Action.Shell`. The PDP and later context work read that
+result. The PDP parses the command itself only when an action has no
+analysis, for example in `gryph policy test`. The receipt does not store the
+analysis.
+
+A read target comes from an input redirect, the source of a copy or a move,
+the file operands of a fixed list of read commands (`cat`, `head`, `grep`,
+`sed` without `-i`, `sort`, `tar`, `sqlite3`, and others), and the files that
+`curl` and `wget` upload. A host comes from a URL anywhere in a word, from
+the operands of `curl`, `wget`, `ssh`, `sftp`, `nc`, and similar tools, from an
+scp-style `host:path` in `scp`, `rsync`, and the remote of a `git` command,
+from `openssl -connect`, and from a `/dev/tcp/host/port` redirect. Hosts are
+lower case, without the port.
+
+A write or remove target also comes from the file operands of an editor
+(`vim`, `vi`, `nvim`, `ex`, `nano`), `sort -o`, the archive of `zip` (also
+`zip -O` and the `zip -lf` log) and of a `tar` create, append, update,
+concatenate, or delete, the archive of `7z a`, `u`, `d`, and `rn`, and the
+output files of `curl` and `wget`. `curl` also writes the files of `--hsts`,
+`--etag-save`, `--libcurl`, `--alt-svc`, and `-w '%output{FILE}'`. The value
+of a `curl` option that the table does not know is a guessed write target.
+
+A command that writes paths in a directory with names that the command line
+does not show is a tree write (`AccessWriteTree`) of that directory: a
+recursive copy (`cp -r`, `rsync -a`, `scp -r`) of a source that can be a
+directory, a copy of directory contents (a source that ends in `/` or `/.`),
+a copy or link with `-T` or `ln -n`, a `tar`, `7z`, or `unzip` extract (the
+target directory or the working directory), a recursive `wget`, a download
+that takes a name from the server (`curl -J`, `wget --content-disposition`),
+`gunzip -N`, and a write through a glob. The walker does not record the
+absolute member names of `tar -P`, `7z -spf`, or `unzip -:`, the files that
+`xz --files` names, the targets of a `7z` command that it does not know, or
+the files that a `curl -w @FILE` format names. `curl -w @FILE` is a read of
+`FILE`. A recursive copy of a source with an extension, such as `notes.txt`,
+is a write of the destination and of the source name in it. A recursive
+copy of a directory into the working directory or home, such as `cp -r
+dotfiles/.claude ~/`, is also a tree write of the source name in the
+destination. The working directory can be `.` or its absolute path. For
+`cp`, a source that ends in `/` is the directory itself. For `rsync`, it is
+the contents. A copy of a directory to another place, such as a backup,
+stays a plain write of that name. A plain download
+writes the URL file name in the `--output-dir` or `-P` directory. `cp
+--parents` and `rsync -R` write the whole source path under the destination.
+An `ln` with one operand writes the base name in the working directory.
+`gzip`, `bzip2`, and `xz` remove each operand and write the compressed or
+decompressed file, unless `-c` or `-k` is set. `zip -m`, `7z -sdel`, `tar
+--remove-files`, and `rsync --remove-source-files` remove the sources.
+
+The PDP matches a removal against every parent directory of each pattern,
+and the root for an absolute pattern. So `rm -rf ~` matches the Gryph config
+directory. The PDP matches a tree write against the directory that holds
+each pattern (`treePatterns`), and against the pattern itself. A recursive
+copy of a named directory into home or the working directory is a named
+tree write (`Target.Named`). It also matches each ancestor below the
+leading `**` of a relative pattern (`namedTreePatterns`). So `cp -r
+dotfiles/.codeium ~/` matches `**/.codeium/windsurf/hooks.json`, and `cp -r
+dotfiles/nvim ~/.config/` and `tar xf x -C ~/.config` do not match
+`**/.config/devin/config.json`. A tree write into another parent does not
+match. So `tar xzf
+node_modules.tgz` in the project root, `cp -r dotfiles/nvim ~/.config/`, and
+`rsync -a stage/ ~/` do not match the built-in rule or a user rule on
+`**/.env`. A copy or an extract into the Gryph config directory, or into
+`~/.cc` for `**/.cc/settings.json`, matches. The cost is a missed change: a
+recursive copy of a directory named like a parent of a protected path, such
+as `cp -r evil/safedep ~/.config/`, or a copy with `-T` onto such a parent,
+does not match.
+
+`parseArgs` in `aarm/shellcmd/tools.go` splits options the way getopt does,
+with one `options` table for each tool. For a tool that parses with
+getopt_long, such as `tar`, `curl`, `wget`, `sort`, `gzip`, and `cp`, a long
+option also matches by a unique prefix, so `--cr` is `--create`. A prefix
+match is only correct when the table lists every real option that is a
+prefix of a listed value option, such as `curl --head` for `--header`. The
+lists are best effort. A plain `mv` or `ln` onto a directory that does not
+exist yet, and a `wget` or `curl` config file, are not seen. `tar` gives each
+letter of an old-style first word that takes a value the next word, in
+order, so `tar xfC a.tar dir` reads `a.tar` into `dir`.
+Self-protection matches write and remove targets only.
+
+The operator toggles self-protection only through
 `policy.self_protection.enabled`. Inspect it with `gryph policy builtin`.
 
 `selfProtectionGlobs` in `cli/policy.go` builds the globs. The Gryph paths come
@@ -212,7 +311,9 @@ implement `HookConfigPaths()` in its adapter. Do not edit the loader.
 
 Self-protection is best effort. The shell parse cannot resolve unknown
 variables, command substitutions, encoded payloads, script files, or
-interpreters, and a process outside the hook path is never seen. Kernel-based
+interpreters, and a process outside the hook path is never seen. It does not
+fail closed on a command that it cannot resolve, and a tree write into a
+parent of a protected directory does not match. Kernel-based
 self-protection is on the roadmap. See
 [security-policy-threat-model.md](./security-policy-threat-model.md).
 

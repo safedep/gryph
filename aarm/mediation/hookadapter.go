@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/identity"
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
 )
@@ -68,6 +69,10 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 		return nil, fmt.Errorf("mediation: extract parameters for %s: %w", event.ActionType, err)
 	}
 	action.Parameters = params
+	if action.Type == model.ActionCommandExec {
+		shell := shellcmd.AnalyzeCommand(params.Command, params.Args, action.WorkingDir)
+		action.Shell = &shell
+	}
 	action.Phase = event.Phase
 	if action.Phase == "" {
 		action.Phase = model.PhaseUnknown

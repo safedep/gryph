@@ -1,17 +1,16 @@
 package pdp
 
 import (
-	"os"
-	"path/filepath"
+	"path"
 	"strings"
 
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
-	"mvdan.cc/sh/v3/syntax"
 )
 
-// actionPaths parses the shell command of an action once per evaluation and
-// shares the result across rules.
+// actionPaths holds the paths that the shell command of an action changes.
+// It uses the mediator's parse when the action carries one, and parses the
+// command once per evaluation otherwise.
 type actionPaths struct {
 	action  *model.Action
 	parsed  bool
@@ -26,24 +25,26 @@ func (a *actionPaths) commandTargets() []shellcmd.Target {
 	if a.action.Type != model.ActionCommandExec {
 		return nil
 	}
-	line := shellLine(a.action.Parameters)
-	if line == "" {
-		return nil
+	analysis := a.action.Shell
+	if analysis == nil {
+		parsed := shellcmd.AnalyzeCommand(a.action.Parameters.Command, a.action.Parameters.Args, a.action.WorkingDir)
+		analysis = &parsed
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = ""
-	}
-	a.targets = shellcmd.Targets(line, shellcmd.Env{
-		WorkingDir: filepath.ToSlash(a.action.WorkingDir),
-		Home:       filepath.ToSlash(home),
-	})
+	a.targets = analysis.Changes()
 	return a.targets
 }
 
 // matchesFiles reports whether the action path, or a path that the shell
 // command changes, matches the rule's file patterns. A file delete or a
 // shell removal of a directory that contains a matching path also matches.
+// A tree write also matches when it writes into the directory that holds a
+// matching path. A named tree write, the directory that a recursive copy
+// creates in home or the working directory, also matches an ancestor below
+// the "**" of a relative pattern. A named plain write matches the same way
+// when its parent holds a matching path, as in "cp -r dotfiles/devin
+// ~/.config/". A tree write into another parent does not match, because a
+// copy or an extract into the project root, home or ~/.config is a common
+// command.
 func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) bool {
 	if matchesAnyPath(r.filePatterns, action.Parameters.Path) {
 		return true
@@ -55,8 +56,19 @@ func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) boo
 		if matchesAnyPath(r.filePatterns, t.Path) {
 			return true
 		}
-		if t.Remove && matchesAnyPath(r.containerPatterns, t.Path) {
+		if t.Named && t.Access == shellcmd.AccessWrite && matchesAnyPath(r.containerPatterns, path.Dir(t.Path)) &&
+			matchesAnyPath(r.namedTreePatterns, t.Path) {
 			return true
+		}
+		switch t.Access {
+		case shellcmd.AccessRemove:
+			if matchesAnyPath(r.containerPatterns, t.Path) {
+				return true
+			}
+		case shellcmd.AccessWriteTree:
+			if matchesAnyPath(r.treePatterns, t.Path) || (t.Named && matchesAnyPath(r.namedTreePatterns, t.Path)) {
+				return true
+			}
 		}
 	}
 	return false
@@ -65,7 +77,7 @@ func (r compiledRule) matchesFiles(action *model.Action, paths *actionPaths) boo
 // containerPatterns returns the glob of each parent directory of each
 // pattern. For "**/.agent/hooks.json" it returns "**/.agent". It skips a
 // parent whose last segment is a glob, because that parent can be any
-// directory.
+// directory. An absolute pattern also has the root as a parent.
 func containerPatterns(patterns []string) []string {
 	var out []string
 	for _, pattern := range patterns {
@@ -77,25 +89,39 @@ func containerPatterns(patterns []string) []string {
 			}
 			out = append(out, strings.Join(segs[:i], "/"))
 		}
+		if strings.HasPrefix(pattern, "/") {
+			out = append(out, "/")
+		}
 	}
 	return out
 }
 
-// shellLine rebuilds the command line for the shell parser. Adapters that
-// split argv into Args lose the original quoting, so each argument is
-// quoted again.
-func shellLine(p model.Parameters) string {
-	var b strings.Builder
-	b.WriteString(p.Command)
-	for _, a := range p.Args {
-		q, err := syntax.Quote(a, syntax.LangBash)
-		if err != nil {
-			q = a
+// namedTreePatterns returns the globs that a named tree write matches: the
+// directory that holds each pattern, and each ancestor below the leading
+// "**" of a relative pattern. So a copy of "dotfiles/.codeium" into home
+// matches "**/.codeium/windsurf/hooks.json". An absolute pattern gives only
+// its directory, so a tree write into home or "/" does not match.
+func namedTreePatterns(patterns []string) []string {
+	out := parentPatterns(patterns)
+	for _, pattern := range patterns {
+		if !path.IsAbs(pattern) {
+			out = append(out, containerPatterns([]string{pattern})...)
 		}
-		if b.Len() > 0 {
-			b.WriteByte(' ')
-		}
-		b.WriteString(q)
 	}
-	return b.String()
+	return out
+}
+
+// parentPatterns returns the glob of the directory that holds each
+// pattern. For "**/.agent/hooks.json" it returns "**/.agent". It skips a
+// pattern whose parent can be any directory, such as "**/.env".
+func parentPatterns(patterns []string) []string {
+	var out []string
+	for _, pattern := range patterns {
+		dir := path.Dir(pattern)
+		if dir == "." || dir == "**" || strings.HasSuffix(dir, "/**") {
+			continue
+		}
+		out = append(out, dir)
+	}
+	return out
 }

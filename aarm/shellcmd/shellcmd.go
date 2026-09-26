@@ -1,29 +1,76 @@
-// Package shellcmd finds the paths that a shell command writes, moves, or
-// removes. The policy engine matches these paths against file patterns, so
-// one path rule covers both a direct file write and a shell command.
+// Package shellcmd finds the paths that a shell command reads, writes, moves,
+// or removes, and the network hosts it contacts. The policy engine matches
+// these paths against file patterns, so one path rule covers both a direct
+// file access and a shell command.
 //
 // The analysis is best effort. It does not run the command, so it cannot
-// resolve unknown variables, command substitutions, or encoded payloads.
+// resolve unknown variables, command substitutions, or encoded payloads. It
+// records only the paths that it can resolve, and it does not record a broad
+// target in place of a path that it cannot resolve.
 package shellcmd
 
 import (
+	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/safedep/dry/log"
 	"mvdan.cc/sh/v3/syntax"
 )
 
-// Target is a path that a command changes.
+// Access is how a command uses a path.
+type Access string
+
+const (
+	// AccessRead means the command reads the path.
+	AccessRead Access = "read"
+	// AccessWrite means the command writes the path.
+	AccessWrite Access = "write"
+	// AccessRemove means the command deletes, moves, or changes the
+	// permissions of the path. A removal of a directory also removes every
+	// path in it.
+	AccessRemove Access = "remove"
+	// AccessWriteTree means the command can write paths in the directory
+	// with names that the command line does not show, such as an extract
+	// or a recursive copy.
+	AccessWriteTree Access = "write-tree"
+)
+
+// Target is a path that a command uses.
 type Target struct {
 	// Path is the target path with forward slashes. It is absolute when the
 	// command or the working directory gives enough information.
-	Path string
+	Path   string
+	Access Access
+	// Named marks the directory that a recursive copy creates under the
+	// source name, as DEST/NAME in "cp -r dotfiles/.claude ~/". The copy can
+	// write any path in that tree.
+	Named bool
+}
 
-	// Remove is true when the command deletes, moves, or changes the
-	// permissions of the path. A removal of a directory also removes every
-	// path in it.
-	Remove bool
+// Analysis is what a command does to paths and hosts.
+type Analysis struct {
+	// Parsed is false when the parser rejected the command or a script
+	// nested in it, such as the script of "bash -c". The analysis then has
+	// no targets and no hosts from the rejected script.
+	Parsed  bool
+	Targets []Target
+	// Hosts are the lower-case host names the command contacts, without the
+	// port.
+	Hosts []string
+}
+
+// Changes returns the targets the command writes or removes.
+func (a Analysis) Changes() []Target {
+	var out []Target
+	for _, t := range a.Targets {
+		if t.Access != AccessRead {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // Env holds the values used to resolve paths.
@@ -32,20 +79,63 @@ type Env struct {
 	Home       string
 }
 
-// Targets returns the paths that command changes. When the parser rejects
-// the command, every word is returned as a removal target so that the caller
-// fails closed.
-func Targets(command string, env Env) []Target {
+// Analyze returns the paths that command uses and the hosts it contacts.
+func Analyze(command string, env Env) Analysis {
 	w := &walker{env: env}
 	start := dirs{env.WorkingDir}
 	if _, err := w.script(command, start); err != nil {
-		w.fallback(command, start)
+		w.failed = true
 	}
-	return w.targets
+	return Analysis{Parsed: !w.failed, Targets: w.targets, Hosts: w.hosts}
 }
 
-// maxDepth limits nested shells, eval, and wrapper chains.
+// AnalyzeCommand analyzes a command given as a command string plus split
+// arguments, as agents report it. It resolves "~" with the user's home
+// directory.
+func AnalyzeCommand(command string, args []string, workingDir string) Analysis {
+	line := Line(command, args)
+	if line == "" {
+		return Analysis{Parsed: true}
+	}
+	return Analyze(line, Env{WorkingDir: filepath.ToSlash(workingDir), Home: HomeDir()})
+}
+
+// HomeDir returns the user's home directory with forward slashes, or an
+// empty string when it is not known. AnalyzeCommand resolves "~" with it.
+func HomeDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Warnf("shellcmd: resolve home directory: %v", err)
+		return ""
+	}
+	return filepath.ToSlash(home)
+}
+
+// Line rebuilds the command line for the parser. Adapters that split argv
+// into args lose the original quoting, so each argument is quoted again.
+func Line(command string, args []string) string {
+	var b strings.Builder
+	b.WriteString(command)
+	for _, a := range args {
+		q, err := syntax.Quote(a, syntax.LangBash)
+		if err != nil {
+			q = a
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(q)
+	}
+	return b.String()
+}
+
+// maxDepth limits nested shells and eval.
 const maxDepth = 8
+
+// maxCalls limits the simple commands that one analysis visits. A command
+// such as a nested "find -exec" can make the walker visit many commands. When
+// the budget runs out, the walker stops and keeps the targets it has.
+const maxCalls = 4096
 
 // maxDirs limits the set of possible working directories. When the set grows
 // past it, the unknown directory takes the place of the extra entries.
@@ -73,7 +163,10 @@ func union(a, b dirs) dirs {
 type walker struct {
 	env     Env
 	depth   int
+	calls   int
 	targets []Target
+	hosts   []string
+	failed  bool
 }
 
 func (w *walker) script(src string, cwds dirs) (dirs, error) {
@@ -86,8 +179,8 @@ func (w *walker) script(src string, cwds dirs) (dirs, error) {
 
 // nested runs a script and returns the working directories after it. The
 // caller decides whether the directory change applies, because eval runs in
-// the current shell and "bash -c" does not. A parse error falls back to the
-// word scan, so a bad nested script also fails closed.
+// the current shell and "bash -c" does not. A script that the parser rejects
+// adds no targets.
 func (w *walker) nested(src string, cwds dirs) dirs {
 	if w.depth >= maxDepth {
 		return cwds
@@ -96,7 +189,7 @@ func (w *walker) nested(src string, cwds dirs) dirs {
 	defer func() { w.depth-- }()
 	after, err := w.script(src, cwds)
 	if err != nil {
-		w.fallback(src, cwds)
+		w.failed = true
 		return cwds
 	}
 	return after
@@ -188,8 +281,15 @@ func (w *walker) redirect(r *syntax.Redirect, cwds dirs) {
 	case syntax.RdrOut, syntax.AppOut, syntax.RdrInOut, syntax.RdrClob,
 		syntax.RdrAll, syntax.RdrAllClob, syntax.AppAll, syntax.AppAllClob:
 		if v, ok := w.word(r.Word, cwds); ok {
-			w.add(v, false, cwds)
+			w.add(v, AccessWrite, cwds)
 		}
+	case syntax.RdrIn:
+		if v, ok := w.word(r.Word, cwds); ok {
+			w.add(v, AccessRead, cwds)
+		}
+	}
+	if v, ok := w.word(r.Word, cwds); ok {
+		w.devSocket(v)
 	}
 }
 
@@ -210,53 +310,121 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	if len(args) == 0 || args[0] == "" {
 		return cwds
 	}
+	if w.calls >= maxCalls {
+		w.failed = true
+		return cwds
+	}
+	w.calls++
 	name := path.Base(args[0])
 	rest := args[1:]
+
+	if after, ok := w.delegate(name, rest, cwds); ok {
+		return after
+	}
+	w.inlineURLs(rest)
 
 	switch name {
 	case "cd", "pushd":
 		return w.cd(rest, cwds)
-	case "command", "builtin":
-		// These run a command in the current shell, so "command cd" changes
-		// the working directory.
-		return w.call(skipOptions(rest), cwds)
-	case "sudo", "doas", "env", "nohup", "exec", "time", "nice", "ionice", "stdbuf", "timeout", "xargs":
-		w.wrapper(name, rest, cwds)
-	case "sh", "bash", "zsh", "dash", "ksh":
-		if src, ok := shellScript(rest); ok {
-			w.nested(src, cwds)
-		}
-	case "eval":
-		return w.nested(strings.Join(rest, " "), cwds)
 	case "rm", "unlink", "rmdir", "shred":
-		w.addAll(operands(rest), true, cwds)
-	case "mv":
-		dest, sources := copyOperands(rest)
-		w.addAll(sources, true, cwds)
-		w.addDest(dest, sources, cwds)
-	case "cp", "install", "ln", "rsync":
-		dest, sources := copyOperands(rest)
-		w.addDest(dest, sources, cwds)
+		w.addAll(operands(rest), AccessRemove, cwds)
+	case "cp", "install", "mv", "ln":
+		w.localCopy(copyTools[name], rest, cwds)
+	case "rsync":
+		w.remoteCopy(parseArgs(rest, rsyncOptions), rsyncFlags, cwds)
+	case "scp":
+		w.remoteCopy(parseArgs(rest, scpOptions), scpFlags, cwds)
 	case "tee", "truncate":
-		w.addAll(operands(rest), false, cwds)
+		w.addAll(operands(rest), AccessWrite, cwds)
 	case "chmod", "chown", "chgrp":
 		if ops := operands(rest); len(ops) > 1 {
-			w.addAll(ops[1:], true, cwds)
+			w.addAll(ops[1:], AccessRemove, cwds)
 		}
 	case "sed", "perl":
+		ops := operands(rest)
 		if hasInPlaceFlag(rest) {
-			w.addAll(operands(rest), false, cwds)
+			w.addAll(ops, AccessWrite, cwds)
+		} else if len(ops) > 1 {
+			w.addAll(ops[1:], AccessRead, cwds)
 		}
+	case "awk", "gawk", "mawk":
+		w.scriptTool(parseArgs(rest, awkOptions), []string{"-f", "--file"}, nil, cwds)
 	case "dd":
 		for _, a := range rest {
 			if v, ok := strings.CutPrefix(a, "of="); ok {
-				w.add(v, false, cwds)
+				w.add(v, AccessWrite, cwds)
+			}
+			if v, ok := strings.CutPrefix(a, "if="); ok {
+				w.add(v, AccessRead, cwds)
 			}
 		}
 	case "find":
 		w.find(rest, cwds)
+	case "grep", "egrep", "fgrep", "rg":
+		w.scriptTool(parseArgs(rest, grepOptions), []string{"-f", "--file"}, []string{"-e", "--regexp"}, cwds)
+	case "jq":
+		w.scriptTool(parseArgs(rest, jqOptions), []string{"-f", "--from-file"}, nil, cwds)
+	case "tar":
+		w.tar(rest, cwds)
+	case "zip":
+		w.zip(rest, cwds)
+	case "7z", "7za", "7zr", "7zz":
+		w.sevenZip(rest, cwds)
+	case "unzip":
+		w.unzip(rest, cwds)
+	case "gzip", "gunzip", "bzip2", "bunzip2", "xz", "unxz":
+		w.compress(compressors[name], rest, cwds)
+	case "sort":
+		w.sort(parseArgs(rest, sortOptions), cwds)
+	case "sqlite3", "source", ".":
+		if ops := operands(rest); len(ops) > 0 {
+			w.add(ops[0], AccessRead, cwds)
+		}
+	case "curl":
+		w.curl(parseArgs(rest, curlOptions), cwds)
+	case "wget":
+		w.wget(parseArgs(rest, wgetOptions), cwds)
+	case "ssh", "sftp", "telnet", "ftp":
+		w.remoteShell(parseArgs(rest, remoteShellOptions[name]))
+	case "nc", "ncat", "netcat":
+		w.netcat(rest)
+	case "git":
+		w.git(rest)
+	case "openssl":
+		w.openssl(rest, cwds)
+	default:
+		if opts, ok := readCommands[name]; ok {
+			w.addAll(parseArgs(rest, opts).operands, AccessRead, cwds)
+		} else if opts, ok := editCommands[name]; ok {
+			w.addAll(parseArgs(rest, opts).operands, AccessWrite, cwds)
+		}
 	}
 	return cwds
+}
+
+// delegate analyzes a command that runs another command or a script: a
+// wrapper, "command", a shell with a script, or eval. The walker analyzes the
+// inner command or script, and not the words of the outer command, so a
+// script that the parser rejects adds no host.
+func (w *walker) delegate(name string, rest []string, cwds dirs) (dirs, bool) {
+	if spec, ok := wrappers[name]; ok {
+		w.wrapper(spec, rest, cwds)
+		return cwds, true
+	}
+	switch name {
+	case "command", "builtin":
+		// These run a command in the current shell, so "command cd" changes
+		// the working directory.
+		return w.call(skipOptions(rest), cwds), true
+	case "sh", "bash", "zsh", "dash", "ksh":
+		if src, ok := shellScript(rest); ok {
+			w.nested(src, cwds)
+			return cwds, true
+		}
+	case "eval":
+		return w.nested(strings.Join(rest, " "), cwds), true
+	}
+	return cwds, false
 }
 
 func (w *walker) cd(args []string, cwds dirs) dirs {
@@ -274,46 +442,107 @@ func (w *walker) cd(args []string, cwds dirs) dirs {
 	return out
 }
 
-// wrapper analyzes the command that a wrapper such as sudo or env runs.
-// Wrapper options can take a value, as in "sudo -u root", and the walker
-// does not know every such option. So it tries each word after the wrapper
-// as the start of the command. A wrong start is a word that names no known
-// command, so it adds no target.
-func (w *walker) wrapper(name string, args []string, cwds dirs) {
-	if w.depth >= maxDepth {
-		return
+// wrapper analyzes the command that a wrapper such as sudo or env runs. It
+// parses the wrapper arguments the way the wrapper does and calls only the
+// program. So a chain of wrappers costs one call per wrapper.
+func (w *walker) wrapper(spec wrapperSpec, args []string, cwds dirs) {
+	start, chdir := spec.program(args)
+	if chdir != "" {
+		cwds = w.cd([]string{chdir}, cwds)
 	}
-	w.depth++
-	defer func() { w.depth-- }()
-
-	if dir, ok := wrapperChdir(name, args); ok {
-		cwds = w.cd([]string{dir}, cwds)
-	}
-	for i, a := range args {
-		if a == "" || strings.HasPrefix(a, "-") {
-			continue
-		}
-		if strings.Contains(a, "=") && !strings.Contains(a, "/") {
-			continue
-		}
-		w.call(args[i:], cwds)
+	if start < len(args) {
+		w.call(args[start:], cwds)
 	}
 }
 
-// wrapperChdir returns the directory from "env -C DIR" or "sudo -D DIR".
-func wrapperChdir(name string, args []string) (string, bool) {
-	short := map[string]string{"env": "-C", "sudo": "-D"}[name]
-	for i, a := range args {
-		if (a == short && short != "") || a == "--chdir" {
-			if i+1 < len(args) {
-				return args[i+1], true
+// wrapperSpec describes how a wrapper parses its arguments.
+type wrapperSpec struct {
+	// values are the options that take a value. An option that is not in
+	// the table takes no value.
+	values map[string]bool
+	// chdir are the options whose value is the working directory of the
+	// program.
+	chdir []string
+	// assigns is true for a wrapper that takes NAME=value words before the
+	// program.
+	assigns bool
+	// operands is the number of fixed operands before the program, such as
+	// the duration of timeout.
+	operands int
+}
+
+var wrappers = map[string]wrapperSpec{
+	"sudo": {values: flagSet("-u", "--user", "-g", "--group", "-C", "--close-from", "-D", "--chdir",
+		"-p", "--prompt", "-r", "--role", "-t", "--type", "-T", "--command-timeout", "-U",
+		"--other-user", "--host"), chdir: []string{"-D", "--chdir"}, assigns: true},
+	"doas":    {values: flagSet("-u", "-C")},
+	"env":     {values: flagSet("-u", "--unset", "-C", "--chdir", "-S", "--split-string"), chdir: []string{"-C", "--chdir"}, assigns: true},
+	"nohup":   {},
+	"exec":    {values: flagSet("-a")},
+	"time":    {values: flagSet("-o", "--output", "-f", "--format")},
+	"nice":    {values: flagSet("-n", "--adjustment")},
+	"ionice":  {values: flagSet("-c", "--class", "-n", "--classdata")},
+	"stdbuf":  {values: flagSet("-i", "--input", "-o", "--output", "-e", "--error")},
+	"timeout": {values: flagSet("-s", "--signal", "-k", "--kill-after"), operands: 1},
+	"xargs": {values: flagSet("-a", "--arg-file", "-d", "--delimiter", "-E", "-I", "-L", "--max-lines",
+		"-n", "--max-args", "-P", "--max-procs", "-s", "--max-chars", "--process-slot-var")},
+	"chrt": {values: flagSet("-T", "--sched-runtime", "-P", "--sched-period", "-D", "--sched-deadline"),
+		operands: 1},
+	"taskset": {operands: 1},
+}
+
+// program returns the index of the program word in args and the working
+// directory that a chdir option sets. The index is len(args) when args
+// name no program. Options end at the first word that is not an option.
+func (s wrapperSpec) program(args []string) (int, string) {
+	chdir := ""
+	skip := s.operands
+	options := true
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case options && a == "--":
+			options = false
+		case options && strings.HasPrefix(a, "--"):
+			name, v, hasValue := strings.Cut(a, "=")
+			if !hasValue && s.values[name] && i+1 < len(args) {
+				i++
+				v = args[i]
 			}
-		}
-		if v, ok := strings.CutPrefix(a, "--chdir="); ok {
-			return v, true
+			if slices.Contains(s.chdir, name) {
+				chdir = v
+			}
+		case options && strings.HasPrefix(a, "-"):
+			for j := 1; j < len(a); j++ {
+				flag := "-" + a[j:j+1]
+				if !s.values[flag] {
+					continue
+				}
+				v := a[j+1:]
+				if v == "" && i+1 < len(args) {
+					i++
+					v = args[i]
+				}
+				if slices.Contains(s.chdir, flag) {
+					chdir = v
+				}
+				break
+			}
+		case s.assigns && isAssignment(a):
+			options = false
+		case skip > 0:
+			skip--
+			options = false
+		default:
+			return i, chdir
 		}
 	}
-	return "", false
+	return len(args), chdir
+}
+
+func isAssignment(word string) bool {
+	name, _, ok := strings.Cut(word, "=")
+	return ok && name != "" && !strings.Contains(name, "/")
 }
 
 // shellScript returns the script of "sh -c SCRIPT". The -c flag can be part
@@ -354,7 +583,7 @@ func (w *walker) find(args []string, cwds dirs) {
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-delete":
-			w.addAll(roots, true, cwds)
+			w.addAll(roots, AccessRemove, cwds)
 		case "-exec", "-ok":
 			end := findActionEnd(args, i)
 			for _, root := range roots {
@@ -376,15 +605,22 @@ func (w *walker) find(args []string, cwds dirs) {
 // So a relative target becomes a removal of the root, as for -delete. An
 // absolute target stays as it is.
 func (w *walker) execdir(root string, cmd []string, cwds dirs) {
-	sub := &walker{env: w.env, depth: w.depth}
+	sub := &walker{env: w.env, depth: w.depth, calls: w.calls}
 	sub.call(cmd, dirs{""})
+	w.calls = sub.calls
 	for _, t := range sub.targets {
 		if path.IsAbs(t.Path) {
 			w.addTarget(t)
+		} else if t.Access == AccessRead {
+			w.add(root, AccessRead, cwds)
 		} else {
-			w.add(root, true, cwds)
+			w.add(root, AccessRemove, cwds)
 		}
 	}
+	for _, h := range sub.hosts {
+		w.addHostName(h)
+	}
+	w.failed = w.failed || sub.failed
 }
 
 func findActionEnd(args []string, start int) int {
@@ -441,65 +677,91 @@ func skipOptions(args []string) []string {
 	return nil
 }
 
-// copyOperands splits the operands of a copy or move into the destination
-// and the sources. The destination is the value of -t or the last operand.
-func copyOperands(args []string) (string, []string) {
-	ops := operands(args)
-	for i, a := range args {
-		dest := ""
-		if (a == "-t" || a == "--target-directory") && i+1 < len(args) {
-			dest = args[i+1]
-		} else if v, ok := strings.CutPrefix(a, "--target-directory="); ok {
-			dest = v
-		}
-		if dest != "" {
-			if j := slices.Index(ops, dest); j >= 0 {
-				ops = slices.Delete(slices.Clone(ops), j, j+1)
-			}
-			return dest, ops
-		}
-	}
-	if len(ops) < 2 {
-		return "", nil
-	}
-	return ops[len(ops)-1], ops[:len(ops)-1]
-}
-
-// addDest adds the destination of a copy or move as a write. When the
-// destination is a directory, the command writes each source name into it,
-// so that path is added too.
-func (w *walker) addDest(dest string, sources []string, cwds dirs) {
+// addDest adds the destination of a copy or move. When the destination is
+// a directory, the command writes each source name into it, so that path is
+// added as a write too. A relative copy, such as "cp --parents", writes the
+// whole source path under the destination.
+//
+// A recursive copy of a directory writes new files into DEST/NAME, so that
+// path is named. Into the working directory or home, such as "cp -r
+// dotfiles/.claude ~/", it is a tree write. For other destinations it is a
+// plain write, because a backup such as "cp -r ~/.claude /tmp/backup" is
+// common. The PDP still matches it when DEST holds a protected path, as in
+// "cp -r dotfiles/devin ~/.config/". The walker resolves DEST for each
+// working directory, so "cd /tmp/backup && cp -r ~/.claude ." stays a
+// backup.
+func (w *walker) addDest(dest string, sources []string, p parsedArgs, flags copyFlags, cwds dirs) {
 	if dest == "" {
 		return
 	}
-	w.add(dest, false, cwds)
-	for _, src := range sources {
-		if src != "" {
-			w.add(strings.TrimSuffix(dest, "/")+"/"+path.Base(src), false, cwds)
+	w.add(dest, destAccess(p, sources, flags), cwds)
+	relative := p.has(flags.relative...)
+	recursive := !relative && p.has(flags.recursive...)
+	for _, cwd := range cwds {
+		tree := recursive && w.isCwdOrHome(resolve(dest, cwd, w.env.Home))
+		for _, src := range sources {
+			if _, remotePath, remote := splitRemote(src); remote {
+				src = remotePath
+			}
+			if src == "" {
+				continue
+			}
+			name := path.Base(src)
+			if relative {
+				name = relativeSource(expandHome(src, w.env.Home))
+			}
+			target := strings.TrimSuffix(dest, "/") + "/" + name
+			contents := strings.HasSuffix(src, "/.") || (flags.slashContents && strings.HasSuffix(src, "/"))
+			if recursive && !contents && mayBeDirectory(src) && !strings.ContainsAny(target, "*?[") {
+				access := AccessWrite
+				if tree {
+					access = AccessWriteTree
+				}
+				w.addTarget(Target{Path: resolve(target, cwd, w.env.Home), Access: access, Named: true})
+				continue
+			}
+			w.add(target, AccessWrite, dirs{cwd})
 		}
 	}
 }
 
-func (w *walker) addAll(values []string, remove bool, cwds dirs) {
+func (w *walker) isCwdOrHome(dir string) bool {
+	return (w.env.Home != "" && dir == path.Clean(w.env.Home)) ||
+		(w.env.WorkingDir != "" && dir == path.Clean(w.env.WorkingDir))
+}
+
+// relativeSource returns the part of a source path that a relative copy
+// keeps. rsync drops the part before a "/./" marker.
+func relativeSource(src string) string {
+	if _, after, ok := strings.Cut(src, "/./"); ok {
+		return after
+	}
+	return src
+}
+
+func (w *walker) addAll(values []string, access Access, cwds dirs) {
 	for _, v := range values {
-		w.add(v, remove, cwds)
+		w.add(v, access, cwds)
 	}
 }
 
 // add records a target for each possible working directory. A path with
-// glob characters is reduced to the directory before the first glob and
-// recorded as a removal, because the glob can select any path in that
-// directory.
-func (w *walker) add(value string, remove bool, cwds dirs) {
-	if value == "" {
+// glob characters is reduced to the directory before the first glob,
+// because the glob can select any path in that directory. A write through a
+// glob is recorded as a tree write of the directory. A removal or a read
+// through a glob is recorded as a removal or a read of the directory.
+func (w *walker) add(value string, access Access, cwds dirs) {
+	if value == "" || (value == "-" && access == AccessRead) {
 		return
 	}
 	if i := strings.IndexAny(value, "*?["); i >= 0 {
 		value = path.Dir(value[:i] + "x")
-		remove = true
+		if access == AccessWrite {
+			access = AccessWriteTree
+		}
 	}
 	for _, cwd := range cwds {
-		w.addTarget(Target{Path: resolve(value, cwd, w.env.Home), Remove: remove})
+		w.addTarget(Target{Path: resolve(value, cwd, w.env.Home), Access: access})
 	}
 }
 
@@ -624,12 +886,4 @@ func hasInPlaceFlag(args []string) bool {
 		}
 	}
 	return false
-}
-
-// fallback treats every word of an unparsable command as a removal target,
-// so a parse failure blocks rather than allows.
-func (w *walker) fallback(command string, cwds dirs) {
-	for _, field := range strings.Fields(command) {
-		w.add(strings.Trim(field, `"'`), true, cwds)
-	}
 }
