@@ -11,6 +11,14 @@ import (
 
 // clearPathEnv neutralizes the environment that steers path resolution, so a
 // test controls only the variables it sets.
+// setHome points the home directory at dir. os.UserHomeDir reads HOME on
+// Unix and USERPROFILE on Windows.
+func setHome(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+}
+
 func clearPathEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv(configDirEnvKey, "")
@@ -65,7 +73,7 @@ func TestResolveDir_XDGHonoredOnAllPlatforms(t *testing.T) {
 
 func TestResolveDir_RelativeXDGIgnored(t *testing.T) {
 	clearPathEnv(t)
-	t.Setenv("HOME", t.TempDir())
+	setHome(t, t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "relative/path")
 
 	got := getConfigDir()

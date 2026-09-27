@@ -62,13 +62,18 @@ func WriteFile(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	tmp := f.Name()
-	if err := writeAndClose(f, data); err != nil {
-		removeFile(tmp)
+	return Replace(f, path, data)
+}
+
+// Replace writes data to tmp, syncs and closes it, and renames it to path.
+// It removes tmp when a step fails. tmp must be in the directory of path.
+func Replace(tmp *os.File, path string, data []byte) error {
+	if err := writeAndClose(tmp, data); err != nil {
+		removeFile(tmp.Name())
 		return fmt.Errorf("write %s: %w", path, err)
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		removeFile(tmp)
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		removeFile(tmp.Name())
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil

@@ -407,44 +407,17 @@ func WritePrivateKeyFile(path string, p *PrivateKeyFile) error {
 	return nil
 }
 
-// writeAtomicFile writes data to path via a same-directory temp file, fsyncs
-// it, and renames into place. A crash mid-write leaves the original file
-// untouched. On any failure the temp file is removed so partial state does
-// not leak into the target directory.
+// writeAtomicFile writes data to path with mode through a same-directory
+// temp file. See securefile.Replace.
 func writeAtomicFile(path string, data []byte, mode os.FileMode) error {
-	dir := filepath.Dir(path)
-	f, err := os.CreateTemp(dir, ".receipt-tmp-*")
+	f, err := os.CreateTemp(filepath.Dir(path), ".receipt-tmp-*")
 	if err != nil {
 		return err
 	}
-	tmpPath := f.Name()
-	cleanup := func() {
-		_ = os.Remove(tmpPath)
-	}
 	if err := f.Chmod(mode); err != nil {
-		_ = f.Close()
-		cleanup()
-		return err
+		return errors.Join(err, f.Close(), os.Remove(f.Name()))
 	}
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
-		cleanup()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		cleanup()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		cleanup()
-		return err
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		cleanup()
-		return err
-	}
-	return nil
+	return securefile.Replace(f, path, data)
 }
 
 // LoadTrustStore reads a trust store JSON file. Returns an empty TrustStore

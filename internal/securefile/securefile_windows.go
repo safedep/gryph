@@ -22,6 +22,10 @@ const (
 		windows.GENERIC_READ | windows.GENERIC_WRITE | windows.GENERIC_ALL
 )
 
+// denyAceTypes are the ACE types that deny access: plain, object, callback
+// and callback object. A deny entry adds no exposure.
+var denyAceTypes = []uint8{1, 6, 10, 12}
+
 func open(path string) (*os.File, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -80,8 +84,8 @@ func checkOwnerOnly(path string, f *os.File) error {
 		return fmt.Errorf("read the owner of %s: %w", path, err)
 	}
 	if !isTrusted(owner) {
-		return fmt.Errorf("%s has owner %s, not the current user. Run: icacls %q /setowner %q",
-			path, accountName(owner), path, accountName(user))
+		return fmt.Errorf("%s has owner %s, not the current user. Delete the file so that Gryph creates a new one",
+			path, accountName(owner))
 	}
 
 	dacl, _, err := sd.DACL()
@@ -96,14 +100,16 @@ func checkOwnerOnly(path string, f *os.File) error {
 		if err := windows.GetAce(dacl, i, &ace); err != nil {
 			return fmt.Errorf("read the DACL of %s: %w", path, err)
 		}
-		if ace.Header.AceFlags&windows.INHERIT_ONLY_ACE != 0 || ace.Header.AceType == windows.ACCESS_DENIED_ACE_TYPE {
+		if ace.Header.AceFlags&windows.INHERIT_ONLY_ACE != 0 || slices.Contains(denyAceTypes, ace.Header.AceType) {
 			continue
 		}
-		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
+		// Other ACE types keep the SID at another offset, so the type check
+		// comes before the SID read.
 		if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE {
-			return fmt.Errorf("%s has a DACL entry of type %d for %s that Gryph cannot check. Run: %s",
-				path, ace.Header.AceType, accountName(sid), restrictCommand(path, user, sid))
+			return fmt.Errorf("%s has a DACL entry of type %d that Gryph cannot check. Run: %s",
+				path, ace.Header.AceType, restrictCommand(path, user, nil))
 		}
+		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
 		if uint32(ace.Mask)&sensitiveAccess != 0 && !isTrusted(sid) {
 			return fmt.Errorf("%s grants access to %s. Run: %s", path, accountName(sid), restrictCommand(path, user, sid))
 		}
