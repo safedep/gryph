@@ -227,7 +227,7 @@ export --export-profile` and stream sync use it.
   when the plain field treatment is not `include`, when the event is
   sensitive, or when any value in the event loses its digest by the rules
   above.
-- A row from before content labels has no label. A sensitive row gets the
+- A row from before content labels has no class and no origin. A sensitive row gets the
   class `secret` on every value, and a prompt gets the origin `user`. The
   export keeps `unclassified: true` on each old value, also when the profile
   drops the value. The export does not run the classifier or the redactor
@@ -238,7 +238,7 @@ self-audit, unless the profile includes every value.
 
 `gryph cat` shows each content value as its text, and a stripped value as
 `[stripped]`. It adds `[unclassified]` after an unclassified value and after
-the `Diff` header of an unclassified diff.
+the `Diff` header of an unclassified diff. The CSV format has a `diff_unclassified` column.
 
 ## Adding a content field
 
