@@ -377,9 +377,9 @@ func parseLegacyPrivateKeyFile(data []byte) (*PrivateKeyFile, error) {
 	return p, nil
 }
 
-// ReadPrivateKeyFile loads and parses the private key file at path. On Unix
-// it refuses a symbolic link, a mode wider than 0600, or an owner that is
-// not the current user. See securefile.ReadFile.
+// ReadPrivateKeyFile loads and parses the private key file at path. It
+// refuses a file that another user owns or that grants access to another
+// user. See securefile.ReadFile.
 func ReadPrivateKeyFile(path string) (*PrivateKeyFile, error) {
 	data, err := securefile.ReadFile(path)
 	if err != nil {
@@ -388,8 +388,9 @@ func ReadPrivateKeyFile(path string) (*PrivateKeyFile, error) {
 	return ParsePrivateKeyFile(data)
 }
 
-// WritePrivateKeyFile serializes p and writes it to path with 0600 mode. The
-// parent directory is created with 0700 if missing.
+// WritePrivateKeyFile serializes p and writes it to path so that only the
+// current user can read it. See securefile.WriteFile. The parent directory
+// is created with 0700 if missing.
 func WritePrivateKeyFile(path string, p *PrivateKeyFile) error {
 	data, err := MarshalPrivateKeyFile(p)
 	if err != nil {
@@ -400,7 +401,7 @@ func WritePrivateKeyFile(path string, p *PrivateKeyFile) error {
 			return fmt.Errorf("receipt: create key dir: %w", err)
 		}
 	}
-	if err := writeAtomicFile(path, data, 0o600); err != nil {
+	if err := securefile.WriteFile(path, data); err != nil {
 		return fmt.Errorf("receipt: write private key: %w", err)
 	}
 	return nil

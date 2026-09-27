@@ -155,13 +155,22 @@ profile and one origin. The prompt `make deploy` under `default` and the
 same text under `metadata` give different digests. The same text with
 origin `user` and with origin `agent` also give different digests.
 
-The key is 32 random bytes in `export.key`, next to the database, with mode
-0600. Gryph creates it on the first export and never exports it. Another
-install cannot match the digests. When you delete the key, the new key
-gives new digests. On Unix, Gryph refuses to read a key file that grants
-access to the group or to others, that another user owns, or that is a
-symbolic link. The error tells you the command that fixes the mode. The self-protection rules block an agent read, write or
-removal of `export.key`. An agent that reads the key can reverse a digest
+The key is 32 random bytes in `export.key`, next to the database. Gryph
+creates it on the first export and never exports it. Only the current user
+can read the new file: mode 0600 on Unix, and on Windows a protected DACL
+for the current user, SYSTEM and Administrators. Another install cannot
+match the digests. When you delete the key, the new key gives new digests.
+
+Gryph refuses to read a key file that another user owns or that grants
+access to another user. On Unix, that is a mode with group or other bits,
+another owner uid, or a symbolic link. On Windows, that is an owner or a
+DACL entry that allows read, write, delete or a permission change for a
+principal other than the current user, SYSTEM or Administrators. A key in
+the default data directory passes. A key in a directory that
+`GRYPH_DATA_DIR` names can inherit a wider DACL. The error tells you the
+`chmod`, `chown` or `icacls` command that fixes the file. The same checks
+apply to the receipt private key. The self-protection rules block an agent
+read, write or removal of `export.key`. An agent that reads the key can reverse a digest
 with a dictionary. An agent that writes a known key can do the same with
 later exports.
 

@@ -53,6 +53,21 @@ jobs:
       - name: Fuzz Path Matcher
         run: go test -run '^$' -fuzz=FuzzGlobsOverlap -fuzztime=30s ./aarm/pdp/
 
+  windows-keys:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test Key File Access
+        run: go test ./internal/securefile/ ./config/ ./aarm/receipt/
+
   verify-schema:
     runs-on: ubuntu-latest
     timeout-minutes: 10

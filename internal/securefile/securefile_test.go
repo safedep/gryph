@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,4 +79,47 @@ func writeFile(t *testing.T, dir, name string, mode os.FileMode) string {
 	require.NoError(t, os.WriteFile(path, []byte("data"), 0o600))
 	require.NoError(t, os.Chmod(path, mode))
 	return path
+}
+
+func TestWriteFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "key")
+	require.NoError(t, WriteFile(path, []byte("one")))
+	require.NoError(t, WriteFile(path, []byte("two")))
+
+	data, err := ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("two"), data)
+	assertOwnerOnlyMode(t, path)
+
+	entries, err := os.ReadDir(filepath.Dir(path))
+	require.NoError(t, err)
+	assert.Len(t, entries, 1, "no temporary file stays")
+}
+
+func TestCreateTemp(t *testing.T) {
+	dir := t.TempDir()
+	a, err := CreateTemp(dir, ".key-")
+	require.NoError(t, err)
+	b, err := CreateTemp(dir, ".key-")
+	require.NoError(t, err)
+	for _, f := range []*os.File{a, b} {
+		assert.True(t, strings.HasPrefix(filepath.Base(f.Name()), ".key-"))
+		_, err := f.Write([]byte("data"))
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+		assertOwnerOnlyMode(t, f.Name())
+		_, err = ReadFile(f.Name())
+		require.NoError(t, err, "a file that CreateTemp makes loads")
+	}
+	assert.NotEqual(t, a.Name(), b.Name())
+}
+
+func assertOwnerOnlyMode(t *testing.T, path string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return
+	}
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }

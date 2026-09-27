@@ -20,6 +20,10 @@ func open(path string) (*os.File, error) {
 	return f, nil
 }
 
+func create(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o600)
+}
+
 func checkOwnerOnly(path string, f *os.File) error {
 	info, err := f.Stat()
 	if err != nil {
