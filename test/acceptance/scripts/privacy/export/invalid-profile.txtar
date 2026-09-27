@@ -1,0 +1,42 @@
+# An invalid export profile does not reset the config. The hook keeps the
+# logging level of the file. gryph export and stream sync fail for that
+# profile only, and never fall back to a weaker profile.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin prompt.json
+exec gryph _hook claude-code UserPromptSubmit
+
+# The full level of the file applies. The default config would strip the
+# prompt.
+exec gryph export --since 1h --export-profile full
+stdout '"prompt":\{"value":"Rename the config loader"'
+
+! exec gryph export --since 1h --export-profile team
+stderr 'unknown class "credentials"'
+! stdout 'Rename the config loader'
+
+! exec gryph stream sync -q
+stderr 'unknown class "credentials"'
+! stdout 'Rename the config loader'
+
+-- home/.config/safedep/gryph/config.yml --
+logging:
+  level: full
+export:
+  profiles:
+    team:
+      default: include
+      rules:
+        - classes: [credentials]
+          then: drop
+streams:
+  targets:
+    - name: team
+      type: stdout
+      enabled: true
+      export_profile: team
+-- prompt.json --
+{"session_id": "s-invalid-profile", "cwd": "/home/user/project", "hook_event_name": "UserPromptSubmit",
+ "prompt": "Rename the config loader"}

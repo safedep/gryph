@@ -1,0 +1,47 @@
+# gryph stream sync applies the export profile of each target before it
+# sends an event. A target without export_profile gets the default profile.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin prompt.json
+exec gryph _hook claude-code UserPromptSubmit
+stdin write.json
+exec gryph _hook claude-code PostToolUse
+
+exec gryph stream sync -q
+stdout '"digest": "hmac-sha256:'
+! stdout '"digest": "sha256:'
+! stdout 'Rename the config loader'
+! stdout 'WRITE_MARKER_7Q'
+
+# A new target has no sync cursor, so it receives every event again.
+cp plain.yml home/.config/safedep/gryph/config.yml
+exec gryph stream sync -q
+! stdout 'Rename the config loader'
+stdout 'WRITE_MARKER_7Q'
+
+-- home/.config/safedep/gryph/config.yml --
+logging:
+  level: full
+streams:
+  targets:
+    - name: meta
+      type: stdout
+      enabled: true
+      export_profile: metadata
+-- plain.yml --
+logging:
+  level: full
+streams:
+  targets:
+    - name: plain
+      type: stdout
+      enabled: true
+-- prompt.json --
+{"session_id": "s-stream", "cwd": "/home/user/project", "hook_event_name": "UserPromptSubmit",
+ "prompt": "Rename the config loader"}
+-- write.json --
+{"session_id": "s-stream", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "Write",
+ "tool_input": {"file_path": "/home/user/project/main.go", "content": "package main // WRITE_MARKER_7Q"},
+ "tool_response": {"success": true}, "tool_use_id": "tu-write"}

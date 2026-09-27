@@ -210,12 +210,12 @@ gryph diff <event-id>                                  # See what changed in a w
 
 gryph export                                           # Export last hour as JSONL to stdout
 gryph export --since "1w" -o audit.jsonl               # Export last week to file
-gryph export --agent claude-code --sensitive            # Include sensitive events
+gryph export --export-profile metadata                 # Labels and digests only
 gryph export --since 1d | jq -r '.action_type' | sort | uniq -c | sort -rn
 ```
 
 Each exported line includes a `$schema` field pointing to [event.schema.json](./schema/event.schema.json).
-Sensitive events are excluded by default; use `--sensitive` to include them.
+The default export profile drops secret content and exports prompts as keyed digests. See [content labels](./docs/content-labels.md#export).
 See [CLI Automation](./docs/cli-automation.md) for more `jq` recipes.
 
 ### Statistics Dashboard

@@ -1,6 +1,9 @@
 package cli_test
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -94,30 +97,93 @@ func TestExport(t *testing.T) {
 			},
 		},
 		{
-			name:  "sensitive_excluded",
+			name:  "sensitive_events_exported_with_default_profile",
 			args:  func(_ *testEnv) []string { return []string{"export"} },
 			setup: seedSensitiveEvents(3, 2),
 			assert: func(t *testing.T, _ *testEnv, stdout, stderr string, err error) {
 				assert.NoError(t, err)
 				lines := strings.Split(strings.TrimSpace(stdout), "\n")
-				assert.Len(t, lines, 3)
-				for _, line := range lines {
-					var evt events.Event
-					require.NoError(t, json.Unmarshal([]byte(line), &evt))
-					assert.False(t, evt.IsSensitive)
-				}
+				assert.Len(t, lines, 5, "the default profile drops content, not events")
+				assert.Contains(t, stderr, "Exported 5 events")
+				assert.NotContains(t, stdout, "SENSITIVE_MARKER")
+				assert.NotContains(t, stdout, `"raw_event"`)
 			},
 		},
 		{
-			name:  "sensitive_included",
-			args:  func(_ *testEnv) []string { return []string{"export", "--sensitive"} },
+			name:  "full_profile",
+			args:  func(_ *testEnv) []string { return []string{"export", "--export-profile", "full"} },
 			setup: seedSensitiveEvents(3, 2),
 			assert: func(t *testing.T, _ *testEnv, stdout, stderr string, err error) {
 				assert.NoError(t, err)
 				lines := strings.Split(strings.TrimSpace(stdout), "\n")
 				assert.Len(t, lines, 5)
 				assert.Contains(t, stderr, "Exported 5 events")
+				assert.Contains(t, stdout, "SENSITIVE_MARKER in the error")
+				assert.Contains(t, stdout, "SENSITIVE_MARKER in the raw event")
 			},
+		},
+		{
+			name:  "sensitive_means_full",
+			args:  func(_ *testEnv) []string { return []string{"export", "--sensitive"} },
+			setup: seedSensitiveEvents(1, 1),
+			assert: func(t *testing.T, _ *testEnv, stdout, _ string, err error) {
+				assert.NoError(t, err)
+				assert.Contains(t, stdout, "SENSITIVE_MARKER in the raw event")
+			},
+		},
+		{
+			name:  "sensitive_with_profile",
+			args:  func(_ *testEnv) []string { return []string{"export", "--sensitive", "--export-profile", "metadata"} },
+			setup: seedSensitiveEvents(1, 1),
+			assert: func(t *testing.T, _ *testEnv, _, _ string, err error) {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "--sensitive cannot be combined with --export-profile")
+			},
+		},
+		{
+			name:  "unknown_profile",
+			args:  func(_ *testEnv) []string { return []string{"export", "--export-profile", "nope"} },
+			setup: seedSensitiveEvents(1, 0),
+			assert: func(t *testing.T, _ *testEnv, _, _ string, err error) {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "unknown export profile")
+			},
+		},
+		{
+			name:   "sensitive_write_hash_default_profile",
+			args:   func(_ *testEnv) []string { return []string{"export"} },
+			setup:  hookSensitiveWrite,
+			assert: assertNoPlainDigest(sensitiveWriteContent, true),
+		},
+		{
+			name:   "sensitive_write_hash_metadata_profile",
+			args:   func(_ *testEnv) []string { return []string{"export", "--export-profile", "metadata"} },
+			setup:  hookSensitiveWrite,
+			assert: assertNoPlainDigest(sensitiveWriteContent, true),
+		},
+		{
+			name:  "short_prompt_digest_default_profile",
+			args:  func(_ *testEnv) []string { return []string{"export"} },
+			setup: hookShortPrompt,
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assertNoPlainDigest(shortPrompt, false)(t, env, stdout, stderr, err)
+				assert.Contains(t, stdout, `"digest":"hmac-sha256:`)
+			},
+		},
+		{
+			name:  "short_prompt_digest_metadata_profile",
+			args:  func(_ *testEnv) []string { return []string{"export", "--export-profile", "metadata"} },
+			setup: hookShortPrompt,
+			assert: func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+				assertNoPlainDigest(shortPrompt, false)(t, env, stdout, stderr, err)
+				assert.Contains(t, stdout, `"digest":"hmac-sha256:`)
+			},
+		},
+		{
+			name:   "same_text_prompt_and_command_default_profile",
+			args:   func(_ *testEnv) []string { return []string{"export"} },
+			setup:  hookPromptAndCommand,
+			assert: assertPromptDigestUnmatched,
 		},
 		{
 			name:  "default_since",
@@ -160,5 +226,115 @@ func TestExport(t *testing.T) {
 			stdout, stderr, err := env.run(args...)
 			tt.assert(t, env, stdout, stderr, err)
 		})
+	}
+}
+
+const (
+	sensitiveWriteContent = "TOKEN=hunter2"
+	shortPrompt           = "yes"
+)
+
+func hookSensitiveWrite(env *testEnv) {
+	payload, err := json.Marshal(map[string]any{
+		"session_id":      "s-export-hash",
+		"cwd":             env.tmpDir,
+		"hook_event_name": "PostToolUse",
+		"tool_name":       "Write",
+		"tool_input":      map[string]any{"file_path": filepath.Join(env.tmpDir, ".env"), "content": sensitiveWriteContent},
+		"tool_response":   map[string]any{"success": true},
+		"tool_use_id":     "tu-env",
+	})
+	require.NoError(env.t, err)
+	_, _, err = env.runHook("claude-code", "PostToolUse", payload)
+	require.NoError(env.t, err)
+}
+
+func hookShortPrompt(env *testEnv) {
+	payload, err := json.Marshal(map[string]any{
+		"session_id":      "s-export-prompt",
+		"cwd":             env.tmpDir,
+		"hook_event_name": "UserPromptSubmit",
+		"prompt":          shortPrompt,
+	})
+	require.NoError(env.t, err)
+	_, _, err = env.runHook("claude-code", "UserPromptSubmit", payload)
+	require.NoError(env.t, err)
+}
+
+const deployText = "make deploy"
+
+// hookPromptAndCommand records the prompt "make deploy" and a Bash command
+// with the same text. The default profile digests the prompt and includes
+// the command.
+func hookPromptAndCommand(env *testEnv) {
+	prompt, err := json.Marshal(map[string]any{
+		"session_id":      "s-export-deploy",
+		"cwd":             env.tmpDir,
+		"hook_event_name": "UserPromptSubmit",
+		"prompt":          deployText,
+	})
+	require.NoError(env.t, err)
+	_, _, err = env.runHook("claude-code", "UserPromptSubmit", prompt)
+	require.NoError(env.t, err)
+
+	command, err := json.Marshal(map[string]any{
+		"session_id":      "s-export-deploy",
+		"cwd":             env.tmpDir,
+		"hook_event_name": "PostToolUse",
+		"tool_name":       "Bash",
+		"tool_input":      map[string]any{"command": deployText},
+		"tool_response":   map[string]any{"stdout": "", "stderr": "", "interrupted": false},
+		"tool_use_id":     "tu-deploy",
+	})
+	require.NoError(env.t, err)
+	_, _, err = env.runHook("claude-code", "PostToolUse", command)
+	require.NoError(env.t, err)
+}
+
+// assertPromptDigestUnmatched checks that the included command carries no
+// digest, and that no other digest in the export equals the prompt digest.
+func assertPromptDigestUnmatched(t *testing.T, _ *testEnv, stdout, _ string, err error) {
+	require.NoError(t, err)
+	var promptDigest string
+	commands := 0
+	for _, line := range strings.Split(strings.TrimSpace(stdout), "\n") {
+		var evt events.Event
+		require.NoError(t, json.Unmarshal([]byte(line), &evt))
+		switch evt.ActionType {
+		case events.ActionUserPrompt:
+			p, perr := evt.GetUserPromptPayload()
+			require.NoError(t, perr)
+			assert.Empty(t, p.Prompt.Value)
+			promptDigest = p.Prompt.Label.Digest
+		case events.ActionCommandExec:
+			p, perr := evt.GetCommandExecPayload()
+			require.NoError(t, perr)
+			assert.Equal(t, deployText, p.Command.Value)
+			assert.Empty(t, p.Command.Label.Digest, "an included value carries no digest")
+			commands++
+		}
+	}
+	assert.Equal(t, 1, commands)
+	require.True(t, strings.HasPrefix(promptDigest, "hmac-sha256:"))
+	assert.Equal(t, 1, strings.Count(stdout, promptDigest), "no other digest equals the prompt digest")
+}
+
+// assertNoPlainDigest checks that the export holds no plain sha256 of the
+// content, in any field, and holds the event.
+func assertNoPlainDigest(content string, sensitive bool) func(*testing.T, *testEnv, string, string, error) {
+	return func(t *testing.T, env *testEnv, stdout, stderr string, err error) {
+		require.NoError(t, err)
+		assert.Contains(t, stderr, "Exported 1 events")
+		sum := sha256.Sum256([]byte(content))
+		assert.NotContains(t, stdout, hex.EncodeToString(sum[:]))
+		assert.NotContains(t, stdout, content)
+
+		store, cleanup := env.openStore()
+		defer cleanup()
+		evts, err := store.QueryEvents(context.Background(), events.NewEventFilter())
+		require.NoError(t, err)
+		require.Len(t, evts, 1)
+		assert.Equal(t, sensitive, evts[0].IsSensitive)
+		assert.Contains(t, string(evts[0].Payload), hex.EncodeToString(sum[:]), "the local store keeps the plain digest")
 	}
 }

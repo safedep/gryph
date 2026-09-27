@@ -198,12 +198,12 @@ Each `<event-id>` argument supports full UUID or prefix match.
 
 ### export
 
-Export raw events as JSON Lines for external analysis. Each line is one complete event object with a `$schema` field. The summary line goes to stderr, so stdout stays clean for pipes. Sensitive events are excluded by default.
+Export raw events as JSON Lines for external analysis. Each line is one complete event object with a `$schema` field. The summary line goes to stderr, so stdout stays clean for pipes. An export profile decides what happens to each content value. See [content labels](content-labels.md#export).
 
 ```bash
 gryph export
 gryph export --since "1w" -o audit.jsonl
-gryph export --agent claude-code --sensitive
+gryph export --agent claude-code --export-profile metadata
 ```
 
 | Flag          | Short | Type   | Default | Description                         |
@@ -212,7 +212,8 @@ gryph export --agent claude-code --sensitive
 | `--until`     |       | string |         | Export events until                 |
 | `--agent`     |       | string |         | Filter by agent                     |
 | `--session`   |       | string |         | Filter by session ID (prefix match) |
-| `--sensitive` |       | bool   | false   | Include sensitive events            |
+| `--export-profile` | | string | default | Export profile: `default`, `metadata`, `full`, or a name under `export.profiles` |
+| `--sensitive` |       | bool   | false   | Deprecated. Same as `--export-profile full` |
 | `--output`    | `-o`  | string | stdout  | Write to file                       |
 
 ### cost
