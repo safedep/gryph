@@ -381,9 +381,9 @@ func parseLegacyPrivateKeyFile(data []byte) (*PrivateKeyFile, error) {
 // it refuses a symbolic link, a mode wider than 0600, or an owner that is
 // not the current user. See securefile.ReadFile.
 func ReadPrivateKeyFile(path string) (*PrivateKeyFile, error) {
-	data, err := securefile.ReadFile("receipt private key", path)
+	data, err := securefile.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("receipt: read private key: %w", err)
 	}
 	return ParsePrivateKeyFile(data)
 }

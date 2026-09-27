@@ -55,7 +55,7 @@ func TestReadFile(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			path := tc.setup(t, t.TempDir())
-			data, err := ReadFile("test key", path)
+			data, err := ReadFile(path)
 			if tc.wantErr != "" {
 				assert.ErrorContains(t, err, tc.wantErr)
 				assert.Nil(t, data)
@@ -68,7 +68,7 @@ func TestReadFile(t *testing.T) {
 }
 
 func TestReadFile_MissingFile(t *testing.T) {
-	_, err := ReadFile("test key", filepath.Join(t.TempDir(), "missing"))
+	_, err := ReadFile(filepath.Join(t.TempDir(), "missing"))
 	assert.ErrorIs(t, err, fs.ErrNotExist)
 }
 

@@ -70,9 +70,9 @@ func LoadOrCreateExportKey(path string) ([]byte, error) {
 }
 
 func readExportKey(path string) ([]byte, error) {
-	key, err := securefile.ReadFile("export key", path)
+	key, err := securefile.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read export key: %w", err)
 	}
 	if len(key) != exportKeySize {
 		return nil, fmt.Errorf("export key %s: want %d bytes, got %d", path, exportKeySize, len(key))

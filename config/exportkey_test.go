@@ -82,7 +82,7 @@ func TestLoadOrCreateExportKey_RefusesUnsafeFile(t *testing.T) {
 			path := tc.setup(t, t.TempDir())
 			key, err := LoadOrCreateExportKey(path)
 			if tc.wantErr != "" {
-				assert.ErrorContains(t, err, "export key "+path)
+				assert.ErrorContains(t, err, "read export key: "+path)
 				assert.ErrorContains(t, err, tc.wantErr)
 				assert.Nil(t, key)
 				return
