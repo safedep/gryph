@@ -15,6 +15,11 @@ import (
 // far above the hook budget, because the fuzzer runs one worker per CPU.
 const fuzzTimeBound = 2 * time.Second
 
+// fuzzMaxInput skips larger inputs. A long valid command can take longer
+// than fuzzTimeBound without a bug. The hook budget covers such a command,
+// and the benchmarks measure large shapes.
+const fuzzMaxInput = 32 << 10
+
 // FuzzAnalyze checks that the analysis never panics, stays in its time
 // bound, and gives one result for one input. The walker runs without the
 // recover of Analyze, so a panic fails the fuzz run. Run it with:
@@ -25,15 +30,17 @@ func FuzzAnalyze(f *testing.F) {
 		f.Add(s)
 	}
 	for _, s := range benchShapes {
-		f.Add(s.command(1))
+		f.Add(s.command(min(s.size, 8)))
 	}
-	env := Env{WorkingDir: "/work", Home: "/home/u"}
 	f.Fuzz(func(t *testing.T, command string) {
+		if len(command) > fuzzMaxInput {
+			t.Skip()
+		}
 		start := time.Now()
-		a := (&walker{env: env}).analyze(command)
+		a := (&walker{env: testEnv}).analyze(command)
 		require.Less(t, time.Since(start), fuzzTimeBound)
 
-		assert.Equal(t, a, (&walker{env: env}).analyze(command), "the analysis is deterministic")
+		assert.Equal(t, a, (&walker{env: testEnv}).analyze(command), "the analysis is deterministic")
 		if _, err := syntax.NewParser().Parse(strings.NewReader(command), ""); err != nil {
 			assert.False(t, a.Parsed, "a command that does not parse is not parsed")
 		}

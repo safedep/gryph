@@ -51,6 +51,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Benchmark Shell Analysis
+        shell: bash
         run: go test -run '^$' -bench=. -benchmem -count=5 ./aarm/shellcmd/ | tee "${RUNNER_TEMP}/bench.txt"
 
       - name: Upload Results

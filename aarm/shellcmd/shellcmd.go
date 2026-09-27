@@ -50,6 +50,7 @@ type Target struct {
 	Access Access
 	// Glob is the resolved pattern when the command reads the path through
 	// a glob. Path is then the directory before the first glob character.
+	// The walker sets it only on a read. Unbounded also sets it on a write.
 	Glob string
 	// Guess marks a read by a command that the walker does not know. Such a
 	// command may read the path, but it may not read every file in a
@@ -144,13 +145,29 @@ func AnalyzeCommand(command string, args []string, workingDir string) Analysis {
 	return Analyze(line, Env{WorkingDir: filepath.ToSlash(workingDir), Home: HomeDir()})
 }
 
+// Unbounded is the analysis of a command that the walker could not finish.
+// The command can write or read any path, contact any host, and run the
+// Gryph hook. A rule on a path, a host, or the hook then matches, so padding
+// a command past a budget does not remove a match.
+func Unbounded() Analysis {
+	return Analysis{
+		Targets: []Target{
+			{Path: "/", Access: AccessWrite, Glob: "/**", MatchDot: true},
+			{Path: "/", Access: AccessRead, Glob: "/**", MatchDot: true},
+		},
+		Hosts:     []string{UnknownHost},
+		GryphHook: true,
+	}
+}
+
 // AnalyzeCommandWithin runs AnalyzeCommand and waits at most budget for it.
 // The second result is false when the budget ran out. The analysis is then
-// empty with Parsed false.
+// Unbounded.
 //
 // Go cannot stop a goroutine, so the analysis keeps running after a timeout.
-// The call budget and the brace cap bound that work, and the hook process
-// exits soon after.
+// The call budget and the brace cap bound that work. The hook process exits
+// soon after. A caller that lives longer pays for the rest of the analysis
+// on one CPU.
 func AnalyzeCommandWithin(command string, args []string, workingDir string, budget time.Duration) (Analysis, bool) {
 	done := make(chan Analysis, 1)
 	go func() { done <- AnalyzeCommand(command, args, workingDir) }()
@@ -160,7 +177,7 @@ func AnalyzeCommandWithin(command string, args []string, workingDir string, budg
 	case a := <-done:
 		return a, true
 	case <-timer.C:
-		return Analysis{}, false
+		return Unbounded(), false
 	}
 }
 

@@ -514,7 +514,7 @@ func TestHookAdapter_Normalize_Entities(t *testing.T) {
 }
 
 func TestHookAdapter_Normalize_ShellBudgetExceeded(t *testing.T) {
-	command := strings.Repeat("sudo -u root ", 20000) + "rm ~/.ssh/id_rsa"
+	command := strings.Repeat("x=1; ", 20000) + "rm ~/.ssh/id_rsa"
 	event := mustEvent(t, uuid.New(), uuid.New(), events.ActionCommandExec, "Bash", time.Now(),
 		events.CommandExecPayload{Command: privacy.NewText(command)})
 
@@ -525,6 +525,5 @@ func TestHookAdapter_Normalize_ShellBudgetExceeded(t *testing.T) {
 	require.NoError(t, err)
 	assert.Less(t, time.Since(start), time.Second, "the hook continues when the budget runs out")
 	require.NotNil(t, action.Shell)
-	assert.False(t, action.Shell.Parsed)
-	assert.Empty(t, action.Shell.Targets)
+	assert.Equal(t, shellcmd.Unbounded(), *action.Shell, "padding past the budget does not remove the rm target")
 }

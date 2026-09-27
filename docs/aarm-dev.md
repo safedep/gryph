@@ -340,8 +340,13 @@ keeps the targets it has, and sets `Parsed` to false, so a caller can see that
 the analysis is not complete.
 
 The hook adapter runs the analysis with `shellcmd.AnalyzeCommandWithin` and a
-budget of 500 ms. When the budget runs out, the action gets an empty analysis
-with `Parsed` false, the adapter logs a warning, and the hook continues.
+budget of 500 ms. When the budget runs out, the action gets
+`shellcmd.Unbounded()`, the adapter logs a warning, and the hook continues.
+The unbounded analysis has `Parsed` false. It writes and reads the glob `/**`,
+contacts `UnknownHost`, and runs the Gryph hook. So every path, host, and hook
+rule matches it. Without it, an agent could pad a command past the budget and
+remove its targets. The PDP matches a target glob against the file patterns
+for any access.
 
 Tests keep the analysis fast and free of panics:
 
@@ -352,8 +357,8 @@ Tests keep the analysis fast and free of panics:
   baseline. CI compares allocations, not time, because the time depends on
   the runner. Run it with `GRYPH_UPDATE_ALLOC_BASELINE=1` to store new values
   after an intended change.
-- `TestAnalyze_WorkGrowsLinearly` and `TestAnalyze_WrappersKeepWrites` check
-  the invariants.
+- `TestAnalyze_WorkGrowsLinearly` (allocations and bytes) and
+  `TestAnalyze_WrappersKeepWrites` check the invariants.
 - `FuzzAnalyze` and `FuzzGlobsOverlap` (`aarm/pdp`) take their seeds from the
   string literals of the table tests (`internal/fuzzseed`). CI runs each
   target for 30 seconds. The nightly workflow runs each target for 20

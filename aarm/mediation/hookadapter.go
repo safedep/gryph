@@ -86,7 +86,7 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 	if action.Type == model.ActionCommandExec {
 		shell, ok := shellcmd.AnalyzeCommandWithin(params.Command, params.Args, action.WorkingDir, h.shellBudget)
 		if !ok {
-			log.Warnf("mediation: shell analysis exceeded %s, the command is not parsed", h.shellBudget)
+			log.Warnf("mediation: shell analysis exceeded %s, the command can use any path or host", h.shellBudget)
 		}
 		action.Shell = &shell
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
+	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -575,4 +576,27 @@ func TestBuiltinSource_ReadsWhenConfigAndDataShareADirectory(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuiltinSource_UnboundedAnalysisMatchesEveryRule(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	docs, err := NewBuiltinSource("**/.cc/settings.json").
+		WithReadGlobs(home + "/.local/share/safedep/gryph/audit.db").
+		Load(context.Background())
+	require.NoError(t, err)
+	engine, err := pdp.New(docs[0])
+	require.NoError(t, err)
+
+	shell := shellcmd.Unbounded()
+	action := &model.Action{
+		Type:       model.ActionCommandExec,
+		WorkingDir: "/work",
+		Parameters: model.Parameters{Command: "x=1; rm ~/.cc/settings.json"},
+		Shell:      &shell,
+	}
+	res, err := engine.Evaluate(context.Background(), action, nil)
+	require.NoError(t, err)
+	assert.Equal(t, model.DecisionBlock, res.Decision)
+	assert.ElementsMatch(t, []string{builtinHookCommandRuleID, builtinProtectedFilesRuleID, builtinProtectedReadsRuleID}, res.MatchedRuleIDs)
 }
