@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 )
@@ -27,45 +27,65 @@ type receiptQuerier interface {
 	QueryReceipts(ctx context.Context, filter *storage.ReceiptFilter) ([]*storage.ReceiptRow, error)
 }
 
+const receiptFollowMaxFailures = 5
+
 type receiptFollower struct {
 	store  receiptQuerier
 	filter storage.ReceiptFilter
 	w      io.Writer
+	errW   io.Writer
 	c      *tui.Colorizer
 	seen   map[uuid.UUID]time.Time
 	latest time.Time
-	// floor is the first row that follow printed. The initial limit can cut
-	// older rows that the overlap reads again, and follow must not print
-	// them after newer rows.
-	floor *storage.ReceiptRow
 }
 
-func newReceiptFollower(store receiptQuerier, filter storage.ReceiptFilter, w io.Writer, c *tui.Colorizer) *receiptFollower {
-	return &receiptFollower{store: store, filter: filter, w: w, c: c, seen: map[uuid.UUID]time.Time{}}
+func newReceiptFollower(store receiptQuerier, filter storage.ReceiptFilter, w, errW io.Writer, c *tui.Colorizer) *receiptFollower {
+	return &receiptFollower{store: store, filter: filter, w: w, errW: errW, c: c, seen: map[uuid.UUID]time.Time{}}
 }
 
 // follow prints the latest limit receipts, then the new receipts on each
-// tick, until ctx ends.
+// tick, until ctx ends. It stops with an error after
+// receiptFollowMaxFailures failed polls in a row.
 func (f *receiptFollower) follow(ctx context.Context, limit int, tick <-chan time.Time) error {
 	if err := f.printInitial(ctx, limit); err != nil {
 		return err
 	}
+	failures := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-tick:
-			if err := f.poll(ctx); err != nil {
+			since := f.pollSince()
+			rows, err := f.fetch(ctx, since)
+			if err != nil {
 				if ctx.Err() != nil {
 					return nil
 				}
-				log.Warnf("policy receipts: poll: %v", err)
+				failures++
+				if failures >= receiptFollowMaxFailures {
+					return err
+				}
+				if _, werr := fmt.Fprintln(f.errW, f.c.Warning(fmt.Sprintf("%v, retrying", err))); werr != nil {
+					return werr
+				}
+				continue
 			}
+			failures = 0
+			if err := f.show(rows); err != nil {
+				return err
+			}
+			f.prune(since)
 		}
 	}
 }
 
+// printInitial reads the latest limit rows and every row of the overlap
+// window. It prints the newest limit rows of both and marks the rest as
+// seen. The first poll reads the window again and must not print a row that
+// the limit cut after newer rows.
 func (f *receiptFollower) printInitial(ctx context.Context, limit int) error {
+	start := time.Now()
 	filter := f.filter
 	// With a session, the store orders by sequence and keeps the oldest
 	// rows. Follow shows the newest, so it reads the session in full.
@@ -73,59 +93,81 @@ func (f *receiptFollower) printInitial(ctx context.Context, limit int) error {
 	if filter.SessionID != nil {
 		filter.Limit = -1
 	}
-	rows, err := f.store.QueryReceipts(ctx, &filter)
+	older, err := f.store.QueryReceipts(ctx, &filter)
 	if err != nil {
 		return fmt.Errorf("failed to query receipts: %w", err)
 	}
-	sortReceiptsByTime(rows)
-	if len(rows) > limit {
-		rows = rows[len(rows)-limit:]
+	recent, err := f.fetch(ctx, f.windowSince(start))
+	if err != nil {
+		return err
 	}
-	f.latest = time.Now()
-	if len(rows) > 0 {
-		f.floor = rows[0]
+	rows := mergeReceipts(older, recent)
+	cut := max(0, len(rows)-limit)
+	for _, r := range rows[:cut] {
+		f.seen[r.ID] = r.RecordedAt
 	}
-	return f.print(rows)
+	f.latest = start
+	return f.show(rows[cut:])
 }
 
-func (f *receiptFollower) poll(ctx context.Context) error {
+func (f *receiptFollower) pollSince() time.Time {
+	return f.windowSince(f.latest)
+}
+
+// windowSince is the start of the overlap window before t. It never reads
+// before the user's --since.
+func (f *receiptFollower) windowSince(t time.Time) time.Time {
+	since := t.Add(-receiptFollowOverlap)
+	if f.filter.Since != nil && f.filter.Since.After(since) {
+		return *f.filter.Since
+	}
+	return since
+}
+
+func (f *receiptFollower) fetch(ctx context.Context, since time.Time) ([]*storage.ReceiptRow, error) {
 	filter := f.filter
-	since := f.latest.Add(-receiptFollowOverlap)
 	filter.Since = &since
 	filter.Limit = -1
 	rows, err := f.store.QueryReceipts(ctx, &filter)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to query receipts: %w", err)
 	}
 	sortReceiptsByTime(rows)
-	if err := f.print(rows); err != nil {
-		return err
-	}
-	for id, at := range f.seen {
-		if at.Before(since) {
-			delete(f.seen, id)
-		}
-	}
-	return nil
+	return rows, nil
 }
 
-func (f *receiptFollower) print(rows []*storage.ReceiptRow) error {
+func (f *receiptFollower) show(rows []*storage.ReceiptRow) error {
 	for _, r := range rows {
 		if _, ok := f.seen[r.ID]; ok {
 			continue
 		}
-		if f.floor != nil && compareReceipts(r, f.floor) < 0 {
-			continue
+		if _, err := fmt.Fprintln(f.w, formatReceiptLine(f.c, r)); err != nil {
+			return err
 		}
 		f.seen[r.ID] = r.RecordedAt
 		if r.RecordedAt.After(f.latest) {
 			f.latest = r.RecordedAt
 		}
-		if _, err := fmt.Fprintln(f.w, formatReceiptLine(f.c, r)); err != nil {
-			return err
-		}
 	}
 	return nil
+}
+
+func (f *receiptFollower) prune(since time.Time) {
+	for id, at := range f.seen {
+		if at.Before(since) {
+			delete(f.seen, id)
+		}
+	}
+}
+
+func mergeReceipts(a, b []*storage.ReceiptRow) []*storage.ReceiptRow {
+	byID := make(map[uuid.UUID]*storage.ReceiptRow, len(a)+len(b))
+	for _, r := range slices.Concat(a, b) {
+		byID[r.ID] = r
+	}
+	rows := slices.Collect(maps.Values(byID))
+	sortReceiptsByTime(rows)
+	return rows
 }
 
 func sortReceiptsByTime(rows []*storage.ReceiptRow) {

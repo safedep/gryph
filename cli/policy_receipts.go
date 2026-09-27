@@ -62,7 +62,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 				return ErrConfig("invalid flags", fmt.Errorf("--all-sessions requires --verify"))
 			}
 			if follow {
-				if err := checkReceiptsFollowFlags(verify, until, format, showHash, interval); err != nil {
+				if err := checkReceiptsFollowFlags(receiptFollowFlags{verify: verify, until: until, format: format, showHash: showHash, interval: interval, limit: limit}); err != nil {
 					return err
 				}
 			}
@@ -115,7 +115,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 				defer stop()
 				ticker := time.NewTicker(interval)
 				defer ticker.Stop()
-				return newReceiptFollower(app.Store, *filter, out, c).follow(sigCtx, limit, ticker.C)
+				return newReceiptFollower(app.Store, *filter, out, cmd.ErrOrStderr(), c).follow(sigCtx, limit, ticker.C)
 			}
 
 			rows, err := app.Store.QueryReceipts(ctx, filter)
@@ -154,7 +154,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&sessionID, "session", "", "session ID (UUID or prefix) to inspect")
-	cmd.Flags().StringVar(&decision, "decision", "", "filter to a single decision (allow, block, guidance, warn, escalate)")
+	cmd.Flags().StringVar(&decision, "decision", "", "filter to a single decision (allow, block, guidance, warn, escalate, defer)")
 	cmd.Flags().DurationVar(&since, "since", 0, "include receipts newer than this offset from now (e.g. 24h)")
 	cmd.Flags().DurationVar(&until, "until", 0, "include receipts older than this offset from now")
 	cmd.Flags().IntVar(&limit, "limit", policyReceiptsDefaultLimit, "maximum number of receipts to return")
@@ -170,18 +170,29 @@ func newPolicyReceiptsCmd() *cobra.Command {
 
 const receiptsAllowHint = "Allow decisions are not recorded. To see them, run: gryph config set policy.log_all_evaluations true"
 
-func checkReceiptsFollowFlags(verify bool, until time.Duration, format string, showHash bool, interval time.Duration) error {
+type receiptFollowFlags struct {
+	verify   bool
+	until    time.Duration
+	format   string
+	showHash bool
+	interval time.Duration
+	limit    int
+}
+
+func checkReceiptsFollowFlags(f receiptFollowFlags) error {
 	switch {
-	case verify:
+	case f.verify:
 		return ErrConfig("invalid flags", fmt.Errorf("--follow cannot be combined with --verify"))
-	case until > 0:
+	case f.until > 0:
 		return ErrConfig("invalid flags", fmt.Errorf("--follow cannot be combined with --until"))
-	case format != "table":
+	case f.format != "table":
 		return ErrConfig("invalid flags", fmt.Errorf("--follow supports only the table format"))
-	case showHash:
+	case f.showHash:
 		return ErrConfig("invalid flags", fmt.Errorf("--follow cannot be combined with --show-hash"))
-	case interval <= 0:
+	case f.interval <= 0:
 		return ErrConfig("invalid flags", fmt.Errorf("--interval must be positive"))
+	case f.limit <= 0:
+		return ErrConfig("invalid flags", fmt.Errorf("--follow needs a positive --limit"))
 	}
 	return nil
 }
@@ -386,7 +397,7 @@ func defaultReceiptTrailing(showHash bool) receiptTableTrailing {
 			Headers: []string{"rule", "result", "hash"},
 			Format:  "  %-28s  %-9s  %s\n",
 			Cells: func(r *storage.ReceiptRow) []interface{} {
-				return []interface{}{receiptRuleCell(r.MatchedRuleIDs), r.ResultStatus, shortHash(r.Hash)}
+				return []interface{}{receiptRuleCell(r.MatchedRuleIDs), tui.EscapeLine(r.ResultStatus), shortHash(r.Hash)}
 			},
 		}
 	}
@@ -395,22 +406,24 @@ func defaultReceiptTrailing(showHash bool) receiptTableTrailing {
 		Headers: []string{"rule", "result"},
 		Format:  "  %-28s  %s\n",
 		Cells: func(r *storage.ReceiptRow) []interface{} {
-			return []interface{}{receiptRuleCell(r.MatchedRuleIDs), r.ResultStatus}
+			return []interface{}{receiptRuleCell(r.MatchedRuleIDs), tui.EscapeLine(r.ResultStatus)}
 		},
 	}
 }
 
 // receiptRuleCell shows the first matched rule, and +N for the others. A
 // rule ID comes from a policy file, so it is escaped.
+const receiptRuleWidth = 28
+
 func receiptRuleCell(ids []string) string {
 	if len(ids) == 0 {
 		return "-"
 	}
-	cell := tui.TruncateString(tui.EscapeLine(ids[0]), 24)
+	more := ""
 	if len(ids) > 1 {
-		cell += fmt.Sprintf(" +%d", len(ids)-1)
+		more = fmt.Sprintf(" +%d", len(ids)-1)
 	}
-	return cell
+	return tui.TruncateString(tui.EscapeLine(ids[0]), receiptRuleWidth-len(more)) + more
 }
 
 func renderReceiptsTable(w io.Writer, c *tui.Colorizer, rows []*storage.ReceiptRow, showHash bool) {

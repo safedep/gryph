@@ -629,22 +629,22 @@ func receiptPredicates(filter *ReceiptFilter) []predicate.AarmReceipt {
 		ps = append(ps, aarmreceipt.AgentEQ(filter.Agent))
 	}
 	if filter.Since != nil {
-		ps = append(ps, aarmreceipt.RecordedAtGTE(*filter.Since))
+		ps = append(ps, aarmreceipt.RecordedAtGTE(filter.Since.UTC()))
 	}
 	if filter.Until != nil {
-		ps = append(ps, aarmreceipt.RecordedAtLTE(*filter.Until))
+		ps = append(ps, aarmreceipt.RecordedAtLTE(filter.Until.UTC()))
 	}
 	if filter.UntilExclusive != nil {
 		if filter.UntilID != nil {
 			ps = append(ps, aarmreceipt.Or(
-				aarmreceipt.RecordedAtLT(*filter.UntilExclusive),
+				aarmreceipt.RecordedAtLT(filter.UntilExclusive.UTC()),
 				aarmreceipt.And(
-					aarmreceipt.RecordedAtEQ(*filter.UntilExclusive),
+					aarmreceipt.RecordedAtEQ(filter.UntilExclusive.UTC()),
 					aarmreceipt.IDLT(*filter.UntilID),
 				),
 			))
 		} else {
-			ps = append(ps, aarmreceipt.RecordedAtLT(*filter.UntilExclusive))
+			ps = append(ps, aarmreceipt.RecordedAtLT(filter.UntilExclusive.UTC()))
 		}
 	}
 	return ps

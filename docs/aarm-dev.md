@@ -512,12 +512,13 @@ plus the built-in rules, so an author can check a draft before install.
 
 ## Receipts
 
-Every decision except `allow` produces a receipt row.
-`Mediator.shouldRecordReceipt` records `allow` rows only when
-`policy.log_all_evaluations` is `true`. The default is `false`.
+`Mediator.shouldRecordReceipt` decides which decisions get a receipt row. It
+skips `allow` rows unless `policy.log_all_evaluations` is `true`. The default
+is `false`.
 `gryph policy receipts --follow` (`cli/policy_receipts_follow.go`) polls the
 receipt table. Each poll reads back an overlap window, because a hook sets
-`recorded_at` before it commits. The receipt log is append-only and hash-chained per
+`recorded_at` before it commits. Storage compares `recorded_at` in UTC, so
+`storage.ReceiptFilter` changes each time bound to UTC. The receipt log is append-only and hash-chained per
 session. The hash canonicalization and field order are documented at the top of
 `aarm/receipt/hash.go`. Change that order only with a matching change to the
 verifier, or every existing chain fails verification.
