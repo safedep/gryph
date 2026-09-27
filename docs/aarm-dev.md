@@ -105,6 +105,8 @@ and accumulator read it. Key fields:
 `Message`, `FullMessage`, `Severity`, `Tags`, `DeferReason`. `Message` is the
 stored message. `FullMessage` goes only to the agent and to the approval
 prompt. `AgentMessage` returns `FullMessage`, or `Message` when it is empty.
+`MatchedRuleIDs` starts with the rule that decided. The other matched rules
+follow in policy order. The receipts table shows the first ID.
 
 ## Policy schema and evaluation
 

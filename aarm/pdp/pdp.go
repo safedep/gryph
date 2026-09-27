@@ -210,6 +210,7 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 	}
 
 	if winnerRule != nil {
+		result.MatchedRuleIDs = deciderFirst(result.MatchedRuleIDs, winnerRule.rule.ID)
 		result.FullMessage = winnerRule.messageOrFallback(action, snapshot)
 		result.Message = result.FullMessage
 		if stored != action {
@@ -218,6 +219,17 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 	}
 
 	return result, nil
+}
+
+// deciderFirst moves the rule that decided to the front and keeps the order
+// of the other rules. A reader of a receipt then sees the deciding rule
+// first.
+func deciderFirst(ids []string, decider string) []string {
+	i := slices.Index(ids, decider)
+	if i <= 0 {
+		return ids
+	}
+	return slices.Concat([]string{decider}, ids[:i], ids[i+1:])
 }
 
 // gates reports whether a decision stops the action or makes it wait for an
