@@ -60,7 +60,9 @@
 //  29. url_digest         (utf-8 bytes; commitment of the URL, empty when none)
 //  30. hash_version       (int64, 8 bytes BE)
 //
-// A commitment is "sha256:<hex>" of sha256(content_salt || value). The
+// A commitment is "sha256:<hex>" of sha256 over four fields: the domain
+// "gryph.receipt.content.v2", the kind ("command" or "url"), content_salt
+// and the value. Each field has an 8-byte big-endian length prefix. The
 // command commitment reads the canonical JSON of the command and the args.
 // The values are the stored values, after write-time redaction. The row
 // holds a random content_salt, which the hash does not cover. An export

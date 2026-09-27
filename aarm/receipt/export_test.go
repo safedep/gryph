@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -253,6 +254,20 @@ func TestExporter_ProfileProjectsPayload(t *testing.T) {
 			res, err := VerifyExportedLog(bytes.NewReader(data), nil)
 			require.NoError(t, err)
 			assert.True(t, res.OK, "a v2 export verifies under every profile: %+v", res)
+
+			p := privacy.BuiltinProfiles()[tt.profile]
+			var csvBuf bytes.Buffer
+			require.NoError(t, NewSQLiteExporter(store).Export(ctx, &csvBuf, ExportOptions{
+				Format: ExportFormatCSV, SessionID: &sess.ID, Profile: &p, Events: store,
+			}))
+			records, err := csv.NewReader(&csvBuf).ReadAll()
+			require.NoError(t, err)
+			col := slices.Index(records[0], "error_message")
+			require.GreaterOrEqual(t, col, 0)
+			require.Len(t, records, len(rows)+1)
+			for i, r := range rows {
+				assert.Equal(t, r.ErrorMessage, records[i+1][col], "the CSV error message gets the profile treatment")
+			}
 		})
 	}
 }

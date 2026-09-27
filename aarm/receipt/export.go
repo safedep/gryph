@@ -114,9 +114,7 @@ func (e *SQLiteExporter) Export(ctx context.Context, w io.Writer, opts ExportOpt
 			if t, ok := treatments[r.ID]; ok {
 				projectRow(&exp, r, t, opts.Stats)
 			}
-			shown := *r
-			shown.ErrorMessage = exp.ErrorMessage
-			if err := sink(&shown, exp); err != nil {
+			if err := sink(r, exp); err != nil {
 				return err
 			}
 		}
@@ -401,8 +399,8 @@ func exporterSink(w io.Writer, format string, includeSig bool) (func(*storage.Re
 		if err := cw.Write(headers); err != nil {
 			return nil, nil, err
 		}
-		return func(r *storage.ReceiptRow, _ ExportedReceipt) error {
-				return cw.Write(csvRow(r, includeSig))
+		return func(r *storage.ReceiptRow, exp ExportedReceipt) error {
+				return cw.Write(csvRow(r, exp.ErrorMessage, includeSig))
 			}, func() error {
 				cw.Flush()
 				return cw.Error()
@@ -431,7 +429,9 @@ func csvHeaders(includeSig bool) []string {
 	return h
 }
 
-func csvRow(r *storage.ReceiptRow, includeSig bool) []string {
+// csvRow takes the error message from the projected export row, so the
+// profile applies to it. The CSV has no payload column.
+func csvRow(r *storage.ReceiptRow, errorMessage string, includeSig bool) []string {
 	actionID := ""
 	if r.ActionID != uuid.Nil {
 		actionID = r.ActionID.String()
@@ -471,7 +471,7 @@ func csvRow(r *storage.ReceiptRow, includeSig bool) []string {
 		r.Message,
 		r.ResultStatus,
 		duration,
-		r.ErrorMessage,
+		errorMessage,
 		hex.EncodeToString(r.PrevHash),
 		hex.EncodeToString(r.Hash),
 		r.SubagentID,
