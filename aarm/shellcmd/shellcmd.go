@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/safedep/dry/log"
 	"mvdan.cc/sh/v3/expand"
@@ -122,8 +123,11 @@ func Analyze(command string, env Env) (a Analysis) {
 			a = Analysis{Targets: w.targets, Hosts: w.hosts, GryphHook: w.gryphHook}
 		}
 	}()
-	start := dirs{env.WorkingDir}
-	if _, err := w.script(command, start); err != nil {
+	return w.analyze(command)
+}
+
+func (w *walker) analyze(command string) Analysis {
+	if _, err := w.script(command, dirs{w.env.WorkingDir}); err != nil {
 		w.failed = true
 	}
 	return Analysis{Parsed: !w.failed, Targets: w.targets, Hosts: w.hosts, GryphHook: w.gryphHook}
@@ -138,6 +142,26 @@ func AnalyzeCommand(command string, args []string, workingDir string) Analysis {
 		return Analysis{Parsed: true}
 	}
 	return Analyze(line, Env{WorkingDir: filepath.ToSlash(workingDir), Home: HomeDir()})
+}
+
+// AnalyzeCommandWithin runs AnalyzeCommand and waits at most budget for it.
+// The second result is false when the budget ran out. The analysis is then
+// empty with Parsed false.
+//
+// Go cannot stop a goroutine, so the analysis keeps running after a timeout.
+// The call budget and the brace cap bound that work, and the hook process
+// exits soon after.
+func AnalyzeCommandWithin(command string, args []string, workingDir string, budget time.Duration) (Analysis, bool) {
+	done := make(chan Analysis, 1)
+	go func() { done <- AnalyzeCommand(command, args, workingDir) }()
+	timer := time.NewTimer(budget)
+	defer timer.Stop()
+	select {
+	case a := <-done:
+		return a, true
+	case <-timer.C:
+		return Analysis{}, false
+	}
 }
 
 // ResolvePath makes a path that an agent reports absolute and clean, the

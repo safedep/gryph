@@ -1,0 +1,60 @@
+name: Nightly Fuzz
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { name: FuzzAnalyze, pkg: ./aarm/shellcmd/ }
+          - { name: FuzzGlobsOverlap, pkg: ./aarm/pdp/ }
+          - { name: FuzzParsePolicy, pkg: ./aarm/pdp/ }
+          - { name: FuzzCELCondition, pkg: ./aarm/pdp/ }
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Fuzz
+        run: go test -run '^$' -fuzz='^${{ matrix.target.name }}$' -fuzztime=20m ${{ matrix.target.pkg }}
+
+      - name: Upload Failing Inputs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: fuzz-${{ matrix.target.name }}
+          path: '**/testdata/fuzz/**'
+
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Benchmark Shell Analysis
+        run: go test -run '^$' -bench=. -benchmem -count=5 ./aarm/shellcmd/ | tee "${RUNNER_TEMP}/bench.txt"
+
+      - name: Upload Results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: bench-shellcmd
+          path: ${{ runner.temp }}/bench.txt

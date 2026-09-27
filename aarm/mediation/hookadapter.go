@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/identity"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
@@ -23,12 +25,18 @@ import (
 // adapters configure them through the same option helpers.
 type HookAdapter struct {
 	Common
+	shellBudget time.Duration
 }
+
+// shellBudget bounds the shell analysis on the hook path. A typical command
+// takes tens of microseconds. The budget only stops a pathological input
+// from delaying the agent.
+const shellBudget = 500 * time.Millisecond
 
 // NewHookAdapter creates a HookAdapter. Accepts the shared CommonOption set
 // (WithClassifier, WithInjectionScorer, WithIdentityCapturer).
 func NewHookAdapter(opts ...CommonOption) *HookAdapter {
-	h := &HookAdapter{Common: Common{IdentityCapture: identity.NewDefaultCapturer()}}
+	h := &HookAdapter{Common: Common{IdentityCapture: identity.NewDefaultCapturer()}, shellBudget: shellBudget}
 	for _, opt := range opts {
 		opt(&h.Common)
 	}
@@ -76,7 +84,10 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 	}
 	action.Parameters = params
 	if action.Type == model.ActionCommandExec {
-		shell := shellcmd.AnalyzeCommand(params.Command, params.Args, action.WorkingDir)
+		shell, ok := shellcmd.AnalyzeCommandWithin(params.Command, params.Args, action.WorkingDir, h.shellBudget)
+		if !ok {
+			log.Warnf("mediation: shell analysis exceeded %s, the command is not parsed", h.shellBudget)
+		}
 		action.Shell = &shell
 	}
 	action.Phase = event.Phase

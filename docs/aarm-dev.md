@@ -339,6 +339,26 @@ simple commands it visits in one analysis. At `maxCalls` (4096) it stops,
 keeps the targets it has, and sets `Parsed` to false, so a caller can see that
 the analysis is not complete.
 
+The hook adapter runs the analysis with `shellcmd.AnalyzeCommandWithin` and a
+budget of 500 ms. When the budget runs out, the action gets an empty analysis
+with `Parsed` false, the adapter logs a warning, and the hook continues.
+
+Tests keep the analysis fast and free of panics:
+
+- `BenchmarkAnalyze_Shapes` covers typical commands, long pipelines, deep
+  nesting, brace expansion, wrapper chains, and long words.
+- `TestAnalyze_AllocBaseline` compares the allocations of each shape with
+  `aarm/shellcmd/testdata/alloc_baseline.json`. It fails at 1.5 times the
+  baseline. CI compares allocations, not time, because the time depends on
+  the runner. Run it with `GRYPH_UPDATE_ALLOC_BASELINE=1` to store new values
+  after an intended change.
+- `TestAnalyze_WorkGrowsLinearly` and `TestAnalyze_WrappersKeepWrites` check
+  the invariants.
+- `FuzzAnalyze` and `FuzzGlobsOverlap` (`aarm/pdp`) take their seeds from the
+  string literals of the table tests (`internal/fuzzseed`). CI runs each
+  target for 30 seconds. The nightly workflow runs each target for 20
+  minutes and uploads the failing inputs.
+
 The analysis is best effort. The hook runs on every agent tool call, so the
 walker must stay fast, and a false block costs more than a missed change.
 The walker records only the paths that it can resolve. When it cannot
