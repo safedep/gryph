@@ -48,6 +48,13 @@
   guarantee: "When the shell analysis of a command runs past policy.shell_budget, the hook still answers and the builtin rules block the command. The same command runs under the default budget."
   labels: [policy, shell, self-protection, claude-code]
 
+- id: security/keys/windows-acl-refused
+  title: "Windows refuses a key file that another principal can read"
+  category: security
+  tier: P1
+  guarantee: "On Windows, Gryph creates the export key with an owner-only DACL and loads it. A key with a DACL entry for Everyone fails to load, and the error names an icacls command that fixes it. After the entry goes, the key loads."
+  labels: [security, keys, windows]
+
 - id: policy/self-protection/config-write-blocked
   title: "builtin self-protection blocks writes to gryph and hook config"
   category: policy

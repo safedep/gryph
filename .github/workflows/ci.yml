@@ -68,6 +68,11 @@ jobs:
       - name: Test Key File Access
         run: go test ./internal/securefile/ ./config/ ./aarm/receipt/
 
+      - name: Run Windows Acceptance Scripts
+        env:
+          ACCEPTANCE_LABELS: windows
+        run: go test -tags acceptance -timeout 10m ./test/acceptance
+
   verify-schema:
     runs-on: ubuntu-latest
     timeout-minutes: 10

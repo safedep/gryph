@@ -142,9 +142,16 @@ func trustedSIDs(user *windows.SID) ([]*windows.SID, error) {
 func restrictCommand(path string, user, other *windows.SID) string {
 	remove := ""
 	if other != nil {
-		remove = fmt.Sprintf(" /remove:g %q", accountName(other))
+		remove = " /remove:g " + quote(accountName(other))
 	}
-	return fmt.Sprintf("icacls %q /inheritance:r%s /grant:r %q", path, remove, accountName(user)+":F")
+	return "icacls " + quote(path) + " /inheritance:r" + remove + " /grant:r " + quote(accountName(user)+":F")
+}
+
+// quote wraps s in double quotes for cmd.exe and PowerShell. A Windows path
+// or account name cannot hold a double quote, so s needs no escape. Go %q
+// would double each backslash of the path.
+func quote(s string) string {
+	return `"` + s + `"`
 }
 
 func accountName(sid *windows.SID) string {

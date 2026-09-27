@@ -1,0 +1,22 @@
+# On Windows, Gryph creates the export key with an owner-only DACL, and it
+# refuses a key that another principal can read. The error names an icacls
+# command with plain Windows quoting. When the wide entry goes, the key
+# loads again.
+[!windows] skip 'the DACL check runs only on Windows'
+
+env GRYPH_CONFIG_DIR=$WORK/config
+env GRYPH_DATA_DIR=$WORK/data
+env GRYPH_CACHE_DIR=$WORK/cache
+
+exec gryph export
+exists $WORK/data/export.key
+exec gryph export
+
+exec icacls $WORK/data/export.key /grant Everyone:R
+! exec gryph export
+stderr 'grants access to Everyone'
+stderr 'icacls "[A-Za-z]:\\[^"]*\\export\.key" /inheritance:r /remove:g "Everyone" /grant:r "[^"]+:F"'
+! stderr '\\\\'
+
+exec icacls $WORK/data/export.key /remove:g Everyone
+exec gryph export
