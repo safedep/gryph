@@ -46,6 +46,7 @@ func labelEvent(event *events.Event, redactor *privacy.Redactor, classes []priva
 		if t.IsZero() {
 			return
 		}
+		t.Label.Unclassified = false
 		setOrigin(event, path, t)
 		if t.Label.Digest == "" && t.Value != "" {
 			t.Label.Digest = privacy.Digest(t.Value)

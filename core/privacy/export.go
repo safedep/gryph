@@ -203,7 +203,7 @@ func (p ExportProfile) Apply(t Text) (Text, Treatment) {
 	case TreatDigest:
 		t.Value = ""
 	case TreatDrop:
-		t = Text{Label: Label{Size: t.Label.Size}}
+		t = Text{Label: Label{Size: t.Label.Size, Unclassified: t.Label.Unclassified}}
 	}
 	return t, treatment
 }

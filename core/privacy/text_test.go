@@ -17,13 +17,17 @@ func TestText_UnmarshalJSON(t *testing.T) {
 	}{
 		{"object", `{"value":"ls","label":{"level":"full","size":2,"redacted":true}}`,
 			Text{Value: "ls", Label: Label{Level: "full", Size: 2, Redacted: true}}},
-		{"object without label is legacy json", `{"value":"ls"}`, Text{Value: `{"value":"ls"}`}},
+		{"object without label is legacy json", `{"value":"ls"}`, Text{Value: `{"value":"ls"}`, Label: Label{Unclassified: true}}},
 		{"label from a newer version", `{"value":"ls","label":{"level":"full","future":1}}`, Text{Value: "ls", Label: Label{Level: "full"}}},
-		{"extra key is legacy json", `{"value":"ls","label":{},"x":1}`, Text{Value: `{"value":"ls","label":{},"x":1}`}},
-		{"legacy string", `"npm install"`, Text{Value: "npm install"}},
-		{"legacy json object", `{"command": "ls", "timeout": 5}`, Text{Value: `{"command":"ls","timeout":5}`}},
-		{"legacy object with a value key", `{"value": 1}`, Text{Value: `{"value":1}`}},
-		{"legacy array", `[1, 2]`, Text{Value: `[1,2]`}},
+		{"extra key is legacy json", `{"value":"ls","label":{},"x":1}`, Text{Value: `{"value":"ls","label":{},"x":1}`, Label: Label{Unclassified: true}}},
+		{"legacy string", `"npm install"`, Text{Value: "npm install", Label: Label{Unclassified: true}}},
+		{"legacy json object", `{"command": "ls", "timeout": 5}`, Text{Value: `{"command":"ls","timeout":5}`, Label: Label{Unclassified: true}}},
+		{"legacy object with a value key", `{"value": 1}`, Text{Value: `{"value":1}`, Label: Label{Unclassified: true}}},
+		{"legacy array", `[1, 2]`, Text{Value: `[1,2]`, Label: Label{Unclassified: true}}},
+		{"legacy number", `42`, Text{Value: `42`, Label: Label{Unclassified: true}}},
+		{"legacy empty string", `""`, Text{}},
+		{"clean object keeps no flag", `{"value":"ls","label":{}}`, Text{Value: "ls"}},
+		{"exported unclassified object", `{"value":"ls","label":{"unclassified":true}}`, Text{Value: "ls", Label: Label{Unclassified: true}}},
 		{"null", `null`, Text{}},
 	}
 	for _, tc := range cases {
@@ -33,6 +37,16 @@ func TestText_UnmarshalJSON(t *testing.T) {
 			assert.Equal(t, tc.want, got)
 		})
 	}
+}
+
+func TestText_UnclassifiedOmittedWhenFalse(t *testing.T) {
+	data, err := json.Marshal(Text{Value: "ls", Label: Label{Level: "full"}})
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "unclassified")
+
+	data, err = json.Marshal(Text{Value: "ls", Label: Label{Unclassified: true}})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"value":"ls","label":{"unclassified":true}}`, string(data))
 }
 
 func TestText_JSONRoundTrip(t *testing.T) {

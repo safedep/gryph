@@ -111,6 +111,7 @@ func eventToDetailView(reg *agent.Registry, e *events.Event) *tui.EventDetailVie
 		ErrorMessage:     e.ErrorMessage,
 		IsSensitive:      e.IsSensitive,
 		DiffContent:      e.DiffContent.Value,
+		DiffUnclassified: e.DiffContent.Label.Unclassified,
 		RawEvent:         e.RawEvent,
 	}
 

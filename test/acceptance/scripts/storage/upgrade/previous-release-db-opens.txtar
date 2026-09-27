@@ -21,11 +21,24 @@ exec gryph doctor --no-color
 stdout '\[ok\]\s+Database schema'
 stdout 'Schema is up to date'
 
+# Content from before content labels exports as unclassified. Gryph never
+# checked it for secrets, so an empty class list must not read as clean.
+exec gryph export --since 100000h
+stdout '"command":\s*\{"value":\s*"go test \./\.\.\.",\s*"label":\s*\{"unclassified":\s*true\}'
+stdout '"content_preview":\s*\{"value":\s*"package main",\s*"label":\s*\{"unclassified":\s*true\}'
+
 # New events append to the migrated database.
 stdin new_event.json
 exec gryph _hook claude-code PreToolUse
+stdin new_command.json
+exec gryph _hook claude-code PreToolUse
 exec gryph query --format json --no-color
-stdout -count=5 '"ActionType"'
+stdout -count=6 '"ActionType"'
+
+# A new row carries a label and no unclassified flag.
+exec gryph export --since 100000h
+stdout '"value":\s*"echo post-upgrade",\s*"label":\s*\{"'
+! stdout 'echo post-upgrade[^\n]*unclassified'
 
 -- new_event.json --
 {
@@ -35,4 +48,13 @@ stdout -count=5 '"ActionType"'
   "tool_name": "Read",
   "tool_input": { "file_path": "/home/user/project/README.md" },
   "tool_use_id": "post-upgrade-1"
+}
+-- new_command.json --
+{
+  "session_id": "post-upgrade-session",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": { "command": "echo post-upgrade" },
+  "tool_use_id": "post-upgrade-2"
 }
