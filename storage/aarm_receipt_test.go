@@ -256,6 +256,28 @@ func TestQueryReceipts_DecisionsTakesPrecedenceOverDecision(t *testing.T) {
 	}
 }
 
+func TestQueryReceipts_FilterByAgent(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	for i, agent := range []string{"claude-code", "cursor", "claude-code"} {
+		row := makeReceiptRow(sessionID, int64(i+1))
+		row.Agent = agent
+		require.NoError(t, store.InsertReceipt(ctx, row))
+	}
+
+	filter := &storage.ReceiptFilter{Agent: "cursor"}
+	rows, err := store.QueryReceipts(ctx, filter)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "cursor", rows[0].Agent)
+
+	n, err := store.CountReceipts(ctx, filter)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+}
+
 func TestCountReceipts(t *testing.T) {
 	store := storagetest.NewStore(t)
 	ctx := context.Background()

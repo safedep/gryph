@@ -429,12 +429,15 @@ Do these steps each time you change a policy file.
 
    WARNING: Keep `policy.fail_mode: closed` during tests. A broken policy then blocks actions instead of allowing them silently. If this locks you out, set `fail_mode: open` temporarily, fix the policy, and set it back.
 
-4. Check the receipts.
+4. Check the receipts. Run `gryph policy receipts --follow` in a second terminal while the agent works. It prints each new decision with the rule that matched and the command, path or URL. Press Ctrl-C to stop it.
 
    ```bash
+   gryph policy receipts --follow
    gryph policy receipts --decision block
    gryph policy receipts --verify --all-sessions
    ```
+
+   Follow shows only the decisions that have a receipt. Set `policy.log_all_evaluations: true` to see `allow` decisions too.
 
 5. Check the context accumulator if your rule uses `context.*` variables. The counters shown here are the same values the CEL conditions see.
 
@@ -459,7 +462,8 @@ Do these steps each time you change a policy file.
 | Command | Purpose |
 |---|---|
 | `gryph policy context` | List per-session counters (action counts, tools used, classifications seen). `--session <id\|prefix>` drills into one session and shows its recent entries. |
-| `gryph policy receipts` | List receipt rows for mediated actions. `--session`, `--decision`, `--since`, `--until` filter. Pass `--show-hash` to include the per-row hash. |
+| `gryph policy receipts` | List receipt rows for mediated actions, with the rule that matched. `--session`, `--agent`, `--decision`, `--since`, `--until` filter. Pass `--show-hash` to include the per-row hash. |
+| `gryph policy receipts --follow` | Print the latest receipts, then each new receipt as Gryph records it, until Ctrl-C. `--interval` sets the poll interval (default `2s`). `--session`, `--agent`, `--decision` and `--since` filter. Follow does not accept `--verify`, `--until`, `--show-hash` or a non-table `--format`. |
 | `gryph policy receipts --verify` | Recompute the hash chain and verify any signatures. `--session ID` verifies one chain in full; `--all-sessions` verifies every chain. Exits non-zero on break or invalid signature. |
 | `gryph policy receipts export` | Stream receipts as JSONL or CSV. `--include-signatures` adds the Ed25519 signature columns. |
 | `gryph policy receipts verify-log --input FILE` | Verify an exported chain stand-alone. No database access needed. Verifies signatures when `--trust-store` resolves to a populated store. NOTE: `verify-log` reads a file, not the database. Run `gryph policy receipts export --include-signatures` first, or pipe: `gryph policy receipts export --include-signatures \| gryph policy receipts verify-log --input -`. |
@@ -480,7 +484,13 @@ Do these steps each time you change a policy file.
 
 ## Receipts
 
-Every mediated action produces a receipt row in the event store. The default `policy.log_all_evaluations: true` records receipts for `allow` decisions too, which keeps Gryph aligned with AARM's "receipt for every action" requirement. Operators who want the prior behavior (only `block` / `guidance` / `warn` / `escalate` rows) set `policy.log_all_evaluations: false` explicitly. Note that the new default raises per-event storage and signing cost on allow-heavy workloads.
+Gryph writes a receipt row for each `block`, `guidance`, `warn`, `escalate` and `defer` decision. By default Gryph does not write a receipt for an `allow` decision, because `policy.log_all_evaluations` is `false`. Set it to `true` to record every evaluation, which AARM's "receipt for every action" requirement asks for:
+
+```bash
+gryph config set policy.log_all_evaluations true
+```
+
+This setting adds storage and signing cost for each allowed action.
 
 Receipts form a per-session hash chain (`hash`, `prev_hash`). The hash now also covers the SHA-256 of the active policy document (`policy_hash`), so an after-the-fact rule edit is visible at verify time. The chain detects tampering and lets you verify the audit trail off-host.
 

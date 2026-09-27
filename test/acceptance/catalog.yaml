@@ -34,6 +34,13 @@
   guarantee: "A matching block rule makes the Claude Code hook exit 2 with the reason, makes the Cursor hook exit 0 with a deny JSON on stdout, and persists the event as blocked."
   labels: [policy, block, claude-code, cursor]
 
+- id: policy/receipts/follow-streams-decisions
+  title: "policy receipts --follow streams new receipts with the matched rule"
+  category: policy
+  tier: P1
+  guarantee: "gryph policy receipts --follow prints the latest receipts, then each new receipt once, with its decision, matched rule and command. SIGINT stops it with exit 0."
+  labels: [policy, receipts, follow]
+
 - id: policy/self-protection/config-write-blocked
   title: "builtin self-protection blocks writes to gryph and hook config"
   category: policy

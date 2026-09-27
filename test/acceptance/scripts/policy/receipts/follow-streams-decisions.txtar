@@ -1,0 +1,83 @@
+# gryph policy receipts --follow prints the latest receipts, then each new
+# receipt as a hook records it. Each line shows the decision, the matched rule
+# and the command. Ctrl-C stops follow with exit 0.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin first.json
+execexit 2 gryph _hook claude-code PreToolUse
+
+exec sh run.sh
+! stdout 'FOLLOWFAIL'
+stdout 'claude-code +Bash +block +block-npm-install +npm install second'
+
+-- run.sh --
+gryph policy receipts --follow --interval 100ms --no-color > follow.out 2>&1 &
+pid=$!
+
+wait_for() {
+  i=0
+  while ! grep -q "$1" follow.out; do
+    i=$((i+1))
+    if [ $i -gt 200 ]; then
+      echo "FOLLOWFAIL: no line for $1"
+      cat follow.out
+      kill -INT $pid
+      exit 0
+    fi
+    sleep 0.05
+  done
+}
+
+wait_for 'npm install first'
+gryph _hook claude-code PreToolUse < second.json > /dev/null 2>&1
+wait_for 'npm install second'
+
+kill -INT $pid
+wait $pid
+status=$?
+if [ $status -ne 0 ]; then
+  echo "FOLLOWFAIL: exit $status"
+fi
+if ! grep 'npm install second' follow.out | grep -q 'block .*block-npm-install'; then
+  echo "FOLLOWFAIL: no decision and rule"
+fi
+if [ "$(grep -c 'npm install first' follow.out)" -ne 1 ]; then
+  echo "FOLLOWFAIL: the first receipt printed more than once"
+fi
+cat follow.out
+exit 0
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: block-npm-install
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+    message: "npm install is not allowed"
+-- first.json --
+{
+  "session_id": "follow-session",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": { "command": "npm install first" },
+  "tool_use_id": "tu-1"
+}
+-- second.json --
+{
+  "session_id": "follow-session",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": { "command": "npm install second" },
+  "tool_use_id": "tu-2"
+}
