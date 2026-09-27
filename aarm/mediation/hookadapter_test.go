@@ -518,8 +518,7 @@ func TestHookAdapter_Normalize_ShellBudgetExceeded(t *testing.T) {
 	event := mustEvent(t, uuid.New(), uuid.New(), events.ActionCommandExec, "Bash", time.Now(),
 		events.CommandExecPayload{Command: privacy.NewText(command)})
 
-	h := NewHookAdapter()
-	h.shellBudget = time.Microsecond
+	h := NewHookAdapter(WithShellBudget(time.Microsecond))
 	start := time.Now()
 	action, _, err := h.Normalize(context.Background(), event, nil)
 	require.NoError(t, err)

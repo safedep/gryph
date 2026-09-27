@@ -1,0 +1,30 @@
+# A command whose shell analysis runs past policy.shell_budget fails
+# closed. The hook still answers, and the builtin rules block the command,
+# because the analysis can no longer rule out any path, host or hook call.
+# With the default budget, the same command parses and runs.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec sh pad.sh
+stdin padded.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr .
+
+exec gryph policy receipts --decision block --no-color
+stdout 'gryph-builtin-'
+
+exec gryph config set policy.shell_budget 500ms
+stdin padded.json
+exec gryph _hook claude-code PreToolUse
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+  shell_budget: 1ns
+-- pad.sh --
+# 20000 assignments take tens of milliseconds to analyze. That is far past
+# 1ns and far below the default budget.
+pad=$(awk 'BEGIN { for (i = 0; i < 20000; i++) printf "x=1; " }')
+printf '{"session_id":"budget-session","cwd":"/home/user/project","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%secho done"},"tool_use_id":"tu-1"}\n' "$pad" > padded.json

@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/core/privacy"
@@ -128,6 +129,9 @@ type PolicyConfig struct {
 	ContextRetentionDays int  `mapstructure:"context_retention_days"`
 	ReceiptRetentionDays int  `mapstructure:"receipt_retention_days"`
 	LogAllEvaluations    bool `mapstructure:"log_all_evaluations"`
+	// ShellBudget bounds the shell analysis of one command in the hook. A
+	// command that runs past it matches every path, host and hook rule.
+	ShellBudget time.Duration `mapstructure:"shell_budget"`
 
 	Approval       ApprovalConfig       `mapstructure:"approval"`
 	Classify       ClassifyConfig       `mapstructure:"classify"`

@@ -25,18 +25,17 @@ import (
 // adapters configure them through the same option helpers.
 type HookAdapter struct {
 	Common
-	shellBudget time.Duration
 }
 
-// shellBudget bounds the shell analysis on the hook path. A typical command
-// takes tens of microseconds. The budget only stops a pathological input
-// from delaying the agent.
-const shellBudget = 500 * time.Millisecond
+// DefaultShellBudget bounds the shell analysis on the hook path. A typical
+// command takes tens of microseconds. The budget only stops a pathological
+// input from delaying the agent.
+const DefaultShellBudget = 500 * time.Millisecond
 
 // NewHookAdapter creates a HookAdapter. Accepts the shared CommonOption set
 // (WithClassifier, WithInjectionScorer, WithIdentityCapturer).
 func NewHookAdapter(opts ...CommonOption) *HookAdapter {
-	h := &HookAdapter{Common: Common{IdentityCapture: identity.NewDefaultCapturer()}, shellBudget: shellBudget}
+	h := &HookAdapter{Common: Common{IdentityCapture: identity.NewDefaultCapturer(), ShellBudget: DefaultShellBudget}}
 	for _, opt := range opts {
 		opt(&h.Common)
 	}
@@ -84,9 +83,9 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 	}
 	action.Parameters = params
 	if action.Type == model.ActionCommandExec {
-		shell, ok := shellcmd.AnalyzeCommandWithin(params.Command, params.Args, action.WorkingDir, h.shellBudget)
+		shell, ok := shellcmd.AnalyzeCommandWithin(params.Command, params.Args, action.WorkingDir, h.ShellBudget)
 		if !ok {
-			log.Warnf("mediation: shell analysis exceeded %s, the command can use any path or host", h.shellBudget)
+			log.Warnf("mediation: shell analysis exceeded %s, the command can use any path or host", h.ShellBudget)
 		}
 		action.Shell = &shell
 	}
