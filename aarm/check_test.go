@@ -108,6 +108,10 @@ func (s *spyAccumulator) Entries(context.Context, uuid.UUID, int) ([]model.Entry
 	return s.entries, nil
 }
 
+func (s *spyAccumulator) Window(_ context.Context, id uuid.UUID, _ model.WindowSpec) (*model.Window, error) {
+	return &model.Window{SessionID: id}, nil
+}
+
 func (s *spyAccumulator) RecordResult(_ context.Context, _ uuid.UUID, r model.Result) error {
 	s.recordResultCalls++
 	s.lastResult = r

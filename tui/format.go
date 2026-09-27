@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // FormatBytes formats bytes as a human-readable string.
@@ -111,18 +113,63 @@ func FormatExitCode(code int) string {
 	return fmt.Sprintf("exit:%d", code)
 }
 
-// TruncateString truncates a string to the given length.
+// TruncateString truncates a string to at most maxLen bytes. It cuts on a
+// rune boundary, so the result stays valid UTF-8.
 func TruncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
 	if maxLen <= 3 {
-		return s[:maxLen]
+		return s[:runeStart(s, maxLen)]
 	}
-	return s[:maxLen-3] + "..."
+	return s[:runeStart(s, maxLen-3)] + "..."
+}
+
+// runeStart moves i back to the start of the rune that holds byte i.
+func runeStart(s string, i int) int {
+	for i > 0 && !utf8.RuneStart(s[i]) {
+		i--
+	}
+	return i
 }
 
 var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// EscapeControl replaces each control character other than a newline or a
+// tab with U+FFFD. Stored content comes from agent tools, and an escape
+// sequence in it must not reach the terminal. It also replaces the bidi and
+// invisible format characters, which can show text in an order that is not
+// the stored order. A CRLF line end becomes a newline.
+func EscapeControl(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r != '\n' && r != '\t' && unsafeRune(r) {
+			return '\uFFFD'
+		}
+		return r
+	}, strings.ReplaceAll(s, "\r\n", "\n"))
+}
+
+// EscapeLine escapes as EscapeControl does, a newline and a tab included, so
+// the value stays on one table row.
+func EscapeLine(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unsafeRune(r) {
+			return '\uFFFD'
+		}
+		return r
+	}, s)
+}
+
+func unsafeRune(r rune) bool {
+	switch {
+	case unicode.IsControl(r):
+		return true
+	case r >= '\u200B' && r <= '\u200F', r >= '\u202A' && r <= '\u202E',
+		r >= '\u2066' && r <= '\u2069', r == '\u2028', r == '\u2029', r == '\u061C':
+		return true
+	}
+	return false
+}
 
 func VisibleLen(s string) int {
 	return len(ansiRegex.ReplaceAllString(s, ""))

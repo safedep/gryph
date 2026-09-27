@@ -115,9 +115,6 @@ func validatePolicyConfig(cfg PolicyConfig) error {
 	if cfg.ContextRetentionDays < 0 {
 		return fmt.Errorf("policy.context_retention_days must be non-negative")
 	}
-	if cfg.Context.CELEntries < 1 || cfg.Context.CELEntries > MaxCELEntries {
-		return fmt.Errorf("policy.context.cel_entries must be between 1 and %d", MaxCELEntries)
-	}
 	if cfg.ReceiptRetentionDays < 0 {
 		return fmt.Errorf("policy.receipt_retention_days must be non-negative")
 	}

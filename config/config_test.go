@@ -639,3 +639,19 @@ func TestLoad_ClampsCELEntries(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_ClampsWindowLimits(t *testing.T) {
+	for _, maxBytes := range []string{"-1", "-0.5"} {
+		t.Run(maxBytes, func(t *testing.T) {
+			configFile := filepath.Join(t.TempDir(), "config.yaml")
+			content := "policy:\n  enabled: true\n  context:\n    window_max_entries: 0\n    window_max_bytes: " + maxBytes + "\n"
+			require.NoError(t, os.WriteFile(configFile, []byte(content), 0o644))
+
+			cfg, err := Load(configFile)
+			require.NoError(t, err, "an out-of-range value must not turn the policy off")
+			assert.True(t, cfg.Policy.Enabled)
+			assert.Equal(t, 1, cfg.Policy.Context.WindowMaxEntries)
+			assert.Equal(t, DefaultWindowMaxBytes, cfg.Policy.Context.WindowMaxBytes, "a negative byte bound must not remove the limit")
+		})
+	}
+}

@@ -290,42 +290,42 @@ type EntryKind = events.Kind
 // Host is the lower-case host from a URL, a network command, or an MCP
 // server URL.
 type DerivedTarget struct {
-	Host      string
-	MCPServer string
-	MCPTool   string
+	Host      string `json:"host,omitempty"`
+	MCPServer string `json:"mcp_server,omitempty"`
+	MCPTool   string `json:"mcp_tool,omitempty"`
 }
 
 // ContextEntry is one entry of the session context. It holds facts only.
 // The path, the command, and the content stay on the audit event.
 type ContextEntry struct {
-	ID              uuid.UUID
-	SessionID       uuid.UUID
-	EventID         uuid.UUID
-	LinkedEventID   uuid.UUID
-	Sequence        int64
-	Kind            EntryKind
-	Timestamp       time.Time
-	ActionType      ActionType
-	Tool            string
-	ToolCallID      string
-	Phase           ActionPhase
-	Target          DerivedTarget
-	Origin          privacy.Origin
-	Tags            []string
-	Classifications []privacy.Class
-	InjectionScore  float32
-	Decision        Decision
-	MatchedRuleIDs  []string
+	ID              uuid.UUID       `json:"id"`
+	SessionID       uuid.UUID       `json:"session_id"`
+	EventID         uuid.UUID       `json:"event_id"`
+	LinkedEventID   uuid.UUID       `json:"linked_event_id,omitzero"`
+	Sequence        int64           `json:"sequence"`
+	Kind            EntryKind       `json:"kind"`
+	Timestamp       time.Time       `json:"timestamp"`
+	ActionType      ActionType      `json:"action_type"`
+	Tool            string          `json:"tool,omitempty"`
+	ToolCallID      string          `json:"tool_call_id,omitempty"`
+	Phase           ActionPhase     `json:"phase,omitempty"`
+	Target          DerivedTarget   `json:"target,omitzero"`
+	Origin          privacy.Origin  `json:"origin,omitempty"`
+	Tags            []string        `json:"tags,omitempty"`
+	Classifications []privacy.Class `json:"classifications,omitempty"`
+	InjectionScore  float32         `json:"injection_score,omitempty"`
+	Decision        Decision        `json:"decision,omitempty"`
+	MatchedRuleIDs  []string        `json:"matched_rule_ids,omitempty"`
 	// ContentDigest is the SHA-256 of the event content before redaction.
 	// The entry never holds the content.
-	ContentDigest string
-	Result        ResultStatus
+	ContentDigest string       `json:"content_digest,omitempty"`
+	Result        ResultStatus `json:"result,omitempty"`
 
 	// Hosts and Entities feed the session state. The entry stores neither,
 	// and the hash does not cover them. Target.Host is the first host.
 	// Entities holds path:, host: and mcp: keys.
-	Hosts    []string
-	Entities []string
+	Hosts    []string `json:"-"`
+	Entities []string `json:"-"`
 }
 
 // EntryFacts is one item of context.entries. Path and Command come from the

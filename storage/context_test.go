@@ -562,3 +562,46 @@ func TestQueryEntryFacts_CutsLongFields(t *testing.T) {
 	assert.Len(t, facts[1].Host, EntryNameMaxBytes)
 	assert.Len(t, facts[1].MCPServer, EntryNameMaxBytes)
 }
+
+func TestQueryContextEntries_KindsAndSequence(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	start := time.Now().UTC()
+	for i, kind := range []string{"action", "intent", "observation"} {
+		require.NoError(t, store.AppendContextEntry(ctx, &ContextEntryRow{
+			SessionID: sessionID, Kind: kind, ActionType: "file_read",
+			Timestamp: start.Add(-time.Duration(i) * time.Minute),
+		}, nil))
+	}
+
+	sequences := func(filter ContextEntryFilter) []int64 {
+		filter.SessionID = &sessionID
+		rows, err := store.QueryContextEntries(ctx, &filter)
+		require.NoError(t, err)
+		out := make([]int64, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, r.Sequence)
+		}
+		return out
+	}
+	seq := int64(3)
+
+	tests := []struct {
+		name   string
+		filter ContextEntryFilter
+		want   []int64
+	}{
+		{"session order follows the sequence, not the timestamp", ContextEntryFilter{Limit: 10}, []int64{3, 2, 1}},
+		{"kinds", ContextEntryFilter{Kinds: []string{"intent", "observation"}, Limit: 10}, []int64{3, 2}},
+		{"sequence", ContextEntryFilter{Sequence: &seq, Limit: 10}, []int64{3}},
+		{"limit", ContextEntryFilter{Limit: 1}, []int64{3}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, sequences(tt.filter))
+		})
+	}
+}

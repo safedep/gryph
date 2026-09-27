@@ -542,9 +542,20 @@ func (s *SQLiteStore) QueryContextEntries(ctx context.Context, filter *ContextEn
 	if filter.SessionID != nil {
 		q.Where(contextentry.SessionIDEQ(*filter.SessionID))
 	}
-	if filter.Ascending {
+	if len(filter.Kinds) > 0 {
+		q.Where(contextentry.KindIn(filter.Kinds...))
+	}
+	if filter.Sequence != nil {
+		q.Where(contextentry.SequenceEQ(*filter.Sequence))
+	}
+	switch {
+	case filter.Ascending:
 		q.Order(contextentry.BySessionID(), contextentry.BySequence(entsql.OrderAsc()))
-	} else {
+	case filter.SessionID != nil:
+		// The sequence is the order of one session. Timestamps from
+		// parallel hooks can disagree with it.
+		q.Order(contextentry.BySequence(entsql.OrderDesc()))
+	default:
 		q.Order(contextentry.ByTimestamp(entsql.OrderDesc()), contextentry.BySequence(entsql.OrderDesc()))
 	}
 	if filter.Limit != -1 {
