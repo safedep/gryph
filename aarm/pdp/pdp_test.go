@@ -267,7 +267,7 @@ rules:
 	require.NoError(t, err)
 
 	assert.Equal(t, model.DecisionBlock, got.Decision)
-	assert.Equal(t, []string{"warn-env", "block-env"}, got.MatchedRuleIDs)
+	assert.Equal(t, []string{"block-env", "warn-env"}, got.MatchedRuleIDs)
 	assert.Equal(t, "block", got.Message)
 }
 
@@ -833,4 +833,22 @@ func TestCollectContextRefs(t *testing.T) {
 	require.NoError(t, issues.Err())
 	refs := collectContextRefs(ast)
 	assert.Equal(t, []string{"files_written", "tools_used"}, refs)
+}
+
+func TestDeciderFirst(t *testing.T) {
+	tests := []struct {
+		name string
+		ids  []string
+		want []string
+	}{
+		{"already first", []string{"b", "w"}, []string{"b", "w"}},
+		{"moves to front", []string{"w1", "b", "w2"}, []string{"b", "w1", "w2"}},
+		{"last", []string{"w1", "w2", "b"}, []string{"b", "w1", "w2"}},
+		{"absent", []string{"w1", "w2"}, []string{"w1", "w2"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, deciderFirst(tt.ids, "b"))
+		})
+	}
 }
