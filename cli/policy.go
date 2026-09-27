@@ -1061,6 +1061,7 @@ func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 			identityCapturer = identity.NewStaticCapturer(identity.Capture{})
 		}
 		adapterOpts = append(adapterOpts, mediation.WithIdentityCapturer(identityCapturer))
+		adapterOpts = append(adapterOpts, mediation.WithShellBudget(policyCfg.ShellBudget))
 
 		opts = append(opts, aarmsec.WithAdapter(mediation.NewHookAdapter(adapterOpts...)))
 		opts = append(opts, aarmsec.WithContentStrip(func(e *events.Event) bool {

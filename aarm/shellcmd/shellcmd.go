@@ -152,8 +152,8 @@ func AnalyzeCommand(command string, args []string, workingDir string) Analysis {
 func Unbounded() Analysis {
 	return Analysis{
 		Targets: []Target{
-			{Path: "/", Access: AccessWrite, Glob: "/**", MatchDot: true},
-			{Path: "/", Access: AccessRead, Glob: "/**", MatchDot: true},
+			{Path: "/", Access: AccessWrite, Glob: "**", MatchDot: true},
+			{Path: "/", Access: AccessRead, Glob: "**", MatchDot: true},
 		},
 		Hosts:     []string{UnknownHost},
 		GryphHook: true,

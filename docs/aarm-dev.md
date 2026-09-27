@@ -341,11 +341,13 @@ simple commands it visits in one analysis. At `maxCalls` (4096) it stops,
 keeps the targets it has, and sets `Parsed` to false, so a caller can see that
 the analysis is not complete.
 
-The hook adapter runs the analysis with `shellcmd.AnalyzeCommandWithin` and a
-budget of 500 ms. When the budget runs out, the action gets
-`shellcmd.Unbounded()`, the adapter logs a warning, and the hook continues.
-The unbounded analysis has `Parsed` false. It writes and reads the glob `/**`,
-contacts `UnknownHost`, and runs the Gryph hook. So every path, host, and hook
+The hook adapter runs the analysis with `shellcmd.AnalyzeCommandWithin` and
+the budget `policy.shell_budget` (default 500 ms, `mediation.WithShellBudget`).
+When the budget runs out, the action gets `shellcmd.Unbounded()`, the adapter
+logs a warning, and the hook continues. The unbounded analysis has `Parsed`
+false. It writes and reads the glob `**`, which also matches a relative
+pattern and a Windows drive path, contacts `UnknownHost`, and runs the Gryph
+hook. So every path, host, and hook
 rule matches it. Without it, an agent could pad a command past the budget and
 remove its targets. The PDP matches a target glob against the file patterns
 for any access.
