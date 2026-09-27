@@ -10,6 +10,7 @@ import (
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/receipt"
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +22,7 @@ func newPolicyReceiptsExportCmd() *cobra.Command {
 		format            string
 		output            string
 		includeSignatures bool
+		exportProfile     string
 	)
 	cmd := &cobra.Command{
 		Use:   "export",
@@ -31,7 +33,9 @@ func newPolicyReceiptsExportCmd() *cobra.Command {
 			"emits a flat row per receipt; the snapshot and action_payload " +
 			"JSON columns are omitted. Signatures are excluded by default; " +
 			"pass --include-signatures to ship the cryptographic material " +
-			"with the export.",
+			"with the export. --export-profile applies to the command and the " +
+			"URL of each JSONL row. A receipt with hash v2 still verifies, " +
+			"because its hash reads their digests.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 
@@ -58,9 +62,15 @@ func newPolicyReceiptsExportCmd() *cobra.Command {
 				}
 			}()
 
+			profile, err := app.Config.ExportProfile(exportProfile)
+			if err != nil {
+				return ErrConfig("invalid export profile", err)
+			}
 			opts := receipt.ExportOptions{
 				Format:            format,
 				IncludeSignatures: includeSignatures,
+				Profile:           &profile,
+				Events:            app.Store,
 			}
 			if sessionID != "" {
 				sid, err := resolveAarmSessionID(ctx, app.Store, sessionID)
@@ -92,8 +102,12 @@ func newPolicyReceiptsExportCmd() *cobra.Command {
 				w = f
 			}
 
-			exporter := receipt.NewSQLiteExporter(app.Store)
-			return exporter.Export(ctx, w, opts)
+			var stats receipt.ExportStats
+			opts.Stats = &stats
+			if err := receipt.NewSQLiteExporter(app.Store).Export(ctx, w, opts); err != nil {
+				return err
+			}
+			return writeReceiptExportWarnings(cmd.ErrOrStderr(), stats)
 		},
 	}
 	cmd.Flags().StringVar(&sessionID, "session", "", "session ID (UUID or prefix) to filter on")
@@ -102,5 +116,20 @@ func newPolicyReceiptsExportCmd() *cobra.Command {
 	cmd.Flags().StringVar(&format, "format", receipt.ExportFormatJSONL, "output format: jsonl, csv")
 	cmd.Flags().StringVar(&output, "output", "", "output file (default stdout)")
 	cmd.Flags().BoolVar(&includeSignatures, "include-signatures", false, "include signature and signer_key_id columns")
+	cmd.Flags().StringVar(&exportProfile, "export-profile", privacy.ProfileDefault, "export profile: default, metadata, full, or a profile under export.profiles")
 	return cmd
+}
+
+func writeReceiptExportWarnings(w io.Writer, stats receipt.ExportStats) error {
+	if stats.ProjectedV1 > 0 {
+		if _, err := fmt.Fprintf(w, "warning: the export profile removed the content of %d receipt(s) with hash v1. The v1 hash covers the content, so these receipts do not verify. Export with --export-profile full to verify them.\n", stats.ProjectedV1); err != nil {
+			return err
+		}
+	}
+	if stats.MessageQuotes > 0 {
+		if _, err := fmt.Fprintf(w, "warning: %d receipt(s) have a rule message that quotes content that the export profile removed. The receipt hash covers the message, so the export keeps it.\n", stats.MessageQuotes); err != nil {
+			return err
+		}
+	}
+	return nil
 }

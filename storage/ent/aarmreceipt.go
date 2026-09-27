@@ -78,7 +78,15 @@ type AarmReceipt struct {
 	// ServiceIdentity holds the value of the "service_identity" field.
 	ServiceIdentity string `json:"service_identity,omitempty"`
 	// RoleScope holds the value of the "role_scope" field.
-	RoleScope    string `json:"role_scope,omitempty"`
+	RoleScope string `json:"role_scope,omitempty"`
+	// CommandDigest holds the value of the "command_digest" field.
+	CommandDigest string `json:"command_digest,omitempty"`
+	// URLDigest holds the value of the "url_digest" field.
+	URLDigest string `json:"url_digest,omitempty"`
+	// HashVersion holds the value of the "hash_version" field.
+	HashVersion int `json:"hash_version,omitempty"`
+	// ContentSalt holds the value of the "content_salt" field.
+	ContentSalt  []byte `json:"content_salt,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -87,11 +95,11 @@ func (*AarmReceipt) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case aarmreceipt.FieldMatchedRuleIds, aarmreceipt.FieldSnapshot, aarmreceipt.FieldActionPayload, aarmreceipt.FieldPrevHash, aarmreceipt.FieldHash, aarmreceipt.FieldPolicyHash, aarmreceipt.FieldSignature:
+		case aarmreceipt.FieldMatchedRuleIds, aarmreceipt.FieldSnapshot, aarmreceipt.FieldActionPayload, aarmreceipt.FieldPrevHash, aarmreceipt.FieldHash, aarmreceipt.FieldPolicyHash, aarmreceipt.FieldSignature, aarmreceipt.FieldContentSalt:
 			values[i] = new([]byte)
-		case aarmreceipt.FieldSequence, aarmreceipt.FieldDurationMs, aarmreceipt.FieldDeferralOfSequence:
+		case aarmreceipt.FieldSequence, aarmreceipt.FieldDurationMs, aarmreceipt.FieldDeferralOfSequence, aarmreceipt.FieldHashVersion:
 			values[i] = new(sql.NullInt64)
-		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSubagentID, aarmreceipt.FieldSubagentType, aarmreceipt.FieldSignerKeyID, aarmreceipt.FieldDeferReason, aarmreceipt.FieldHumanPrincipal, aarmreceipt.FieldServiceIdentity, aarmreceipt.FieldRoleScope:
+		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSubagentID, aarmreceipt.FieldSubagentType, aarmreceipt.FieldSignerKeyID, aarmreceipt.FieldDeferReason, aarmreceipt.FieldHumanPrincipal, aarmreceipt.FieldServiceIdentity, aarmreceipt.FieldRoleScope, aarmreceipt.FieldCommandDigest, aarmreceipt.FieldURLDigest:
 			values[i] = new(sql.NullString)
 		case aarmreceipt.FieldRecordedAt:
 			values[i] = new(sql.NullTime)
@@ -306,6 +314,30 @@ func (_m *AarmReceipt) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.RoleScope = value.String
 			}
+		case aarmreceipt.FieldCommandDigest:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field command_digest", values[i])
+			} else if value.Valid {
+				_m.CommandDigest = value.String
+			}
+		case aarmreceipt.FieldURLDigest:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field url_digest", values[i])
+			} else if value.Valid {
+				_m.URLDigest = value.String
+			}
+		case aarmreceipt.FieldHashVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field hash_version", values[i])
+			} else if value.Valid {
+				_m.HashVersion = int(value.Int64)
+			}
+		case aarmreceipt.FieldContentSalt:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field content_salt", values[i])
+			} else if value != nil {
+				_m.ContentSalt = *value
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -435,6 +467,18 @@ func (_m *AarmReceipt) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("role_scope=")
 	builder.WriteString(_m.RoleScope)
+	builder.WriteString(", ")
+	builder.WriteString("command_digest=")
+	builder.WriteString(_m.CommandDigest)
+	builder.WriteString(", ")
+	builder.WriteString("url_digest=")
+	builder.WriteString(_m.URLDigest)
+	builder.WriteString(", ")
+	builder.WriteString("hash_version=")
+	builder.WriteString(fmt.Sprintf("%v", _m.HashVersion))
+	builder.WriteString(", ")
+	builder.WriteString("content_salt=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ContentSalt))
 	builder.WriteByte(')')
 	return builder.String()
 }

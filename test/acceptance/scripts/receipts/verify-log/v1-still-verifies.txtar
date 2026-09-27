@@ -1,0 +1,19 @@
+# The verifier keeps hash v1. An export from before hash v2 has no
+# hash_version, and it verifies. A v1 hash covers the command, so a v1 row
+# whose command an export profile removed fails with a reason that names
+# the fix.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph policy receipts verify-log --input v1.jsonl
+stdout 'chain_breaks\s+0'
+
+replace v1.jsonl '"action_payload":{"command":"go test ./...",' '"projected":true,"action_payload":{'
+execexit 2 gryph policy receipts verify-log --input v1.jsonl
+stderr 'chain break'
+stdout 'export profile removed them'
+
+-- v1.jsonl --
+{"id":"e03f14f6-3dc6-50c7-a768-f324a4a9d865","session_id":"6f1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","sequence":1,"recorded_at":"2026-05-16T12:00:00Z","recorded_at_unix_ns":1778932800000000000,"agent":"claude-code","tool":"Bash","action_type":"command_exec","decision":"allow","result_status":"pending","action_payload":{"command":"go test ./...","working_dir":"/home/user/project"},"hash":"de0f2328ba63cdddb713c1574ff4209d583dde024ac2a084a6332cc43c82b275"}
+{"id":"3b69bd4d-e361-5706-8fbd-55f654090ccc","session_id":"6f1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","sequence":2,"recorded_at":"2026-05-16T12:00:01Z","recorded_at_unix_ns":1778932801000000000,"agent":"claude-code","tool":"Bash","action_type":"command_exec","decision":"block","result_status":"blocked","action_payload":{"command":"npm install","working_dir":"/home/user/project"},"prev_hash":"de0f2328ba63cdddb713c1574ff4209d583dde024ac2a084a6332cc43c82b275","hash":"416bdf593bb7141fc7e1edd173ffa38dfce78a3f52429fef1197385dc6bcb0b7"}

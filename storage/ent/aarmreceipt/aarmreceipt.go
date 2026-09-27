@@ -75,6 +75,14 @@ const (
 	FieldServiceIdentity = "service_identity"
 	// FieldRoleScope holds the string denoting the role_scope field in the database.
 	FieldRoleScope = "role_scope"
+	// FieldCommandDigest holds the string denoting the command_digest field in the database.
+	FieldCommandDigest = "command_digest"
+	// FieldURLDigest holds the string denoting the url_digest field in the database.
+	FieldURLDigest = "url_digest"
+	// FieldHashVersion holds the string denoting the hash_version field in the database.
+	FieldHashVersion = "hash_version"
+	// FieldContentSalt holds the string denoting the content_salt field in the database.
+	FieldContentSalt = "content_salt"
 	// Table holds the table name of the aarmreceipt in the database.
 	Table = "aarm_receipts"
 )
@@ -112,6 +120,10 @@ var Columns = []string{
 	FieldHumanPrincipal,
 	FieldServiceIdentity,
 	FieldRoleScope,
+	FieldCommandDigest,
+	FieldURLDigest,
+	FieldHashVersion,
+	FieldContentSalt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -135,6 +147,8 @@ var (
 	HashValidator func([]byte) error
 	// PolicyHashValidator is a validator for the "policy_hash" field. It is called by the builders before save.
 	PolicyHashValidator func([]byte) error
+	// ContentSaltValidator is a validator for the "content_salt" field. It is called by the builders before save.
+	ContentSaltValidator func([]byte) error
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -290,4 +304,19 @@ func ByServiceIdentity(opts ...sql.OrderTermOption) OrderOption {
 // ByRoleScope orders the results by the role_scope field.
 func ByRoleScope(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRoleScope, opts...).ToFunc()
+}
+
+// ByCommandDigest orders the results by the command_digest field.
+func ByCommandDigest(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCommandDigest, opts...).ToFunc()
+}
+
+// ByURLDigest orders the results by the url_digest field.
+func ByURLDigest(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldURLDigest, opts...).ToFunc()
+}
+
+// ByHashVersion orders the results by the hash_version field.
+func ByHashVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHashVersion, opts...).ToFunc()
 }

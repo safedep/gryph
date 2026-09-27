@@ -544,6 +544,85 @@ func (_u *AarmReceiptUpdate) ClearRoleScope() *AarmReceiptUpdate {
 	return _u
 }
 
+// SetCommandDigest sets the "command_digest" field.
+func (_u *AarmReceiptUpdate) SetCommandDigest(v string) *AarmReceiptUpdate {
+	_u.mutation.SetCommandDigest(v)
+	return _u
+}
+
+// SetNillableCommandDigest sets the "command_digest" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableCommandDigest(v *string) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetCommandDigest(*v)
+	}
+	return _u
+}
+
+// ClearCommandDigest clears the value of the "command_digest" field.
+func (_u *AarmReceiptUpdate) ClearCommandDigest() *AarmReceiptUpdate {
+	_u.mutation.ClearCommandDigest()
+	return _u
+}
+
+// SetURLDigest sets the "url_digest" field.
+func (_u *AarmReceiptUpdate) SetURLDigest(v string) *AarmReceiptUpdate {
+	_u.mutation.SetURLDigest(v)
+	return _u
+}
+
+// SetNillableURLDigest sets the "url_digest" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableURLDigest(v *string) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetURLDigest(*v)
+	}
+	return _u
+}
+
+// ClearURLDigest clears the value of the "url_digest" field.
+func (_u *AarmReceiptUpdate) ClearURLDigest() *AarmReceiptUpdate {
+	_u.mutation.ClearURLDigest()
+	return _u
+}
+
+// SetHashVersion sets the "hash_version" field.
+func (_u *AarmReceiptUpdate) SetHashVersion(v int) *AarmReceiptUpdate {
+	_u.mutation.ResetHashVersion()
+	_u.mutation.SetHashVersion(v)
+	return _u
+}
+
+// SetNillableHashVersion sets the "hash_version" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableHashVersion(v *int) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetHashVersion(*v)
+	}
+	return _u
+}
+
+// AddHashVersion adds value to the "hash_version" field.
+func (_u *AarmReceiptUpdate) AddHashVersion(v int) *AarmReceiptUpdate {
+	_u.mutation.AddHashVersion(v)
+	return _u
+}
+
+// ClearHashVersion clears the value of the "hash_version" field.
+func (_u *AarmReceiptUpdate) ClearHashVersion() *AarmReceiptUpdate {
+	_u.mutation.ClearHashVersion()
+	return _u
+}
+
+// SetContentSalt sets the "content_salt" field.
+func (_u *AarmReceiptUpdate) SetContentSalt(v []byte) *AarmReceiptUpdate {
+	_u.mutation.SetContentSalt(v)
+	return _u
+}
+
+// ClearContentSalt clears the value of the "content_salt" field.
+func (_u *AarmReceiptUpdate) ClearContentSalt() *AarmReceiptUpdate {
+	_u.mutation.ClearContentSalt()
+	return _u
+}
+
 // Mutation returns the AarmReceiptMutation object of the builder.
 func (_u *AarmReceiptUpdate) Mutation() *AarmReceiptMutation {
 	return _u.mutation
@@ -601,6 +680,11 @@ func (_u *AarmReceiptUpdate) check() error {
 	if v, ok := _u.mutation.PolicyHash(); ok {
 		if err := aarmreceipt.PolicyHashValidator(v); err != nil {
 			return &ValidationError{Name: "policy_hash", err: fmt.Errorf(`ent: validator failed for field "AarmReceipt.policy_hash": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ContentSalt(); ok {
+		if err := aarmreceipt.ContentSaltValidator(v); err != nil {
+			return &ValidationError{Name: "content_salt", err: fmt.Errorf(`ent: validator failed for field "AarmReceipt.content_salt": %w`, err)}
 		}
 	}
 	return nil
@@ -787,6 +871,33 @@ func (_u *AarmReceiptUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.RoleScopeCleared() {
 		_spec.ClearField(aarmreceipt.FieldRoleScope, field.TypeString)
+	}
+	if value, ok := _u.mutation.CommandDigest(); ok {
+		_spec.SetField(aarmreceipt.FieldCommandDigest, field.TypeString, value)
+	}
+	if _u.mutation.CommandDigestCleared() {
+		_spec.ClearField(aarmreceipt.FieldCommandDigest, field.TypeString)
+	}
+	if value, ok := _u.mutation.URLDigest(); ok {
+		_spec.SetField(aarmreceipt.FieldURLDigest, field.TypeString, value)
+	}
+	if _u.mutation.URLDigestCleared() {
+		_spec.ClearField(aarmreceipt.FieldURLDigest, field.TypeString)
+	}
+	if value, ok := _u.mutation.HashVersion(); ok {
+		_spec.SetField(aarmreceipt.FieldHashVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedHashVersion(); ok {
+		_spec.AddField(aarmreceipt.FieldHashVersion, field.TypeInt, value)
+	}
+	if _u.mutation.HashVersionCleared() {
+		_spec.ClearField(aarmreceipt.FieldHashVersion, field.TypeInt)
+	}
+	if value, ok := _u.mutation.ContentSalt(); ok {
+		_spec.SetField(aarmreceipt.FieldContentSalt, field.TypeBytes, value)
+	}
+	if _u.mutation.ContentSaltCleared() {
+		_spec.ClearField(aarmreceipt.FieldContentSalt, field.TypeBytes)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -1323,6 +1434,85 @@ func (_u *AarmReceiptUpdateOne) ClearRoleScope() *AarmReceiptUpdateOne {
 	return _u
 }
 
+// SetCommandDigest sets the "command_digest" field.
+func (_u *AarmReceiptUpdateOne) SetCommandDigest(v string) *AarmReceiptUpdateOne {
+	_u.mutation.SetCommandDigest(v)
+	return _u
+}
+
+// SetNillableCommandDigest sets the "command_digest" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableCommandDigest(v *string) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetCommandDigest(*v)
+	}
+	return _u
+}
+
+// ClearCommandDigest clears the value of the "command_digest" field.
+func (_u *AarmReceiptUpdateOne) ClearCommandDigest() *AarmReceiptUpdateOne {
+	_u.mutation.ClearCommandDigest()
+	return _u
+}
+
+// SetURLDigest sets the "url_digest" field.
+func (_u *AarmReceiptUpdateOne) SetURLDigest(v string) *AarmReceiptUpdateOne {
+	_u.mutation.SetURLDigest(v)
+	return _u
+}
+
+// SetNillableURLDigest sets the "url_digest" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableURLDigest(v *string) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetURLDigest(*v)
+	}
+	return _u
+}
+
+// ClearURLDigest clears the value of the "url_digest" field.
+func (_u *AarmReceiptUpdateOne) ClearURLDigest() *AarmReceiptUpdateOne {
+	_u.mutation.ClearURLDigest()
+	return _u
+}
+
+// SetHashVersion sets the "hash_version" field.
+func (_u *AarmReceiptUpdateOne) SetHashVersion(v int) *AarmReceiptUpdateOne {
+	_u.mutation.ResetHashVersion()
+	_u.mutation.SetHashVersion(v)
+	return _u
+}
+
+// SetNillableHashVersion sets the "hash_version" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableHashVersion(v *int) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetHashVersion(*v)
+	}
+	return _u
+}
+
+// AddHashVersion adds value to the "hash_version" field.
+func (_u *AarmReceiptUpdateOne) AddHashVersion(v int) *AarmReceiptUpdateOne {
+	_u.mutation.AddHashVersion(v)
+	return _u
+}
+
+// ClearHashVersion clears the value of the "hash_version" field.
+func (_u *AarmReceiptUpdateOne) ClearHashVersion() *AarmReceiptUpdateOne {
+	_u.mutation.ClearHashVersion()
+	return _u
+}
+
+// SetContentSalt sets the "content_salt" field.
+func (_u *AarmReceiptUpdateOne) SetContentSalt(v []byte) *AarmReceiptUpdateOne {
+	_u.mutation.SetContentSalt(v)
+	return _u
+}
+
+// ClearContentSalt clears the value of the "content_salt" field.
+func (_u *AarmReceiptUpdateOne) ClearContentSalt() *AarmReceiptUpdateOne {
+	_u.mutation.ClearContentSalt()
+	return _u
+}
+
 // Mutation returns the AarmReceiptMutation object of the builder.
 func (_u *AarmReceiptUpdateOne) Mutation() *AarmReceiptMutation {
 	return _u.mutation
@@ -1393,6 +1583,11 @@ func (_u *AarmReceiptUpdateOne) check() error {
 	if v, ok := _u.mutation.PolicyHash(); ok {
 		if err := aarmreceipt.PolicyHashValidator(v); err != nil {
 			return &ValidationError{Name: "policy_hash", err: fmt.Errorf(`ent: validator failed for field "AarmReceipt.policy_hash": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ContentSalt(); ok {
+		if err := aarmreceipt.ContentSaltValidator(v); err != nil {
+			return &ValidationError{Name: "content_salt", err: fmt.Errorf(`ent: validator failed for field "AarmReceipt.content_salt": %w`, err)}
 		}
 	}
 	return nil
@@ -1596,6 +1791,33 @@ func (_u *AarmReceiptUpdateOne) sqlSave(ctx context.Context) (_node *AarmReceipt
 	}
 	if _u.mutation.RoleScopeCleared() {
 		_spec.ClearField(aarmreceipt.FieldRoleScope, field.TypeString)
+	}
+	if value, ok := _u.mutation.CommandDigest(); ok {
+		_spec.SetField(aarmreceipt.FieldCommandDigest, field.TypeString, value)
+	}
+	if _u.mutation.CommandDigestCleared() {
+		_spec.ClearField(aarmreceipt.FieldCommandDigest, field.TypeString)
+	}
+	if value, ok := _u.mutation.URLDigest(); ok {
+		_spec.SetField(aarmreceipt.FieldURLDigest, field.TypeString, value)
+	}
+	if _u.mutation.URLDigestCleared() {
+		_spec.ClearField(aarmreceipt.FieldURLDigest, field.TypeString)
+	}
+	if value, ok := _u.mutation.HashVersion(); ok {
+		_spec.SetField(aarmreceipt.FieldHashVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedHashVersion(); ok {
+		_spec.AddField(aarmreceipt.FieldHashVersion, field.TypeInt, value)
+	}
+	if _u.mutation.HashVersionCleared() {
+		_spec.ClearField(aarmreceipt.FieldHashVersion, field.TypeInt)
+	}
+	if value, ok := _u.mutation.ContentSalt(); ok {
+		_spec.SetField(aarmreceipt.FieldContentSalt, field.TypeBytes, value)
+	}
+	if _u.mutation.ContentSaltCleared() {
+		_spec.ClearField(aarmreceipt.FieldContentSalt, field.TypeBytes)
 	}
 	_node = &AarmReceipt{config: _u.config}
 	_spec.Assign = _node.assignValues
