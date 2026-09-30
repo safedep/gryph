@@ -256,6 +256,50 @@ func TestQueryReceipts_DecisionsTakesPrecedenceOverDecision(t *testing.T) {
 	}
 }
 
+func TestQueryReceipts_FilterByAgent(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	sessionID := uuid.New()
+
+	for i, agent := range []string{"claude-code", "cursor", "claude-code"} {
+		row := makeReceiptRow(sessionID, int64(i+1))
+		row.Agent = agent
+		require.NoError(t, store.InsertReceipt(ctx, row))
+	}
+
+	filter := &storage.ReceiptFilter{Agent: "cursor"}
+	rows, err := store.QueryReceipts(ctx, filter)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "cursor", rows[0].Agent)
+
+	n, err := store.CountReceipts(ctx, filter)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+}
+
+func TestQueryReceipts_SinceInOtherZone(t *testing.T) {
+	store := storagetest.NewStore(t)
+	ctx := context.Background()
+	require.NoError(t, store.InsertReceipt(ctx, makeReceiptRow(uuid.New(), 1)))
+
+	for _, zone := range []string{"Asia/Kolkata", "America/Los_Angeles"} {
+		t.Run(zone, func(t *testing.T) {
+			loc, err := time.LoadLocation(zone)
+			require.NoError(t, err)
+			recent := time.Now().In(loc).Add(-10 * time.Second)
+			rows, err := store.QueryReceipts(ctx, &storage.ReceiptFilter{Since: &recent})
+			require.NoError(t, err)
+			assert.Len(t, rows, 1)
+
+			future := time.Now().In(loc).Add(time.Hour)
+			rows, err = store.QueryReceipts(ctx, &storage.ReceiptFilter{Since: &future})
+			require.NoError(t, err)
+			assert.Empty(t, rows)
+		})
+	}
+}
+
 func TestCountReceipts(t *testing.T) {
 	store := storagetest.NewStore(t)
 	ctx := context.Background()

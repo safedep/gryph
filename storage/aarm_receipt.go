@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/storage/ent"
 	"github.com/safedep/gryph/storage/ent/aarmreceipt"
+	"github.com/safedep/gryph/storage/ent/predicate"
 )
 
 const (
@@ -585,34 +586,7 @@ func (s *SQLiteStore) QueryReceipts(ctx context.Context, filter *ReceiptFilter) 
 	if filter == nil {
 		filter = &ReceiptFilter{}
 	}
-	q := s.client.AarmReceipt.Query()
-	if filter.SessionID != nil {
-		q.Where(aarmreceipt.SessionIDEQ(*filter.SessionID))
-	}
-	if len(filter.Decisions) > 0 {
-		q.Where(aarmreceipt.DecisionIn(filter.Decisions...))
-	} else if filter.Decision != "" {
-		q.Where(aarmreceipt.DecisionEQ(filter.Decision))
-	}
-	if filter.Since != nil {
-		q.Where(aarmreceipt.RecordedAtGTE(*filter.Since))
-	}
-	if filter.Until != nil {
-		q.Where(aarmreceipt.RecordedAtLTE(*filter.Until))
-	}
-	if filter.UntilExclusive != nil {
-		if filter.UntilID != nil {
-			q.Where(aarmreceipt.Or(
-				aarmreceipt.RecordedAtLT(*filter.UntilExclusive),
-				aarmreceipt.And(
-					aarmreceipt.RecordedAtEQ(*filter.UntilExclusive),
-					aarmreceipt.IDLT(*filter.UntilID),
-				),
-			))
-		} else {
-			q.Where(aarmreceipt.RecordedAtLT(*filter.UntilExclusive))
-		}
-	}
+	q := s.client.AarmReceipt.Query().Where(receiptPredicates(filter)...)
 
 	if filter.SessionID != nil {
 		q.Order(aarmreceipt.BySequence(entsql.OrderAsc()))
@@ -639,6 +613,43 @@ func (s *SQLiteStore) QueryReceipts(ctx context.Context, filter *ReceiptFilter) 
 	return out, nil
 }
 
+// receiptPredicates builds the WHERE clause of a receipt filter. Limit and
+// the order are not predicates, so callers apply them.
+func receiptPredicates(filter *ReceiptFilter) []predicate.AarmReceipt {
+	var ps []predicate.AarmReceipt
+	if filter.SessionID != nil {
+		ps = append(ps, aarmreceipt.SessionIDEQ(*filter.SessionID))
+	}
+	if len(filter.Decisions) > 0 {
+		ps = append(ps, aarmreceipt.DecisionIn(filter.Decisions...))
+	} else if filter.Decision != "" {
+		ps = append(ps, aarmreceipt.DecisionEQ(filter.Decision))
+	}
+	if filter.Agent != "" {
+		ps = append(ps, aarmreceipt.AgentEQ(filter.Agent))
+	}
+	if filter.Since != nil {
+		ps = append(ps, aarmreceipt.RecordedAtGTE(filter.Since.UTC()))
+	}
+	if filter.Until != nil {
+		ps = append(ps, aarmreceipt.RecordedAtLTE(filter.Until.UTC()))
+	}
+	if filter.UntilExclusive != nil {
+		if filter.UntilID != nil {
+			ps = append(ps, aarmreceipt.Or(
+				aarmreceipt.RecordedAtLT(filter.UntilExclusive.UTC()),
+				aarmreceipt.And(
+					aarmreceipt.RecordedAtEQ(filter.UntilExclusive.UTC()),
+					aarmreceipt.IDLT(*filter.UntilID),
+				),
+			))
+		} else {
+			ps = append(ps, aarmreceipt.RecordedAtLT(filter.UntilExclusive.UTC()))
+		}
+	}
+	return ps
+}
+
 // ListReceiptSessionIDs returns the distinct session IDs that appear in the
 // receipt log. Intended for admin operations such as full-cluster hash-chain
 // verification. Not for hot paths.
@@ -660,21 +671,7 @@ func (s *SQLiteStore) CountReceipts(ctx context.Context, filter *ReceiptFilter) 
 	if filter == nil {
 		filter = &ReceiptFilter{}
 	}
-	q := s.client.AarmReceipt.Query()
-	if filter.SessionID != nil {
-		q.Where(aarmreceipt.SessionIDEQ(*filter.SessionID))
-	}
-	if len(filter.Decisions) > 0 {
-		q.Where(aarmreceipt.DecisionIn(filter.Decisions...))
-	} else if filter.Decision != "" {
-		q.Where(aarmreceipt.DecisionEQ(filter.Decision))
-	}
-	if filter.Since != nil {
-		q.Where(aarmreceipt.RecordedAtGTE(*filter.Since))
-	}
-	if filter.Until != nil {
-		q.Where(aarmreceipt.RecordedAtLTE(*filter.Until))
-	}
+	q := s.client.AarmReceipt.Query().Where(receiptPredicates(filter)...)
 	n, err := q.Count(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("storage: count receipts: %w", err)

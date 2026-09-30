@@ -261,8 +261,10 @@ type ReceiptFilter struct {
 	// Decisions filters to any decision in the supplied set via SQL IN.
 	// Empty slice means "no decision filter" (same as unset).
 	Decisions []string
-	Since     *time.Time
-	Until     *time.Time
+	// Agent filters to one agent name via SQL equality.
+	Agent string
+	Since *time.Time
+	Until *time.Time
 	// UntilExclusive applies a strict "recorded_at < UntilExclusive"
 	// predicate. Stronger than the inclusive Until and intended for paged
 	// cursors that must advance past timestamp duplicates. When both Until

@@ -105,6 +105,8 @@ and accumulator read it. Key fields:
 `Message`, `FullMessage`, `Severity`, `Tags`, `DeferReason`. `Message` is the
 stored message. `FullMessage` goes only to the agent and to the approval
 prompt. `AgentMessage` returns `FullMessage`, or `Message` when it is empty.
+`MatchedRuleIDs` starts with the rule that decided. The other matched rules
+follow in policy order. The receipts table shows the first ID.
 
 ## Policy schema and evaluation
 
@@ -512,8 +514,13 @@ plus the built-in rules, so an author can check a draft before install.
 
 ## Receipts
 
-Every non-skip decision produces a receipt row. `policy.log_all_evaluations`
-also records `allow` rows. The receipt log is append-only and hash-chained per
+`Mediator.shouldRecordReceipt` decides which decisions get a receipt row. It
+skips `allow` rows unless `policy.log_all_evaluations` is `true`. The default
+is `false`.
+`gryph policy receipts --follow` (`cli/policy_receipts_follow.go`) polls the
+receipt table. Each poll reads back an overlap window, because a hook sets
+`recorded_at` before it commits. Storage compares `recorded_at` in UTC, so
+`storage.ReceiptFilter` changes each time bound to UTC. The receipt log is append-only and hash-chained per
 session. The hash canonicalization and field order are documented at the top of
 `aarm/receipt/hash.go`. Change that order only with a matching change to the
 verifier, or every existing chain fails verification.
