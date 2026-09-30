@@ -50,7 +50,8 @@ type Target struct {
 	Access Access
 	// Glob is the resolved pattern when the command reads the path through
 	// a glob. Path is then the directory before the first glob character.
-	// The walker sets it only on a read. Unbounded also sets it on a write.
+	// The walker sets it only on a read. Unbounded also sets it on a write
+	// and a removal.
 	Glob string
 	// Guess marks a read by a command that the walker does not know. Such a
 	// command may read the path, but it may not read every file in a
@@ -127,11 +128,21 @@ func Analyze(command string, env Env) (a Analysis) {
 	return w.analyze(command)
 }
 
+// analyze returns Unbounded when the walk hit a limit. Otherwise an agent
+// could pad a command past the limit and hide the targets after it.
 func (w *walker) analyze(command string) Analysis {
 	if _, err := w.script(command, dirs{w.env.WorkingDir}); err != nil {
 		w.failed = true
 	}
+	if w.exhausted {
+		return Unbounded()
+	}
 	return Analysis{Parsed: !w.failed, Targets: w.targets, Hosts: w.hosts, GryphHook: w.gryphHook}
+}
+
+func (w *walker) exhaust() {
+	w.failed = true
+	w.exhausted = true
 }
 
 // AnalyzeCommand analyzes a command given as a command string plus split
@@ -146,13 +157,14 @@ func AnalyzeCommand(command string, args []string, workingDir string) Analysis {
 }
 
 // Unbounded is the analysis of a command that the walker could not finish.
-// The command can write or read any path, contact any host, and run the
-// Gryph hook. A rule on a path, a host, or the hook then matches, so padding
+// The command can write, remove or read any path, contact any host, and
+// run the Gryph hook. A rule on a path, a host, or the hook then matches, so padding
 // a command past a budget does not remove a match.
 func Unbounded() Analysis {
 	return Analysis{
 		Targets: []Target{
 			{Path: "/", Access: AccessWrite, Glob: "**", MatchDot: true},
+			{Path: "/", Access: AccessRemove, Glob: "**", MatchDot: true},
 			{Path: "/", Access: AccessRead, Glob: "**", MatchDot: true},
 		},
 		Hosts:     []string{UnknownHost},
@@ -252,12 +264,15 @@ func union(a, b dirs) dirs {
 }
 
 type walker struct {
-	env       Env
-	depth     int
-	calls     int
-	targets   []Target
-	hosts     []string
-	failed    bool
+	env     Env
+	depth   int
+	calls   int
+	targets []Target
+	hosts   []string
+	failed  bool
+	// exhausted is true when the walk hit maxCalls or maxDepth and skipped
+	// the rest of the command.
+	exhausted bool
 	matchDot  bool
 	gryphHook bool
 	// stdin is the input of the statement that the walker is in.
@@ -300,6 +315,7 @@ func (w *walker) script(src string, cwds dirs) (dirs, error) {
 // adds no targets.
 func (w *walker) nested(src string, cwds dirs) dirs {
 	if w.depth >= maxDepth {
+		w.exhaust()
 		return cwds
 	}
 	w.depth++
@@ -580,7 +596,7 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 		return cwds
 	}
 	if w.calls >= maxCalls {
-		w.failed = true
+		w.exhaust()
 		return cwds
 	}
 	w.calls++
@@ -1201,6 +1217,7 @@ var launchers = map[string]func(args []string) launch{
 // launcher analyzes the command or the script that a launcher runs.
 func (w *walker) launcher(name string, args []string, cwds dirs) {
 	if w.depth >= maxDepth {
+		w.exhaust()
 		return
 	}
 	w.depth++
@@ -1579,6 +1596,9 @@ func (w *walker) execdir(root string, cmd []string, cwds dirs) {
 	sub := &walker{env: w.env, depth: w.depth, calls: w.calls}
 	sub.call(cmd, dirs{""})
 	w.calls = sub.calls
+	if sub.exhausted {
+		w.exhaust()
+	}
 	for _, t := range sub.targets {
 		if path.IsAbs(t.Path) {
 			w.addTarget(t)

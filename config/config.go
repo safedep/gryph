@@ -397,6 +397,7 @@ func Load(configPath string) (*Config, error) {
 	}
 
 	// Unmarshal into struct
+	normalizeShellBudget(v)
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("error parsing config: %w", err)
@@ -423,6 +424,43 @@ func Load(configPath string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+const (
+	shellBudgetKey = "policy.shell_budget"
+	// DefaultShellBudget is the default of policy.shell_budget.
+	DefaultShellBudget = 500 * time.Millisecond
+	// MinShellBudget is the smallest policy.shell_budget. A smaller budget
+	// makes most commands run past it, and the hook then blocks them.
+	MinShellBudget = 10 * time.Millisecond
+)
+
+// shellBudgetValue parses a raw policy.shell_budget. A bare number has no
+// unit, and the decoder would read 500 as 500ns, so it is an error.
+func shellBudgetValue(raw any) (time.Duration, error) {
+	s, ok := raw.(string)
+	if !ok {
+		return 0, fmt.Errorf("%s must be a duration with a unit, such as 500ms", shellBudgetKey)
+	}
+	d, err := time.ParseDuration(strings.TrimSpace(s))
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", shellBudgetKey, err)
+	}
+	if d < MinShellBudget {
+		return 0, fmt.Errorf("%s must be %s or more", shellBudgetKey, MinShellBudget)
+	}
+	return d, nil
+}
+
+// normalizeShellBudget replaces an invalid policy.shell_budget with the
+// default before the decode. A decode or validation error makes loadApp
+// fall back to the defaults, and the defaults turn the policy off. gryph
+// config set still rejects an invalid value, see validateSettings.
+func normalizeShellBudget(v *viper.Viper) {
+	if _, err := shellBudgetValue(v.Get(shellBudgetKey)); err != nil {
+		log.Warnf("config: %v. Gryph uses %s instead of %v", err, DefaultShellBudget, v.Get(shellBudgetKey))
+		v.Set(shellBudgetKey, DefaultShellBudget.String())
+	}
 }
 
 // contextLimit is the valid range of one policy.context key. An
