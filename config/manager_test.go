@@ -367,6 +367,19 @@ func TestManager_Set_RejectsInvalidValue(t *testing.T) {
 	require.NoError(t, mgr.Set("policy.context.cel_entries", 200))
 }
 
+func TestManager_Set_ShellBudget(t *testing.T) {
+	configFile := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, os.WriteFile(configFile, []byte("policy:\n  enabled: true\n  shell_budget: fast\n"), 0o600))
+	mgr, err := NewManager(configFile)
+	require.NoError(t, err)
+
+	require.NoError(t, mgr.Set("policy.fail_mode", "closed"), "a bad budget in the file must not block another key")
+	for _, value := range []string{"0", "-1s", "fast", "500", "5ms"} {
+		assert.ErrorIs(t, mgr.Set("policy.shell_budget", value), ErrInvalidValue, value)
+	}
+	require.NoError(t, mgr.Set("policy.shell_budget", "250ms"))
+}
+
 func TestManager_Set_ClampsOtherContextKeys(t *testing.T) {
 	configFile := filepath.Join(t.TempDir(), "config.yml")
 	content := "policy:\n  enabled: false\n  context:\n    window_max_entries: 0\n    window_max_bytes: -1\n"

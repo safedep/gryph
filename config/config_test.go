@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
@@ -654,6 +655,35 @@ func TestLoad_ClampsWindowLimits(t *testing.T) {
 			assert.True(t, cfg.Policy.Enabled)
 			assert.Equal(t, 1, cfg.Policy.Context.WindowMaxEntries)
 			assert.Equal(t, DefaultWindowMaxBytes, cfg.Policy.Context.WindowMaxBytes, "a negative byte bound must not remove the limit")
+		})
+	}
+}
+
+func TestLoad_ShellBudget(t *testing.T) {
+	cases := []struct {
+		value string
+		want  time.Duration
+	}{
+		{"500ms", 500 * time.Millisecond},
+		{"2s", 2 * time.Second},
+		{"10ms", MinShellBudget},
+		{"5ms", DefaultShellBudget},
+		{"0", DefaultShellBudget},
+		{"-1s", DefaultShellBudget},
+		{"fast", DefaultShellBudget},
+		{"0.5", DefaultShellBudget},
+		{"500", DefaultShellBudget},
+	}
+	for _, tc := range cases {
+		t.Run(tc.value, func(t *testing.T) {
+			configFile := filepath.Join(t.TempDir(), "config.yaml")
+			content := "policy:\n  enabled: true\n  shell_budget: " + tc.value + "\n"
+			require.NoError(t, os.WriteFile(configFile, []byte(content), 0o644))
+
+			cfg, err := Load(configFile)
+			require.NoError(t, err, "a bad shell budget must not turn the policy off")
+			assert.True(t, cfg.Policy.Enabled)
+			assert.Equal(t, tc.want, cfg.Policy.ShellBudget)
 		})
 	}
 }

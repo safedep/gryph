@@ -194,6 +194,12 @@ var ErrInvalidValue = errors.New("invalid config value")
 // out-of-range value that is already in the file does not block a set of
 // another key. The key that the call sets must be in its range.
 func validateSettings(v *viper.Viper, key string) error {
+	if key == shellBudgetKey {
+		if _, err := shellBudgetValue(v.Get(key)); err != nil {
+			return err
+		}
+	}
+	normalizeShellBudget(v)
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return err

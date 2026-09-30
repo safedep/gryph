@@ -61,7 +61,7 @@ func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".context.window_max_bytes", DefaultWindowMaxBytes)
 	v.SetDefault(prefix+".receipt_retention_days", 365)
 	v.SetDefault(prefix+".log_all_evaluations", false)
-	v.SetDefault(prefix+".shell_budget", "500ms")
+	v.SetDefault(prefix+".shell_budget", DefaultShellBudget.String())
 	v.SetDefault(prefix+".approval.mode", string(ApprovalModeNop))
 	v.SetDefault(prefix+".approval.timeout_seconds", 60)
 	v.SetDefault(prefix+".approval.require_note", false)
