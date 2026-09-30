@@ -578,6 +578,36 @@ func TestBuiltinSource_ReadsWhenConfigAndDataShareADirectory(t *testing.T) {
 	}
 }
 
+func TestBuiltinSource_BlocksCommandsPaddedPastTheCallLimit(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	data := home + "/.local/share/safedep/gryph"
+	docs, err := NewBuiltinSource(home + "/.config/safedep/gryph/**").
+		WithReadGlobs(data + "/audit.db").
+		Load(context.Background())
+	require.NoError(t, err)
+	engine, err := pdp.New(docs[0])
+	require.NoError(t, err)
+
+	pad := strings.Repeat("true; ", 4100)
+	for _, command := range []string{
+		"rm -rf ~/.config/safedep/gryph",
+		"cat ~/.local/share/safedep/gryph/audit.db",
+		"gryph _hook claude-code PreToolUse",
+	} {
+		t.Run(command, func(t *testing.T) {
+			action := &model.Action{
+				Type:       model.ActionCommandExec,
+				WorkingDir: "/work",
+				Parameters: model.Parameters{Command: pad + command},
+			}
+			res, err := engine.Evaluate(context.Background(), action, nil)
+			require.NoError(t, err)
+			assert.Equal(t, model.DecisionBlock, res.Decision)
+		})
+	}
+}
+
 func TestBuiltinSource_UnboundedAnalysisMatchesEveryRule(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

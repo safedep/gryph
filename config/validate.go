@@ -120,8 +120,8 @@ func validatePolicyConfig(cfg PolicyConfig) error {
 	if cfg.ReceiptRetentionDays < 0 {
 		return fmt.Errorf("policy.receipt_retention_days must be non-negative")
 	}
-	if cfg.ShellBudget <= 0 {
-		return fmt.Errorf("policy.shell_budget must be positive")
+	if cfg.ShellBudget < MinShellBudget {
+		return fmt.Errorf("%s must be %s or more", shellBudgetKey, MinShellBudget)
 	}
 	switch cfg.Approval.Mode {
 	case "", ApprovalModeNop, ApprovalModeCLI:

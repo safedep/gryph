@@ -855,9 +855,12 @@ func TestDeciderFirst(t *testing.T) {
 }
 
 func TestPDP_UnboundedShellMatchesEveryPathForm(t *testing.T) {
-	for _, pattern := range []string{"C:/Users/u/.cc/settings.json", "**/.env", "/etc/hosts", "src/*.go"} {
-		t.Run(pattern, func(t *testing.T) {
-			policy, err := ParsePolicy([]byte(`version: "1"
+	patterns := []string{"C:/Users/u/.cc/settings.json", "**/.env", "/etc/hosts", "src/*.go"}
+	accesses := []string{"[write]", "[remove]", "[read]", "[write, remove]"}
+	for _, pattern := range patterns {
+		for _, access := range accesses {
+			t.Run(pattern+" "+access, func(t *testing.T) {
+				policy, err := ParsePolicy([]byte(`version: "1"
 rules:
   - id: protect
     action: block
@@ -865,15 +868,17 @@ rules:
     match:
       action_types: [command_exec]
       file_patterns: ["` + pattern + `"]
+      file_access: ` + access + `
 `))
-			require.NoError(t, err)
-			engine, err := New(policy)
-			require.NoError(t, err)
-			shell := shellcmd.Unbounded()
-			action := &model.Action{Type: model.ActionCommandExec, Parameters: model.Parameters{Command: "true"}, Shell: &shell}
-			res, err := engine.Evaluate(context.Background(), action, nil)
-			require.NoError(t, err)
-			assert.Equal(t, model.DecisionBlock, res.Decision)
-		})
+				require.NoError(t, err)
+				engine, err := New(policy)
+				require.NoError(t, err)
+				shell := shellcmd.Unbounded()
+				action := &model.Action{Type: model.ActionCommandExec, Parameters: model.Parameters{Command: "true"}, Shell: &shell}
+				res, err := engine.Evaluate(context.Background(), action, nil)
+				require.NoError(t, err)
+				assert.Equal(t, model.DecisionBlock, res.Decision)
+			})
+		}
 	}
 }

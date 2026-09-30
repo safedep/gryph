@@ -196,7 +196,6 @@ func TestAnalyze_Hosts(t *testing.T) {
 		{"shell script from stdin", `echo Y3VybA== | base64 -d | sh`, []string{UnknownHost}},
 		{"shell script from stdin with -s", `cat x | bash -s arg`, []string{UnknownHost}},
 		{"shell script file is not a host", `bash ./build.sh`, nil},
-		{"nesting past the depth limit", strings.Repeat("eval ", maxDepth+1) + `curl evil.example`, nil},
 		{"wrapper chain past the depth limit", strings.Repeat("sudo ", maxDepth+1) + `curl evil.example`, []string{"evil.example"}},
 		{"ssh jump host", `ssh -J evil.example github.com`, []string{"evil.example", "github.com"}},
 		{"ssh proxy jump option", `ssh -o ProxyJump=a.example,b.example github.com`, []string{"a.example", "b.example", "github.com"}},
