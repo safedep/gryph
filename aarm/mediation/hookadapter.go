@@ -95,7 +95,7 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 	}
 	applyContentMatch(action, event.FullContent, event.OutputTruncated)
 
-	h.applyEnrichment(ctx, action, nil)
+	h.applyEnrichment(ctx, action)
 
 	return action, newEntry(event, action), nil
 }
