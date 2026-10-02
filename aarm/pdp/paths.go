@@ -125,7 +125,7 @@ func (r compiledRule) selects(access shellcmd.Access) bool {
 // file_read action.
 func (r compiledRule) matchesTarget(t shellcmd.Target) bool {
 	treeRead := t.Access == shellcmd.AccessRead && !t.Guess && !t.Flat && (t.Glob != "" || !isHomeOrParent(t.Path))
-	if t.Access == shellcmd.AccessRead && t.Glob != "" {
+	if t.Glob != "" {
 		return globsOverlap(t.Glob, r.filePatterns, t.MatchDot) || (treeRead && globsOverlap(t.Glob, r.containerPatterns, t.MatchDot))
 	}
 	if matchesAnyPath(r.filePatterns, t.Path) {

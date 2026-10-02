@@ -4,6 +4,7 @@ package mediation
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/safedep/gryph/aarm/identity"
 	"github.com/safedep/gryph/aarm/model"
@@ -44,6 +45,9 @@ type Common struct {
 	Classifier      Classifier
 	Scorer          InjectionScorer
 	IdentityCapture identity.Capturer
+	// ShellBudget bounds the shell analysis of a command. Only the hook
+	// adapter analyzes commands.
+	ShellBudget time.Duration
 }
 
 // CommonOption mutates a Common. Each option is a no-op when its argument is
@@ -65,6 +69,16 @@ func WithInjectionScorer(s InjectionScorer) CommonOption {
 	return func(o *Common) {
 		if s != nil {
 			o.Scorer = s
+		}
+	}
+}
+
+// WithShellBudget sets the time budget of the shell analysis. A budget of
+// zero or less is ignored.
+func WithShellBudget(d time.Duration) CommonOption {
+	return func(o *Common) {
+		if d > 0 {
+			o.ShellBudget = d
 		}
 	}
 }

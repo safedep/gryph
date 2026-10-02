@@ -41,6 +41,13 @@
   guarantee: "gryph policy receipts --follow prints the latest receipts, then each new receipt once, with its decision, matched rule and command. SIGINT stops it with exit 0."
   labels: [policy, receipts, follow]
 
+- id: policy/shell/budget-exceeded-fails-closed
+  title: "a command past the shell analysis budget fails closed"
+  category: policy
+  tier: P0
+  guarantee: "When the shell analysis of a command runs past policy.shell_budget, the hook still answers and the builtin rules block the command. The same command runs under the default budget. gryph config set rejects a bad budget, and a bad budget in the file falls back to the default with the policy still on."
+  labels: [policy, shell, self-protection, claude-code]
+
 - id: policy/self-protection/config-write-blocked
   title: "builtin self-protection blocks writes to gryph and hook config"
   category: policy

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/safedep/gryph/aarm/model"
+	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -850,5 +851,34 @@ func TestDeciderFirst(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, deciderFirst(tt.ids, "b"))
 		})
+	}
+}
+
+func TestPDP_UnboundedShellMatchesEveryPathForm(t *testing.T) {
+	patterns := []string{"C:/Users/u/.cc/settings.json", "**/.env", "/etc/hosts", "src/*.go"}
+	accesses := []string{"[write]", "[remove]", "[read]", "[write, remove]"}
+	for _, pattern := range patterns {
+		for _, access := range accesses {
+			t.Run(pattern+" "+access, func(t *testing.T) {
+				policy, err := ParsePolicy([]byte(`version: "1"
+rules:
+  - id: protect
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+      file_patterns: ["` + pattern + `"]
+      file_access: ` + access + `
+`))
+				require.NoError(t, err)
+				engine, err := New(policy)
+				require.NoError(t, err)
+				shell := shellcmd.Unbounded()
+				action := &model.Action{Type: model.ActionCommandExec, Parameters: model.Parameters{Command: "true"}, Shell: &shell}
+				res, err := engine.Evaluate(context.Background(), action, nil)
+				require.NoError(t, err)
+				assert.Equal(t, model.DecisionBlock, res.Decision)
+			})
+		}
 	}
 }

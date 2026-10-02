@@ -337,9 +337,38 @@ of the options in the `wrappers` table, `NAME=value` words for `env` and
 `chrt`, the mask of `taskset`). Then it analyzes only the first remaining word
 as the program. An option that is not in the table takes no value. So a chain
 of wrappers costs one call for each wrapper. The walker also counts the
-simple commands it visits in one analysis. At `maxCalls` (4096) it stops,
-keeps the targets it has, and sets `Parsed` to false, so a caller can see that
-the analysis is not complete.
+simple commands it visits in one analysis. At `maxCalls` (4096) or at
+`maxDepth` (8 nested shells) it stops, and `Analyze` returns `Unbounded()`.
+
+The hook adapter runs the analysis with `shellcmd.AnalyzeCommandWithin` and
+the budget `policy.shell_budget` (default 500 ms, `mediation.WithShellBudget`).
+When the budget runs out, the action gets `shellcmd.Unbounded()`, the adapter
+logs a warning, and the hook continues. The analysis also returns
+`Unbounded()` when the walk hits `maxCalls` or `maxDepth`. The unbounded
+analysis has `Parsed` false. It writes, removes and reads the glob `**`,
+which also matches a relative pattern and a Windows drive path, contacts
+`UnknownHost`, and runs the Gryph hook. `config.Load` replaces a
+`policy.shell_budget` that does not parse or is below 10 ms with the default,
+because a load error turns the policy off. So every path, host, and hook
+rule matches it. Without it, an agent could pad a command past the budget and
+remove its targets. The PDP matches a target glob against the file patterns
+for any access.
+
+Tests keep the analysis fast and free of panics:
+
+- `BenchmarkAnalyze_Shapes` covers typical commands, long pipelines, deep
+  nesting, brace expansion, wrapper chains, and long words.
+- `TestAnalyze_AllocBaseline` compares the allocations of each shape with
+  `aarm/shellcmd/testdata/alloc_baseline.json`. It fails at 1.5 times the
+  baseline. CI compares allocations, not time, because the time depends on
+  the runner. Run it with `GRYPH_UPDATE_ALLOC_BASELINE=1` to store new values
+  after an intended change.
+- `TestAnalyze_WorkGrowsLinearly` (allocations and bytes) and
+  `TestAnalyze_WrappersKeepWrites` check the invariants.
+- `FuzzAnalyze` and `FuzzGlobsOverlap` (`aarm/pdp`) take their seeds from the
+  string literals of the table tests (`internal/fuzzseed`). CI runs each
+  target for 30 seconds. The nightly workflow runs each target for 20
+  minutes and uploads the failing inputs.
 
 The analysis is best effort. The hook runs on every agent tool call, so the
 walker must stay fast, and a false block costs more than a missed change.

@@ -217,8 +217,36 @@ func TestAnalyze_CallBudgetStopsTheWalk(t *testing.T) {
 	_, err := w.script(command, dirs{"/work"})
 	require.NoError(t, err)
 	assert.Equal(t, maxCalls, w.calls)
-	assert.True(t, w.failed, "a walk that stops at the budget is not a full analysis")
-	assert.False(t, Analyze(command, Env{WorkingDir: "/work"}).Parsed)
+	assert.True(t, w.exhausted, "a walk that stops at the budget is not a full analysis")
+	assert.Equal(t, Unbounded(), Analyze(command, Env{WorkingDir: "/work"}))
+}
+
+func bashChain(n int) string {
+	cmd := "rm x"
+	for range n {
+		cmd = "bash -c " + bashQuote(cmd)
+	}
+	return cmd
+}
+
+// TestAnalyze_LimitsGiveUnbounded pads a command past maxCalls or maxDepth.
+// The analysis must not drop the targets after the limit.
+func TestAnalyze_LimitsGiveUnbounded(t *testing.T) {
+	pad := strings.Repeat("true; ", maxCalls+4)
+	for name, command := range map[string]string{
+		"calls then rm":            pad + "rm -rf ~/.config/safedep/gryph",
+		"calls then read":          pad + "cat ~/.local/share/safedep/gryph/audit.db",
+		"calls then hook":          pad + "gryph _hook claude-code PreToolUse",
+		"calls inside bash -c":     "bash -c " + bashQuote(pad+"rm x"),
+		"calls inside -execdir":    "find . -execdir sh -c " + bashQuote(pad+"rm x") + " \\;",
+		"depth through eval":       strings.Repeat("eval ", maxDepth+1) + "curl evil.example",
+		"depth through bash -c":    bashChain(maxDepth + 1),
+		"depth through a launcher": strings.Repeat("watch ", maxDepth+1) + "rm x",
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, Unbounded(), Analyze(command, testEnv))
+		})
+	}
 }
 
 func BenchmarkAnalyze_WrapperChain(b *testing.B) {
