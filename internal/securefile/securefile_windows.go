@@ -164,3 +164,9 @@ func accountName(sid *windows.SID) string {
 	}
 	return domain + `\` + account
 }
+
+// syncDir does nothing. Windows cannot sync a directory handle, and NTFS
+// journals the rename.
+func syncDir(string) error {
+	return nil
+}

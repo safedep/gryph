@@ -65,8 +65,9 @@ func WriteFile(path string, data []byte) error {
 	return Replace(f, path, data)
 }
 
-// Replace writes data to tmp, syncs and closes it, and renames it to path.
-// It removes tmp when a step fails. tmp must be in the directory of path.
+// Replace writes data to tmp, syncs and closes it, renames it to path, and
+// syncs the directory of path. It removes tmp when a step before the rename
+// fails. tmp must be in the directory of path.
 func Replace(tmp *os.File, path string, data []byte) error {
 	if err := writeAndClose(tmp, data); err != nil {
 		removeFile(tmp.Name())
@@ -75,6 +76,9 @@ func Replace(tmp *os.File, path string, data []byte) error {
 	if err := os.Rename(tmp.Name(), path); err != nil {
 		removeFile(tmp.Name())
 		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := syncDir(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("write %s: sync the directory: %w", path, err)
 	}
 	return nil
 }

@@ -38,3 +38,13 @@ func checkOwnerOnly(path string, f *os.File) error {
 	}
 	return nil
 }
+
+// syncDir makes a rename in dir durable. Without it, a power loss after the
+// rename can leave the old file or no file.
+func syncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	return errors.Join(d.Sync(), d.Close())
+}
