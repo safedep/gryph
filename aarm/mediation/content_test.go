@@ -67,6 +67,7 @@ func TestPopulateWellKnownParams_PromotesKnownKeys(t *testing.T) {
 		{"url", map[string]any{"url": "https://x.example/y"}, model.Parameters{URL: "https://x.example/y"}},
 		{"command", map[string]any{"command": "rm -rf /"}, model.Parameters{Command: "rm -rf /"}},
 		{"arguments fallback", map[string]any{"arguments": []any{"a"}}, model.Parameters{Args: []string{"a"}}},
+		{"args wins over arguments", map[string]any{"args": []any{"a"}, "arguments": []any{"b"}}, model.Parameters{Args: []string{"a"}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -78,7 +79,8 @@ func TestPopulateWellKnownParams_PromotesKnownKeys(t *testing.T) {
 }
 
 func TestPopulateWellKnownParams_KeepsSetFields(t *testing.T) {
-	p := model.Parameters{Path: "/set", URL: "https://set.example", Command: "set"}
-	populateWellKnownParams(&p, map[string]any{"path": "/new", "url": "https://new.example", "command": "new"})
-	assert.Equal(t, model.Parameters{Path: "/set", URL: "https://set.example", Command: "set"}, p)
+	set := model.Parameters{Path: "/set", URL: "https://set.example", Command: "set", Args: []string{"set"}}
+	p := set
+	populateWellKnownParams(&p, map[string]any{"path": "/new", "url": "https://new.example", "command": "new", "args": []any{"new"}})
+	assert.Equal(t, set, p)
 }
