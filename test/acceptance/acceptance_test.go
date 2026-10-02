@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +25,10 @@ func TestAcceptance(t *testing.T) {
 	bin := os.Getenv("GRYPH_BIN")
 	if bin == "" {
 		bin = filepath.Join(t.TempDir(), "gryph")
+		// exec finds a Windows program only by its extension.
+		if runtime.GOOS == "windows" {
+			bin += ".exe"
+		}
 		build := exec.Command("go", "build", "-o", bin, "../../cmd/gryph")
 		build.Stderr = os.Stderr
 		require.NoError(t, build.Run(), "build gryph for acceptance run")

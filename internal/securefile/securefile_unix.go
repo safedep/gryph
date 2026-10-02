@@ -20,6 +20,10 @@ func open(path string) (*os.File, error) {
 	return f, nil
 }
 
+func create(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o600)
+}
+
 func checkOwnerOnly(path string, f *os.File) error {
 	info, err := f.Stat()
 	if err != nil {
@@ -33,4 +37,14 @@ func checkOwnerOnly(path string, f *os.File) error {
 			path, st.Uid, os.Getuid(), os.Getuid(), path)
 	}
 	return nil
+}
+
+// syncDir makes a rename in dir durable. Without it, a power loss after the
+// rename can leave the old file or no file.
+func syncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	return errors.Join(d.Sync(), d.Close())
 }

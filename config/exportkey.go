@@ -21,11 +21,11 @@ func (c *Config) ExportKeyFile() string {
 }
 
 // LoadOrCreateExportKey reads the export key at path. When the file does
-// not exist, it writes a new random key with mode 0600. The key never
-// leaves the machine. Two processes that create the key at the same time
-// get the same key, because only the first hard link wins. On Unix it
-// refuses a key file that is a symbolic link, that another user owns, or
-// that grants access to the group or to others.
+// not exist, it writes a new random key that only the current user can
+// read. The key never leaves the machine. Two processes that create the key
+// at the same time get the same key, because only the first hard link wins.
+// It refuses a key file that another user owns or that grants access to
+// another user. See securefile.ReadFile.
 func LoadOrCreateExportKey(path string) ([]byte, error) {
 	key, err := readExportKey(path)
 	if !errors.Is(err, fs.ErrNotExist) {
@@ -41,7 +41,7 @@ func LoadOrCreateExportKey(path string) ([]byte, error) {
 		return nil, fmt.Errorf("generate export key: %w", err)
 	}
 
-	tmp, err := os.CreateTemp(dir, ".export.key-*")
+	tmp, err := securefile.CreateTemp(dir, ".export.key-")
 	if err != nil {
 		return nil, fmt.Errorf("create export key: %w", err)
 	}
@@ -56,10 +56,6 @@ func LoadOrCreateExportKey(path string) ([]byte, error) {
 	if err := tmp.Close(); err != nil {
 		return nil, fmt.Errorf("write export key: %w", err)
 	}
-	if err := os.Chmod(tmp.Name(), 0o600); err != nil {
-		return nil, fmt.Errorf("write export key: %w", err)
-	}
-
 	if err := os.Link(tmp.Name(), path); err != nil {
 		if errors.Is(err, fs.ErrExist) {
 			return readExportKey(path)

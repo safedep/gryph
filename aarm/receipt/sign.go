@@ -377,9 +377,9 @@ func parseLegacyPrivateKeyFile(data []byte) (*PrivateKeyFile, error) {
 	return p, nil
 }
 
-// ReadPrivateKeyFile loads and parses the private key file at path. On Unix
-// it refuses a symbolic link, a mode wider than 0600, or an owner that is
-// not the current user. See securefile.ReadFile.
+// ReadPrivateKeyFile loads and parses the private key file at path. It
+// refuses a file that another user owns or that grants access to another
+// user. See securefile.ReadFile.
 func ReadPrivateKeyFile(path string) (*PrivateKeyFile, error) {
 	data, err := securefile.ReadFile(path)
 	if err != nil {
@@ -388,8 +388,9 @@ func ReadPrivateKeyFile(path string) (*PrivateKeyFile, error) {
 	return ParsePrivateKeyFile(data)
 }
 
-// WritePrivateKeyFile serializes p and writes it to path with 0600 mode. The
-// parent directory is created with 0700 if missing.
+// WritePrivateKeyFile serializes p and writes it to path so that only the
+// current user can read it. See securefile.WriteFile. The parent directory
+// is created with 0700 if missing.
 func WritePrivateKeyFile(path string, p *PrivateKeyFile) error {
 	data, err := MarshalPrivateKeyFile(p)
 	if err != nil {
@@ -400,50 +401,23 @@ func WritePrivateKeyFile(path string, p *PrivateKeyFile) error {
 			return fmt.Errorf("receipt: create key dir: %w", err)
 		}
 	}
-	if err := writeAtomicFile(path, data, 0o600); err != nil {
+	if err := securefile.WriteFile(path, data); err != nil {
 		return fmt.Errorf("receipt: write private key: %w", err)
 	}
 	return nil
 }
 
-// writeAtomicFile writes data to path via a same-directory temp file, fsyncs
-// it, and renames into place. A crash mid-write leaves the original file
-// untouched. On any failure the temp file is removed so partial state does
-// not leak into the target directory.
+// writeAtomicFile writes data to path with mode through a same-directory
+// temp file. See securefile.Replace.
 func writeAtomicFile(path string, data []byte, mode os.FileMode) error {
-	dir := filepath.Dir(path)
-	f, err := os.CreateTemp(dir, ".receipt-tmp-*")
+	f, err := os.CreateTemp(filepath.Dir(path), ".receipt-tmp-*")
 	if err != nil {
 		return err
 	}
-	tmpPath := f.Name()
-	cleanup := func() {
-		_ = os.Remove(tmpPath)
-	}
 	if err := f.Chmod(mode); err != nil {
-		_ = f.Close()
-		cleanup()
-		return err
+		return errors.Join(err, f.Close(), os.Remove(f.Name()))
 	}
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
-		cleanup()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		cleanup()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		cleanup()
-		return err
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		cleanup()
-		return err
-	}
-	return nil
+	return securefile.Replace(f, path, data)
 }
 
 // LoadTrustStore reads a trust store JSON file. Returns an empty TrustStore

@@ -477,7 +477,7 @@ Do these steps each time you change a policy file.
 
 | Command | Purpose |
 |---|---|
-| `gryph policy keys generate` | Create an Ed25519 keypair, write the private key to `<config dir>/keys/receipt.key` (0600), append the pubkey to the trust store. `--force` rotates the key and records a `receipt_key_rotated` self-audit row. |
+| `gryph policy keys generate` | Create an Ed25519 keypair, write the private key to `<config dir>/keys/receipt.key` (owner only), append the pubkey to the trust store. `--force` rotates the key and records a `receipt_key_rotated` self-audit row. |
 | `gryph policy keys list` | List trusted public keys. |
 | `gryph policy keys trust --pub FILE` | Add an external public key from a JSON file. Rejects entries whose `key_id` does not match `sha256(pub)[:8]`. |
 | `gryph policy keys revoke --key-id ID` | Remove a key from the trust store. The private key file is left in place. |
@@ -797,7 +797,7 @@ Read this before relying on receipt signatures as evidence outside your own host
 
 ### Trust roots
 
-1. The private key file at `<config dir>/keys/receipt.key`. Mode `0600`, owner-checked.
+1. The private key file at `<config dir>/keys/receipt.key`. Mode `0600` on Unix and an owner-only DACL on Windows. Gryph checks the owner and the access before it reads the key.
 2. The trust store at `<config dir>/keys/receipt-pub.json`. World-readable so SOC tools can inspect it. Writable only at filesystem perms; `keys trust` rejects entries whose `key_id` does not derive from their pubkey, but nothing stops you from adding your own freshly generated key.
 3. The mediation path itself. The chain attests to what Gryph computed, not to what the agent did downstream.
 
