@@ -1074,7 +1074,7 @@ func entToEvent(e *ent.AuditEvent) *events.Event {
 		ToolName:         e.ToolName,
 		ResultStatus:     events.ResultStatus(e.ResultStatus),
 		ErrorMessage:     e.ErrorMessage,
-		DiffContent:      privacy.Text{Value: e.DiffContent, Label: e.DiffLabel},
+		DiffContent:      diffText(e.DiffContent, e.DiffLabel),
 		IsSensitive:      e.IsSensitive,
 		SubagentID:       e.SubagentID,
 		SubagentType:     e.SubagentType,
@@ -1328,3 +1328,14 @@ var _ Store = (*SQLiteStore)(nil)
 // from before content labels holds the command as a string. A newer row
 // holds a privacy.Text object with the command in "value".
 const payloadCommandSQL = "COALESCE(json_extract(payload, '$.command.value'), json_extract(payload, '$.command'))"
+
+// diffText rebuilds the diff content of a row. A write stores a label with
+// the digest and the size of each diff that is not empty. So an empty label
+// on a diff that is not empty comes from a row from before content labels,
+// where diff_label is NULL.
+func diffText(value string, label privacy.Label) privacy.Text {
+	if value != "" && label.IsZero() {
+		label.Unclassified = true
+	}
+	return privacy.Text{Value: value, Label: label}
+}

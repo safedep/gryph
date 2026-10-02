@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/safedep/gryph/core/privacy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -59,4 +60,23 @@ func TestRenderCostSummaryBySessionAlignsColoredNames(t *testing.T) {
 	for i, line := range lines[:5] {
 		assert.Equal(t, costSessionTableWidth, visibleRuneCount(line), "line %d: %q", i, line)
 	}
+}
+
+func TestRenderEventDetailsMarksUnclassified(t *testing.T) {
+	type payload struct {
+		Command privacy.Text `json:"command"`
+		Output  privacy.Text `json:"output"`
+	}
+	var buf bytes.Buffer
+	p := NewTablePresenter(PresenterOptions{Writer: &buf, UseColors: false, TerminalWidth: 200})
+	require.NoError(t, p.RenderEventDetails([]*EventDetailView{{
+		ID:               "e1",
+		Payload:          payload{Command: privacy.Text{Value: "go test ./...", Label: privacy.Label{Unclassified: true}}, Output: privacy.NewText("ok")},
+		DiffContent:      "+x",
+		DiffUnclassified: true,
+	}}))
+	out := buf.String()
+	assert.Contains(t, out, "go test ./... [unclassified]")
+	assert.NotContains(t, out, "ok [unclassified]")
+	assert.Contains(t, out, "Diff [unclassified]")
 }

@@ -360,8 +360,8 @@
   title: "a previous release's database survives the upgrade"
   category: storage
   tier: P0
-  guarantee: "A database written by the previous release opens under the current binary, events stay queryable, the schema migrates, and new events append."
-  labels: [storage, upgrade]
+  guarantee: "A database written by the previous release opens under the current binary, events stay queryable, the schema migrates, and new events append. Old content exports as unclassified, and new content does not."
+  labels: [storage, upgrade, privacy]
 
 - id: install/idempotent/reinstall-no-duplicates
   title: "reinstall keeps exactly one gryph entry per hook type"

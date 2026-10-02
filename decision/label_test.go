@@ -338,3 +338,17 @@ func TestLabelEvent_Origins(t *testing.T) {
 	assert.Equal(t, privacy.OriginMCP, tp.Output.Label.Origin)
 	assert.Equal(t, "github", tp.Output.Label.Source)
 }
+
+func TestLabelEvent_ClearsUnclassified(t *testing.T) {
+	event := newLabelEvent(t, events.ActionCommandExec, events.CommandExecPayload{
+		Command: privacy.Text{Value: "go test ./...", Label: privacy.Label{Unclassified: true}},
+	})
+	event.DiffContent.Label.Unclassified = true
+
+	label(event, testRedactor(t), nil, config.LoggingFull)
+
+	p := decode[events.CommandExecPayload](t, event)
+	assert.False(t, p.Command.Label.Unclassified)
+	assert.Equal(t, privacy.Digest("go test ./..."), p.Command.Label.Digest)
+	assert.False(t, event.DiffContent.Label.Unclassified)
+}

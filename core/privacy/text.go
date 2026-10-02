@@ -55,6 +55,10 @@ type Label struct {
 	// only for a value that it redacts or digests. See
 	// ExportProfile.KeyedDigest.
 	Digest string `json:"digest,omitempty"`
+	// Unclassified is true when Gryph stored the value before content
+	// labels. Gryph did not classify or redact it. A reader must not read
+	// the empty class list as "holds no secret". Only a read sets it.
+	Unclassified bool `json:"unclassified,omitempty"`
 }
 
 // IsZero reports whether the label holds no data.
@@ -122,7 +126,8 @@ func (t Text) IsZero() bool {
 
 // UnmarshalJSON reads a Text object. It also reads the forms that rows from
 // before content labels hold: a bare JSON string, or any other JSON value,
-// which becomes the compact JSON text of that value.
+// which becomes the compact JSON text of that value. Such a Text gets an
+// Unclassified label.
 //
 // An object is a Text only when its keys are exactly "value" and "label" and
 // the value is a string. A writer always writes both keys, and an old tool
@@ -140,7 +145,7 @@ func (t *Text) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(data, &s); err != nil {
 			return err
 		}
-		*t = Text{Value: s}
+		*t = unclassified(s)
 		return nil
 	case data[0] == '{':
 		if text, ok := decodeTextObject(data); ok {
@@ -152,8 +157,14 @@ func (t *Text) UnmarshalJSON(data []byte) error {
 	if err := json.Compact(&compact, data); err != nil {
 		return err
 	}
-	*t = Text{Value: compact.String()}
+	*t = unclassified(compact.String())
 	return nil
+}
+
+// unclassified returns a Text for a value from before content labels. An
+// empty value holds nothing to classify, so it gets no label.
+func unclassified(v string) Text {
+	return Text{Value: v, Label: Label{Unclassified: v != ""}}
 }
 
 func decodeTextObject(data []byte) (Text, bool) {

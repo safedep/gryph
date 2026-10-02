@@ -166,6 +166,7 @@ type EventDetailView struct {
 	IsSensitive      bool            `json:"is_sensitive"`
 	Payload          any             `json:"payload,omitempty"`
 	DiffContent      string          `json:"diff_content,omitempty"`
+	DiffUnclassified bool            `json:"diff_unclassified,omitempty"`
 	RawEvent         json.RawMessage `json:"raw_event,omitempty"`
 }
 

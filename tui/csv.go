@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 )
 
 // CSVPresenter renders output as CSV.
@@ -300,7 +301,7 @@ func (p *CSVPresenter) RenderEventDetails(events []*EventDetailView) error {
 		"id", "session_id", "agent_session_id", "sequence", "timestamp",
 		"duration_ms", "agent_name", "agent_version", "working_directory",
 		"action_type", "tool_name", "result_status", "error_message",
-		"sensitive", "payload", "diff_content", "raw_event",
+		"sensitive", "payload", "diff_content", "diff_unclassified", "raw_event",
 	})
 
 	for _, e := range events {
@@ -338,6 +339,7 @@ func (p *CSVPresenter) RenderEventDetails(events []*EventDetailView) error {
 			sensitive,
 			payloadStr,
 			e.DiffContent,
+			strconv.FormatBool(e.DiffUnclassified),
 			rawEventStr,
 		})
 	}

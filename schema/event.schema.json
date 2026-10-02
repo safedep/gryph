@@ -294,6 +294,9 @@
         },
         "truncated": {
           "type": "boolean"
+        },
+        "unclassified": {
+          "type": "boolean"
         }
       }
     },

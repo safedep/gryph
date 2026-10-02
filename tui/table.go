@@ -689,7 +689,11 @@ func (p *TablePresenter) RenderEventDetails(events []*EventDetailView) error {
 
 		if e.DiffContent != "" {
 			tw.println()
-			tw.printf("%s\n", p.color.Header("Diff"))
+			header := p.color.Header("Diff")
+			if e.DiffUnclassified {
+				header += " " + p.color.Warning(unclassifiedMarker)
+			}
+			tw.printf("%s\n", header)
 			for _, line := range strings.Split(e.DiffContent, "\n") {
 				if strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---") {
 					tw.println(p.color.DiffHeader(line))
@@ -744,9 +748,13 @@ func (p *TablePresenter) renderPayloadDetail(tw *tableWriter, payload any) {
 	}
 }
 
+// unclassifiedMarker follows a value that Gryph stored before content
+// labels. Gryph did not check such a value for secrets.
+const unclassifiedMarker = "[unclassified]"
+
 // payloadFields flattens a typed payload for display. A content value shows
-// as its text, and a stripped value shows as a marker. Tool input and output
-// show as their JSON text.
+// as its text, a stripped value shows as a marker, and an unclassified value
+// ends with a marker. Tool input and output show as their JSON text.
 func payloadFields(payload any) map[string]any {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -769,6 +777,9 @@ func payloadFields(payload any) map[string]any {
 		if stripped, _ := label["stripped"].(bool); stripped && text == "" {
 			fields[key] = "[stripped]"
 			continue
+		}
+		if unclassified, _ := label["unclassified"].(bool); unclassified {
+			text += " " + unclassifiedMarker
 		}
 		fields[key] = text
 	}

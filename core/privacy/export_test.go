@@ -217,3 +217,13 @@ func TestStricter(t *testing.T) {
 	assert.Equal(t, TreatRedact, Stricter(TreatInclude, TreatRedact))
 	assert.Equal(t, TreatInclude, Stricter(TreatInclude, TreatInclude))
 }
+
+func TestExportProfile_ApplyKeepsUnclassified(t *testing.T) {
+	old := Text{Value: "go test ./...", Label: Label{Unclassified: true}}
+	for _, p := range []ExportProfile{BuiltinProfiles()[ProfileDefault], {Name: "drop", Default: TreatDrop}, {Name: "redact", Default: TreatRedact}} {
+		t.Run(p.Name, func(t *testing.T) {
+			got, _ := p.Apply(old)
+			assert.True(t, got.Label.Unclassified)
+		})
+	}
+}

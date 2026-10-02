@@ -1,8 +1,12 @@
 # Content Labels
 
-Every piece of agent content that Gryph stores is a `privacy.Text`: the value
-and a `privacy.Label`. Exporters and policy read the label. They do not need
-the current config to know what the value is.
+Most agent content that Gryph stores is a `privacy.Text`: the value and a
+`privacy.Label`. Exporters and policy read the label. They do not need the
+current config to know what the value is.
+
+Some fields have no label. `Event.ErrorMessage` stays a string, and
+`Event.RawEvent` stays raw JSON. The export section lists the plain string
+payload fields and how the export treats them.
 
 ## Types
 
@@ -11,7 +15,7 @@ the current config to know what the value is.
 | Type | Meaning |
 |---|---|
 | `Text` | `Value` and `Label`. JSON: `{"value": "...", "label": {...}}` |
-| `Label` | `Classes`, `Origin`, `Source`, `Redacted`, `Truncated`, `Stripped`, `Level`, `Size`, `Digest` |
+| `Label` | `Classes`, `Origin`, `Source`, `Redacted`, `Truncated`, `Stripped`, `Level`, `Size`, `Digest`, `Unclassified` |
 | `Class` | A closed set: `secret`, `pii`, `source_code`, `config`, `git_internal`, `external_url`, `unknown_sensitive` |
 | `Origin` | A closed set: `user`, `agent`, `file_project`, `file_external`, `command`, `web`, `mcp`, `unknown` |
 | `Redactor` | The sensitive-path globs and the redaction regexps |
@@ -43,11 +47,17 @@ Identifiers stay `string`: paths, URLs, tool names, and session IDs.
 `TestPayloadStringFields` in `core/events` lists the allowed `string` fields.
 A new content field that is a `string` fails the test.
 
-`Text` reads the old row forms. A bare JSON string becomes `Value` with an
-empty label. Any other JSON value, such as an old tool input object, becomes
-its compact JSON text. So rows from before labels stay readable with no data
-migration. The storage filters on the command read `$.command.value` and fall
-back to `$.command`.
+`Text` reads the old row forms. A bare JSON string becomes `Value`. Any other
+JSON value, such as an old tool input object, becomes its compact JSON text.
+So rows from before labels stay readable with no data migration. The storage
+filters on the command read `$.command.value` and fall back to `$.command`.
+
+An old form that is not empty gets the label `{"unclassified": true}`. Gryph
+did not classify or redact such a value, so an empty class list on it does
+not mean "holds no secret". Storage also sets `Unclassified` on a diff that
+has no `diff_label`, because the label step gives every diff a digest. Only
+a read sets the flag. The label step clears it when an old event goes
+through the label step again. A new row never has the key.
 
 ## The label step
 
@@ -217,14 +227,18 @@ export --export-profile` and stream sync use it.
   when the plain field treatment is not `include`, when the event is
   sensitive, or when any value in the event loses its digest by the rules
   above.
-- A row from before content labels has no label. A sensitive row gets the
-  class `secret` on every value, and a prompt gets the origin `user`.
+- A row from before content labels has no class and no origin. A sensitive row gets the
+  class `secret` on every value, and a prompt gets the origin `user`. The
+  export keeps `unclassified: true` on each old value, also when the profile
+  drops the value. The export does not run the classifier or the redactor
+  on old values, because that changes what old data claims about itself.
 
 Stream sync also removes `details.raw_event` and the error of a hook error
 self-audit, unless the profile includes every value.
 
 `gryph cat` shows each content value as its text, and a stripped value as
-`[stripped]`.
+`[stripped]`. It adds `[unclassified]` after an unclassified value and after
+the `Diff` header of an unclassified diff. The CSV format has a `diff_unclassified` column.
 
 ## Adding a content field
 
