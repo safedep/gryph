@@ -130,3 +130,32 @@ func TestOpenDir_BaseMayBeLinked(t *testing.T) {
 	_, err = os.Stat(filepath.Join(real, "sub", "f"))
 	assert.NoError(t, err)
 }
+
+func TestDir_OpenDir(t *testing.T) {
+	base := t.TempDir()
+	d, err := OpenDir(base, ".")
+	require.NoError(t, err)
+	defer func() { _ = d.Close() }()
+
+	require.NoError(t, d.Mkdir("users", 0o700))
+	users, err := d.OpenDir("users")
+	require.NoError(t, err)
+	defer func() { _ = users.Close() }()
+	assert.Equal(t, filepath.Join(base, "users"), users.Path())
+	require.NoError(t, users.WriteFile("f", []byte("x"), 0o600))
+	_, err = os.Stat(filepath.Join(base, "users", "f"))
+	assert.NoError(t, err)
+
+	_, err = d.OpenDir(filepath.Join("users", "f"))
+	assert.Error(t, err, "one name only")
+	_, err = users.OpenDir("f")
+	assert.Error(t, err, "a file is not a directory")
+	_, err = d.OpenDir("missing")
+	assert.ErrorIs(t, err, os.ErrNotExist)
+
+	elsewhere := t.TempDir()
+	symlinkOrSkip(t, elsewhere, filepath.Join(base, "link"))
+	_, err = d.OpenDir("link")
+	assert.ErrorIs(t, err, ErrSymlink)
+	assert.Error(t, d.Mkdir("link", 0o700), "a link in place of the directory is refused")
+}

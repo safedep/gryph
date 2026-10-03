@@ -62,6 +62,16 @@ func (h dirHandle) walk(comps []string) (dirHandle, error) {
 	return cur, nil
 }
 
+// openChild opens the directory name relative to h. The kernel refuses a
+// link and a file that is not a directory on the open itself.
+func (h dirHandle) openChild(name string) (dirHandle, error) {
+	fd, err := unix.Openat(h.fd, name, dirOpenFlags, 0)
+	if err != nil {
+		return dirHandle{}, wrapLink(filepath.Join(h.path, name), err)
+	}
+	return dirHandle{fd: fd, path: filepath.Join(h.path, name)}, nil
+}
+
 func (h dirHandle) close() error {
 	if h.fd < 0 {
 		return nil

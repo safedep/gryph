@@ -27,7 +27,7 @@ decision/ipc/   Wire format between the hook client and the decision service: fr
 engine/         Runtime assembly: config, store, registry, policy check, decision service
 selfprotect/    Self-protection vocabulary: assets, levels, profiles, and the user-scope provider
 platform/       Operating-system specific code behind small interfaces (account identity, no-follow file access, scheduler, processes, kernel settings, peer credentials, socket listening)
-supervisor/     The decision service outside the agent user: one socket, a partition per peer uid, per-account limits. Imports engine, never cli
+supervisor/     The decision service outside the agent user: one socket, a partition per peer uid, per-account limits. Imports engine, never cli. Opens files only through platform/nofollow (architecture test and forbidigo rule)
 cli/            Cobra commands as an App pattern over the engine runtime
 tui/            Output formatters (table, json, csv)
 ```

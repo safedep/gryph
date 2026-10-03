@@ -35,6 +35,10 @@ func openDir(base string, comps []string) (dirHandle, error) {
 	return dirHandle{path: cur}, nil
 }
 
+func (h dirHandle) openChild(name string) (dirHandle, error) {
+	return openDir(h.path, []string{name})
+}
+
 func (h dirHandle) close() error { return nil }
 
 func (h dirHandle) stat(name string) (fs.FileInfo, error) {

@@ -16,6 +16,7 @@ import (
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/decision/ipc"
+	"github.com/safedep/gryph/platform/nofollow"
 	"github.com/safedep/gryph/platform/peercred"
 )
 
@@ -32,6 +33,7 @@ type Server struct {
 	version string
 
 	mu         sync.Mutex
+	rootDir    *nofollow.Dir
 	partitions map[uint32]*partition
 	wg         sync.WaitGroup
 }
@@ -39,7 +41,8 @@ type Server struct {
 // Options configure a Server.
 type Options struct {
 	// StateDir holds the partitions. Empty takes the configured or the
-	// platform default.
+	// platform default. The directory must exist: the service manager or
+	// the command that starts the service creates it, never the server.
 	StateDir string
 	Limits   Limits
 	// Version is what Welcome reports as the server version.
@@ -64,6 +67,14 @@ func New(cfg *config.Config, opts Options) *Server {
 // connection: every request runs on its own goroutine, so a slow request
 // never holds the next connection.
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
+	root, err := nofollow.OpenDir(s.root, ".")
+	if err != nil {
+		return fmt.Errorf("state directory: %w", err)
+	}
+	s.mu.Lock()
+	s.rootDir = root
+	s.mu.Unlock()
+	defer func() { _ = root.Close() }()
 	go func() {
 		<-ctx.Done()
 		_ = ln.Close()
@@ -151,7 +162,7 @@ func (s *Server) partition(ctx context.Context, uid uint32) (*partition, error) 
 	if p, ok := s.partitions[uid]; ok {
 		return p, nil
 	}
-	p, err := openPartition(ctx, s.cfg, s.root, uid, s.limits)
+	p, err := openPartition(ctx, s.cfg, s.rootDir, uid, s.limits)
 	if err != nil {
 		return nil, err
 	}

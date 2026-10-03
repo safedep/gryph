@@ -28,7 +28,9 @@ func startServer(t *testing.T, limits Limits) (string, string) {
 	ln, err := net.Listen("unix", sock)
 	require.NoError(t, err)
 	cfg := config.Default()
-	srv := New(cfg, Options{StateDir: filepath.Join(dir, "state"), Limits: limits, Version: "test"})
+	state := filepath.Join(dir, "state")
+	require.NoError(t, os.Mkdir(state, 0o700))
+	srv := New(cfg, Options{StateDir: state, Limits: limits, Version: "test"})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ctx, ln) }()
@@ -40,7 +42,7 @@ func startServer(t *testing.T, limits Limits) (string, string) {
 			t.Error("the server did not stop")
 		}
 	})
-	return sock, filepath.Join(dir, "state")
+	return sock, state
 }
 
 func dial(t *testing.T, sock string) net.Conn {
@@ -156,4 +158,32 @@ func TestBucket(t *testing.T) {
 	assert.True(t, b.take(now.Add(10*time.Second)))
 	assert.True(t, b.take(now.Add(10*time.Second)))
 	assert.False(t, b.take(now.Add(10*time.Second)), "the bucket never holds more than the burst")
+}
+
+func TestServer_StateDirectoryMustExist(t *testing.T) {
+	dir := t.TempDir()
+	ln, err := net.Listen("unix", filepath.Join(dir, "hook.sock"))
+	require.NoError(t, err)
+	defer func() { _ = ln.Close() }()
+	srv := New(config.Default(), Options{StateDir: filepath.Join(dir, "missing"), Version: "test"})
+	err = srv.Serve(context.Background(), ln)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, os.ErrNotExist)
+	assert.Contains(t, err.Error(), "state directory")
+}
+
+func TestServer_PartitionLinkRefused(t *testing.T) {
+	sock, state := startServer(t, DefaultLimits())
+	elsewhere := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(state, "users"), 0o700))
+	require.NoError(t, os.Symlink(elsewhere, filepath.Join(state, "users", strconv.Itoa(os.Getuid()))))
+
+	conn := dial(t, sock)
+	reply, err := ipc.ReadFrame(conn)
+	require.NoError(t, err)
+	assert.Equal(t, ipc.TypeError, reply.Type)
+	assert.Contains(t, string(reply.Body), ipc.CodeInternal)
+	entries, err := os.ReadDir(elsewhere)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "nothing was written through the link")
 }

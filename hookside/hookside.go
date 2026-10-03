@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
-	"github.com/safedep/gryph/agent/claudecode"
+	"github.com/safedep/gryph/agent/claudecode/transcript"
 	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/decision"
@@ -55,7 +55,7 @@ func CollectCost(ctx context.Context, agentName, transcriptPath string, sessionI
 	var collector cost.TokenCollector
 	switch agentName {
 	case agent.AgentClaudeCode:
-		collector = claudecode.NewTranscriptCollector()
+		collector = transcript.NewCollector()
 	default:
 		return nil
 	}

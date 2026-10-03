@@ -56,6 +56,25 @@ wire. The agent name, the hook type, the project claim and the cost totals
 are claims the server records as claims. The server knows the client from
 the kernel, through the peer credentials of the socket, never from a frame.
 
+The server never opens a path that a claim names. The working directory
+and the transcript path of an event are strings to it. The hook side alone,
+as the agent user, detects the project in the working directory
+(`utils/projectdetection`) and reads the transcript for the cost
+(`agent/claudecode/transcript`). Two checks keep it so:
+
+- `supervisor/architecture_test.go` fails when a file of the package
+  imports one of those packages, `hookside`, `cli`, `core/cost` or
+  `os/user`, and when `utils/projectdetection`, `hookside`,
+  `agent/claudecode/transcript` or `cli` appears anywhere in the dependency
+  tree of the package.
+- The `forbidigo` rule in `.golangci.yml` refuses a raw `os.Open`,
+  `os.OpenFile`, `os.Create`, `os.ReadFile`, `os.WriteFile`, `os.Stat`,
+  `os.Lstat`, `os.ReadDir`, `os.Mkdir` and `os.MkdirAll` in `supervisor/`
+  outside a test. The package opens every file through `platform/nofollow`
+  on a handle of the state directory: each component is opened relative to
+  the one before it, a link is refused, and the kernel checks the type on
+  the open.
+
 ## The client's reading of a verdict
 
 A `decision` whose `decision` names a verdict this binary does not know
@@ -81,7 +100,12 @@ The uid the kernel reports is the tenant key. The partition of an account
 lives at `<state dir>/users/<uid>/`, mode 0700, with its own store (`audit.db`), receipt
 chain and context state. No field of a request names a partition. One mutex
 per partition serializes the writes, so the chain stays in order without a
-lock on the database.
+lock on the database. The state directory must exist before the server
+starts: `gryph supervisor run` creates it when it is missing, and the
+service unit owns it on a managed host. The server opens it once and
+creates `users/` and `users/<uid>/` relative to that handle. A link in
+place of either refuses the partition, and the connection gets `error
+internal`.
 
 Limits per account, with the defaults: 16 open connections, 20 requests a
 second with a burst of 40, and a 30 s idle timeout per connection. The

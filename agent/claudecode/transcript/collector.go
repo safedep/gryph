@@ -1,4 +1,7 @@
-package claudecode
+// Package transcript reads a Claude Code transcript file and sums its token
+// usage. Only the hook side imports it: it opens a path that the agent
+// names, so it must never run with a privilege above the agent user.
+package transcript
 
 import (
 	"bufio"
@@ -29,18 +32,18 @@ type messageUsage struct {
 	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
 }
 
-// TranscriptCollector implements cost.TokenCollector by parsing Claude Code transcript files.
-type TranscriptCollector struct{}
+// Collector implements cost.TokenCollector over a Claude Code transcript file.
+type Collector struct{}
 
-func NewTranscriptCollector() *TranscriptCollector {
-	return &TranscriptCollector{}
+func NewCollector() *Collector {
+	return &Collector{}
 }
 
-func (c *TranscriptCollector) Source() cost.CostSource {
+func (c *Collector) Source() cost.CostSource {
 	return cost.CostSourceTranscript
 }
 
-func (c *TranscriptCollector) Collect(_ context.Context, transcriptPath string) (*cost.SessionUsage, error) {
+func (c *Collector) Collect(_ context.Context, transcriptPath string) (*cost.SessionUsage, error) {
 	if transcriptPath == "" {
 		return nil, nil
 	}

@@ -3,8 +3,6 @@ package supervisor
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -15,6 +13,7 @@ import (
 	"github.com/safedep/gryph/decision"
 	"github.com/safedep/gryph/decision/ipc"
 	"github.com/safedep/gryph/engine"
+	"github.com/safedep/gryph/platform/nofollow"
 	"github.com/safedep/gryph/selfprotect"
 )
 
@@ -47,12 +46,21 @@ type partition struct {
 
 // openPartition opens or creates the partition of uid under root. The
 // directory is the service account's and mode 0700, so no agent user reads
-// another account's state.
-func openPartition(ctx context.Context, cfg *config.Config, root string, uid uint32, limits Limits) (*partition, error) {
-	dir := filepath.Join(root, "users", strconv.FormatUint(uint64(uid), 10))
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+// another account's state. Every step runs relative to the open root and
+// refuses a link, so a link planted under the state directory cannot send
+// the partition elsewhere.
+func openPartition(ctx context.Context, cfg *config.Config, root *nofollow.Dir, uid uint32, limits Limits) (*partition, error) {
+	users, err := childDir(root, "users")
+	if err != nil {
 		return nil, fmt.Errorf("partition %d: %w", uid, err)
 	}
+	defer func() { _ = users.Close() }()
+	home, err := childDir(users, strconv.FormatUint(uint64(uid), 10))
+	if err != nil {
+		return nil, fmt.Errorf("partition %d: %w", uid, err)
+	}
+	dir := home.Path()
+	_ = home.Close()
 	rt, err := engine.NewPartition(ctx, cfg, dir)
 	if err != nil {
 		return nil, fmt.Errorf("partition %d: %w", uid, err)
@@ -64,6 +72,15 @@ func openPartition(ctx context.Context, cfg *config.Config, root string, uid uin
 		service: rt.DecisionService(),
 		bucket:  newBucket(limits.Rate, limits.Burst, time.Now()),
 	}, nil
+}
+
+// childDir creates name inside parent when it is missing and opens it on
+// the parent's handle.
+func childDir(parent *nofollow.Dir, name string) (*nofollow.Dir, error) {
+	if err := parent.Mkdir(name, 0o700); err != nil {
+		return nil, err
+	}
+	return parent.OpenDir(name)
 }
 
 func (p *partition) close() error {

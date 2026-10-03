@@ -84,6 +84,20 @@ func (d *Dir) WriteFile(name string, data []byte, perm os.FileMode) error {
 	return d.handle.writeFile(name, data, perm)
 }
 
+// OpenDir opens the directory name inside the directory, relative to the
+// open handle. A link at name is refused, and so is a name that is not a
+// directory.
+func (d *Dir) OpenDir(name string) (*Dir, error) {
+	if err := checkName(name); err != nil {
+		return nil, err
+	}
+	h, err := d.handle.openChild(name)
+	if err != nil {
+		return nil, err
+	}
+	return &Dir{path: filepath.Join(d.path, name), handle: h}, nil
+}
+
 // Mkdir creates the directory name in the directory. An existing directory
 // is not an error. A link at name is refused.
 func (d *Dir) Mkdir(name string, perm os.FileMode) error {

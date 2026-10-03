@@ -61,6 +61,12 @@ exists for a test.`,
 				limits.Rate = rate
 				limits.Burst = int(rate * 2)
 			}
+			if stateDir == "" {
+				stateDir = cfg.Supervisor.StatePath()
+			}
+			if err := os.MkdirAll(stateDir, 0o700); err != nil {
+				return WrapError(ExitGeneral, "create the state directory", err)
+			}
 			srv := supervisor.New(cfg, supervisor.Options{StateDir: stateDir, Limits: limits, Version: version.Version})
 
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
