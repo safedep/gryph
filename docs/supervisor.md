@@ -258,9 +258,14 @@ Known limits:
   shows the change as the drift of the row until the watcher restarts.
 - An open with `O_CREAT` creates the entry before the kernel asks, so a
   refused create leaves an empty file behind.
-- The watcher reads the open flags from `/proc/<pid>/syscall`. A 32-bit
-  process, or a process that opens with `openat2`, gives no flags, and the
-  watcher refuses its open, read or write: the protection fails closed.
+- The watcher reads the open flags from `/proc/<tid>/syscall` of the
+  thread that opens. A 32-bit process, or a process that opens with
+  `openat2`, gives no flags, and the watcher refuses its open, read or
+  write: the protection fails closed. An exec of a marked file passes:
+  the kernel opens it for a read.
+- A `truncate(2)` on a path has no permission event. The watcher records
+  it as a change it could not stop. The mode of a managed file is what
+  stops it, as for a rename.
 - A process in another mount namespace that reaches the file through a
   bind mount is seen, because the mark is on the inode. A copy of the file
   in another place is not the protected file.

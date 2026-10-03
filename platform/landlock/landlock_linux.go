@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"unsafe"
 
@@ -51,6 +52,7 @@ func handledAccess(version int) uint64 {
 }
 
 func restrict(opts Options) error {
+	runtime.LockOSThread()
 	version, err := abi()
 	if err != nil {
 		return err

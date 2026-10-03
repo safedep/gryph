@@ -1090,7 +1090,7 @@
   title: "the kernel watcher stops a write to a managed file by a non-privileged account"
   category: kernel
   tier: P1
-  guarantee: "With gryph supervisor fanotify up, a process of a non-privileged account cannot open a managed file for a write, a truncate or a create, also when the access checks of the file would let it. A read passes and root passes. A rename or an unlink of a protected file is recorded in the state file with the account that made it, the file at the path is marked again, and gryph doctor shows it as drift. Nightly kernel job only."
+  guarantee: "With gryph supervisor fanotify up, a process of a non-privileged account cannot open a managed file for a write, a truncate or a create, also when the access checks of the file would let it. A read from any thread passes, an exec of the managed binary passes and root passes. A rename or an unlink of a protected file is recorded in the state file with the account that made it, the file at the path is marked again, and gryph doctor shows it as drift. Nightly kernel job only."
   labels: [kernel, fanotify, self-protection, privileged, linux]
 
 - id: kernel/fanotify/provider-level
@@ -1104,7 +1104,7 @@
   title: "gryph run keeps the configuration directory out of the agent's write reach"
   category: kernel
   tier: P1
-  guarantee: "On a Linux kernel with Landlock, gryph run starts a program under a ruleset that keeps the Gryph configuration directory readable and refuses every write, create, remove and rename in it from the program and from anything it starts, whatever path the write takes. The rest of the file system stays as it is, except that no new entry can be made directly inside an ancestor of the protected directory. A hook under the ruleset still records its event. The census shows which live agent processes started through the launcher. A program that is not on PATH is an error."
+  guarantee: "On a Linux kernel with Landlock, gryph run starts a program under a ruleset that keeps the Gryph configuration directory readable and refuses every write, create, remove and rename in it from the program and from anything it starts, whatever path the write takes. A configuration directory that does not exist yet is made before the ruleset, so the program cannot make its own. Every launch carries the ruleset. The rest of the file system stays as it is, except that no new entry can be made directly inside an ancestor of the protected directory. A hook under the ruleset still records its event. The census shows which live agent processes started through the launcher. A program that is not on PATH is an error."
   labels: [kernel, landlock, self-protection, linux]
 
 - id: kernel/bpf-lsm/probe-report

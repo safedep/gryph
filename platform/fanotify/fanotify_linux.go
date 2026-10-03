@@ -62,7 +62,10 @@ func available() error {
 }
 
 func open(opts Options) (*watcher, error) {
-	perm, err := unix.FanotifyInit(unix.FAN_CLASS_CONTENT|unix.FAN_CLOEXEC|unix.FAN_NONBLOCK, unix.O_RDONLY|unix.O_LARGEFILE|unix.O_CLOEXEC)
+	// The event names the thread that opens, not its process: the flags
+	// of the open are in the state of that thread, and the main thread of
+	// a program with threads waits elsewhere.
+	perm, err := unix.FanotifyInit(unix.FAN_CLASS_CONTENT|unix.FAN_CLOEXEC|unix.FAN_NONBLOCK|unix.FAN_REPORT_TID, unix.O_RDONLY|unix.O_LARGEFILE|unix.O_CLOEXEC)
 	if err != nil {
 		return nil, fmt.Errorf("fanotify: open a permission group: %w", err)
 	}
@@ -336,16 +339,16 @@ func fdPath(fd int) string {
 	return strings.TrimSuffix(path, " (deleted)")
 }
 
-// openerOf reads the real uid of the process and the flags of the open it
-// waits in. The process is blocked in the open syscall while the event is
-// open, so /proc/<pid>/syscall holds its arguments. A syscall that is not
-// a plain open, or a process that is gone, gives unknown.
-func openerOf(pid int) (uid uint32, write bool, unknown bool) {
-	uid, ok := realUID(pid)
+// openerOf reads the real uid of the thread and the flags of the open it
+// waits in. The thread is blocked in the open syscall while the event is
+// open, so /proc/<tid>/syscall holds its arguments. A syscall that is not
+// a plain open, or a thread that is gone, gives unknown.
+func openerOf(tid int) (uid uint32, write bool, unknown bool) {
+	uid, ok := realUID(tid)
 	if !ok {
 		return 0, false, true
 	}
-	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "syscall"))
+	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(tid), "syscall"))
 	if err != nil {
 		return uid, false, true
 	}
@@ -356,6 +359,12 @@ func openerOf(pid int) (uid uint32, write bool, unknown bool) {
 	nr, err := strconv.Atoi(fields[0])
 	if err != nil {
 		return uid, false, true
+	}
+	// The kernel opens the file of an exec for a read, with no flags in
+	// the arguments. The hook of a locked agent is such an open of the
+	// managed binary, by the account of the user.
+	if isExec(nr) {
+		return uid, false, false
 	}
 	index := openFlagsIndex(nr)
 	if index < 0 || index+1 >= len(fields) {

@@ -62,6 +62,12 @@ itself with the program.`,
 			if err != nil {
 				return WrapError(ExitGeneral, "gryph run", err)
 			}
+			// A rule needs an existing path. Without the directory the
+			// agent could make it and put a configuration of its own
+			// there, so the launcher makes it first.
+			if err := os.MkdirAll(paths.ConfigDir, 0o700); err != nil {
+				return WrapError(ExitGeneral, "gryph run", err)
+			}
 			opts := landlock.Options{ReadOnly: []string{paths.ConfigDir}}
 			if err := landlock.Restrict(opts); err != nil {
 				return WrapError(ExitGeneral, "gryph run", err)

@@ -21,6 +21,14 @@ exec install -m 644 policy.yaml /etc/safedep/gryph/policy.yaml
 exec gryph supervisor fanotify --state-file $WORK/fanotify.json --pid-file $WORK/fanotify.pid --allow-root &
 exec gryph supervisor ready --until-exists $WORK/fanotify.json
 
+# The account runs the managed binary: the open of an exec passes, and
+# the reads of the hook, which a program with threads makes from any
+# thread, pass.
+exec runuser -u gryphacc1 -- /usr/local/bin/gryph-acceptance version
+stdout 'gryph v'
+exec cp read.json /home/gryphacc1/read.json
+exec runuser -u gryphacc1 -- sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PreToolUse < /home/gryphacc1/read.json'
+
 # The access checks would let the account write. Only the watcher stops it.
 exec chmod 666 /etc/safedep/gryph/policy.yaml
 exec runuser -u gryphacc1 -- sh -c 'cat /etc/safedep/gryph/policy.yaml'
@@ -67,6 +75,15 @@ supervisor:
   fanotify:
     enabled: true
     state_file: ${WORK}/fanotify.json
+-- read.json --
+{
+  "session_id": "acceptance-fanotify",
+  "cwd": "/home/gryphacc1",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {"file_path": "/home/gryphacc1/read.json"},
+  "tool_use_id": "tool-use-r1"
+}
 -- policy.yaml --
 version: "1"
 rules:

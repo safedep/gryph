@@ -38,6 +38,17 @@ jobs:
             "$(go env GOPATH)/bin/gotestsum" --junitfile "${RUNNER_TEMP}/acceptance.xml" --format testname \
             -- -tags acceptance -parallel 1 -timeout 20m ./test/acceptance
 
+      - name: Run the Red-Team Suite
+        if: always()
+        env:
+          GRYPH_BIN: ${{ runner.temp }}/gryph
+        run: |
+          sudo env "PATH=$PATH" "GOCACHE=$(go env GOCACHE)" "GOMODCACHE=$(go env GOMODCACHE)" "GOFLAGS=-buildvcs=false" \
+            GRYPH_BIN="$GRYPH_BIN" GRYPH_REDTEAM_REPORT="${RUNNER_TEMP}/redteam.md" \
+            go test -tags redteam -count=1 -v ./test/redteam/ || status=$?
+          cat "${RUNNER_TEMP}/redteam.md" >> "$GITHUB_STEP_SUMMARY"
+          exit "${status:-0}"
+
       - name: Render Report
         if: always()
         run: |
@@ -55,3 +66,4 @@ jobs:
           path: |
             ${{ runner.temp }}/acceptance-report.md
             ${{ runner.temp }}/acceptance.xml
+            ${{ runner.temp }}/redteam.md

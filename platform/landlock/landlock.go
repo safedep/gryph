@@ -31,6 +31,11 @@ func ABI() (int, error) {
 // the execute rights only. The process keeps no right to create an entry
 // directly inside an ancestor of a read-only path, because a rule on that
 // ancestor would reach the read-only path too. Ancestors reports them.
+//
+// The kernel attaches the domain to the calling thread. Restrict locks
+// the goroutine to its thread and keeps it locked, so the exec that
+// follows runs on the restricted thread and the program inherits the
+// domain.
 func Restrict(opts Options) error {
 	return restrict(opts)
 }

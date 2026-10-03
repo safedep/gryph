@@ -10,7 +10,7 @@ GO_LDFLAGS=-ldflags "-w $(GO_CFLAGS)"
 
 BENCHTIME ?= 50x
 
-.PHONY: all deps generate generate-schema verify-schema gryph clean test conformance conformance-json conformance-markdown bench-hook
+.PHONY: all deps generate generate-schema verify-schema gryph clean test conformance conformance-json conformance-markdown bench-hook redteam
 
 all: gryph
 
@@ -60,6 +60,12 @@ lint:
 # with the percentiles of each benchmark.
 bench-hook:
 	GRYPH_PERF_REPORT=$(CURDIR)/perf-reports/hook-latency.md $(GO) test -tags perf -run '^$$' -bench . -benchtime=$(BENCHTIME) -count=1 ./test/perf/
+
+# Red-team suite: every bypass of the threat model against the protected
+# paths under each provider, and the overhead of each provider on the hook
+# path. As root it also runs the fanotify column. Writes a Markdown report.
+redteam:
+	GRYPH_REDTEAM_REPORT=$(CURDIR)/perf-reports/redteam.md $(GO) test -tags redteam -count=1 -v ./test/redteam/
 
 # AARM conformance suite. Builds the gryph binary (which the CLI invokes
 # to drive the test runner) and the standalone conformance test binary

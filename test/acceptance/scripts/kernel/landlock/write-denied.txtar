@@ -15,6 +15,14 @@ env XDG_DATA_HOME=$WORK/home/.local/share
 mkdir $HOME/.claude
 exec gryph install --agent claude-code
 
+# An account that never ran gryph has no configuration directory. The
+# launcher makes it before the ruleset, so the program cannot make its
+# own, and the ruleset covers it.
+! exec sh -c 'HOME='$WORK'/fresh XDG_CONFIG_HOME='$WORK'/fresh/.config XDG_DATA_HOME='$WORK'/fresh/.local/share gryph run sh -c "echo x > '$WORK'/fresh/.config/safedep/gryph/config.yml"'
+stderr 'Permission denied'
+exists $WORK/fresh/.config/safedep/gryph
+! exists $WORK/fresh/.config/safedep/gryph/config.yml
+
 # A write to the policy by any path fails. A read passes.
 ! exec gryph run sh -c 'echo "# changed" >> '$XDG_CONFIG_HOME'/safedep/gryph/policy.yaml'
 stderr 'Permission denied'
@@ -26,6 +34,11 @@ stderr 'Permission denied'
 exec gryph run sh -c 'cat '$XDG_CONFIG_HOME'/safedep/gryph/policy.yaml'
 stdout 'acceptance-landlock-marker'
 exec cat $XDG_CONFIG_HOME/safedep/gryph/policy.yaml
+! stdout 'changed'
+
+# Every launch carries the ruleset: the kernel attaches it to one thread,
+# and the launcher runs the program from that thread.
+exec sh -c 'for i in $(seq 1 25); do gryph run sh -c "echo changed >> '$XDG_CONFIG_HOME'/safedep/gryph/policy.yaml" 2>/dev/null; done; cat '$XDG_CONFIG_HOME'/safedep/gryph/policy.yaml'
 ! stdout 'changed'
 
 # The project and the data directory stay writable, so a hook under the

@@ -12,3 +12,8 @@ func openFlagsIndex(nr int) int {
 	}
 	return -1
 }
+
+// isExec says whether the process waits in an exec of the file.
+func isExec(nr int) bool {
+	return nr == unix.SYS_EXECVE || nr == unix.SYS_EXECVEAT
+}

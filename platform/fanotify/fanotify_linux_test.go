@@ -33,8 +33,12 @@ func TestWatcher(t *testing.T) {
 	// The umask narrows the mode of a new file. Every account must be able
 	// to write by the access checks, so only the watcher stops the write.
 	require.NoError(t, os.Chmod(file, 0o666))
+	// The managed binary is a marked file that every account runs.
+	tool := filepath.Join(dir, "tool.sh")
+	require.NoError(t, os.WriteFile(tool, []byte("#!/bin/sh\nexit 0\n"), 0o777))
+	require.NoError(t, os.Chmod(tool, 0o777))
 
-	w, err := Open(Options{Files: []string{file}, Dirs: []string{dir}})
+	w, err := Open(Options{Files: []string{file, tool}, Dirs: []string{dir}})
 	require.NoError(t, err)
 	defer func() { _ = w.Close() }()
 
@@ -64,6 +68,8 @@ func TestWatcher(t *testing.T) {
 		return cmd.Run()
 	}
 	assert.NoError(t, run("nobody", "cat "+file+" >/dev/null"), "a read passes")
+	assert.NoError(t, run("nobody", tool), "an exec passes")
+	assert.NoError(t, run("nobody", `python3 -c 'import sys, threading; t = threading.Thread(target=lambda: open(sys.argv[1]).read()); t.start(); t.join()' `+file), "a read from a thread that is not the main one passes")
 	assert.Error(t, run("nobody", "echo x >> "+file), "a write is denied")
 	assert.Error(t, run("nobody", ": > "+filepath.Join(dir, "new.yaml")), "a create in the directory is denied")
 	assert.NoError(t, exec.Command("sh", "-c", "echo y >> "+file).Run(), "root writes")
