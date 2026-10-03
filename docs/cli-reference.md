@@ -479,6 +479,14 @@ gryph supervisor run --socket /tmp/hook.sock --state-dir /tmp/gryph-state
 | `--ingest-interval` | duration | 1m             | Time between two passes over the spool |
 | `--spool-max-files` | int | 256                 | Entries one pass takes from one account's spool |
 
+With the service on, the read commands of every account (`logs`, `query`,
+`sessions`, `session`, `cat`, `diff`, `stats`, `cost`, `policy receipts`,
+`policy approve history`, `policy deferrals list`) read through the
+service and see the partition of their own account, nothing else. A
+developer keeps access to their own log on a managed host. Without the
+service the commands fail with the socket path in the error. See
+[reads](./supervisor-dev.md#reads) in the developer guide.
+
 At start the service makes the machine keys below the state directory when
 they are missing: `keys/receipt.key` (the receipt signing key, mode 0600),
 `keys/receipt-pub.json` (the public halves of the keys the service has

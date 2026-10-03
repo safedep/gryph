@@ -62,7 +62,7 @@ func newPolicyApproveHistoryCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 			defer func() {
@@ -71,7 +71,7 @@ func newPolicyApproveHistoryCmd() *cobra.Command {
 				}
 			}()
 
-			rows, err := queryApprovalHistory(ctx, app.Store, sessionID, limit)
+			rows, err := queryApprovalHistory(ctx, app.Reads, sessionID, limit)
 			if err != nil {
 				return err
 			}
@@ -92,7 +92,7 @@ func newPolicyApproveHistoryCmd() *cobra.Command {
 
 var approvalHistoryDecisions = []string{"escalate", "approved", "denied", "approval_timeout"}
 
-func queryApprovalHistory(ctx context.Context, store storage.Store, sessionID string, limit int) ([]*storage.ReceiptRow, error) {
+func queryApprovalHistory(ctx context.Context, store storage.ReadStore, sessionID string, limit int) ([]*storage.ReceiptRow, error) {
 	if limit <= 0 {
 		limit = policyApproveDefaultLimit
 	}

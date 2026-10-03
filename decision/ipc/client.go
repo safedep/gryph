@@ -135,6 +135,48 @@ func (c *Client) Handle(ctx context.Context, h Handle) (*Decision, error) {
 	return d, nil
 }
 
+// ReadTimeout bounds one read of the CLI over the socket. A read runs a
+// query on the partition of the account, which can take longer than a
+// decision, and nothing waits on it but the user.
+const ReadTimeout = 10 * time.Second
+
+// Query runs one read on the partition of the account and returns its
+// rows. The deadline is the one of ctx, else ReadTimeout.
+func (c *Client) Query(ctx context.Context, q Query) (*QueryResult, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, ReadTimeout)
+		defer cancel()
+	}
+	reply, err := c.call(ctx, MustFrame(TypeQuery, q))
+	if err != nil {
+		return nil, err
+	}
+	res, ok := reply.(*QueryResult)
+	if !ok {
+		return nil, fmt.Errorf("%w: %T", ErrProtocol, reply)
+	}
+	return res, nil
+}
+
+// SessionCost sends the cost totals of a session, which the client read
+// from the transcript, for the service to store as a claim.
+func (c *Client) SessionCost(ctx context.Context, sc SessionCost) error {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, ReadTimeout)
+		defer cancel()
+	}
+	reply, err := c.call(ctx, MustFrame(TypeSessionCost, sc))
+	if err != nil {
+		return err
+	}
+	if _, ok := reply.(*Ack); !ok {
+		return fmt.Errorf("%w: %T", ErrProtocol, reply)
+	}
+	return nil
+}
+
 // ReportHookError tells the service that the hook produced no decision.
 func (c *Client) ReportHookError(ctx context.Context, r ReportHookError) error {
 	reply, err := c.call(ctx, MustFrame(TypeReportHookError, r))

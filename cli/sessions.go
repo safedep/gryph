@@ -43,7 +43,7 @@ Shows all recorded agent sessions with summary statistics.`,
 			})
 
 			// Initialize store
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 
@@ -68,7 +68,7 @@ Shows all recorded agent sessions with summary statistics.`,
 			}
 
 			// Query sessions
-			sessions, err := app.Store.QuerySessions(ctx, filter)
+			sessions, err := app.Reads.QuerySessions(ctx, filter)
 			if err != nil {
 				return err
 			}

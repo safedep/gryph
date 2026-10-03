@@ -360,7 +360,7 @@
   title: "supervisor run serves a decision on the socket and opens the partition of the peer"
   category: supervisor
   tier: P0
-  guarantee: "gryph supervisor run listens on a Unix socket. A client gets welcome with the profile, a decision for a hook payload, ack for a hook error report, and error unsupported for a read that no service answers yet. The partition of the peer account appears under the state directory."
+  guarantee: "gryph supervisor run listens on a Unix socket. A client gets welcome with the profile, a decision for a hook payload, ack for a hook error report, the rows of its own partition for a read, and error unsupported for a frame no service answers yet. The partition of the peer account appears under the state directory."
   labels: [supervisor, ipc]
 
 - id: supervisor/peer/uid-partition
@@ -474,6 +474,13 @@
   tier: P0
   guarantee: "gryph supervisor keys rotate writes a new key, appends its public half to the managed trust store next to the keys already there, and reloads the running service through its pid file. Receipts signed before and after the rotation both verify, each with its own key id. Privileged job only."
   labels: [receipts, supervisor, keys, privileged, linux]
+
+- id: reads/system-mode/own-partition-only
+  title: "the read commands of a managed host read the own partition through the service"
+  category: reads
+  tier: P0
+  guarantee: "Under a managed configuration with the decision service on, sessions, query, logs, cat and policy receipts answer from the partition of the account that the kernel reports for the socket connection, through the service. An account sees its own log and nothing of another account, opens no database of its own, cannot read another partition on disk, and gets a clear error without the service. Privileged job only."
+  labels: [reads, supervisor, privileged, linux]
 
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"

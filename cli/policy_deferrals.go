@@ -42,7 +42,7 @@ func newPolicyDeferralsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 			defer func() {
@@ -59,13 +59,13 @@ func newPolicyDeferralsCmd() *cobra.Command {
 				filter.Status = status
 			}
 			if sessionID != "" {
-				sid, rerr := resolveAarmSessionID(ctx, app.Store, sessionID)
+				sid, rerr := resolveAarmSessionID(ctx, app.Reads, sessionID)
 				if rerr != nil {
 					return rerr
 				}
 				filter.SessionID = &sid
 			}
-			rows, err := app.Store.QueryDeferredActions(ctx, filter)
+			rows, err := app.Reads.QueryDeferredActions(ctx, filter)
 			if err != nil {
 				return fmt.Errorf("failed to query deferred actions: %w", err)
 			}

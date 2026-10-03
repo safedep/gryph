@@ -61,7 +61,7 @@ Use --sync to collect cost data from agent transcripts before displaying.`,
 				UseColors: app.Config.ShouldUseColors(),
 			})
 
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 
@@ -100,7 +100,7 @@ Use --sync to collect cost data from agent transcripts before displaying.`,
 				filter = filter.WithAgent(agent)
 			}
 
-			sessions, err := app.Store.QuerySessions(ctx, filter)
+			sessions, err := app.Reads.QuerySessions(ctx, filter)
 			if err != nil {
 				return err
 			}
@@ -181,14 +181,15 @@ func syncSessionCosts(ctx context.Context, app *App, sessions []*session.Session
 
 		pw.Update("Syncing cost data (%d/%d) ...", i+1, len(sessions))
 
-		recoverTranscriptPath(ctx, app.Store, sess)
-		if sc := hookside.CollectCost(ctx, sess.AgentName, sess.TranscriptPath, sess.ID); sc != nil {
+		recoverTranscriptPath(ctx, app.Reads, sess)
+		sc := hookside.CollectCost(ctx, sess.AgentName, sess.TranscriptPath, sess.ID)
+		if sc != nil {
 			sess.SetCost(sc, sc.Source)
 		}
 
 		if sess.HasCostData() {
 			synced++
-			if err := app.Store.UpdateSession(ctx, sess); err != nil {
+			if err := app.SetSessionCost(ctx, sess, sc); err != nil {
 				log.Debugf("failed to update session %s: %v", sess.ID, err)
 			}
 		}
@@ -403,7 +404,7 @@ func sortedGroupsByCost(groups map[string]*tui.CostGroupView) []tui.CostGroupVie
 	return result
 }
 
-func recoverTranscriptPath(ctx context.Context, store storage.Store, sess *session.Session) {
+func recoverTranscriptPath(ctx context.Context, store storage.ReadStore, sess *session.Session) {
 	if sess.TranscriptPath != "" {
 		return
 	}
@@ -429,8 +430,12 @@ func recoverTranscriptPath(ctx context.Context, store storage.Store, sess *sessi
 		}
 		if raw.TranscriptPath != "" {
 			sess.TranscriptPath = raw.TranscriptPath
-			if err := store.UpdateSession(ctx, sess); err != nil {
-				log.Errorf("failed to update session transcript path: %v", err)
+			// Over the socket the session row is the service's. The path
+			// serves this run, and the totals reach the service as a claim.
+			if w, ok := store.(storage.Store); ok {
+				if err := w.UpdateSession(ctx, sess); err != nil {
+					log.Errorf("failed to update session transcript path: %v", err)
+				}
 			}
 			return
 		}

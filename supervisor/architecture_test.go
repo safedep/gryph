@@ -46,7 +46,10 @@ func TestSupervisorFilesImportNoClaimReader(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && strings.HasSuffix(path, ".go") {
+		// A test builds fixtures with the types of these packages and
+		// never runs in the service. The tree check below covers what
+		// the service links.
+		if !d.IsDir() && strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
 			files = append(files, path)
 		}
 		return nil

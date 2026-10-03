@@ -36,6 +36,7 @@ const (
 	TypeAck             = "ack"
 	TypeQuery           = "query"
 	TypeQueryResult     = "query_result"
+	TypeSessionCost     = "session_cost"
 	TypeError           = "error"
 )
 

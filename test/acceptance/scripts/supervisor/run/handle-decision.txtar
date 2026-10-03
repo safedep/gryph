@@ -1,8 +1,9 @@
 # gryph supervisor run serves the decision service on a socket. A client
 # of the same account gets welcome, a decision for a hook payload, ack for
-# a hook error report, and error unsupported for a read that no service
-# answers yet. The partition of the account appears under the state
-# directory. The hidden send command is the client of this test.
+# a hook error report, the rows of its own partition for a read, and
+# error unsupported for a frame no service answers yet. The partition of
+# the account appears under the state directory. The hidden send command
+# is the client of this test.
 [windows] skip 'the service listens on a Unix socket'
 env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
@@ -10,13 +11,14 @@ env XDG_DATA_HOME=$WORK/home/.local/share
 
 exec gryph supervisor run --socket $WORK/hook.sock --state-dir $WORK/state --allow-root &
 
-ipcframe frames.bin hello.json handle.json report.json query.json
+ipcframe frames.bin hello.json handle.json report.json query.json reply.json
 stdin frames.bin
 exec gryph supervisor send --socket $WORK/hook.sock --text
 stdout '^\{"type":"welcome","body":\{"proto":1,"server_version":"[^"]*","mode":"enforce"\}\}$'
 stdout '^\{"type":"decision","body":\{"decision":"allow"\}\}$'
 stdout '^\{"type":"ack","body":\{\}\}$'
-stdout '"type":"error","body":\{"code":"unsupported","message":"query is not served yet"'
+stdout '"type":"query_result","body":\{"rows":\[\{"id":"[0-9a-f-]+","agent_session_id":"test-session-123","agent_name":"claude-code"'
+stdout '"type":"error","body":\{"code":"unsupported","message":"prompt_reply is not served yet"'
 
 exec id -u
 cp stdout uid.txt
@@ -31,3 +33,5 @@ exists $WORK/state/users/$UID/audit.db
 {"type":"report_hook_error","body":{"agent":"claude-code","hook_type":"PreToolUse","raw_size":3,"message":"payload did not parse"}}
 -- query.json --
 {"type":"query","body":{"kind":"sessions"}}
+-- reply.json --
+{"type":"prompt_reply","body":{"nonce":"n","decision":"allow"}}

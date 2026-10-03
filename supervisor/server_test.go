@@ -5,6 +5,7 @@ package supervisor
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,8 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/decision"
@@ -21,6 +24,7 @@ import (
 	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/spool"
 	"github.com/safedep/gryph/storage"
+	"github.com/safedep/gryph/storage/remote"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -61,6 +65,13 @@ func startServerWithSpool(t *testing.T) (*Server, string, string) {
 // startServerWith is startServerWithSpool for one configuration.
 func startServerWith(t *testing.T, cfg *config.Config) (*Server, string, string) {
 	t.Helper()
+	return startServerWithLimits(t, cfg, Limits{})
+}
+
+// startServerWithLimits is startServerWith with limits of its own. A
+// zero value takes the defaults.
+func startServerWithLimits(t *testing.T, cfg *config.Config, limits Limits) (*Server, string, string) {
+	t.Helper()
 	dir := t.TempDir()
 	sock := filepath.Join(dir, "hook.sock")
 	ln, err := net.Listen("unix", sock)
@@ -69,7 +80,7 @@ func startServerWith(t *testing.T, cfg *config.Config) (*Server, string, string)
 	require.NoError(t, os.Mkdir(state, 0o700))
 	spoolDir := filepath.Join(dir, "spool")
 	require.NoError(t, spool.EnsureRoot(spoolDir))
-	srv := New(cfg, Options{StateDir: state, Version: "test", SpoolDir: spoolDir, IngestInterval: -1})
+	srv := New(cfg, Options{StateDir: state, Limits: limits, Version: "test", SpoolDir: spoolDir, IngestInterval: -1})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ctx, ln) }()
@@ -142,6 +153,10 @@ func TestServer_HandleInOwnPartition(t *testing.T) {
 	assert.Equal(t, ipc.TypeAck, reply.Type)
 
 	reply = exchange(t, conn, ipc.MustFrame(ipc.TypeQuery, ipc.Query{Kind: "sessions"}))
+	assert.Equal(t, ipc.TypeQueryResult, reply.Type)
+	assert.Contains(t, string(reply.Body), `"agent_name":"claude-code"`)
+
+	reply = exchange(t, conn, ipc.MustFrame(ipc.TypePromptReply, ipc.PromptReply{Nonce: "n", Decision: "allow"}))
 	assert.Equal(t, ipc.TypeError, reply.Type)
 	assert.Contains(t, string(reply.Body), ipc.CodeUnsupported)
 }
@@ -350,4 +365,91 @@ func TestServer_SignsWithTheMachineKeyAndReloads(t *testing.T) {
 		keyIDs = append(keyIDs, r.SignerKeyID)
 	}
 	assert.ElementsMatch(t, []string{first.KeyID, rotated.KeyID}, keyIDs, "the row before the reload carries the old key, the one after the new key")
+}
+
+func TestServer_ReadsComeFromTheOwnPartition(t *testing.T) {
+	cfg := config.Default()
+	cfg.Policy.Enabled = true
+	cfg.Policy.LogAllEvaluations = true
+	_, state, _ := startServerWithLimits(t, cfg, Limits{MaxConns: 16, Rate: 1000, Burst: 1000, IdleTimeout: 30 * time.Second})
+	sock := filepath.Join(filepath.Dir(state), "hook.sock")
+
+	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	require.NoError(t, err)
+	defer func() { _ = client.Close() }()
+	reads := remote.New(client)
+	ctx := context.Background()
+
+	sessions, err := reads.QuerySessions(ctx, session.NewSessionFilter())
+	require.NoError(t, err)
+	assert.Empty(t, sessions, "nothing recorded yet")
+
+	for i := range 70 {
+		payload := fmt.Sprintf(`{"session_id":"test-session-123","cwd":"/home/user/project","hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"/home/user/project/f%d.go"},"tool_use_id":"tu-%d"}`, i, i)
+		d, err := client.Handle(ctx, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(payload)})
+		require.NoError(t, err)
+		require.Equal(t, decision.Verdict("allow"), d.Decision)
+	}
+
+	sessions, err = reads.QuerySessions(ctx, session.NewSessionFilter())
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	sess := sessions[0]
+	assert.Equal(t, "claude-code", sess.AgentName)
+
+	evts, err := reads.GetEventsBySession(ctx, sess.ID)
+	require.NoError(t, err)
+	assert.Len(t, evts, 70, "a long answer comes back over more than one page")
+	n, err := reads.CountEvents(ctx, events.NewEventFilter())
+	require.NoError(t, err)
+	assert.Equal(t, 70, n)
+	filter := events.NewEventFilter()
+	filter.Limit = 5
+	some, err := reads.QueryEvents(ctx, filter)
+	require.NoError(t, err)
+	assert.Len(t, some, 5, "the filter of the client runs at the service")
+
+	byID, err := reads.GetEvent(ctx, evts[0].ID)
+	require.NoError(t, err)
+	require.NotNil(t, byID)
+	assert.Equal(t, evts[0].ID, byID.ID)
+	byPrefix, err := reads.GetEventByPrefix(ctx, evts[0].ID.String()[:8])
+	require.NoError(t, err)
+	require.NotNil(t, byPrefix)
+	missing, err := reads.GetEventByPrefix(ctx, "ffffffff")
+	require.NoError(t, err)
+	assert.Nil(t, missing, "no row is no error, as on the local store")
+	bySess, err := reads.GetSessionByPrefix(ctx, sess.ID.String()[:8])
+	require.NoError(t, err)
+	require.NotNil(t, bySess)
+	later, err := reads.QueryEventsAfter(ctx, evts[0].Timestamp, evts[0].ID, 10)
+	require.NoError(t, err)
+	assert.NotEmpty(t, later)
+
+	receipts, err := reads.QueryReceipts(ctx, &storage.ReceiptFilter{Limit: -1})
+	require.NoError(t, err)
+	assert.Len(t, receipts, 70)
+	ids, err := reads.ListReceiptSessionIDs(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []uuid.UUID{sess.ID}, ids)
+	deferred, err := reads.QueryDeferredActions(ctx, &storage.DeferredActionFilter{})
+	require.NoError(t, err)
+	assert.Empty(t, deferred)
+	state2, err := reads.GetContextStateByPrefix(ctx, sess.ID.String()[:8])
+	require.NoError(t, err)
+	assert.NotNil(t, state2)
+
+	require.NoError(t, client.SessionCost(ctx, ipc.SessionCost{SessionID: sess.ID, Cost: &cost.SessionCost{SessionID: sess.ID, TotalCost: 1.5, Currency: "USD", Source: cost.CostSourceTranscript, Usage: cost.SessionUsage{InputTokens: 10}}}))
+	sess, err = reads.GetSession(ctx, sess.ID)
+	require.NoError(t, err)
+	require.NotNil(t, sess)
+	assert.Equal(t, "client_reported:transcript", sess.CostSource)
+	assert.Equal(t, int64(10), sess.InputTokens)
+	err = client.SessionCost(ctx, ipc.SessionCost{SessionID: uuid.New(), Cost: &cost.SessionCost{Currency: "USD"}})
+	assert.Error(t, err, "a session of no partition of this account is refused")
+
+	_, err = client.Query(ctx, ipc.Query{Kind: "no-such-kind"})
+	var serr *ipc.ServerError
+	require.ErrorAs(t, err, &serr)
+	assert.Equal(t, ipc.CodeInvalid, serr.Code)
 }

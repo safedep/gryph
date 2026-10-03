@@ -201,6 +201,17 @@ func (s *Server) dispatch(ctx context.Context, part *partition, f *ipc.Frame, bo
 			return nil, err
 		}
 		return nil, nil
+	case *ipc.Query:
+		return part.query(ctx, b)
+	case *ipc.SessionCost:
+		if !part.bucket.take(time.Now()) {
+			part.recordRateLimit(ctx, "session_cost")
+			return ipc.ErrorFrame(ipc.CodeRateLimited, "too many requests from this account"), nil
+		}
+		if err := part.setSessionCost(ctx, b); err != nil {
+			return ipc.ErrorFrame(ipc.CodeInvalid, err.Error()), nil
+		}
+		return nil, nil
 	case *ipc.Hello:
 		return ipc.ErrorFrame(ipc.CodeInvalid, "hello after the handshake"), nil
 	default:

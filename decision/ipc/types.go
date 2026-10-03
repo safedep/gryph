@@ -3,6 +3,7 @@ package ipc
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"time"
 	"unicode/utf8"
 
@@ -109,6 +110,14 @@ type QueryResult struct {
 	Next string            `json:"next,omitempty"`
 }
 
+// SessionCost carries the cost totals that the client collected from the
+// transcript of a session, for gryph cost --sync. The server stores them
+// on the session of its own partition, marked as client reported.
+type SessionCost struct {
+	SessionID uuid.UUID         `json:"session_id"`
+	Cost      *cost.SessionCost `json:"cost_totals"`
+}
+
 // Error answers a frame the server refuses. Code is one of the Code
 // constants. A client maps a code it does not know like CodeInternal.
 type Error struct {
@@ -164,19 +173,25 @@ func (h *Handle) Validate() error {
 		return err
 	}
 	if h.Cost != nil {
-		if err := boundString("cost_totals.currency", h.Cost.Currency, MaxName); err != nil {
+		return validateCost(h.Cost)
+	}
+	return nil
+}
+
+// validateCost bounds the strings of cost totals.
+func validateCost(c *cost.SessionCost) error {
+	if err := boundString("cost_totals.currency", c.Currency, MaxName); err != nil {
+		return err
+	}
+	if err := boundString("cost_totals.source", string(c.Source), MaxName); err != nil {
+		return err
+	}
+	if len(c.Models) > MaxQueryItems {
+		return fmt.Errorf("%w: more than %d models in cost_totals", ErrInvalid, MaxQueryItems)
+	}
+	for _, m := range c.Models {
+		if err := boundString("cost_totals.models.model", m.Model, MaxName); err != nil {
 			return err
-		}
-		if err := boundString("cost_totals.source", string(h.Cost.Source), MaxName); err != nil {
-			return err
-		}
-		if len(h.Cost.Models) > MaxQueryItems {
-			return fmt.Errorf("%w: more than %d models in cost_totals", ErrInvalid, MaxQueryItems)
-		}
-		for _, m := range h.Cost.Models {
-			if err := boundString("cost_totals.models.model", m.Model, MaxName); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
@@ -270,6 +285,17 @@ func (q *Query) Validate() error {
 }
 
 // Validate implements Body.
+func (c *SessionCost) Validate() error {
+	if c.SessionID == uuid.Nil {
+		return fmt.Errorf("%w: session_cost without a session", ErrInvalid)
+	}
+	if c.Cost == nil {
+		return fmt.Errorf("%w: session_cost without totals", ErrInvalid)
+	}
+	return validateCost(c.Cost)
+}
+
+// Validate implements Body.
 func (q *QueryResult) Validate() error {
 	if len(q.Rows) > MaxQueryItems {
 		return fmt.Errorf("%w: more than %d rows", ErrInvalid, MaxQueryItems)
@@ -322,6 +348,8 @@ func Decode(f *Frame) (Body, error) {
 		body = &Query{}
 	case TypeQueryResult:
 		body = &QueryResult{}
+	case TypeSessionCost:
+		body = &SessionCost{}
 	case TypeError:
 		body = &Error{}
 	default:

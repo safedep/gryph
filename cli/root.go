@@ -2,13 +2,23 @@
 package cli
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
 	"os"
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/security"
+	"github.com/safedep/gryph/core/session"
+	"github.com/safedep/gryph/decision/ipc"
 	"github.com/safedep/gryph/engine"
+	"github.com/safedep/gryph/hookside"
 	"github.com/safedep/gryph/internal/version"
+	"github.com/safedep/gryph/storage"
+	"github.com/safedep/gryph/storage/remote"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -17,6 +27,60 @@ import (
 type App struct {
 	*engine.Runtime
 	Presenter tui.Presenter
+	// Reads is the store of the read commands: the local store, or the
+	// partition of this account at the decision service on a managed
+	// host. InitReadStore sets it.
+	Reads  storage.ReadStore
+	remote *ipc.Client
+}
+
+// InitReadStore opens the store of the read commands. Under a managed
+// configuration with the decision service on, the hooks record nothing in
+// the user's database, so the reads go to the service over the socket and
+// come back from the partition of this account. The socket passes the same
+// identity check as in the hook. Elsewhere it opens the local database.
+func (a *App) InitReadStore(ctx context.Context) error {
+	if !clientMode(a.Config) {
+		if err := a.InitStore(ctx); err != nil {
+			return err
+		}
+		a.Reads = a.Store
+		return nil
+	}
+	socket := a.Config.Supervisor.SocketPath()
+	client, err := ipc.Dial(ctx, socket, ipc.DialOptions{Version: version.Version, VerifyServer: func(conn net.Conn) error {
+		return hookside.VerifyServer(conn, socket, a.Config.Supervisor.ServerAccount())
+	}})
+	if err != nil {
+		return fmt.Errorf("the decision service at %s: %w", socket, err)
+	}
+	a.remote = client
+	a.Reads = remote.New(client)
+	return nil
+}
+
+// SetSessionCost stores the cost totals sc that this process read from
+// the transcript of sess: on the local store, or at the service as a
+// claim of this account. Without new totals there is nothing to send.
+func (a *App) SetSessionCost(ctx context.Context, sess *session.Session, sc *cost.SessionCost) error {
+	if a.remote != nil {
+		if sc == nil {
+			return nil
+		}
+		return a.remote.SessionCost(ctx, ipc.SessionCost{SessionID: sess.ID, Cost: sc})
+	}
+	return a.Store.UpdateSession(ctx, sess)
+}
+
+// Close releases the store and the connection to the service.
+func (a *App) Close() error {
+	var errs []error
+	if a.remote != nil {
+		errs = append(errs, a.remote.Close())
+		a.remote = nil
+	}
+	errs = append(errs, a.Runtime.Close())
+	return errors.Join(errs...)
 }
 
 // NewApp creates a new App with the given configuration.

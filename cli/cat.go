@@ -41,7 +41,7 @@ and conversation context. Accepts full UUIDs or ID prefixes.`,
 				UseColors: app.Config.ShouldUseColors(),
 			})
 
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 			defer func() {
@@ -72,7 +72,7 @@ and conversation context. Accepts full UUIDs or ID prefixes.`,
 func resolveEvent(ctx context.Context, app *App, idArg string) (*events.Event, error) {
 	eventID, err := uuid.Parse(idArg)
 	if err != nil {
-		e, err := app.Store.GetEventByPrefix(ctx, idArg)
+		e, err := app.Reads.GetEventByPrefix(ctx, idArg)
 		if err != nil {
 			return nil, fmt.Errorf("event not found: %s", idArg)
 		}
@@ -82,7 +82,7 @@ func resolveEvent(ctx context.Context, app *App, idArg string) (*events.Event, e
 		return e, nil
 	}
 
-	event, err := app.Store.GetEvent(ctx, eventID)
+	event, err := app.Reads.GetEvent(ctx, eventID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get event: %w", err)
 	}

@@ -1,0 +1,117 @@
+# On a managed host with the decision service on, the read commands go to
+# the service over the socket and come back from the partition of the
+# account that the kernel reports. A developer reads their own log and
+# nothing of another account, opens no database of their own, and cannot
+# read another partition on disk. Runs only in the privileged job on a
+# Linux host with the useradd tools and no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+[!exec:useradd] skip 'needs useradd'
+! exists /etc/safedep/gryph
+! exists /home/gryphacc1
+! exists /home/gryphacc2
+! exists /tmp/gryph-acceptance-state
+! exists /usr/local/bin/gryph-acceptance
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+exec cp $ACCEPTANCE_GRYPH_BIN /usr/local/bin/gryph-acceptance
+exec useradd -m -s /bin/bash gryphacc1
+exec useradd -m -s /bin/bash gryphacc2
+exec id -u gryphacc1
+cp stdout uid1.txt
+capture UID1 '([0-9]+)' uid1.txt
+exec id -u gryphacc2
+cp stdout uid2.txt
+capture UID2 '([0-9]+)' uid2.txt
+expandenv managed.yml
+exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
+
+exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir /tmp/gryph-acceptance-state --spool-dir /tmp/gryph-acceptance-spool --allow-root &
+exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do test -f /tmp/gryph-acceptance-state/keys/export.key && break; sleep 0.2; done'
+# Root puts the public half of the machine key in the managed trust
+# store, so every account verifies the receipts of the service.
+exec gryph supervisor keys rotate --json
+stdout '"reloaded": true'
+
+# Each account runs a hook: the service records it in that account's
+# partition. The hook opens no database in the home.
+exec cp read1.json /tmp/gryph-acceptance-read1.json
+exec cp read2.json /tmp/gryph-acceptance-read2.json
+exec chmod 644 /tmp/gryph-acceptance-read1.json /tmp/gryph-acceptance-read2.json
+exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PreToolUse < /tmp/gryph-acceptance-read1.json'
+exec runuser -u gryphacc2 -- /bin/sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PreToolUse < /tmp/gryph-acceptance-read2.json'
+! exists /home/gryphacc1/.local/share/safedep/gryph/audit.db
+! exists /home/gryphacc2/.local/share/safedep/gryph/audit.db
+exists /tmp/gryph-acceptance-state/users/$UID1/audit.db
+exists /tmp/gryph-acceptance-state/users/$UID2/audit.db
+
+# The first account reads its own log through the service, and nothing
+# of the second account. The read opens no database in the home either.
+exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance sessions --format json --no-color'
+stdout -count=1 '"AgentName": "claude-code"'
+exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance query --format json --no-color'
+stdout 'first-account.go'
+! stdout 'second-account.go'
+exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance logs --format json --no-color'
+stdout 'first-account.go'
+exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance query --format json --no-color'
+cp stdout events1.json
+capture EVENT1 '"ShortID": "([0-9a-f]+)"' events1.json
+exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance cat '$EVENT1' --format json --no-color'
+stdout 'first-account.go'
+exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance policy receipts --format json --no-color'
+stdout -count=1 '"decision":\s*"allow"'
+stdout '"signer_key_scope":\s*"supervisor"'
+exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance policy receipts --verify --all-sessions --no-color'
+stdout 'Chain verification: OK'
+exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance stats --help'
+! exists /home/gryphacc1/.local/share/safedep/gryph/audit.db
+
+# The second account sees its own log only.
+exec runuser -u gryphacc2 -- /bin/sh -c '/usr/local/bin/gryph-acceptance query --format json --no-color'
+stdout 'second-account.go'
+! stdout 'first-account.go'
+
+# No account reads another partition on disk.
+! exec runuser -u gryphacc2 -- /bin/sh -c 'cat /tmp/gryph-acceptance-state/users/'$UID1'/audit.db > /dev/null'
+stderr 'Permission denied'
+
+# Without the service the read fails with a clear error, not with an
+# empty local log.
+exec sh -c 'pkill -f "^/tmp/.*gryph.* supervisor run" || pkill -f "supervisor run --socket /tmp/gryph-acceptance-hook.sock"; sleep 0.5; true'
+! exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance sessions --no-color'
+stderr 'the decision service at /tmp/gryph-acceptance-hook.sock'
+
+exec rm -rf /etc/safedep/gryph /tmp/gryph-acceptance-state /tmp/gryph-acceptance-spool /tmp/gryph-acceptance-hook.sock /tmp/gryph-acceptance-read1.json /tmp/gryph-acceptance-read2.json /usr/local/bin/gryph-acceptance
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+exec userdel -r gryphacc1
+exec userdel -r gryphacc2
+
+-- managed.yml --
+policy:
+  enabled: true
+  log_all_evaluations: true
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  state_dir: /tmp/gryph-acceptance-state
+  spool_dir: /tmp/gryph-acceptance-spool
+-- read1.json --
+{
+  "session_id": "session-of-account-one",
+  "cwd": "/home/gryphacc1/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {"file_path": "/home/gryphacc1/project/first-account.go"},
+  "tool_use_id": "tool-use-r1"
+}
+-- read2.json --
+{
+  "session_id": "session-of-account-two",
+  "cwd": "/home/gryphacc2/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {"file_path": "/home/gryphacc2/project/second-account.go"},
+  "tool_use_id": "tool-use-r2"
+}

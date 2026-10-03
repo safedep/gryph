@@ -73,7 +73,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 				return err
 			}
 
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 			defer func() {
@@ -99,7 +99,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 				filter.Until = &t
 			}
 			if sessionID != "" {
-				sid, err := resolveAarmSessionID(ctx, app.Store, sessionID)
+				sid, err := resolveAarmSessionID(ctx, app.Reads, sessionID)
 				if err != nil {
 					return err
 				}
@@ -116,10 +116,10 @@ func newPolicyReceiptsCmd() *cobra.Command {
 				defer stop()
 				ticker := time.NewTicker(interval)
 				defer ticker.Stop()
-				return newReceiptFollower(app.Store, *filter, out, cmd.ErrOrStderr(), c).follow(sigCtx, limit, ticker.C)
+				return newReceiptFollower(app.Reads, *filter, out, cmd.ErrOrStderr(), c).follow(sigCtx, limit, ticker.C)
 			}
 
-			rows, err := app.Store.QueryReceipts(ctx, filter)
+			rows, err := app.Reads.QueryReceipts(ctx, filter)
 			if err != nil {
 				return fmt.Errorf("failed to query receipts: %w", err)
 			}
@@ -129,7 +129,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 				if verifyErr != nil {
 					return ErrConfig("load trust store", verifyErr)
 				}
-				breaks, sigResults, verr := verifyReceiptChains(ctx, app.Store, rows, filter.SessionID, allSessions, verifier)
+				breaks, sigResults, verr := verifyReceiptChains(ctx, app.Reads, rows, filter.SessionID, allSessions, verifier)
 				if verr != nil {
 					return verr
 				}
@@ -209,7 +209,7 @@ type receiptVerifyBreak struct {
 // verifier is non-nil) verifies each signature inline. Chain breaks and per-
 // receipt signature verdicts are returned together so callers can render
 // both without a second full pass over the data.
-func verifyReceiptChains(ctx context.Context, store storage.Store, rows []*storage.ReceiptRow, sessionFilter *uuid.UUID, allSessions bool, verifier *receipt.Ed25519Verifier) ([]receiptVerifyBreak, []receiptSignatureResult, error) {
+func verifyReceiptChains(ctx context.Context, store storage.ReadStore, rows []*storage.ReceiptRow, sessionFilter *uuid.UUID, allSessions bool, verifier *receipt.Ed25519Verifier) ([]receiptVerifyBreak, []receiptSignatureResult, error) {
 	sessionIDs, err := collectVerifySessionIDs(ctx, store, rows, sessionFilter, allSessions)
 	if err != nil {
 		return nil, nil, err
@@ -245,12 +245,21 @@ func verifyReceiptChains(ctx context.Context, store storage.Store, rows []*stora
 	}
 
 	if len(breaks) > 0 {
-		emitChainBrokenAudit(ctx, store, breaks)
+		emitChainBrokenAudit(ctx, auditStore(store), breaks)
 	}
 	return breaks, sigResults, nil
 }
 
-func collectVerifySessionIDs(ctx context.Context, store storage.Store, rows []*storage.ReceiptRow, sessionFilter *uuid.UUID, allSessions bool) ([]uuid.UUID, error) {
+// auditStore returns the store a self-audit row can go to: the local store,
+// and nothing over the socket, where the service owns the self-audit log.
+func auditStore(store storage.ReadStore) storage.Store {
+	if w, ok := store.(storage.Store); ok {
+		return w
+	}
+	return nil
+}
+
+func collectVerifySessionIDs(ctx context.Context, store storage.ReadStore, rows []*storage.ReceiptRow, sessionFilter *uuid.UUID, allSessions bool) ([]uuid.UUID, error) {
 	if sessionFilter != nil {
 		return []uuid.UUID{*sessionFilter}, nil
 	}
@@ -518,7 +527,7 @@ type signatureSummary struct {
 	KeyScopes map[string]int `json:"key_scopes,omitempty"`
 }
 
-func verifyOneSignature(ctx context.Context, store storage.Store, r *storage.ReceiptRow, verifier *receipt.Ed25519Verifier) receiptSignatureResult {
+func verifyOneSignature(ctx context.Context, store storage.ReadStore, r *storage.ReceiptRow, verifier *receipt.Ed25519Verifier) receiptSignatureResult {
 	res := receiptSignatureResult{
 		SessionID: r.SessionID,
 		Sequence:  r.Sequence,
@@ -536,19 +545,19 @@ func verifyOneSignature(ctx context.Context, store storage.Store, r *storage.Rec
 	if verifier == nil {
 		res.Status = signatureStatusInvalid
 		res.Reason = "no trust store configured"
-		emitSignatureInvalidAudit(ctx, store, r, res.Reason)
+		emitSignatureInvalidAudit(ctx, auditStore(store), r, res.Reason)
 		return res
 	}
 	if !verifier.HasKey(r.SignerKeyID) {
 		res.Status = signatureStatusInvalid
 		res.Reason = "unknown signer_key_id"
-		emitSignatureInvalidAudit(ctx, store, r, res.Reason)
+		emitSignatureInvalidAudit(ctx, auditStore(store), r, res.Reason)
 		return res
 	}
 	if err := verifier.Verify(r.Hash, r.Signature, r.SignerKeyID); err != nil {
 		res.Status = signatureStatusInvalid
 		res.Reason = err.Error()
-		emitSignatureInvalidAudit(ctx, store, r, res.Reason)
+		emitSignatureInvalidAudit(ctx, auditStore(store), r, res.Reason)
 		return res
 	}
 	res.Status = signatureStatusOK

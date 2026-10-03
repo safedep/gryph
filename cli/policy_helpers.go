@@ -22,7 +22,7 @@ func detectOperatorIdentity() string {
 // prefix, or session-row prefix) to the canonical session UUID. Shared by the
 // AARM-facing CLI commands (policy receipts, policy context) so the lookup
 // order and error message stay in lockstep.
-func resolveAarmSessionID(ctx context.Context, store storage.Store, ref string) (uuid.UUID, error) {
+func resolveAarmSessionID(ctx context.Context, store storage.ReadStore, ref string) (uuid.UUID, error) {
 	if id, err := uuid.Parse(ref); err == nil {
 		return id, nil
 	}

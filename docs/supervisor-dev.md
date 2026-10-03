@@ -41,6 +41,7 @@ down. A first frame of another type ends the connection with `error`.
 | `report_hook_error` | client to server | `agent`, `hook_type`, `raw_size`, `raw_event` (up to 64 KiB), `message` (4096). The fields of the hook error. | `ack` |
 | `query` | client to server | `kind` (64), `params` (up to 64 entries, 64 and 1024), `limit` | `query_result` or `error` |
 | `query_result` | server to client | `rows` (up to 64 JSON documents), `next` (1024) | |
+| `session_cost` | client to server | `session_id`, `cost_totals` (the session cost the client collected from the transcript) | `ack` or `error` |
 | `ack` | server to client | empty | |
 | `error` | server to client | `code` (64), `message` (4096) | |
 
@@ -154,6 +155,39 @@ dir>/supervisor.pid`. On the signal the service retires every partition
 connections closes with its last, and the next contact of the account
 opens a fresh partition that reads the new key. The old key signs nothing
 after that, and its public half stays in the trust store.
+
+## Reads
+
+On a managed host with the service on, the hooks record nothing in the
+user's database, so the read commands (`logs`, `query`, `sessions`,
+`session`, `cat`, `diff`, `stats`, `cost`, `policy receipts`, `policy
+approve history`, `policy deferrals list`) read through the service. The
+CLI opens the socket with the same identity check as the hook
+(`App.InitReadStore`), and the service answers every `query` from the
+partition of the account that the kernel reports for the connection. No
+field of a request names a partition, and the service serves nothing but
+reads: `storage.ReadStore` holds the methods those commands use, and
+`storage/remote` implements it over `query` frames. The full
+`storage.Store` never goes over the socket.
+
+The `kind` of a `query` names one method, and `params` carries its
+arguments: `id`, `prefix`, `filter` (the filter of the local call as
+JSON), `after` and `limit` for the follow read, and `page`. The service
+runs the same filter as a local read would and answers in pages of 64
+rows: `next` names the next page, and the client asks for it until `next`
+is empty. The kinds: `event`, `event_by_prefix`, `events`, `count_events`,
+`session_events`, `events_after`, `session`, `session_by_prefix`,
+`sessions`, `receipts`, `receipt_session_ids`, `deferred_actions`,
+`deferred_action_by_prefix`, `context_state_by_prefix`. A kind the
+service does not know gets `error invalid`. Every read counts against the
+rate limit of the account.
+
+`gryph cost --sync` reads the transcripts as the user, as the hook does,
+and sends the totals in a `session_cost` frame. The service stores them on
+the session of its own partition, marked `client_reported`, and refuses a
+session that is not there. The interactive `gryph query` searches a local
+index and stays on the local database. The self-audit rows that a failed
+verification writes go to the local store only.
 
 ## The spool
 

@@ -43,7 +43,7 @@ a file_write action or if diff was not captured.`,
 			})
 
 			// Initialize store
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 			defer func() {
@@ -57,7 +57,7 @@ a file_write action or if diff was not captured.`,
 			eventID, err := uuid.Parse(eventIDArg)
 			if err != nil {
 				// Try prefix match
-				e, err := app.Store.GetEventByPrefix(ctx, eventIDArg)
+				e, err := app.Reads.GetEventByPrefix(ctx, eventIDArg)
 				if err != nil {
 					return fmt.Errorf("event not found: %s", eventIDArg)
 				}
@@ -70,7 +70,7 @@ a file_write action or if diff was not captured.`,
 			}
 
 			// Get event
-			event, err := app.Store.GetEvent(ctx, eventID)
+			event, err := app.Reads.GetEvent(ctx, eventID)
 			if err != nil {
 				return fmt.Errorf("failed to get event: %w", err)
 			}

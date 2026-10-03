@@ -180,6 +180,12 @@ func (s *Session) CountEvent(e *events.Event) {
 
 // SetCost records the totals of one cost computation under the given
 // source.
+// SetClientReportedCost stores totals that a client collected and
+// reported, which the service did not verify, marked as such.
+func (s *Session) SetClientReportedCost(sc *cost.SessionCost) {
+	s.SetCost(sc, cost.ClientReported(sc.Source))
+}
+
 func (s *Session) SetCost(sc *cost.SessionCost, source cost.CostSource) {
 	s.InputTokens = sc.Usage.InputTokens
 	s.OutputTokens = sc.Usage.OutputTokens
