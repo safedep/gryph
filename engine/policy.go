@@ -517,10 +517,16 @@ func databaseGlobs(cfg *config.Config) []string {
 	return []string{db, db + "-wal", db + "-shm", db + "-journal"}
 }
 
+// SelfProtectionGlobs returns the paths an agent must not change: the
+// config directory, the database, the keys, the trust store, the gryph
+// binary that the hooks run, and every agent's hook config.
 func SelfProtectionGlobs(cfg *config.Config, paths *config.Paths) []string {
 	var globs []string
 	if paths != nil && paths.ConfigDir != "" {
 		globs = append(globs, filepath.ToSlash(paths.ConfigDir)+"/**")
+	}
+	if binary := gryphBinaryPath(); binary != "" {
+		globs = append(globs, filepath.ToSlash(binary))
 	}
 	if cfg != nil {
 		globs = append(globs, databaseGlobs(cfg)...)

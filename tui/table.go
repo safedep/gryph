@@ -450,6 +450,10 @@ func (p *TablePresenter) RenderDoctor(result *DoctorView) error {
 	}
 	tw.println()
 
+	if result.Profile != "" {
+		p.renderProtection(tw, result)
+	}
+
 	if result.AllOK {
 		tw.println(p.color.Success("All checks passed."))
 	} else {
@@ -457,6 +461,21 @@ func (p *TablePresenter) RenderDoctor(result *DoctorView) error {
 	}
 
 	return tw.Err()
+}
+
+// renderProtection prints the self-protection table and the profile.
+func (p *TablePresenter) renderProtection(tw *tableWriter, result *DoctorView) {
+	tw.printf("%s\n", p.color.Header("Self-protection"))
+	tw.printf("  Profile: %s\n", result.Profile)
+	tw.println()
+	tw.printf("  %-12s %-13s %-25s %s\n", "ASSET", "AGENT", "LEVEL", "DETAIL")
+	for _, row := range result.Protection {
+		tw.printf("  %-12s %-13s %-25s %s\n", row.Asset, row.Agent, row.Level, row.Detail)
+		if row.Drift != "" {
+			tw.printf("  %-12s %-13s %s\n", "", "", p.color.Warning("drift: "+row.Drift))
+		}
+	}
+	tw.println()
 }
 
 // RenderConfig renders the configuration.

@@ -71,14 +71,23 @@ func (p *JSONLPresenter) RenderUninstall(result *UninstallView) error {
 	return p.encoder.Encode(result)
 }
 
-// RenderDoctor renders the doctor check results as JSONL.
+// RenderDoctor renders the doctor check results as JSONL: one line per
+// check, then one line per protection row, then the profile.
 func (p *JSONLPresenter) RenderDoctor(result *DoctorView) error {
 	for _, check := range result.Checks {
 		if err := p.encoder.Encode(check); err != nil {
 			return err
 		}
 	}
-	return nil
+	for _, row := range result.Protection {
+		if err := p.encoder.Encode(struct{ Protection ProtectionRow }{row}); err != nil {
+			return err
+		}
+	}
+	if result.Profile == "" {
+		return nil
+	}
+	return p.encoder.Encode(struct{ Profile string }{result.Profile})
 }
 
 // RenderConfig renders the configuration as JSONL.

@@ -205,6 +205,19 @@ func RequiredHookTypeNames(specs []events.HookSpec) []string {
 	return names
 }
 
+// MissingPromptHooks returns the prompt hooks in specs that installed does
+// not hold. An install from before prompt capture lacks them, and the
+// session context then has no intent.
+func MissingPromptHooks(specs []events.HookSpec, installed []string) []string {
+	var missing []string
+	for _, s := range specs {
+		if s.Prompt && !slices.Contains(installed, string(s.Type)) {
+			missing = append(missing, string(s.Type))
+		}
+	}
+	return missing
+}
+
 // SetPluginStatus fills status for a plugin file that Gryph generates.
 // marker returns the text that the plugin holds for one hook type. A plugin
 // is valid only when it equals expected, or when its SHA-256 digest is in

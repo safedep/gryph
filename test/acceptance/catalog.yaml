@@ -307,6 +307,13 @@
   guarantee: "A read and a write payload for each supported agent parse and persist with the correct action type."
   labels: [hook, ingest, protocols]
 
+- id: doctor/selfprotect/asset-table
+  title: "doctor prints the self-protection level of every asset and the profile"
+  category: doctor
+  tier: P0
+  guarantee: "gryph doctor prints one row per Gryph asset with its level and detail, a drift line when a hook configuration differs from a current install, and the profile the levels earn: none with policy off, guard with policy on."
+  labels: [doctor, selfprotect]
+
 - id: health/doctor/unhealthy-flagged
   title: "doctor flags a missing database and invalid hooks"
   category: health

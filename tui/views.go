@@ -208,6 +208,20 @@ type AgentUninstallView struct {
 type DoctorView struct {
 	Checks []DoctorCheck
 	AllOK  bool
+	// Protection holds one row per Gryph asset, and Profile the label that
+	// the levels earn.
+	Protection []ProtectionRow
+	Profile    string
+}
+
+// ProtectionRow is the self-protection level of one asset.
+type ProtectionRow struct {
+	Asset    string
+	Agent    string
+	Level    string
+	Provider string
+	Drift    string
+	Detail   string
 }
 
 // DoctorCheck represents a single doctor check.

@@ -115,10 +115,14 @@ func TestSelfProtectionGlobs_StaticSetNoRepoLocal(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := config.Default()
 	paths := &config.Paths{ConfigDir: tmp}
+	restore := gryphBinaryPath
+	gryphBinaryPath = func() string { return filepath.Join(tmp, "bin", "gryph") }
+	t.Cleanup(func() { gryphBinaryPath = restore })
 
 	globs := SelfProtectionGlobs(cfg, paths)
 
 	assert.Contains(t, globs, filepath.ToSlash(tmp)+"/**")
+	assert.Contains(t, globs, filepath.ToSlash(filepath.Join(tmp, "bin", "gryph")), "an agent must not replace the binary")
 	assert.Contains(t, globs, "**/.claude/settings.json")
 	assert.Contains(t, globs, filepath.ToSlash(cfg.ExportKeyFile()))
 	assert.NotContains(t, globs, "**/.gryph-policy.yml")

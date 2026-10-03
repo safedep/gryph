@@ -58,7 +58,7 @@ The rule `gryph-builtin-hook-command` is best effort. It catches only a literal 
 
 The read rule also blocks a file read of each directory that holds the database or the signing key, at any depth, below the home directory. This blocks a `Grep`, `Glob`, or `LS` tool call on the data directory, the config directory, their `safedep` parents, `~/.config`, and `~/.local/share`. On macOS, these are the `~/Library` directories that hold them. A read of one file in these directories, such as `policy.yaml`, passes. A file read of the home directory, or of a parent of it, passes. So does a shell read of it, such as `grep -r x ~` or `tar -C ~ -czf home.tgz .`. A tool that searches the whole home directory can read the protected files, so this is a limit of the read rule. A `sqlite3` command that names a file with a SQL expression is also a limit.
 
-Kernel-based self-protection is on the roadmap. Until then, treat self-protection as a guard against mistakes and simple attempts, not as a security boundary. The [threat model](./security-policy-threat-model.md) lists the lower-level controls for a hardened deployment.
+Kernel-based self-protection is on the roadmap. Until then, treat self-protection as a guard against mistakes and simple attempts, not as a security boundary. `gryph doctor` prints the level of each protected asset and the profile they earn. The [threat model](./security-policy-threat-model.md) defines the levels and lists the lower-level controls for a hardened deployment.
 
 Write a file with `gryph policy init [name|path]` or open one with `gryph policy edit [name|path]`. See [Commands](#commands). Run `gryph policy list` to see every active source. Per-host managed policy is a planned future iteration. Today, one host governs its own policy.
 

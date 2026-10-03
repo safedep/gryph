@@ -75,9 +75,35 @@ Diagnose issues with installation. Checks database health, config validity, hook
 
 ```bash
 gryph doctor
+gryph doctor --format json
 ```
 
-No additional flags.
+| Flag       | Short | Type   | Default | Description                              |
+| ---------- | ----- | ------ | ------- | ---------------------------------------- |
+| `--format` |       | string | table   | Output format: `table`, `json`, `jsonl`, `csv` |
+
+After the checks, `doctor` prints the self-protection table. It has one row per
+Gryph asset: the hook configuration of each agent on the host, the binary, the
+policy, the config, the database and the keys. Each row shows the level at
+which the asset resists a change, its path, and its drift when the asset does
+not match a current install. The `Profile` line is the label that the levels
+earn: `none`, `guard`, `locked` or `managed`. The
+[threat model](./security-policy-threat-model.md#assets-levels-and-profiles)
+defines the levels and the profiles.
+
+```
+Self-protection
+  Profile: guard
+
+  ASSET        AGENT         LEVEL                     DETAIL
+  hook_config  claude-code   detect                    /home/me/.claude
+  binary                     mediated                  /opt/safedep/gryph/bin/gryph
+  policy                     mediated                  /home/me/.config/safedep/gryph/policy.yaml, ...
+```
+
+With `policy.enabled: false`, the default, the built-in rules do not run. Every
+asset that only they protect is at `none`, the row names the config key, and
+the profile is `none`.
 
 ### logs
 

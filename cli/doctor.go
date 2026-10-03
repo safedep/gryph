@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 
 	"github.com/safedep/dry/log"
@@ -13,6 +12,7 @@ import (
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/internal/selfupdate"
 	"github.com/safedep/gryph/internal/version"
+	"github.com/safedep/gryph/selfprotect"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/semver"
@@ -20,6 +20,8 @@ import (
 
 // NewDoctorCmd creates the doctor command.
 func NewDoctorCmd() *cobra.Command {
+	var format string
+
 	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Diagnose issues with installation",
@@ -29,7 +31,10 @@ Performs various health checks:
 - Database file exists and is readable/writable
 - Config file exists and is valid
 - Agent hooks are installed and executable
-- Database schema is up to date`,
+- Database schema is up to date
+
+It also prints the self-protection table: the level at which each Gryph
+asset resists a change, and the profile that the levels earn.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
@@ -37,6 +42,10 @@ Performs various health checks:
 			if err != nil {
 				return err
 			}
+			app.Presenter = tui.NewPresenter(getFormat(format), tui.PresenterOptions{
+				Writer:    cmd.OutOrStdout(),
+				UseColors: app.Config.ShouldUseColors(),
+			})
 
 			checker := selfupdate.NewChecker()
 			updateCh := checker.CheckAsync(ctx, &selfupdate.CheckInput{Version: version.Version})
@@ -118,7 +127,7 @@ Performs various health checks:
 						}
 						hookCheck.Suggestion = "Run 'gryph install --force --agent " + adapter.Name() + "'"
 						v.AllOK = false
-					} else if missing := missingPromptHooks(adapter, hookStatus); len(missing) > 0 {
+					} else if missing := agent.MissingPromptHooks(adapter.Hooks(), hookStatus.Hooks); len(missing) > 0 {
 						hookCheck.Status = tui.CheckWarn
 						hookCheck.Message = "Prompt hook not installed: " + strings.Join(missing, ", ")
 						hookCheck.Suggestion = "Run 'gryph install --force --agent " + adapter.Name() + "' to record prompts"
@@ -149,6 +158,19 @@ Performs various health checks:
 				}
 				v.Checks = append(v.Checks, schemaCheck)
 
+				statuses := app.ProtectionProvider().Assess(ctx)
+				v.Profile = string(selfprotect.ProfileOf(statuses))
+				for _, s := range statuses {
+					v.Protection = append(v.Protection, tui.ProtectionRow{
+						Asset:    string(s.Asset),
+						Agent:    s.Agent,
+						Level:    s.Level.String(),
+						Provider: s.Provider,
+						Drift:    s.Drift,
+						Detail:   s.Detail,
+					})
+				}
+
 				return v, nil
 			})
 			if err != nil {
@@ -170,6 +192,8 @@ Performs various health checks:
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json, jsonl, csv")
 
 	return cmd
 }
@@ -202,17 +226,4 @@ func canonicalVersion(v string) string {
 		return ""
 	}
 	return semver.Canonical(v)
-}
-
-// missingPromptHooks returns the prompt hooks that the adapter declares but
-// the agent config does not hold. An install from before prompt capture
-// lacks them, and the session context then has no intent.
-func missingPromptHooks(adapter agent.Adapter, status *agent.HookStatus) []string {
-	var missing []string
-	for _, h := range adapter.Hooks() {
-		if h.Prompt && !slices.Contains(status.Hooks, string(h.Type)) {
-			missing = append(missing, string(h.Type))
-		}
-	}
-	return missing
 }
