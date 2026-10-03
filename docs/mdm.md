@@ -105,18 +105,34 @@ gryph doctor --managed --json | jq -r .profile
 
 Each recipe does the same three things: place the binary, place the input
 files, run the commands. Replace the download step with your artifact store.
-The packages for Linux and the signed installers for macOS and Windows are
-planned. Until they ship, the scripts place the binary.
+On Linux the release ships a deb and an rpm package that put the binary at
+`/opt/safedep/gryph/bin/gryph` with a `/usr/bin/gryph` link. The signed
+installers for macOS and Windows are planned. Until they ship, the scripts
+place the binary.
+
+Every package and the checksum file carry a Sigstore signature from the
+release workflow, with no long-lived key. Verify one before you ship it to a
+fleet, with the certificate and the signature that sit next to it on the
+release page:
+
+```bash
+cosign verify-blob \
+  --certificate gryph_1.2.3_linux_amd64.deb.pem \
+  --signature gryph_1.2.3_linux_amd64.deb.sig \
+  --certificate-identity-regexp '^https://github.com/safedep/gryph/\.github/workflows/goreleaser\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  gryph_1.2.3_linux_amd64.deb
+```
 
 ### Linux with a configuration management tool
 
-Place the files and run the install as root. Set the two kernel settings that
-close the known same-user bypasses. `gryph doctor` reports both under
-"Host posture".
+Install the package, place the input files and run the install as root. Set
+the two kernel settings that close the known same-user bypasses. `gryph
+doctor` reports both under "Host posture".
 
 ```bash
-install -d -m 0755 -o root -g root /opt/safedep/gryph/bin /etc/safedep/gryph-input
-install -m 0755 -o root -g root ./gryph /opt/safedep/gryph/bin/gryph
+apt install ./gryph_1.2.3_linux_amd64.deb     # or: rpm -i gryph-1.2.3.x86_64.rpm
+install -d -m 0755 -o root -g root /etc/safedep/gryph-input
 install -m 0644 -o root -g root ./managed.yml ./policy.yaml /etc/safedep/gryph-input/
 
 cat > /etc/sysctl.d/60-gryph.conf <<'SYSCTL'
