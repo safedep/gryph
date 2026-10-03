@@ -21,14 +21,17 @@ const minVersion = "0.26.0"
 // Hooks declares the Gemini CLI hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
-var Hooks = []events.HookSpec{
+//
+// Gemini CLI waits 60 s for a hook by default (hooks reference, 2026-10-03).
+// Exit code 2 blocks. The reference documents no timeout behavior.
+var Hooks = events.WithTimeout(60*time.Second, []events.HookSpec{
 	{Type: "BeforeAgent", Phase: events.PhasePre, Blocking: true, Prompt: true, MinVersion: minVersion},
 	{Type: "BeforeTool", Phase: events.PhasePre, Blocking: true, MinVersion: minVersion},
 	{Type: "AfterTool", Phase: events.PhasePost, MinVersion: minVersion},
 	{Type: "SessionStart", Phase: events.PhaseUnknown, MinVersion: minVersion},
 	{Type: "SessionEnd", Phase: events.PhaseUnknown, MinVersion: minVersion},
 	{Type: "Notification", Phase: events.PhaseUnknown, MinVersion: minVersion},
-}
+})
 
 // HookTypes are the hook type names in Hooks, in install order.
 var HookTypes = agent.HookTypeNames(Hooks)

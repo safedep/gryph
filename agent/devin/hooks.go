@@ -16,14 +16,21 @@ import (
 // Hooks declares the Devin hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
-var Hooks = []events.HookSpec{
+//
+// Gryph writes hookTimeout into every hook entry. Devin lets the action
+// through on any exit code other than 2 (Cascade hooks reference,
+// 2026-10-03). The reference documents no timeout behavior.
+var Hooks = events.WithTimeout(hookTimeout, []events.HookSpec{
 	{Type: "SessionStart", Phase: events.PhaseUnknown},
 	{Type: "PreToolUse", Phase: events.PhasePre, Blocking: true},
 	{Type: "PostToolUse", Phase: events.PhasePost},
 	{Type: "UserPromptSubmit", Phase: events.PhasePre, Blocking: true, Prompt: true},
 	{Type: "Stop", Phase: events.PhaseUnknown},
 	{Type: "SessionEnd", Phase: events.PhaseUnknown},
-}
+})
+
+// hookTimeout is the timeout that Gryph writes into each Devin hook entry.
+const hookTimeout = 30 * time.Second
 
 // HookTypes are the hook type names in Hooks, in install order.
 var HookTypes = agent.HookTypeNames(Hooks)
@@ -120,7 +127,7 @@ func generateGryphHooks(program string) map[string][]HookMatcher {
 					{
 						Type:    "command",
 						Command: gryphHookCommand(program, hookType),
-						Timeout: 30,
+						Timeout: int(hookTimeout / time.Second),
 					},
 				},
 			},

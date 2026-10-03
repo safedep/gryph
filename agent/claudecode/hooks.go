@@ -16,9 +16,12 @@ import (
 // Hooks declares the Claude Code hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
-var Hooks = []events.HookSpec{
+//
+// Claude Code waits 600 s for a command hook and 30 s on UserPromptSubmit,
+// then lets the action through (hooks reference, 2026-10-03).
+var Hooks = events.WithTimeout(600*time.Second, []events.HookSpec{
 	{Type: "PreToolUse", Phase: events.PhasePre, Blocking: true},
-	{Type: "UserPromptSubmit", Phase: events.PhasePre, Blocking: true, Prompt: true},
+	{Type: "UserPromptSubmit", Phase: events.PhasePre, Blocking: true, Prompt: true, Timeout: 30 * time.Second},
 	{Type: "PostToolUse", Phase: events.PhasePost},
 	{Type: "PostToolUseFailure", Phase: events.PhasePost},
 	{Type: "SessionStart", Phase: events.PhaseUnknown},
@@ -26,7 +29,7 @@ var Hooks = []events.HookSpec{
 	{Type: "Notification", Phase: events.PhaseUnknown},
 	{Type: "SubagentStart", Phase: events.PhaseUnknown},
 	{Type: "SubagentStop", Phase: events.PhaseUnknown},
-}
+})
 
 // HookTypes are the hook type names in Hooks, in install order.
 var HookTypes = agent.HookTypeNames(Hooks)

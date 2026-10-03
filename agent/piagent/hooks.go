@@ -30,13 +30,16 @@ func processedPlugin(program string) []byte {
 // Hooks declares the Pi Agent hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
-var Hooks = []events.HookSpec{
-	{Type: "input", Phase: events.PhasePre, Blocking: true, Prompt: true, MinVersion: "0.47.0"},
+//
+// The Gryph extension waits 30 s, and 10 s on input, then lets the action
+// through, also on a spawn error.
+var Hooks = events.WithTimeout(30*time.Second, []events.HookSpec{
+	{Type: "input", Phase: events.PhasePre, Blocking: true, Prompt: true, MinVersion: "0.47.0", Timeout: 10 * time.Second},
 	{Type: "tool_call", Phase: events.PhasePre, Blocking: true},
 	{Type: "tool_result", Phase: events.PhasePost},
 	{Type: "session_start", Phase: events.PhaseUnknown},
 	{Type: "session_shutdown", Phase: events.PhaseUnknown},
-}
+})
 
 // HookTypes are the hook type names in Hooks, in install order.
 var HookTypes = agent.HookTypeNames(Hooks)

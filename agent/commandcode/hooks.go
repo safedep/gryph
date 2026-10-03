@@ -16,6 +16,9 @@ import (
 // Hooks declares the Command Code hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
+//
+// Command Code documents no hook timeout or error behavior that Gryph has
+// verified, so Timeout stays 0.
 var Hooks = []events.HookSpec{
 	{Type: "PreToolUse", Phase: events.PhasePre, Blocking: true},
 	{Type: "PostToolUse", Phase: events.PhasePost},

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
@@ -30,14 +31,17 @@ func processedPlugin(program string) []byte {
 // Hooks declares the OpenCode hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
-var Hooks = []events.HookSpec{
+//
+// The Gryph plugin waits 5 s and lets the action through on every result
+// other than exit code 2.
+var Hooks = events.WithTimeout(5*time.Second, []events.HookSpec{
 	{Type: "chat.message", Phase: events.PhasePre, Blocking: true, Prompt: true},
 	{Type: "tool.execute.before", Phase: events.PhasePre, Blocking: true},
 	{Type: "tool.execute.after", Phase: events.PhasePost},
 	{Type: "session.created", Phase: events.PhaseUnknown},
 	{Type: "session.idle", Phase: events.PhaseUnknown},
 	{Type: "session.error", Phase: events.PhaseUnknown},
-}
+})
 
 // HookTypes are the hook type names in Hooks, in install order.
 var HookTypes = agent.HookTypeNames(Hooks)

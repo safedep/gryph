@@ -85,6 +85,12 @@ func (a *Adapter) Hooks() []events.HookSpec { return Hooks }
   a prompt hook, and `gryph doctor` warns when it is missing.
 - `MinVersion` is the first agent version that fires the hook. `gryph doctor`
   warns when the detected version is older.
+- `Timeout` is how long the agent waits for the hook before it gives up and
+  lets the action through. Set it to the agent's documented default, or to the
+  timeout that Gryph writes into the hook entry or plugin. Use
+  `events.WithTimeout` to fill one value into a table. Record the source and
+  the date of the check in a comment, and add a row to the error behavior
+  table in `docs/agent-enforcement-coverage.md`.
 - Set `event.HookType` in `ParseEvent` to the declared name. A hook that the
   table does not declare gets phase `unknown`.
 - Set `event.ToolCallID` when the agent sends a tool call identifier. The

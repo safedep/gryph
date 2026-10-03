@@ -16,13 +16,19 @@ import (
 // Hooks declares the Codex hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
-var Hooks = []events.HookSpec{
+//
+// Gryph writes hookTimeout into every hook entry. Codex lets the action
+// through on a hook error or timeout (hooks reference, 2026-10-03).
+var Hooks = events.WithTimeout(hookTimeout, []events.HookSpec{
 	{Type: "SessionStart", Phase: events.PhaseUnknown},
 	{Type: "PreToolUse", Phase: events.PhasePre, Blocking: true},
 	{Type: "PostToolUse", Phase: events.PhasePost},
 	{Type: "UserPromptSubmit", Phase: events.PhasePre, Blocking: true, Prompt: true},
 	{Type: "Stop", Phase: events.PhaseUnknown},
-}
+})
+
+// hookTimeout is the timeout that Gryph writes into each Codex hook entry.
+const hookTimeout = 30 * time.Second
 
 // HookTypes are the hook type names in Hooks, in install order.
 var HookTypes = agent.HookTypeNames(Hooks)
@@ -64,7 +70,7 @@ func GenerateHooksConfig(program string) *HooksConfig {
 					{
 						Type:    "command",
 						Command: utils.HookCommand(program, "codex", hookType),
-						Timeout: 30,
+						Timeout: int(hookTimeout / time.Second),
 					},
 				},
 			},

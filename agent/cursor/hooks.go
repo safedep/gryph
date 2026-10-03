@@ -16,6 +16,10 @@ import (
 // Hooks declares the Cursor hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
+//
+// Cursor lets the action through on a crash, a timeout, or an exit code
+// other than 2, unless the hook sets failClosed (hooks reference,
+// 2026-10-03). The reference names no default timeout, so Timeout stays 0.
 var Hooks = []events.HookSpec{
 	// Pre-action hooks (can block)
 	{Type: "preToolUse", Phase: events.PhasePre, Blocking: true},

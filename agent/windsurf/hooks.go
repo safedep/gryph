@@ -16,6 +16,10 @@ import (
 // Hooks declares the Windsurf hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
+//
+// Windsurf lets the action through on any exit code other than 2 (Cascade
+// hooks reference, 2026-10-03). The reference names no timeout, so Timeout
+// stays 0.
 var Hooks = []events.HookSpec{
 	{Type: "pre_read_code", Phase: events.PhasePre, Blocking: true},
 	{Type: "post_read_code", Phase: events.PhasePost},
