@@ -482,14 +482,14 @@ policy:
 managed:
   agents: [claude-code, codex]   # the agents that get a managed hook entry
   lock_hooks: [claude-code]      # also turn on the agent's own lock: only managed hooks run
-  binary: /usr/libexec/safedep/gryph/gryph   # optional, the default of the platform
+  binary: /opt/safedep/gryph/bin/gryph   # optional, the default of the platform
 ```
 
 The hook entries name the `gryph` binary by an absolute path. Root must own
 the binary and every directory above it, and nothing in the chain may be
 writable by group or other, or the command exits 3. The default is
-`/usr/libexec/safedep/gryph/gryph` on Linux, `/Library/SafeDep/gryph/bin/gryph`
-on macOS and `%ProgramFiles%\SafeDep\gryph\gryph.exe` on Windows. `--config`
+`/opt/safedep/gryph/bin/gryph` on Linux and macOS, and
+`%ProgramFiles%\SafeDep\gryph\gryph.exe` on Windows. `--config`
 and `--policy` must pass the same check, so root never acts on a file another
 user wrote.
 
@@ -557,7 +557,7 @@ their error.
 {
   "status": "ok",
   "config": "/etc/safedep/gryph/config.yml",
-  "binary": "/usr/libexec/safedep/gryph/gryph",
+  "binary": "/opt/safedep/gryph/bin/gryph",
   "changed": true,
   "agents": [
     {"name": "claude-code", "path": "/etc/claude-code/managed-settings.d/50-gryph.json", "class": "locked", "action": "install", "changed": true, "locked": true},
@@ -597,7 +597,7 @@ directory another user can write, is refused.
   "issues": [],
   "config": {"path": "/etc/safedep/gryph/config.yml", "chain": "ok"},
   "policy": {"path": "/etc/safedep/gryph/policy.yaml", "chain": "ok", "version": "1", "sha256": "...", "allow_user_policy": false},
-  "binary": {"path": "/usr/libexec/safedep/gryph/gryph", "chain": "ok"},
+  "binary": {"path": "/opt/safedep/gryph/bin/gryph", "chain": "ok"},
   "agents": [
     {"name": "claude-code", "class": "locked", "path": "/etc/claude-code/managed-settings.d/50-gryph.json", "level": "prevent_same_user", "match": true, "locked": true},
     {"name": "cursor", "class": "system_path", "path": "/etc/cursor/hooks.json", "level": "detect", "match": true, "locked": false}

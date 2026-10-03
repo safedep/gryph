@@ -49,8 +49,8 @@ Rules that hold for every command:
 
 | Platform | Binary | Managed directory |
 |---|---|---|
-| Linux | `/usr/libexec/safedep/gryph/gryph` | `/etc/safedep/gryph/` |
-| macOS | `/Library/SafeDep/gryph/bin/gryph` | `/Library/Application Support/safedep/gryph/` |
+| Linux | `/opt/safedep/gryph/bin/gryph`, with `/usr/bin/gryph` as a link for `PATH` | `/etc/safedep/gryph/` |
+| macOS | `/opt/safedep/gryph/bin/gryph`, with `/usr/local/bin/gryph` as a link for `PATH` | `/Library/Application Support/safedep/gryph/` |
 | Windows | `%ProgramFiles%\SafeDep\gryph\gryph.exe` | `%ProgramData%\safedep\gryph\` |
 
 The managed directory holds `config.yml`, `policy.yaml`, `policies/` and
@@ -69,7 +69,7 @@ policy:
 managed:
   agents: [claude-code, codex, cursor, gemini, windsurf]
   lock_hooks: [claude-code]      # only managed hooks run, Claude Code and Codex only
-  # binary: /usr/libexec/safedep/gryph/gryph
+  # binary: /opt/safedep/gryph/bin/gryph
 ```
 
 The lock also stops the developer's own hooks, so it is off by default. The
@@ -115,8 +115,8 @@ close the known same-user bypasses. `gryph doctor` reports both under
 "Host posture".
 
 ```bash
-install -d -m 0755 -o root -g root /usr/libexec/safedep/gryph /etc/safedep/gryph-input
-install -m 0755 -o root -g root ./gryph /usr/libexec/safedep/gryph/gryph
+install -d -m 0755 -o root -g root /opt/safedep/gryph/bin /etc/safedep/gryph-input
+install -m 0755 -o root -g root ./gryph /opt/safedep/gryph/bin/gryph
 install -m 0644 -o root -g root ./managed.yml ./policy.yaml /etc/safedep/gryph-input/
 
 cat > /etc/sysctl.d/60-gryph.conf <<'SYSCTL'
@@ -140,16 +140,16 @@ nothing when the host is already right.
 ### Jamf Pro (macOS)
 
 1. Ship the binary and the input files as a package that installs to
-   `/Library/SafeDep/gryph/bin/gryph` (mode 0755, `root:wheel`) and
-   `/Library/SafeDep/gryph/input/` (mode 0644, `root:wheel`). A package keeps
+   `/opt/safedep/gryph/bin/gryph` (mode 0755, `root:wheel`) and
+   `/opt/safedep/gryph/input/` (mode 0644, `root:wheel`). A package keeps
    the ownership right. A script that copies from a user's download does not.
 2. Add a policy with a script that runs after the package:
 
    ```bash
    #!/bin/bash
-   /Library/SafeDep/gryph/bin/gryph install --managed \
-     --config /Library/SafeDep/gryph/input/managed.yml \
-     --policy /Library/SafeDep/gryph/input/policy.yaml --json
+   /opt/safedep/gryph/bin/gryph install --managed \
+     --config /opt/safedep/gryph/input/managed.yml \
+     --policy /opt/safedep/gryph/input/policy.yaml --json
    ```
 
    Run it at enrollment and on a recurring check-in. It changes nothing when
@@ -159,11 +159,11 @@ nothing when the host is already right.
 
    ```bash
    #!/bin/bash
-   profile=$(/Library/SafeDep/gryph/bin/gryph doctor --managed --json 2>/dev/null | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin)["profile"])' 2>/dev/null)
+   profile=$(/opt/safedep/gryph/bin/gryph doctor --managed --json 2>/dev/null | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin)["profile"])' 2>/dev/null)
    echo "<result>${profile:-none}</result>"
    ```
 
-4. To remove, run `/Library/SafeDep/gryph/bin/gryph uninstall --managed --json`
+4. To remove, run `/opt/safedep/gryph/bin/gryph uninstall --managed --json`
    from a policy, then remove the package.
 
 The reconcile job is a launchd agent at
@@ -180,9 +180,9 @@ logged in picks it up at its next login.
 
    ```bash
    #!/bin/bash
-   /Library/SafeDep/gryph/bin/gryph install --managed \
-     --config /Library/SafeDep/gryph/input/managed.yml \
-     --policy /Library/SafeDep/gryph/input/policy.yaml --json
+   /opt/safedep/gryph/bin/gryph install --managed \
+     --config /opt/safedep/gryph/input/managed.yml \
+     --policy /opt/safedep/gryph/input/policy.yaml --json
    ```
 
 3. Add a second Custom Script whose audit script is the compliance check. It
@@ -190,7 +190,7 @@ logged in picks it up at its next login.
 
    ```bash
    #!/bin/bash
-   /Library/SafeDep/gryph/bin/gryph doctor --managed --json
+   /opt/safedep/gryph/bin/gryph doctor --managed --json
    ```
 
 ### Microsoft Intune (Windows)

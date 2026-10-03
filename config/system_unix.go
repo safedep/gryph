@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"syscall"
 )
@@ -34,13 +33,12 @@ func programDataDir() string {
 // let a user plant or replace a managed file that governs every user on the
 // machine.
 // managedBinaryDefault is where a package puts the root-owned gryph
-// binary. The directory chain is root-only on a stock install, which
-// /usr/local is not on an Intel Mac with Homebrew.
+// binary, on Linux and on macOS. /opt is root-only on a stock install of
+// both, which /usr/local is not on an Intel Mac with Homebrew, and a
+// package may write it on macOS without a change to the protected system
+// volume.
 func managedBinaryDefault() string {
-	if runtime.GOOS == "darwin" {
-		return "/Library/SafeDep/gryph/bin/gryph"
-	}
-	return "/usr/libexec/safedep/gryph/gryph"
+	return "/opt/safedep/gryph/bin/gryph"
 }
 
 func verifyManagedPathTrust(path string) error {

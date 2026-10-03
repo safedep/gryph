@@ -15,7 +15,7 @@ func TestManagedInstall_Gemini(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "gemini-cli", "settings.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(`{"general":{"vimMode":false},"hooksConfig":{"notifications":true},"hooks":{"BeforeTool":[{"matcher":"shell","hooks":[{"type":"command","command":"/enterprise/check"}]}]}}`), 0o644))
-	opts := agent.ManagedInstallOptions{Command: "/usr/libexec/safedep/gryph/gryph"}
+	opts := agent.ManagedInstallOptions{Command: "/opt/safedep/gryph/bin/gryph"}
 
 	res, err := installManagedAt(path, opts)
 	require.NoError(t, err)
@@ -34,7 +34,7 @@ func TestManagedInstall_Gemini(t *testing.T) {
 	require.Len(t, before, 2)
 	assert.Equal(t, "shell", before[0]["matcher"], "the enterprise entry stays first")
 	assert.Equal(t, "*", before[1]["matcher"])
-	assert.Equal(t, "/usr/libexec/safedep/gryph/gryph _hook gemini BeforeTool", agent.EntryList(before[1]["hooks"])[0]["command"])
+	assert.Equal(t, "/opt/safedep/gryph/bin/gryph _hook gemini BeforeTool", agent.EntryList(before[1]["hooks"])[0]["command"])
 	assert.Len(t, doc["hooks"].(map[string]any), len(HookTypes))
 
 	res, err = installManagedAt(path, opts)

@@ -17,7 +17,7 @@ func TestRenderManagedDoctor(t *testing.T) {
 		Issues:        []string{},
 		Config:        managedFileReport{Path: "/etc/safedep/gryph/config.yml", Chain: managedChainOK},
 		Policy:        managedPolicyReport{managedFileReport: managedFileReport{Path: "/etc/safedep/gryph/policy.yaml", Chain: managedChainOK}, Version: "1", SHA256: "ab"},
-		Binary:        managedFileReport{Path: "/usr/libexec/safedep/gryph/gryph", Chain: managedChainOK},
+		Binary:        managedFileReport{Path: "/opt/safedep/gryph/bin/gryph", Chain: managedChainOK},
 		Agents:        []managedAgentState{{Name: "claude-code", Class: "locked", Path: "/etc/claude-code/x", Level: "prevent_same_user", Match: true, Locked: true}},
 		Key:           managedKeyReport{Scope: managedKeyScopeUser},
 		Supervisor:    managedSupervisorReport{State: managedSupervisorAbsent},

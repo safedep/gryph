@@ -27,4 +27,4 @@ managed:
 -- missing.yml --
 managed:
   agents: [claude-code]
-  binary: /usr/libexec/safedep/gryph/no-such-gryph
+  binary: /opt/safedep/gryph/bin/no-such-gryph

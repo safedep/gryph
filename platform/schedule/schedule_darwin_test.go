@@ -46,7 +46,7 @@ func TestInstallRemoveSystemWide_Darwin(t *testing.T) {
 	t.Cleanup(func() { systemAgentsDir = restore })
 	calls := stubRunner(t)
 
-	job := Job{Name: "gryph-reconcile", Description: "Gryph reconcile", Command: []string{"/Library/SafeDep/gryph/bin/gryph", "supervisor", "reconcile", "--once"}, Interval: 15 * time.Minute}
+	job := Job{Name: "gryph-reconcile", Description: "Gryph reconcile", Command: []string{"/opt/safedep/gryph/bin/gryph", "supervisor", "reconcile", "--once"}, Interval: 15 * time.Minute}
 	res, err := InstallSystemWide(context.Background(), job)
 	require.NoError(t, err)
 	assert.True(t, res.Enabled)
@@ -54,7 +54,7 @@ func TestInstallRemoveSystemWide_Darwin(t *testing.T) {
 	assert.Equal(t, []string{path}, res.Paths)
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.Contains(t, string(data), "<string>/Library/SafeDep/gryph/bin/gryph</string>")
+	assert.Contains(t, string(data), "<string>/opt/safedep/gryph/bin/gryph</string>")
 	assert.Contains(t, string(data), "<integer>900</integer>")
 	assert.Empty(t, *calls, "launchd loads the agent at login, no command runs")
 

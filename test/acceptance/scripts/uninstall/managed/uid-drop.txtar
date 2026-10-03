@@ -48,7 +48,7 @@ exec rm -f /etc/gryph-acceptance-trap.json /usr/local/bin/gryph-acceptance
 {
   "hooks": {
     "PreToolUse": [
-      {"matcher": "*", "hooks": [{"type": "command", "command": "/usr/libexec/safedep/gryph/gryph _hook claude-code PreToolUse"}]}
+      {"matcher": "*", "hooks": [{"type": "command", "command": "/opt/safedep/gryph/bin/gryph _hook claude-code PreToolUse"}]}
     ],
     "SessionEnd": [
       {"hooks": [{"type": "command", "command": "/enterprise/notify.sh"}]}

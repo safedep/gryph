@@ -13,7 +13,7 @@ import (
 
 func TestManagedInstall_Windsurf(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "devin", "hooks.json")
-	opts := agent.ManagedInstallOptions{Command: "/usr/libexec/safedep/gryph/gryph"}
+	opts := agent.ManagedInstallOptions{Command: "/opt/safedep/gryph/bin/gryph"}
 
 	res, err := installManagedAt(path, opts)
 	require.NoError(t, err)
@@ -25,7 +25,7 @@ func TestManagedInstall_Windsurf(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &doc))
 	hooks := doc["hooks"].(map[string]any)
 	assert.Len(t, hooks, len(HookTypes))
-	assert.Equal(t, "/usr/libexec/safedep/gryph/gryph _hook windsurf pre_run_command", agent.EntryList(hooks["pre_run_command"])[0]["command"])
+	assert.Equal(t, "/opt/safedep/gryph/bin/gryph _hook windsurf pre_run_command", agent.EntryList(hooks["pre_run_command"])[0]["command"])
 
 	res, err = installManagedAt(path, opts)
 	require.NoError(t, err)

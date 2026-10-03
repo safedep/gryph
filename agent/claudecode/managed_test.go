@@ -14,7 +14,7 @@ import (
 
 func TestManagedInstall_ClaudeCode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "claude-code", "managed-settings.d", "50-gryph.json")
-	opts := agent.ManagedInstallOptions{Command: "/usr/libexec/safedep/gryph/gryph"}
+	opts := agent.ManagedInstallOptions{Command: "/opt/safedep/gryph/bin/gryph"}
 
 	res, err := installManagedAt(path, agent.ManagedInstallOptions{Command: opts.Command, DryRun: true})
 	require.NoError(t, err)
@@ -35,7 +35,7 @@ func TestManagedInstall_ClaudeCode(t *testing.T) {
 	assert.False(t, hasLock, "the lock is off by default")
 	hooks := doc["hooks"].(map[string]any)
 	assert.Len(t, hooks, len(HookTypes))
-	assert.Contains(t, string(data), `/usr/libexec/safedep/gryph/gryph _hook claude-code PreToolUse`)
+	assert.Contains(t, string(data), `/opt/safedep/gryph/bin/gryph _hook claude-code PreToolUse`)
 
 	res, err = installManagedAt(path, opts)
 	require.NoError(t, err)
