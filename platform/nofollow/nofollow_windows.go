@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -45,19 +46,52 @@ func (h dirHandle) stat(name string) (fs.FileInfo, error) {
 	return os.Lstat(filepath.Join(h.path, name))
 }
 
-func (h dirHandle) readFile(name string) ([]byte, error) {
+func (h dirHandle) open(name string) (*os.File, error) {
 	path := filepath.Join(h.path, name)
 	if _, err := attributes(path); err != nil {
 		return nil, err
 	}
-	info, err := os.Lstat(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
 	if !info.Mode().IsRegular() {
+		_ = f.Close()
 		return nil, fmt.Errorf("%s is not a regular file", path)
 	}
-	return os.ReadFile(path)
+	return f, nil
+}
+
+func (h dirHandle) readFile(name string) ([]byte, error) {
+	f, err := h.open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	return io.ReadAll(f)
+}
+
+func (h dirHandle) info() (fs.FileInfo, error) {
+	return os.Stat(h.path)
+}
+
+func (h dirHandle) readDir() ([]fs.DirEntry, error) {
+	return os.ReadDir(h.path)
+}
+
+func (h dirHandle) remove(name string) error {
+	return os.Remove(filepath.Join(h.path, name))
+}
+
+// Owner reports false on Windows: the file owner is a security identifier,
+// not a uid, and the hard link count is not part of the file information.
+func Owner(fs.FileInfo) (uid uint32, links uint64, ok bool) {
+	return 0, 0, false
 }
 
 func (h dirHandle) writeFile(name string, data []byte, perm os.FileMode) error {

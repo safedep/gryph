@@ -119,6 +119,56 @@ sends the frames on stdin to a service and prints the replies. With
 `--idle` it first opens that many connections that send hello and hold.
 The acceptance scripts under `supervisor/` use it.
 
+## The spool
+
+The spool is the drop directory of the hook clients. `gryph supervisor run`
+creates the root (`supervisor.spool_dir`, `--spool-dir`) when it is missing,
+with the set-group-ID bit, the sticky bit and mode 733: an account makes its
+own directory under it, the directory takes the group of the root, and no
+account lists or removes another account's entries. On a managed host the
+packaging gives the root to the service account, so that group is the
+service account's. The client makes `<root>/<uid>/` with mode 770 and
+writes each entry as `<unix nanoseconds>-<pid>.json` with mode 640, through
+a temporary name and a rename. The service reads and removes the entries
+with the group bits alone, as the service account, with no privilege.
+
+An entry is one JSON object: `recorded_at`, `kind` (empty for an action the
+client decided alone, `tamper` for a finding of the client), `verdict`,
+`reason` and `frame` (the `handle` frame the service did not see).
+
+The service reads the spool once at start and then every
+`--ingest-interval` (default 1 m). One pass runs as follows, per account
+directory:
+
+- The owner of the directory, read from its open handle, is the account.
+  A directory named for another uid still feeds the partition of its
+  owner.
+- Every file is opened relative to the directory handle with no-follow
+  and no wait, so a link or a FIFO cannot send the pass elsewhere or hold
+  it. The kind, the owner and the link count come from the open
+  descriptor: a file that is not regular, has another owner, has more than
+  one link, is over the file cap (the frame cap plus 64 KiB) or does not
+  decode as an entry is refused unread. The frame of an entry passes the
+  same bounds as a frame on the wire.
+- The pass takes at most `--spool-max-files` entries (default 256) and
+  64 MiB from one account. The entries past that are removed unread and
+  counted as dropped.
+- A file the pass took, refused or dropped is removed. A file the
+  partition could not record stays for the next pass.
+
+An entry with a `handle` frame becomes an event in the agent session, with
+the client's verdict as its result, and a receipt with the decision
+`unverified` and the message "client verdict <verdict> without the decision
+service: <reason>". The service runs no evaluation on it, and the
+accumulator never sees it: a spooled action changes no context counter. A
+`tamper` entry becomes a `server_identity` tamper event in the system
+session of the account. The files a pass refused or dropped become one
+`spool_refused` tamper event with the names and the reasons. Entries that
+the client decided alone while the service was running, by their
+`recorded_at`, become one `degraded` tamper event with the count: that
+pattern means the client could not reach a running service, which a
+same-user flood causes on purpose.
+
 ## The client
 
 A managed configuration with `supervisor.enabled: true` turns the hook into
@@ -161,9 +211,8 @@ that binds a socket of its own gets a block, not an allow.
 Every failure leaves an entry in the spool of the account
 (`supervisor.spool_dir`, default `/var/spool/safedep/gryph/<uid>/`): the
 frame the service did not see, the verdict the client gave, and the reason.
-An allow there is an action the service records later, marked as spooled.
-The spool root must exist, root-owned with the sticky bit; the client makes
-its own account directory, mode 0700.
+An allow there is an action the service records later, marked as
+unverified. The [spool](#the-spool) section has the layout and the pass.
 
 Only the managed file sets `supervisor.unavailable.{blocking,prompt,other}`
 (`block` or `allow`). The `pilot` profile's `local-ephemeral` fallback is

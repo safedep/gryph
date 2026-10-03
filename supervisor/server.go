@@ -18,6 +18,7 @@ import (
 	"github.com/safedep/gryph/decision/ipc"
 	"github.com/safedep/gryph/platform/nofollow"
 	"github.com/safedep/gryph/platform/peercred"
+	"github.com/safedep/gryph/spool"
 )
 
 // ProviderName names the service in a tamper event.
@@ -31,6 +32,11 @@ type Server struct {
 	root    string
 	limits  Limits
 	version string
+
+	spoolDir       string
+	spoolLimits    spool.Limits
+	ingestInterval time.Duration
+	started        time.Time
 
 	mu         sync.Mutex
 	rootDir    *nofollow.Dir
@@ -47,6 +53,15 @@ type Options struct {
 	Limits   Limits
 	// Version is what Welcome reports as the server version.
 	Version string
+	// SpoolDir is the spool the service reads. Empty takes the configured
+	// or the platform default.
+	SpoolDir string
+	// SpoolLimits bound one pass over one account's spool. A zero value
+	// takes the defaults.
+	SpoolLimits spool.Limits
+	// IngestInterval is the time between two passes over the spool. Zero
+	// takes DefaultIngestInterval. A negative value turns the passes off.
+	IngestInterval time.Duration
 }
 
 // New builds a server for the managed configuration cfg.
@@ -59,7 +74,23 @@ func New(cfg *config.Config, opts Options) *Server {
 	if limits.MaxConns <= 0 {
 		limits = DefaultLimits()
 	}
-	return &Server{cfg: cfg, root: root, limits: limits, version: opts.Version, partitions: map[uint32]*partition{}}
+	spoolDir := opts.SpoolDir
+	if spoolDir == "" {
+		spoolDir = cfg.Supervisor.SpoolPath()
+	}
+	spoolLimits := opts.SpoolLimits
+	if spoolLimits.MaxFiles <= 0 {
+		spoolLimits = spool.DefaultLimits()
+	}
+	interval := opts.IngestInterval
+	if interval == 0 {
+		interval = DefaultIngestInterval
+	}
+	return &Server{
+		cfg: cfg, root: root, limits: limits, version: opts.Version,
+		spoolDir: spoolDir, spoolLimits: spoolLimits, ingestInterval: interval,
+		partitions: map[uint32]*partition{},
+	}
 }
 
 // Serve accepts connections until ctx ends or the listener fails. The
@@ -73,12 +104,20 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	}
 	s.mu.Lock()
 	s.rootDir = root
+	s.started = time.Now()
 	s.mu.Unlock()
 	defer func() { _ = root.Close() }()
 	go func() {
 		<-ctx.Done()
 		_ = ln.Close()
 	}()
+	if s.ingestInterval > 0 {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.ingestLoop(ctx)
+		}()
+	}
 	for {
 		conn, err := ln.Accept()
 		if err != nil {

@@ -18,10 +18,10 @@ func TestWrite(t *testing.T) {
 	assert.Equal(t, filepath.Join(root, "1000"), filepath.Dir(path))
 	info, err := os.Stat(path)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	assert.Equal(t, FileMode, info.Mode().Perm())
 	dirInfo, err := os.Stat(filepath.Dir(path))
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0o700), dirInfo.Mode().Perm())
+	assert.Equal(t, DirMode, dirInfo.Mode().Perm())
 
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)

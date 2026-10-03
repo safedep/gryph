@@ -143,6 +143,12 @@ const resultStatusRecorded = "recorded"
 // it in the system session of the account. The PDP never produces it.
 const DecisionTamper = "tamper"
 
+// DecisionUnverified is the decision column of a receipt for an action that
+// the hook client decided without the decision service and left in the
+// spool. The service records it without an evaluation, so the message
+// carries the client's verdict and reason. The PDP never produces it.
+const DecisionUnverified = "unverified"
+
 // HashInput collects every byte that participates in the receipt hash. The
 // receipt generator constructs one of these per insert, computes the hash,
 // and persists both the input and its hash.
@@ -190,7 +196,7 @@ func DeriveInsertResultStatus(decision string) string {
 		return string(model.ResultBlocked)
 	case string(model.DecisionDefer):
 		return resultStatusDeferred
-	case DecisionTamper:
+	case DecisionTamper, DecisionUnverified:
 		return resultStatusRecorded
 	}
 	return resultStatusPending

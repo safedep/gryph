@@ -87,21 +87,80 @@ func (h dirHandle) stat(name string) (fs.FileInfo, error) {
 	return os.Lstat(filepath.Join(h.path, name)) // mode and size from the kernel, through the standard type
 }
 
-func (h dirHandle) readFile(name string) ([]byte, error) {
-	fd, err := unix.Openat(h.fd, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+// open opens name read-only on the handle. O_NONBLOCK makes the open of a
+// FIFO return at once, so the kind check on the descriptor runs before any
+// wait. A regular file reads the same with or without it.
+func (h dirHandle) open(name string) (*os.File, error) {
+	fd, err := unix.Openat(h.fd, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, wrapLink(filepath.Join(h.path, name), err)
 	}
 	f := os.NewFile(uintptr(fd), filepath.Join(h.path, name))
-	defer func() { _ = f.Close() }()
 	info, err := f.Stat()
 	if err != nil {
+		_ = f.Close()
 		return nil, err
 	}
 	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("%s is not a regular file", f.Name())
+		_ = f.Close()
+		return nil, fmt.Errorf("%s is not a regular file", filepath.Join(h.path, name))
 	}
+	return f, nil
+}
+
+func (h dirHandle) readFile(name string) ([]byte, error) {
+	f, err := h.open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
 	return io.ReadAll(f)
+}
+
+// file returns the handle as a file on a duplicate descriptor, for the
+// standard library calls that want one. The caller closes it.
+func (h dirHandle) file() (*os.File, error) {
+	fd, err := unix.Dup(h.fd)
+	if err != nil {
+		return nil, &os.PathError{Op: "dup", Path: h.path, Err: err}
+	}
+	unix.CloseOnExec(fd)
+	return os.NewFile(uintptr(fd), h.path), nil
+}
+
+func (h dirHandle) info() (fs.FileInfo, error) {
+	f, err := h.file()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	return f.Stat()
+}
+
+func (h dirHandle) readDir() ([]fs.DirEntry, error) {
+	f, err := h.file()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	return f.ReadDir(-1)
+}
+
+func (h dirHandle) remove(name string) error {
+	if err := unix.Unlinkat(h.fd, name, 0); err != nil {
+		return &os.PathError{Op: "remove", Path: filepath.Join(h.path, name), Err: err}
+	}
+	return nil
+}
+
+// Owner returns the uid that owns the file of info and the count of its
+// hard links. ok is false when the platform does not report them.
+func Owner(info fs.FileInfo) (uid uint32, links uint64, ok bool) {
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, 0, false
+	}
+	return st.Uid, uint64(st.Nlink), true //nolint:unconvert // Nlink is uint16 on darwin and uint64 on linux
 }
 
 func (h dirHandle) writeFile(name string, data []byte, perm os.FileMode) error {

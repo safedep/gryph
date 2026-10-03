@@ -159,3 +159,50 @@ func TestDir_OpenDir(t *testing.T) {
 	assert.ErrorIs(t, err, ErrSymlink)
 	assert.Error(t, d.Mkdir("link", 0o700), "a link in place of the directory is refused")
 }
+
+func TestDir_OpenReadDirRemove(t *testing.T) {
+	base := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(base, "b.json"), []byte("b"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "a.json"), []byte("a"), 0o600))
+	require.NoError(t, os.Mkdir(filepath.Join(base, "sub"), 0o700))
+	d, err := OpenDir(base, ".")
+	require.NoError(t, err)
+	defer func() { _ = d.Close() }()
+
+	info, err := d.Info()
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+
+	entries, err := d.ReadDir()
+	require.NoError(t, err)
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	assert.Equal(t, []string{"a.json", "b.json", "sub"}, names)
+
+	f, err := d.Open("a.json")
+	require.NoError(t, err)
+	fi, err := f.Stat()
+	require.NoError(t, err)
+	assert.True(t, fi.Mode().IsRegular())
+	if uid, links, ok := Owner(fi); ok {
+		assert.Equal(t, uint32(os.Getuid()), uid)
+		assert.Equal(t, uint64(1), links)
+	}
+	require.NoError(t, f.Close())
+
+	_, err = d.Open("sub")
+	assert.Error(t, err, "a directory is not a regular file")
+	symlinkOrSkip(t, filepath.Join(base, "a.json"), filepath.Join(base, "link.json"))
+	_, err = d.Open("link.json")
+	assert.ErrorIs(t, err, ErrSymlink)
+
+	require.NoError(t, d.Remove("link.json"))
+	_, err = os.Lstat(filepath.Join(base, "link.json"))
+	assert.ErrorIs(t, err, os.ErrNotExist)
+	_, err = os.Stat(filepath.Join(base, "a.json"))
+	assert.NoError(t, err, "the target of the link stays")
+	require.NoError(t, d.Remove("a.json"))
+	assert.ErrorIs(t, d.Remove("a.json"), os.ErrNotExist)
+}

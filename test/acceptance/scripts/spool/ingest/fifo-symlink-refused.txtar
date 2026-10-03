@@ -1,0 +1,58 @@
+# A spool file is read from an open descriptor that never follows a link
+# and never waits: a FIFO, a symbolic link and a file with two links are
+# refused unread and removed, the target of the link is untouched, and the
+# service keeps answering through the pass. Runs only in the privileged
+# job on a Linux host with the useradd tools.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the account tools of this script are the Linux ones'
+[!exec:useradd] skip 'needs useradd'
+! exists /home/gryphacc1
+! exists /tmp/gryph-acceptance-spool
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec useradd -m -s /bin/bash gryphacc1
+exec id -u gryphacc1
+cp stdout uid1.txt
+capture UID1 '([0-9]+)' uid1.txt
+
+exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir $WORK/state --spool-dir /tmp/gryph-acceptance-spool --ingest-interval 500ms --allow-root &
+exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do test -S /tmp/gryph-acceptance-hook.sock && break; sleep 0.2; done'
+
+exec cp entry.json /tmp/gryph-acceptance-entry.json
+exec chmod 644 /tmp/gryph-acceptance-entry.json
+exec runuser -u gryphacc1 -- /bin/sh -c 'mkdir -m 770 /tmp/gryph-acceptance-spool/'$UID1' && cd /tmp/gryph-acceptance-spool/'$UID1' && mkfifo 1-pipe.json && ln -s /etc/shadow 2-link.json && cp /tmp/gryph-acceptance-entry.json 3-two.json && ln 3-two.json /home/gryphacc1/other-name && cp /tmp/gryph-acceptance-entry.json 4-good.json'
+
+exec sleep 2
+# The pass did not wait on the FIFO: the service answers.
+ipcframe hello.bin hello.json
+stdin hello.bin
+exec gryph supervisor send --socket /tmp/gryph-acceptance-hook.sock --text
+stdout '"type":"welcome"'
+
+! exists /tmp/gryph-acceptance-spool/$UID1/1-pipe.json
+! exists /tmp/gryph-acceptance-spool/$UID1/2-link.json
+! exists /tmp/gryph-acceptance-spool/$UID1/3-two.json
+! exists /tmp/gryph-acceptance-spool/$UID1/4-good.json
+exists /etc/shadow
+exists /home/gryphacc1/other-name
+
+env GRYPH_DATA_DIR=$WORK/state/users/$UID1
+exec gryph policy receipts --format json --no-color
+stdout -count=1 '"decision":\s*"unverified"'
+stdout -count=1 '"decision":\s*"tamper"'
+exec gryph query --agent gryph --format json --no-color
+cp stdout tamper.json
+capture TAMPER_ID '"ID": "([0-9a-f-]+)"' tamper.json
+exec gryph cat $TAMPER_ID --format json --no-color
+stdout '"operation":\s*"spool_refused"'
+stdout '3 file\(s\) refused: 1-pipe.json \([^)]*not a regular file\), 2-link.json \([^)]*symbolic link\), 3-two.json \(2 links\)'
+
+exec rm -rf /tmp/gryph-acceptance-spool /tmp/gryph-acceptance-entry.json
+exec userdel -r gryphacc1
+
+-- hello.json --
+{"type":"hello","body":{"proto":1,"client_version":"test"}}
+-- entry.json --
+{"recorded_at":"2026-01-01T00:00:00Z","verdict":"allow","reason":"ipc: cannot reach the decision service at /tmp/gryph-acceptance-hook.sock","frame":{"type":"handle","body":{"agent":"claude-code","hook_type":"UserPromptSubmit","raw_payload":"eyJzZXNzaW9uX2lkIjoidGVzdC1zZXNzaW9uLTEyMyIsImN3ZCI6Ii9ob21lL3VzZXIvcHJvamVjdCIsImhvb2tfZXZlbnRfbmFtZSI6IlVzZXJQcm9tcHRTdWJtaXQiLCJwcm9tcHQiOiJsaXN0IHRoZSBmaWxlcyJ9","project_claim":{"name":"project"}}}}

@@ -33,12 +33,24 @@ type Entry struct {
 // the system session of the account.
 const KindTamper = "tamper"
 
-// Write puts entry under root/<account>/, as a file that the writer alone
-// can read. The root must exist: the service creates it, root-owned with
-// the sticky bit, so an account writes only under its own directory. The
-// account directory is created on first use when the root allows it. The
-// write goes through a temporary name and a rename, so a reader never
-// sees a partial entry.
+// The modes of the spool. The root carries the set-group-ID bit and the
+// sticky bit: an account directory made under it takes the group of the
+// root, which is the service account's, and no account removes another
+// account's entries. The account directory and its files give that group
+// read, and the directory write, so the service reads and removes the
+// entries without a privilege. The modes are set after the create, so the
+// umask of the writer does not take the group bits away.
+const (
+	RootMode = os.ModeSetgid | os.ModeSticky | 0o733
+	DirMode  = os.FileMode(0o770)
+	FileMode = os.FileMode(0o640)
+)
+
+// Write puts entry under root/<account>/, as a file that the writer and
+// the service can read. The root must exist: the service creates it, so
+// an account writes only under its own directory. The account directory is
+// created on first use when the root allows it. The write goes through a
+// temporary name and a rename, so a reader never sees a partial entry.
 func Write(root, account string, entry Entry) (string, error) {
 	if root == "" {
 		return "", errors.New("spool: no spool directory")
@@ -47,7 +59,12 @@ func Write(root, account string, entry Entry) (string, error) {
 		return "", fmt.Errorf("spool: %w", err)
 	}
 	dir := filepath.Join(root, account)
-	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+	switch err := os.Mkdir(dir, DirMode); {
+	case err == nil:
+		if err := os.Chmod(dir, DirMode); err != nil {
+			return "", fmt.Errorf("spool: %w", err)
+		}
+	case !errors.Is(err, os.ErrExist):
 		return "", fmt.Errorf("spool: %w", err)
 	}
 	if entry.RecordedAt.IsZero() {
@@ -59,7 +76,11 @@ func Write(root, account string, entry Entry) (string, error) {
 	}
 	name := strconv.FormatInt(entry.RecordedAt.UnixNano(), 10) + "-" + strconv.Itoa(os.Getpid()) + ".json"
 	tmp := filepath.Join(dir, "."+name+".tmp")
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	if err := os.WriteFile(tmp, data, FileMode); err != nil {
+		return "", fmt.Errorf("spool: %w", err)
+	}
+	if err := os.Chmod(tmp, FileMode); err != nil {
+		_ = os.Remove(tmp)
 		return "", fmt.Errorf("spool: %w", err)
 	}
 	final := filepath.Join(dir, name)
@@ -68,4 +89,22 @@ func Write(root, account string, entry Entry) (string, error) {
 		return "", fmt.Errorf("spool: %w", err)
 	}
 	return final, nil
+}
+
+// EnsureRoot creates the root when it is missing, with RootMode. An
+// existing root keeps its mode: the packaging of the host owns it.
+func EnsureRoot(root string) error {
+	if root == "" {
+		return errors.New("spool: no spool directory")
+	}
+	if _, err := os.Stat(root); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return fmt.Errorf("spool: %w", err)
+	}
+	if err := os.Chmod(root, RootMode); err != nil {
+		return fmt.Errorf("spool: %w", err)
+	}
+	return nil
 }

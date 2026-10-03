@@ -13,8 +13,12 @@ import (
 	"time"
 
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/decision"
 	"github.com/safedep/gryph/decision/ipc"
+	"github.com/safedep/gryph/spool"
+	"github.com/safedep/gryph/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,7 +34,7 @@ func startServer(t *testing.T, limits Limits) (string, string) {
 	cfg := config.Default()
 	state := filepath.Join(dir, "state")
 	require.NoError(t, os.Mkdir(state, 0o700))
-	srv := New(cfg, Options{StateDir: state, Limits: limits, Version: "test"})
+	srv := New(cfg, Options{StateDir: state, Limits: limits, Version: "test", SpoolDir: filepath.Join(dir, "spool"), IngestInterval: -1})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ctx, ln) }()
@@ -43,6 +47,38 @@ func startServer(t *testing.T, limits Limits) (string, string) {
 		}
 	})
 	return sock, state
+}
+
+// startServerWithSpool is startServer with the server in hand, for a test
+// that runs a spool pass itself.
+func startServerWithSpool(t *testing.T) (*Server, string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	sock := filepath.Join(dir, "hook.sock")
+	ln, err := net.Listen("unix", sock)
+	require.NoError(t, err)
+	state := filepath.Join(dir, "state")
+	require.NoError(t, os.Mkdir(state, 0o700))
+	spoolDir := filepath.Join(dir, "spool")
+	require.NoError(t, spool.EnsureRoot(spoolDir))
+	srv := New(config.Default(), Options{StateDir: state, Version: "test", SpoolDir: spoolDir, IngestInterval: -1})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- srv.Serve(ctx, ln) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("the server did not stop")
+		}
+	})
+	require.Eventually(t, func() bool {
+		srv.mu.Lock()
+		defer srv.mu.Unlock()
+		return srv.rootDir != nil
+	}, 5*time.Second, 10*time.Millisecond)
+	return srv, state, spoolDir
 }
 
 func dial(t *testing.T, sock string) net.Conn {
@@ -186,4 +222,78 @@ func TestServer_PartitionLinkRefused(t *testing.T) {
 	entries, err := os.ReadDir(elsewhere)
 	require.NoError(t, err)
 	assert.Empty(t, entries, "nothing was written through the link")
+}
+
+func TestServer_IngestsSpoolIntoTheOwnerPartition(t *testing.T) {
+	srv, state, spoolDir := startServerWithSpool(t)
+	me := strconv.Itoa(os.Getuid())
+	handle := ipc.MustFrame(ipc.TypeHandle, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(readPayload), Project: decision.ProjectClaim{Name: "project"}})
+	_, err := spool.Write(spoolDir, me, spool.Entry{Verdict: "allow", Reason: "ipc: cannot reach the decision service", Frame: handle})
+	require.NoError(t, err)
+	_, err = spool.Write(spoolDir, me, spool.Entry{Kind: spool.KindTamper, Verdict: "block", Reason: "socket is not owned by root"})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(spoolDir, me, "9-stray.json"), []byte("nope"), 0o600))
+
+	ctx := context.Background()
+	require.NoError(t, srv.IngestOnce(ctx))
+	entries, err := os.ReadDir(filepath.Join(spoolDir, me))
+	require.NoError(t, err)
+	assert.Empty(t, entries, "every file is taken or refused")
+
+	srv.mu.Lock()
+	part := srv.partitions[uint32(os.Getuid())]
+	srv.mu.Unlock()
+	require.NotNil(t, part, "the pass opened the partition of the owner")
+	require.NoError(t, srv.closePartitions())
+
+	store, err := storage.NewSQLiteStore(filepath.Join(state, "users", me, "audit.db"))
+	require.NoError(t, err)
+	defer func() { _ = store.Close() }()
+
+	rows, err := store.QueryReceipts(ctx, &storage.ReceiptFilter{Decision: "unverified"})
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "claude-code", rows[0].Agent)
+	assert.Equal(t, "recorded", rows[0].ResultStatus)
+	assert.Contains(t, rows[0].Message, "client verdict allow without the decision service: ipc: cannot reach")
+
+	system := session.SystemSessionID(me)
+	tamper, err := store.GetEventsBySession(ctx, system)
+	require.NoError(t, err)
+	var ops []string
+	for _, e := range tamper {
+		var payload events.TamperPayload
+		require.NoError(t, json.Unmarshal(e.Payload, &payload))
+		ops = append(ops, payload.Operation)
+		switch payload.Operation {
+		case events.TamperServerIdentity:
+			assert.Equal(t, "socket is not owned by root", payload.Detail)
+		case events.TamperSpoolRefused:
+			assert.Contains(t, payload.Detail, "1 file(s) refused: 9-stray.json (not an entry")
+		case events.TamperDegraded:
+			assert.Equal(t, "1 hook call(s) decided without the service while it was running", payload.Detail)
+		}
+	}
+	assert.ElementsMatch(t, []string{events.TamperServerIdentity, events.TamperSpoolRefused, events.TamperDegraded}, ops)
+}
+
+func TestServer_SpoolBeforeStartIsNotDegraded(t *testing.T) {
+	srv, state, spoolDir := startServerWithSpool(t)
+	me := strconv.Itoa(os.Getuid())
+	handle := ipc.MustFrame(ipc.TypeHandle, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(readPayload)})
+	_, err := spool.Write(spoolDir, me, spool.Entry{RecordedAt: srv.started.Add(-time.Minute), Verdict: "allow", Reason: "down", Frame: handle})
+	require.NoError(t, err)
+	ctx := context.Background()
+	require.NoError(t, srv.IngestOnce(ctx))
+	require.NoError(t, srv.closePartitions())
+
+	store, err := storage.NewSQLiteStore(filepath.Join(state, "users", me, "audit.db"))
+	require.NoError(t, err)
+	defer func() { _ = store.Close() }()
+	tamper, err := store.GetEventsBySession(ctx, session.SystemSessionID(me))
+	require.NoError(t, err)
+	assert.Empty(t, tamper, "an entry from before the start is an outage, not a flood")
+	rows, err := store.QueryReceipts(ctx, &storage.ReceiptFilter{Decision: "unverified"})
+	require.NoError(t, err)
+	assert.Len(t, rows, 1)
 }

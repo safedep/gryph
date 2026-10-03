@@ -162,6 +162,10 @@ func (a *Runtime) ExportProfile(name string) (privacy.ExportProfile, error) {
 // DecisionService returns the in-process decision service for hook events.
 // Call it after InitStore.
 func (a *Runtime) DecisionService() decision.Service {
+	return a.decisionService()
+}
+
+func (a *Runtime) decisionService() *decision.Local {
 	return decision.NewLocal(a.Store, a.Security, a.Redactor, a.Config.GetAgentLoggingLevel,
 		decision.WithResultRecorder(func() decision.ResultRecorder {
 			if m := a.AarmMediator(); m != nil {

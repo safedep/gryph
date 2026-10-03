@@ -230,6 +230,17 @@ const (
 	// TamperSilentAgent records a live agent process that sent no hook
 	// call in the census window.
 	TamperSilentAgent = "silent_agent"
+	// TamperServerIdentity records a hook client that refused the
+	// decision service socket, because the socket or its peer was not the
+	// system's.
+	TamperServerIdentity = "server_identity"
+	// TamperDegraded records hook calls that the client decided alone
+	// while the decision service was running.
+	TamperDegraded = "degraded"
+	// TamperSpoolRefused records spool files of the account that the
+	// decision service refused: another owner, not a regular file, or
+	// over the quota.
+	TamperSpoolRefused = "spool_refused"
 )
 
 // Summary is the one-line form of the payload. The receipt stores and

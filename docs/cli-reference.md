@@ -475,6 +475,9 @@ gryph supervisor run --socket /tmp/hook.sock --state-dir /tmp/gryph-state
 | `--allow-root` | bool    | false                | Allow a run as root, for a test |
 | `--max-conns`  | int     | 16                   | Open connections per account |
 | `--rate`       | float   | 20                   | Requests per second per account |
+| `--spool-dir`  | string  | the configured path  | Read the spool here. The service creates the root when it is missing |
+| `--ingest-interval` | duration | 1m             | Time between two passes over the spool |
+| `--spool-max-files` | int | 256                 | Entries one pass takes from one account's spool |
 
 The managed configuration sets the service: `supervisor.enabled` (the hook
 becomes a client of the service), `supervisor.socket` (default

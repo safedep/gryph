@@ -60,6 +60,37 @@ func (d *Dir) ReadFile(name string) ([]byte, error) {
 	return d.handle.readFile(name)
 }
 
+// Info returns the information of the directory itself, from its open
+// handle.
+func (d *Dir) Info() (fs.FileInfo, error) {
+	return d.handle.info()
+}
+
+// ReadDir returns the entries of the directory, sorted by name.
+func (d *Dir) ReadDir() ([]fs.DirEntry, error) {
+	return d.handle.readDir()
+}
+
+// Open opens the regular file name in the directory for reading, without
+// following a link and without a wait on a FIFO. The kind of the file is
+// checked on the open descriptor. A link or another kind of file is
+// refused.
+func (d *Dir) Open(name string) (*os.File, error) {
+	if err := checkName(name); err != nil {
+		return nil, err
+	}
+	return d.handle.open(name)
+}
+
+// Remove removes the file name from the directory. It never follows a
+// link: the link itself goes.
+func (d *Dir) Remove(name string) error {
+	if err := checkName(name); err != nil {
+		return err
+	}
+	return d.handle.remove(name)
+}
+
 // Stat returns the information of name in the directory without following
 // a link.
 func (d *Dir) Stat(name string) (fs.FileInfo, error) {

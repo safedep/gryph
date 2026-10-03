@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/decision"
@@ -27,11 +26,12 @@ const rateLimitEventInterval = time.Minute
 // so the receipt chain and the context state of the account stay in
 // order without a lock on the database.
 type partition struct {
-	uid     uint32
-	dir     string
-	rt      *engine.Runtime
-	service decision.Service
-	bucket  *bucket
+	uid      uint32
+	dir      string
+	rt       *engine.Runtime
+	service  decision.Service
+	spoolRec *engine.SpoolRecorder
+	bucket   *bucket
 
 	// write serializes Handle and ReportHookError: the one writer of the
 	// partition.
@@ -65,12 +65,18 @@ func openPartition(ctx context.Context, cfg *config.Config, root *nofollow.Dir, 
 	if err != nil {
 		return nil, fmt.Errorf("partition %d: %w", uid, err)
 	}
+	spoolRec, err := rt.SpoolRecorder()
+	if err != nil {
+		_ = rt.Close()
+		return nil, fmt.Errorf("partition %d: %w", uid, err)
+	}
 	return &partition{
-		uid:     uid,
-		dir:     dir,
-		rt:      rt,
-		service: rt.DecisionService(),
-		bucket:  newBucket(limits.Rate, limits.Burst, time.Now()),
+		uid:      uid,
+		dir:      dir,
+		rt:       rt,
+		service:  rt.DecisionService(),
+		spoolRec: spoolRec,
+		bucket:   newBucket(limits.Rate, limits.Burst, time.Now()),
 	}, nil
 }
 
@@ -157,22 +163,10 @@ func (p *partition) recordRateLimit(ctx context.Context, what string) {
 	p.lastRateEvent = time.Now()
 	p.eventMu.Unlock()
 
-	recorder, err := p.rt.TamperRecorderFor(strconv.FormatUint(uint64(p.uid), 10))
-	if err != nil {
-		log.Warnf("supervisor: rate limit event for uid %d not recorded: %v", p.uid, err)
-		return
-	}
-	p.write.Lock()
-	defer p.write.Unlock()
-	_, err = recorder.Record(ctx, events.TamperPayload{
-		Operation:   events.TamperRateLimited,
-		Asset:       string(selfprotect.AssetSupervisor),
-		LevelBefore: selfprotect.LevelDetect.String(),
-		LevelAfter:  selfprotect.LevelDetect.String(),
-		Provider:    ProviderName,
-		Detail:      "the account sent more " + what + " requests than the limit allows",
+	p.recordTamper(ctx, events.TamperPayload{
+		Operation: events.TamperRateLimited,
+		Asset:     string(selfprotect.AssetSupervisor),
+		Provider:  ProviderName,
+		Detail:    "the account sent more " + what + " requests than the limit allows",
 	})
-	if err != nil {
-		log.Warnf("supervisor: rate limit event for uid %d not recorded: %v", p.uid, err)
-	}
 }

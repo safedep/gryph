@@ -16,17 +16,21 @@ import (
 	"github.com/safedep/gryph/decision/ipc"
 	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/platform/listen"
+	"github.com/safedep/gryph/spool"
 	"github.com/safedep/gryph/supervisor"
 	"github.com/spf13/cobra"
 )
 
 func newSupervisorRunCmd() *cobra.Command {
 	var (
-		socket    string
-		stateDir  string
-		allowRoot bool
-		maxConns  int
-		rate      float64
+		socket         string
+		stateDir       string
+		spoolDir       string
+		allowRoot      bool
+		maxConns       int
+		rate           float64
+		ingestInterval time.Duration
+		spoolMaxFiles  int
 	)
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -67,7 +71,20 @@ exists for a test.`,
 			if err := os.MkdirAll(stateDir, 0o700); err != nil {
 				return WrapError(ExitGeneral, "create the state directory", err)
 			}
-			srv := supervisor.New(cfg, supervisor.Options{StateDir: stateDir, Limits: limits, Version: version.Version})
+			if spoolDir == "" {
+				spoolDir = cfg.Supervisor.SpoolPath()
+			}
+			if err := spool.EnsureRoot(spoolDir); err != nil {
+				log.Warnf("supervisor: spool directory not created, hook clients cannot leave entries: %v", err)
+			}
+			spoolLimits := spool.DefaultLimits()
+			if spoolMaxFiles > 0 {
+				spoolLimits.MaxFiles = spoolMaxFiles
+			}
+			srv := supervisor.New(cfg, supervisor.Options{
+				StateDir: stateDir, Limits: limits, Version: version.Version,
+				SpoolDir: spoolDir, SpoolLimits: spoolLimits, IngestInterval: ingestInterval,
+			})
 
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -80,6 +97,9 @@ exists for a test.`,
 	}
 	cmd.Flags().StringVar(&socket, "socket", "", "listen at this socket path instead of the one the service manager passes or the configured one")
 	cmd.Flags().StringVar(&stateDir, "state-dir", "", "hold the partitions here instead of the configured state directory")
+	cmd.Flags().StringVar(&spoolDir, "spool-dir", "", "read the spool here instead of the configured spool directory")
+	cmd.Flags().DurationVar(&ingestInterval, "ingest-interval", supervisor.DefaultIngestInterval, "time between two passes over the spool")
+	cmd.Flags().IntVar(&spoolMaxFiles, "spool-max-files", 0, "entries one pass takes from one account's spool")
 	cmd.Flags().BoolVar(&allowRoot, "allow-root", false, "allow a run as root, for a test")
 	cmd.Flags().IntVar(&maxConns, "max-conns", 0, "open connections per account")
 	cmd.Flags().Float64Var(&rate, "rate", 0, "requests per second per account")

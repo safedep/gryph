@@ -388,7 +388,7 @@
   title: "in client mode a prompt or lifecycle hook allows and spools when the service is absent"
   category: hook
   tier: P0
-  guarantee: "With no service at the socket, a prompt hook and a lifecycle hook allow, and the client leaves each payload in the spool of its own account, mode 0700, with the verdict and the reason. Privileged job only."
+  guarantee: "With no service at the socket, a prompt hook and a lifecycle hook allow, and the client leaves each payload in the spool of its own account, mode 0770 with files at 0640 so the service account reads them, with the verdict and the reason. Privileged job only."
   labels: [hook, client, supervisor, privileged, linux]
 
 - id: hook/client/socket-held-no-welcome
@@ -411,6 +411,34 @@
   tier: P0
   guarantee: "The hook client accepts the service socket only when root owns it and every directory above it is root-owned and not writable by others, and when the peer runs as root or the service account. A socket in a user's directory, or one whose peer is another user, blocks every hook in every mode with one stderr line, leaves a tamper entry in the spool, and never falls back. A root service passes. Privileged job only."
   labels: [hook, client, supervisor, privileged, linux]
+
+- id: spool/ingest/owner-partition
+  title: "the service assigns a spool entry to the owner of its directory"
+  category: spool
+  tier: P0
+  guarantee: "A spool entry goes to the partition of the account that owns the directory it sits in, never to the account the directory is named for, as a receipt with the decision unverified. A file inside that another account owns is refused unread, removed, and reported as a spool_refused tamper event in the system session of the directory owner. The service makes the spool root with the set-group-ID and sticky bits. Privileged job only."
+  labels: [spool, supervisor, privileged, linux]
+
+- id: spool/ingest/fifo-symlink-refused
+  title: "the service reads a spool file from a descriptor that never follows a link or waits"
+  category: spool
+  tier: P0
+  guarantee: "A FIFO, a symbolic link and a file with two links in an account's spool are refused unread and removed, the target of the link is untouched, the service keeps answering through the pass, and one spool_refused tamper event names each file and its reason. Privileged job only."
+  labels: [spool, supervisor, privileged, linux]
+
+- id: spool/quota/bound
+  title: "one pass takes at most the quota of entries from one account"
+  category: spool
+  tier: P1
+  guarantee: "With --spool-max-files 3 and five entries, three become unverified receipts, two are removed unread, and one spool_refused tamper event records the count dropped. Privileged job only."
+  labels: [spool, supervisor, privileged, linux]
+
+- id: spool/flood/degraded-while-up
+  title: "entries decided alone while the service ran become a degraded tamper event"
+  category: spool
+  tier: P1
+  guarantee: "A spool entry whose recorded_at is after the start of the service means the client could not reach a running service. One pass records one degraded tamper event with the count of such entries, and an entry from before the start records nothing. Privileged job only."
+  labels: [spool, supervisor, privileged, linux]
 
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
