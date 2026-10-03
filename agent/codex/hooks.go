@@ -51,7 +51,7 @@ func hookMatcher(hookType string) string {
 	}
 }
 
-func GenerateHooksConfig() *HooksConfig {
+func GenerateHooksConfig(program string) *HooksConfig {
 	config := &HooksConfig{
 		Hooks: make(map[string][]HookMatcher),
 	}
@@ -63,7 +63,7 @@ func GenerateHooksConfig() *HooksConfig {
 				Hooks: []HookCommand{
 					{
 						Type:    "command",
-						Command: fmt.Sprintf("%s _hook codex %s", utils.GryphCommand(), hookType),
+						Command: utils.HookCommand(program, "codex", hookType),
 						Timeout: 30,
 					},
 				},
@@ -139,7 +139,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		}
 
 		if !opts.Force && !opts.DryRun {
-			existingConfig = mergeHooksConfig(existingConfig)
+			existingConfig = mergeHooksConfig(existingConfig, opts.Command)
 		}
 	}
 
@@ -153,7 +153,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	if existingConfig != nil && !opts.Force {
 		newConfig = existingConfig
 	} else {
-		newConfig = GenerateHooksConfig()
+		newConfig = GenerateHooksConfig(opts.Command)
 	}
 
 	data, err := json.MarshalIndent(newConfig, "", "  ")
@@ -181,20 +181,21 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	return result, nil
 }
 
-func mergeHooksConfig(existing *HooksConfig) *HooksConfig {
-	gryphConfig := GenerateHooksConfig()
+// mergeHooksConfig adds the gryph hooks to existing. A gryph entry that an
+// earlier install wrote, also with another program path, is replaced in
+// place, so a repair install updates the command.
+func mergeHooksConfig(existing *HooksConfig, program string) *HooksConfig {
+	gryphConfig := GenerateHooksConfig(program)
 
 	for hookType, matchers := range gryphConfig.Hooks {
+		want := matchers[0].Hooks[0]
 		found := false
-		for _, m := range existing.Hooks[hookType] {
-			for _, h := range m.Hooks {
-				if h.Command == matchers[0].Hooks[0].Command {
+		for mi := range existing.Hooks[hookType] {
+			for hi, h := range existing.Hooks[hookType][mi].Hooks {
+				if utils.IsHookCommand(h.Command, "codex", hookType) {
+					existing.Hooks[hookType][mi].Hooks[hi] = want
 					found = true
-					break
 				}
-			}
-			if found {
-				break
 			}
 		}
 		if !found {
@@ -336,10 +337,9 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 	status.Valid = true
 
 	for _, hookType := range HookTypes {
-		expectedCmd := fmt.Sprintf("%s _hook codex %s", utils.GryphCommand(), hookType)
 		for _, m := range config.Hooks[hookType] {
 			for _, h := range m.Hooks {
-				if h.Command == expectedCmd {
+				if utils.IsHookCommand(h.Command, "codex", hookType) {
 					status.Installed = true
 					status.Hooks = append(status.Hooks, hookType)
 					break

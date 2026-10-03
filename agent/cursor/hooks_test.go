@@ -9,7 +9,7 @@ import (
 )
 
 func TestGenerateHooksConfig_CommandFormat(t *testing.T) {
-	config := GenerateHooksConfig()
+	config := GenerateHooksConfig("")
 	expectedPrefix := utils.GryphCommand() + " _hook cursor "
 
 	for _, hookType := range HookTypes {

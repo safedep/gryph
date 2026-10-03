@@ -13,6 +13,20 @@
   guarantee: "gryph install --agent claude-code adds gryph hook entries to ~/.claude/settings.json and keeps pre-existing hooks and settings."
   labels: [install, claude-code]
 
+- id: install/command/absolute-path
+  title: "gryph install names the binary by its absolute path"
+  category: install
+  tier: P0
+  guarantee: "Every hook entry that gryph install writes names the gryph binary by its absolute path, so the hook does not depend on PATH, and doctor reads the install as valid."
+  labels: [install, command, claude-code]
+
+- id: install/command/legacy-accepted
+  title: "hook entries with the bare program name stay valid"
+  category: install
+  tier: P1
+  guarantee: "Hook entries from an earlier install that name the bare program gryph read as installed and valid in doctor and status, and gryph install --force rewrites them with the absolute path."
+  labels: [install, command, claude-code]
+
 - id: install/uninstall/round-trip
   title: "gryph uninstall removes only gryph hooks and restores backups"
   category: install

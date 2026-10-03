@@ -59,7 +59,7 @@ type HookCommand struct {
 }
 
 // GenerateHooksConfig generates the hooks.json content for Gryph.
-func GenerateHooksConfig() *HooksConfig {
+func GenerateHooksConfig(program string) *HooksConfig {
 	config := &HooksConfig{
 		Version: 1,
 		Hooks:   make(map[string][]HookCommand),
@@ -67,7 +67,7 @@ func GenerateHooksConfig() *HooksConfig {
 
 	for _, hookType := range HookTypes {
 		config.Hooks[hookType] = []HookCommand{
-			{Command: fmt.Sprintf("%s _hook cursor %s", utils.GryphCommand(), hookType)},
+			{Command: utils.HookCommand(program, "cursor", hookType)},
 		}
 	}
 
@@ -146,7 +146,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 
 		if !opts.Force && !opts.DryRun {
 			// Merge with existing config
-			existingConfig = mergeHooksConfig(existingConfig)
+			existingConfig = mergeHooksConfig(existingConfig, opts.Command)
 		}
 	}
 
@@ -161,7 +161,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	if existingConfig != nil && !opts.Force {
 		newConfig = existingConfig
 	} else {
-		newConfig = GenerateHooksConfig()
+		newConfig = GenerateHooksConfig(opts.Command)
 	}
 
 	data, err := json.MarshalIndent(newConfig, "", "  ")
@@ -193,16 +193,18 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 }
 
 // mergeHooksConfig merges Gryph hooks with existing hooks.
-func mergeHooksConfig(existing *HooksConfig) *HooksConfig {
-	gryphConfig := GenerateHooksConfig()
+func mergeHooksConfig(existing *HooksConfig, program string) *HooksConfig {
+	gryphConfig := GenerateHooksConfig(program)
 
 	for hookType, commands := range gryphConfig.Hooks {
-		// Check if gryph command already exists
+		// A gryph entry that an earlier install wrote, also with another
+		// program path, is replaced in place, so a repair install updates
+		// the command.
 		found := false
-		for _, cmd := range existing.Hooks[hookType] {
-			if cmd.Command == commands[0].Command {
+		for i, cmd := range existing.Hooks[hookType] {
+			if utils.IsHookCommand(cmd.Command, "cursor", hookType) {
+				existing.Hooks[hookType][i] = commands[0]
 				found = true
-				break
 			}
 		}
 		if !found {
@@ -315,11 +317,10 @@ func ValidateHooksContent(config *HooksConfig) []string {
 	var issues []string
 
 	for _, hookType := range agent.RequiredHookTypeNames(Hooks) {
-		expectedCmd := fmt.Sprintf("%s _hook cursor %s", utils.GryphCommand(), hookType)
 		found := false
 
 		for _, cmd := range config.Hooks[hookType] {
-			if cmd.Command == expectedCmd {
+			if utils.IsHookCommand(cmd.Command, "cursor", hookType) {
 				found = true
 				break
 			}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/safedep/gryph/agent"
@@ -47,7 +46,7 @@ type HookCommand struct {
 
 // GenerateHooksConfig generates the hooks configuration for gryph. Matchers
 // are omitted so that every tool call is captured.
-func GenerateHooksConfig() SettingsHooks {
+func GenerateHooksConfig(program string) SettingsHooks {
 	hooks := make(SettingsHooks)
 
 	for _, hookType := range HookTypes {
@@ -56,7 +55,7 @@ func GenerateHooksConfig() SettingsHooks {
 				Hooks: []HookCommand{
 					{
 						Type:    "command",
-						Command: expectedHookCommand(hookType),
+						Command: expectedHookCommand(program, hookType),
 					},
 				},
 			},
@@ -66,26 +65,18 @@ func GenerateHooksConfig() SettingsHooks {
 	return hooks
 }
 
-// expectedHookCommand returns the exact hook command gryph installs for the
-// given hook type.
-func expectedHookCommand(hookType string) string {
-	return fmt.Sprintf("%s _hook command-code %s", utils.GryphCommand(), hookType)
+// expectedHookCommand returns the hook command gryph installs for the given
+// hook type.
+func expectedHookCommand(program, hookType string) string {
+	return utils.HookCommand(program, AgentName, hookType)
 }
 
 // isOwnedHookCommand reports whether a hook command string was installed by
-// gryph for the given hook type. Commands are compared field by field so
-// that unrelated executables whose names merely start with "gryph" (e.g.
-// gryphon, gryph-helper) and hooks installed for other agents are never
-// treated as owned — and therefore never skipped or removed by gryph.
+// gryph for the given hook type, whatever program path it names. Unrelated
+// executables whose names only start with "gryph" and hooks of other agents
+// are never treated as owned, so gryph never skips or removes them.
 func isOwnedHookCommand(cmd, hookType string) bool {
-	fields := strings.Fields(cmd)
-	if len(fields) < 4 {
-		return false
-	}
-	if filepath.Base(fields[0]) != utils.GryphCommand() {
-		return false
-	}
-	return fields[1] == "_hook" && fields[2] == AgentName && fields[3] == hookType
+	return utils.IsHookCommand(cmd, AgentName, hookType)
 }
 
 // readSettings reads the settings.json file. A "hooks" key that is present
@@ -205,7 +196,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		return result, nil
 	}
 
-	gryphHooks := GenerateHooksConfig()
+	gryphHooks := GenerateHooksConfig(opts.Command)
 
 	if settings["hooks"] == nil {
 		settings["hooks"] = make(map[string]interface{})

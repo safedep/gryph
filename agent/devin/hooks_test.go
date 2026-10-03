@@ -59,7 +59,7 @@ func TestInstallHooks_RepairsPartialInstall(t *testing.T) {
 				map[string]any{
 					"matcher": ".*",
 					"hooks": []any{
-						map[string]any{"type": "command", "command": gryphHookCommand("PreToolUse"), "timeout": 30},
+						map[string]any{"type": "command", "command": gryphHookCommand("", "PreToolUse"), "timeout": 30},
 					},
 				},
 			},

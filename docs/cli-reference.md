@@ -28,6 +28,12 @@ gryph install --dry-run
 gryph install --force
 ```
 
+Each hook entry names the `gryph` binary by its absolute path, with symbolic
+links resolved, so the hook does not depend on `PATH`. Entries from an
+earlier install that name the bare program `gryph` stay valid. Run
+`gryph install --force` to rewrite them with the path. A binary that runs
+under another name keeps the bare program name.
+
 | Flag          | Type                | Default | Description                                |
 | ------------- | ------------------- | ------- | ------------------------------------------ |
 | `--agent`     | string (repeatable) | all     | Install for specific agent only            |

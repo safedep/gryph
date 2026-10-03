@@ -11,7 +11,7 @@ import (
 )
 
 func TestGenerateHooksConfig_CommandFormat(t *testing.T) {
-	config := GenerateHooksConfig()
+	config := GenerateHooksConfig("")
 	expectedPrefix := utils.GryphCommand() + " _hook command-code "
 
 	for _, hookType := range HookTypes {
@@ -29,7 +29,7 @@ func TestGenerateHooksConfig_CommandFormat(t *testing.T) {
 func TestGenerateHooksConfig_NoMatchers(t *testing.T) {
 	// Command Code matches every tool when the matcher is omitted, and a
 	// matcher on Stop/SessionStart prevents those hooks from firing at all.
-	config := GenerateHooksConfig()
+	config := GenerateHooksConfig("")
 
 	for _, hookType := range HookTypes {
 		assert.Empty(t, config[hookType][0].Matcher,

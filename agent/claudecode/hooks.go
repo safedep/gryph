@@ -54,7 +54,7 @@ type Settings struct {
 }
 
 // GenerateHooksConfig generates the hooks configuration for gryph.
-func GenerateHooksConfig() SettingsHooks {
+func GenerateHooksConfig(program string) SettingsHooks {
 	hooks := make(SettingsHooks)
 
 	for _, hookType := range HookTypes {
@@ -62,7 +62,7 @@ func GenerateHooksConfig() SettingsHooks {
 			Hooks: []HookCommand{
 				{
 					Type:    "command",
-					Command: fmt.Sprintf("%s _hook claude-code %s", utils.GryphCommand(), hookType),
+					Command: utils.HookCommand(program, "claude-code", hookType),
 				},
 			},
 		}
@@ -178,7 +178,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	// Generate gryph hooks config
-	gryphHooks := GenerateHooksConfig()
+	gryphHooks := GenerateHooksConfig(opts.Command)
 
 	// Merge or replace hooks
 	if settings["hooks"] == nil {
@@ -244,7 +244,7 @@ func hasGryphHooks(hooks map[string]interface{}) bool {
 						for _, h := range hooksList {
 							if hook, ok := h.(map[string]interface{}); ok {
 								if cmd, ok := hook["command"].(string); ok {
-									if len(cmd) >= 5 && cmd[:5] == "gryph" {
+									if utils.IsGryphCommand(cmd) {
 										return true
 									}
 								}
@@ -350,7 +350,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 					continue
 				}
 				cmd, _ := hook["command"].(string)
-				if len(cmd) < 5 || cmd[:5] != "gryph" {
+				if !utils.IsGryphCommand(cmd) {
 					filteredHooks = append(filteredHooks, h)
 				}
 			}
@@ -429,8 +429,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 					continue
 				}
 				cmd, _ := hook["command"].(string)
-				expectedCmd := fmt.Sprintf("%s _hook claude-code %s", utils.GryphCommand(), hookType)
-				if cmd == expectedCmd {
+				if utils.IsHookCommand(cmd, "claude-code", hookType) {
 					status.Installed = true
 					status.Hooks = append(status.Hooks, hookType)
 					break

@@ -51,6 +51,9 @@ type InstallOptions struct {
 	Backup bool
 	// BackupDir is the directory to store backups.
 	BackupDir string
+	// Command is the program that the hook entries name. Empty names the
+	// running binary by its absolute path.
+	Command string
 }
 
 // InstallResult contains the result of hook installation.

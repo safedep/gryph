@@ -16,8 +16,8 @@ import (
 //go:embed plugin.ts
 var pluginTS []byte
 
-func processedPlugin() []byte {
-	return bytes.ReplaceAll(pluginTS, []byte(utils.GryphCommandPlaceholder), []byte(utils.GryphCommand()))
+func processedPlugin(program string) []byte {
+	return utils.RenderPlugin(pluginTS, program)
 }
 
 // Hooks declares the OpenClaw hooks Gryph installs and parses. Phase and
@@ -108,7 +108,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		return result, result.Error
 	}
 
-	if err := os.WriteFile(pluginFile, processedPlugin(), 0644); err != nil {
+	if err := os.WriteFile(pluginFile, processedPlugin(opts.Command), 0644); err != nil {
 		result.Error = fmt.Errorf("failed to write plugin file: %w", err)
 		return result, result.Error
 	}
@@ -203,7 +203,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 
 	status.Installed = true
 	status.Hooks = HookTypes
-	status.Valid = bytes.Equal(data, processedPlugin())
+	status.Valid = bytes.Equal(data, processedPlugin(""))
 	if !status.Valid {
 		status.Issues = append(status.Issues, "plugin file differs from expected content (may need update)")
 	}

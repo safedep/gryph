@@ -1,7 +1,6 @@
 package piagent
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
@@ -24,8 +23,8 @@ var legacyPluginDigests = []string{
 	"6a99732b3cefb3ed4a8a21e2ba962d7ea4696a22492a95c6f0b4fe6ccd780b60",
 }
 
-func processedPlugin() []byte {
-	return bytes.ReplaceAll(pluginTS, []byte(utils.GryphCommandPlaceholder), []byte(utils.GryphCommand()))
+func processedPlugin(program string) []byte {
+	return utils.RenderPlugin(pluginTS, program)
 }
 
 // Hooks declares the Pi Agent hooks Gryph installs and parses. Phase and
@@ -104,7 +103,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		return result, nil
 	}
 
-	if err := os.WriteFile(extensionPath, processedPlugin(), 0644); err != nil {
+	if err := os.WriteFile(extensionPath, processedPlugin(opts.Command), 0644); err != nil {
 		result.Error = fmt.Errorf("failed to write extension: %w", err)
 		return result, result.Error
 	}
@@ -196,7 +195,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 		return status, nil
 	}
 
-	agent.SetPluginStatus(status, data, processedPlugin(), legacyPluginDigests, Hooks,
+	agent.SetPluginStatus(status, data, processedPlugin(""), legacyPluginDigests, Hooks,
 		func(hookType string) string { return `pi.on("` + hookType + `"` },
 		"extension content differs from expected (may have been modified)")
 

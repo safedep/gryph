@@ -132,6 +132,8 @@ See `agent/gemini/detect.go` or `agent/claudecode/detect.go`.
 
 ### 4. Implement hook management (`hooks.go`)
 
+Build every hook command with `utils.HookCommand(opts.Command, "<agent>", hookType)`. It names the running binary by its absolute path, or the program that `InstallOptions.Command` gives. Match an existing entry with `utils.IsHookCommand(cmd, "<agent>", hookType)` or `utils.IsGryphCommand(cmd)`, never by string equality: an entry from an earlier install names the bare program or another path, and both must read as installed. A plugin template holds `__GRYPH_COMMAND__` inside a string literal, and `utils.RenderPlugin` fills it in.
+
 Three operations:
 
 - **Install** - Read the agent's config file, merge gryph hook entries, write back. Support `--force`, `--dry-run`, and `--backup` flags via `InstallOptions`.

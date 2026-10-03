@@ -37,7 +37,7 @@ func TestPluginTS_UsesPiEvents(t *testing.T) {
 }
 
 func TestProcessedPlugin_ReplacesPlaceholder(t *testing.T) {
-	processed := string(processedPlugin())
+	processed := string(processedPlugin(""))
 	assert.True(t, strings.Contains(processed, `"gryph"`),
 		"processed plugin should have gryph command replaced")
 	assert.True(t, strings.Contains(processed, `["_hook", "pi-agent"`),
@@ -56,10 +56,10 @@ func TestGetHookStatus_PluginContent(t *testing.T) {
 		wantValid   bool
 		wantMissing string
 	}{
-		{"current extension", processedPlugin(), true, ""},
+		{"current extension", processedPlugin(""), true, ""},
 		{"v0.9.0 extension without the input hook", legacy("gryph-hooks-v0.9.0.ts"), true, "input"},
 		{"v0.3.6 extension that never blocks", legacy("gryph-hooks-v0.3.6.ts"), false, ""},
-		{"current extension that ignores exit code 2", bytes.ReplaceAll(processedPlugin(), []byte("result.exitCode === 2"), []byte("false")), false, ""},
+		{"current extension that ignores exit code 2", bytes.ReplaceAll(processedPlugin(""), []byte("result.exitCode === 2"), []byte("false")), false, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

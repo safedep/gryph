@@ -53,8 +53,8 @@ func hookMatcher(hookType string) string {
 	}
 }
 
-func gryphHookCommand(hookType string) string {
-	return fmt.Sprintf("%s _hook devin %s", utils.GryphCommand(), hookType)
+func gryphHookCommand(program, hookType string) string {
+	return utils.HookCommand(program, "devin", hookType)
 }
 
 // readDevinConfig reads the full Devin config.json as a raw JSON map. This
@@ -110,7 +110,7 @@ func writeDevinConfig(configFile string, raw map[string]json.RawMessage) error {
 	return os.WriteFile(configFile, data, 0600)
 }
 
-func generateGryphHooks() map[string][]HookMatcher {
+func generateGryphHooks(program string) map[string][]HookMatcher {
 	hooks := make(map[string][]HookMatcher)
 	for _, hookType := range HookTypes {
 		hooks[hookType] = []HookMatcher{
@@ -119,7 +119,7 @@ func generateGryphHooks() map[string][]HookMatcher {
 				Hooks: []HookCommand{
 					{
 						Type:    "command",
-						Command: gryphHookCommand(hookType),
+						Command: gryphHookCommand(program, hookType),
 						Timeout: 30,
 					},
 				},
@@ -137,7 +137,7 @@ func hasAllGryphHooks(hooks map[string][]HookMatcher) bool {
 		found := false
 		for _, m := range hooks[hookType] {
 			for _, h := range m.Hooks {
-				if h.Command == gryphHookCommand(hookType) {
+				if utils.IsHookCommand(h.Command, "devin", hookType) {
 					found = true
 					break
 				}
@@ -153,20 +153,21 @@ func hasAllGryphHooks(hooks map[string][]HookMatcher) bool {
 	return true
 }
 
-func mergeGryphHooks(existing map[string][]HookMatcher) map[string][]HookMatcher {
-	gryph := generateGryphHooks()
+// mergeGryphHooks adds the gryph hooks to existing. A gryph entry that an
+// earlier install wrote, also with another program path, is replaced in
+// place, so a repair install updates the command.
+func mergeGryphHooks(existing map[string][]HookMatcher, program string) map[string][]HookMatcher {
+	gryph := generateGryphHooks(program)
 
 	for hookType, matchers := range gryph {
+		want := matchers[0].Hooks[0]
 		found := false
-		for _, m := range existing[hookType] {
-			for _, h := range m.Hooks {
-				if h.Command == matchers[0].Hooks[0].Command {
+		for mi := range existing[hookType] {
+			for hi, h := range existing[hookType][mi].Hooks {
+				if utils.IsHookCommand(h.Command, "devin", hookType) {
+					existing[hookType][mi].Hooks[hi] = want
 					found = true
-					break
 				}
-			}
-			if found {
-				break
 			}
 		}
 		if !found {
@@ -257,9 +258,9 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 
 	var mergedHooks map[string][]HookMatcher
 	if existingHooks != nil && !opts.Force {
-		mergedHooks = mergeGryphHooks(existingHooks)
+		mergedHooks = mergeGryphHooks(existingHooks, opts.Command)
 	} else {
-		mergedHooks = generateGryphHooks()
+		mergedHooks = generateGryphHooks(opts.Command)
 	}
 
 	if err := writeHooksToConfig(raw, mergedHooks); err != nil {
@@ -403,10 +404,9 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 	status.Valid = true
 
 	for _, hookType := range HookTypes {
-		expectedCmd := gryphHookCommand(hookType)
 		for _, m := range hooks[hookType] {
 			for _, h := range m.Hooks {
-				if h.Command == expectedCmd {
+				if utils.IsHookCommand(h.Command, "devin", hookType) {
 					status.Installed = true
 					status.Hooks = append(status.Hooks, hookType)
 					break
