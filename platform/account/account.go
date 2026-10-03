@@ -8,6 +8,9 @@ package account
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
+	"os"
 	"os/exec"
 )
 
@@ -25,6 +28,16 @@ type Account struct {
 	// are zero on Windows.
 	UID uint32
 	GID uint32
+}
+
+// Chown gives path to the account. The identifiers of the account are
+// unsigned and the chown takes signed ones, so an identifier above the
+// signed range is refused, never wrapped into another account's.
+func (a Account) Chown(path string) error {
+	if a.UID > math.MaxInt32 || a.GID > math.MaxInt32 {
+		return fmt.Errorf("account %s: uid %d or gid %d is out of the range of a chown", a.Name, a.UID, a.GID)
+	}
+	return os.Chown(path, int(a.UID), int(a.GID))
 }
 
 // CurrentID returns the identifier of the account that runs this process.

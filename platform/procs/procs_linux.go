@@ -36,6 +36,11 @@ func listUID(owner int) ([]Process, error) {
 		if !ownedBy(dir, uid) {
 			continue
 		}
+		// A zombie runs nothing and takes no signal. A container without
+		// a reaper keeps them, so a stop that waits on them never ends.
+		if !running(pid) {
+			continue
+		}
 		comm, err := os.ReadFile(filepath.Join(dir, "comm"))
 		if err != nil {
 			continue

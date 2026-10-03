@@ -98,6 +98,15 @@ func TestAcceptance(t *testing.T) {
 					// A privileged script names the test binary as the
 					// root-owned managed binary.
 					env.Setenv("ACCEPTANCE_GRYPH_BIN", bin)
+					// A Unix socket path has a short limit (104 bytes on
+					// macOS), and the work directory of a script is deep.
+					// A script that listens puts its socket here.
+					socketDir, err := os.MkdirTemp("", "gryph-sock-")
+					if err != nil {
+						return err
+					}
+					env.Defer(func() { _ = os.RemoveAll(socketDir) })
+					env.Setenv("ACCEPTANCE_SOCKET_DIR", socketDir)
 					// The status and doctor commands run an async update check
 					// against the GitHub API. Forward proxy and TLS settings so
 					// the check works in proxied environments. The check fails

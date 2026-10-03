@@ -9,11 +9,11 @@ env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
 env XDG_DATA_HOME=$WORK/home/.local/share
 
-exec gryph supervisor run --socket $WORK/hook.sock --state-dir $WORK/state --allow-root &
+exec gryph supervisor run --socket $ACCEPTANCE_SOCKET_DIR/hook.sock --state-dir $WORK/state --allow-root &
 
 ipcframe frames.bin hello.json handle.json report.json query.json reply.json
 stdin frames.bin
-exec gryph supervisor send --socket $WORK/hook.sock --text
+exec gryph supervisor send --socket $ACCEPTANCE_SOCKET_DIR/hook.sock --text
 stdout '^\{"type":"welcome","body":\{"proto":1,"server_version":"[^"]*","mode":"enforce"\}\}$'
 stdout '^\{"type":"decision","body":\{"decision":"allow"\}\}$'
 stdout '^\{"type":"ack","body":\{\}\}$'

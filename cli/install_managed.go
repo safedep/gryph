@@ -343,7 +343,7 @@ func handStateToServiceAccount(cfg *config.Config) (string, error) {
 	if err != nil {
 		return "root", nil
 	}
-	if err := os.Chown(cfg.Supervisor.StatePath(), int(acct.UID), int(acct.GID)); err != nil {
+	if err := acct.Chown(cfg.Supervisor.StatePath()); err != nil {
 		return "", fmt.Errorf("hand %s to %s: %w", cfg.Supervisor.StatePath(), acct.Name, err)
 	}
 	return handMachineKeysToServiceAccount(cfg)
@@ -376,7 +376,7 @@ func installSupervisorService(ctx context.Context, in *managedInstallInput, repo
 		return
 	}
 	if acct, err := account.Lookup(sup.ServerAccount()); err == nil {
-		if err := os.Chown(sup.SpoolPath(), int(acct.UID), int(acct.GID)); err != nil {
+		if err := acct.Chown(sup.SpoolPath()); err != nil {
 			svc.Error = fmt.Sprintf("hand %s to %s: %v", sup.SpoolPath(), acct.Name, err)
 			return
 		}

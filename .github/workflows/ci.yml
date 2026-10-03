@@ -193,13 +193,19 @@ jobs:
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@v1.13.0
 
+      # The managed scripts name this binary in hook entries, and the
+      # install refuses a binary whose path chain is not root-owned. The
+      # work directory of the runner is such a chain, so the binary goes
+      # under /opt, which root owns in the container.
       - name: Build
-        run: go build -o "${RUNNER_TEMP}/gryph" ./cmd/gryph
+        run: |
+          mkdir -p /opt/gryph-ci
+          go build -o /opt/gryph-ci/gryph ./cmd/gryph
 
       - name: Run Privileged Acceptance Scripts
         env:
           ACCEPTANCE_PRIVILEGED: "1"
-          GRYPH_BIN: ${{ runner.temp }}/gryph
+          GRYPH_BIN: /opt/gryph-ci/gryph
         run: |
           "$(go env GOPATH)/bin/gotestsum" --junitfile "${RUNNER_TEMP}/acceptance.xml" --format testname \
             -- -tags acceptance -parallel 1 -timeout 20m ./test/acceptance
@@ -216,7 +222,7 @@ jobs:
       - name: Guard the Client Latency
         env:
           GRYPH_PERF_CLIENT: "1"
-          GRYPH_BIN: ${{ runner.temp }}/gryph
+          GRYPH_BIN: /opt/gryph-ci/gryph
         run: make bench-hook BENCHTIME=50x | tee "${RUNNER_TEMP}/bench-hook-client.txt"
 
       - name: Upload Report
