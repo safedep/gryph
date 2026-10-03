@@ -3,9 +3,13 @@ package cli
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"time"
 
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/engine"
+	"github.com/safedep/gryph/platform/schedule"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -91,4 +95,49 @@ A timer runs this command. See gryph install --repair-timer.`,
 	cmd.Flags().BoolVar(&repair, "repair", false, "repair hook configurations in this pass, also when policy.self_protection.repair is off")
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json, jsonl, csv")
 	return cmd
+}
+
+// The timer that runs the reconcile pass.
+const (
+	repairTimerName     = "gryph-reconcile"
+	repairTimerInterval = 15 * time.Minute
+)
+
+// repairTimerJob returns the scheduled job for the reconcile pass. It names
+// the running binary by its absolute path, so the job does not depend on
+// PATH.
+func repairTimerJob() (schedule.Job, error) {
+	program := utils.GryphCommand()
+	if !filepath.IsAbs(program) {
+		return schedule.Job{}, fmt.Errorf("the running program %q has no absolute path", program)
+	}
+	return schedule.Job{
+		Name:        repairTimerName,
+		Description: "Gryph reconcile: keep the agent hooks in place",
+		Command:     []string{program, "supervisor", "reconcile", "--once"},
+		Interval:    repairTimerInterval,
+	}, nil
+}
+
+// installRepairTimer installs the timer and returns its view. A failure is
+// in the view, because the hooks are installed either way.
+func installRepairTimer(ctx context.Context) *tui.RepairTimerView {
+	job, err := repairTimerJob()
+	if err != nil {
+		return &tui.RepairTimerView{Error: err.Error()}
+	}
+	res, err := schedule.Install(ctx, job)
+	if err != nil {
+		return &tui.RepairTimerView{Error: err.Error()}
+	}
+	return &tui.RepairTimerView{Paths: res.Paths, Enabled: res.Enabled, Next: res.Next}
+}
+
+// removeRepairTimer removes the timer and returns its view.
+func removeRepairTimer(ctx context.Context) *tui.RepairTimerView {
+	res, err := schedule.Remove(ctx, repairTimerName)
+	if err != nil {
+		return &tui.RepairTimerView{Error: err.Error()}
+	}
+	return &tui.RepairTimerView{Paths: res.Paths, Enabled: res.Enabled, Next: res.Next}
 }

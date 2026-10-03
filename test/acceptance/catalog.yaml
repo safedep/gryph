@@ -342,6 +342,13 @@
   guarantee: "After three repairs of one hook configuration within an hour, a reconcile pass leaves it as it is, reports the rate limit, and records one rate_limited tamper event."
   labels: [reconcile, repair, selfprotect]
 
+- id: reconcile/timer/units-written
+  title: "install --repair-timer writes the reconcile timer units and uninstall removes them"
+  category: reconcile
+  tier: P2
+  guarantee: "On Linux, gryph install --repair-timer writes the systemd user service and timer that run gryph supervisor reconcile --once every 15 minutes, exits zero when the scheduler is out of reach, and gryph uninstall --repair-timer removes the units."
+  labels: [reconcile, timer, linux]
+
 - id: receipts/system-session/verify
   title: "tamper events are receipts in the system session and the chain verifies"
   category: receipts

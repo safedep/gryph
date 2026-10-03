@@ -175,6 +175,19 @@ type InstallView struct {
 	Agents   []AgentInstallView
 	Database string
 	Config   string
+	// RepairTimer is set when the install also changed the repair timer.
+	RepairTimer *RepairTimerView
+}
+
+// RepairTimerView is the outcome of a change to the repair timer.
+type RepairTimerView struct {
+	// Paths lists the files the change wrote or removed.
+	Paths []string
+	// Enabled is true when the scheduler took the change. When it is
+	// false, Next names the command to finish by hand.
+	Enabled bool
+	Next    string
+	Error   string
 }
 
 // AgentInstallView represents an agent's installation result.
@@ -193,6 +206,8 @@ type AgentInstallView struct {
 type UninstallView struct {
 	Agents []AgentUninstallView
 	Purged bool
+	// RepairTimer is set when the uninstall also removed the repair timer.
+	RepairTimer *RepairTimerView
 }
 
 // AgentUninstallView represents an agent's uninstallation result.

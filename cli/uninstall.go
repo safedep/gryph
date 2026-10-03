@@ -20,6 +20,7 @@ func NewUninstallCmd() *cobra.Command {
 		purge         bool
 		dryRun        bool
 		restoreBackup bool
+		repairTimer   bool
 	)
 
 	cmd := &cobra.Command{
@@ -138,6 +139,10 @@ removes the database and configuration files as well.`,
 				}
 			}
 
+			if repairTimer && !dryRun {
+				view.RepairTimer = removeRepairTimer(ctx)
+			}
+
 			return app.Presenter.RenderUninstall(view)
 		},
 	}
@@ -146,6 +151,7 @@ removes the database and configuration files as well.`,
 	cmd.Flags().BoolVar(&purge, "purge", false, "also remove database and configuration")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be removed")
 	cmd.Flags().BoolVar(&restoreBackup, "restore-backup", false, "restore backed-up hooks if available")
+	cmd.Flags().BoolVar(&repairTimer, "repair-timer", false, "also remove the timer that runs gryph supervisor reconcile")
 
 	return cmd
 }

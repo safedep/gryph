@@ -384,6 +384,9 @@ func (p *TablePresenter) RenderInstall(result *InstallView) error {
 	tw.println()
 	tw.printf("  %-11s %s\n", "Database", p.color.Path(result.Database))
 	tw.printf("  %-11s %s\n", "Config", p.color.Path(result.Config))
+	if result.RepairTimer != nil {
+		p.renderRepairTimer(tw, result.RepairTimer, "installed")
+	}
 	tw.println()
 	tw.println("Run 'gryph status' to verify.")
 	tw.println("Run 'gryph logs -f' to watch activity.")
@@ -417,8 +420,26 @@ func (p *TablePresenter) RenderUninstall(result *UninstallView) error {
 	if result.Purged {
 		tw.println("Database and config files have been removed.")
 	}
+	if result.RepairTimer != nil {
+		p.renderRepairTimer(tw, result.RepairTimer, "removed")
+	}
 
 	return tw.Err()
+}
+
+// renderRepairTimer prints the outcome of a change to the repair timer.
+func (p *TablePresenter) renderRepairTimer(tw *tableWriter, timer *RepairTimerView, verb string) {
+	switch {
+	case timer.Error != "":
+		tw.printf("  %-11s %s\n", "Repair timer", p.color.Warning("not "+verb+": "+timer.Error))
+	case timer.Enabled:
+		tw.printf("  %-11s %s\n", "Repair timer", verb)
+	default:
+		tw.printf("  %-11s %s\n", "Repair timer", verb+", scheduler not reached. Run: "+timer.Next)
+	}
+	for _, path := range timer.Paths {
+		tw.printf("  %-11s %s\n", "", p.color.Path(path))
+	}
 }
 
 // RenderDoctor renders the doctor check results.

@@ -40,6 +40,17 @@ under another name keeps the bare program name.
 | `--dry-run`   | bool                | false   | Show what would be installed               |
 | `--force`     | bool                | false   | Overwrite existing hooks without prompting |
 | `--no-backup` | bool                | false   | Skip backup of existing hooks              |
+| `--repair-timer` | bool             | false   | Also install the timer that runs `gryph supervisor reconcile --once` every 15 minutes |
+
+`--repair-timer` writes a per-user job for the scheduler of the operating
+system and asks the scheduler to run it: a systemd user timer on Linux
+(`~/.config/systemd/user/gryph-reconcile.{service,timer}`), a launchd agent
+on macOS (`~/Library/LaunchAgents/io.safedep.gryph-reconcile.plist`), or a
+scheduled task on Windows (`SafeDep\gryph-reconcile`). When the scheduler is
+out of reach, for example a systemd user instance that is not running, the
+files stay in place and the output names the command to run by hand. The
+job runs as the user. It repairs only when `policy.self_protection.repair`
+is on. See [supervisor reconcile](#supervisor-reconcile).
 
 ### uninstall
 
@@ -58,6 +69,7 @@ gryph uninstall --restore-backup
 | `--purge`          | bool                | false   | Also remove database and configuration |
 | `--dry-run`        | bool                | false   | Show what would be removed             |
 | `--restore-backup` | bool                | false   | Restore backed-up hooks if available   |
+| `--repair-timer`   | bool                | false   | Also remove the timer that runs `gryph supervisor reconcile` |
 
 ### status
 
@@ -151,8 +163,9 @@ under a system managed configuration. A repair follows these rules:
   repairing that asset and records a `rate_limited` tamper event. A pass
   that fights an agent over a file must not loop.
 
-The command exits with code 1 when a repair failed or an asset reached the
-rate limit, so a timer job shows up in its log. The outcome of each repair
+`gryph install --repair-timer` installs the timer that runs this command every
+15 minutes. The command exits with code 1 when a repair failed or an asset
+reached the rate limit, so a timer job shows up in its log. The outcome of each repair
 is a tamper event: `repair`, `repair_failed` or `rate_limited`. See
 [system session and tamper events](./security-policy.md#system-session-and-tamper-events).
 

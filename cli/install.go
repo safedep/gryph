@@ -14,10 +14,11 @@ import (
 // NewInstallCmd creates the install command.
 func NewInstallCmd() *cobra.Command {
 	var (
-		agents   []string
-		dryRun   bool
-		force    bool
-		noBackup bool
+		agents      []string
+		dryRun      bool
+		force       bool
+		noBackup    bool
+		repairTimer bool
 	)
 
 	cmd := &cobra.Command{
@@ -30,7 +31,8 @@ to enable audit logging. Existing hooks are backed up by default.`,
 		Example: `  gryph install
   gryph install --agent claude-code
   gryph install --dry-run
-  gryph install --force`,
+  gryph install --force
+  gryph install --repair-timer`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
@@ -135,6 +137,10 @@ to enable audit logging. Existing hooks are backed up by default.`,
 					v.Agents = append(v.Agents, agentView)
 				}
 
+				if repairTimer && !dryRun {
+					v.RepairTimer = installRepairTimer(ctx)
+				}
+
 				return v, nil
 			})
 			if err != nil {
@@ -149,6 +155,7 @@ to enable audit logging. Existing hooks are backed up by default.`,
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be installed")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing hooks without prompting")
 	cmd.Flags().BoolVar(&noBackup, "no-backup", false, "skip backup of existing hooks")
+	cmd.Flags().BoolVar(&repairTimer, "repair-timer", false, "also install the timer that runs gryph supervisor reconcile --once every 15 minutes")
 
 	return cmd
 }
