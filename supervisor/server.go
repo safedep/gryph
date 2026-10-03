@@ -212,6 +212,16 @@ func (s *Server) dispatch(ctx context.Context, part *partition, f *ipc.Frame, bo
 			return ipc.ErrorFrame(ipc.CodeInvalid, err.Error()), nil
 		}
 		return nil, nil
+	case *ipc.ImportEvents, *ipc.ImportReceipts, *ipc.ImportSession:
+		if !part.bucket.take(time.Now()) {
+			part.recordRateLimit(ctx, "import")
+			return ipc.ErrorFrame(ipc.CodeRateLimited, "too many requests from this account"), nil
+		}
+		taken, err := part.importRows(ctx, body)
+		if err != nil {
+			return ipc.ErrorFrame(ipc.CodeInvalid, err.Error()), nil
+		}
+		return ipc.NewFrame(ipc.TypeImportResult, ipc.ImportResult{Taken: taken})
 	case *ipc.Hello:
 		return ipc.ErrorFrame(ipc.CodeInvalid, "hello after the handshake"), nil
 	default:

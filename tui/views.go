@@ -47,6 +47,7 @@ type ConfigStatusView struct {
 type SessionView struct {
 	ID               string
 	ShortID          string
+	Imported         bool `json:",omitempty"`
 	AgentName        string
 	AgentDisplayName string
 	AgentVersion     string
@@ -125,6 +126,7 @@ type CostGroupView struct {
 type EventView struct {
 	ID               string
 	ShortID          string
+	Imported         bool `json:",omitempty"`
 	SessionID        string
 	ShortSessionID   string
 	Sequence         int

@@ -171,6 +171,11 @@ func CostSource(v string) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldCostSource, v))
 }
 
+// Imported applies equality check predicate on the "imported" field. It's identical to ImportedEQ.
+func Imported(v bool) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldImported, v))
+}
+
 // CostComputedAt applies equality check predicate on the "cost_computed_at" field. It's identical to CostComputedAtEQ.
 func CostComputedAt(v time.Time) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldCostComputedAt, v))
@@ -1349,6 +1354,16 @@ func CostSourceEqualFold(v string) predicate.Session {
 // CostSourceContainsFold applies the ContainsFold predicate on the "cost_source" field.
 func CostSourceContainsFold(v string) predicate.Session {
 	return predicate.Session(sql.FieldContainsFold(FieldCostSource, v))
+}
+
+// ImportedEQ applies the EQ predicate on the "imported" field.
+func ImportedEQ(v bool) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldImported, v))
+}
+
+// ImportedNEQ applies the NEQ predicate on the "imported" field.
+func ImportedNEQ(v bool) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldImported, v))
 }
 
 // CostComputedAtEQ applies the EQ predicate on the "cost_computed_at" field.

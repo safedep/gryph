@@ -496,6 +496,25 @@ had, the current one last, readable by every account) and
 directory and reloads its partitions on `SIGHUP`, so a key rotation
 reaches it without a restart.
 
+#### supervisor import
+
+Carry this account's own database into the decision service. The command
+runs as the account, on a managed host with the service on.
+
+```bash
+gryph supervisor import [--force] [--json]
+```
+
+It sends the sessions, the events and the receipts of the database in the
+account's home to the service, which stores them in the partition of the
+account marked imported. The receipts keep the account's own signatures.
+A session the service already has is skipped, and a marker file
+`import.done` in the data directory ends a later run before it starts;
+`--force` runs it again. The reconcile job of the account runs the import
+once on a managed host. The JSON report has `database`, `sessions`,
+`events`, `receipts`, `skipped`, `done` and `note`. See
+[import](./supervisor-dev.md#import) in the developer guide.
+
 #### supervisor keys rotate
 
 Replace the receipt signing key of the decision service. Root runs it.

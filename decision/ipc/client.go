@@ -177,6 +177,25 @@ func (c *Client) SessionCost(ctx context.Context, sc SessionCost) error {
 	return nil
 }
 
+// Import sends one import frame (import_events, import_receipts or
+// import_session) and returns the count of rows the service took.
+func (c *Client) Import(ctx context.Context, frameType string, body Body) (int, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, ReadTimeout)
+		defer cancel()
+	}
+	reply, err := c.call(ctx, MustFrame(frameType, body))
+	if err != nil {
+		return 0, err
+	}
+	res, ok := reply.(*ImportResult)
+	if !ok {
+		return 0, fmt.Errorf("%w: %T", ErrProtocol, reply)
+	}
+	return res.Taken, nil
+}
+
 // ReportHookError tells the service that the hook produced no decision.
 func (c *Client) ReportHookError(ctx context.Context, r ReportHookError) error {
 	reply, err := c.call(ctx, MustFrame(TypeReportHookError, r))

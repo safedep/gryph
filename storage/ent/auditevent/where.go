@@ -136,6 +136,11 @@ func ToolCallID(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldToolCallID, v))
 }
 
+// Imported applies equality check predicate on the "imported" field. It's identical to ImportedEQ.
+func Imported(v bool) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldImported, v))
+}
+
 // LinkedEventID applies equality check predicate on the "linked_event_id" field. It's identical to LinkedEventIDEQ.
 func LinkedEventID(v uuid.UUID) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldLinkedEventID, v))
@@ -1184,6 +1189,16 @@ func ToolCallIDEqualFold(v string) predicate.AuditEvent {
 // ToolCallIDContainsFold applies the ContainsFold predicate on the "tool_call_id" field.
 func ToolCallIDContainsFold(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldContainsFold(FieldToolCallID, v))
+}
+
+// ImportedEQ applies the EQ predicate on the "imported" field.
+func ImportedEQ(v bool) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldImported, v))
+}
+
+// ImportedNEQ applies the NEQ predicate on the "imported" field.
+func ImportedNEQ(v bool) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldImported, v))
 }
 
 // LinkedEventIDEQ applies the EQ predicate on the "linked_event_id" field.

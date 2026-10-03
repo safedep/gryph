@@ -322,7 +322,8 @@ func eventCreate(client *ent.Client, event *events.Event) (*ent.AuditEventCreate
 		SetAgentName(event.AgentName).
 		SetActionType(auditevent.ActionType(event.ActionType)).
 		SetResultStatus(auditevent.ResultStatus(event.ResultStatus)).
-		SetIsSensitive(event.IsSensitive)
+		SetIsSensitive(event.IsSensitive).
+		SetImported(event.Imported)
 
 	// Set optional fields
 	if event.DurationMs > 0 {
@@ -569,7 +570,8 @@ func (s *SQLiteStore) SaveSession(ctx context.Context, sess *session.Session) er
 		SetEventCount(sess.EventCount).
 		SetErrors(sess.Errors).
 		SetSensitiveActions(sess.SensitiveActions).
-		SetBlockedActions(sess.BlockedActions)
+		SetBlockedActions(sess.BlockedActions).
+		SetImported(sess.Imported)
 
 	// Set optional fields
 	if sess.AgentSessionID != "" {
@@ -1081,6 +1083,7 @@ func entToEvent(e *ent.AuditEvent) *events.Event {
 		Phase:            events.Phase(e.Phase),
 		Kind:             events.Kind(e.Kind),
 		ToolCallID:       e.ToolCallID,
+		Imported:         e.Imported,
 	}
 
 	if e.LinkedEventID != nil {
@@ -1126,6 +1129,7 @@ func entToSession(e *ent.Session) *session.Session {
 		Errors:           e.Errors,
 		SensitiveActions: e.SensitiveActions,
 		BlockedActions:   e.BlockedActions,
+		Imported:         e.Imported,
 	}
 
 	if e.EndedAt != nil {

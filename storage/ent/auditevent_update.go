@@ -392,6 +392,20 @@ func (_u *AuditEventUpdate) ClearToolCallID() *AuditEventUpdate {
 	return _u
 }
 
+// SetImported sets the "imported" field.
+func (_u *AuditEventUpdate) SetImported(v bool) *AuditEventUpdate {
+	_u.mutation.SetImported(v)
+	return _u
+}
+
+// SetNillableImported sets the "imported" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillableImported(v *bool) *AuditEventUpdate {
+	if v != nil {
+		_u.SetImported(*v)
+	}
+	return _u
+}
+
 // SetLinkedEventID sets the "linked_event_id" field.
 func (_u *AuditEventUpdate) SetLinkedEventID(v uuid.UUID) *AuditEventUpdate {
 	_u.mutation.SetLinkedEventID(v)
@@ -599,6 +613,9 @@ func (_u *AuditEventUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.ToolCallIDCleared() {
 		_spec.ClearField(auditevent.FieldToolCallID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Imported(); ok {
+		_spec.SetField(auditevent.FieldImported, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.LinkedEventID(); ok {
 		_spec.SetField(auditevent.FieldLinkedEventID, field.TypeUUID, value)
@@ -1017,6 +1034,20 @@ func (_u *AuditEventUpdateOne) ClearToolCallID() *AuditEventUpdateOne {
 	return _u
 }
 
+// SetImported sets the "imported" field.
+func (_u *AuditEventUpdateOne) SetImported(v bool) *AuditEventUpdateOne {
+	_u.mutation.SetImported(v)
+	return _u
+}
+
+// SetNillableImported sets the "imported" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillableImported(v *bool) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetImported(*v)
+	}
+	return _u
+}
+
 // SetLinkedEventID sets the "linked_event_id" field.
 func (_u *AuditEventUpdateOne) SetLinkedEventID(v uuid.UUID) *AuditEventUpdateOne {
 	_u.mutation.SetLinkedEventID(v)
@@ -1254,6 +1285,9 @@ func (_u *AuditEventUpdateOne) sqlSave(ctx context.Context) (_node *AuditEvent, 
 	}
 	if _u.mutation.ToolCallIDCleared() {
 		_spec.ClearField(auditevent.FieldToolCallID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Imported(); ok {
+		_spec.SetField(auditevent.FieldImported, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.LinkedEventID(); ok {
 		_spec.SetField(auditevent.FieldLinkedEventID, field.TypeUUID, value)

@@ -1004,6 +1004,7 @@ type AarmReceiptMutation struct {
 	url_digest              *string
 	hash_version            *int
 	addhash_version         *int
+	imported                *bool
 	content_salt            *[]byte
 	clearedFields           map[string]struct{}
 	done                    bool
@@ -2789,6 +2790,42 @@ func (m *AarmReceiptMutation) ResetHashVersion() {
 	delete(m.clearedFields, aarmreceipt.FieldHashVersion)
 }
 
+// SetImported sets the "imported" field.
+func (m *AarmReceiptMutation) SetImported(b bool) {
+	m.imported = &b
+}
+
+// Imported returns the value of the "imported" field in the mutation.
+func (m *AarmReceiptMutation) Imported() (r bool, exists bool) {
+	v := m.imported
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldImported returns the old "imported" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldImported(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldImported is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldImported requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldImported: %w", err)
+	}
+	return oldValue.Imported, nil
+}
+
+// ResetImported resets all changes to the "imported" field.
+func (m *AarmReceiptMutation) ResetImported() {
+	m.imported = nil
+}
+
 // SetContentSalt sets the "content_salt" field.
 func (m *AarmReceiptMutation) SetContentSalt(b []byte) {
 	m.content_salt = &b
@@ -2872,7 +2909,7 @@ func (m *AarmReceiptMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AarmReceiptMutation) Fields() []string {
-	fields := make([]string, 0, 35)
+	fields := make([]string, 0, 36)
 	if m.session_id != nil {
 		fields = append(fields, aarmreceipt.FieldSessionID)
 	}
@@ -2975,6 +3012,9 @@ func (m *AarmReceiptMutation) Fields() []string {
 	if m.hash_version != nil {
 		fields = append(fields, aarmreceipt.FieldHashVersion)
 	}
+	if m.imported != nil {
+		fields = append(fields, aarmreceipt.FieldImported)
+	}
 	if m.content_salt != nil {
 		fields = append(fields, aarmreceipt.FieldContentSalt)
 	}
@@ -3054,6 +3094,8 @@ func (m *AarmReceiptMutation) Field(name string) (ent.Value, bool) {
 		return m.URLDigest()
 	case aarmreceipt.FieldHashVersion:
 		return m.HashVersion()
+	case aarmreceipt.FieldImported:
+		return m.Imported()
 	case aarmreceipt.FieldContentSalt:
 		return m.ContentSalt()
 	}
@@ -3133,6 +3175,8 @@ func (m *AarmReceiptMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldURLDigest(ctx)
 	case aarmreceipt.FieldHashVersion:
 		return m.OldHashVersion(ctx)
+	case aarmreceipt.FieldImported:
+		return m.OldImported(ctx)
 	case aarmreceipt.FieldContentSalt:
 		return m.OldContentSalt(ctx)
 	}
@@ -3381,6 +3425,13 @@ func (m *AarmReceiptMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetHashVersion(v)
+		return nil
+	case aarmreceipt.FieldImported:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetImported(v)
 		return nil
 	case aarmreceipt.FieldContentSalt:
 		v, ok := value.([]byte)
@@ -3762,6 +3813,9 @@ func (m *AarmReceiptMutation) ResetField(name string) error {
 	case aarmreceipt.FieldHashVersion:
 		m.ResetHashVersion()
 		return nil
+	case aarmreceipt.FieldImported:
+		m.ResetImported()
+		return nil
 	case aarmreceipt.FieldContentSalt:
 		m.ResetContentSalt()
 		return nil
@@ -3845,6 +3899,7 @@ type AuditEventMutation struct {
 	phase             *string
 	kind              *string
 	tool_call_id      *string
+	imported          *bool
 	linked_event_id   *uuid.UUID
 	clearedFields     map[string]struct{}
 	session           *uuid.UUID
@@ -4937,6 +4992,42 @@ func (m *AuditEventMutation) ResetToolCallID() {
 	delete(m.clearedFields, auditevent.FieldToolCallID)
 }
 
+// SetImported sets the "imported" field.
+func (m *AuditEventMutation) SetImported(b bool) {
+	m.imported = &b
+}
+
+// Imported returns the value of the "imported" field in the mutation.
+func (m *AuditEventMutation) Imported() (r bool, exists bool) {
+	v := m.imported
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldImported returns the old "imported" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldImported(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldImported is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldImported requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldImported: %w", err)
+	}
+	return oldValue.Imported, nil
+}
+
+// ResetImported resets all changes to the "imported" field.
+func (m *AuditEventMutation) ResetImported() {
+	m.imported = nil
+}
+
 // SetLinkedEventID sets the "linked_event_id" field.
 func (m *AuditEventMutation) SetLinkedEventID(u uuid.UUID) {
 	m.linked_event_id = &u
@@ -5047,7 +5138,7 @@ func (m *AuditEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuditEventMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 23)
 	if m.session != nil {
 		fields = append(fields, auditevent.FieldSessionID)
 	}
@@ -5111,6 +5202,9 @@ func (m *AuditEventMutation) Fields() []string {
 	if m.tool_call_id != nil {
 		fields = append(fields, auditevent.FieldToolCallID)
 	}
+	if m.imported != nil {
+		fields = append(fields, auditevent.FieldImported)
+	}
 	if m.linked_event_id != nil {
 		fields = append(fields, auditevent.FieldLinkedEventID)
 	}
@@ -5164,6 +5258,8 @@ func (m *AuditEventMutation) Field(name string) (ent.Value, bool) {
 		return m.Kind()
 	case auditevent.FieldToolCallID:
 		return m.ToolCallID()
+	case auditevent.FieldImported:
+		return m.Imported()
 	case auditevent.FieldLinkedEventID:
 		return m.LinkedEventID()
 	}
@@ -5217,6 +5313,8 @@ func (m *AuditEventMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldKind(ctx)
 	case auditevent.FieldToolCallID:
 		return m.OldToolCallID(ctx)
+	case auditevent.FieldImported:
+		return m.OldImported(ctx)
 	case auditevent.FieldLinkedEventID:
 		return m.OldLinkedEventID(ctx)
 	}
@@ -5374,6 +5472,13 @@ func (m *AuditEventMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetToolCallID(v)
+		return nil
+	case auditevent.FieldImported:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetImported(v)
 		return nil
 	case auditevent.FieldLinkedEventID:
 		v, ok := value.(uuid.UUID)
@@ -5613,6 +5718,9 @@ func (m *AuditEventMutation) ResetField(name string) error {
 		return nil
 	case auditevent.FieldToolCallID:
 		m.ResetToolCallID()
+		return nil
+	case auditevent.FieldImported:
+		m.ResetImported()
 		return nil
 	case auditevent.FieldLinkedEventID:
 		m.ResetLinkedEventID()
@@ -10576,6 +10684,7 @@ type SessionMutation struct {
 	model_usage           *[]map[string]interface{}
 	appendmodel_usage     []map[string]interface{}
 	cost_source           *string
+	imported              *bool
 	cost_computed_at      *time.Time
 	clearedFields         map[string]struct{}
 	events                map[uuid.UUID]struct{}
@@ -11954,6 +12063,42 @@ func (m *SessionMutation) ResetCostSource() {
 	delete(m.clearedFields, session.FieldCostSource)
 }
 
+// SetImported sets the "imported" field.
+func (m *SessionMutation) SetImported(b bool) {
+	m.imported = &b
+}
+
+// Imported returns the value of the "imported" field in the mutation.
+func (m *SessionMutation) Imported() (r bool, exists bool) {
+	v := m.imported
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldImported returns the old "imported" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldImported(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldImported is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldImported requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldImported: %w", err)
+	}
+	return oldValue.Imported, nil
+}
+
+// ResetImported resets all changes to the "imported" field.
+func (m *SessionMutation) ResetImported() {
+	m.imported = nil
+}
+
 // SetCostComputedAt sets the "cost_computed_at" field.
 func (m *SessionMutation) SetCostComputedAt(t time.Time) {
 	m.cost_computed_at = &t
@@ -12091,7 +12236,7 @@ func (m *SessionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SessionMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.agent_session_id != nil {
 		fields = append(fields, session.FieldAgentSessionID)
 	}
@@ -12164,6 +12309,9 @@ func (m *SessionMutation) Fields() []string {
 	if m.cost_source != nil {
 		fields = append(fields, session.FieldCostSource)
 	}
+	if m.imported != nil {
+		fields = append(fields, session.FieldImported)
+	}
 	if m.cost_computed_at != nil {
 		fields = append(fields, session.FieldCostComputedAt)
 	}
@@ -12223,6 +12371,8 @@ func (m *SessionMutation) Field(name string) (ent.Value, bool) {
 		return m.ModelUsage()
 	case session.FieldCostSource:
 		return m.CostSource()
+	case session.FieldImported:
+		return m.Imported()
 	case session.FieldCostComputedAt:
 		return m.CostComputedAt()
 	}
@@ -12282,6 +12432,8 @@ func (m *SessionMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldModelUsage(ctx)
 	case session.FieldCostSource:
 		return m.OldCostSource(ctx)
+	case session.FieldImported:
+		return m.OldImported(ctx)
 	case session.FieldCostComputedAt:
 		return m.OldCostComputedAt(ctx)
 	}
@@ -12460,6 +12612,13 @@ func (m *SessionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCostSource(v)
+		return nil
+	case session.FieldImported:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetImported(v)
 		return nil
 	case session.FieldCostComputedAt:
 		v, ok := value.(time.Time)
@@ -12816,6 +12975,9 @@ func (m *SessionMutation) ResetField(name string) error {
 		return nil
 	case session.FieldCostSource:
 		m.ResetCostSource()
+		return nil
+	case session.FieldImported:
+		m.ResetImported()
 		return nil
 	case session.FieldCostComputedAt:
 		m.ResetCostComputedAt()

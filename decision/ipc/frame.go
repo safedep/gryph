@@ -37,6 +37,10 @@ const (
 	TypeQuery           = "query"
 	TypeQueryResult     = "query_result"
 	TypeSessionCost     = "session_cost"
+	TypeImportEvents    = "import_events"
+	TypeImportReceipts  = "import_receipts"
+	TypeImportSession   = "import_session"
+	TypeImportResult    = "import_result"
 	TypeError           = "error"
 )
 

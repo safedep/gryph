@@ -21,7 +21,7 @@ func NewSupervisorCmd() *cobra.Command {
 		Use:   "supervisor",
 		Short: "Keep Gryph in place on this host",
 	}
-	cmd.AddCommand(newSupervisorReconcileCmd(), newSupervisorProtocolCmd(), newSupervisorRunCmd(), newSupervisorSendCmd(), newSupervisorFakeCmd(), newSupervisorKeysCmd())
+	cmd.AddCommand(newSupervisorReconcileCmd(), newSupervisorProtocolCmd(), newSupervisorRunCmd(), newSupervisorSendCmd(), newSupervisorFakeCmd(), newSupervisorKeysCmd(), newSupervisorImportCmd())
 	return cmd
 }
 
@@ -73,6 +73,15 @@ A timer runs this command. See gryph install --repair-timer.`,
 					log.Errorf("failed to close app: %v", err)
 				}
 			}()
+
+			// The per-user job runs the pass. On a managed host with the
+			// service on, the same job carries the user's old database
+			// into the service once, as the user.
+			if clientMode(app.Config) && !importDone(app.Paths) {
+				if _, err := importUserDatabase(ctx, app, false); err != nil {
+					log.Warnf("supervisor: import of the user's database not done: %v", err)
+				}
+			}
 
 			report, err := app.Reconcile(ctx, repair || engine.RepairEnabled(app.Config))
 			if report != nil {

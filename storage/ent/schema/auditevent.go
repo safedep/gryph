@@ -76,6 +76,11 @@ func (AuditEvent) Fields() []ent.Field {
 		field.String("tool_call_id").
 			Optional().
 			Comment("Agent identifier of the tool call, shared by its pre and post events"),
+		// imported marks a row that gryph supervisor import copied from a
+		// user's own database into the partition of the decision service.
+		// The user could have changed it before the import, so a reader
+		// keeps it apart from a row the service recorded itself.
+		field.Bool("imported").Default(false),
 		field.UUID("linked_event_id", uuid.UUID{}).
 			Optional().
 			Nillable().

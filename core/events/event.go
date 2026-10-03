@@ -78,6 +78,9 @@ type Event struct {
 	// LinkedEventID is the ID of the pre event of the same tool call, set on
 	// a post event when Gryph recorded the pre event.
 	LinkedEventID uuid.UUID `json:"linked_event_id,omitempty,omitzero"`
+	// Imported marks an event that gryph supervisor import copied from
+	// the user's own database into the partition of the decision service.
+	Imported bool `json:"imported,omitempty"`
 	// Origin is where the content of the event came from, as the adapter
 	// claims it. ClaimOrigin fills it from the event facts when the adapter
 	// does not. The context entry and the content labels store it.

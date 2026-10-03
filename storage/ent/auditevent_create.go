@@ -269,6 +269,20 @@ func (_c *AuditEventCreate) SetNillableToolCallID(v *string) *AuditEventCreate {
 	return _c
 }
 
+// SetImported sets the "imported" field.
+func (_c *AuditEventCreate) SetImported(v bool) *AuditEventCreate {
+	_c.mutation.SetImported(v)
+	return _c
+}
+
+// SetNillableImported sets the "imported" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableImported(v *bool) *AuditEventCreate {
+	if v != nil {
+		_c.SetImported(*v)
+	}
+	return _c
+}
+
 // SetLinkedEventID sets the "linked_event_id" field.
 func (_c *AuditEventCreate) SetLinkedEventID(v uuid.UUID) *AuditEventCreate {
 	_c.mutation.SetLinkedEventID(v)
@@ -349,6 +363,10 @@ func (_c *AuditEventCreate) defaults() {
 		v := auditevent.DefaultIsSensitive
 		_c.mutation.SetIsSensitive(v)
 	}
+	if _, ok := _c.mutation.Imported(); !ok {
+		v := auditevent.DefaultImported
+		_c.mutation.SetImported(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := auditevent.DefaultID()
 		_c.mutation.SetID(v)
@@ -397,6 +415,9 @@ func (_c *AuditEventCreate) check() error {
 	}
 	if _, ok := _c.mutation.IsSensitive(); !ok {
 		return &ValidationError{Name: "is_sensitive", err: errors.New(`ent: missing required field "AuditEvent.is_sensitive"`)}
+	}
+	if _, ok := _c.mutation.Imported(); !ok {
+		return &ValidationError{Name: "imported", err: errors.New(`ent: missing required field "AuditEvent.imported"`)}
 	}
 	if len(_c.mutation.SessionIDs()) == 0 {
 		return &ValidationError{Name: "session", err: errors.New(`ent: missing required edge "AuditEvent.session"`)}
@@ -515,6 +536,10 @@ func (_c *AuditEventCreate) createSpec() (*AuditEvent, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ToolCallID(); ok {
 		_spec.SetField(auditevent.FieldToolCallID, field.TypeString, value)
 		_node.ToolCallID = value
+	}
+	if value, ok := _c.mutation.Imported(); ok {
+		_spec.SetField(auditevent.FieldImported, field.TypeBool, value)
+		_node.Imported = value
 	}
 	if value, ok := _c.mutation.LinkedEventID(); ok {
 		_spec.SetField(auditevent.FieldLinkedEventID, field.TypeUUID, value)

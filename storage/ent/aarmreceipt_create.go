@@ -409,6 +409,20 @@ func (_c *AarmReceiptCreate) SetNillableHashVersion(v *int) *AarmReceiptCreate {
 	return _c
 }
 
+// SetImported sets the "imported" field.
+func (_c *AarmReceiptCreate) SetImported(v bool) *AarmReceiptCreate {
+	_c.mutation.SetImported(v)
+	return _c
+}
+
+// SetNillableImported sets the "imported" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillableImported(v *bool) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetImported(*v)
+	}
+	return _c
+}
+
 // SetContentSalt sets the "content_salt" field.
 func (_c *AarmReceiptCreate) SetContentSalt(v []byte) *AarmReceiptCreate {
 	_c.mutation.SetContentSalt(v)
@@ -472,6 +486,10 @@ func (_c *AarmReceiptCreate) defaults() {
 		v := aarmreceipt.DefaultResultStatus
 		_c.mutation.SetResultStatus(v)
 	}
+	if _, ok := _c.mutation.Imported(); !ok {
+		v := aarmreceipt.DefaultImported
+		_c.mutation.SetImported(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := aarmreceipt.DefaultID()
 		_c.mutation.SetID(v)
@@ -525,6 +543,9 @@ func (_c *AarmReceiptCreate) check() error {
 		if err := aarmreceipt.PolicyHashValidator(v); err != nil {
 			return &ValidationError{Name: "policy_hash", err: fmt.Errorf(`ent: validator failed for field "AarmReceipt.policy_hash": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.Imported(); !ok {
+		return &ValidationError{Name: "imported", err: errors.New(`ent: missing required field "AarmReceipt.imported"`)}
 	}
 	if v, ok := _c.mutation.ContentSalt(); ok {
 		if err := aarmreceipt.ContentSaltValidator(v); err != nil {
@@ -701,6 +722,10 @@ func (_c *AarmReceiptCreate) createSpec() (*AarmReceipt, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.HashVersion(); ok {
 		_spec.SetField(aarmreceipt.FieldHashVersion, field.TypeInt, value)
 		_node.HashVersion = value
+	}
+	if value, ok := _c.mutation.Imported(); ok {
+		_spec.SetField(aarmreceipt.FieldImported, field.TypeBool, value)
+		_node.Imported = value
 	}
 	if value, ok := _c.mutation.ContentSalt(); ok {
 		_spec.SetField(aarmreceipt.FieldContentSalt, field.TypeBytes, value)

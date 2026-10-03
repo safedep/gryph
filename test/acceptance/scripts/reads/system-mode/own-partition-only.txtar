@@ -39,8 +39,8 @@ stdout '"reloaded": true'
 exec cp read1.json /tmp/gryph-acceptance-read1.json
 exec cp read2.json /tmp/gryph-acceptance-read2.json
 exec chmod 644 /tmp/gryph-acceptance-read1.json /tmp/gryph-acceptance-read2.json
-exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PreToolUse < /tmp/gryph-acceptance-read1.json'
-exec runuser -u gryphacc2 -- /bin/sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PreToolUse < /tmp/gryph-acceptance-read2.json'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PreToolUse < /tmp/gryph-acceptance-read1.json'
+exec runuser -u gryphacc2 -- env HOME=/home/gryphacc2 XDG_CONFIG_HOME=/home/gryphacc2/.config XDG_DATA_HOME=/home/gryphacc2/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PreToolUse < /tmp/gryph-acceptance-read2.json'
 ! exists /home/gryphacc1/.local/share/safedep/gryph/audit.db
 ! exists /home/gryphacc2/.local/share/safedep/gryph/audit.db
 exists /tmp/gryph-acceptance-state/users/$UID1/audit.db
@@ -48,39 +48,39 @@ exists /tmp/gryph-acceptance-state/users/$UID2/audit.db
 
 # The first account reads its own log through the service, and nothing
 # of the second account. The read opens no database in the home either.
-exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance sessions --format json --no-color'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance sessions --format json --no-color'
 stdout -count=1 '"AgentName": "claude-code"'
-exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance query --format json --no-color'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance query --format json --no-color'
 stdout 'first-account.go'
 ! stdout 'second-account.go'
-exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance logs --format json --no-color'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance logs --format json --no-color'
 stdout 'first-account.go'
-exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance query --format json --no-color'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance query --format json --no-color'
 cp stdout events1.json
 capture EVENT1 '"ShortID": "([0-9a-f]+)"' events1.json
-exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance cat '$EVENT1' --format json --no-color'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance cat '$EVENT1' --format json --no-color'
 stdout 'first-account.go'
-exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance policy receipts --format json --no-color'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance policy receipts --format json --no-color'
 stdout -count=1 '"decision":\s*"allow"'
 stdout '"signer_key_scope":\s*"supervisor"'
-exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance policy receipts --verify --all-sessions --no-color'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance policy receipts --verify --all-sessions --no-color'
 stdout 'Chain verification: OK'
-exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance stats --help'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance stats --help'
 ! exists /home/gryphacc1/.local/share/safedep/gryph/audit.db
 
 # The second account sees its own log only.
-exec runuser -u gryphacc2 -- /bin/sh -c '/usr/local/bin/gryph-acceptance query --format json --no-color'
+exec runuser -u gryphacc2 -- env HOME=/home/gryphacc2 XDG_CONFIG_HOME=/home/gryphacc2/.config XDG_DATA_HOME=/home/gryphacc2/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance query --format json --no-color'
 stdout 'second-account.go'
 ! stdout 'first-account.go'
 
 # No account reads another partition on disk.
-! exec runuser -u gryphacc2 -- /bin/sh -c 'cat /tmp/gryph-acceptance-state/users/'$UID1'/audit.db > /dev/null'
+! exec runuser -u gryphacc2 -- env HOME=/home/gryphacc2 XDG_CONFIG_HOME=/home/gryphacc2/.config XDG_DATA_HOME=/home/gryphacc2/.local/share /bin/sh -c 'cat /tmp/gryph-acceptance-state/users/'$UID1'/audit.db > /dev/null'
 stderr 'Permission denied'
 
 # Without the service the read fails with a clear error, not with an
 # empty local log.
 exec sh -c 'pkill -f "^/tmp/.*gryph.* supervisor run" || pkill -f "supervisor run --socket /tmp/gryph-acceptance-hook.sock"; sleep 0.5; true'
-! exec runuser -u gryphacc1 -- /bin/sh -c '/usr/local/bin/gryph-acceptance sessions --no-color'
+! exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance sessions --no-color'
 stderr 'the decision service at /tmp/gryph-acceptance-hook.sock'
 
 exec rm -rf /etc/safedep/gryph /tmp/gryph-acceptance-state /tmp/gryph-acceptance-spool /tmp/gryph-acceptance-hook.sock /tmp/gryph-acceptance-read1.json /tmp/gryph-acceptance-read2.json /usr/local/bin/gryph-acceptance

@@ -58,6 +58,8 @@ const (
 	FieldKind = "kind"
 	// FieldToolCallID holds the string denoting the tool_call_id field in the database.
 	FieldToolCallID = "tool_call_id"
+	// FieldImported holds the string denoting the imported field in the database.
+	FieldImported = "imported"
 	// FieldLinkedEventID holds the string denoting the linked_event_id field in the database.
 	FieldLinkedEventID = "linked_event_id"
 	// EdgeSession holds the string denoting the session edge name in mutations.
@@ -97,6 +99,7 @@ var Columns = []string{
 	FieldPhase,
 	FieldKind,
 	FieldToolCallID,
+	FieldImported,
 	FieldLinkedEventID,
 }
 
@@ -119,6 +122,8 @@ var (
 	AgentNameValidator func(string) error
 	// DefaultIsSensitive holds the default value on creation for the "is_sensitive" field.
 	DefaultIsSensitive bool
+	// DefaultImported holds the default value on creation for the "imported" field.
+	DefaultImported bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -282,6 +287,11 @@ func ByKind(opts ...sql.OrderTermOption) OrderOption {
 // ByToolCallID orders the results by the tool_call_id field.
 func ByToolCallID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldToolCallID, opts...).ToFunc()
+}
+
+// ByImported orders the results by the imported field.
+func ByImported(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldImported, opts...).ToFunc()
 }
 
 // ByLinkedEventID orders the results by the linked_event_id field.

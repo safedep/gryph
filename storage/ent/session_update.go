@@ -497,6 +497,20 @@ func (_u *SessionUpdate) ClearCostSource() *SessionUpdate {
 	return _u
 }
 
+// SetImported sets the "imported" field.
+func (_u *SessionUpdate) SetImported(v bool) *SessionUpdate {
+	_u.mutation.SetImported(v)
+	return _u
+}
+
+// SetNillableImported sets the "imported" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableImported(v *bool) *SessionUpdate {
+	if v != nil {
+		_u.SetImported(*v)
+	}
+	return _u
+}
+
 // SetCostComputedAt sets the "cost_computed_at" field.
 func (_u *SessionUpdate) SetCostComputedAt(v time.Time) *SessionUpdate {
 	_u.mutation.SetCostComputedAt(v)
@@ -746,6 +760,9 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.CostSourceCleared() {
 		_spec.ClearField(session.FieldCostSource, field.TypeString)
+	}
+	if value, ok := _u.mutation.Imported(); ok {
+		_spec.SetField(session.FieldImported, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.CostComputedAt(); ok {
 		_spec.SetField(session.FieldCostComputedAt, field.TypeTime, value)
@@ -1284,6 +1301,20 @@ func (_u *SessionUpdateOne) ClearCostSource() *SessionUpdateOne {
 	return _u
 }
 
+// SetImported sets the "imported" field.
+func (_u *SessionUpdateOne) SetImported(v bool) *SessionUpdateOne {
+	_u.mutation.SetImported(v)
+	return _u
+}
+
+// SetNillableImported sets the "imported" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableImported(v *bool) *SessionUpdateOne {
+	if v != nil {
+		_u.SetImported(*v)
+	}
+	return _u
+}
+
 // SetCostComputedAt sets the "cost_computed_at" field.
 func (_u *SessionUpdateOne) SetCostComputedAt(v time.Time) *SessionUpdateOne {
 	_u.mutation.SetCostComputedAt(v)
@@ -1563,6 +1594,9 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 	}
 	if _u.mutation.CostSourceCleared() {
 		_spec.ClearField(session.FieldCostSource, field.TypeString)
+	}
+	if value, ok := _u.mutation.Imported(); ok {
+		_spec.SetField(session.FieldImported, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.CostComputedAt(); ok {
 		_spec.SetField(session.FieldCostComputedAt, field.TypeTime, value)

@@ -65,6 +65,10 @@ type Session struct {
 	CostSource string `json:"cost_source,omitempty"`
 	// CostComputedAt is when cost was last computed.
 	CostComputedAt *time.Time `json:"cost_computed_at,omitempty"`
+	// Imported marks a session that gryph supervisor import copied from
+	// the user's own database into the partition of the decision service.
+	// The user could have changed it before the import.
+	Imported bool `json:"imported,omitempty"`
 }
 
 // NewSession creates a new Session with a generated UUID and current timestamp.

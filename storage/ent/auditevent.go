@@ -63,6 +63,8 @@ type AuditEvent struct {
 	Kind string `json:"kind,omitempty"`
 	// Agent identifier of the tool call, shared by its pre and post events
 	ToolCallID string `json:"tool_call_id,omitempty"`
+	// Imported holds the value of the "imported" field.
+	Imported bool `json:"imported,omitempty"`
 	// ID of the pre event of the same tool call, set on a linked post event
 	LinkedEventID *uuid.UUID `json:"linked_event_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -100,7 +102,7 @@ func (*AuditEvent) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case auditevent.FieldPayload, auditevent.FieldDiffLabel, auditevent.FieldRawEvent:
 			values[i] = new([]byte)
-		case auditevent.FieldIsSensitive:
+		case auditevent.FieldIsSensitive, auditevent.FieldImported:
 			values[i] = new(sql.NullBool)
 		case auditevent.FieldSequence, auditevent.FieldDurationMs:
 			values[i] = new(sql.NullInt64)
@@ -264,6 +266,12 @@ func (_m *AuditEvent) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ToolCallID = value.String
 			}
+		case auditevent.FieldImported:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field imported", values[i])
+			} else if value.Valid {
+				_m.Imported = value.Bool
+			}
 		case auditevent.FieldLinkedEventID:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field linked_event_id", values[i])
@@ -376,6 +384,9 @@ func (_m *AuditEvent) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("tool_call_id=")
 	builder.WriteString(_m.ToolCallID)
+	builder.WriteString(", ")
+	builder.WriteString("imported=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Imported))
 	builder.WriteString(", ")
 	if v := _m.LinkedEventID; v != nil {
 		builder.WriteString("linked_event_id=")

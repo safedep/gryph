@@ -453,3 +453,100 @@ func TestServer_ReadsComeFromTheOwnPartition(t *testing.T) {
 	require.ErrorAs(t, err, &serr)
 	assert.Equal(t, ipc.CodeInvalid, serr.Code)
 }
+
+func TestServer_ImportsTheUsersRowsMarked(t *testing.T) {
+	cfg := config.Default()
+	_, state, _ := startServerWithLimits(t, cfg, Limits{MaxConns: 16, Rate: 1000, Burst: 1000, IdleTimeout: 30 * time.Second})
+	sock := filepath.Join(filepath.Dir(state), "hook.sock")
+	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	require.NoError(t, err)
+	defer func() { _ = client.Close() }()
+	ctx := context.Background()
+
+	// The user's own database: one session with 70 events and one receipt.
+	userDB := filepath.Join(t.TempDir(), "audit.db")
+	local, err := storage.NewSQLiteStore(userDB)
+	require.NoError(t, err)
+	require.NoError(t, local.Init(ctx))
+	sess := session.NewSessionWithID(uuid.New(), "claude-code")
+	sess.ProjectName = "old-project"
+	require.NoError(t, local.SaveSession(ctx, sess))
+	for i := range 70 {
+		ev := events.NewEvent(sess.ID, "claude-code", events.ActionFileRead)
+		ev.ToolName = "Read"
+		ev.ResultStatus = events.ResultSuccess
+		require.NoError(t, local.RecordEvent(ctx, ev, session.EventCounts(ev)), i)
+	}
+	require.NoError(t, local.InsertReceipt(ctx, &storage.ReceiptRow{ID: uuid.New(), SessionID: sess.ID, Sequence: 1, RecordedAt: time.Now(), Agent: "claude-code", ActionType: "file_read", Decision: "allow", ResultStatus: "success", Hash: []byte("0123456789abcdef0123456789abcdef"), Signature: []byte("sig"), SignerKeyID: "0123456789abcdef", SignerKeyScope: "user"}))
+	stored, err := local.GetSession(ctx, sess.ID)
+	require.NoError(t, err)
+	evts, err := local.GetEventsBySession(ctx, sess.ID)
+	require.NoError(t, err)
+	receipts, err := local.QueryReceipts(ctx, &storage.ReceiptFilter{SessionID: &sess.ID, Limit: -1})
+	require.NoError(t, err)
+	require.NoError(t, local.Close())
+
+	_, err = client.Import(ctx, ipc.TypeImportEvents, &ipc.ImportEvents{SessionID: sess.ID, Events: evts[:1]})
+	require.Error(t, err, "the session row comes first")
+	taken, err := client.Import(ctx, ipc.TypeImportSession, &ipc.ImportSession{Session: stored})
+	require.NoError(t, err)
+	assert.Equal(t, 1, taken)
+	taken, err = client.Import(ctx, ipc.TypeImportSession, &ipc.ImportSession{Session: stored})
+	require.NoError(t, err)
+	assert.Equal(t, 0, taken, "a second import of the session changes nothing")
+	send := func(evts []*events.Event) int {
+		t.Helper()
+		taken, err := client.Import(ctx, ipc.TypeImportEvents, &ipc.ImportEvents{SessionID: sess.ID, Events: evts})
+		require.NoError(t, err)
+		return taken
+	}
+	assert.Equal(t, 64, send(evts[:64]))
+	assert.Equal(t, 6, send(evts[64:]))
+	assert.Equal(t, 0, send(evts[:10]), "rows that are there stay")
+	taken, err = client.Import(ctx, ipc.TypeImportReceipts, &ipc.ImportReceipts{SessionID: sess.ID, Receipts: receipts})
+	require.NoError(t, err)
+	assert.Equal(t, 1, taken)
+
+	reads := remote.New(client)
+	got, err := reads.GetSession(ctx, sess.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.True(t, got.Imported)
+	assert.Equal(t, "old-project", got.ProjectName)
+	assert.Equal(t, 70, got.EventCount, "the counters of the user's row come along")
+	gotEvents, err := reads.GetEventsBySession(ctx, sess.ID)
+	require.NoError(t, err)
+	require.Len(t, gotEvents, 70)
+	for _, e := range gotEvents {
+		assert.True(t, e.Imported)
+	}
+	assert.Equal(t, evts[0].Sequence, gotEvents[0].Sequence)
+	gotReceipts, err := reads.QueryReceipts(ctx, &storage.ReceiptFilter{SessionID: &sess.ID})
+	require.NoError(t, err)
+	require.Len(t, gotReceipts, 1)
+	assert.True(t, gotReceipts[0].Imported)
+	assert.Equal(t, []byte("sig"), gotReceipts[0].Signature, "the signature stays the user's")
+	assert.Equal(t, "user", gotReceipts[0].SignerKeyScope)
+
+	// A session the service recorded itself refuses the user's rows.
+	d, err := client.Handle(ctx, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(readPayload)})
+	require.NoError(t, err)
+	require.Equal(t, decision.Verdict("allow"), d.Decision)
+	own, err := reads.QuerySessions(ctx, session.NewSessionFilter())
+	require.NoError(t, err)
+	var ownID uuid.UUID
+	for _, s := range own {
+		if !s.Imported {
+			ownID = s.ID
+		}
+	}
+	require.NotEqual(t, uuid.Nil, ownID)
+	ev := events.NewEvent(ownID, "claude-code", events.ActionFileRead)
+	_, err = client.Import(ctx, ipc.TypeImportEvents, &ipc.ImportEvents{SessionID: ownID, Events: []*events.Event{ev}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "recorded itself")
+	wrong := events.NewEvent(uuid.New(), "claude-code", events.ActionFileRead)
+	_, err = client.Import(ctx, ipc.TypeImportEvents, &ipc.ImportEvents{SessionID: sess.ID, Events: []*events.Event{wrong}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "belongs to session")
+}

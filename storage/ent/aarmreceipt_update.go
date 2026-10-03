@@ -631,6 +631,20 @@ func (_u *AarmReceiptUpdate) ClearHashVersion() *AarmReceiptUpdate {
 	return _u
 }
 
+// SetImported sets the "imported" field.
+func (_u *AarmReceiptUpdate) SetImported(v bool) *AarmReceiptUpdate {
+	_u.mutation.SetImported(v)
+	return _u
+}
+
+// SetNillableImported sets the "imported" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableImported(v *bool) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetImported(*v)
+	}
+	return _u
+}
+
 // SetContentSalt sets the "content_salt" field.
 func (_u *AarmReceiptUpdate) SetContentSalt(v []byte) *AarmReceiptUpdate {
 	_u.mutation.SetContentSalt(v)
@@ -918,6 +932,9 @@ func (_u *AarmReceiptUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.HashVersionCleared() {
 		_spec.ClearField(aarmreceipt.FieldHashVersion, field.TypeInt)
+	}
+	if value, ok := _u.mutation.Imported(); ok {
+		_spec.SetField(aarmreceipt.FieldImported, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.ContentSalt(); ok {
 		_spec.SetField(aarmreceipt.FieldContentSalt, field.TypeBytes, value)
@@ -1547,6 +1564,20 @@ func (_u *AarmReceiptUpdateOne) ClearHashVersion() *AarmReceiptUpdateOne {
 	return _u
 }
 
+// SetImported sets the "imported" field.
+func (_u *AarmReceiptUpdateOne) SetImported(v bool) *AarmReceiptUpdateOne {
+	_u.mutation.SetImported(v)
+	return _u
+}
+
+// SetNillableImported sets the "imported" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableImported(v *bool) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetImported(*v)
+	}
+	return _u
+}
+
 // SetContentSalt sets the "content_salt" field.
 func (_u *AarmReceiptUpdateOne) SetContentSalt(v []byte) *AarmReceiptUpdateOne {
 	_u.mutation.SetContentSalt(v)
@@ -1864,6 +1895,9 @@ func (_u *AarmReceiptUpdateOne) sqlSave(ctx context.Context) (_node *AarmReceipt
 	}
 	if _u.mutation.HashVersionCleared() {
 		_spec.ClearField(aarmreceipt.FieldHashVersion, field.TypeInt)
+	}
+	if value, ok := _u.mutation.Imported(); ok {
+		_spec.SetField(aarmreceipt.FieldImported, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.ContentSalt(); ok {
 		_spec.SetField(aarmreceipt.FieldContentSalt, field.TypeBytes, value)

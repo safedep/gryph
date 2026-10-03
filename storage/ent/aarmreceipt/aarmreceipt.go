@@ -83,6 +83,8 @@ const (
 	FieldURLDigest = "url_digest"
 	// FieldHashVersion holds the string denoting the hash_version field in the database.
 	FieldHashVersion = "hash_version"
+	// FieldImported holds the string denoting the imported field in the database.
+	FieldImported = "imported"
 	// FieldContentSalt holds the string denoting the content_salt field in the database.
 	FieldContentSalt = "content_salt"
 	// Table holds the table name of the aarmreceipt in the database.
@@ -126,6 +128,7 @@ var Columns = []string{
 	FieldCommandDigest,
 	FieldURLDigest,
 	FieldHashVersion,
+	FieldImported,
 	FieldContentSalt,
 }
 
@@ -150,6 +153,8 @@ var (
 	HashValidator func([]byte) error
 	// PolicyHashValidator is a validator for the "policy_hash" field. It is called by the builders before save.
 	PolicyHashValidator func([]byte) error
+	// DefaultImported holds the default value on creation for the "imported" field.
+	DefaultImported bool
 	// ContentSaltValidator is a validator for the "content_salt" field. It is called by the builders before save.
 	ContentSaltValidator func([]byte) error
 	// DefaultID holds the default value on creation for the "id" field.
@@ -327,4 +332,9 @@ func ByURLDigest(opts ...sql.OrderTermOption) OrderOption {
 // ByHashVersion orders the results by the hash_version field.
 func ByHashVersion(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldHashVersion, opts...).ToFunc()
+}
+
+// ByImported orders the results by the imported field.
+func ByImported(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldImported, opts...).ToFunc()
 }

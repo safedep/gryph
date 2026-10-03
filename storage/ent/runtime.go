@@ -58,8 +58,12 @@ func init() {
 	aarmreceiptDescPolicyHash := aarmreceiptFields[23].Descriptor()
 	// aarmreceipt.PolicyHashValidator is a validator for the "policy_hash" field. It is called by the builders before save.
 	aarmreceipt.PolicyHashValidator = aarmreceiptDescPolicyHash.Validators[0].(func([]byte) error)
+	// aarmreceiptDescImported is the schema descriptor for imported field.
+	aarmreceiptDescImported := aarmreceiptFields[35].Descriptor()
+	// aarmreceipt.DefaultImported holds the default value on creation for the imported field.
+	aarmreceipt.DefaultImported = aarmreceiptDescImported.Default.(bool)
 	// aarmreceiptDescContentSalt is the schema descriptor for content_salt field.
-	aarmreceiptDescContentSalt := aarmreceiptFields[35].Descriptor()
+	aarmreceiptDescContentSalt := aarmreceiptFields[36].Descriptor()
 	// aarmreceipt.ContentSaltValidator is a validator for the "content_salt" field. It is called by the builders before save.
 	aarmreceipt.ContentSaltValidator = aarmreceiptDescContentSalt.Validators[0].(func([]byte) error)
 	// aarmreceiptDescID is the schema descriptor for id field.
@@ -84,6 +88,10 @@ func init() {
 	auditeventDescIsSensitive := auditeventFields[16].Descriptor()
 	// auditevent.DefaultIsSensitive holds the default value on creation for the is_sensitive field.
 	auditevent.DefaultIsSensitive = auditeventDescIsSensitive.Default.(bool)
+	// auditeventDescImported is the schema descriptor for imported field.
+	auditeventDescImported := auditeventFields[22].Descriptor()
+	// auditevent.DefaultImported holds the default value on creation for the imported field.
+	auditevent.DefaultImported = auditeventDescImported.Default.(bool)
 	// auditeventDescID is the schema descriptor for id field.
 	auditeventDescID := auditeventFields[0].Descriptor()
 	// auditevent.DefaultID holds the default value on creation for the id field.
@@ -212,6 +220,10 @@ func init() {
 	sessionDescEstimatedCostUsd := sessionFields[22].Descriptor()
 	// session.DefaultEstimatedCostUsd holds the default value on creation for the estimated_cost_usd field.
 	session.DefaultEstimatedCostUsd = sessionDescEstimatedCostUsd.Default.(float64)
+	// sessionDescImported is the schema descriptor for imported field.
+	sessionDescImported := sessionFields[25].Descriptor()
+	// session.DefaultImported holds the default value on creation for the imported field.
+	session.DefaultImported = sessionDescImported.Default.(bool)
 	// sessionDescID is the schema descriptor for id field.
 	sessionDescID := sessionFields[0].Descriptor()
 	// session.DefaultID holds the default value on creation for the id field.

@@ -88,6 +88,7 @@ var (
 		{Name: "command_digest", Type: field.TypeString, Nullable: true},
 		{Name: "url_digest", Type: field.TypeString, Nullable: true},
 		{Name: "hash_version", Type: field.TypeInt, Nullable: true},
+		{Name: "imported", Type: field.TypeBool, Default: false},
 		{Name: "content_salt", Type: field.TypeBytes, Nullable: true, Size: 32},
 	}
 	// AarmReceiptsTable holds the schema information for the "aarm_receipts" table.
@@ -154,6 +155,7 @@ var (
 		{Name: "phase", Type: field.TypeString, Nullable: true},
 		{Name: "kind", Type: field.TypeString, Nullable: true},
 		{Name: "tool_call_id", Type: field.TypeString, Nullable: true},
+		{Name: "imported", Type: field.TypeBool, Default: false},
 		{Name: "linked_event_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "session_id", Type: field.TypeUUID},
 	}
@@ -165,7 +167,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "audit_events_sessions_events",
-				Columns:    []*schema.Column{AuditEventsColumns[22]},
+				Columns:    []*schema.Column{AuditEventsColumns[23]},
 				RefColumns: []*schema.Column{SessionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -179,7 +181,7 @@ var (
 			{
 				Name:    "auditevent_session_id",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[22]},
+				Columns: []*schema.Column{AuditEventsColumns[23]},
 			},
 			{
 				Name:    "auditevent_agent_name",
@@ -199,7 +201,7 @@ var (
 			{
 				Name:    "auditevent_session_id_tool_call_id",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[22], AuditEventsColumns[20]},
+				Columns: []*schema.Column{AuditEventsColumns[23], AuditEventsColumns[20]},
 			},
 		},
 	}
@@ -363,6 +365,7 @@ var (
 		{Name: "estimated_cost_usd", Type: field.TypeFloat64, Default: 0},
 		{Name: "model_usage", Type: field.TypeJSON, Nullable: true},
 		{Name: "cost_source", Type: field.TypeString, Nullable: true},
+		{Name: "imported", Type: field.TypeBool, Default: false},
 		{Name: "cost_computed_at", Type: field.TypeTime, Nullable: true},
 	}
 	// SessionsTable holds the schema information for the "sessions" table.

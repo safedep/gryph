@@ -42,6 +42,10 @@ down. A first frame of another type ends the connection with `error`.
 | `query` | client to server | `kind` (64), `params` (up to 64 entries, 64 and 1024), `limit` | `query_result` or `error` |
 | `query_result` | server to client | `rows` (up to 64 JSON documents), `next` (1024) | |
 | `session_cost` | client to server | `session_id`, `cost_totals` (the session cost the client collected from the transcript) | `ack` or `error` |
+| `import_events` | client to server | `session_id`, `events` (up to 64 events of the user's own database) | `import_result` or `error` |
+| `import_receipts` | client to server | `session_id`, `receipts` (up to 64 receipts, with their hashes and signatures) | `import_result` or `error` |
+| `import_session` | client to server | `session` (the session row, sent first) | `import_result` or `error` |
+| `import_result` | server to client | `taken` (the count of rows the server stored) | |
 | `ack` | server to client | empty | |
 | `error` | server to client | `code` (64), `message` (4096) | |
 
@@ -188,6 +192,30 @@ the session of its own partition, marked `client_reported`, and refuses a
 session that is not there. The interactive `gryph query` searches a local
 index and stays on the local database. The self-audit rows that a failed
 verification writes go to the local store only.
+
+## Import
+
+Before a host gets the service, the hooks of an account record into a
+database in the account's home. `gryph supervisor import` carries it into
+the service, as the account: root never opens a user's database. The
+command reads the sessions, the events and the receipts of the local
+database and sends them in `import_events`, `import_receipts` and
+`import_session` frames, up to 64 rows each. The session row goes first,
+because the events and the receipts reference it. The service skips a row
+that is already there and counts it as zero, so a run that stopped gets
+completed by the next one. The reconcile job of the account runs the import once
+on a managed host, and a marker file in the data directory
+(`import.done`) ends later runs before they start. `--force` runs it
+again.
+
+The service stores the rows in the partition of the peer account with
+`imported` set on the session, the events and the receipts, because the
+account could have changed them before the import. Imported rows never
+touch the accumulator, and a session the service recorded itself refuses
+them. A receipt keeps its hash, its signature and its key: the chain is
+the one the user's database held, in the `user` scope, and it verifies
+against the account's own trust store, which stays in the home. `sessions`,
+`query` and `policy receipts` print the marker.
 
 ## The spool
 

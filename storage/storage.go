@@ -220,6 +220,17 @@ type ContextStateDelta struct {
 	Intent bool
 }
 
+// ImportStore takes the rows of a user's own database into this store,
+// marked imported. A row that is already there is left as it is, so a
+// second import of the same session changes nothing, and a run that
+// stopped gets completed by the next one. The session row comes first:
+// the events and the receipts reference it.
+type ImportStore interface {
+	ImportEvents(ctx context.Context, sessionID uuid.UUID, evts []*events.Event) (int, error)
+	ImportReceipts(ctx context.Context, sessionID uuid.UUID, rows []*ReceiptRow) (int, error)
+	ImportSession(ctx context.Context, sess *session.Session) (bool, error)
+}
+
 // ReceiptStore defines the interface for the AARM receipt log: an
 // append-only, hash-chained record per session. InsertReceipt is called
 // inside the generator's transaction with a pre-computed sequence and hash;
@@ -316,6 +327,11 @@ type ReceiptRow struct {
 	// service. Empty on a row from before the marker, which a user key
 	// signed.
 	SignerKeyScope string
+
+	// Imported marks a receipt that gryph supervisor import copied from
+	// the user's own database. Its hash and signature are the original
+	// ones, and the user could have changed the row before the import.
+	Imported bool
 
 	// DeferReason is the operator-facing rationale recorded on defer receipts
 	// (explicit defer rules carry the rule's reason; synthetic defers carry
@@ -447,6 +463,7 @@ type SelfAuditFilter struct {
 
 // Store combines all storage interfaces.
 type Store interface {
+	ImportStore
 	EventStore
 	SessionStore
 	SelfAuditStore

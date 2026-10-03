@@ -307,6 +307,7 @@ func emitChainBrokenAudit(ctx context.Context, store storage.Store, breaks []rec
 type policyReceiptView struct {
 	ID              string                 `json:"id"`
 	SessionID       string                 `json:"session_id"`
+	Imported        bool                   `json:"imported,omitempty"`
 	Sequence        int64                  `json:"sequence"`
 	RecordedAt      string                 `json:"recorded_at"`
 	Agent           string                 `json:"agent,omitempty"`
@@ -339,6 +340,7 @@ func receiptToView(r *storage.ReceiptRow) policyReceiptView {
 		ID:              r.ID.String(),
 		SessionID:       r.SessionID.String(),
 		Sequence:        r.Sequence,
+		Imported:        r.Imported,
 		RecordedAt:      r.RecordedAt.Format(time.RFC3339Nano),
 		Agent:           r.Agent,
 		Tool:            r.Tool,

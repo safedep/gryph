@@ -341,7 +341,8 @@ func receiptCreate(client *ent.AarmReceiptClient, row *ReceiptRow) *ent.AarmRece
 		SetActionType(row.ActionType).
 		SetDecision(row.Decision).
 		SetResultStatus(aarmreceipt.ResultStatus(row.ResultStatus)).
-		SetHash(row.Hash)
+		SetHash(row.Hash).
+		SetImported(row.Imported)
 
 	if row.ActionID != uuid.Nil {
 		create.SetActionID(row.ActionID)
@@ -783,6 +784,7 @@ func entToReceipt(e *ent.AarmReceipt) *ReceiptRow {
 		URLDigest:       e.URLDigest,
 		HashVersion:     e.HashVersion,
 		ContentSalt:     e.ContentSalt,
+		Imported:        e.Imported,
 	}
 	if e.DurationMs != nil {
 		v := *e.DurationMs

@@ -482,6 +482,13 @@
   guarantee: "Under a managed configuration with the decision service on, sessions, query, logs, cat and policy receipts answer from the partition of the account that the kernel reports for the socket connection, through the service. An account sees its own log and nothing of another account, opens no database of its own, cannot read another partition on disk, and gets a clear error without the service. Privileged job only."
   labels: [reads, supervisor, privileged, linux]
 
+- id: import/user-db/rows-marked
+  title: "gryph supervisor import carries the own database into the service, marked imported"
+  category: import
+  tier: P1
+  guarantee: "As the account, gryph supervisor import sends the sessions, events and receipts of the account's own database to the decision service. The service stores them in the partition of the account marked imported, the receipts keep the account's own signatures and verify against the account's trust store, a second run changes nothing, and the database in the home stays as it was. Privileged job only."
+  labels: [import, supervisor, privileged, linux]
+
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
   category: install

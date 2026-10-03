@@ -8,7 +8,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/safedep/gryph/core/cost"
+	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/decision"
+	"github.com/safedep/gryph/storage"
 )
 
 // The bounds of the string fields. A field above its bound makes the frame
@@ -116,6 +119,33 @@ type QueryResult struct {
 type SessionCost struct {
 	SessionID uuid.UUID         `json:"session_id"`
 	Cost      *cost.SessionCost `json:"cost_totals"`
+}
+
+// ImportEvents carries up to MaxQueryItems events of one session from the
+// user's own database, for gryph supervisor import. The server stores
+// them in its own partition, marked imported.
+type ImportEvents struct {
+	SessionID uuid.UUID       `json:"session_id"`
+	Events    []*events.Event `json:"events"`
+}
+
+// ImportReceipts carries up to MaxQueryItems receipts of one session from
+// the user's own database, with their hashes and signatures.
+type ImportReceipts struct {
+	SessionID uuid.UUID             `json:"session_id"`
+	Receipts  []*storage.ReceiptRow `json:"receipts"`
+}
+
+// ImportSession carries the session row, first: the events and the
+// receipts of the session reference it.
+type ImportSession struct {
+	Session *session.Session `json:"session"`
+}
+
+// ImportResult answers an import frame with the count of rows the server
+// took. A row that was already there counts as zero.
+type ImportResult struct {
+	Taken int `json:"taken"`
 }
 
 // Error answers a frame the server refuses. Code is one of the Code
@@ -296,6 +326,49 @@ func (c *SessionCost) Validate() error {
 }
 
 // Validate implements Body.
+func (i *ImportEvents) Validate() error {
+	if i.SessionID == uuid.Nil {
+		return fmt.Errorf("%w: import_events without a session", ErrInvalid)
+	}
+	if len(i.Events) > MaxQueryItems {
+		return fmt.Errorf("%w: more than %d events in import_events", ErrInvalid, MaxQueryItems)
+	}
+	for _, e := range i.Events {
+		if e == nil {
+			return fmt.Errorf("%w: import_events with an empty event", ErrInvalid)
+		}
+	}
+	return nil
+}
+
+// Validate implements Body.
+func (i *ImportReceipts) Validate() error {
+	if i.SessionID == uuid.Nil {
+		return fmt.Errorf("%w: import_receipts without a session", ErrInvalid)
+	}
+	if len(i.Receipts) > MaxQueryItems {
+		return fmt.Errorf("%w: more than %d receipts in import_receipts", ErrInvalid, MaxQueryItems)
+	}
+	for _, r := range i.Receipts {
+		if r == nil {
+			return fmt.Errorf("%w: import_receipts with an empty receipt", ErrInvalid)
+		}
+	}
+	return nil
+}
+
+// Validate implements Body.
+func (i *ImportSession) Validate() error {
+	if i.Session == nil || i.Session.ID == uuid.Nil {
+		return fmt.Errorf("%w: import_session without a session", ErrInvalid)
+	}
+	return boundString("session.agent_name", i.Session.AgentName, MaxName)
+}
+
+// Validate implements Body.
+func (*ImportResult) Validate() error { return nil }
+
+// Validate implements Body.
 func (q *QueryResult) Validate() error {
 	if len(q.Rows) > MaxQueryItems {
 		return fmt.Errorf("%w: more than %d rows", ErrInvalid, MaxQueryItems)
@@ -350,6 +423,14 @@ func Decode(f *Frame) (Body, error) {
 		body = &QueryResult{}
 	case TypeSessionCost:
 		body = &SessionCost{}
+	case TypeImportEvents:
+		body = &ImportEvents{}
+	case TypeImportReceipts:
+		body = &ImportReceipts{}
+	case TypeImportSession:
+		body = &ImportSession{}
+	case TypeImportResult:
+		body = &ImportResult{}
 	case TypeError:
 		body = &Error{}
 	default:

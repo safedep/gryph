@@ -231,3 +231,29 @@ func paginate(rows []any, page int) (ipc.QueryResult, error) {
 	}
 	return res, nil
 }
+
+// importRows takes the rows of one import frame into the partition,
+// marked imported. The rows come from the user's own database, which the
+// user could change, so they never touch the accumulator and a session
+// the service recorded itself refuses them.
+func (p *partition) importRows(ctx context.Context, body ipc.Body) (int, error) {
+	p.write.Lock()
+	defer p.write.Unlock()
+	switch b := body.(type) {
+	case *ipc.ImportEvents:
+		return p.rt.Store.ImportEvents(ctx, b.SessionID, b.Events)
+	case *ipc.ImportReceipts:
+		return p.rt.Store.ImportReceipts(ctx, b.SessionID, b.Receipts)
+	case *ipc.ImportSession:
+		taken, err := p.rt.Store.ImportSession(ctx, b.Session)
+		if err != nil {
+			return 0, err
+		}
+		if taken {
+			return 1, nil
+		}
+		return 0, nil
+	default:
+		return 0, fmt.Errorf("not an import frame: %T", body)
+	}
+}

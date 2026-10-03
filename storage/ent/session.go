@@ -67,6 +67,8 @@ type Session struct {
 	ModelUsage []map[string]interface{} `json:"model_usage,omitempty"`
 	// CostSource holds the value of the "cost_source" field.
 	CostSource string `json:"cost_source,omitempty"`
+	// Imported holds the value of the "imported" field.
+	Imported bool `json:"imported,omitempty"`
 	// CostComputedAt holds the value of the "cost_computed_at" field.
 	CostComputedAt *time.Time `json:"cost_computed_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -100,6 +102,8 @@ func (*Session) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case session.FieldModelUsage:
 			values[i] = new([]byte)
+		case session.FieldImported:
+			values[i] = new(sql.NullBool)
 		case session.FieldEstimatedCostUsd:
 			values[i] = new(sql.NullFloat64)
 		case session.FieldTotalActions, session.FieldFilesRead, session.FieldFilesWritten, session.FieldCommandsExecuted, session.FieldNetworkRequests, session.FieldEventCount, session.FieldErrors, session.FieldSensitiveActions, session.FieldBlockedActions, session.FieldInputTokens, session.FieldOutputTokens, session.FieldCacheReadTokens, session.FieldCacheWriteTokens:
@@ -278,6 +282,12 @@ func (_m *Session) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.CostSource = value.String
 			}
+		case session.FieldImported:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field imported", values[i])
+			} else if value.Valid {
+				_m.Imported = value.Bool
+			}
 		case session.FieldCostComputedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field cost_computed_at", values[i])
@@ -399,6 +409,9 @@ func (_m *Session) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("cost_source=")
 	builder.WriteString(_m.CostSource)
+	builder.WriteString(", ")
+	builder.WriteString("imported=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Imported))
 	builder.WriteString(", ")
 	if v := _m.CostComputedAt; v != nil {
 		builder.WriteString("cost_computed_at=")

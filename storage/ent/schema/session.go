@@ -71,6 +71,11 @@ func (Session) Fields() []ent.Field {
 			Optional(),
 		field.String("cost_source").
 			Optional(),
+		// imported marks a row that gryph supervisor import copied from a
+		// user's own database into the partition of the decision service.
+		// The user could have changed it before the import, so a reader
+		// keeps it apart from a row the service recorded itself.
+		field.Bool("imported").Default(false),
 		field.Time("cost_computed_at").
 			Optional().
 			Nillable(),

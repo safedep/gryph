@@ -63,6 +63,8 @@ const (
 	FieldModelUsage = "model_usage"
 	// FieldCostSource holds the string denoting the cost_source field in the database.
 	FieldCostSource = "cost_source"
+	// FieldImported holds the string denoting the imported field in the database.
+	FieldImported = "imported"
 	// FieldCostComputedAt holds the string denoting the cost_computed_at field in the database.
 	FieldCostComputedAt = "cost_computed_at"
 	// EdgeEvents holds the string denoting the events edge name in mutations.
@@ -105,6 +107,7 @@ var Columns = []string{
 	FieldEstimatedCostUsd,
 	FieldModelUsage,
 	FieldCostSource,
+	FieldImported,
 	FieldCostComputedAt,
 }
 
@@ -151,6 +154,8 @@ var (
 	DefaultCacheWriteTokens int64
 	// DefaultEstimatedCostUsd holds the default value on creation for the "estimated_cost_usd" field.
 	DefaultEstimatedCostUsd float64
+	// DefaultImported holds the default value on creation for the "imported" field.
+	DefaultImported bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -276,6 +281,11 @@ func ByEstimatedCostUsd(opts ...sql.OrderTermOption) OrderOption {
 // ByCostSource orders the results by the cost_source field.
 func ByCostSource(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCostSource, opts...).ToFunc()
+}
+
+// ByImported orders the results by the imported field.
+func ByImported(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldImported, opts...).ToFunc()
 }
 
 // ByCostComputedAt orders the results by the cost_computed_at field.

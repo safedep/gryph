@@ -352,6 +352,7 @@ func eventToView(reg *agent.Registry, e *events.Event) *tui.EventView {
 	view := &tui.EventView{
 		ID:               e.ID.String(),
 		ShortID:          tui.FormatShortID(e.ID.String()),
+		Imported:         e.Imported,
 		SessionID:        e.SessionID.String(),
 		ShortSessionID:   tui.FormatShortID(e.SessionID.String()),
 		Sequence:         e.Sequence,

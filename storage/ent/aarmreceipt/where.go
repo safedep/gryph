@@ -205,6 +205,11 @@ func HashVersion(v int) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldHashVersion, v))
 }
 
+// Imported applies equality check predicate on the "imported" field. It's identical to ImportedEQ.
+func Imported(v bool) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldImported, v))
+}
+
 // ContentSalt applies equality check predicate on the "content_salt" field. It's identical to ContentSaltEQ.
 func ContentSalt(v []byte) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldContentSalt, v))
@@ -2148,6 +2153,16 @@ func HashVersionIsNil() predicate.AarmReceipt {
 // HashVersionNotNil applies the NotNil predicate on the "hash_version" field.
 func HashVersionNotNil() predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldNotNull(FieldHashVersion))
+}
+
+// ImportedEQ applies the EQ predicate on the "imported" field.
+func ImportedEQ(v bool) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldImported, v))
+}
+
+// ImportedNEQ applies the NEQ predicate on the "imported" field.
+func ImportedNEQ(v bool) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldImported, v))
 }
 
 // ContentSaltEQ applies the EQ predicate on the "content_salt" field.

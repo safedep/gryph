@@ -100,6 +100,7 @@ func sessionToView(reg *agent.Registry, s *session.Session) *tui.SessionView {
 	view := &tui.SessionView{
 		ID:               s.ID.String(),
 		ShortID:          tui.FormatShortID(s.ID.String()),
+		Imported:         s.Imported,
 		AgentName:        s.AgentName,
 		AgentDisplayName: getAgentDisplayName(reg, s.AgentName),
 		AgentVersion:     s.AgentVersion,

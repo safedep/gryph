@@ -73,6 +73,11 @@ func (AarmReceipt) Fields() []ent.Field {
 		field.String("command_digest").Optional(),
 		field.String("url_digest").Optional(),
 		field.Int("hash_version").Optional(),
+		// imported marks a row that gryph supervisor import copied from a
+		// user's own database into the partition of the decision service.
+		// The user could have changed it before the import, so a reader
+		// keeps it apart from a row the service recorded itself.
+		field.Bool("imported").Default(false),
 		field.Bytes("content_salt").Optional().MaxLen(32),
 	}
 }
