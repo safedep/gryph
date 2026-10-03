@@ -70,7 +70,7 @@ exec sh -c 'if [ "'$STATE'" = running ]; then grep -q "enabled: true" /etc/safed
 # wants them. Its state goes to a directory of its own, because the keys
 # under the state directory are the service account's and root does not
 # read them. The next run finds the service and turns the switch on.
-exec sh -c 'if [ "'$STATE'" = down ]; then ('$ACCEPTANCE_GRYPH_BIN' supervisor run --socket /run/safedep/gryph/hook.sock --state-dir /tmp/gryph-acceptance-state --spool-dir /tmp/gryph-acceptance-spool --allow-root >/dev/null 2>&1 &) && for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do test -S /run/safedep/gryph/hook.sock && break; sleep 0.2; done; fi; true'
+exec sh -c 'if [ "'$STATE'" = down ]; then ('$ACCEPTANCE_GRYPH_BIN' supervisor run --socket /run/safedep/gryph/hook.sock --state-dir /tmp/gryph-acceptance-state --spool-dir /tmp/gryph-acceptance-spool --allow-root >/dev/null 2>&1 &) && '$ACCEPTANCE_GRYPH_BIN' supervisor ready --socket /run/safedep/gryph/hook.sock; fi; true'
 exec gryph install --managed --config $WORK/managed.yml --json
 stdout '"running": true'
 stdout '"switch": "on"'
@@ -86,7 +86,7 @@ stdout '"switch": "off"'
 ! exists /etc/systemd/system/gryph-supervisor.service
 ! exists /etc/safedep/gryph/config.yml
 
-exec sh -c 'pkill -u _gryph; test -f /tmp/gryph-acceptance-state/supervisor.pid && kill $(cat /tmp/gryph-acceptance-state/supervisor.pid); sleep 0.3; true'
+exec gryph supervisor stop --pid-file /tmp/gryph-acceptance-state/supervisor.pid --user _gryph
 exec sh -c 'if grep -q absent '$WORK'/account.txt; then userdel _gryph; fi'
 exec rm -rf /etc/safedep/gryph /etc/claude-code /var/lib/safedep/gryph /var/spool/safedep/gryph /run/safedep/gryph /tmp/gryph-acceptance-state /tmp/gryph-acceptance-spool /usr/local/bin/gryph-acceptance /etc/systemd/system/gryph-supervisor.socket /etc/systemd/system/gryph-supervisor.service
 exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer

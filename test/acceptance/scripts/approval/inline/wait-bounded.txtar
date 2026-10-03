@@ -16,7 +16,7 @@ expandenv managed.yml
 exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
 exec install -m 644 policy.yaml /etc/safedep/gryph/policy.yaml
 exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir $WORK/state --spool-dir $WORK/spool --allow-root &
-exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do test -S /tmp/gryph-acceptance-hook.sock && break; sleep 0.2; done'
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
 
 # The service reads its own wait at start: 15 s here. An OpenCode hook
 # has 5 s, so the client waits that minus the margin.

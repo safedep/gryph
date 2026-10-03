@@ -27,6 +27,11 @@ func List() ([]Process, error) {
 	return list()
 }
 
+// ListUID returns the processes of another account. Only Linux has it.
+func ListUID(uid int) ([]Process, error) {
+	return listUID(uid)
+}
+
 // Matches reports whether the process runs the program name. The match is
 // on the short name, without a Windows .exe suffix, and ignores case.
 func (p Process) Matches(name string) bool {

@@ -412,6 +412,20 @@
   guarantee: "A service that answers a decision with a verdict this binary does not know makes every hook block, prompt hooks included, because the service answered and this is not the absent-service case. Privileged job only."
   labels: [hook, client, supervisor, privileged, linux]
 
+- id: hook/client/new-client-old-server
+  title: "a service that does not know the frames of this client blocks"
+  category: hook
+  tier: P0
+  guarantee: "A service that answers error unsupported to a hook request, as an older service during an upgrade, makes a blocking hook block and a prompt hook pass, because the service answered and the phase rule decides. The spool keeps both decisions with the refusal. Privileged job only."
+  labels: [hook, client, supervisor, privileged, linux]
+
+- id: hook/client/killed-during-request
+  title: "a service that stops in the middle of a request leaves the fail mode"
+  category: hook
+  tier: P0
+  guarantee: "A stop of the decision service with SIGTERM drains the request a blocking hook waits on, so the hook gets its answer. A kill with SIGKILL cannot drain: the hook blocks with the absent-service line, exits 2, and leaves the decision in the spool with the cause. Privileged job only."
+  labels: [hook, client, supervisor, chaos, privileged, linux]
+
 - id: hook/client/fake-socket-refused
   title: "the hook client refuses a socket that is not the system's"
   category: hook

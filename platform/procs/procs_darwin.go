@@ -33,3 +33,7 @@ func list() ([]Process, error) {
 	}
 	return out, nil
 }
+
+func listUID(int) ([]Process, error) {
+	return nil, ErrUnsupported
+}

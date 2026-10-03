@@ -4,6 +4,8 @@ import (
 	"context"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/safedep/gryph/decision/ipc"
 	"github.com/safedep/gryph/internal/version"
@@ -47,6 +49,14 @@ func newSupervisorFakeCmd() *cobra.Command {
 				return WrapError(ExitGeneral, "open the socket", err)
 			}
 			defer func() { _ = ln.Close() }()
+			// The harness ends the fake with an interrupt. The close removes
+			// the socket file, so the next script finds no stale socket.
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			go func() {
+				<-ctx.Done()
+				_ = ln.Close()
+			}()
 			for {
 				conn, err := ln.Accept()
 				if err != nil {

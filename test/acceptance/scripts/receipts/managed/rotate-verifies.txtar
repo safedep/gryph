@@ -14,9 +14,9 @@ expandenv managed.yml
 exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
 
 exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir /tmp/gryph-acceptance-state --spool-dir /tmp/gryph-acceptance-spool --allow-root &
-# The service opens the socket first and makes its keys on the way into
-# the accept loop, so the export key, the last of them, says it is ready.
-exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do test -f /tmp/gryph-acceptance-state/keys/export.key && break; sleep 0.2; done'
+# The service makes its keys on the way into the accept loop, so a
+# handshake says they exist.
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
 exists /tmp/gryph-acceptance-state/supervisor.pid
 exists /tmp/gryph-acceptance-state/keys/receipt.key
 # The service made its key at start and signs with it. No install ran, so
@@ -40,7 +40,7 @@ stdout '^2$'
 grep $KEY1 /etc/safedep/gryph/keys/receipt-pub.json
 
 # The reloaded service signs with the new key.
-exec sh -c 'for i in 1 2 3 4 5; do sleep 0.2; done'
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
 stdin frames.bin
 exec gryph supervisor send --socket /tmp/gryph-acceptance-hook.sock --text
 stdout '"type":"decision"'
@@ -55,7 +55,7 @@ stdout '^3$'
 grep $KEY2 /etc/safedep/gryph/keys/receipt-pub.json
 grep $KEY3 /etc/safedep/gryph/keys/receipt-pub.json
 grep second /etc/safedep/gryph/keys/receipt-pub.json
-exec sh -c 'for i in 1 2 3 4 5; do sleep 0.2; done'
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
 stdin frames.bin
 exec gryph supervisor send --socket /tmp/gryph-acceptance-hook.sock --text
 stdout '"type":"decision"'

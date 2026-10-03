@@ -23,7 +23,7 @@ cp stdout uid2.txt
 capture UID2 '([0-9]+)' uid2.txt
 
 exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir $WORK/state --spool-dir /tmp/gryph-acceptance-spool --ingest-interval 500ms --allow-root &
-exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do test -S /tmp/gryph-acceptance-hook.sock && break; sleep 0.2; done'
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
 
 # The service made the root: an account makes its own directory under
 # it and no account removes another account's entries.
@@ -41,7 +41,8 @@ exec runuser -u gryphacc2 -- /bin/sh -c 'mkdir -m 770 /tmp/gryph-acceptance-spoo
 exec cp entry.json /tmp/gryph-acceptance-spool/$UID1/2-planted.json
 exec chown gryphacc2:gryphacc2 /tmp/gryph-acceptance-spool/$UID1/2-planted.json
 
-exec sleep 2
+# The pass took every entry.
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock --until-empty /tmp/gryph-acceptance-spool/$UID1 --until-empty /tmp/gryph-acceptance-spool/4242
 ! exists /tmp/gryph-acceptance-spool/$UID1/1-1.json
 ! exists /tmp/gryph-acceptance-spool/$UID1/2-planted.json
 ! exists /tmp/gryph-acceptance-spool/4242/1-1.json

@@ -28,7 +28,7 @@ expandenv managed.yml
 exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
 
 exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir /tmp/gryph-acceptance-state --spool-dir /tmp/gryph-acceptance-spool --allow-root &
-exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do test -f /tmp/gryph-acceptance-state/keys/export.key && break; sleep 0.2; done'
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
 # Root puts the public half of the machine key in the managed trust
 # store, so every account verifies the receipts of the service.
 exec gryph supervisor keys rotate --json
@@ -79,7 +79,7 @@ stderr 'Permission denied'
 
 # Without the service the read fails with a clear error, not with an
 # empty local log.
-exec sh -c 'kill $(cat /tmp/gryph-acceptance-state/supervisor.pid); sleep 0.5; true'
+exec gryph supervisor stop --pid-file /tmp/gryph-acceptance-state/supervisor.pid
 ! exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance sessions --no-color'
 stderr 'the decision service at /tmp/gryph-acceptance-hook.sock'
 

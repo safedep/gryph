@@ -10,3 +10,7 @@ import (
 func list() ([]Process, error) {
 	return nil, fmt.Errorf("list processes: no support on %s", runtime.GOOS)
 }
+
+func listUID(int) ([]Process, error) {
+	return nil, ErrUnsupported
+}

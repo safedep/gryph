@@ -17,13 +17,14 @@ cp stdout uid1.txt
 capture UID1 '([0-9]+)' uid1.txt
 
 exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir $WORK/state --spool-dir /tmp/gryph-acceptance-spool --ingest-interval 500ms --spool-max-files 3 --allow-root &
-exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do test -S /tmp/gryph-acceptance-hook.sock && break; sleep 0.2; done'
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
 
 exec cp entry.json /tmp/gryph-acceptance-entry.json
 exec chmod 644 /tmp/gryph-acceptance-entry.json
 exec runuser -u gryphacc1 -- /bin/sh -c 'mkdir -m 770 /tmp/gryph-acceptance-spool/'$UID1' && cd /tmp/gryph-acceptance-spool/'$UID1' && for i in 1 2 3 4 5; do cp /tmp/gryph-acceptance-entry.json $i-1.json; done'
 
-exec sleep 2
+# The pass took every entry.
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock --until-empty /tmp/gryph-acceptance-spool/$UID1
 exec sh -c 'ls /tmp/gryph-acceptance-spool/'$UID1' | wc -l'
 stdout '^0$'
 

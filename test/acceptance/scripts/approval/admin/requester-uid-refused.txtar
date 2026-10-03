@@ -28,7 +28,7 @@ exec cp read.json /tmp/gryph-acceptance-read.json
 exec cp terminal.py /tmp/gryph-acceptance-terminal.py
 exec chmod 644 /tmp/gryph-acceptance-deploy.json /tmp/gryph-acceptance-deploy2.json /tmp/gryph-acceptance-read.json /tmp/gryph-acceptance-terminal.py
 exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir /tmp/gryph-acceptance-state --spool-dir /tmp/gryph-acceptance-spool --allow-root &
-exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do test -S /tmp/gryph-acceptance-hook.sock && break; sleep 0.2; done'
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
 
 # The requester has no terminal: the request waits for an approver.
 ! exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PreToolUse < /tmp/gryph-acceptance-deploy.json'
@@ -45,10 +45,10 @@ stdout 'the account that asked cannot answer its own request'
 exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance policy approve list --format json --no-color'
 stdout '"state": "pending"'
 
-exec sh -c 'kill $(cat /tmp/gryph-acceptance-state/supervisor.pid); sleep 0.3; true'
+exec gryph supervisor stop --pid-file /tmp/gryph-acceptance-state/supervisor.pid
 exec rm -rf /etc/safedep/gryph /tmp/gryph-acceptance-state /tmp/gryph-acceptance-spool /tmp/gryph-acceptance-hook.sock /tmp/gryph-acceptance-deploy.json /tmp/gryph-acceptance-deploy2.json /tmp/gryph-acceptance-read.json /tmp/gryph-acceptance-terminal.py /usr/local/bin/gryph-acceptance
 exec rmdir --ignore-fail-on-non-empty /etc/safedep
-exec sh -c 'pkill -u gryphacc1; pkill -u gryphacc2; pkill -u gryphacc3; sleep 0.2; true'
+exec gryph supervisor stop --user gryphacc1 --user gryphacc2 --user gryphacc3
 exec userdel -r gryphacc1
 exec userdel -r gryphacc2
 exec sh -c 'id gryphacc3 >/dev/null 2>&1 && userdel -r gryphacc3; true'

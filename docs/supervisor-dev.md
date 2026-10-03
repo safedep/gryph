@@ -124,7 +124,13 @@ account, so a review sees the flood without the flood filling the store.
 The hidden `gryph supervisor send --socket <path> [--text] [--idle N]`
 sends the frames on stdin to a service and prints the replies. With
 `--idle` it first opens that many connections that send hello and hold.
-The acceptance scripts under `supervisor/` use it.
+The acceptance scripts under `supervisor/` use it. The hidden `gryph
+supervisor ready --socket <path>` completes one handshake and exits, and
+waits on `--until-exists` and `--until-empty` paths after it. The hidden
+`gryph supervisor stop --pid-file <path> [--user <name>]` ends the service
+and the processes of an account and waits for their exit. Both look again
+every 50 ms until `--timeout`, so a script names the condition it waits
+for instead of a fixed sleep. See `test/acceptance/README.md`.
 
 ## Approvals
 

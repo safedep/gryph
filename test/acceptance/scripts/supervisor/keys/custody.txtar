@@ -47,7 +47,7 @@ stdout '"receipt_key": "/tmp/gryph-acceptance-state/keys/receipt.key",\n\s*"key_
 
 # The service runs as the service account and signs with the key.
 exec sh -c 'runuser -u _gryph -- /usr/local/bin/gryph-acceptance supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir /tmp/gryph-acceptance-state --spool-dir /tmp/gryph-acceptance-spool >/dev/null 2>&1 &'
-exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do test -S /tmp/gryph-acceptance-hook.sock && break; sleep 0.2; done'
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
 ipcframe frames.bin hello.json handle.json
 stdin frames.bin
 exec gryph supervisor send --socket /tmp/gryph-acceptance-hook.sock --text
@@ -79,7 +79,7 @@ stdout '"owner": "_gryph"'
 execexit 1 gryph doctor --managed --no-color
 stdout 'Key: supervisor-owned \(protected\) /tmp/gryph-acceptance-state/keys/receipt.key owner _gryph'
 
-exec sh -c 'pkill -u _gryph; sleep 0.3; true'
+exec gryph supervisor stop --user _gryph
 exec userdel _gryph
 exec rm -rf /etc/safedep/gryph /etc/claude-code /tmp/gryph-acceptance-state /tmp/gryph-acceptance-spool /tmp/gryph-acceptance-hook.sock /usr/local/bin/gryph-acceptance /etc/systemd/system/gryph-supervisor.socket /etc/systemd/system/gryph-supervisor.service
 exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer

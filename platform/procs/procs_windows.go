@@ -62,3 +62,7 @@ func describe(entry windows.ProcessEntry32, me *windows.SID) (Process, bool) {
 	}
 	return p, true
 }
+
+func listUID(int) ([]Process, error) {
+	return nil, ErrUnsupported
+}

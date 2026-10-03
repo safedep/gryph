@@ -16,11 +16,15 @@ import (
 const userHZ = 100
 
 func list() ([]Process, error) {
+	return listUID(os.Getuid())
+}
+
+func listUID(owner int) ([]Process, error) {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		return nil, fmt.Errorf("list processes: %w", err)
 	}
-	uid := strconv.Itoa(os.Getuid())
+	uid := strconv.Itoa(owner)
 	boot := bootTime()
 	var out []Process
 	for _, e := range entries {
@@ -36,7 +40,7 @@ func list() ([]Process, error) {
 		if err != nil {
 			continue
 		}
-		p := Process{PID: pid, Name: strings.TrimSpace(string(comm)), UID: os.Getuid()}
+		p := Process{PID: pid, Name: strings.TrimSpace(string(comm)), UID: owner}
 		if exe, err := os.Readlink(filepath.Join(dir, "exe")); err == nil {
 			p.Path = exe
 		}

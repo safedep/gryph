@@ -85,6 +85,12 @@ func TestMain(m *testing.M) {
 			code = 1
 		}
 	}
+	if code == 0 {
+		if err := checkBudget(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			code = 1
+		}
+	}
 	os.Exit(code)
 }
 
@@ -169,6 +175,30 @@ func BenchmarkHook(b *testing.B) {
 				record(b, name, durations)
 			})
 		}
+	}
+	if !clientEnabled() {
+		return
+	}
+	// The managed configuration is authoritative while it exists, so the
+	// client mode runs after the local modes, with the service up for all
+	// of its phases.
+	startService(b, bin)
+	for _, phase := range phases {
+		name := phase.name + "/" + clientModeName
+		b.Run(name, func(b *testing.B) {
+			env := sandbox(b, "")
+			payload := fixture(b, phase.fixture)
+			runHook(b, bin, env, phase.hookType, payload)
+			durations := make([]time.Duration, 0, b.N)
+			b.ResetTimer()
+			for range b.N {
+				start := time.Now()
+				runHook(b, bin, env, phase.hookType, payload)
+				durations = append(durations, time.Since(start))
+			}
+			b.StopTimer()
+			record(b, name, durations)
+		})
 	}
 }
 

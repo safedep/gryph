@@ -19,14 +19,14 @@ exec cp $ACCEPTANCE_GRYPH_BIN /usr/local/bin/gryph-acceptance
 exec cp read.json /tmp/gryph-acceptance-agents/read.json
 exec cp prompt.json /tmp/gryph-acceptance-agents/prompt.json
 exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir $WORK/state --spool-dir $WORK/spool --allow-root &
-exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do test -S /tmp/gryph-acceptance-hook.sock && break; sleep 0.2; done'
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
 
 # A process named like the agent runs the first hooks of the session and
 # stays alive, as an agent does. The session binds to it.
 exec install -m 755 claude /tmp/gryph-acceptance-agents/claude
 # Detached, so the harness holds no pipe of a process that outlives it.
 exec sh -c '/tmp/gryph-acceptance-agents/claude >/dev/null 2>&1 &'
-exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do test -f /tmp/gryph-acceptance-agents/done && break; sleep 0.2; done'
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock --until-exists /tmp/gryph-acceptance-agents/done
 exists /tmp/gryph-acceptance-agents/done
 exec gryph sessions --format json --no-color
 stdout '"agent_process": "claude:[0-9]+:[0-9]+"'
@@ -54,7 +54,8 @@ exec gryph _hook claude-code PreToolUse
 exec gryph policy context --session $SESSION --format json --no-color
 stdout '"actions_since_intent": 2'
 
-exec sh -c 'kill $(cat $WORK/state/supervisor.pid) 2>/dev/null; pkill -f "acceptance-agents/claud[e]"; sleep 0.3; true'
+exec gryph supervisor stop --pid-file $WORK/state/supervisor.pid
+exec sh -c 'pkill -KILL -f "acceptance-agents/claud[e]"; true'
 exec rm -rf /etc/safedep/gryph /tmp/gryph-acceptance-agents /usr/local/bin/gryph-acceptance /root/.local/share/safedep /root/.config/safedep /root/.cache/safedep
 exec rmdir --ignore-fail-on-non-empty /etc/safedep
 -- managed.yml --
