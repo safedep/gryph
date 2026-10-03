@@ -15,6 +15,7 @@ import (
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/approval"
 	"github.com/safedep/gryph/decision/ipc"
+	"github.com/safedep/gryph/platform/localauth"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -108,7 +109,14 @@ refused on a managed host, so an agent with a shell cannot answer.`,
 				_, _ = fmt.Fprintf(out, "Aborted: request %s not answered\n", tui.FormatShortID(row.ID.String()))
 				return nil
 			}
+			// The authority of the host may ask for the password. The agent
+			// puts that question on this terminal.
+			stopAgent, err := localauth.Agent(ctx)
+			if err != nil {
+				log.Warnf("policy approve: no authentication agent on this terminal: %v", err)
+			}
 			res, err := app.Approve(ctx, ipc.Approve{RequestID: row.ID, Decision: decision, Scope: scope, Note: note})
+			stopAgent()
 			if err != nil {
 				var se *ipc.ServerError
 				if errors.As(err, &se) && se.Code == ipc.CodeUnauthorized {

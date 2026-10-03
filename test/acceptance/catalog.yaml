@@ -552,6 +552,20 @@
   guarantee: "Two approvers answer one request. The first answer decides it, the second approver is told the request was answered first, and the requester's next hook reports the first answer with its note. Privileged job only."
   labels: [approval, supervisor, admin, privileged, linux]
 
+- id: approval/local-auth/password-required
+  title: "the service asks the approver for their password on a host with polkit"
+  category: approval
+  tier: P0
+  guarantee: "On a host with polkit, the decision service asks the approver for their password through polkit before it takes the answer. pkttyagent asks on the terminal of gryph policy approve resolve. The right password makes the answer local-auth and stores the grant. A wrong password leaves the request pending. Privileged job with polkit only."
+  labels: [approval, supervisor, local-auth, privileged, linux]
+
+- id: approval/local-auth/pty-agent-refused
+  title: "an agent that types on a pseudo terminal cannot pass the password prompt"
+  category: approval
+  tier: P0
+  guarantee: "An answer whose password prompt gets no valid password is refused and the request stays pending. Only policy.approval.local_admin.allow_without_auth in the managed configuration waives the password, and the answer then counts at a lower assurance than local-auth. Privileged job with polkit only."
+  labels: [approval, supervisor, local-auth, privileged, linux]
+
 - id: supervisor/install/ordering
   title: "the managed install turns the service switch on only after the service answers"
   category: supervisor

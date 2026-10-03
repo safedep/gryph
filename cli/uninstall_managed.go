@@ -16,6 +16,7 @@ import (
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/platform/account"
+	"github.com/safedep/gryph/platform/localauth"
 	"github.com/safedep/gryph/platform/service"
 	"github.com/spf13/cobra"
 )
@@ -196,6 +197,15 @@ func stopSupervisorService(ctx context.Context) *managedServiceReport {
 	svc.Changed = svc.Changed || res.Changed
 	svc.Enabled = res.Enabled
 	svc.Next = res.Next
+	if path, _ := localauth.PolicyFile(); path != "" {
+		removed, err := removeManagedPath(path, false)
+		if err != nil {
+			svc.Error = "remove the authentication policy: " + err.Error()
+		} else if removed {
+			svc.AuthPolicy = path
+			svc.Changed = true
+		}
+	}
 	if !svc.Changed && len(res.Paths) == 0 {
 		return nil
 	}

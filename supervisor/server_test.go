@@ -72,6 +72,13 @@ func startServerWith(t *testing.T, cfg *config.Config) (*Server, string, string)
 // zero value takes the defaults.
 func startServerWithLimits(t *testing.T, cfg *config.Config, limits Limits) (*Server, string, string) {
 	t.Helper()
+	return startServerWithOptions(t, cfg, Options{Limits: limits})
+}
+
+// startServerWithOptions is startServerWithLimits with every option in
+// hand. The paths and the version come from the test.
+func startServerWithOptions(t *testing.T, cfg *config.Config, opts Options) (*Server, string, string) {
+	t.Helper()
 	dir := t.TempDir()
 	sock := filepath.Join(dir, "hook.sock")
 	ln, err := net.Listen("unix", sock)
@@ -80,7 +87,8 @@ func startServerWithLimits(t *testing.T, cfg *config.Config, limits Limits) (*Se
 	require.NoError(t, os.Mkdir(state, 0o700))
 	spoolDir := filepath.Join(dir, "spool")
 	require.NoError(t, spool.EnsureRoot(spoolDir))
-	srv := New(cfg, Options{StateDir: state, Limits: limits, Version: "test", SpoolDir: spoolDir, IngestInterval: -1})
+	opts.StateDir, opts.Version, opts.SpoolDir, opts.IngestInterval = state, "test", spoolDir, -1
+	srv := New(cfg, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ctx, ln) }()

@@ -17,6 +17,7 @@ import (
 	"github.com/safedep/gryph/decision/ipc"
 	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/platform/account"
+	"github.com/safedep/gryph/platform/localauth"
 	"github.com/safedep/gryph/platform/peercred"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/storage/remote"
@@ -32,6 +33,56 @@ const (
 // approverCacheTTL bounds how long the service remembers a group lookup,
 // so a change of the group database reaches it without a restart.
 const approverCacheTTL = 30 * time.Second
+
+// authWait bounds how long the authority may ask the approver for the
+// password. The client waits a little longer for the answer.
+const authWait = 90 * time.Second
+
+// authCache remembers whether the authority of the platform runs, for
+// approverCacheTTL.
+type authCache struct {
+	mu        sync.Mutex
+	available bool
+	at        time.Time
+}
+
+// authAvailable reports whether the host can ask an approver for the
+// password.
+func (s *Server) authAvailable(ctx context.Context) bool {
+	s.authCache.mu.Lock()
+	defer s.authCache.mu.Unlock()
+	if !s.authCache.at.IsZero() && time.Since(s.authCache.at) < approverCacheTTL {
+		return s.authCache.available
+	}
+	s.authCache.available = s.auth.Available(ctx)
+	s.authCache.at = time.Now()
+	return s.authCache.available
+}
+
+// authenticate asks the authority for the password of the approver. It
+// returns the reason the answer cannot count, or empty when it can.
+func (s *Server) authenticate(ctx context.Context, peer *peercred.Peer) string {
+	subject, err := localauth.SubjectOf(peer.PID)
+	if err != nil {
+		return "the approver process is not there to authenticate: " + err.Error()
+	}
+	actx, cancel := context.WithTimeout(ctx, authWait)
+	defer cancel()
+	res, err := s.auth.Authorize(actx, subject, localauth.ActionID, true)
+	switch {
+	case errors.Is(err, localauth.ErrUnavailable):
+		return "the authority of the host stopped answering: " + err.Error()
+	case err != nil:
+		return "the authority of the host did not answer: " + err.Error()
+	case res.Authorized:
+		return ""
+	case res.Dismissed:
+		return "the approver dismissed the password prompt"
+	case res.Challenge:
+		return "no password was given: run the command from a session with a polkit agent, or on a terminal where pkttyagent can ask"
+	}
+	return "the authority of the host refused the approver"
+}
 
 // approverCache remembers who is in the approval group.
 type approverCache struct {
@@ -217,6 +268,21 @@ func (s *Server) approve(ctx context.Context, own *partition, peer *peercred.Pee
 			return refuse("the answer comes from the login session that asked (self-elevated), which policy.approval.local_admin.allow_self_elevated does not allow")
 		}
 		assurance = approval.AssuranceSelfElevated
+	}
+	// A host with an authority asks the approver for the password. An
+	// agent under the approver's account does not know it. The managed
+	// configuration alone can waive it. A password proves a person at
+	// the keyboard, so the answer is local-auth: whether the person who
+	// asked may answer was decided above.
+	if s.authAvailable(ctx) {
+		if reason := s.authenticate(ctx, peer); reason != "" {
+			if !cfg.LocalAdmin.AllowWithoutAuth {
+				return refuse("the answer needs the password of the approver: " + reason)
+			}
+		} else {
+			assurance = approval.AssuranceLocalAuth
+			floorAs = assurance
+		}
 	}
 	if min := approval.Assurance(row.MinAssurance); !floorAs.Meets(min) {
 		return refuse(fmt.Sprintf("the channel %s is below the min_assurance %s of the rule", assurance, min))

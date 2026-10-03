@@ -512,6 +512,10 @@ type LocalAdminConfig struct {
 	// AllowSelfElevated accepts an answer from the person who asked, through
 	// another account of theirs, at the self-elevated assurance.
 	AllowSelfElevated bool `mapstructure:"allow_self_elevated"`
+	// AllowWithoutAuth accepts an answer without the password of the
+	// approver on a host whose authority could ask for it. Off, an
+	// answer needs the password when the host has polkit.
+	AllowWithoutAuth bool `mapstructure:"allow_without_auth"`
 }
 
 // The approval channels, named by the assurance each one gives.

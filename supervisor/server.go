@@ -17,6 +17,7 @@ import (
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/decision/ipc"
 	"github.com/safedep/gryph/engine"
+	"github.com/safedep/gryph/platform/localauth"
 	"github.com/safedep/gryph/platform/nofollow"
 	"github.com/safedep/gryph/platform/peercred"
 	"github.com/safedep/gryph/spool"
@@ -44,6 +45,8 @@ type Server struct {
 	partitions map[uint32]*partition
 	wg         sync.WaitGroup
 	approvers  approverCache
+	auth       localauth.Authorizer
+	authCache  authCache
 }
 
 // Options configure a Server.
@@ -64,6 +67,9 @@ type Options struct {
 	// IngestInterval is the time between two passes over the spool. Zero
 	// takes DefaultIngestInterval. A negative value turns the passes off.
 	IngestInterval time.Duration
+	// Authorizer is the authority that authenticates an approver. Nil
+	// takes the one of the platform.
+	Authorizer localauth.Authorizer
 }
 
 // New builds a server for the managed configuration cfg.
@@ -93,10 +99,14 @@ func New(cfg *config.Config, opts Options) *Server {
 	if interval == 0 {
 		interval = DefaultIngestInterval
 	}
+	auth := opts.Authorizer
+	if auth == nil {
+		auth = localauth.Default()
+	}
 	return &Server{
 		cfg: cfg, root: root, limits: limits, version: opts.Version,
 		spoolDir: spoolDir, spoolLimits: spoolLimits, ingestInterval: interval,
-		partitions: map[uint32]*partition{},
+		partitions: map[uint32]*partition{}, auth: auth,
 	}
 }
 

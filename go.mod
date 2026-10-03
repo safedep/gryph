@@ -7,6 +7,7 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charmbracelet/bubbletea v1.2.4
 	github.com/charmbracelet/lipgloss v1.0.0
+	github.com/godbus/dbus/v5 v5.2.2
 	github.com/google/cel-go v0.27.0
 	github.com/google/uuid v1.6.0
 	github.com/pelletier/go-toml/v2 v2.2.4

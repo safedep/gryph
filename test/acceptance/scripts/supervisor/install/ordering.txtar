@@ -39,6 +39,8 @@ stdout '/etc/systemd/system/gryph-supervisor.socket'
 stdout '/etc/systemd/system/gryph-supervisor.service'
 exists /etc/systemd/system/gryph-supervisor.socket
 exists /etc/systemd/system/gryph-supervisor.service
+exists /usr/share/polkit-1/actions/io.safedep.gryph.policy
+grep 'io.safedep.gryph.approve' /usr/share/polkit-1/actions/io.safedep.gryph.policy
 grep 'ListenStream=/run/safedep/gryph/hook.sock' /etc/systemd/system/gryph-supervisor.socket
 grep 'SocketMode=0666' /etc/systemd/system/gryph-supervisor.socket
 grep 'User=_gryph' /etc/systemd/system/gryph-supervisor.service

@@ -110,8 +110,14 @@ func TestAcceptance(t *testing.T) {
 				// ACCEPTANCE_PRIVILEGED set. A script under it writes to system
 				// paths, so the job runs with -parallel 1.
 				Condition: func(cond string) (bool, error) {
-					if cond == "privileged" {
+					switch cond {
+					case "privileged":
 						return os.Getenv("ACCEPTANCE_PRIVILEGED") != "" && os.Geteuid() == 0, nil
+					case "polkit":
+						// polkit answers on the system bus, and pkttyagent
+						// asks on a terminal. A host without either skips the
+						// local-auth scripts.
+						return polkitAvailable(), nil
 					}
 					return false, fmt.Errorf("unknown condition %q", cond)
 				},
@@ -305,4 +311,18 @@ func forwardHostEnv(env *testscript.Env, keys ...string) {
 			env.Setenv(key, v)
 		}
 	}
+}
+
+// polkitAvailable reports whether the host runs a system bus with polkit
+// and has the terminal agent.
+func polkitAvailable() bool {
+	if _, err := os.Stat("/run/dbus/system_bus_socket"); err != nil {
+		return false
+	}
+	for _, tool := range []string{"pkttyagent", "pkcheck"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			return false
+		}
+	}
+	return exec.Command("pkcheck", "--version").Run() == nil
 }

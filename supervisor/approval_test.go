@@ -46,7 +46,9 @@ func startApprovalServer(t *testing.T, cfg *config.Config) (*Server, string, *st
 	t.Helper()
 	cfg.Policy.Enabled = true
 	cfg.Policy.LogAllEvaluations = true
-	srv, state, _ := startServerWith(t, cfg)
+	// The host that runs the tests may run polkit. The approval tests
+	// stay hermetic with no authority.
+	srv, state, _ := startServerWithOptions(t, cfg, Options{Authorizer: &fakeAuthority{}})
 	dir := filepath.Join(state, "users", strconv.Itoa(os.Getuid()))
 	require.NoError(t, os.MkdirAll(dir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "policy.yaml"), []byte(escalatePolicy), 0o600))

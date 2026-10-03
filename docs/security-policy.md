@@ -676,6 +676,7 @@ policy:
     local_admin:
       group: gryph-admins                    # who answers on the local-admin channel
       allow_self_elevated: false             # accept an answer from the person who asked
+      allow_without_auth: false              # accept an answer without the approver's password
 ```
 
 Each channel gives one assurance. The order, lowest first:
@@ -685,7 +686,7 @@ Each channel gives one assurance. The order, lowest first:
 | `same-user-tty` | The developer, on the terminal of the hook. The same account can forge this answer, so it applies to one request and stores no grant. |
 | `self-elevated` | A local admin who is the same person as the developer, through `sudo`. Off by default. |
 | `local-admin` | A member of the admin group of the host. |
-| `local-auth` | An answer behind an authentication prompt of the operating system. |
+| `local-auth` | A member of the admin group who gave their password to the authority of the operating system, polkit on Linux. |
 | `out-of-band` | An approver outside the host. |
 
 A rule sets its own floor with `min_assurance`. A channel below the floor never answers the rule, and the request never falls back to a weaker channel. The default floor is `local-admin`, so the developer cannot approve their own escalation unless a rule says `min_assurance: same-user-tty`:
@@ -729,7 +730,13 @@ The decision service checks every answer against the peer credentials of the con
 - The first answer wins, by the clock of the service. A later answer is `superseded` and changes nothing. A deny is final.
 - `--scope` is bounded by `max_grant_scope`.
 
-`resolve` confirms on the terminal of the approver before it sends an allow, and refuses `--yes` on a managed host, so an agent with a shell under the approver's account cannot answer with a flag. An agent that allocates a pseudo terminal can still type the confirmation. An approver who runs an agent under their own account can be puppeted at the `local-admin` assurance. On a shared host, approve from an account that runs no agent. The `local-auth` channel adds an authentication prompt of the operating system behind the answer.
+`resolve` confirms on the terminal of the approver before it sends an allow, and refuses `--yes` on a managed host, so an agent with a shell under the approver's account cannot answer with a flag. An agent that allocates a pseudo terminal can still type the confirmation. That is the limit of the `local-admin` assurance: an approver who runs an unmediated agent under their own account can be puppeted. On a shared host, approve from an account that runs no agent, or use the `local-auth` channel.
+
+### The password of the approver
+
+On a Linux host with polkit, the decision service asks polkit to authenticate the approver before it takes the answer (`CheckAuthorization` on the process of `resolve`, action `io.safedep.gryph.approve`, with user interaction). `gryph install --managed` writes the action file `/usr/share/polkit-1/actions/io.safedep.gryph.policy`, which asks the approver for their own password every time. `resolve` starts `pkttyagent` for its own process, so the password prompt shows on the terminal of the command. A desktop session answers through its own polkit agent. An agent that types `y` does not know the password.
+
+An answer with the password records `local-auth` as the assurance: the password proves a person at the keyboard. Whether the person who asked may answer at all is the `allow_self_elevated` decision, which comes first. Without the password, on a host that could have asked (no agent, a wrong password, a dismissed prompt), the service refuses the answer unless the managed configuration sets `allow_without_auth: true`. That host then takes the answer at `local-admin` or `self-elevated`. A host without polkit takes the answer at those assurances too.
 
 A refused answer is on the self-audit log of the account that asked as `approval_refused`, a superseded one as `approval_superseded`.
 

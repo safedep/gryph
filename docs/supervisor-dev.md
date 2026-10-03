@@ -188,6 +188,23 @@ A `handle` of a hook after the action (`Action.Phase` is not `pre`) makes
 a review item: `review` on the row, no prompt, no wait, the note as
 guidance, and no grant on an allow.
 
+`platform/localauth` is the authority of the platform behind an
+`Authorizer` interface: `Available` and `Authorize(subject, action,
+interactive)`. On Linux it is polkit over the system bus
+(`github.com/godbus/dbus/v5`): `CheckAuthorization` with a `unix-process`
+subject (pid and start time from `/proc/<pid>/stat`), the action
+`io.safedep.gryph.approve`, `AllowUserInteraction`, and a cancellation id
+that a timed-out call (90 s) cancels. The install writes the action file
+(`localauth.PolicyFile`, `auth_self`) and the uninstall removes it. The
+server asks when `Available` (cached 30 s) and the peer passed the group
+and uid checks: an authorized answer at `local-admin` becomes
+`local-auth`; anything else refuses unless `allow_without_auth`. The
+client's `resolve` runs `localauth.Agent` (`pkttyagent --process <pid>
+--notify-fd`) across the `approve` call, with a 2 min client deadline.
+Tests give the server a fake `Authorizer` through `Options.Authorizer`.
+The acceptance condition `[polkit]` needs the system bus socket,
+`pkcheck` and `pkttyagent`.
+
 ## The units
 
 On Linux the service runs under systemd with socket activation

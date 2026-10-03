@@ -223,12 +223,16 @@ func (c *Client) Import(ctx context.Context, frameType string, body Body) (int, 
 	return res.Taken, nil
 }
 
+// ApproveTimeout bounds one answer to an approval request. The service
+// may ask the approver for a password in that time.
+const ApproveTimeout = 2 * time.Minute
+
 // Approve answers an approval request and returns the state of the
 // request after the answer.
 func (c *Client) Approve(ctx context.Context, a Approve) (*ApproveResult, error) {
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, ReadTimeout)
+		ctx, cancel = context.WithTimeout(ctx, ApproveTimeout)
 		defer cancel()
 	}
 	reply, err := c.call(ctx, MustFrame(TypeApprove, a))

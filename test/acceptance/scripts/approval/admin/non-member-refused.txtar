@@ -63,6 +63,7 @@ policy:
     local_admin:
       group: gryph-acceptance-admins
       allow_self_elevated: true
+      allow_without_auth: true
 supervisor:
   enabled: true
   socket: /tmp/gryph-acceptance-hook.sock
@@ -112,8 +113,9 @@ rules:
 # The payload file is the stdin of the hook, or a dash keeps the stdin of
 # the helper. Stdout and stderr of the hook
 # are pipes, as under an agent. The terminal gets the answer when a
-# question that ends in [y/N] shows. A dash gives no answer. A command
-# that stays silent for a minute is killed. Everything the hook writes goes to
+# question that ends in [y/N] shows, and TERMINAL_PASSWORD when a line
+# that ends in "Password:" shows. A dash gives no answer. A command that
+# stays silent for a minute is killed. Everything the hook writes goes to
 # stdout, and the exit code is the hook's.
 import os
 import pty
@@ -137,6 +139,8 @@ os.close(out_w)
 os.close(err_w)
 seen = b""
 sent = False
+password = os.environ.get("TERMINAL_PASSWORD")
+password_sent = False
 open_fds = {fd, out_r, err_r}
 while open_fds:
     ready, _, _ = select.select(list(open_fds), [], [], 60)
@@ -158,5 +162,8 @@ while open_fds:
             if not sent and answer != "-" and b"[y/N]" in seen:
                 os.write(fd, (answer + "\n").encode())
                 sent = True
+            if password and not password_sent and b"Password:" in seen:
+                os.write(fd, (password + "\n").encode())
+                password_sent = True
 _, status = os.waitpid(pid, 0)
 sys.exit(os.waitstatus_to_exitcode(status))
