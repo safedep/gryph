@@ -80,6 +80,56 @@ type Config struct {
 	Policy  PolicyConfig  `mapstructure:"policy"`
 	Export  ExportConfig  `mapstructure:"export"`
 	Managed ManagedConfig `mapstructure:"managed"`
+	// Supervisor is the decision service that runs outside the user. Only
+	// the managed file sets it: a user cannot point the hook at a service
+	// of their own.
+	Supervisor SupervisorConfig `mapstructure:"supervisor"`
+}
+
+// SupervisorConfig configures the decision service and the hook's use of it.
+type SupervisorConfig struct {
+	// Enabled turns the hook into a client of the service. A socket alone
+	// never does.
+	Enabled bool `mapstructure:"enabled"`
+	// Socket is the path of the service socket. Empty takes the default of
+	// the platform.
+	Socket string `mapstructure:"socket"`
+	// Profile is enforce or pilot. It decides what a hook does when the
+	// service is out of reach.
+	Profile string `mapstructure:"profile"`
+	// StateDir holds the partitions of the accounts. Empty takes the
+	// default of the platform.
+	StateDir string `mapstructure:"state_dir"`
+}
+
+// The supervisor profiles.
+const (
+	SupervisorProfileEnforce = "enforce"
+	SupervisorProfilePilot   = "pilot"
+)
+
+// EffectiveProfile returns the profile, enforce when unset.
+func (s SupervisorConfig) EffectiveProfile() string {
+	if s.Profile == "" {
+		return SupervisorProfileEnforce
+	}
+	return s.Profile
+}
+
+// SocketPath returns the socket path, or the default of the platform.
+func (s SupervisorConfig) SocketPath() string {
+	if s.Socket != "" {
+		return s.Socket
+	}
+	return supervisorSocketDefault()
+}
+
+// StatePath returns the state directory, or the default of the platform.
+func (s SupervisorConfig) StatePath() string {
+	if s.StateDir != "" {
+		return s.StateDir
+	}
+	return supervisorStateDefault()
 }
 
 // ExportConfig holds the user export profiles, by name.

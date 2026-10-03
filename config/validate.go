@@ -15,6 +15,11 @@ func validate(cfg *Config) error {
 	if err := validateManagedConfig(cfg.Managed); err != nil {
 		return err
 	}
+	switch cfg.Supervisor.Profile {
+	case "", SupervisorProfileEnforce, SupervisorProfilePilot:
+	default:
+		return fmt.Errorf("supervisor.profile %q is not enforce or pilot", cfg.Supervisor.Profile)
+	}
 
 	// Validate logging level
 	if !isValidLoggingLevel(cfg.Logging.Level) {

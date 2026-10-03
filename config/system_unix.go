@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"syscall"
 )
@@ -39,6 +40,25 @@ func programDataDir() string {
 // volume.
 func managedBinaryDefault() string {
 	return "/opt/safedep/gryph/bin/gryph"
+}
+
+// supervisorSocketDefault is where the service manager opens the socket of
+// the decision service. The directory is root-owned, so a user cannot put
+// a socket of their own there.
+func supervisorSocketDefault() string {
+	if runtime.GOOS == "darwin" {
+		return "/var/run/safedep/gryph/hook.sock"
+	}
+	return "/run/safedep/gryph/hook.sock"
+}
+
+// supervisorStateDefault holds the partitions of the accounts. The service
+// account owns it, and no user can read another user's partition.
+func supervisorStateDefault() string {
+	if runtime.GOOS == "darwin" {
+		return "/Library/Application Support/safedep/gryph"
+	}
+	return "/var/lib/safedep/gryph"
 }
 
 func verifyManagedPathTrust(path string) error {

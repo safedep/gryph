@@ -15,6 +15,10 @@ func setDefaults(v *viper.Viper) {
 
 	// Storage defaults
 	v.SetDefault("storage.path", "") // Empty means use platform default
+	v.SetDefault("supervisor.enabled", false)
+	v.SetDefault("supervisor.socket", "")
+	v.SetDefault("supervisor.profile", "")
+	v.SetDefault("supervisor.state_dir", "")
 	v.SetDefault("storage.retention_days", 90)
 
 	// Privacy defaults

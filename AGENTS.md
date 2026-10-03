@@ -26,7 +26,8 @@ decision/       Decision service: label, redact, evaluate, and record one hook e
 decision/ipc/   Wire format between the hook client and the decision service: frames, bounds, the connection loop
 engine/         Runtime assembly: config, store, registry, policy check, decision service
 selfprotect/    Self-protection vocabulary: assets, levels, profiles, and the user-scope provider
-platform/       Operating-system specific code behind small interfaces (account identity, no-follow file access, scheduler, processes, kernel settings)
+platform/       Operating-system specific code behind small interfaces (account identity, no-follow file access, scheduler, processes, kernel settings, peer credentials, socket listening)
+supervisor/     The decision service outside the agent user: one socket, a partition per peer uid, per-account limits. Imports engine, never cli
 cli/            Cobra commands as an App pattern over the engine runtime
 tui/            Output formatters (table, json, csv)
 ```

@@ -6,6 +6,7 @@ package engine
 
 import (
 	"context"
+	"path/filepath"
 
 	aarmsec "github.com/safedep/gryph/aarm"
 
@@ -56,7 +57,40 @@ func (a *Runtime) AarmMediator() *aarmsec.Mediator {
 // New assembles the runtime for cfg. It opens no store. Call InitStore for
 // the database.
 func New(cfg *config.Config) (*Runtime, error) {
-	paths := config.ResolvePaths()
+	return newRuntime(cfg, config.ResolvePaths())
+}
+
+// NewPartition assembles the runtime of one account's partition of the
+// decision service: every per-user path sits under dir, and the store is
+// open. The policy comes from the managed sources, as for every runtime,
+// and the user's own policy files are the ones under dir, which the
+// service account owns and no agent user can write.
+func NewPartition(ctx context.Context, cfg *config.Config, dir string) (*Runtime, error) {
+	paths := &config.Paths{
+		ConfigFile:   filepath.Join(dir, "config.yml"),
+		ConfigDir:    dir,
+		DataDir:      dir,
+		DatabaseFile: filepath.Join(dir, "audit.db"),
+		CacheDir:     filepath.Join(dir, "cache"),
+		BackupsDir:   filepath.Join(dir, "backups"),
+	}
+	rt, err := newRuntime(cfg, paths)
+	if err != nil {
+		return nil, err
+	}
+	store, err := storage.NewSQLiteStore(paths.DatabaseFile)
+	if err != nil {
+		return nil, err
+	}
+	if err := store.Init(ctx); err != nil {
+		_ = store.Close()
+		return nil, err
+	}
+	rt.Store = store
+	return rt, nil
+}
+
+func newRuntime(cfg *config.Config, paths *config.Paths) (*Runtime, error) {
 
 	// Merge default patterns with config patterns
 	// There may be duplicates, but that's okay for now.

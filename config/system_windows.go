@@ -25,6 +25,12 @@ func managedBinaryDefault() string {
 	return filepath.Join(dir, "SafeDep", "gryph", "gryph.exe")
 }
 
+// supervisorSocketDefault names the pipe of the decision service.
+func supervisorSocketDefault() string { return `\\.\pipe\safedep-gryph-hook` }
+
+// supervisorStateDefault holds the partitions of the accounts.
+func supervisorStateDefault() string { return filepath.Join(programDataDir(), "safedep", "gryph") }
+
 func programDataDir() string {
 	dir, err := windows.KnownFolderPath(windows.FOLDERID_ProgramData, windows.KF_FLAG_DEFAULT)
 	if err != nil || dir == "" {

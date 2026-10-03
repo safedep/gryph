@@ -63,6 +63,38 @@ blocks, as a hook response with an unknown verdict blocks today. A missing
 `welcome`, a deadline, a rate limit and a server error each map to the
 verdict the fail mode of the hook names.
 
+## The server
+
+`gryph supervisor run` is the service. It takes its socket from the
+service manager when it was started with socket activation (`LISTEN_FDS`),
+else it opens `--socket` in the foreground. It runs as the service account,
+never as root. `--allow-root` exists for a test.
+
+The accept loop only accepts, reads the peer credentials from the kernel
+(`SO_PEERCRED` on Linux, `LOCAL_PEERCRED` and `LOCAL_PEERPID` on macOS) and
+counts the connection. Every connection runs on its own goroutine, so a slow
+request never holds the next connection. On Linux the service also takes a
+`pidfd` on the peer, so a later check of the process cannot land on another
+process that took the same pid.
+
+The uid the kernel reports is the tenant key. The partition of an account
+lives at `<state dir>/users/<uid>/`, mode 0700, with its own store (`audit.db`), receipt
+chain and context state. No field of a request names a partition. One mutex
+per partition serializes the writes, so the chain stays in order without a
+lock on the database.
+
+Limits per account, with the defaults: 16 open connections, 20 requests a
+second with a burst of 40, and a 30 s idle timeout per connection. The
+newest connection above the limit gets `error rate_limited` and closes. A
+request over the rate gets `error rate_limited`. The first refusal in a
+minute becomes a tamper event `rate_limited` in the system session of the
+account, so a review sees the flood without the flood filling the store.
+
+The hidden `gryph supervisor send --socket <path> [--text] [--idle N]`
+sends the frames on stdin to a service and prints the replies. With
+`--idle` it first opens that many connections that send hello and hold.
+The acceptance scripts under `supervisor/` use it.
+
 ## Testing
 
 `gryph supervisor protocol [--text]` is a hidden command that runs the

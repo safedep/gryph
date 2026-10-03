@@ -356,6 +356,27 @@
   guarantee: "Over the wire format, hello gets welcome, a frame type the binary does not know gets error with code unsupported, a frame that fails its bounds gets error with code invalid, and the connection goes on to answer the next frame. Unknown fields are ignored."
   labels: [ipc, protocol, supervisor]
 
+- id: supervisor/run/handle-decision
+  title: "supervisor run serves a decision on the socket and opens the partition of the peer"
+  category: supervisor
+  tier: P0
+  guarantee: "gryph supervisor run listens on a Unix socket. A client gets welcome with the profile, a decision for a hook payload, ack for a hook error report, and error unsupported for a read that no service answers yet. The partition of the peer account appears under the state directory."
+  labels: [supervisor, ipc]
+
+- id: supervisor/peer/uid-partition
+  title: "the service keys every partition on the peer uid"
+  category: supervisor
+  tier: P0
+  guarantee: "Two accounts that send the same frames get two partitions under the state directory, each with its own session and nothing of the other. The tenant key is the uid the kernel reports, never a field of a request. Privileged job only."
+  labels: [supervisor, privileged, linux]
+
+- id: supervisor/limits/per-uid
+  title: "the service bounds the connections and the requests of one account"
+  category: supervisor
+  tier: P0
+  guarantee: "The newest connection of an account above the connection limit gets error rate_limited and closes. A flood of requests over the rate gets error rate_limited, the service records one tamper event in the system session of the account, and another account is not affected. Privileged job only."
+  labels: [supervisor, privileged, linux]
+
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
   category: install

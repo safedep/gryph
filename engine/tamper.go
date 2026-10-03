@@ -44,6 +44,19 @@ func (a *Runtime) TamperRecorder() (*TamperRecorder, error) {
 	return newTamperRecorder(a.Store, gen, id), nil
 }
 
+// TamperRecorderFor returns the recorder of the system session of another
+// account, for a service that records on behalf of the accounts it serves.
+func (a *Runtime) TamperRecorderFor(accountID string) (*TamperRecorder, error) {
+	if a.Store == nil {
+		return nil, errors.New("engine: the store is not open")
+	}
+	gen, err := newReceiptGenerator(a.Config, a.Paths, a.Store)
+	if err != nil {
+		return nil, err
+	}
+	return newTamperRecorder(a.Store, gen, accountID), nil
+}
+
 func newTamperRecorder(store storage.Store, receipts receipt.Generator, accountID string) *TamperRecorder {
 	return &TamperRecorder{store: store, receipts: receipts, session: session.NewSystemSession(accountID)}
 }

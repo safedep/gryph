@@ -457,6 +457,33 @@ Reset all configuration to defaults.
 gryph config reset
 ```
 
+#### supervisor run
+
+Run the decision service for every account of the host. The service takes
+its socket from the service manager with socket activation, else it opens
+`--socket`. It runs as the service account, never as root.
+
+```bash
+gryph supervisor run
+gryph supervisor run --socket /tmp/hook.sock --state-dir /tmp/gryph-state
+```
+
+| Flag           | Type    | Default              | Description |
+| -------------- | ------- | -------------------- | ----------- |
+| `--socket`     | string  | the configured path  | Listen at this socket path instead of the one the service manager passes |
+| `--state-dir`  | string  | the configured path  | Hold the partitions here |
+| `--allow-root` | bool    | false                | Allow a run as root, for a test |
+| `--max-conns`  | int     | 16                   | Open connections per account |
+| `--rate`       | float   | 20                   | Requests per second per account |
+
+The managed configuration sets the service: `supervisor.enabled`,
+`supervisor.socket` (default `/run/safedep/gryph/hook.sock` on Linux,
+`/var/run/safedep/gryph/hook.sock` on macOS), `supervisor.profile`
+(`enforce` or `pilot`) and `supervisor.state_dir` (default
+`/var/lib/safedep/gryph` on Linux, the managed directory on macOS). Only the
+managed file sets them. The [developer guide](./supervisor-dev.md) has the
+wire format and the limits.
+
 #### Managed install
 
 An administrator, or an MDM script that runs as root, installs Gryph for every
