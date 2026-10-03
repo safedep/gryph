@@ -3,7 +3,10 @@
 package acceptance
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +18,8 @@ import (
 	"testing"
 
 	"github.com/rogpeppe/go-internal/testscript"
+	"github.com/safedep/gryph/platform/fanotify"
+	"github.com/safedep/gryph/platform/landlock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -85,6 +90,23 @@ func TestAcceptance(t *testing.T) {
 					env.Setenv("PATH", binDir+string(os.PathListSeparator)+env.Getenv("PATH"))
 					env.Setenv("ACCEPTANCE_TESTDATA", testdata)
 					env.Setenv("ACCEPTANCE_EXAMPLES", examples)
+					// The host that runs the suite may run a real agent, for
+					// example the developer's own Claude Code. The census would
+					// then report it in every script. A script that tests the
+					// census turns it on again.
+					env.Setenv("GRYPH_POLICY_SELF_PROTECTION_CENSUS", "false")
+					// A privileged script names the test binary as the
+					// root-owned managed binary.
+					env.Setenv("ACCEPTANCE_GRYPH_BIN", bin)
+					// A Unix socket path has a short limit (104 bytes on
+					// macOS), and the work directory of a script is deep.
+					// A script that listens puts its socket here.
+					socketDir, err := os.MkdirTemp("", "gryph-sock-")
+					if err != nil {
+						return err
+					}
+					env.Defer(func() { _ = os.RemoveAll(socketDir) })
+					env.Setenv("ACCEPTANCE_SOCKET_DIR", socketDir)
 					// The status and doctor commands run an async update check
 					// against the GitHub API. Forward proxy and TLS settings so
 					// the check works in proxied environments. The check fails
@@ -95,11 +117,37 @@ func TestAcceptance(t *testing.T) {
 						"SSL_CERT_FILE", "SSL_CERT_DIR")
 					return nil
 				},
+				// privileged is true in the privileged job: root, and
+				// ACCEPTANCE_PRIVILEGED set. A script under it writes to system
+				// paths, so the job runs with -parallel 1.
+				Condition: func(cond string) (bool, error) {
+					switch cond {
+					case "privileged":
+						return os.Getenv("ACCEPTANCE_PRIVILEGED") != "" && os.Geteuid() == 0, nil
+					case "polkit":
+						// polkit answers on the system bus, and pkttyagent
+						// asks on a terminal. A host without either skips the
+						// local-auth scripts.
+						return polkitAvailable(), nil
+					case "landlock":
+						// The launcher needs a kernel with Landlock, and a
+						// container whose seccomp filter lets it through.
+						_, err := landlock.ABI()
+						return err == nil, nil
+					case "fanotify":
+						// The kernel watcher needs CAP_SYS_ADMIN. A container
+						// without it, the normal privileged job included,
+						// skips the kernel scripts.
+						return fanotify.Available() == nil, nil
+					}
+					return false, fmt.Errorf("unknown condition %q", cond)
+				},
 				Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
 					"execexit":  cmdExecExit,
 					"expandenv": cmdExpandEnv,
 					"replace":   cmdReplace,
 					"capture":   cmdCapture,
+					"ipcframe":  cmdIPCFrame,
 				},
 			})
 		})
@@ -214,6 +262,28 @@ func cmdCapture(ts *testscript.TestScript, neg bool, args []string) {
 	ts.Setenv(args[0], m[1])
 }
 
+// cmdIPCFrame writes the JSON files as length-prefixed frames into one
+// file: ipcframe <out> <json-file>... A script pipes the file into a
+// command that speaks the wire format.
+func cmdIPCFrame(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("ipcframe does not support negation")
+	}
+	if len(args) < 2 {
+		ts.Fatalf("usage: ipcframe <out> <json-file>...")
+	}
+	var out bytes.Buffer
+	for _, name := range args[1:] {
+		data, err := os.ReadFile(ts.MkAbs(name))
+		ts.Check(err)
+		var header [4]byte
+		binary.BigEndian.PutUint32(header[:], uint32(len(data)))
+		out.Write(header[:])
+		out.Write(data)
+	}
+	ts.Check(os.WriteFile(ts.MkAbs(args[0]), out.Bytes(), 0o644))
+}
+
 type scriptFile struct {
 	path   string // path to the .txtar, relative to the working directory
 	relDir string // directory relative to the scripts root, "/"-separated
@@ -262,4 +332,18 @@ func forwardHostEnv(env *testscript.Env, keys ...string) {
 			env.Setenv(key, v)
 		}
 	}
+}
+
+// polkitAvailable reports whether the host runs a system bus with polkit
+// and has the terminal agent.
+func polkitAvailable() bool {
+	if _, err := os.Stat("/run/dbus/system_bus_socket"); err != nil {
+		return false
+	}
+	for _, tool := range []string{"pkttyagent", "pkcheck"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			return false
+		}
+	}
+	return exec.Command("pkcheck", "--version").Run() == nil
 }

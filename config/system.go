@@ -17,10 +17,10 @@ const configFileName = "config.yml"
 var globalConfigDirOverride string
 
 // systemConfigDir returns the root owned directory for system managed gryph
-// state, or "" when the platform has no such location. Today only
-// config.yml is read from it. The directory mirrors the per-user config
-// directory layout, so policy.yaml, policies/ and keys/receipt-pub.json are
-// reserved for a future managed policy and trust store.
+// state, or "" when the platform has no such location. It holds config.yml,
+// policy.yaml and policies/. The directory mirrors the per-user config
+// directory layout, so keys/receipt-pub.json is reserved for a future
+// managed trust store.
 func systemConfigDir() string {
 	if globalConfigDirOverride != "" {
 		return globalConfigDirOverride
@@ -32,40 +32,121 @@ func systemConfigDir() string {
 	case "linux":
 		return filepath.Join("/etc", defaultHomeRelativePath)
 	case "windows":
-		programData := os.Getenv("PROGRAMDATA")
-		if programData == "" {
-			programData = `C:\ProgramData`
-		}
-		return filepath.Join(programData, defaultHomeRelativePath)
+		return filepath.Join(programDataDir(), defaultHomeRelativePath)
 	}
 
 	return ""
 }
 
-// managedFileTrusted is overridable in tests, which cannot create root owned
+// managedPathTrusted is overridable in tests, which cannot create root owned
 // files.
-var managedFileTrusted = verifyManagedFileTrust
+var managedPathTrusted = verifyManagedPathTrust
+
+// ManagedConfigState describes the system managed config file of this host.
+type ManagedConfigState struct {
+	// Path is where the managed file lives on this platform. It is empty
+	// when the platform has no managed location.
+	Path string
+	// Exists is true when a regular file is at Path.
+	Exists bool
+	// Err says why Gryph ignores a file that exists. It is nil when the file
+	// is trusted or when no file exists.
+	Err error
+}
+
+// ManagedConfigStatus reports the managed config file and whether Gryph
+// trusts it. The trust check covers the file and every directory above it.
+// Without the chain, a root owned file in a user writable directory is
+// replaceable by rename, and the host silently falls back to the per-user
+// config.
+func ManagedConfigStatus() ManagedConfigState {
+	dir := systemConfigDir()
+	if dir == "" {
+		return ManagedConfigState{}
+	}
+
+	state := ManagedConfigState{Path: filepath.Join(dir, configFileName)}
+	info, err := os.Stat(state.Path)
+	if err != nil || !info.Mode().IsRegular() {
+		return state
+	}
+	state.Exists = true
+	state.Err = managedPathTrusted(state.Path)
+	return state
+}
+
+// managedConfigActive reports a trusted managed config file. It logs
+// nothing, because the path resolvers call it on every lookup.
+func managedConfigActive() bool {
+	state := ManagedConfigStatus()
+	return state.Exists && state.Err == nil
+}
+
+// ManagedConfigDir returns the system managed directory, or "" when the
+// platform has no such location. The built-in rules protect it.
+func ManagedConfigDir() string {
+	return systemConfigDir()
+}
+
+// ManagedConfigActive reports a trusted managed config file.
+func ManagedConfigActive() bool {
+	return managedConfigActive()
+}
+
+// ManagedPolicy describes the managed policy sources of this host.
+type ManagedPolicy struct {
+	// Active is true when a trusted managed config file is in force. Its
+	// allow_user_policy key then decides whether the user's sources load.
+	Active bool
+	// File and Dir are the managed policy file and the managed policies
+	// directory. Both are empty when the platform has no managed location.
+	File string
+	Dir  string
+	// Trust verifies the path chain of one managed file. A file that fails
+	// it does not load.
+	Trust func(path string) error
+}
+
+// ManagedPolicyState returns the managed policy sources of this host. The
+// files load whenever they exist and pass the trust check, with or without
+// a managed config file, so an administrator can ship policy alone.
+func ManagedPolicyState() ManagedPolicy {
+	dir := systemConfigDir()
+	if dir == "" {
+		return ManagedPolicy{}
+	}
+	return ManagedPolicy{
+		Active: managedConfigActive(),
+		File:   filepath.Join(dir, "policy.yaml"),
+		Dir:    filepath.Join(dir, "policies"),
+		Trust:  managedPathTrusted,
+	}
+}
+
+// ManagedTrustStorePath returns the receipt trust store that an
+// administrator ships with the managed configuration, root-owned, or ""
+// when the platform has no managed location. Its public keys count as
+// trusted on every user's host next to the user's own store.
+func ManagedTrustStorePath() string {
+	dir := systemConfigDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, "keys", "receipt-pub.json")
+}
 
 // ManagedConfigFile returns the system managed config file when it exists,
 // is a regular file, and passes the trust check. It returns "" otherwise.
 // While a managed file is active, it is authoritative and the per-user
 // config file is ignored.
 func ManagedConfigFile() string {
-	dir := systemConfigDir()
-	if dir == "" {
+	state := ManagedConfigStatus()
+	if !state.Exists {
 		return ""
 	}
-
-	path := filepath.Join(dir, configFileName)
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() {
+	if state.Err != nil {
+		log.Warnf("ignoring managed config %s: %v", state.Path, state.Err)
 		return ""
 	}
-
-	if !managedFileTrusted(info) {
-		log.Warnf("ignoring managed config %s: the file is not root owned or is writable by group or other", path)
-		return ""
-	}
-
-	return path
+	return state.Path
 }

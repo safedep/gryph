@@ -1,0 +1,25 @@
+# gryph install --managed writes the Windsurf entries into the Cascade
+# system hooks.json. Runs only in the privileged job on a Linux host with
+# no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+! exists /etc/devin
+expandenv managed.yml
+
+exec gryph install --managed --config $WORK/managed.yml --json
+stdout '"status": "ok"'
+stdout '"name": "windsurf"'
+stdout '"class": "system_path"'
+stdout '"path": "/etc/devin/hooks.json"'
+grep '_hook windsurf pre_run_command' /etc/devin/hooks.json
+grep '_hook windsurf pre_user_prompt' /etc/devin/hooks.json
+
+exec rm -rf /etc/safedep/gryph /etc/devin
+exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- managed.yml --
+managed:
+  agents: [windsurf]
+  binary: ${ACCEPTANCE_GRYPH_BIN}

@@ -1,0 +1,91 @@
+# gryph doctor --managed prints the compliance report of a managed install
+# for an MDM tool, with a stable JSON contract, and exits 0 only for the
+# locked profile. It refuses a binary that root does not own. Runs only in
+# the privileged job on a Linux host with no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+! exists /etc/claude-code
+! exists /etc/cursor
+expandenv managed.yml user-binary.yml
+
+# No managed configuration: profile none, exit 1, every fixed fact present.
+execexit 1 gryph doctor --managed --json
+stdout '"schema_version": 1'
+stdout '"profile": "none"'
+stdout '"no managed configuration at /etc/safedep/gryph/config.yml"'
+stdout '"scope": "user"'
+stdout '"state": "absent"'
+stdout '"level": "none"'
+
+# Config and entries without a policy: still none.
+exec gryph install --managed --config $WORK/managed.yml
+execexit 1 gryph doctor --managed --json
+stdout '"profile": "none"'
+stdout '"no managed policy at /etc/safedep/gryph/policy.yaml"'
+stdout '"name": "claude-code"'
+stdout '"level": "prevent_same_user"'
+stdout '"name": "cursor"'
+stdout '"level": "detect"'
+
+# The full install: locked, exit 0.
+exec gryph install --managed --config $WORK/managed.yml --policy $WORK/policy.yaml
+exec gryph doctor --managed --json
+stdout '"profile": "locked"'
+stdout '"summary": "Locked \(hook entry and policy files, decision and audit trail not protected\)"'
+stdout '"issues": \[\]'
+stdout '"version": "1"'
+stdout '"sha256": "[0-9a-f]{64}"'
+stdout '"allow_user_policy": false'
+stdout '"chain": "ok"'
+stdout -count=1 '"chain": "missing"'
+stdout '"protected": false'
+exec gryph doctor --managed
+stdout 'Managed doctor: Locked \(hook entry and policy files, decision and audit trail not protected\)'
+stdout 'Key: user-owned \(not protected\)'
+stdout 'claude-code\s+locked\s+prevent_same_user\s+/etc/claude-code/managed-settings.d/50-gryph.json\s+\(locked\)'
+stdout 'cursor\s+system_path\s+detect\s+/etc/cursor/hooks.json'
+
+# A removed entry drops the profile.
+exec rm /etc/cursor/hooks.json
+execexit 1 gryph doctor --managed --json
+stdout '"cursor: the managed entry differs from the managed configuration"'
+
+# A binary that root does not own is refused.
+exec cp $ACCEPTANCE_GRYPH_BIN $WORK/bin/gryph
+exec chown 65534:65534 $WORK/bin/gryph
+exec cp $WORK/user-binary.yml /etc/safedep/gryph/config.yml
+execexit 1 gryph doctor --managed --json
+stdout '"chain": "untrusted"'
+stdout 'is not owned by root'
+stdout 'a user could replace it'
+
+exec rm -rf /etc/safedep/gryph /etc/claude-code /etc/cursor
+exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- bin/.keep --
+-- managed.yml --
+policy:
+  enabled: true
+  allow_user_policy: false
+managed:
+  agents: [claude-code, cursor]
+  lock_hooks: [claude-code]
+  binary: ${ACCEPTANCE_GRYPH_BIN}
+-- user-binary.yml --
+policy:
+  enabled: true
+managed:
+  agents: [claude-code]
+  binary: ${WORK}/bin/gryph
+-- policy.yaml --
+version: "1"
+rules:
+  - id: managed-cap-writes
+    action: block
+    severity: high
+    match:
+      action_types: [file_write]
+    condition: "context.files_written > 20"
+    message: "too many writes this session"

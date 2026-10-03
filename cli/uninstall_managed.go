@@ -1,0 +1,426 @@
+package cli
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/engine"
+	"github.com/safedep/gryph/platform/account"
+	"github.com/safedep/gryph/platform/localauth"
+	"github.com/safedep/gryph/platform/service"
+	"github.com/spf13/cobra"
+)
+
+// userHelperTimeout bounds one per-user helper run. A home on a slow
+// network mount must not hold the uninstall of the whole host.
+const userHelperTimeout = 60 * time.Second
+
+// userHelperOutputLimit bounds what the parent reads from a helper. The
+// helper runs as the user, so its output is the user's data.
+const userHelperOutputLimit = 1 << 20
+
+// managedUninstallReport is the JSON contract of gryph uninstall --managed.
+type managedUninstallReport struct {
+	Status  string `json:"status"`
+	Changed bool   `json:"changed"`
+	// Removed lists the managed files the run removed.
+	Removed []string               `json:"removed"`
+	Agents  []managedAgentReport   `json:"agents"`
+	Users   []managedUserUninstall `json:"users"`
+	// UsersSkipped says why no home was visited, when the platform cannot
+	// list accounts or run a command as one.
+	UsersSkipped string `json:"users_skipped,omitempty"`
+	// Timer is the system-wide reconcile job the run removed. Absent in a
+	// dry run.
+	Timer *managedTimerReport `json:"timer,omitempty"`
+	// Service is the decision service the run stopped: the switch went
+	// off first, then the units. Absent when no managed configuration
+	// turned the service on, and in a dry run.
+	Service *managedServiceReport `json:"service,omitempty"`
+}
+
+// managedUserUninstall is the outcome of the helper for one account.
+type managedUserUninstall struct {
+	Name   string               `json:"name"`
+	ID     string               `json:"id"`
+	Home   string               `json:"home"`
+	Agents []userAgentUninstall `json:"agents"`
+	Purged []string             `json:"purged,omitempty"`
+	Error  string               `json:"error,omitempty"`
+}
+
+// runManagedUninstall is gryph uninstall --managed: the reverse of
+// install --managed, for an MDM script that runs as root. It removes the
+// Gryph entries from every managed hook file, then the Gryph entries from
+// the agent hook files in every account's home, then the managed policy
+// and configuration. The per-user state stays unless --purge.
+//
+// The walk of the homes is the only place where a root process touches a
+// user's home, and it never does so as root: a helper drops to the
+// account's uid and gid before it opens a file, under the repair rules.
+func runManagedUninstall(cmd *cobra.Command, purge, dryRun, asJSON bool) error {
+	if !utils.IsPrivileged() {
+		return NewCLIError(ExitGeneral, "uninstall --managed needs an administrator: root on Linux and macOS, an elevated prompt on Windows")
+	}
+	if config.ManagedConfigPath() == "" {
+		return NewCLIError(ExitGeneral, "this platform has no system managed location")
+	}
+	ctx := utils.WithoutProgramExecution(context.Background())
+	report := &managedUninstallReport{Status: managedStatusOK, Removed: []string{}, Agents: []managedAgentReport{}, Users: []managedUserUninstall{}}
+	degraded := 0
+
+	// The switch goes off before anything else: the hooks decide in
+	// process again from this moment, and the units can stop without a
+	// hook taking the absent-service fallback.
+	if !dryRun {
+		report.Service = stopSupervisorService(ctx)
+		if report.Service != nil {
+			if report.Service.Error != "" {
+				degraded++
+			}
+			report.Changed = report.Changed || report.Service.Changed
+		}
+	}
+
+	registry := agent.NewRegistry()
+	engine.RegisterAdapters(registry, nil, config.Default())
+	installers := map[string]agent.ManagedInstaller{}
+	for _, a := range registry.All() {
+		if m, ok := a.(agent.ManagedInstaller); ok {
+			installers[a.Name()] = m
+		}
+	}
+	for _, name := range sortedKeys(installers) {
+		installer := installers[name]
+		row := managedAgentReport{Name: name, Path: installer.ManagedHookPath(), Class: string(installer.ManagedClass()), Action: "remove"}
+		res, err := installer.UninstallManaged(ctx, agent.ManagedInstallOptions{DryRun: dryRun})
+		if err != nil {
+			row.Error = err.Error()
+			degraded++
+		} else {
+			row.Changed = res.Changed
+		}
+		report.Changed = report.Changed || row.Changed
+		report.Agents = append(report.Agents, row)
+	}
+
+	degraded += walkHomes(ctx, report, purge, dryRun)
+
+	if !dryRun {
+		report.Timer = timerReport(removeSystemRepairTimer(ctx))
+		if report.Timer.Error != "" {
+			degraded++
+		}
+		report.Changed = report.Changed || report.Timer.Changed
+	}
+
+	policy := config.ManagedPolicyState()
+	trustStore := config.ManagedTrustStorePath()
+	for _, path := range []string{policy.File, policy.Dir, trustStore, filepath.Dir(trustStore), config.ManagedConfigPath()} {
+		removed, err := removeManagedPath(path, dryRun)
+		if err != nil {
+			return WrapError(ExitGeneral, "remove "+path, err)
+		}
+		if removed {
+			report.Changed = true
+			report.Removed = append(report.Removed, path)
+		}
+	}
+
+	switch {
+	case dryRun:
+		report.Status = managedStatusDryRun
+	case degraded > 0:
+		report.Status = managedStatusPartial
+	}
+	if err := renderManagedUninstall(cmd.OutOrStdout(), report, asJSON); err != nil {
+		return err
+	}
+	if degraded > 0 {
+		return &exitError{code: ExitManagedPartial, message: fmt.Sprintf("uninstall --managed: %d item(s) degraded", degraded)}
+	}
+	return nil
+}
+
+// stopSupervisorService clears supervisor.enabled in the managed
+// configuration, then stops and removes the units of the decision
+// service. It returns nil when no managed configuration turns the service
+// on and no units are installed.
+func stopSupervisorService(ctx context.Context) *managedServiceReport {
+	path := config.ManagedConfigPath()
+	data, err := config.ReadTrustedFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return &managedServiceReport{Switch: managedSwitchOff, Error: err.Error()}
+	}
+	svc := &managedServiceReport{Units: []string{}, Switch: managedSwitchOff}
+	if err == nil {
+		cfg, perr := config.Parse(data)
+		if perr == nil {
+			svc.Account = cfg.Supervisor.ServerAccount()
+			if cfg.Supervisor.Enabled {
+				off, serr := config.SetSupervisorEnabled(data, false)
+				if serr != nil {
+					svc.Error = serr.Error()
+					return svc
+				}
+				changed, werr := config.WriteManagedFile(path, off)
+				if werr != nil {
+					svc.Error = werr.Error()
+					return svc
+				}
+				svc.Changed = changed
+			}
+		}
+	}
+	res, err := service.Remove(ctx, supervisorServiceName)
+	switch {
+	case errors.Is(err, service.ErrUnsupported):
+		if !svc.Changed {
+			return nil
+		}
+		return svc
+	case err != nil:
+		svc.Error = err.Error()
+		return svc
+	}
+	svc.Units = res.Paths
+	svc.Changed = svc.Changed || res.Changed
+	svc.Enabled = res.Enabled
+	svc.Next = res.Next
+	fan, err := service.Remove(ctx, fanotifyServiceName)
+	switch {
+	case errors.Is(err, service.ErrUnsupported):
+	case err != nil:
+		svc.Error = "remove the kernel watcher: " + err.Error()
+		return svc
+	default:
+		svc.Units = append(svc.Units, fan.Paths...)
+		svc.Changed = svc.Changed || fan.Changed
+		if !fan.Enabled {
+			svc.Enabled = false
+			svc.Next = strings.TrimPrefix(svc.Next+"; "+fan.Next, "; ")
+		}
+	}
+	if path, _ := localauth.PolicyFile(); path != "" {
+		removed, err := removeManagedPath(path, false)
+		if err != nil {
+			svc.Error = "remove the authentication policy: " + err.Error()
+		} else if removed {
+			svc.AuthPolicy = path
+			svc.Changed = true
+		}
+	}
+	if !svc.Changed && len(res.Paths) == 0 {
+		return nil
+	}
+	return svc
+}
+
+// walkHomes runs the per-user helper for every human account and returns
+// the count of accounts that reported a failure.
+func walkHomes(ctx context.Context, report *managedUninstallReport, purge, dryRun bool) int {
+	accounts, err := account.List()
+	if err != nil {
+		report.UsersSkipped = err.Error()
+		return 0
+	}
+	self, err := os.Executable()
+	if err != nil {
+		report.UsersSkipped = "the running program has no path: " + err.Error()
+		return 0
+	}
+	degraded := 0
+	for _, acct := range accounts {
+		row := managedUserUninstall{Name: acct.Name, ID: acct.ID, Home: acct.Home, Agents: []userAgentUninstall{}}
+		helper, err := runUserHelper(ctx, self, acct, purge, dryRun)
+		if err != nil {
+			row.Error = err.Error()
+			degraded++
+		} else {
+			row.Agents = helper.Agents
+			row.Purged = helper.Purged
+			for _, a := range helper.Agents {
+				if a.Error != "" {
+					degraded++
+					break
+				}
+			}
+			report.Changed = report.Changed || userChanged(helper)
+		}
+		report.Users = append(report.Users, row)
+	}
+	return degraded
+}
+
+func runUserHelper(ctx context.Context, self string, acct account.Account, purge, dryRun bool) (*userUninstallReport, error) {
+	ctx, cancel := context.WithTimeout(ctx, userHelperTimeout)
+	defer cancel()
+	args := []string{"_uninstall-user"}
+	if purge {
+		args = append(args, "--purge")
+	}
+	if dryRun {
+		args = append(args, "--dry-run")
+	}
+	cmd, err := account.Command(ctx, acct, self, args...)
+	if err != nil {
+		return nil, err
+	}
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &limitedWriter{w: &stdout, n: userHelperOutputLimit}
+	cmd.Stderr = &limitedWriter{w: &stderr, n: userHelperOutputLimit}
+	if err := cmd.Run(); err != nil {
+		msg := bytes.TrimSpace(stderr.Bytes())
+		if len(msg) > 0 {
+			return nil, fmt.Errorf("helper for %s: %w: %s", acct.Name, err, msg)
+		}
+		return nil, fmt.Errorf("helper for %s: %w", acct.Name, err)
+	}
+	var report userUninstallReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		return nil, fmt.Errorf("helper for %s printed no report: %w", acct.Name, err)
+	}
+	return &report, nil
+}
+
+func userChanged(r *userUninstallReport) bool {
+	if len(r.Purged) > 0 {
+		return true
+	}
+	for _, a := range r.Agents {
+		if len(a.HooksRemoved) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// removeManagedPath removes a managed file, or a managed directory that
+// holds nothing, and refuses a link. It reports whether anything went.
+func removeManagedPath(path string, dryRun bool) (bool, error) {
+	if path == "" {
+		return false, nil
+	}
+	info, err := os.Lstat(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return false, nil
+	case err != nil:
+		return false, err
+	case info.Mode()&os.ModeSymlink != 0:
+		return false, fmt.Errorf("%s is a symbolic link, not a managed file", path)
+	case info.IsDir():
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			return false, err
+		}
+		if len(entries) > 0 {
+			return false, nil
+		}
+	}
+	if dryRun {
+		return true, nil
+	}
+	if err := os.Remove(path); err != nil {
+		return false, err
+	}
+	// The managed directory itself goes when nothing is left in it, so a
+	// host that never had Gryph and a host that removed it look the same.
+	if dir := filepath.Dir(path); dir != "" {
+		if entries, err := os.ReadDir(dir); err == nil && len(entries) == 0 {
+			_ = os.Remove(dir)
+		}
+	}
+	return true, nil
+}
+
+func renderManagedUninstall(w io.Writer, report *managedUninstallReport, asJSON bool) error {
+	if asJSON {
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		return enc.Encode(report)
+	}
+	lines := []string{"Managed uninstall: " + report.Status}
+	if svc := report.Service; svc != nil {
+		line := fmt.Sprintf("  %-12s switch %s, %d unit(s) removed", "Service", svc.Switch, len(svc.Units))
+		if svc.Error != "" {
+			line += "  error: " + svc.Error
+		}
+		lines = append(lines, line)
+	}
+	for _, a := range report.Agents {
+		state := "unchanged"
+		if a.Changed {
+			state = "changed"
+		}
+		line := fmt.Sprintf("  %-12s %-11s %-9s %s", a.Name, a.Class, state, a.Path)
+		if a.Error != "" {
+			line += "  error: " + a.Error
+		}
+		lines = append(lines, line)
+	}
+	for _, u := range report.Users {
+		line := fmt.Sprintf("  user %s (%s) %s", u.Name, u.ID, u.Home)
+		if u.Error != "" {
+			line += "  error: " + u.Error
+		}
+		lines = append(lines, line)
+		for _, a := range u.Agents {
+			detail := fmt.Sprintf("%d hook(s) removed", len(a.HooksRemoved))
+			if a.Error != "" {
+				detail = "error: " + a.Error
+			}
+			lines = append(lines, fmt.Sprintf("    %-12s %s", a.Name, detail))
+		}
+		for _, p := range u.Purged {
+			lines = append(lines, "    purged "+p)
+		}
+	}
+	if report.UsersSkipped != "" {
+		lines = append(lines, "  users skipped: "+report.UsersSkipped)
+	}
+	for _, p := range report.Removed {
+		lines = append(lines, "  removed "+p)
+	}
+	for _, line := range lines {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+	if report.Timer != nil {
+		return renderTimerLines(w, "Reconcile job", report.Timer)
+	}
+	return nil
+}
+
+// limitedWriter keeps the first n bytes and drops the rest.
+type limitedWriter struct {
+	w io.Writer
+	n int
+}
+
+func (l *limitedWriter) Write(p []byte) (int, error) {
+	if l.n <= 0 {
+		return len(p), nil
+	}
+	keep := p
+	if len(keep) > l.n {
+		keep = keep[:l.n]
+	}
+	l.n -= len(keep)
+	if _, err := l.w.Write(keep); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}

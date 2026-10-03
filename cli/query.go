@@ -63,7 +63,7 @@ through the audit history.`,
 			})
 
 			// Initialize store
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 
@@ -115,7 +115,7 @@ through the audit history.`,
 			if session != "" {
 				sessionID, err := uuid.Parse(session)
 				if err != nil {
-					s, err := app.Store.GetSessionByPrefix(ctx, session)
+					s, err := app.Reads.GetSessionByPrefix(ctx, session)
 					if err != nil {
 						return fmt.Errorf("session not found: %s", session)
 					}
@@ -161,7 +161,7 @@ through the audit history.`,
 
 			// Handle count-only mode
 			if count {
-				n, err := app.Store.CountEvents(ctx, filter)
+				n, err := app.Reads.CountEvents(ctx, filter)
 				if err != nil {
 					return err
 				}
@@ -169,7 +169,7 @@ through the audit history.`,
 			}
 
 			// Query events
-			evts, err := app.Store.QueryEvents(ctx, filter)
+			evts, err := app.Reads.QueryEvents(ctx, filter)
 			if err != nil {
 				return err
 			}
@@ -212,6 +212,9 @@ through the audit history.`,
 func runInteractiveQuery(app *App, since, until string, today, yesterday bool,
 	agents, actions []string, filePattern, cmdPattern, status, sessionID string, sensitive bool) error {
 
+	if app.Store == nil {
+		return NewCLIError(ExitGeneral, "the interactive query searches the local database, which the decision service holds on this host. Use the filter flags instead")
+	}
 	opts := query.Options{
 		Store:       app.Store,
 		Agents:      agents,
@@ -222,7 +225,7 @@ func runInteractiveQuery(app *App, since, until string, today, yesterday bool,
 		Sensitive:   sensitive,
 	}
 
-	searcher, ok := app.Store.(storage.Searcher)
+	searcher, ok := app.Reads.(storage.Searcher)
 	if !ok {
 		return fmt.Errorf("store does not support search, interactive mode requires FTS")
 	}

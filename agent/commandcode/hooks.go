@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/safedep/gryph/agent"
@@ -17,6 +16,9 @@ import (
 // Hooks declares the Command Code hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
+//
+// Command Code documents no hook timeout or error behavior that Gryph has
+// verified, so Timeout stays 0.
 var Hooks = []events.HookSpec{
 	{Type: "PreToolUse", Phase: events.PhasePre, Blocking: true},
 	{Type: "PostToolUse", Phase: events.PhasePost},
@@ -47,7 +49,7 @@ type HookCommand struct {
 
 // GenerateHooksConfig generates the hooks configuration for gryph. Matchers
 // are omitted so that every tool call is captured.
-func GenerateHooksConfig() SettingsHooks {
+func GenerateHooksConfig(program string) SettingsHooks {
 	hooks := make(SettingsHooks)
 
 	for _, hookType := range HookTypes {
@@ -56,7 +58,7 @@ func GenerateHooksConfig() SettingsHooks {
 				Hooks: []HookCommand{
 					{
 						Type:    "command",
-						Command: expectedHookCommand(hookType),
+						Command: expectedHookCommand(program, hookType),
 					},
 				},
 			},
@@ -66,35 +68,27 @@ func GenerateHooksConfig() SettingsHooks {
 	return hooks
 }
 
-// expectedHookCommand returns the exact hook command gryph installs for the
-// given hook type.
-func expectedHookCommand(hookType string) string {
-	return fmt.Sprintf("%s _hook command-code %s", utils.GryphCommand(), hookType)
+// expectedHookCommand returns the hook command gryph installs for the given
+// hook type.
+func expectedHookCommand(program, hookType string) string {
+	return utils.HookCommand(program, AgentName, hookType)
 }
 
 // isOwnedHookCommand reports whether a hook command string was installed by
-// gryph for the given hook type. Commands are compared field by field so
-// that unrelated executables whose names merely start with "gryph" (e.g.
-// gryphon, gryph-helper) and hooks installed for other agents are never
-// treated as owned — and therefore never skipped or removed by gryph.
+// gryph for the given hook type, whatever program path it names. Unrelated
+// executables whose names only start with "gryph" and hooks of other agents
+// are never treated as owned, so gryph never skips or removes them.
 func isOwnedHookCommand(cmd, hookType string) bool {
-	fields := strings.Fields(cmd)
-	if len(fields) < 4 {
-		return false
-	}
-	if filepath.Base(fields[0]) != utils.GryphCommand() {
-		return false
-	}
-	return fields[1] == "_hook" && fields[2] == AgentName && fields[3] == hookType
+	return utils.IsHookCommand(cmd, AgentName, hookType)
 }
 
 // readSettings reads the settings.json file. A "hooks" key that is present
 // but not a JSON object is rejected here so that install, uninstall, and
 // status all fail with the same configuration error instead of silently
 // treating a malformed section as empty.
-func readSettings(path string) (map[string]interface{}, error) {
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
+func readSettings(path string, opts agent.InstallOptions) (map[string]interface{}, error) {
+	data, err := agent.ReadHookFile(path, opts)
+	if agent.IsNotExist(err) {
 		return make(map[string]interface{}), nil
 	}
 	if err != nil {
@@ -121,13 +115,13 @@ func readSettings(path string) (map[string]interface{}, error) {
 }
 
 // writeSettings writes the settings.json file.
-func writeSettings(path string, settings map[string]interface{}) error {
+func writeSettings(path string, settings map[string]interface{}, opts agent.InstallOptions) error {
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0600)
+	return agent.WriteHookFile(path, data, 0600, opts)
 }
 
 // backupSettings copies the current settings file to a timestamped backup,
@@ -180,7 +174,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 
 	settingsPath := filepath.Join(detection.ConfigPath, "settings.json")
 
-	settings, err := readSettings(settingsPath)
+	settings, err := readSettings(settingsPath, opts)
 	if err != nil {
 		result.Error = fmt.Errorf("failed to read settings.json: %w", err)
 		return result, result.Error
@@ -205,7 +199,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		return result, nil
 	}
 
-	gryphHooks := GenerateHooksConfig()
+	gryphHooks := GenerateHooksConfig(opts.Command)
 
 	if settings["hooks"] == nil {
 		settings["hooks"] = make(map[string]interface{})
@@ -246,7 +240,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		result.Warnings = append(result.Warnings, "gryph hooks already installed (use --force to overwrite)")
 	}
 
-	if err := writeSettings(settingsPath, settings); err != nil {
+	if err := writeSettings(settingsPath, settings, opts); err != nil {
 		result.Error = fmt.Errorf("failed to write settings.json: %w", err)
 		return result, result.Error
 	}
@@ -350,7 +344,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		return result, nil
 	}
 
-	settings, err := readSettings(settingsPath)
+	settings, err := readSettings(settingsPath, agent.InstallOptions{Repair: opts.Repair})
 	if err != nil {
 		result.Error = fmt.Errorf("failed to read settings.json: %w", err)
 		return result, result.Error
@@ -435,7 +429,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 	}
 
 	// Write updated settings
-	if err := writeSettings(settingsPath, settings); err != nil {
+	if err := writeSettings(settingsPath, settings, agent.InstallOptions{Repair: opts.Repair}); err != nil {
 		result.Error = fmt.Errorf("failed to write settings.json: %w", err)
 		return result, result.Error
 	}
@@ -458,7 +452,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 	}
 
 	settingsPath := filepath.Join(detection.ConfigPath, "settings.json")
-	settings, err := readSettings(settingsPath)
+	settings, err := readSettings(settingsPath, agent.InstallOptions{})
 	if err != nil {
 		status.Issues = append(status.Issues, fmt.Sprintf("cannot read settings.json: %v", err))
 		return status, nil

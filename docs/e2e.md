@@ -136,3 +136,21 @@ func TestMyCommand(t *testing.T) {
     }
 }
 ```
+
+## Hook Latency Benchmark
+
+`test/perf` measures the hook path through the real `gryph` binary, one
+process per hook with the payload on stdin, for each hook kind (blocking pre
+hook, prompt hook, post hook, lifecycle hook) with policy off and on. It
+reports the mean and the p50, p95 and p99 of each benchmark.
+
+```bash
+make bench-hook              # 50 runs per benchmark
+make bench-hook BENCHTIME=200x
+```
+
+The report lands in `perf-reports/hook-latency.md`. CI runs the benchmark on
+every push and keeps the report as an artifact. The numbers depend on the
+machine, so compare two runs from one machine only.
+`perf-reports/hook-latency-baseline.md` holds one reference run and the
+budget rule for later changes to the hook path.

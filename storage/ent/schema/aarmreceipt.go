@@ -61,6 +61,7 @@ func (AarmReceipt) Fields() []ent.Field {
 
 		field.Bytes("signature").Optional(),
 		field.String("signer_key_id").Optional(),
+		field.String("signer_key_scope").Optional(),
 
 		field.String("defer_reason").Optional(),
 		field.Int64("deferral_of_sequence").Optional().Nillable(),
@@ -72,7 +73,20 @@ func (AarmReceipt) Fields() []ent.Field {
 		field.String("command_digest").Optional(),
 		field.String("url_digest").Optional(),
 		field.Int("hash_version").Optional(),
+		// imported marks a row that gryph supervisor import copied from a
+		// user's own database into the partition of the decision service.
+		// The user could have changed it before the import, so a reader
+		// keeps it apart from a row the service recorded itself.
+		field.Bool("imported").Default(false),
 		field.Bytes("content_salt").Optional().MaxLen(32),
+		// approval records who answered an escalation and how sure Gryph
+		// is of it: channel, assurance, approver, peer_trust, request_id,
+		// grant_id and scope. The hash does not cover it: the answer comes
+		// after the insert, as the decision update does.
+		field.JSON("approval", map[string]interface{}{}).Optional(),
+		// peer_trust is the trust of the connection that carried the
+		// action to the decision service.
+		field.String("peer_trust").Optional(),
 	}
 }
 

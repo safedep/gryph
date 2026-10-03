@@ -7,12 +7,12 @@ import (
 	"io"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -56,7 +56,7 @@ func newPolicyKeysGenerateCmd() *cobra.Command {
 				return err
 			}
 			keyPath := app.Config.ResolveReceiptKeyPath(app.Paths)
-			trustPath := app.Config.ResolveReceiptTrustStorePath(app.Paths)
+			trustPath := app.Config.WritableTrustStorePath(app.Paths)
 
 			rotated := false
 			if _, statErr := os.Stat(keyPath); statErr == nil {
@@ -107,8 +107,8 @@ func newPolicyKeysGenerateCmd() *cobra.Command {
 					if note != "" {
 						details["note"] = note
 					}
-					if err := logSelfAudit(cmd.Context(), app.Store, SelfAuditActionReceiptKeyRotated, "",
-						details, SelfAuditResultSuccess, ""); err != nil {
+					if err := engine.LogSelfAudit(cmd.Context(), app.Store, engine.SelfAuditActionReceiptKeyRotated, "",
+						details, engine.SelfAuditResultSuccess, ""); err != nil {
 						log.Errorf("failed to record receipt_key_rotated audit: %v", err)
 					}
 				}
@@ -139,7 +139,7 @@ func newPolicyKeysListCmd() *cobra.Command {
 				return err
 			}
 			trustPath := app.Config.ResolveReceiptTrustStorePath(app.Paths)
-			ts, err := receipt.LoadTrustStore(trustPath)
+			ts, err := receipt.LoadTrustStores(app.Config.ReceiptTrustStorePaths(app.Paths)...)
 			if err != nil {
 				return ErrConfig("load trust store", err)
 			}
@@ -190,7 +190,7 @@ func newPolicyKeysTrustCmd() *cobra.Command {
 			if entry.Created.IsZero() {
 				entry.Created = time.Now().UTC()
 			}
-			trustPath := app.Config.ResolveReceiptTrustStorePath(app.Paths)
+			trustPath := app.Config.WritableTrustStorePath(app.Paths)
 			ts, err := receipt.LoadTrustStore(trustPath)
 			if err != nil {
 				return ErrConfig("load trust store", err)
@@ -224,7 +224,7 @@ func newPolicyKeysRevokeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			trustPath := app.Config.ResolveReceiptTrustStorePath(app.Paths)
+			trustPath := app.Config.WritableTrustStorePath(app.Paths)
 			ts, err := receipt.LoadTrustStore(trustPath)
 			if err != nil {
 				return ErrConfig("load trust store", err)
@@ -258,56 +258,4 @@ func renderKeysTable(w io.Writer, c *tui.Colorizer, ts *receipt.TrustStore, path
 		}
 		_, _ = fmt.Fprintf(w, "%-16s  %-20s  %s\n", k.KeyID, created, tui.TruncateString(k.Note, 40))
 	}
-}
-
-// loadReceiptVerifierFromConfig loads the trust store for the configured
-// path. Returns an empty verifier when the trust store is missing.
-func loadReceiptVerifierFromConfig(cfg *config.Config, paths *config.Paths) (*receipt.Ed25519Verifier, error) {
-	trustPath := cfg.ResolveReceiptTrustStorePath(paths)
-	ts, err := receipt.LoadTrustStore(trustPath)
-	if err != nil {
-		return nil, fmt.Errorf("load trust store %s: %w", trustPath, err)
-	}
-	return receipt.NewEd25519Verifier(ts)
-}
-
-// signerAutoMissingKeyOnce guards the one-time log line emitted when
-// sign_mode=auto is selected but no key file is present on disk.
-var signerAutoMissingKeyOnce sync.Once
-
-// loadReceiptSignerFromConfig loads the configured signing key into an
-// Ed25519Signer. The behavior depends on policy.receipts.sign_mode:
-//   - never: return (nil, nil) unconditionally
-//   - always: load the key. Hard-fail when the key is missing
-//   - auto (default): load the key if present, otherwise log once and
-//     return (nil, nil) so the mediator writes unsigned receipts.
-func loadReceiptSignerFromConfig(cfg *config.Config, paths *config.Paths) (*receipt.Ed25519Signer, error) {
-	if cfg == nil {
-		return nil, nil
-	}
-	mode := cfg.Policy.Receipts.EffectiveSignMode()
-	if mode == config.SignModeNever {
-		return nil, nil
-	}
-	keyPath := cfg.ResolveReceiptKeyPath(paths)
-	if mode == config.SignModeAuto {
-		if _, err := os.Stat(keyPath); err != nil {
-			if os.IsNotExist(err) {
-				signerAutoMissingKeyOnce.Do(func() {
-					log.Warnf("config: policy.receipts.sign_mode=auto but no key at %v; receipts will be unsigned", keyPath)
-				})
-				return nil, nil
-			}
-			return nil, fmt.Errorf("stat private key %s: %w", keyPath, err)
-		}
-	}
-	pkFile, err := receipt.ReadPrivateKeyFile(keyPath)
-	if err != nil {
-		return nil, fmt.Errorf("read private key %s: %w", keyPath, err)
-	}
-	priv, err := pkFile.PrivateKey()
-	if err != nil {
-		return nil, fmt.Errorf("decode private key: %w", err)
-	}
-	return receipt.NewEd25519Signer(priv)
 }

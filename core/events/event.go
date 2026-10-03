@@ -78,6 +78,14 @@ type Event struct {
 	// LinkedEventID is the ID of the pre event of the same tool call, set on
 	// a post event when Gryph recorded the pre event.
 	LinkedEventID uuid.UUID `json:"linked_event_id,omitempty,omitzero"`
+	// PeerTrust is the trust of the connection that carried the event to
+	// the decision service: agent, unknown or low. The service sets it
+	// from the process behind the socket. A hook that decides in process
+	// leaves it empty.
+	PeerTrust string `json:"peer_trust,omitempty"`
+	// Imported marks an event that gryph supervisor import copied from
+	// the user's own database into the partition of the decision service.
+	Imported bool `json:"imported,omitempty"`
 	// Origin is where the content of the event came from, as the adapter
 	// claims it. ClaimOrigin fills it from the event facts when the adapter
 	// does not. The context entry and the content labels store it.
@@ -191,6 +199,73 @@ type SubagentStopPayload struct {
 // UserPromptPayload represents the payload for user_prompt events.
 type UserPromptPayload struct {
 	Prompt privacy.Text `json:"prompt"`
+}
+
+// TamperPayload is the payload of a tamper event: one change to a Gryph
+// asset, as the self-protection provider saw it. Levels are the names of
+// selfprotect levels. Drift is empty when the asset matches its desired
+// state again.
+type TamperPayload struct {
+	// Operation is the kind of change. See the Tamper constants.
+	Operation   string `json:"operation"`
+	Asset       string `json:"asset"`
+	Agent       string `json:"agent,omitempty"`
+	LevelBefore string `json:"level_before"`
+	LevelAfter  string `json:"level_after"`
+	Drift       string `json:"drift,omitempty"`
+	Provider    string `json:"provider"`
+	Detail      string `json:"detail,omitempty"`
+	// Error is the reason a repair failed.
+	Error string `json:"error,omitempty"`
+}
+
+// The operations of a tamper event.
+const (
+	// TamperDrift records an asset that differs from its desired state.
+	TamperDrift = "drift"
+	// TamperLevel records a change of the protection level of an asset
+	// with no drift.
+	TamperLevel = "level"
+	// TamperResolved records a drift that cleared without a repair.
+	TamperResolved = "resolved"
+	// TamperRepair records a repair that restored the asset.
+	TamperRepair = "repair"
+	// TamperRepairFailed records a repair that did not restore the asset.
+	TamperRepairFailed = "repair_failed"
+	// TamperRateLimited records an asset that Gryph stopped repairing,
+	// because the repairs in the window reached the limit.
+	TamperRateLimited = "rate_limited"
+	// TamperSilentAgent records a live agent process that sent no hook
+	// call in the census window.
+	TamperSilentAgent = "silent_agent"
+	// TamperServerIdentity records a hook client that refused the
+	// decision service socket, because the socket or its peer was not the
+	// system's.
+	TamperServerIdentity = "server_identity"
+	// TamperDegraded records hook calls that the client decided alone
+	// while the decision service was running.
+	TamperDegraded = "degraded"
+	// TamperSpoolRefused records spool files of the account that the
+	// decision service refused: another owner, not a regular file, or
+	// over the quota.
+	TamperSpoolRefused = "spool_refused"
+)
+
+// Summary is the one-line form of the payload. The receipt stores and
+// hashes it, so the chain binds the facts of the change.
+func (p TamperPayload) Summary() string {
+	subject := p.Asset
+	if p.Agent != "" {
+		subject += " " + p.Agent
+	}
+	s := subject + " " + p.Operation + ": level " + p.LevelBefore + " to " + p.LevelAfter
+	if p.Drift != "" {
+		s += ", " + p.Drift
+	}
+	if p.Error != "" {
+		s += ", error: " + p.Error
+	}
+	return s
 }
 
 // toolUseDisplayFields lists Input keys checked in priority order by DisplayTarget.
@@ -350,6 +425,8 @@ func NewPayload(t ActionType) any {
 		return &SubagentStopPayload{}
 	case ActionUserPrompt:
 		return &UserPromptPayload{}
+	case ActionTamper:
+		return &TamperPayload{}
 	default:
 		return nil
 	}

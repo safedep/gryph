@@ -1,0 +1,51 @@
+# Doctor prints one self-protection row per Gryph asset with its level, and
+# the profile that the levels earn. With policy off, the built-in rules do
+# not run, so every asset they protect is at none and the row names the
+# config key. With policy on, the install reaches guard. A broken hook entry
+# shows as drift on the hook_config row.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+
+exec gryph doctor --no-color
+stdout 'Self-protection'
+stdout 'Profile: none'
+stdout 'hook_config\s+claude-code\s+detect\s+'
+stdout 'binary\s+none\s+policy.enabled is false, '
+stdout 'policy\s+none\s+policy.enabled is false, '
+stdout 'config\s+none\s+policy.enabled is false, '
+stdout 'store\s+none\s+policy.enabled is false, .*audit.db'
+stdout -count=2 'key\s+none\s+policy.enabled is false, '
+! stdout 'drift:'
+
+env XDG_CONFIG_HOME=$WORK/home2/.config
+exec gryph doctor --no-color
+stdout 'Profile: guard'
+stdout 'hook_config\s+claude-code\s+detect\s+'
+stdout 'binary\s+mediated\s+'
+stdout 'policy\s+mediated\s+.*policy.yaml, .*policies'
+stdout 'config\s+mediated\s+.*home2/.config/safedep/gryph/config.yml'
+stdout 'store\s+mediated\s+'
+stdout -count=2 'key\s+mediated\s+'
+! stdout 'none'
+
+exec gryph doctor --format json --no-color
+stdout '"Profile": "guard"'
+stdout '"Asset": "hook_config"'
+stdout '"Agent": "claude-code"'
+stdout '"Level": "detect"'
+stdout '"Provider": "user"'
+
+# A broken hook entry is drift on the hook_config row. The profile does not
+# change, because the level says what Gryph can do, not what it found.
+replace $HOME/.claude/settings.json PreToolUse XPreToolUse
+exec gryph doctor --no-color
+stdout 'Profile: guard'
+stdout 'drift: hooks are invalid: PreToolUse'
+
+-- home2/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true

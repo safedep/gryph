@@ -38,7 +38,7 @@ code changes, command results, error rates, and session info.`,
 				return err
 			}
 
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 
@@ -49,7 +49,7 @@ code changes, command results, error rates, and session info.`,
 			}()
 
 			opts := stats.Options{
-				Store:       app.Store,
+				Store:       app.Reads,
 				AgentFilter: p.agent,
 			}
 

@@ -94,6 +94,12 @@ type Analysis struct {
 	// the walker cannot resolve, and one argument is the literal word
 	// "_hook". The check is best effort, like the rest of the analysis.
 	GryphHook bool
+	// GryphResolve is true when a call resolves an approval request,
+	// "gryph policy approve resolve" or "gryph policy deferrals resolve".
+	// The call counts under the same rule as GryphHook: the program is gryph
+	// or a word the walker cannot resolve, and the literal words policy,
+	// approve or deferrals, and resolve come in that order.
+	GryphResolve bool
 }
 
 // Changes returns the targets the command writes or removes.
@@ -122,7 +128,7 @@ func Analyze(command string, env Env) (a Analysis) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Warnf("shellcmd: analysis panic: %v", r)
-			a = Analysis{Targets: w.targets, Hosts: w.hosts, GryphHook: w.gryphHook}
+			a = Analysis{Targets: w.targets, Hosts: w.hosts, GryphHook: w.gryphHook, GryphResolve: w.gryphResolve}
 		}
 	}()
 	return w.analyze(command)
@@ -137,7 +143,7 @@ func (w *walker) analyze(command string) Analysis {
 	if w.exhausted {
 		return Unbounded()
 	}
-	return Analysis{Parsed: !w.failed, Targets: w.targets, Hosts: w.hosts, GryphHook: w.gryphHook}
+	return Analysis{Parsed: !w.failed, Targets: w.targets, Hosts: w.hosts, GryphHook: w.gryphHook, GryphResolve: w.gryphResolve}
 }
 
 func (w *walker) exhaust() {
@@ -167,8 +173,9 @@ func Unbounded() Analysis {
 			{Path: "/", Access: AccessRemove, Glob: "**", MatchDot: true},
 			{Path: "/", Access: AccessRead, Glob: "**", MatchDot: true},
 		},
-		Hosts:     []string{UnknownHost},
-		GryphHook: true,
+		Hosts:        []string{UnknownHost},
+		GryphHook:    true,
+		GryphResolve: true,
 	}
 }
 
@@ -272,9 +279,10 @@ type walker struct {
 	failed  bool
 	// exhausted is true when the walk hit maxCalls or maxDepth and skipped
 	// the rest of the command.
-	exhausted bool
-	matchDot  bool
-	gryphHook bool
+	exhausted    bool
+	matchDot     bool
+	gryphHook    bool
+	gryphResolve bool
 	// stdin is the input of the statement that the walker is in.
 	stdin stdinSource
 }
@@ -603,6 +611,9 @@ func (w *walker) call(args []string, cwds dirs) dirs {
 	if runsGryphHook(args) {
 		w.gryphHook = true
 	}
+	if runsGryphResolve(args) {
+		w.gryphResolve = true
+	}
 	if args[0] == "" {
 		return cwds
 	}
@@ -831,7 +842,32 @@ func runsGryphHook(args []string) bool {
 	if len(args) < 2 || !slices.Contains(args[1:], gryphHookCommand) {
 		return false
 	}
-	return args[0] == "" || strings.TrimSuffix(path.Base(args[0]), ".exe") == "gryph"
+	return isGryphProgram(args[0])
+}
+
+// runsGryphResolve reports whether a call resolves an approval request:
+// "gryph policy approve resolve" or "gryph policy deferrals resolve". The
+// program rule is the one of runsGryphHook. Flags may come between the
+// words, so the words are matched in order, not as neighbors.
+func runsGryphResolve(args []string) bool {
+	if len(args) < 4 || !isGryphProgram(args[0]) {
+		return false
+	}
+	rest := args[1:]
+	for _, step := range [][]string{{"policy"}, {"approve", "deferrals"}, {"resolve"}} {
+		i := slices.IndexFunc(rest, func(w string) bool { return slices.Contains(step, w) })
+		if i < 0 {
+			return false
+		}
+		rest = rest[i+1:]
+	}
+	return true
+}
+
+// isGryphProgram reports whether a program word is gryph, or a word that
+// the walker cannot resolve, such as "$G".
+func isGryphProgram(program string) bool {
+	return program == "" || strings.TrimSuffix(path.Base(program), ".exe") == "gryph"
 }
 
 func (w *walker) cd(args []string, cwds dirs) dirs {

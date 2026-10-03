@@ -26,22 +26,69 @@ when the two differ. Run
 
 <!-- BEGIN generated hook table: go test ./cli -run TestEnforcementCoverageDoc -->
 
-| Agent | Blocking pre-execution hooks | Post-execution hooks (detection) | Other hooks |
-|---|---|---|---|
-| Claude Code | `PreToolUse`, `UserPromptSubmit` (prompt) | `PostToolUse`, `PostToolUseFailure` | `SessionStart`, `SessionEnd`, `Notification`, `SubagentStart`, `SubagentStop` |
-| Codex | `PreToolUse`, `UserPromptSubmit` (prompt) | `PostToolUse` | `SessionStart`, `Stop` |
-| Command Code | `PreToolUse` | `PostToolUse` | `Stop`, `SessionStart` |
-| Cursor | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `beforeTabFileRead`, `beforeSubmitPrompt` (prompt) | `postToolUse`, `postToolUseFailure`, `afterFileEdit`, `afterTabFileEdit`, `afterShellExecution`, `afterMCPExecution`, `afterAgentResponse`, `afterAgentThought` | `sessionStart`, `sessionEnd`, `stop`, `subagentStart`, `subagentStop`, `preCompact` |
-| Devin | `PreToolUse`, `UserPromptSubmit` (prompt) | `PostToolUse` | `SessionStart`, `Stop`, `SessionEnd` |
-| Gemini CLI | `BeforeAgent` (prompt), `BeforeTool` | `AfterTool` | `SessionStart`, `SessionEnd`, `Notification` |
-| OpenCode | `chat.message` (prompt), `tool.execute.before` | `tool.execute.after` | `session.created`, `session.idle`, `session.error` |
-| Pi Agent | `input` (prompt), `tool_call` | `tool_result` | `session_start`, `session_shutdown` |
-| Windsurf | `pre_read_code`, `pre_write_code`, `pre_run_command`, `pre_mcp_tool_use`, `pre_user_prompt` (prompt) | `post_read_code`, `post_write_code`, `post_run_command`, `post_mcp_tool_use`, `post_cascade_response`, `post_setup_worktree` | (none) |
-| OpenClaw (inactive) | `before_tool_call` | `after_tool_call` | `session_start`, `session_end` |
+| Agent | Blocking pre-execution hooks | Post-execution hooks (detection) | Other hooks | Hook timeout |
+|---|---|---|---|---|
+| Claude Code | `PreToolUse`, `UserPromptSubmit` (prompt) | `PostToolUse`, `PostToolUseFailure` | `SessionStart`, `SessionEnd`, `Notification`, `SubagentStart`, `SubagentStop` | 600 s, `UserPromptSubmit` 30 s |
+| Codex | `PreToolUse`, `UserPromptSubmit` (prompt) | `PostToolUse` | `SessionStart`, `Stop` | 30 s |
+| Command Code | `PreToolUse` | `PostToolUse` | `Stop`, `SessionStart` | not documented |
+| Cursor | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `beforeReadFile`, `beforeTabFileRead`, `beforeSubmitPrompt` (prompt) | `postToolUse`, `postToolUseFailure`, `afterFileEdit`, `afterTabFileEdit`, `afterShellExecution`, `afterMCPExecution`, `afterAgentResponse`, `afterAgentThought` | `sessionStart`, `sessionEnd`, `stop`, `subagentStart`, `subagentStop`, `preCompact` | not documented |
+| Devin | `PreToolUse`, `UserPromptSubmit` (prompt) | `PostToolUse` | `SessionStart`, `Stop`, `SessionEnd` | 30 s |
+| Gemini CLI | `BeforeAgent` (prompt), `BeforeTool` | `AfterTool` | `SessionStart`, `SessionEnd`, `Notification` | 60 s |
+| OpenCode | `chat.message` (prompt), `tool.execute.before` | `tool.execute.after` | `session.created`, `session.idle`, `session.error` | 5 s |
+| Pi Agent | `input` (prompt), `tool_call` | `tool_result` | `session_start`, `session_shutdown` | 30 s, `input` 10 s |
+| Windsurf | `pre_read_code`, `pre_write_code`, `pre_run_command`, `pre_mcp_tool_use`, `pre_user_prompt` (prompt) | `post_read_code`, `post_write_code`, `post_run_command`, `post_mcp_tool_use`, `post_cascade_response`, `post_setup_worktree` | (none) | not documented |
+| OpenClaw (inactive) | `before_tool_call` | `after_tool_call` | `session_start`, `session_end` | 5 s |
 
 <!-- END generated hook table -->
 
-The OpenClaw adapter is not registered (`cli/root.go`), because it is
+## Behavior on a hook error or timeout
+
+Every supported agent lets the action through when the hook exits with a
+code other than 2, crashes, or runs past its timeout. A block therefore
+exists only while Gryph answers with an explicit block before the agent gives
+up. The `Timeout` of each `HookSpec` records how long that is. The table
+records what each agent documents, with the date of the check. A row must be
+checked again for each agent release before Gryph relies on it.
+
+| Agent | Timeout source | On a hook error or timeout | Checked |
+|---|---|---|---|
+| Claude Code | Documented default: 600 s for a command hook, 30 s on `UserPromptSubmit`. A per-hook `timeout` field overrides it. | Exit code 2 is the only code that blocks. A timed-out hook renders no decision and the call proceeds. | 2026-10-03, hooks reference |
+| Codex | Documented default 600 s. Gryph writes `timeout = 30` into each hook entry. | Errors and timeouts do not block. Exit code 2 blocks. | 2026-10-03, hooks reference |
+| Command Code | Not documented. | Not verified. | not verified |
+| Cursor | A `timeout` field with a platform default that the reference does not name. | Crashes, timeouts and exit codes other than 2 fail open unless the hook sets `failClosed: true`. Gryph sets `failClosed` on its system-level entries. | 2026-10-03, hooks reference |
+| Devin | Gryph writes `timeout = 30` into each hook entry. The reference names no default. | Any exit code other than 2 lets the action proceed. Timeout behavior is not documented. | 2026-10-03, Cascade hooks reference |
+| Gemini CLI | Documented default 60 s (`timeout`, in milliseconds). | Exit code 2 blocks. Other codes produce a warning and the action proceeds. Timeout behavior is not documented. | 2026-10-03, hooks reference |
+| OpenCode | The Gryph plugin waits 5 s. | The plugin lets the action through on every result other than exit code 2. | 2026-10-03, plugin source |
+| Pi Agent | The Gryph extension waits 30 s, and 10 s on `input`. | The extension lets the action through on a timeout, a spawn error, or exit code 1. | 2026-10-03, extension source |
+| Windsurf | The reference names no timeout. | Any exit code other than 2 lets the action proceed. | 2026-10-03, Cascade hooks reference |
+
+## Managed settings
+
+`gryph install --managed` writes a hook entry into the file that an agent
+reads for every user of the host. The class says how far that file resists
+the user, from the vendor documentation. A row must be checked again for
+each agent release before Gryph relies on it. The owner of a `locked` row
+does that check. A row drops to `system_path` when nobody can check it
+again. See [Managed install](./cli-reference.md#managed-install) for the
+paths.
+
+| Agent | Class | Why | Checked | Owner |
+|---|---|---|---|---|
+| Claude Code | `locked` | A user or project `disableAllHooks` does not turn off a managed hook. `allowManagedHooksOnly` lets only managed hooks run. | 2026-10-03, managed settings docs, Claude Code 2.1 | abhisek |
+| Codex | `locked` | Managed hooks are trusted and a user cannot disable them. `[features] hooks = true` is pinned. `allow_managed_hooks_only` lets only managed hooks run. | 2026-10-03, managed configuration docs | abhisek |
+| Cursor | `system_path` | Enterprise entries have priority and any deny wins. The reference does not say that a user cannot turn them off. Gryph sets `failClosed` on its entries. | 2026-10-03, hooks reference | maintainers |
+| Gemini CLI | `system_path` | The system file wins on a conflict and hook lists concatenate across scopes. Gryph pins `hooksConfig.enabled` there. The source does not say what `hooksConfig.disabled` in the user scope does to a system hook. | 2026-10-03, settings source on main | maintainers |
+| Windsurf | `system_path` | The reference says a user cannot disable the system file without root, and that system, user and workspace entries all run. It documents no lock against a user entry that answers first. | 2026-10-03, Cascade hooks reference | maintainers |
+| Devin, OpenCode, Pi Agent, Command Code | none | No documented managed location. | 2026-10-03 | maintainers |
+
+The weekly workflow `Agent Docs Check` runs `scripts/check-agent-docs.sh`.
+The script fetches the vendor page of each row and fails when a managed key
+name or a managed path is gone from it: `allowManagedHooksOnly`,
+`allow_managed_hooks_only`, `failClosed`, the managed paths. A failure means
+a vendor changed something. The owner reads the agent release, checks the
+class, and updates the row and the adapter.
+
+The OpenClaw adapter is not registered (`engine/engine.go`), because it is
 non-functional. Installation cannot select it, and `runHook` returns
 `unknown agent` for it. Gryph enforces no OpenClaw hook until the adapter is
 registered. The row above records the planned mapping only.

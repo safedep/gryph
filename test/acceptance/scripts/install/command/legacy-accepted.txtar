@@ -1,0 +1,30 @@
+# Hook entries from an earlier install name the bare program gryph. Gryph
+# still reads them as installed and valid, and a forced install rewrites
+# them with the absolute path.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph doctor --no-color
+stdout '\[ok\]\s+Claude Code hooks'
+
+exec gryph install --force --agent claude-code
+grep '"command": "/[^"]*/gryph _hook claude-code PreToolUse"' $HOME/.claude/settings.json
+! grep '"command": "gryph _hook' $HOME/.claude/settings.json
+exec gryph doctor --no-color
+stdout '\[ok\]\s+Claude Code hooks'
+
+-- home/.claude/settings.json --
+{
+  "hooks": {
+    "PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "gryph _hook claude-code PreToolUse"}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "gryph _hook claude-code UserPromptSubmit"}]}],
+    "PostToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "gryph _hook claude-code PostToolUse"}]}],
+    "PostToolUseFailure": [{"matcher": "*", "hooks": [{"type": "command", "command": "gryph _hook claude-code PostToolUseFailure"}]}],
+    "SessionStart": [{"hooks": [{"type": "command", "command": "gryph _hook claude-code SessionStart"}]}],
+    "SessionEnd": [{"hooks": [{"type": "command", "command": "gryph _hook claude-code SessionEnd"}]}],
+    "Notification": [{"hooks": [{"type": "command", "command": "gryph _hook claude-code Notification"}]}],
+    "SubagentStart": [{"hooks": [{"type": "command", "command": "gryph _hook claude-code SubagentStart"}]}],
+    "SubagentStop": [{"hooks": [{"type": "command", "command": "gryph _hook claude-code SubagentStop"}]}]
+  }
+}

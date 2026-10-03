@@ -7,6 +7,7 @@ import (
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -176,13 +177,13 @@ func newConfigSetCmd() *cobra.Command {
 				return err
 			}
 
-			if err := logSelfAudit(ctx, app.Store, SelfAuditActionConfigChange, "",
+			if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionConfigChange, "",
 				map[string]interface{}{
 					"key":       key,
 					"old_value": oldValue,
 					"new_value": parsedValue,
 				},
-				SelfAuditResultSuccess, ""); err != nil {
+				engine.SelfAuditResultSuccess, ""); err != nil {
 				return fmt.Errorf("failed to log self-audit: %w", err)
 			}
 
@@ -233,11 +234,11 @@ func newConfigResetCmd() *cobra.Command {
 				return err
 			}
 
-			if err := logSelfAudit(ctx, app.Store, SelfAuditActionConfigChange, "",
+			if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionConfigChange, "",
 				map[string]interface{}{
 					"action": "reset",
 				},
-				SelfAuditResultSuccess, ""); err != nil {
+				engine.SelfAuditResultSuccess, ""); err != nil {
 				return fmt.Errorf("failed to log self-audit: %w", err)
 			}
 

@@ -28,6 +28,8 @@ type Generator interface {
 	Record(ctx context.Context, in *RecordInput) (*Record, error)
 	UpdateResult(ctx context.Context, sessionID uuid.UUID, sequence int64, result model.Result) error
 	UpdateDecision(ctx context.Context, sessionID uuid.UUID, sequence int64, decision string, resultStatus string, note string) error
+	// UpdateApproval records who answered an escalation on its receipt.
+	UpdateApproval(ctx context.Context, sessionID uuid.UUID, sequence int64, approval map[string]any) error
 }
 
 // RecordInput is the input to Generator.Record.
@@ -67,6 +69,10 @@ type RecordInput struct {
 	// defer row and on non-resolution receipts.
 	DeferralOfSequence *int64
 
+	// PeerTrust is the trust of the connection that carried the action to
+	// the decision service. The hash does not cover it.
+	PeerTrust string
+
 	// ErrorMessage is an optional explanation persisted on the receipt row's
 	// error_message column at insert time. The hash chain ignores
 	// error_message (the verifier zeros it via DeriveInsertResultStatus), so
@@ -89,6 +95,8 @@ type Record struct {
 	// CLI uses this to emit a SelfAuditActionReceiptSigned row without
 	// re-querying the receipt.
 	SignerKeyID string
+	// SignerKeyScope is the scope of the key that signed the row.
+	SignerKeyScope string
 }
 
 // GeneratorOption configures a Generator at construction time. Today the
@@ -130,6 +138,11 @@ func (*Nop) UpdateResult(_ context.Context, _ uuid.UUID, _ int64, _ model.Result
 
 // UpdateDecision implements Generator.
 func (*Nop) UpdateDecision(_ context.Context, _ uuid.UUID, _ int64, _, _, _ string) error {
+	return nil
+}
+
+// UpdateApproval implements Generator.
+func (*Nop) UpdateApproval(_ context.Context, _ uuid.UUID, _ int64, _ map[string]any) error {
 	return nil
 }
 

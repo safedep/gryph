@@ -63,6 +63,11 @@ func (p *JSONPresenter) RenderDoctor(result *DoctorView) error {
 	return p.encoder.Encode(result)
 }
 
+// RenderProtection renders a self-protection pass as JSON.
+func (p *JSONPresenter) RenderProtection(view *ProtectionView) error {
+	return p.encoder.Encode(view)
+}
+
 // RenderConfig renders the configuration as JSON.
 func (p *JSONPresenter) RenderConfig(config *ConfigView) error {
 	return p.encoder.Encode(config)

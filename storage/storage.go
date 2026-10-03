@@ -220,6 +220,17 @@ type ContextStateDelta struct {
 	Intent bool
 }
 
+// ImportStore takes the rows of a user's own database into this store,
+// marked imported. A row that is already there is left as it is, so a
+// second import of the same session changes nothing, and a run that
+// stopped gets completed by the next one. The session row comes first:
+// the events and the receipts reference it.
+type ImportStore interface {
+	ImportEvents(ctx context.Context, sessionID uuid.UUID, evts []*events.Event) (int, error)
+	ImportReceipts(ctx context.Context, sessionID uuid.UUID, rows []*ReceiptRow) (int, error)
+	ImportSession(ctx context.Context, sess *session.Session) (bool, error)
+}
+
 // ReceiptStore defines the interface for the AARM receipt log: an
 // append-only, hash-chained record per session. InsertReceipt is called
 // inside the generator's transaction with a pre-computed sequence and hash;
@@ -236,6 +247,9 @@ type ReceiptStore interface {
 	RecordReceiptInTx(ctx context.Context, sessionID uuid.UUID, build func(prev *ReceiptRow) (*ReceiptRow, error)) (*ReceiptRow, error)
 	UpdateReceiptResult(ctx context.Context, sessionID uuid.UUID, sequence int64, status string, durationMS int64, errorMsg string) error
 	UpdateReceiptDecision(ctx context.Context, sessionID uuid.UUID, sequence int64, decision string, resultStatus string, note string) error
+	// UpdateReceiptApproval records who answered the escalation of the
+	// receipt and how sure Gryph is of it.
+	UpdateReceiptApproval(ctx context.Context, sessionID uuid.UUID, sequence int64, approval map[string]interface{}) error
 	QueryReceipts(ctx context.Context, filter *ReceiptFilter) ([]*ReceiptRow, error)
 	CountReceipts(ctx context.Context, filter *ReceiptFilter) (int, error)
 	DeleteReceiptsBefore(ctx context.Context, before time.Time) (int, error)
@@ -311,6 +325,26 @@ type ReceiptRow struct {
 
 	Signature   []byte
 	SignerKeyID string
+	// SignerKeyScope says which key signed the row: user for a key in the
+	// user's config directory, supervisor for the key of the decision
+	// service. Empty on a row from before the marker, which a user key
+	// signed.
+	SignerKeyScope string
+
+	// Imported marks a receipt that gryph supervisor import copied from
+	// the user's own database. Its hash and signature are the original
+	// ones, and the user could have changed the row before the import.
+	Imported bool
+
+	// Approval records the answer to an escalation: channel, assurance,
+	// approver, peer_trust, and the request or the grant that carried it.
+	// The hash does not cover it.
+	Approval map[string]interface{}
+
+	// PeerTrust is the trust of the connection that carried the action to
+	// the decision service: agent, unknown or low. Empty for a receipt a
+	// hook wrote in process.
+	PeerTrust string
 
 	// DeferReason is the operator-facing rationale recorded on defer receipts
 	// (explicit defer rules carry the rule's reason; synthetic defers carry
@@ -442,6 +476,7 @@ type SelfAuditFilter struct {
 
 // Store combines all storage interfaces.
 type Store interface {
+	ImportStore
 	EventStore
 	SessionStore
 	SelfAuditStore
@@ -449,6 +484,7 @@ type Store interface {
 	ContextStore
 	ReceiptStore
 	DeferralStore
+	ApprovalStore
 
 	// Init initializes the database schema.
 	Init(ctx context.Context) error

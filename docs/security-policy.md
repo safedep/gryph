@@ -28,15 +28,18 @@ Once enabled, every supported agent hook runs through the engine.
 
 ## Where policy files live
 
-Gryph loads policy from three sources, in this order:
+Gryph loads policy from four sources, in this order:
 
+0. **Managed policy** (`policy.yaml` and `policies/*.yaml` in the system managed directory, optional). An administrator owns these files. They load on every host that has a managed directory, with or without a managed configuration file, and each file must pass the same path chain check as the [managed configuration](./cli-reference.md#system-managed-configuration): root must own the file and every directory above it. A file that fails the check does not load, and the policy load fails, so the hook fails as `fail_mode` says. `gryph policy list` shows these sources as `managed` and `managed-policies`.
 1. **Global policy file** (`${ConfigDir}/policy.yaml`, optional). The single operator-owned file. On macOS this is `~/Library/Application Support/safedep/gryph/policy.yaml`; on Linux `~/.config/safedep/gryph/policy.yaml`. A missing file is not an error.
 2. **Policies directory** (`${ConfigDir}/policies/*.yaml` and `*.yml`, optional). Each file is a separate policy document. Files load in sorted name order and merge after the global file. A missing directory is not an error. This lets you author policy as many small, self-contained files instead of one large file.
-3. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, the export key, and agent hook configs from agent self-modification. A second rule, `gryph-builtin-protected-reads`, blocks agent reads of the database (with its `-wal`, `-shm`, and `-journal` files), of the receipt signing key, and of the export key (`export.key` next to the database). The export key keys the digests in an export. See [Content Labels](./content-labels.md#export). A third rule, `gryph-builtin-hook-command`, blocks an agent shell command that runs `gryph _hook`. Such a command can record a forged event. An agent may read the policy files and the hook configs. Self-protection is best effort. See [Self-protection limits](#self-protection-limits).
+3. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, the export key, and agent hook configs from agent self-modification. A second rule, `gryph-builtin-protected-reads`, blocks agent reads of the database (with its `-wal`, `-shm`, and `-journal` files), of the receipt signing key, and of the export key (`export.key` next to the database). The export key keys the digests in an export. See [Content Labels](./content-labels.md#export). A third rule, `gryph-builtin-hook-command`, blocks an agent shell command that runs `gryph _hook`, `gryph policy approve resolve`, or `gryph policy deferrals resolve`. The first can record a forged event. The others can answer the approval the agent waits on. The decision service refuses both from under an agent (see [The trust of a connection](#the-trust-of-a-connection)). The rule is one more layer, not the control. An agent may read the policy files and the hook configs. Self-protection is best effort. See [Self-protection limits](#self-protection-limits).
 
 With `policy.enabled: true` and no user files on disk, the merged policy contains built-in self-protection rules only.
 
-Both the global file and the policies directory sit inside `${ConfigDir}`, so both are protected by the built-in self-protection rules. Gryph resolves no other location. A file at any other path is never loaded as policy.
+Both the global file and the policies directory sit inside `${ConfigDir}`, so both are protected by the built-in self-protection rules, and so is the managed directory. Gryph resolves no other location. A file at any other path is never loaded as policy.
+
+A managed configuration file can drop the user sources with `allow_user_policy: false`. The managed policy and the built-in rules are then the whole policy. The default is `true`, because a new file can only add rules. While a managed configuration is in force, `policy.self_protection.enabled` has no effect: the built-in rules stay on.
 
 ### Self-protection limits
 
@@ -54,13 +57,13 @@ Self-protection is best effort. It blocks file writes and deletes to protected p
 - On macOS, a path in a different letter case. The file system ignores case, and the match does not.
 - The Gryph commands that print the audit data, such as `gryph query`, `gryph export`, and `gryph cat`.
 
-The rule `gryph-builtin-hook-command` is best effort. It catches only a literal `gryph _hook` call. It checks each call in the command, also inside wrappers (`env`, `sudo`, `exec`, `command`, `setsid`, `strace`, `parallel`, and others), `find -exec`, `bash -c` (also after a flag group such as `-euo pipefail`), a here-document or a here-string with literal text that a shell reads, `eval`, `watch`, `flock`, `su -c`, `runuser`, and `script`. Gryph decodes ANSI-C quoting (`$'\x5fhook'`) and expands braces before the check. A call blocks when its program is gryph, or a variable or a command substitution, and one argument is the literal word `_hook`. So `gryph _hook claude-code UserPromptSubmit`, `bash -c 'gryph _hook x y'`, and `$G _hook x y` block. A word that can only become `_hook` when the shell runs the command does not block. So `gryph query --session "$SID"`, `gryph _hoo? x y`, `echo _hook | xargs gryph`, and `eval "$S"` pass. A word such as `_hook` in the arguments of another program, as in `grep -rn _hook cli/`, does not block.
+The rule `gryph-builtin-hook-command` is best effort. It catches only a literal `gryph _hook` call, or a literal `gryph policy approve resolve` or `gryph policy deferrals resolve` call. It checks each call in the command, also inside wrappers (`env`, `sudo`, `exec`, `command`, `setsid`, `strace`, `parallel`, and others), `find -exec`, `bash -c` (also after a flag group such as `-euo pipefail`), a here-document or a here-string with literal text that a shell reads, `eval`, `watch`, `flock`, `su -c`, `runuser`, and `script`. Gryph decodes ANSI-C quoting (`$'\x5fhook'`) and expands braces before the check. A call blocks when its program is gryph, or a variable or a command substitution, and one argument is the literal word `_hook`. So `gryph _hook claude-code UserPromptSubmit`, `bash -c 'gryph _hook x y'`, and `$G _hook x y` block. A word that can only become `_hook` when the shell runs the command does not block. So `gryph query --session "$SID"`, `gryph _hoo? x y`, `echo _hook | xargs gryph`, and `eval "$S"` pass. A word such as `_hook` in the arguments of another program, as in `grep -rn _hook cli/`, does not block. A resolve call blocks when the literal words `policy`, `approve` or `deferrals`, and `resolve` come in that order, with or without flags between them. So `gryph policy approve resolve --id x` and `gryph --no-color policy approve resolve --id x` block, and `gryph policy approve list` and `gryph policy approve "$ACTION"` pass.
 
 The read rule also blocks a file read of each directory that holds the database or the signing key, at any depth, below the home directory. This blocks a `Grep`, `Glob`, or `LS` tool call on the data directory, the config directory, their `safedep` parents, `~/.config`, and `~/.local/share`. On macOS, these are the `~/Library` directories that hold them. A read of one file in these directories, such as `policy.yaml`, passes. A file read of the home directory, or of a parent of it, passes. So does a shell read of it, such as `grep -r x ~` or `tar -C ~ -czf home.tgz .`. A tool that searches the whole home directory can read the protected files, so this is a limit of the read rule. A `sqlite3` command that names a file with a SQL expression is also a limit.
 
-Kernel-based self-protection is on the roadmap. Until then, treat self-protection as a guard against mistakes and simple attempts, not as a security boundary. The [threat model](./security-policy-threat-model.md) lists the lower-level controls for a hardened deployment.
+Kernel-based self-protection is on the roadmap. Until then, treat self-protection as a guard against mistakes and simple attempts, not as a security boundary. `gryph doctor` prints the level of each protected asset and the profile they earn, detects a change to a hook configuration, and repairs it when you turn repair on. The [self-protection guide](./self-protection.md) explains the levels, the reconcile pass and the repair. The [threat model](./security-policy-threat-model.md) lists the claims and the lower-level controls for a hardened deployment.
 
-Write a file with `gryph policy init [name|path]` or open one with `gryph policy edit [name|path]`. See [Commands](#commands). Run `gryph policy list` to see every active source. Per-host managed policy is a planned future iteration. Today, one host governs its own policy.
+Write a file with `gryph policy init [name|path]` or open one with `gryph policy edit [name|path]`. See [Commands](#commands). Run `gryph policy list` to see every active source. An administrator installs a managed policy for every user of a host with `gryph install --managed --policy <file>`. See [Managed install](./cli-reference.md#managed-install).
 
 Use `disabled:` to suppress a rule by ID. `disabled:` is scoped to the file that declares it. It removes only rules defined in the same file. A file cannot disable a rule from another file, and no user file can disable a built-in rule. Rule IDs must be unique across all files. User rules may not use the `gryph-builtin-` prefix. Namespace your rule IDs by the file's purpose to avoid collisions.
 
@@ -174,6 +177,7 @@ action.human_principal             captured identity, see Identity capture
 action.service_identity            CI / service identity, see Identity capture
 action.role_scope                  OS uid/gid + asserted scopes
 action.gryph_hook                  true when a shell command runs gryph _hook
+action.gryph_resolve               true when a shell command runs gryph policy approve resolve
 context.{total_actions, files_read, files_written, commands_executed,
          network_requests, errors, tools_used, session_duration_ms,
          classifications_seen, tags_seen, tag_seq, origins_seen,
@@ -373,7 +377,7 @@ block > escalate > defer > guidance > warn > allow
 | `gryph policy install <path> [--name N] [--force] [--dry-run]` | Validate a candidate file, then copy it into the policies directory so it becomes active. The destination name is the source basename, or `<name>.yaml` with `--name`. Refuses to overwrite without `--force`. `--dry-run` validates and shows the destination without copying. |
 | `gryph policy schema` | Print the JSON Schema. Pipe into editor tooling or an AI agent. |
 | `gryph policy validate [--file PATH]` | Parse and compile the merged policy, reporting the rule count and sources. With `--file`, validate one file in isolation, without merging the active policy. Use `--file` to lint a candidate before install. |
-| `gryph policy test ...` | Dry-run a synthetic action through the merged policy. With `--file PATH`, dry-run against one file plus the built-in rules, to check a draft before install. See `--help` for flags. |
+| `gryph policy test ...` | Dry-run a synthetic action through the merged policy. With `--file PATH`, dry-run against one file plus the built-in rules, to check a draft before install. With `--degraded`, evaluate as the hook does in the pilot profile with the decision service out of reach: a rule that reads the session context blocks. See `--help` for flags. |
 
 `gryph policy test` accepts `--format json` for machine-readable output.
 
@@ -467,8 +471,11 @@ Do these steps each time you change a policy file.
 | `gryph policy receipts --verify` | Recompute the hash chain and verify any signatures. `--session ID` verifies one chain in full; `--all-sessions` verifies every chain. Exits non-zero on break or invalid signature. |
 | `gryph policy receipts export` | Stream receipts as JSONL or CSV. `--include-signatures` adds the Ed25519 signature columns. |
 | `gryph policy receipts verify-log --input FILE` | Verify an exported chain stand-alone. No database access needed. Verifies signatures when `--trust-store` resolves to a populated store. NOTE: `verify-log` reads a file, not the database. Run `gryph policy receipts export --include-signatures` first, or pipe: `gryph policy receipts export --include-signatures \| gryph policy receipts verify-log --input -`. |
-| `gryph policy approve list` | List pending approval requests. CLI prompts run in-process, so this is always empty in the CLI frontend. |
-| `gryph policy approve history` | Show receipts whose decision was `escalate`, `approved`, `denied`, or `approval_timeout`. |
+| `gryph policy approve list` | List the approval requests of this account. `--state` filters to `pending` (the default), `approved`, `denied`, `expired`, or `all`. On a managed host the decision service keeps the queue. A hook that decides in process asks on its own terminal and keeps no queue, so the list is then empty. |
+| `gryph policy approve show ID` | Show one request by id or id prefix: the action, the rules, the floor, the state, and the answer with its channel, assurance and approver. |
+| `gryph policy approve watch` | Print each new pending request as it arrives, until Ctrl-C. `--interval` sets the poll interval (default `2s`). |
+| `gryph policy approve resolve --id ID --decision allow\|deny [--scope once\|session\|window] [--note TEXT]` | Answer a request of another account as an approver, on a managed host. The command confirms on the terminal and refuses `--yes`. An allow stores a grant with the scope. |
+| `gryph policy approve history` | Show receipts whose decision was `escalate`, `approved`, `denied`, or `approval_timeout`, with the `approval` record of each answer. |
 | `gryph policy deferrals` | List the pending-deferral queue. `--status` filters to `pending`, `resolved_allow`, `resolved_deny`, `resolved_timeout`, or `all`. `--session ID` scopes to one session. |
 | `gryph policy deferrals resolve --id ID --decision allow|deny [--note TEXT]` | Resolve a queued deferral by id (or id-prefix). Writes a follow-up receipt with `deferral_of_sequence` set, emits a `deferral_resolved` self-audit row. |
 | `gryph policy deferrals sweep [--dry-run]` | Flip every expired pending deferral to `resolved_timeout`, write a deny follow-up receipt for each, emit `deferral_timeout` per row and a `deferral_sweep` summary. |
@@ -481,6 +488,48 @@ Do these steps each time you change a policy file.
 | `gryph policy keys list` | List trusted public keys. |
 | `gryph policy keys trust --pub FILE` | Add an external public key from a JSON file. Rejects entries whose `key_id` does not match `sha256(pub)[:8]`. |
 | `gryph policy keys revoke --key-id ID` | Remove a key from the trust store. The private key file is left in place. |
+
+Every signed receipt carries `signer_key_scope` next to `signer_key_id`. A
+receipt that the hook process signed in a user install has the scope `user`:
+the key lives in the user's config directory, the user can read it, and the
+signature proves nothing against that user. A receipt of the decision service
+has the scope `supervisor`: the machine key belongs to the service account,
+which runs outside the user, and `gryph supervisor keys rotate` replaces it.
+See [keys](./supervisor-dev.md#keys) in the developer guide. A receipt signed before the marker existed has no scope, and
+the verifiers print it as `unmarked`. `gryph policy receipts --verify` and
+`gryph policy receipts verify-log` count the signed receipts per scope, so an
+audit never reads a user signature as one of the decision service.
+
+An administrator ships a trust store for the whole host with
+`gryph install --managed --trust-store`. It lands at `keys/receipt-pub.json`
+in the [managed directory](./cli-reference.md#managed-install), root-owned.
+The verifier trusts its keys next to the user's own store. A user key command
+writes the user's store only.
+
+### Key custody
+
+Who holds a key decides what its signature proves.
+
+| Key | Where | Who can read it | What its signature proves |
+|---|---|---|---|
+| The user key, scope `user` | `<config dir>/keys/receipt.key` in the user's home, mode 0600 | The user, and every process of the user, an agent included | That the receipt comes from that user's host. Nothing against that user or their agents. |
+| The machine key, scope `supervisor` | `<state dir>/keys/receipt.key` under `/var/lib/safedep/gryph`, owned by the service account, mode 0600 | The service account only | That the decision service recorded the receipt. A process of the agent's user cannot forge it. |
+| The export key | next to the database, or `<state dir>/keys/export.key` for the service | the same owner as the signing key | It keys the digests of an export, so an export never carries a secret in clear. |
+
+Root never reads a private key. `gryph install --managed` makes the
+machine keys as root and hands them to the service account before the
+service starts. A key that exists is not read again: the key id comes from
+the published public half. The service makes its keys itself at start
+when they are missing. The published public halves live next to the key
+in `receipt-pub.json`, readable by every account, the current key last,
+and `gryph supervisor keys rotate` carries every one of them into the
+managed trust store, so a receipt of a key that no install published
+still verifies.
+
+The service never imports a user key. A key in a home is one that
+same-user malware may have read, so the receipts a user key signed keep
+their `user` scope, and the service signs only with the machine key. See
+[the decision service](./supervisor.md#keys-and-receipts).
 
 ## Receipts
 
@@ -498,6 +547,8 @@ A receipt hash covers a salted commitment of the command and of the URL, not the
 
 Receipt rows carry the three identity fields (`human_principal`, `service_identity`, `role_scope`) captured at the mediation boundary. They surface in the `gryph policy receipts --format json` view and in the JSONL and CSV exports. Pre-Phase-6 rows have NULL identity columns and continue to verify cleanly: the hash recipe treats the empty string as the same length-prefixed zero bytes as the insert path.
 
+A receipt of the decision service also carries `signer_key_scope` (`supervisor`), `peer_trust` (the [trust of the connection](#the-trust-of-a-connection) that carried the action: `agent`, `unknown` or `low`) and, for an escalation, the `approval` record: the request id, the channel, the assurance, the approver, the scope of the grant and the note. A receipt the service took from the spool has the decision `unverified`, because the hook decided it alone. A receipt the service took from `gryph supervisor import` has the `imported` marker and keeps the signature of the user key.
+
 Signing defaults to `sign_mode: auto`: receipts carry an Ed25519 signature when a key file is present at the configured `key_path`, and skip the signature when no key is on disk. Pick the explicit mode that matches your operational policy:
 
 ```yaml
@@ -509,6 +560,22 @@ policy:
 ```
 
 The legacy `sign: true` / `sign: false` bool is still accepted as a deprecated alias for `sign_mode: always` / `sign_mode: never`. Each receipt then carries an Ed25519 signature and `signer_key_id`. `gryph policy receipts --verify` walks the chain, recomputes every hash, and verifies signatures against the trust store. `gryph policy receipts export ... | gryph policy receipts verify-log --input -` round-trips the same checks without database access.
+
+### System session and tamper events
+
+Gryph records a change to one of its own assets as a tamper event. A tamper event is not an agent action, so it does not go into an agent session. It goes into the system session of the account: one session per operating-system account, with the agent name `gryph` and an ID that Gryph derives from the account identifier, in the same way it derives an agent session ID from the agent's session identifier. Every tamper event has a receipt in that session's chain, with the decision `tamper`, the result status `recorded`, and a message that names the asset, the agent, the level before and after, and the drift. The receipt hashes the message, so the chain binds the facts of the change.
+
+`gryph doctor` and `gryph supervisor reconcile --once` record a tamper event when a hook configuration differs from a current install, when the difference changes, when it clears, and when the level of an asset changes. A repeated run with no change records nothing. The event payload is a `tamper` action with the fields `operation`, `asset`, `agent`, `level_before`, `level_after`, `drift`, `provider`, `detail` and `error`. The operation is `drift`, `level`, `resolved`, `repair`, `repair_failed`, `rate_limited`, `silent_agent`, `server_identity`, `degraded` or `spool_refused`. A `silent_agent` event records a live agent process that sent no hook call through the census window. The last three come from the decision service: a hook client that refused a socket that was not the system's, hook calls that a client decided alone while the service was running, and spool files of the account that the service refused. See the [spool](./supervisor-dev.md#the-spool) in the developer guide. See the [doctor command](./cli-reference.md#doctor).
+
+With `policy.self_protection.repair: true`, a pass also rewrites the Gryph entries of a hook configuration that differs from a current install. The [reconcile command](./cli-reference.md#supervisor-reconcile) lists the rules a repair follows. A repair runs as the user, through the same adapter as `gryph install --force`, so it cannot reach a file the user cannot write. It is a control against drift and against a careless change, not against a same-user adversary who changes the file again: after three repairs in an hour Gryph stops and records the rate limit.
+
+Verify the system session with the same commands as an agent session:
+
+```
+gryph policy receipts --verify --all-sessions
+gryph policy receipts export --format jsonl --output receipts.jsonl
+gryph policy receipts verify-log --input receipts.jsonl
+```
 
 ### Context chain
 
@@ -605,7 +672,11 @@ exercises the entire chain in one pass.
 
 ## Approval workflow
 
-A rule with `action: escalate` pauses the agent's tool call and prompts the operator on `/dev/tty` for approve or deny.
+A rule with `action: escalate` pauses the agent's tool call until an approver answers.
+
+### A hook that decides in process
+
+Without the decision service, the hook prompts the operator on `/dev/tty` for approve or deny.
 
 ```yaml
 policy:
@@ -616,6 +687,112 @@ policy:
 ```
 
 The receipt row records the final outcome (`approved`, `denied`, or `approval_timeout`) and the approver identity. Review past decisions with `gryph policy approve history`. If no controlling terminal is available, the request denies; the safe default applies for unattended runs.
+
+### A managed host with the decision service
+
+With `supervisor.enabled: true` the decision service answers every escalation. It keeps a request store per account, decides each request once, and records the answer on the receipt with the channel, the assurance, the approver and the trust of the connection that carried it.
+
+```yaml
+policy:
+  approval:
+    channels: [same-user-tty, local-admin]   # the channels in use
+    min_assurance: local-admin               # the floor for a rule that sets none
+    inline_wait: 15s                         # how long a hook waits for an inline answer
+    request_ttl: 30m                         # an unanswered request expires as a deny
+    grant_ttl: 15m                           # how long a stored approval stays usable
+    max_grant_scope: once                    # once | session | window
+    local_admin:
+      group: gryph-admins                    # who answers on the local-admin channel
+      allow_self_elevated: false             # accept an answer from the person who asked
+      allow_without_auth: false              # accept an answer without the approver's password
+```
+
+Each channel gives one assurance. The order, lowest first:
+
+| Channel and assurance | Who answers |
+|---|---|
+| `same-user-tty` | The developer, on the terminal of the hook. The same account can forge this answer, so it applies to one request and stores no grant. |
+| `self-elevated` | A local admin who is the same person as the developer, through `sudo`. Off by default. |
+| `local-admin` | A member of the admin group of the host. |
+| `local-auth` | A member of the admin group who gave their password to the authority of the operating system, polkit on Linux. |
+| `out-of-band` | An approver outside the host. |
+
+A rule sets its own floor with `min_assurance`. A channel below the floor never answers the rule, and the request never falls back to a weaker channel. The default floor is `local-admin`, so the developer cannot approve their own escalation unless a rule says `min_assurance: same-user-tty`:
+
+```yaml
+- id: npm-install
+  action: escalate
+  min_assurance: same-user-tty
+  match:
+    action_types: [command_exec]
+    command_patterns: ["\\bnpm\\s+install\\b"]
+  message: "npm install needs approval"
+```
+
+What happens on an escalation:
+
+1. The service records the request receipt and stores the request: the action digest, the rules, the user, the host, the session, and a one-line summary.
+2. When the floor accepts `same-user-tty` and the agent can wait, the hook shows the prompt on its terminal. The wait is `inline_wait`, bounded by the hook timeout of the agent minus a margin. A wait under two seconds is no wait. The terminal shows one status line first: `gryph: approval needed for rule npm-install (request 7f3k2a1b). Waiting up to 15s.`
+3. An answer in time allows or blocks the action now. The service accepts one answer per prompt, on the connection of the hook, before the deadline. When the hook goes away first, the request stays open and the prompt can never be answered.
+4. With no answer, the action blocks and the request stays pending. The agent reads: `This action needs approval. Request 7f3k2a1b is pending. Tell the user. Do not retry until the user confirms that it is approved. Check status: gryph policy approve show 7f3k2a1b`.
+5. A request that nobody answers within `request_ttl` expires as a deny. The receipt records `approval_timeout`.
+6. The next hook of the same session tells the agent what happened to its open requests, once: `Request 7f3k2a1b was approved. You can retry.`, `Request 7f3k2a1b was denied: <note>`, or `Request 7f3k2a1b expired without an answer.`
+
+### The local admin
+
+A member of `policy.approval.local_admin.group` answers from the host, locally or over SSH, with no `sudo`:
+
+```
+$ gryph policy approve list
+$ gryph policy approve show 7f3k2a1b
+$ gryph policy approve resolve --id 7f3k2a1b --decision allow --scope once --note "release window"
+$ gryph policy approve resolve --id 7f3k2a1b --decision deny --note "use the staging target"
+$ gryph policy approve watch
+```
+
+The decision service checks every answer against the peer credentials of the connection, never against a field of the command:
+
+- The account must be in the group. The group comes from the OS group database, primary and supplementary groups, and the service reads it again every 30 seconds. An empty group has no members, and `gryph doctor --managed` then reports `no approver channel`.
+- The account that asked cannot answer its own request, whatever its groups.
+- The service compares the login identity of the process that asked with the one that answers (`loginuid` on Linux). The same identity, or none on either side, means the person who asked answers through another account, for example through `sudo`. That answer is `self-elevated`. The configuration refuses it unless `allow_self_elevated: true`, which lets it stand in for `local-admin`. The receipt still records `self-elevated`.
+- The first answer wins, by the clock of the service. A later answer is `superseded` and changes nothing. A deny is final.
+- `--scope` is bounded by `max_grant_scope`.
+
+`resolve` confirms on the terminal of the approver before it sends an allow, and refuses `--yes` on a managed host, so an agent with a shell under the approver's account cannot answer with a flag. An agent that allocates a pseudo terminal can still type the confirmation. That is the limit of the `local-admin` assurance: an approver who runs an unmediated agent under their own account can be puppeted. On a shared host, approve from an account that runs no agent, or use the `local-auth` channel.
+
+### The password of the approver
+
+On a Linux host with polkit, the decision service asks polkit to authenticate the approver before it takes the answer (`CheckAuthorization` on the process of `resolve`, action `io.safedep.gryph.approve`, with user interaction). `gryph install --managed` writes the action file `/usr/share/polkit-1/actions/io.safedep.gryph.policy`, which asks the approver for their own password every time. `resolve` starts `pkttyagent` for its own process, so the password prompt shows on the terminal of the command. A desktop session answers through its own polkit agent. An agent that types `y` does not know the password.
+
+An answer with the password records `local-auth` as the assurance: the password proves a person at the keyboard. Whether the person who asked may answer at all is the `allow_self_elevated` decision, which comes first. Without the password, on a host that could have asked (no agent, a wrong password, a dismissed prompt), the service refuses the answer unless the managed configuration sets `allow_without_auth: true`. That host then takes the answer at `local-admin` or `self-elevated`. A host without polkit takes the answer at those assurances too.
+
+A refused answer is on the self-audit log of the account that asked as `approval_refused`, a superseded one as `approval_superseded`.
+
+A rule with `action: escalate` on a hook that runs after the action, for example a post-tool-use hook, cannot stop the action. The request is then a review item: an approver sees it in the same queue, nobody waits, and an allow stores no grant.
+
+### The trust of a connection
+
+The decision service knows the process behind every connection from the kernel. On Linux it also walks the parents of that process and looks for a known agent program, for example `claude`, that runs as the same account. An agent of another account above the hook, such as one that runs the hook through `sudo -u`, is not the agent of this account. A session binds to the first agent process seen above one of its hooks, and the service records on every event and every receipt how much it trusts the connection that carried it (`peer_trust`):
+
+| Trust | Meaning |
+|---|---|
+| `agent` | A known agent is an ancestor of the hook, and it is the one the session is bound to. |
+| `unknown` | No agent is an ancestor, and the session is bound to none: a host without the walk, or an agent Gryph does not know. |
+| `low` | The hook is not under the agent the session is bound to, while that agent lives. A process of the same account sent it. |
+
+The walk is a signal, not proof: a process can leave the tree of its agent. What `low` changes:
+
+- A prompt from a low-trust connection is recorded as an observation. It does not become the latest intent and does not reset `context.actions_since_intent`, so a forged prompt cannot make a rule lenient.
+- An escalation from a low-trust connection gets no prompt on the terminal, whatever the rule's `min_assurance`. The request waits for an approver at `local-admin` or above.
+- An answer to a request from a process under a known agent is refused, whoever the account is.
+
+When the bound agent process ends, the next agent above a hook binds the session again, so an agent that resumes a session is not low trust.
+
+### Grants
+
+A later answer from a stronger channel can store a grant. A grant binds to the account, the action digest, the agent session and its scope. The digest covers the normalized action and its working directory, so the same command in another directory is another action. `once` matches the same action one time. `session` matches it for the rest of the agent session. `window` matches it for the account until `grant_ttl`. A grant never matches a whole rule. A retry that matches a grant is allowed, and the receipt names the grant. `max_grant_scope` bounds what an approver can give.
+
+Every answer, and every use of a grant, is on the receipt chain: `gryph policy approve history --format json` prints the `approval` record of each row.
 
 ## Risk signals
 

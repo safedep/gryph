@@ -71,14 +71,40 @@ func (p *JSONLPresenter) RenderUninstall(result *UninstallView) error {
 	return p.encoder.Encode(result)
 }
 
-// RenderDoctor renders the doctor check results as JSONL.
+// RenderDoctor renders the doctor check results as JSONL: one line per
+// check, then one line per protection row, then the profile.
 func (p *JSONLPresenter) RenderDoctor(result *DoctorView) error {
 	for _, check := range result.Checks {
 		if err := p.encoder.Encode(check); err != nil {
 			return err
 		}
 	}
-	return nil
+	for _, row := range result.Posture {
+		if err := p.encoder.Encode(struct{ Posture PostureRow }{row}); err != nil {
+			return err
+		}
+	}
+	if result.Profile == "" {
+		return nil
+	}
+	return p.RenderProtection(&result.ProtectionView)
+}
+
+// RenderProtection renders a self-protection pass as JSONL: one line per
+// asset row, then one line with the profile and the outcome of the pass.
+func (p *JSONLPresenter) RenderProtection(view *ProtectionView) error {
+	for _, row := range view.Protection {
+		if err := p.encoder.Encode(struct{ Protection ProtectionRow }{row}); err != nil {
+			return err
+		}
+	}
+	return p.encoder.Encode(struct {
+		Profile        string
+		TamperRecorded int
+		Repaired       []string
+		RepairFailed   []string
+		RateLimited    []string
+	}{view.Profile, view.TamperRecorded, view.Repaired, view.RepairFailed, view.RateLimited})
 }
 
 // RenderConfig renders the configuration as JSONL.

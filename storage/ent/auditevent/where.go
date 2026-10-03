@@ -136,6 +136,16 @@ func ToolCallID(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldToolCallID, v))
 }
 
+// Imported applies equality check predicate on the "imported" field. It's identical to ImportedEQ.
+func Imported(v bool) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldImported, v))
+}
+
+// PeerTrust applies equality check predicate on the "peer_trust" field. It's identical to PeerTrustEQ.
+func PeerTrust(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldPeerTrust, v))
+}
+
 // LinkedEventID applies equality check predicate on the "linked_event_id" field. It's identical to LinkedEventIDEQ.
 func LinkedEventID(v uuid.UUID) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldLinkedEventID, v))
@@ -1184,6 +1194,91 @@ func ToolCallIDEqualFold(v string) predicate.AuditEvent {
 // ToolCallIDContainsFold applies the ContainsFold predicate on the "tool_call_id" field.
 func ToolCallIDContainsFold(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldContainsFold(FieldToolCallID, v))
+}
+
+// ImportedEQ applies the EQ predicate on the "imported" field.
+func ImportedEQ(v bool) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldImported, v))
+}
+
+// ImportedNEQ applies the NEQ predicate on the "imported" field.
+func ImportedNEQ(v bool) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldImported, v))
+}
+
+// PeerTrustEQ applies the EQ predicate on the "peer_trust" field.
+func PeerTrustEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldPeerTrust, v))
+}
+
+// PeerTrustNEQ applies the NEQ predicate on the "peer_trust" field.
+func PeerTrustNEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldPeerTrust, v))
+}
+
+// PeerTrustIn applies the In predicate on the "peer_trust" field.
+func PeerTrustIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldPeerTrust, vs...))
+}
+
+// PeerTrustNotIn applies the NotIn predicate on the "peer_trust" field.
+func PeerTrustNotIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldPeerTrust, vs...))
+}
+
+// PeerTrustGT applies the GT predicate on the "peer_trust" field.
+func PeerTrustGT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldPeerTrust, v))
+}
+
+// PeerTrustGTE applies the GTE predicate on the "peer_trust" field.
+func PeerTrustGTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldPeerTrust, v))
+}
+
+// PeerTrustLT applies the LT predicate on the "peer_trust" field.
+func PeerTrustLT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldPeerTrust, v))
+}
+
+// PeerTrustLTE applies the LTE predicate on the "peer_trust" field.
+func PeerTrustLTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldPeerTrust, v))
+}
+
+// PeerTrustContains applies the Contains predicate on the "peer_trust" field.
+func PeerTrustContains(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContains(FieldPeerTrust, v))
+}
+
+// PeerTrustHasPrefix applies the HasPrefix predicate on the "peer_trust" field.
+func PeerTrustHasPrefix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasPrefix(FieldPeerTrust, v))
+}
+
+// PeerTrustHasSuffix applies the HasSuffix predicate on the "peer_trust" field.
+func PeerTrustHasSuffix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasSuffix(FieldPeerTrust, v))
+}
+
+// PeerTrustIsNil applies the IsNil predicate on the "peer_trust" field.
+func PeerTrustIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldPeerTrust))
+}
+
+// PeerTrustNotNil applies the NotNil predicate on the "peer_trust" field.
+func PeerTrustNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldPeerTrust))
+}
+
+// PeerTrustEqualFold applies the EqualFold predicate on the "peer_trust" field.
+func PeerTrustEqualFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEqualFold(FieldPeerTrust, v))
+}
+
+// PeerTrustContainsFold applies the ContainsFold predicate on the "peer_trust" field.
+func PeerTrustContainsFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContainsFold(FieldPeerTrust, v))
 }
 
 // LinkedEventIDEQ applies the EQ predicate on the "linked_event_id" field.

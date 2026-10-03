@@ -14,6 +14,7 @@ import (
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/storage/storagetest"
 	"github.com/safedep/gryph/tui"
@@ -123,7 +124,7 @@ func TestRunPolicyContextVerify_DetectsTamper(t *testing.T) {
 	require.Error(t, err, "tampered row must surface as a verification failure")
 	assert.Contains(t, buf.String(), "Context chain verification: FAILED")
 
-	audits, qErr := store.QuerySelfAudits(ctx, &storage.SelfAuditFilter{Action: SelfAuditActionContextChainBroken})
+	audits, qErr := store.QuerySelfAudits(ctx, &storage.SelfAuditFilter{Action: engine.SelfAuditActionContextChainBroken})
 	require.NoError(t, qErr)
 	assert.NotEmpty(t, audits, "chain break must produce a self-audit row")
 }

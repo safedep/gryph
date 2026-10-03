@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/receipt"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -72,7 +73,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 				return err
 			}
 
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 			defer func() {
@@ -98,7 +99,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 				filter.Until = &t
 			}
 			if sessionID != "" {
-				sid, err := resolveAarmSessionID(ctx, app.Store, sessionID)
+				sid, err := resolveAarmSessionID(ctx, app.Reads, sessionID)
 				if err != nil {
 					return err
 				}
@@ -115,20 +116,20 @@ func newPolicyReceiptsCmd() *cobra.Command {
 				defer stop()
 				ticker := time.NewTicker(interval)
 				defer ticker.Stop()
-				return newReceiptFollower(app.Store, *filter, out, cmd.ErrOrStderr(), c).follow(sigCtx, limit, ticker.C)
+				return newReceiptFollower(app.Reads, *filter, out, cmd.ErrOrStderr(), c).follow(sigCtx, limit, ticker.C)
 			}
 
-			rows, err := app.Store.QueryReceipts(ctx, filter)
+			rows, err := app.Reads.QueryReceipts(ctx, filter)
 			if err != nil {
 				return fmt.Errorf("failed to query receipts: %w", err)
 			}
 
 			if verify {
-				verifier, verifyErr := loadReceiptVerifierFromConfig(app.Config, app.Paths)
+				verifier, verifyErr := engine.LoadReceiptVerifierFromConfig(app.Config, app.Paths)
 				if verifyErr != nil {
 					return ErrConfig("load trust store", verifyErr)
 				}
-				breaks, sigResults, verr := verifyReceiptChains(ctx, app.Store, rows, filter.SessionID, allSessions, verifier)
+				breaks, sigResults, verr := verifyReceiptChains(ctx, app.Reads, rows, filter.SessionID, allSessions, verifier)
 				if verr != nil {
 					return verr
 				}
@@ -154,7 +155,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&sessionID, "session", "", "session ID (UUID or prefix) to inspect")
-	cmd.Flags().StringVar(&decision, "decision", "", "filter to a single decision (allow, block, guidance, warn, escalate, defer)")
+	cmd.Flags().StringVar(&decision, "decision", "", "filter to a single decision (allow, block, guidance, warn, escalate, defer, tamper, unverified)")
 	cmd.Flags().DurationVar(&since, "since", 0, "include receipts newer than this offset from now (e.g. 24h)")
 	cmd.Flags().DurationVar(&until, "until", 0, "include receipts older than this offset from now")
 	cmd.Flags().IntVar(&limit, "limit", policyReceiptsDefaultLimit, "maximum number of receipts to return")
@@ -208,7 +209,7 @@ type receiptVerifyBreak struct {
 // verifier is non-nil) verifies each signature inline. Chain breaks and per-
 // receipt signature verdicts are returned together so callers can render
 // both without a second full pass over the data.
-func verifyReceiptChains(ctx context.Context, store storage.Store, rows []*storage.ReceiptRow, sessionFilter *uuid.UUID, allSessions bool, verifier *receipt.Ed25519Verifier) ([]receiptVerifyBreak, []receiptSignatureResult, error) {
+func verifyReceiptChains(ctx context.Context, store storage.ReadStore, rows []*storage.ReceiptRow, sessionFilter *uuid.UUID, allSessions bool, verifier *receipt.Ed25519Verifier) ([]receiptVerifyBreak, []receiptSignatureResult, error) {
 	sessionIDs, err := collectVerifySessionIDs(ctx, store, rows, sessionFilter, allSessions)
 	if err != nil {
 		return nil, nil, err
@@ -244,12 +245,21 @@ func verifyReceiptChains(ctx context.Context, store storage.Store, rows []*stora
 	}
 
 	if len(breaks) > 0 {
-		emitChainBrokenAudit(ctx, store, breaks)
+		emitChainBrokenAudit(ctx, auditStore(store), breaks)
 	}
 	return breaks, sigResults, nil
 }
 
-func collectVerifySessionIDs(ctx context.Context, store storage.Store, rows []*storage.ReceiptRow, sessionFilter *uuid.UUID, allSessions bool) ([]uuid.UUID, error) {
+// auditStore returns the store a self-audit row can go to: the local store,
+// and nothing over the socket, where the service owns the self-audit log.
+func auditStore(store storage.ReadStore) storage.Store {
+	if w, ok := store.(storage.Store); ok {
+		return w
+	}
+	return nil
+}
+
+func collectVerifySessionIDs(ctx context.Context, store storage.ReadStore, rows []*storage.ReceiptRow, sessionFilter *uuid.UUID, allSessions bool) ([]uuid.UUID, error) {
 	if sessionFilter != nil {
 		return []uuid.UUID{*sessionFilter}, nil
 	}
@@ -288,8 +298,8 @@ func emitChainBrokenAudit(ctx context.Context, store storage.Store, breaks []rec
 		})
 	}
 	details["breaks"] = summary
-	if err := logSelfAudit(ctx, store, SelfAuditActionReceiptChainBroken, "",
-		details, SelfAuditResultError, "receipt chain verification failed"); err != nil {
+	if err := engine.LogSelfAudit(ctx, store, engine.SelfAuditActionReceiptChainBroken, "",
+		details, engine.SelfAuditResultError, "receipt chain verification failed"); err != nil {
 		log.Errorf("failed to record receipt chain failure: %v", err)
 	}
 }
@@ -297,6 +307,7 @@ func emitChainBrokenAudit(ctx context.Context, store storage.Store, breaks []rec
 type policyReceiptView struct {
 	ID              string                 `json:"id"`
 	SessionID       string                 `json:"session_id"`
+	Imported        bool                   `json:"imported,omitempty"`
 	Sequence        int64                  `json:"sequence"`
 	RecordedAt      string                 `json:"recorded_at"`
 	Agent           string                 `json:"agent,omitempty"`
@@ -318,9 +329,12 @@ type policyReceiptView struct {
 	SubagentType    string                 `json:"subagent_type,omitempty"`
 	PolicyHash      string                 `json:"policy_hash,omitempty"`
 	SignerKeyID     string                 `json:"signer_key_id,omitempty"`
+	SignerKeyScope  string                 `json:"signer_key_scope,omitempty"`
 	HumanPrincipal  string                 `json:"human_principal,omitempty"`
 	ServiceIdentity string                 `json:"service_identity,omitempty"`
 	RoleScope       string                 `json:"role_scope,omitempty"`
+	Approval        map[string]interface{} `json:"approval,omitempty"`
+	PeerTrust       string                 `json:"peer_trust,omitempty"`
 }
 
 func receiptToView(r *storage.ReceiptRow) policyReceiptView {
@@ -328,6 +342,7 @@ func receiptToView(r *storage.ReceiptRow) policyReceiptView {
 		ID:              r.ID.String(),
 		SessionID:       r.SessionID.String(),
 		Sequence:        r.Sequence,
+		Imported:        r.Imported,
 		RecordedAt:      r.RecordedAt.Format(time.RFC3339Nano),
 		Agent:           r.Agent,
 		Tool:            r.Tool,
@@ -345,9 +360,12 @@ func receiptToView(r *storage.ReceiptRow) policyReceiptView {
 		SubagentID:      r.SubagentID,
 		SubagentType:    r.SubagentType,
 		SignerKeyID:     r.SignerKeyID,
+		SignerKeyScope:  r.SignerKeyScope,
 		HumanPrincipal:  r.HumanPrincipal,
 		ServiceIdentity: r.ServiceIdentity,
 		RoleScope:       r.RoleScope,
+		Approval:        r.Approval,
+		PeerTrust:       r.PeerTrust,
 	}
 	if r.DurationMS != nil {
 		d := *r.DurationMS
@@ -502,6 +520,7 @@ type receiptSignatureResult struct {
 	Sequence  int64           `json:"sequence"`
 	ReceiptID uuid.UUID       `json:"receipt_id"`
 	KeyID     string          `json:"key_id,omitempty"`
+	KeyScope  string          `json:"key_scope,omitempty"`
 	Status    signatureStatus `json:"status"`
 	Reason    string          `json:"reason,omitempty"`
 }
@@ -510,9 +529,11 @@ type signatureSummary struct {
 	SignedOK      int `json:"signed_ok"`
 	Unsigned      int `json:"unsigned"`
 	SignedInvalid int `json:"signed_invalid"`
+	// KeyScopes counts the signed receipts per key scope.
+	KeyScopes map[string]int `json:"key_scopes,omitempty"`
 }
 
-func verifyOneSignature(ctx context.Context, store storage.Store, r *storage.ReceiptRow, verifier *receipt.Ed25519Verifier) receiptSignatureResult {
+func verifyOneSignature(ctx context.Context, store storage.ReadStore, r *storage.ReceiptRow, verifier *receipt.Ed25519Verifier) receiptSignatureResult {
 	res := receiptSignatureResult{
 		SessionID: r.SessionID,
 		Sequence:  r.Sequence,
@@ -523,22 +544,26 @@ func verifyOneSignature(ctx context.Context, store storage.Store, r *storage.Rec
 		res.Status = signatureStatusUnsigned
 		return res
 	}
+	res.KeyScope = r.SignerKeyScope
+	if res.KeyScope == "" {
+		res.KeyScope = receipt.KeyScopeUnmarked
+	}
 	if verifier == nil {
 		res.Status = signatureStatusInvalid
 		res.Reason = "no trust store configured"
-		emitSignatureInvalidAudit(ctx, store, r, res.Reason)
+		emitSignatureInvalidAudit(ctx, auditStore(store), r, res.Reason)
 		return res
 	}
 	if !verifier.HasKey(r.SignerKeyID) {
 		res.Status = signatureStatusInvalid
 		res.Reason = "unknown signer_key_id"
-		emitSignatureInvalidAudit(ctx, store, r, res.Reason)
+		emitSignatureInvalidAudit(ctx, auditStore(store), r, res.Reason)
 		return res
 	}
 	if err := verifier.Verify(r.Hash, r.Signature, r.SignerKeyID); err != nil {
 		res.Status = signatureStatusInvalid
 		res.Reason = err.Error()
-		emitSignatureInvalidAudit(ctx, store, r, res.Reason)
+		emitSignatureInvalidAudit(ctx, auditStore(store), r, res.Reason)
 		return res
 	}
 	res.Status = signatureStatusOK
@@ -554,8 +579,8 @@ func emitSignatureInvalidAudit(ctx context.Context, store storage.Store, r *stor
 		"sequence":      r.Sequence,
 		"signer_key_id": r.SignerKeyID,
 	}
-	if err := logSelfAudit(ctx, store, SelfAuditActionReceiptSignatureInvalid, "",
-		details, SelfAuditResultError, reason); err != nil {
+	if err := engine.LogSelfAudit(ctx, store, engine.SelfAuditActionReceiptSignatureInvalid, "",
+		details, engine.SelfAuditResultError, reason); err != nil {
 		log.Errorf("failed to record receipt_signature_invalid audit: %v", err)
 	}
 }
@@ -563,6 +588,12 @@ func emitSignatureInvalidAudit(ctx context.Context, store storage.Store, r *stor
 func summarizeSignatureResults(results []receiptSignatureResult) signatureSummary {
 	var s signatureSummary
 	for _, r := range results {
+		if r.KeyScope != "" {
+			if s.KeyScopes == nil {
+				s.KeyScopes = map[string]int{}
+			}
+			s.KeyScopes[r.KeyScope]++
+		}
 		switch r.Status {
 		case signatureStatusOK:
 			s.SignedOK++
@@ -596,6 +627,9 @@ func renderSignatureVerifyResults(w io.Writer, c *tui.Colorizer, summary signatu
 	_, _ = fmt.Fprintf(w, "%s signed_ok=%d unsigned=%d signed_invalid=%d\n",
 		c.Header("Signature verification:"),
 		summary.SignedOK, summary.Unsigned, summary.SignedInvalid)
+	for _, scope := range sortedScopes(summary.KeyScopes) {
+		_, _ = fmt.Fprintf(w, "  key_scope=%s %d\n", scope, summary.KeyScopes[scope])
+	}
 	if summary.SignedInvalid == 0 {
 		return
 	}
@@ -603,9 +637,9 @@ func renderSignatureVerifyResults(w io.Writer, c *tui.Colorizer, summary signatu
 		if r.Status != signatureStatusInvalid {
 			continue
 		}
-		_, _ = fmt.Fprintf(w, "  %s session=%s seq=%d key_id=%s %s\n",
+		_, _ = fmt.Fprintf(w, "  %s session=%s seq=%d key_id=%s key_scope=%s %s\n",
 			c.Error("INVALID"),
 			tui.FormatShortID(r.SessionID.String()),
-			r.Sequence, r.KeyID, r.Reason)
+			r.Sequence, r.KeyID, r.KeyScope, r.Reason)
 	}
 }

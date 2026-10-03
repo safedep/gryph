@@ -1,0 +1,22 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - forbidigo
+  settings:
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^os\.(Open|OpenFile|Create|ReadFile|WriteFile|Stat|Lstat|ReadDir|Mkdir|MkdirAll)$
+          msg: the supervisor opens a file only below its state directory through platform/nofollow, never at a path a client can name
+  exclusions:
+    rules:
+      # The rule guards the package that runs above the agent user. The
+      # rest of the tree opens files as the user who owns them.
+      - path-except: ^supervisor/
+        linters:
+          - forbidigo
+      - path: _test\.go$
+        linters:
+          - forbidigo

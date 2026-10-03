@@ -1,0 +1,25 @@
+# A repair leaves a hook configuration that does not parse. A human must
+# look at it. The failure is a tamper event.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+cp broken.json $HOME/.claude/settings.json
+
+execexit 1 gryph supervisor reconcile --once --repair --no-color
+stdout 'drift: '
+stdout 'Repair failed: hook_config claude-code'
+cmp $HOME/.claude/settings.json broken.json
+
+# The same holds for an agent whose install replaces a malformed file by
+# hand. A repair does not.
+mkdir $HOME/.codex
+cp broken.json $HOME/.codex/hooks.json
+execexit 1 gryph supervisor reconcile --once --repair --no-color
+stdout 'Repair failed: hook_config codex: .*does not parse'
+cmp $HOME/.codex/hooks.json broken.json
+
+-- broken.json --
+{ "hooks": not json

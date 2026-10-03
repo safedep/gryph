@@ -160,6 +160,11 @@ func SignerKeyID(v string) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldSignerKeyID, v))
 }
 
+// SignerKeyScope applies equality check predicate on the "signer_key_scope" field. It's identical to SignerKeyScopeEQ.
+func SignerKeyScope(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldSignerKeyScope, v))
+}
+
 // DeferReason applies equality check predicate on the "defer_reason" field. It's identical to DeferReasonEQ.
 func DeferReason(v string) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldDeferReason, v))
@@ -200,9 +205,19 @@ func HashVersion(v int) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldHashVersion, v))
 }
 
+// Imported applies equality check predicate on the "imported" field. It's identical to ImportedEQ.
+func Imported(v bool) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldImported, v))
+}
+
 // ContentSalt applies equality check predicate on the "content_salt" field. It's identical to ContentSaltEQ.
 func ContentSalt(v []byte) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldContentSalt, v))
+}
+
+// PeerTrust applies equality check predicate on the "peer_trust" field. It's identical to PeerTrustEQ.
+func PeerTrust(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldPeerTrust, v))
 }
 
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
@@ -1520,6 +1535,81 @@ func SignerKeyIDContainsFold(v string) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldContainsFold(FieldSignerKeyID, v))
 }
 
+// SignerKeyScopeEQ applies the EQ predicate on the "signer_key_scope" field.
+func SignerKeyScopeEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeNEQ applies the NEQ predicate on the "signer_key_scope" field.
+func SignerKeyScopeNEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeIn applies the In predicate on the "signer_key_scope" field.
+func SignerKeyScopeIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldSignerKeyScope, vs...))
+}
+
+// SignerKeyScopeNotIn applies the NotIn predicate on the "signer_key_scope" field.
+func SignerKeyScopeNotIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldSignerKeyScope, vs...))
+}
+
+// SignerKeyScopeGT applies the GT predicate on the "signer_key_scope" field.
+func SignerKeyScopeGT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeGTE applies the GTE predicate on the "signer_key_scope" field.
+func SignerKeyScopeGTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeLT applies the LT predicate on the "signer_key_scope" field.
+func SignerKeyScopeLT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeLTE applies the LTE predicate on the "signer_key_scope" field.
+func SignerKeyScopeLTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeContains applies the Contains predicate on the "signer_key_scope" field.
+func SignerKeyScopeContains(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContains(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeHasPrefix applies the HasPrefix predicate on the "signer_key_scope" field.
+func SignerKeyScopeHasPrefix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasPrefix(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeHasSuffix applies the HasSuffix predicate on the "signer_key_scope" field.
+func SignerKeyScopeHasSuffix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasSuffix(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeIsNil applies the IsNil predicate on the "signer_key_scope" field.
+func SignerKeyScopeIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldSignerKeyScope))
+}
+
+// SignerKeyScopeNotNil applies the NotNil predicate on the "signer_key_scope" field.
+func SignerKeyScopeNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldSignerKeyScope))
+}
+
+// SignerKeyScopeEqualFold applies the EqualFold predicate on the "signer_key_scope" field.
+func SignerKeyScopeEqualFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEqualFold(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeContainsFold applies the ContainsFold predicate on the "signer_key_scope" field.
+func SignerKeyScopeContainsFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContainsFold(FieldSignerKeyScope, v))
+}
+
 // DeferReasonEQ applies the EQ predicate on the "defer_reason" field.
 func DeferReasonEQ(v string) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldDeferReason, v))
@@ -2070,6 +2160,16 @@ func HashVersionNotNil() predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldNotNull(FieldHashVersion))
 }
 
+// ImportedEQ applies the EQ predicate on the "imported" field.
+func ImportedEQ(v bool) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldImported, v))
+}
+
+// ImportedNEQ applies the NEQ predicate on the "imported" field.
+func ImportedNEQ(v bool) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldImported, v))
+}
+
 // ContentSaltEQ applies the EQ predicate on the "content_salt" field.
 func ContentSaltEQ(v []byte) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldContentSalt, v))
@@ -2118,6 +2218,91 @@ func ContentSaltIsNil() predicate.AarmReceipt {
 // ContentSaltNotNil applies the NotNil predicate on the "content_salt" field.
 func ContentSaltNotNil() predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldNotNull(FieldContentSalt))
+}
+
+// ApprovalIsNil applies the IsNil predicate on the "approval" field.
+func ApprovalIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldApproval))
+}
+
+// ApprovalNotNil applies the NotNil predicate on the "approval" field.
+func ApprovalNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldApproval))
+}
+
+// PeerTrustEQ applies the EQ predicate on the "peer_trust" field.
+func PeerTrustEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldPeerTrust, v))
+}
+
+// PeerTrustNEQ applies the NEQ predicate on the "peer_trust" field.
+func PeerTrustNEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldPeerTrust, v))
+}
+
+// PeerTrustIn applies the In predicate on the "peer_trust" field.
+func PeerTrustIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldPeerTrust, vs...))
+}
+
+// PeerTrustNotIn applies the NotIn predicate on the "peer_trust" field.
+func PeerTrustNotIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldPeerTrust, vs...))
+}
+
+// PeerTrustGT applies the GT predicate on the "peer_trust" field.
+func PeerTrustGT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldPeerTrust, v))
+}
+
+// PeerTrustGTE applies the GTE predicate on the "peer_trust" field.
+func PeerTrustGTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldPeerTrust, v))
+}
+
+// PeerTrustLT applies the LT predicate on the "peer_trust" field.
+func PeerTrustLT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldPeerTrust, v))
+}
+
+// PeerTrustLTE applies the LTE predicate on the "peer_trust" field.
+func PeerTrustLTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldPeerTrust, v))
+}
+
+// PeerTrustContains applies the Contains predicate on the "peer_trust" field.
+func PeerTrustContains(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContains(FieldPeerTrust, v))
+}
+
+// PeerTrustHasPrefix applies the HasPrefix predicate on the "peer_trust" field.
+func PeerTrustHasPrefix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasPrefix(FieldPeerTrust, v))
+}
+
+// PeerTrustHasSuffix applies the HasSuffix predicate on the "peer_trust" field.
+func PeerTrustHasSuffix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasSuffix(FieldPeerTrust, v))
+}
+
+// PeerTrustIsNil applies the IsNil predicate on the "peer_trust" field.
+func PeerTrustIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldPeerTrust))
+}
+
+// PeerTrustNotNil applies the NotNil predicate on the "peer_trust" field.
+func PeerTrustNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldPeerTrust))
+}
+
+// PeerTrustEqualFold applies the EqualFold predicate on the "peer_trust" field.
+func PeerTrustEqualFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEqualFold(FieldPeerTrust, v))
+}
+
+// PeerTrustContainsFold applies the ContainsFold predicate on the "peer_trust" field.
+func PeerTrustContainsFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContainsFold(FieldPeerTrust, v))
 }
 
 // And groups predicates with the AND operator between them.

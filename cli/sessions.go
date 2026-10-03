@@ -43,7 +43,7 @@ Shows all recorded agent sessions with summary statistics.`,
 			})
 
 			// Initialize store
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 
@@ -68,7 +68,7 @@ Shows all recorded agent sessions with summary statistics.`,
 			}
 
 			// Query sessions
-			sessions, err := app.Store.QuerySessions(ctx, filter)
+			sessions, err := app.Reads.QuerySessions(ctx, filter)
 			if err != nil {
 				return err
 			}
@@ -100,6 +100,7 @@ func sessionToView(reg *agent.Registry, s *session.Session) *tui.SessionView {
 	view := &tui.SessionView{
 		ID:               s.ID.String(),
 		ShortID:          tui.FormatShortID(s.ID.String()),
+		Imported:         s.Imported,
 		AgentName:        s.AgentName,
 		AgentDisplayName: getAgentDisplayName(reg, s.AgentName),
 		AgentVersion:     s.AgentVersion,
@@ -120,6 +121,7 @@ func sessionToView(reg *agent.Registry, s *session.Session) *tui.SessionView {
 		EstimatedCostUSD: s.EstimatedCostUSD,
 		CostSource:       s.CostSource,
 		CostComputedAt:   s.CostComputedAt,
+		AgentProcess:     s.AgentProcess,
 	}
 
 	if s.ModelUsage != nil {

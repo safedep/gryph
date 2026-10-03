@@ -1,0 +1,118 @@
+# gryph supervisor import carries an account's own database into the
+# decision service, as the account. The service stores the sessions, the
+# events and the receipts in the partition of the account, marked
+# imported, with the signatures of the account's own key. A second run
+# changes nothing. Root never opens the database. Runs only in the
+# privileged job on a Linux host with the useradd tools and no managed
+# state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+[!exec:useradd] skip 'needs useradd'
+! exists /etc/safedep/gryph
+! exists /home/gryphacc1
+! exists /tmp/gryph-acceptance-state
+! exists /usr/local/bin/gryph-acceptance
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+exec cp $ACCEPTANCE_GRYPH_BIN /usr/local/bin/gryph-acceptance
+exec useradd -m -s /bin/bash gryphacc1
+exec id -u gryphacc1
+cp stdout uid1.txt
+capture UID1 '([0-9]+)' uid1.txt
+
+# Before the service: the account signs with its own key and records
+# into its own database.
+exec cp read.json /tmp/gryph-acceptance-read.json
+exec cp write.json /tmp/gryph-acceptance-write.json
+exec chmod 644 /tmp/gryph-acceptance-read.json /tmp/gryph-acceptance-write.json
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c 'mkdir -p ~/.config/safedep/gryph && printf "policy:\n  enabled: true\n  log_all_evaluations: true\n" > ~/.config/safedep/gryph/config.yml'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance policy keys generate --no-color'
+cp stdout generate.out
+capture USERKEY 'Generated key ([0-9a-f]{16})' generate.out
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PreToolUse < /tmp/gryph-acceptance-read.json'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PostToolUse < /tmp/gryph-acceptance-write.json'
+exists /home/gryphacc1/.local/share/safedep/gryph/audit.db
+exec stat -c %a:%U /home/gryphacc1/.local/share/safedep/gryph/audit.db
+cp stdout before.txt
+capture DBMODE '([0-9]+:gryphacc1)' before.txt
+
+# The service comes. The import runs as the account.
+expandenv managed.yml
+exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
+exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir /tmp/gryph-acceptance-state --spool-dir /tmp/gryph-acceptance-spool --allow-root &
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
+
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance supervisor import --json'
+stdout '"sessions": 1'
+stdout '"events": 2'
+stdout '"receipts": 2'
+stdout '"skipped": 0'
+stdout '"done": true'
+exists /home/gryphacc1/.local/share/safedep/gryph/import.done
+
+# The rows are in the partition, marked imported, with the account's
+# signatures. The account reads them through the service and verifies
+# them against its own trust store.
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance sessions --format json --no-color'
+stdout -count=1 '"AgentName": "claude-code"'
+stdout '"Imported": true'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance query --format json --no-color'
+stdout -count=2 '"Imported": true'
+stdout 'imported-read.go'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance policy receipts --format json --no-color'
+stdout -count=2 '"imported": true'
+stdout -count=2 '"signer_key_scope":\s*"user"'
+stdout '"signer_key_id":\s*"'$USERKEY'"'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance policy receipts --verify --all-sessions --no-color'
+stdout 'Chain verification: OK'
+stdout 'signed_ok=2'
+stdout 'key_scope=user 2'
+
+# A second run changes nothing, with or without the marker.
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance supervisor import --json'
+stdout 'already imported'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance supervisor import --force --json'
+stdout '"sessions": 0'
+stdout '"events": 0'
+stdout '"receipts": 0'
+stdout '"skipped": 1'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance sessions --format json --no-color'
+stdout -count=1 '"AgentName": "claude-code"'
+
+# The import left the account's database as it was.
+exec stat -c %a:%U /home/gryphacc1/.local/share/safedep/gryph/audit.db
+stdout '^'$DBMODE'$'
+
+exec rm -rf /etc/safedep/gryph /tmp/gryph-acceptance-state /tmp/gryph-acceptance-spool /tmp/gryph-acceptance-hook.sock /tmp/gryph-acceptance-read.json /tmp/gryph-acceptance-write.json /usr/local/bin/gryph-acceptance
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+exec userdel -r gryphacc1
+
+-- managed.yml --
+policy:
+  enabled: true
+  log_all_evaluations: true
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  state_dir: /tmp/gryph-acceptance-state
+  spool_dir: /tmp/gryph-acceptance-spool
+-- read.json --
+{
+  "session_id": "session-before-the-service",
+  "cwd": "/home/gryphacc1/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {"file_path": "/home/gryphacc1/project/imported-read.go"},
+  "tool_use_id": "tool-use-r1"
+}
+-- write.json --
+{
+  "session_id": "session-before-the-service",
+  "cwd": "/home/gryphacc1/project",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": {"file_path": "/home/gryphacc1/project/imported-write.go", "content": "x"},
+  "tool_response": {"success": true},
+  "tool_use_id": "tool-use-w1"
+}

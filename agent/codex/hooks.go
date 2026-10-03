@@ -16,13 +16,19 @@ import (
 // Hooks declares the Codex hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
-var Hooks = []events.HookSpec{
+//
+// Gryph writes hookTimeout into every hook entry. Codex lets the action
+// through on a hook error or timeout (hooks reference, 2026-10-03).
+var Hooks = events.WithTimeout(hookTimeout, []events.HookSpec{
 	{Type: "SessionStart", Phase: events.PhaseUnknown},
 	{Type: "PreToolUse", Phase: events.PhasePre, Blocking: true},
 	{Type: "PostToolUse", Phase: events.PhasePost},
 	{Type: "UserPromptSubmit", Phase: events.PhasePre, Blocking: true, Prompt: true},
 	{Type: "Stop", Phase: events.PhaseUnknown},
-}
+})
+
+// hookTimeout is the timeout that Gryph writes into each Codex hook entry.
+const hookTimeout = 30 * time.Second
 
 // HookTypes are the hook type names in Hooks, in install order.
 var HookTypes = agent.HookTypeNames(Hooks)
@@ -51,7 +57,7 @@ func hookMatcher(hookType string) string {
 	}
 }
 
-func GenerateHooksConfig() *HooksConfig {
+func GenerateHooksConfig(program string) *HooksConfig {
 	config := &HooksConfig{
 		Hooks: make(map[string][]HookMatcher),
 	}
@@ -63,8 +69,8 @@ func GenerateHooksConfig() *HooksConfig {
 				Hooks: []HookCommand{
 					{
 						Type:    "command",
-						Command: fmt.Sprintf("%s _hook codex %s", utils.GryphCommand(), hookType),
-						Timeout: 30,
+						Command: utils.HookCommand(program, "codex", hookType),
+						Timeout: int(hookTimeout / time.Second),
 					},
 				},
 			},
@@ -94,19 +100,26 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	hooksFile := detection.HooksPath
 
 	if !opts.DryRun {
-		if err := os.MkdirAll(configDir, 0700); err != nil {
+		if err := agent.EnsureHookDir(configDir, 0700, opts); err != nil {
 			result.Error = fmt.Errorf("failed to create config directory: %w", err)
 			return result, result.Error
 		}
 	}
 
 	var existingConfig *HooksConfig
-	if data, err := os.ReadFile(hooksFile); err == nil {
+	if data, err := agent.ReadHookFile(hooksFile, opts); err == nil {
 		existingConfig = &HooksConfig{}
 		if err := json.Unmarshal(data, existingConfig); err != nil {
+			if opts.Repair {
+				result.Error = fmt.Errorf("hooks.json does not parse, so the repair leaves it: %w", err)
+				return result, result.Error
+			}
 			result.Warnings = append(result.Warnings, "existing hooks.json is malformed, will be replaced")
 			existingConfig = nil
 		}
+	} else if !agent.IsNotExist(err) {
+		result.Error = fmt.Errorf("failed to read hooks.json: %w", err)
+		return result, result.Error
 	}
 
 	if existingConfig != nil {
@@ -139,7 +152,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		}
 
 		if !opts.Force && !opts.DryRun {
-			existingConfig = mergeHooksConfig(existingConfig)
+			existingConfig = mergeHooksConfig(existingConfig, opts.Command)
 		}
 	}
 
@@ -153,7 +166,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	if existingConfig != nil && !opts.Force {
 		newConfig = existingConfig
 	} else {
-		newConfig = GenerateHooksConfig()
+		newConfig = GenerateHooksConfig(opts.Command)
 	}
 
 	data, err := json.MarshalIndent(newConfig, "", "  ")
@@ -162,7 +175,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		return result, result.Error
 	}
 
-	if err := os.WriteFile(hooksFile, data, 0600); err != nil {
+	if err := agent.WriteHookFile(hooksFile, data, 0600, opts); err != nil {
 		result.Error = fmt.Errorf("failed to write hooks.json: %w", err)
 		return result, result.Error
 	}
@@ -181,20 +194,21 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	return result, nil
 }
 
-func mergeHooksConfig(existing *HooksConfig) *HooksConfig {
-	gryphConfig := GenerateHooksConfig()
+// mergeHooksConfig adds the gryph hooks to existing. A gryph entry that an
+// earlier install wrote, also with another program path, is replaced in
+// place, so a repair install updates the command.
+func mergeHooksConfig(existing *HooksConfig, program string) *HooksConfig {
+	gryphConfig := GenerateHooksConfig(program)
 
 	for hookType, matchers := range gryphConfig.Hooks {
+		want := matchers[0].Hooks[0]
 		found := false
-		for _, m := range existing.Hooks[hookType] {
-			for _, h := range m.Hooks {
-				if h.Command == matchers[0].Hooks[0].Command {
+		for mi := range existing.Hooks[hookType] {
+			for hi, h := range existing.Hooks[hookType][mi].Hooks {
+				if utils.IsHookCommand(h.Command, "codex", hookType) {
+					existing.Hooks[hookType][mi].Hooks[hi] = want
 					found = true
-					break
 				}
-			}
-			if found {
-				break
 			}
 		}
 		if !found {
@@ -221,8 +235,8 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 
 	hooksFile := detection.HooksPath
 
-	data, err := os.ReadFile(hooksFile)
-	if os.IsNotExist(err) {
+	data, err := agent.ReadHookFile(hooksFile, agent.InstallOptions{Repair: opts.Repair})
+	if agent.IsNotExist(err) {
 		result.Success = true
 		return result, nil
 	} else if err != nil {
@@ -283,7 +297,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		return result, result.Error
 	}
 
-	if err := os.WriteFile(hooksFile, newData, 0600); err != nil {
+	if err := agent.WriteHookFile(hooksFile, newData, 0600, agent.InstallOptions{Repair: opts.Repair}); err != nil {
 		result.Error = fmt.Errorf("failed to write hooks.json: %w", err)
 		return result, result.Error
 	}
@@ -336,10 +350,9 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 	status.Valid = true
 
 	for _, hookType := range HookTypes {
-		expectedCmd := fmt.Sprintf("%s _hook codex %s", utils.GryphCommand(), hookType)
 		for _, m := range config.Hooks[hookType] {
 			for _, h := range m.Hooks {
-				if h.Command == expectedCmd {
+				if utils.IsHookCommand(h.Command, "codex", hookType) {
 					status.Installed = true
 					status.Hooks = append(status.Hooks, hookType)
 					break

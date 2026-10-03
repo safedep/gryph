@@ -106,7 +106,7 @@ type StatsData struct {
 	TimeSpanEnd   time.Time
 }
 
-func computeStats(ctx context.Context, store storage.Store, since, until *time.Time, agentFilter string) (*StatsData, error) {
+func computeStats(ctx context.Context, store storage.ReadStore, since, until *time.Time, agentFilter string) (*StatsData, error) {
 	data := &StatsData{}
 
 	sessionFilter := session.NewSessionFilter().WithLimit(10000)

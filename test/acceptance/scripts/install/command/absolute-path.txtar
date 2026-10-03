@@ -1,0 +1,16 @@
+# gryph install names the gryph binary by its absolute path in every hook
+# entry, so the hook does not depend on PATH.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+
+grep '"command": "/[^"]*/gryph _hook claude-code PreToolUse"' $HOME/.claude/settings.json
+grep '"command": "/[^"]*/gryph _hook claude-code UserPromptSubmit"' $HOME/.claude/settings.json
+grep '"command": "/[^"]*/gryph _hook claude-code SessionStart"' $HOME/.claude/settings.json
+! grep '"command": "gryph _hook' $HOME/.claude/settings.json
+
+exec gryph doctor --no-color
+stdout '\[ok\]\s+Claude Code hooks'

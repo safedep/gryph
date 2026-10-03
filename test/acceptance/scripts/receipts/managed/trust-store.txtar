@@ -1,0 +1,59 @@
+# gryph install --managed --trust-store puts the administrator's receipt
+# trust store in the managed directory, root-owned and readable by every
+# user. Every user's verifier trusts its keys next to the user's own store,
+# gryph policy keys list shows them, and gryph doctor --managed reports the
+# store. A key command of a user writes the user's own store, never the
+# managed one. Runs only in the privileged job on a Linux host with no
+# managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+! exists /etc/claude-code
+! exists /root/.config/safedep/gryph/keys
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+expandenv managed.yml
+
+# An administrator makes the key pair that the fleet trusts.
+exec gryph policy keys generate --no-color
+cp stdout generate.out
+capture KEYID 'Generated key ([0-9a-f]{16})' generate.out
+exec cp $XDG_CONFIG_HOME/safedep/gryph/keys/receipt-pub.json $WORK/fleet-pub.json
+
+execexit 3 gryph install --managed --config $WORK/managed.yml --trust-store $WORK/broken.json
+stderr 'trust store'
+! exists /etc/safedep/gryph
+
+exec gryph install --managed --config $WORK/managed.yml --trust-store $WORK/fleet-pub.json --json
+stdout '"trust_store": "/etc/safedep/gryph/keys/receipt-pub.json"'
+exists /etc/safedep/gryph/keys/receipt-pub.json
+exec stat -c %a:%U /etc/safedep/gryph/keys/receipt-pub.json
+stdout '644:root'
+
+# Under the managed configuration the user's home comes from the account
+# database, so root's own store is empty and the managed key still shows.
+exec gryph policy keys list --no-color
+stdout $KEYID
+exec gryph policy keys generate --no-color
+exists /root/.config/safedep/gryph/keys/receipt-pub.json
+grep $KEYID /etc/safedep/gryph/keys/receipt-pub.json
+! grep $KEYID /root/.config/safedep/gryph/keys/receipt-pub.json
+
+# No managed policy here, so the profile stays none and the exit code 1.
+execexit 1 gryph doctor --managed --json
+stdout '"trust_store": \{'
+stdout '"keys": 1'
+
+exec rm -rf /etc/safedep/gryph /etc/claude-code /root/.config/safedep/gryph/keys
+exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- broken.json --
+{"keys": [{"key_id": "0000000000000000", "pub": "AAAA"}]}
+-- managed.yml --
+policy:
+  enabled: true
+managed:
+  agents: [claude-code]
+  binary: ${ACCEPTANCE_GRYPH_BIN}

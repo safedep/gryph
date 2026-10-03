@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -347,4 +348,39 @@ func TestPolicyList_BrokenFileDoesNotHideOthers(t *testing.T) {
 	assert.Contains(t, out, "good.yaml")
 	assert.Contains(t, out, "bad.yaml")
 	assert.Contains(t, out, "!")
+}
+
+func TestPolicyListRows_Managed(t *testing.T) {
+	sys := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(sys, "policy.yaml"), []byte("version: \"1\"\nrules:\n  - id: m\n    action: allow\n"), 0o644))
+	require.NoError(t, os.Mkdir(filepath.Join(sys, "policies"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(sys, "policies", "a.yaml"), []byte("version: \"1\"\nrules:\n  - id: a\n    action: allow\n"), 0o644))
+	user := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(user, "policy.yaml"), []byte("version: \"1\"\nrules:\n  - id: u\n    action: allow\n"), 0o644))
+	paths := &config.Paths{ConfigDir: user}
+	cfg := config.Default()
+	cfg.Policy.SelfProtection.Enabled = true
+	managed := config.ManagedPolicy{Active: true, File: filepath.Join(sys, "policy.yaml"), Dir: filepath.Join(sys, "policies"), Trust: func(string) error { return nil }}
+
+	rows := policyListRows(cfg, paths, managed)
+	sources := make([]string, 0, len(rows))
+	for _, r := range rows {
+		sources = append(sources, r.source)
+	}
+	assert.Equal(t, []string{"managed", "managed-policies", "global", "builtin"}, sources)
+	for _, r := range rows {
+		assert.Empty(t, r.err, r.source)
+	}
+
+	cfg.Policy.AllowUserPolicy = false
+	rows = policyListRows(cfg, paths, managed)
+	require.Len(t, rows, 4)
+	assert.Equal(t, "user", rows[2].source)
+	assert.Contains(t, rows[2].err, "allow_user_policy")
+
+	managed.Trust = func(path string) error { return errors.New("not owned by root") }
+	rows = policyListRows(cfg, paths, managed)
+	assert.Equal(t, "not trusted: not owned by root", rows[0].err)
+	assert.Equal(t, "managed-policies", rows[1].source)
+	assert.Equal(t, "not trusted: not owned by root", rows[1].err)
 }

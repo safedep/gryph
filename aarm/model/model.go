@@ -38,6 +38,8 @@ const (
 	ActionSubagentStop ActionType = "subagent_stop"
 	// ActionUserPrompt indicates a prompt that the user submitted.
 	ActionUserPrompt ActionType = "user_prompt"
+	// ActionTamper records a change to a Gryph asset in the system session.
+	ActionTamper ActionType = "tamper"
 	// ActionUnknown indicates an unrecognized action.
 	ActionUnknown ActionType = "unknown"
 )
@@ -65,6 +67,10 @@ type Action struct {
 	HumanPrincipal  string
 	ServiceIdentity string
 	RoleScope       string
+
+	// PeerTrust is the trust of the connection that carried the event to
+	// the decision service: agent, unknown or low. Empty in process.
+	PeerTrust string
 
 	DataClassifications []privacy.Class
 	InjectionScore      float32
@@ -224,6 +230,10 @@ type EvaluationResult struct {
 	// (fresh_session_insufficient_context, conflicting_policies) for the
 	// auto-defer triggers.
 	DeferReason string
+
+	// MinAssurance is the lowest approval assurance the escalate rule that
+	// decided accepts. Empty takes the floor of the approval service.
+	MinAssurance string
 }
 
 // AgentMessage returns the message for the agent and the operator. A result

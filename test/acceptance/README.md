@@ -95,6 +95,39 @@ The harness adds three commands to the testscript builtins:
   Use it for values not known when the script is authored, such as a deferral
   id or a signature.
 
+## Privileged scripts
+
+A script that starts with `[!privileged] skip` writes to a system path, for
+example the managed directory `/etc/safedep/gryph`. It runs only in the
+privileged job: as root, with `ACCEPTANCE_PRIVILEGED=1`, with `-parallel 1`
+because every such script uses the same system path, and on a host that has
+no managed Gryph state. Each script removes what it wrote. CI runs the job
+`acceptance-privileged` in a throwaway Ubuntu container on every pull
+request and every push to main. The scripts make the accounts they need
+with `useradd` and remove them. A script that starts with `[!polkit] skip`
+also needs a system bus with polkit and `pkttyagent`. The job starts both.
+The job then runs the client-mode latency guard (see `perf-reports/`).
+
+```bash
+sudo ACCEPTANCE_PRIVILEGED=1 go test -tags acceptance -parallel 1 -run 'TestAcceptance/policy/managed' ./test/acceptance/
+```
+
+A script never sleeps for a fixed time. It states the condition it waits
+for, with a deadline, through the hidden commands of the binary:
+
+- `gryph supervisor ready --socket <path>` completes a handshake with the
+  service. With `--until-exists <path>` it then waits for the path, and with
+  `--until-empty <dir>` for the directory to hold no entry, for example the
+  spool directory of an account after a pass.
+- `gryph supervisor stop --pid-file <path>` ends the service and waits for
+  its exit. With `--user <name>` it also kills every process of that account
+  and waits, so the script can remove the account.
+- `gryph supervisor reconcile --once` runs one repair pass, for the scripts
+  that would otherwise wait on the timer.
+
+A sleep stays only where elapsed time is the condition, such as a request
+that expires or an agent that stays silent.
+
 ## Run it
 
 ```bash

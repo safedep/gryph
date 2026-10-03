@@ -1,0 +1,58 @@
+# A service that does not know the frames of this client, as an older
+# service during an upgrade, answers error unsupported after the
+# handshake. The client blocks: the service answered, so this is not the
+# absent-service case, and the phase rule decides. A prompt hook goes
+# through, because a block there stops the user and not the agent. Runs
+# only in the privileged job on a Linux host with no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+mkdir $WORK/spool
+expandenv managed.yml
+exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
+
+exec gryph supervisor fake --socket /tmp/gryph-acceptance-hook.sock --reply unsupported.json &
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
+
+stdin bash.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr '^Gryph supervisor is not running\. Run `gryph doctor`\.$'
+
+stdin prompt.json
+exec gryph _hook claude-code UserPromptSubmit
+! stderr .
+
+exec sh -c 'cat $WORK/spool/0/*.json'
+stdout -count=1 '"verdict":"block"'
+stdout -count=1 '"verdict":"allow"'
+stdout -count=2 'the decision service refused: unsupported: handle is not served'
+
+exec rm -rf /etc/safedep/gryph
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- managed.yml --
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  spool_dir: ${WORK}/spool
+-- unsupported.json --
+{"type":"error","body":{"code":"unsupported","message":"handle is not served by this version"}}
+-- bash.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {"command": "ls -la", "description": "list"},
+  "tool_use_id": "tool-use-b1"
+}
+-- prompt.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "list the files"
+}

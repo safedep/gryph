@@ -128,6 +128,17 @@
           "type": "string",
           "description": "Go text/template rendered when the rule matches. Available references: .Action (Type, Tool, Operation, Agent, WorkingDir, Project, Kind, Origin, Source, Hosts, ReadPaths, WritePaths, Params), .Context (TotalActions, FilesRead, FilesWritten, CommandsExecuted, NetworkRequests, Errors, ToolsUsed, SessionDurationMs, ClassificationsSeen, TagsSeen, TagSeq, OriginsSeen, EntitiesSeen, EgressHosts, IntentAvailable, ActionsSinceIntent), .Rule (ID, Description, Action, Severity, Tags)."
         },
+        "min_assurance": {
+          "type": "string",
+          "description": "Only with action `escalate`. The lowest approval assurance the rule accepts. A channel below it never answers the rule. The decision service defaults to policy.approval.min_assurance.",
+          "enum": [
+            "same-user-tty",
+            "self-elevated",
+            "local-admin",
+            "local-auth",
+            "out-of-band"
+          ]
+        },
         "reason": {
           "type": "string",
           "description": "Required when action is `defer`. Surfaces on the receipt's defer_reason and in the operator-facing block message."

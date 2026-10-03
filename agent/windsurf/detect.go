@@ -6,10 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
-	"time"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/agent/utils"
 )
 
 func Detect(ctx context.Context) (*agent.DetectionResult, error) {
@@ -76,20 +75,8 @@ func Detect(ctx context.Context) (*agent.DetectionResult, error) {
 }
 
 func getVersion(ctx context.Context) string {
-	cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(cmdCtx, "windsurf", "--version")
-	output, err := cmd.Output()
-	if err == nil {
-		version := strings.TrimSpace(string(output))
-		if parts := strings.Fields(version); len(parts) > 0 {
-			for _, part := range parts {
-				if len(part) > 0 && (part[0] >= '0' && part[0] <= '9') {
-					return part
-				}
-			}
-		}
-		return version
+	if v := utils.ProgramVersion(ctx, "windsurf", "--version"); v != "" {
+		return v
 	}
 	return "unknown"
 }

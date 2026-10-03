@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
@@ -16,19 +17,22 @@ import (
 //go:embed plugin.ts
 var pluginTS []byte
 
-func processedPlugin() []byte {
-	return bytes.ReplaceAll(pluginTS, []byte(utils.GryphCommandPlaceholder), []byte(utils.GryphCommand()))
+func processedPlugin(program string) []byte {
+	return utils.RenderPlugin(pluginTS, program)
 }
 
 // Hooks declares the OpenClaw hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
-var Hooks = []events.HookSpec{
+//
+// The Gryph plugin waits 5 s and lets the action through on every result
+// other than exit code 2.
+var Hooks = events.WithTimeout(5*time.Second, []events.HookSpec{
 	{Type: "before_tool_call", Phase: events.PhasePre, Blocking: true},
 	{Type: "after_tool_call", Phase: events.PhasePost},
 	{Type: "session_start", Phase: events.PhaseUnknown},
 	{Type: "session_end", Phase: events.PhaseUnknown},
-}
+})
 
 // HookTypes are the hook type names in Hooks, in install order.
 var HookTypes = agent.HookTypeNames(Hooks)
@@ -103,12 +107,12 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	dir := pluginDir(detection.HooksPath)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := agent.EnsureHookDir(dir, 0700, opts); err != nil {
 		result.Error = fmt.Errorf("failed to create extensions directory: %w", err)
 		return result, result.Error
 	}
 
-	if err := os.WriteFile(pluginFile, processedPlugin(), 0644); err != nil {
+	if err := agent.WriteHookFile(pluginFile, processedPlugin(opts.Command), 0644, opts); err != nil {
 		result.Error = fmt.Errorf("failed to write plugin file: %w", err)
 		return result, result.Error
 	}
@@ -203,7 +207,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 
 	status.Installed = true
 	status.Hooks = HookTypes
-	status.Valid = bytes.Equal(data, processedPlugin())
+	status.Valid = bytes.Equal(data, processedPlugin(""))
 	if !status.Valid {
 		status.Issues = append(status.Issues, "plugin file differs from expected content (may need update)")
 	}

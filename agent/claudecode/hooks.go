@@ -16,9 +16,12 @@ import (
 // Hooks declares the Claude Code hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
-var Hooks = []events.HookSpec{
+//
+// Claude Code waits 600 s for a command hook and 30 s on UserPromptSubmit,
+// then lets the action through (hooks reference, 2026-10-03).
+var Hooks = events.WithTimeout(600*time.Second, []events.HookSpec{
 	{Type: "PreToolUse", Phase: events.PhasePre, Blocking: true},
-	{Type: "UserPromptSubmit", Phase: events.PhasePre, Blocking: true, Prompt: true},
+	{Type: "UserPromptSubmit", Phase: events.PhasePre, Blocking: true, Prompt: true, Timeout: 30 * time.Second},
 	{Type: "PostToolUse", Phase: events.PhasePost},
 	{Type: "PostToolUseFailure", Phase: events.PhasePost},
 	{Type: "SessionStart", Phase: events.PhaseUnknown},
@@ -26,7 +29,7 @@ var Hooks = []events.HookSpec{
 	{Type: "Notification", Phase: events.PhaseUnknown},
 	{Type: "SubagentStart", Phase: events.PhaseUnknown},
 	{Type: "SubagentStop", Phase: events.PhaseUnknown},
-}
+})
 
 // HookTypes are the hook type names in Hooks, in install order.
 var HookTypes = agent.HookTypeNames(Hooks)
@@ -54,7 +57,7 @@ type Settings struct {
 }
 
 // GenerateHooksConfig generates the hooks configuration for gryph.
-func GenerateHooksConfig() SettingsHooks {
+func GenerateHooksConfig(program string) SettingsHooks {
 	hooks := make(SettingsHooks)
 
 	for _, hookType := range HookTypes {
@@ -62,7 +65,7 @@ func GenerateHooksConfig() SettingsHooks {
 			Hooks: []HookCommand{
 				{
 					Type:    "command",
-					Command: fmt.Sprintf("%s _hook claude-code %s", utils.GryphCommand(), hookType),
+					Command: utils.HookCommand(program, "claude-code", hookType),
 				},
 			},
 		}
@@ -80,9 +83,9 @@ func GenerateHooksConfig() SettingsHooks {
 }
 
 // readSettings reads the settings.json file.
-func readSettings(path string) (map[string]interface{}, error) {
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
+func readSettings(path string, opts agent.InstallOptions) (map[string]interface{}, error) {
+	data, err := agent.ReadHookFile(path, opts)
+	if agent.IsNotExist(err) {
 		return make(map[string]interface{}), nil
 	}
 	if err != nil {
@@ -98,13 +101,13 @@ func readSettings(path string) (map[string]interface{}, error) {
 }
 
 // writeSettings writes the settings.json file.
-func writeSettings(path string, settings map[string]interface{}) error {
+func writeSettings(path string, settings map[string]interface{}, opts agent.InstallOptions) error {
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0600)
+	return agent.WriteHookFile(path, data, 0600, opts)
 }
 
 // InstallHooks installs hooks for Claude Code by modifying settings.json.
@@ -127,7 +130,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	settingsPath := filepath.Join(detection.ConfigPath, "settings.json")
 
 	// Read existing settings
-	settings, err := readSettings(settingsPath)
+	settings, err := readSettings(settingsPath, opts)
 	if err != nil {
 		result.Error = fmt.Errorf("failed to read settings.json: %w", err)
 		return result, result.Error
@@ -178,7 +181,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	// Generate gryph hooks config
-	gryphHooks := GenerateHooksConfig()
+	gryphHooks := GenerateHooksConfig(opts.Command)
 
 	// Merge or replace hooks
 	if settings["hooks"] == nil {
@@ -216,7 +219,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	// Write updated settings
-	if err := writeSettings(settingsPath, settings); err != nil {
+	if err := writeSettings(settingsPath, settings, opts); err != nil {
 		result.Error = fmt.Errorf("failed to write settings.json: %w", err)
 		return result, result.Error
 	}
@@ -244,7 +247,7 @@ func hasGryphHooks(hooks map[string]interface{}) bool {
 						for _, h := range hooksList {
 							if hook, ok := h.(map[string]interface{}); ok {
 								if cmd, ok := hook["command"].(string); ok {
-									if len(cmd) >= 5 && cmd[:5] == "gryph" {
+									if utils.IsGryphCommand(cmd) {
 										return true
 									}
 								}
@@ -298,7 +301,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		}
 	}
 
-	settings, err := readSettings(settingsPath)
+	settings, err := readSettings(settingsPath, agent.InstallOptions{Repair: opts.Repair})
 	if err != nil {
 		result.Error = fmt.Errorf("failed to read settings.json: %w", err)
 		return result, result.Error
@@ -350,7 +353,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 					continue
 				}
 				cmd, _ := hook["command"].(string)
-				if len(cmd) < 5 || cmd[:5] != "gryph" {
+				if !utils.IsGryphCommand(cmd) {
 					filteredHooks = append(filteredHooks, h)
 				}
 			}
@@ -370,7 +373,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 	}
 
 	// Write updated settings
-	if err := writeSettings(settingsPath, settings); err != nil {
+	if err := writeSettings(settingsPath, settings, agent.InstallOptions{Repair: opts.Repair}); err != nil {
 		result.Error = fmt.Errorf("failed to write settings.json: %w", err)
 		return result, result.Error
 	}
@@ -393,7 +396,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 	}
 
 	settingsPath := filepath.Join(detection.ConfigPath, "settings.json")
-	settings, err := readSettings(settingsPath)
+	settings, err := readSettings(settingsPath, agent.InstallOptions{})
 	if err != nil {
 		status.Issues = append(status.Issues, fmt.Sprintf("cannot read settings.json: %v", err))
 		return status, nil
@@ -429,8 +432,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 					continue
 				}
 				cmd, _ := hook["command"].(string)
-				expectedCmd := fmt.Sprintf("%s _hook claude-code %s", utils.GryphCommand(), hookType)
-				if cmd == expectedCmd {
+				if utils.IsHookCommand(cmd, "claude-code", hookType) {
 					status.Installed = true
 					status.Hooks = append(status.Hooks, hookType)
 					break

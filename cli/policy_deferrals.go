@@ -14,6 +14,7 @@ import (
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/receipt"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -41,7 +42,7 @@ func newPolicyDeferralsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 			defer func() {
@@ -58,21 +59,36 @@ func newPolicyDeferralsCmd() *cobra.Command {
 				filter.Status = status
 			}
 			if sessionID != "" {
-				sid, rerr := resolveAarmSessionID(ctx, app.Store, sessionID)
+				sid, rerr := resolveAarmSessionID(ctx, app.Reads, sessionID)
 				if rerr != nil {
 					return rerr
 				}
 				filter.SessionID = &sid
 			}
-			rows, err := app.Store.QueryDeferredActions(ctx, filter)
+			rows, err := app.Reads.QueryDeferredActions(ctx, filter)
 			if err != nil {
 				return fmt.Errorf("failed to query deferred actions: %w", err)
 			}
+			// An escalation that waits for an approver is a deferral too.
+			// It lives in the request store of the decision service, so
+			// the queue shows it next to the deferral rows.
+			var requests []*storage.ApprovalRequestRow
+			if status == "" || status == "all" || status == storage.DeferredActionStatusPending {
+				requests, err = app.Reads.QueryApprovalRequests(ctx, &storage.ApprovalRequestFilter{State: storage.ApprovalRequestPending, SessionID: filter.SessionID, AllAccounts: true, Limit: limit})
+				if err != nil {
+					return fmt.Errorf("failed to query approval requests: %w", err)
+				}
+			}
 			out := cmd.OutOrStdout()
 			if format == "json" {
-				return writeDeferralsJSON(out, rows)
+				return writeDeferralsJSON(out, rows, requests)
 			}
-			renderDeferralsTable(out, policyColorizer(app), rows)
+			c := policyColorizer(app)
+			renderDeferralsTable(out, c, rows)
+			if len(requests) > 0 {
+				_, _ = fmt.Fprintln(out)
+				renderApprovalRequestsTable(out, c, requests)
+			}
 			return nil
 		},
 	}
@@ -138,6 +154,9 @@ func newPolicyDeferralsResolveCmd() *cobra.Command {
 				return fmt.Errorf("failed to resolve deferral id: %w", err)
 			}
 			if row == nil {
+				if req, rerr := app.Store.GetApprovalRequestByPrefix(ctx, id); rerr == nil && req != nil {
+					return ErrConfig("the id names an approval request", fmt.Errorf("answer request %s with gryph policy approve resolve", tui.FormatShortID(req.ID.String())))
+				}
 				return ErrConfig("no deferral matches id", fmt.Errorf("id %q did not match any deferred-action row", id))
 			}
 			if row.Status != storage.DeferredActionStatusPending {
@@ -241,8 +260,8 @@ func newPolicyDeferralsSweepCmd() *cobra.Command {
 				"candidates":   len(pending),
 				"swept_before": now.Format(time.RFC3339),
 			}
-			if err := logSelfAudit(ctx, app.Store, SelfAuditActionDeferralSweep, "",
-				details, SelfAuditResultSuccess, ""); err != nil {
+			if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionDeferralSweep, "",
+				details, engine.SelfAuditResultSuccess, ""); err != nil {
 				log.Errorf("failed to record deferral_sweep audit: %v", err)
 			}
 			_, _ = fmt.Fprintf(out, "Swept %d expired deferral(s) (of %d candidates)\n", processed, len(pending))
@@ -339,8 +358,8 @@ func applyDeferralResolution(ctx context.Context, store storage.Store, row *stor
 	for k, v := range spec.ExtraDetails {
 		details[k] = v
 	}
-	if err := logSelfAudit(ctx, store, spec.AuditAction, "",
-		details, SelfAuditResultSuccess, ""); err != nil {
+	if err := engine.LogSelfAudit(ctx, store, spec.AuditAction, "",
+		details, engine.SelfAuditResultSuccess, ""); err != nil {
 		log.Errorf("failed to record %s audit: %v", spec.AuditAction, err)
 	}
 	return nil
@@ -357,7 +376,7 @@ func resolveDeferralRow(ctx context.Context, store storage.Store, row *storage.D
 		FollowUpResult:   model.ResultRejected,
 		Resolver:         resolver,
 		Note:             note,
-		AuditAction:      SelfAuditActionDeferralResolved,
+		AuditAction:      engine.SelfAuditActionDeferralResolved,
 	}
 	if decision == "allow" {
 		spec.Status = storage.DeferredActionStatusResolvedAllow
@@ -384,7 +403,7 @@ func timeoutDeferralRow(ctx context.Context, store storage.Store, row *storage.D
 		FollowUpMessage:  fmt.Sprintf("deferral %s timed out", row.ID.String()[:8]),
 		Resolver:         "system:timeout",
 		Note:             "deferral expired",
-		AuditAction:      SelfAuditActionDeferralTimeout,
+		AuditAction:      engine.SelfAuditActionDeferralTimeout,
 		ExtraDetails: map[string]interface{}{
 			"expires_at": row.ExpiresAt.Format(time.RFC3339),
 		},
@@ -494,13 +513,20 @@ func deferralToView(r *storage.DeferredActionRow) deferralView {
 	return v
 }
 
-func writeDeferralsJSON(w io.Writer, rows []*storage.DeferredActionRow) error {
+func writeDeferralsJSON(w io.Writer, rows []*storage.DeferredActionRow, requests []*storage.ApprovalRequestRow) error {
 	views := make([]deferralView, 0, len(rows))
 	for _, r := range rows {
 		views = append(views, deferralToView(r))
 	}
+	doc := map[string]interface{}{"deferrals": views}
+	if len(requests) > 0 {
+		reqs := make([]approvalRequestView, 0, len(requests))
+		for _, r := range requests {
+			reqs = append(reqs, approvalRequestToView(r))
+		}
+		doc["approval_requests"] = reqs
+	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	return enc.Encode(map[string]interface{}{"deferrals": views})
+	return enc.Encode(doc)
 }
-

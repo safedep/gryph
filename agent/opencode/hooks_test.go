@@ -13,7 +13,7 @@ import (
 )
 
 func TestProcessedPlugin_ReplacesPlaceholder(t *testing.T) {
-	processed := processedPlugin()
+	processed := processedPlugin("")
 
 	assert.NotContains(t, string(processed), utils.GryphCommandPlaceholder)
 	assert.Contains(t, string(processed), utils.GryphCommand())
@@ -28,10 +28,10 @@ func TestGetHookStatus_PluginContent(t *testing.T) {
 		wantValid   bool
 		wantMissing string
 	}{
-		{"current plugin", processedPlugin(), true, ""},
+		{"current plugin", processedPlugin(""), true, ""},
 		{"v0.9.0 plugin without the chat.message hook", legacy, true, "chat.message"},
 		{"v0.9.0 plugin without the block throw", bytes.Replace(legacy, []byte("throw new Error"), []byte("void new Error"), 1), false, ""},
-		{"current plugin without the block throw", bytes.Replace(processedPlugin(), []byte("throw new Error"), []byte("void new Error"), 1), false, ""},
+		{"current plugin without the block throw", bytes.Replace(processedPlugin(""), []byte("throw new Error"), []byte("void new Error"), 1), false, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

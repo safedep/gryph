@@ -1,6 +1,10 @@
 package events
 
-import "github.com/safedep/gryph/core/privacy"
+import (
+	"time"
+
+	"github.com/safedep/gryph/core/privacy"
+)
 
 // HookType is the name an agent gives one of its hook events, such as
 // "PreToolUse" or "beforeShellExecution".
@@ -28,6 +32,50 @@ type HookSpec struct {
 	// MinVersion is the first agent version that fires the hook. It is empty
 	// when every supported version fires it.
 	MinVersion string
+	// Timeout is how long the agent waits for the hook before it gives up
+	// and, for every supported agent, lets the action through. It comes from
+	// the agent's documented default, or from the timeout that Gryph writes
+	// into the hook entry or plugin. Zero means the agent documents none.
+	Timeout time.Duration
+}
+
+// WithTimeout sets Timeout on every spec that has none and returns specs.
+func WithTimeout(d time.Duration, specs []HookSpec) []HookSpec {
+	for i := range specs {
+		if specs[i].Timeout == 0 {
+			specs[i].Timeout = d
+		}
+	}
+	return specs
+}
+
+// FailColumn names how a hook fails when Gryph cannot decide in time: it
+// selects the column of the fail-mode table that an administrator sets.
+type FailColumn string
+
+const (
+	// FailColumnBlocking is a pre hook whose block stops the action and that
+	// carries no prompt.
+	FailColumnBlocking FailColumn = "blocking"
+	// FailColumnPrompt is a hook that carries the user prompt.
+	FailColumnPrompt FailColumn = "prompt"
+	// FailColumnOther is every other hook: post hooks and lifecycle hooks
+	// whose block stops nothing.
+	FailColumnOther FailColumn = "other"
+)
+
+// FailColumn returns the fail-mode column of the hook. A prompt hook uses
+// the prompt column even when it blocks, because a blocked prompt stops the
+// user, not the agent.
+func (s HookSpec) FailColumn() FailColumn {
+	switch {
+	case s.Prompt:
+		return FailColumnPrompt
+	case s.Phase == PhasePre && s.Blocking:
+		return FailColumnBlocking
+	default:
+		return FailColumnOther
+	}
 }
 
 // Kind classifies an event in the session context.

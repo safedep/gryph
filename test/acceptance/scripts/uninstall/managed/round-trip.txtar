@@ -1,0 +1,64 @@
+# gryph uninstall --managed reverses install --managed: it removes the Gryph
+# entries from every managed hook file, keeps the administrator's own
+# entries, removes the managed policy and configuration, and leaves the
+# system directory as it was. A second run changes nothing. Runs only in
+# the privileged job on a Linux host with no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+! exists /etc/claude-code
+! exists /etc/cursor
+! exists /usr/local/bin/gryph-acceptance
+expandenv managed.yml
+exec mkdir -p /etc/cursor
+exec cp hooks.json /etc/cursor/hooks.json
+
+# The per-user helper runs as each account, so the binary must sit where
+# every account can run it. The test binary lives in a private directory.
+exec cp $ACCEPTANCE_GRYPH_BIN /usr/local/bin/gryph-acceptance
+
+exec gryph install --managed --config $WORK/managed.yml --policy $WORK/policy.yaml
+exists /etc/safedep/gryph/config.yml
+exists /etc/safedep/gryph/policy.yaml
+exists /etc/claude-code/managed-settings.d/50-gryph.json
+grep '_hook cursor' /etc/cursor/hooks.json
+
+exec /usr/local/bin/gryph-acceptance uninstall --managed --json
+stdout '"status": "ok"'
+stdout '"changed": true'
+stdout '"name": "claude-code"'
+stdout '"removed": \['
+stdout '"/etc/safedep/gryph/policy.yaml"'
+stdout '"/etc/safedep/gryph/config.yml"'
+! exists /etc/safedep/gryph
+! exists /etc/claude-code/managed-settings.d/50-gryph.json
+exists /etc/cursor/hooks.json
+! grep '_hook cursor' /etc/cursor/hooks.json
+grep '/enterprise/audit.sh' /etc/cursor/hooks.json
+
+exec /usr/local/bin/gryph-acceptance uninstall --managed
+stdout 'Managed uninstall: ok'
+! stdout '\bchanged\b'
+! stdout 'removed /etc'
+
+exec rm -rf /etc/cursor /etc/claude-code /usr/local/bin/gryph-acceptance
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- hooks.json --
+{"version": 1, "hooks": {"beforeShellExecution": [{"command": "/enterprise/audit.sh"}]}}
+-- managed.yml --
+policy:
+  enabled: true
+managed:
+  agents: [claude-code, cursor]
+  binary: ${ACCEPTANCE_GRYPH_BIN}
+-- policy.yaml --
+version: "1"
+rules:
+  - id: managed-cap-writes
+    action: block
+    severity: high
+    match:
+      action_types: [file_write]
+    condition: "context.files_written > 20"
+    message: "too many writes this session"

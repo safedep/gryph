@@ -1,7 +1,6 @@
 package piagent
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
@@ -24,20 +23,23 @@ var legacyPluginDigests = []string{
 	"6a99732b3cefb3ed4a8a21e2ba962d7ea4696a22492a95c6f0b4fe6ccd780b60",
 }
 
-func processedPlugin() []byte {
-	return bytes.ReplaceAll(pluginTS, []byte(utils.GryphCommandPlaceholder), []byte(utils.GryphCommand()))
+func processedPlugin(program string) []byte {
+	return utils.RenderPlugin(pluginTS, program)
 }
 
 // Hooks declares the Pi Agent hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
-var Hooks = []events.HookSpec{
-	{Type: "input", Phase: events.PhasePre, Blocking: true, Prompt: true, MinVersion: "0.47.0"},
+//
+// The Gryph extension waits 30 s, and 10 s on input, then lets the action
+// through, also on a spawn error.
+var Hooks = events.WithTimeout(30*time.Second, []events.HookSpec{
+	{Type: "input", Phase: events.PhasePre, Blocking: true, Prompt: true, MinVersion: "0.47.0", Timeout: 10 * time.Second},
 	{Type: "tool_call", Phase: events.PhasePre, Blocking: true},
 	{Type: "tool_result", Phase: events.PhasePost},
 	{Type: "session_start", Phase: events.PhaseUnknown},
 	{Type: "session_shutdown", Phase: events.PhaseUnknown},
-}
+})
 
 // HookTypes are the hook type names in Hooks, in install order.
 var HookTypes = agent.HookTypeNames(Hooks)
@@ -61,7 +63,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	extensionsDir := filepath.Join(detection.ConfigPath, "extensions")
-	if err := os.MkdirAll(extensionsDir, 0755); err != nil {
+	if err := agent.EnsureHookDir(extensionsDir, 0755, opts); err != nil {
 		result.Error = fmt.Errorf("failed to create extensions directory: %w", err)
 		return result, result.Error
 	}
@@ -104,7 +106,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		return result, nil
 	}
 
-	if err := os.WriteFile(extensionPath, processedPlugin(), 0644); err != nil {
+	if err := agent.WriteHookFile(extensionPath, processedPlugin(opts.Command), 0644, opts); err != nil {
 		result.Error = fmt.Errorf("failed to write extension: %w", err)
 		return result, result.Error
 	}
@@ -196,7 +198,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 		return status, nil
 	}
 
-	agent.SetPluginStatus(status, data, processedPlugin(), legacyPluginDigests, Hooks,
+	agent.SetPluginStatus(status, data, processedPlugin(""), legacyPluginDigests, Hooks,
 		func(hookType string) string { return `pi.on("` + hookType + `"` },
 		"extension content differs from expected (may have been modified)")
 

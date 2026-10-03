@@ -1,0 +1,103 @@
+# gryph install --managed with the decision service on controls the order:
+# it writes the configuration with the switch off, makes the service
+# account, the keys and the spool, writes the hardened units, starts the
+# socket, and turns the switch on only after the service answers. A host
+# where the service does not answer keeps the switch off and the install
+# reports it. gryph uninstall --managed clears the switch first, then
+# stops the units. Runs only in the privileged job on a Linux host with the
+# useradd tools and no managed state. A host without a running systemd
+# gets the units in place and starts the service by hand.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the units of this script are the systemd ones'
+[!exec:useradd] skip 'needs useradd'
+! exists /etc/safedep/gryph
+! exists /etc/systemd/system/gryph-supervisor.socket
+! exists /var/lib/safedep/gryph
+! exists /tmp/gryph-acceptance-state
+! exists /usr/local/bin/gryph-acceptance
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+exec sh -c 'getent passwd _gryph >/dev/null && echo exists || echo absent'
+cp stdout account.txt
+# The uninstall walks every home through a helper that runs as the
+# account, so the binary must sit where every account can run it.
+exec cp $ACCEPTANCE_GRYPH_BIN /usr/local/bin/gryph-acceptance
+expandenv managed.yml
+
+# The first run. Without a running service manager the service cannot
+# answer: the switch stays off and the run is partial.
+exec sh -c 'gryph install --managed --config '$WORK'/managed.yml --json > '$WORK'/install.json; echo "exit $?" > '$WORK'/exit.txt'
+exec cat $WORK/exit.txt
+cp stdout exit1.txt
+capture EXIT1 'exit ([0-9]+)' exit1.txt
+exec cat $WORK/install.json
+stdout '"service": \{'
+stdout '"account": "_gryph"'
+stdout '"units": \['
+stdout '/etc/systemd/system/gryph-supervisor.socket'
+stdout '/etc/systemd/system/gryph-supervisor.service'
+exists /etc/systemd/system/gryph-supervisor.socket
+exists /etc/systemd/system/gryph-supervisor.service
+exists /usr/share/polkit-1/actions/io.safedep.gryph.policy
+grep 'io.safedep.gryph.approve' /usr/share/polkit-1/actions/io.safedep.gryph.policy
+grep 'ListenStream=/run/safedep/gryph/hook.sock' /etc/systemd/system/gryph-supervisor.socket
+grep 'SocketMode=0666' /etc/systemd/system/gryph-supervisor.socket
+grep 'User=_gryph' /etc/systemd/system/gryph-supervisor.service
+grep 'ProtectHome=yes' /etc/systemd/system/gryph-supervisor.service
+grep 'ProtectSystem=strict' /etc/systemd/system/gryph-supervisor.service
+grep 'SystemCallFilter=@system-service' /etc/systemd/system/gryph-supervisor.service
+grep 'StateDirectory=safedep/gryph' /etc/systemd/system/gryph-supervisor.service
+grep 'ReadWritePaths=/var/spool/safedep/gryph' /etc/systemd/system/gryph-supervisor.service
+! grep 'ProtectProc' /etc/systemd/system/gryph-supervisor.service
+exec getent passwd _gryph
+stdout '^_gryph:'
+exec stat -c %U /var/lib/safedep/gryph /var/lib/safedep/gryph/keys/receipt.key /var/spool/safedep/gryph
+stdout -count=3 '^_gryph$'
+exec stat -c %a /var/spool/safedep/gryph
+stdout '^3733$'
+
+# The switch is on only when the service answered.
+exec sh -c 'if grep -q "\"running\": true" '$WORK'/install.json; then echo running; else echo down; fi'
+cp stdout state.txt
+capture STATE '(running|down)' state.txt
+exec sh -c 'if [ "'$STATE'" = running ]; then grep -q "enabled: true" /etc/safedep/gryph/config.yml && grep -q "\"switch\": \"on\"" '$WORK'/install.json && [ "'$EXIT1'" = 0 ]; else grep -q "enabled: false" /etc/safedep/gryph/config.yml && grep -q "\"switch\": \"off\"" '$WORK'/install.json && grep -q "did not answer" '$WORK'/install.json && [ "'$EXIT1'" = 10 ]; fi'
+
+# On a host without a running service manager, the service starts by
+# hand on the socket of the units. The service manager would open the
+# socket as root, so the test runs the service as root too: the socket
+# and its directory are root's, as the identity check of the next run
+# wants them. Its state goes to a directory of its own, because the keys
+# under the state directory are the service account's and root does not
+# read them. The next run finds the service and turns the switch on.
+exec sh -c 'if [ "'$STATE'" = down ]; then ('$ACCEPTANCE_GRYPH_BIN' supervisor run --socket /run/safedep/gryph/hook.sock --state-dir /tmp/gryph-acceptance-state --spool-dir /tmp/gryph-acceptance-spool --allow-root >/dev/null 2>&1 &) && '$ACCEPTANCE_GRYPH_BIN' supervisor ready --socket /run/safedep/gryph/hook.sock; fi; true'
+exec gryph install --managed --config $WORK/managed.yml --json
+stdout '"running": true'
+stdout '"switch": "on"'
+grep 'enabled: true' /etc/safedep/gryph/config.yml
+# The administrator's file is in place as written, comments included.
+grep '# the decision service of this host' /etc/safedep/gryph/config.yml
+
+# The uninstall clears the switch first, then the units.
+exec /usr/local/bin/gryph-acceptance uninstall --managed --json
+stdout '"service": \{'
+stdout '"switch": "off"'
+! exists /etc/systemd/system/gryph-supervisor.socket
+! exists /etc/systemd/system/gryph-supervisor.service
+! exists /etc/safedep/gryph/config.yml
+
+exec gryph supervisor stop --pid-file /tmp/gryph-acceptance-state/supervisor.pid --user _gryph
+exec sh -c 'if grep -q absent '$WORK'/account.txt; then userdel _gryph; fi'
+exec rm -rf /etc/safedep/gryph /etc/claude-code /var/lib/safedep/gryph /var/spool/safedep/gryph /run/safedep/gryph /tmp/gryph-acceptance-state /tmp/gryph-acceptance-spool /usr/local/bin/gryph-acceptance /etc/systemd/system/gryph-supervisor.socket /etc/systemd/system/gryph-supervisor.service
+exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
+exec sh -c 'rmdir /var/lib/safedep /var/spool/safedep /run/safedep /etc/safedep 2>/dev/null; true'
+
+-- managed.yml --
+# the decision service of this host
+policy:
+  enabled: true
+managed:
+  agents: [claude-code]
+  binary: ${ACCEPTANCE_GRYPH_BIN}
+supervisor:
+  enabled: true

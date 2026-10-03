@@ -1,0 +1,69 @@
+name: Nightly Kernel
+on:
+  schedule:
+    - cron: '41 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kernel-acceptance:
+    # The kernel scripts need CAP_SYS_ADMIN in the initial user namespace,
+    # which a container does not have. They run as root on the runner
+    # itself, one at a time, and write the system paths of a managed host.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@v1.13.0
+
+      - name: Build
+        run: go build -o "${RUNNER_TEMP}/gryph" ./cmd/gryph
+
+      - name: Run Kernel Acceptance Scripts
+        env:
+          GRYPH_BIN: ${{ runner.temp }}/gryph
+        run: |
+          sudo env "PATH=$PATH" "GOCACHE=$(go env GOCACHE)" "GOMODCACHE=$(go env GOMODCACHE)" "GOFLAGS=-buildvcs=false" \
+            ACCEPTANCE_PRIVILEGED=1 ACCEPTANCE_CATEGORY=kernel GRYPH_BIN="$GRYPH_BIN" \
+            "$(go env GOPATH)/bin/gotestsum" --junitfile "${RUNNER_TEMP}/acceptance.xml" --format testname \
+            -- -tags acceptance -parallel 1 -timeout 20m ./test/acceptance
+
+      - name: Run the Red-Team Suite
+        if: always()
+        env:
+          GRYPH_BIN: ${{ runner.temp }}/gryph
+        run: |
+          sudo env "PATH=$PATH" "GOCACHE=$(go env GOCACHE)" "GOMODCACHE=$(go env GOMODCACHE)" "GOFLAGS=-buildvcs=false" \
+            GRYPH_BIN="$GRYPH_BIN" GRYPH_REDTEAM_REPORT="${RUNNER_TEMP}/redteam.md" \
+            go test -tags redteam -count=1 -v ./test/redteam/ || status=$?
+          cat "${RUNNER_TEMP}/redteam.md" >> "$GITHUB_STEP_SUMMARY"
+          exit "${status:-0}"
+
+      - name: Render Report
+        if: always()
+        run: |
+          go run ./test/acceptance/report \
+            -junit "${RUNNER_TEMP}/acceptance.xml" \
+            -catalog test/acceptance/catalog.yaml \
+            -scripts test/acceptance/scripts \
+            | tee "${RUNNER_TEMP}/acceptance-report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: acceptance-report-kernel
+          path: |
+            ${{ runner.temp }}/acceptance-report.md
+            ${{ runner.temp }}/acceptance.xml
+            ${{ runner.temp }}/redteam.md

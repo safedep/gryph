@@ -717,7 +717,7 @@ func TestValidate_ExportProfiles(t *testing.T) {
 		}}}, "", `unknown origin "email"`},
 		{"rule without classes or origins", map[string]ExportProfileConfig{"team": {Default: "include", Rules: []privacy.ExportRule{
 			rule(privacy.TreatDrop, nil, nil),
-		}}}, "", "a rule needs classes or origins"},
+		}}}, "", "a rule needs classes, origins or fields"},
 		{"unknown target profile", nil, "nope", `streams.targets[0]: unknown export profile "nope"`},
 	}
 	for _, tt := range tests {

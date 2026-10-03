@@ -437,6 +437,26 @@ func (_u *AarmReceiptUpdate) ClearSignerKeyID() *AarmReceiptUpdate {
 	return _u
 }
 
+// SetSignerKeyScope sets the "signer_key_scope" field.
+func (_u *AarmReceiptUpdate) SetSignerKeyScope(v string) *AarmReceiptUpdate {
+	_u.mutation.SetSignerKeyScope(v)
+	return _u
+}
+
+// SetNillableSignerKeyScope sets the "signer_key_scope" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableSignerKeyScope(v *string) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetSignerKeyScope(*v)
+	}
+	return _u
+}
+
+// ClearSignerKeyScope clears the value of the "signer_key_scope" field.
+func (_u *AarmReceiptUpdate) ClearSignerKeyScope() *AarmReceiptUpdate {
+	_u.mutation.ClearSignerKeyScope()
+	return _u
+}
+
 // SetDeferReason sets the "defer_reason" field.
 func (_u *AarmReceiptUpdate) SetDeferReason(v string) *AarmReceiptUpdate {
 	_u.mutation.SetDeferReason(v)
@@ -611,6 +631,20 @@ func (_u *AarmReceiptUpdate) ClearHashVersion() *AarmReceiptUpdate {
 	return _u
 }
 
+// SetImported sets the "imported" field.
+func (_u *AarmReceiptUpdate) SetImported(v bool) *AarmReceiptUpdate {
+	_u.mutation.SetImported(v)
+	return _u
+}
+
+// SetNillableImported sets the "imported" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableImported(v *bool) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetImported(*v)
+	}
+	return _u
+}
+
 // SetContentSalt sets the "content_salt" field.
 func (_u *AarmReceiptUpdate) SetContentSalt(v []byte) *AarmReceiptUpdate {
 	_u.mutation.SetContentSalt(v)
@@ -620,6 +654,38 @@ func (_u *AarmReceiptUpdate) SetContentSalt(v []byte) *AarmReceiptUpdate {
 // ClearContentSalt clears the value of the "content_salt" field.
 func (_u *AarmReceiptUpdate) ClearContentSalt() *AarmReceiptUpdate {
 	_u.mutation.ClearContentSalt()
+	return _u
+}
+
+// SetApproval sets the "approval" field.
+func (_u *AarmReceiptUpdate) SetApproval(v map[string]interface{}) *AarmReceiptUpdate {
+	_u.mutation.SetApproval(v)
+	return _u
+}
+
+// ClearApproval clears the value of the "approval" field.
+func (_u *AarmReceiptUpdate) ClearApproval() *AarmReceiptUpdate {
+	_u.mutation.ClearApproval()
+	return _u
+}
+
+// SetPeerTrust sets the "peer_trust" field.
+func (_u *AarmReceiptUpdate) SetPeerTrust(v string) *AarmReceiptUpdate {
+	_u.mutation.SetPeerTrust(v)
+	return _u
+}
+
+// SetNillablePeerTrust sets the "peer_trust" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillablePeerTrust(v *string) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetPeerTrust(*v)
+	}
+	return _u
+}
+
+// ClearPeerTrust clears the value of the "peer_trust" field.
+func (_u *AarmReceiptUpdate) ClearPeerTrust() *AarmReceiptUpdate {
+	_u.mutation.ClearPeerTrust()
 	return _u
 }
 
@@ -839,6 +905,12 @@ func (_u *AarmReceiptUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if _u.mutation.SignerKeyIDCleared() {
 		_spec.ClearField(aarmreceipt.FieldSignerKeyID, field.TypeString)
 	}
+	if value, ok := _u.mutation.SignerKeyScope(); ok {
+		_spec.SetField(aarmreceipt.FieldSignerKeyScope, field.TypeString, value)
+	}
+	if _u.mutation.SignerKeyScopeCleared() {
+		_spec.ClearField(aarmreceipt.FieldSignerKeyScope, field.TypeString)
+	}
 	if value, ok := _u.mutation.DeferReason(); ok {
 		_spec.SetField(aarmreceipt.FieldDeferReason, field.TypeString, value)
 	}
@@ -893,11 +965,26 @@ func (_u *AarmReceiptUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if _u.mutation.HashVersionCleared() {
 		_spec.ClearField(aarmreceipt.FieldHashVersion, field.TypeInt)
 	}
+	if value, ok := _u.mutation.Imported(); ok {
+		_spec.SetField(aarmreceipt.FieldImported, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.ContentSalt(); ok {
 		_spec.SetField(aarmreceipt.FieldContentSalt, field.TypeBytes, value)
 	}
 	if _u.mutation.ContentSaltCleared() {
 		_spec.ClearField(aarmreceipt.FieldContentSalt, field.TypeBytes)
+	}
+	if value, ok := _u.mutation.Approval(); ok {
+		_spec.SetField(aarmreceipt.FieldApproval, field.TypeJSON, value)
+	}
+	if _u.mutation.ApprovalCleared() {
+		_spec.ClearField(aarmreceipt.FieldApproval, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.PeerTrust(); ok {
+		_spec.SetField(aarmreceipt.FieldPeerTrust, field.TypeString, value)
+	}
+	if _u.mutation.PeerTrustCleared() {
+		_spec.ClearField(aarmreceipt.FieldPeerTrust, field.TypeString)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -1327,6 +1414,26 @@ func (_u *AarmReceiptUpdateOne) ClearSignerKeyID() *AarmReceiptUpdateOne {
 	return _u
 }
 
+// SetSignerKeyScope sets the "signer_key_scope" field.
+func (_u *AarmReceiptUpdateOne) SetSignerKeyScope(v string) *AarmReceiptUpdateOne {
+	_u.mutation.SetSignerKeyScope(v)
+	return _u
+}
+
+// SetNillableSignerKeyScope sets the "signer_key_scope" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableSignerKeyScope(v *string) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetSignerKeyScope(*v)
+	}
+	return _u
+}
+
+// ClearSignerKeyScope clears the value of the "signer_key_scope" field.
+func (_u *AarmReceiptUpdateOne) ClearSignerKeyScope() *AarmReceiptUpdateOne {
+	_u.mutation.ClearSignerKeyScope()
+	return _u
+}
+
 // SetDeferReason sets the "defer_reason" field.
 func (_u *AarmReceiptUpdateOne) SetDeferReason(v string) *AarmReceiptUpdateOne {
 	_u.mutation.SetDeferReason(v)
@@ -1501,6 +1608,20 @@ func (_u *AarmReceiptUpdateOne) ClearHashVersion() *AarmReceiptUpdateOne {
 	return _u
 }
 
+// SetImported sets the "imported" field.
+func (_u *AarmReceiptUpdateOne) SetImported(v bool) *AarmReceiptUpdateOne {
+	_u.mutation.SetImported(v)
+	return _u
+}
+
+// SetNillableImported sets the "imported" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableImported(v *bool) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetImported(*v)
+	}
+	return _u
+}
+
 // SetContentSalt sets the "content_salt" field.
 func (_u *AarmReceiptUpdateOne) SetContentSalt(v []byte) *AarmReceiptUpdateOne {
 	_u.mutation.SetContentSalt(v)
@@ -1510,6 +1631,38 @@ func (_u *AarmReceiptUpdateOne) SetContentSalt(v []byte) *AarmReceiptUpdateOne {
 // ClearContentSalt clears the value of the "content_salt" field.
 func (_u *AarmReceiptUpdateOne) ClearContentSalt() *AarmReceiptUpdateOne {
 	_u.mutation.ClearContentSalt()
+	return _u
+}
+
+// SetApproval sets the "approval" field.
+func (_u *AarmReceiptUpdateOne) SetApproval(v map[string]interface{}) *AarmReceiptUpdateOne {
+	_u.mutation.SetApproval(v)
+	return _u
+}
+
+// ClearApproval clears the value of the "approval" field.
+func (_u *AarmReceiptUpdateOne) ClearApproval() *AarmReceiptUpdateOne {
+	_u.mutation.ClearApproval()
+	return _u
+}
+
+// SetPeerTrust sets the "peer_trust" field.
+func (_u *AarmReceiptUpdateOne) SetPeerTrust(v string) *AarmReceiptUpdateOne {
+	_u.mutation.SetPeerTrust(v)
+	return _u
+}
+
+// SetNillablePeerTrust sets the "peer_trust" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillablePeerTrust(v *string) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetPeerTrust(*v)
+	}
+	return _u
+}
+
+// ClearPeerTrust clears the value of the "peer_trust" field.
+func (_u *AarmReceiptUpdateOne) ClearPeerTrust() *AarmReceiptUpdateOne {
+	_u.mutation.ClearPeerTrust()
 	return _u
 }
 
@@ -1759,6 +1912,12 @@ func (_u *AarmReceiptUpdateOne) sqlSave(ctx context.Context) (_node *AarmReceipt
 	if _u.mutation.SignerKeyIDCleared() {
 		_spec.ClearField(aarmreceipt.FieldSignerKeyID, field.TypeString)
 	}
+	if value, ok := _u.mutation.SignerKeyScope(); ok {
+		_spec.SetField(aarmreceipt.FieldSignerKeyScope, field.TypeString, value)
+	}
+	if _u.mutation.SignerKeyScopeCleared() {
+		_spec.ClearField(aarmreceipt.FieldSignerKeyScope, field.TypeString)
+	}
 	if value, ok := _u.mutation.DeferReason(); ok {
 		_spec.SetField(aarmreceipt.FieldDeferReason, field.TypeString, value)
 	}
@@ -1813,11 +1972,26 @@ func (_u *AarmReceiptUpdateOne) sqlSave(ctx context.Context) (_node *AarmReceipt
 	if _u.mutation.HashVersionCleared() {
 		_spec.ClearField(aarmreceipt.FieldHashVersion, field.TypeInt)
 	}
+	if value, ok := _u.mutation.Imported(); ok {
+		_spec.SetField(aarmreceipt.FieldImported, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.ContentSalt(); ok {
 		_spec.SetField(aarmreceipt.FieldContentSalt, field.TypeBytes, value)
 	}
 	if _u.mutation.ContentSaltCleared() {
 		_spec.ClearField(aarmreceipt.FieldContentSalt, field.TypeBytes)
+	}
+	if value, ok := _u.mutation.Approval(); ok {
+		_spec.SetField(aarmreceipt.FieldApproval, field.TypeJSON, value)
+	}
+	if _u.mutation.ApprovalCleared() {
+		_spec.ClearField(aarmreceipt.FieldApproval, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.PeerTrust(); ok {
+		_spec.SetField(aarmreceipt.FieldPeerTrust, field.TypeString, value)
+	}
+	if _u.mutation.PeerTrustCleared() {
+		_spec.ClearField(aarmreceipt.FieldPeerTrust, field.TypeString)
 	}
 	_node = &AarmReceipt{config: _u.config}
 	_spec.Assign = _node.assignValues

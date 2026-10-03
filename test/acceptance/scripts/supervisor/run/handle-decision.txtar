@@ -1,0 +1,37 @@
+# gryph supervisor run serves the decision service on a socket. A client
+# of the same account gets welcome, a decision for a hook payload, ack for
+# a hook error report, the rows of its own partition for a read, and
+# error invalid for a prompt reply when no prompt is open. The partition
+# of the account appears under the state directory. The hidden send command
+# is the client of this test.
+[windows] skip 'the service listens on a Unix socket'
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph supervisor run --socket $ACCEPTANCE_SOCKET_DIR/hook.sock --state-dir $WORK/state --allow-root &
+
+ipcframe frames.bin hello.json handle.json report.json query.json reply.json
+stdin frames.bin
+exec gryph supervisor send --socket $ACCEPTANCE_SOCKET_DIR/hook.sock --text
+stdout '^\{"type":"welcome","body":\{"proto":1,"server_version":"[^"]*","mode":"enforce"\}\}$'
+stdout '^\{"type":"decision","body":\{"decision":"allow"\}\}$'
+stdout '^\{"type":"ack","body":\{\}\}$'
+stdout '"type":"query_result","body":\{"rows":\[\{"id":"[0-9a-f-]+","agent_session_id":"test-session-123","agent_name":"claude-code"'
+stdout '"type":"error","body":\{"code":"invalid","message":"no prompt is open on this connection"'
+
+exec id -u
+cp stdout uid.txt
+capture UID '([0-9]+)' uid.txt
+exists $WORK/state/users/$UID/audit.db
+
+-- hello.json --
+{"type":"hello","body":{"proto":1,"client_version":"test"}}
+-- handle.json --
+{"type":"handle","body":{"agent":"claude-code","hook_type":"PreToolUse","raw_payload":"eyJzZXNzaW9uX2lkIjoidGVzdC1zZXNzaW9uLTEyMyIsImN3ZCI6Ii9ob21lL3VzZXIvcHJvamVjdCIsImhvb2tfZXZlbnRfbmFtZSI6IlByZVRvb2xVc2UiLCJ0b29sX25hbWUiOiJSZWFkIiwidG9vbF9pbnB1dCI6eyJmaWxlX3BhdGgiOiIvaG9tZS91c2VyL3Byb2plY3QvbWFpbi5nbyJ9LCJ0b29sX3VzZV9pZCI6InRvb2wtdXNlLXIxIn0=","project_claim":{"name":"project"}}}
+-- report.json --
+{"type":"report_hook_error","body":{"agent":"claude-code","hook_type":"PreToolUse","raw_size":3,"message":"payload did not parse"}}
+-- query.json --
+{"type":"query","body":{"kind":"sessions"}}
+-- reply.json --
+{"type":"prompt_reply","body":{"nonce":"n","decision":"approve"}}

@@ -13,6 +13,20 @@
   guarantee: "gryph install --agent claude-code adds gryph hook entries to ~/.claude/settings.json and keeps pre-existing hooks and settings."
   labels: [install, claude-code]
 
+- id: install/command/absolute-path
+  title: "gryph install names the binary by its absolute path"
+  category: install
+  tier: P0
+  guarantee: "Every hook entry that gryph install writes names the gryph binary by its absolute path, so the hook does not depend on PATH, and doctor reads the install as valid."
+  labels: [install, command, claude-code]
+
+- id: install/command/legacy-accepted
+  title: "hook entries with the bare program name stay valid"
+  category: install
+  tier: P1
+  guarantee: "Hook entries from an earlier install that name the bare program gryph read as installed and valid in doctor and status, and gryph install --force rewrites them with the absolute path."
+  labels: [install, command, claude-code]
+
 - id: install/uninstall/round-trip
   title: "gryph uninstall removes only gryph hooks and restores backups"
   category: install
@@ -26,6 +40,20 @@
   tier: P0
   guarantee: "gryph _hook parses a real agent payload from stdin, exits zero, persists the event, and maps repeated payloads of one agent session to one gryph session."
   labels: [hook, ingest, claude-code]
+
+- id: policy/managed/sources-load
+  title: "managed policy files load as sources with the chain check"
+  category: policy
+  tier: P0
+  guarantee: "policy.yaml and policies/ in the system managed directory load as policy sources, gryph policy list shows them with the managed scope, the user's own policy still loads, and a managed file that fails the chain check fails the policy load. Privileged job only."
+  labels: [policy, managed, privileged, linux]
+
+- id: policy/managed/user-policy-dropped
+  title: "allow_user_policy false in the managed configuration drops the user sources"
+  category: policy
+  tier: P1
+  guarantee: "With allow_user_policy: false in the managed configuration, the user's policy sources do not load, gryph policy list says so, and policy.self_protection.enabled in the file cannot turn the built-in rules off. Privileged job only."
+  labels: [policy, managed, privileged, linux]
 
 - id: policy/block/dangerous-command
   title: "a policy block rule stops the action with the agent's protocol"
@@ -83,6 +111,13 @@
   guarantee: "With policy enabled, an agent shell command that runs gryph _hook with a literal _hook argument, directly, in a nested shell (also after a flag group such as -euo pipefail), or through ANSI-C quoting, is blocked at exit 2, so it cannot forge a user prompt. Another gryph command passes, also with a variable argument. A grep for a word that holds _hook passes."
   labels: [policy, self-protection, intent]
 
+- id: policy/self-protection/resolve-blocked
+  title: "builtin self-protection blocks agent shell commands that resolve an approval"
+  category: policy
+  tier: P1
+  guarantee: "With policy enabled, an agent shell command that runs gryph policy approve resolve or gryph policy deferrals resolve with literal words, directly, with flags between the words, or in a nested shell, is blocked at exit 2, so it cannot answer the approval the agent waits on. The approve list and show commands pass, and so does a resolve word that a variable supplies."
+  labels: [policy, self-protection, approval]
+
 - id: policy/file-access/read-rule-matches-shell-reads
   title: "file_access selects which shell targets a file rule matches"
   category: policy
@@ -117,6 +152,27 @@
   tier: P1
   guarantee: "A profile under export.profiles redacts a user prompt by its origin and digests other values by its default. A value that no rule matches gets the default treatment of the profile."
   labels: [privacy, export, config]
+
+- id: privacy/export/policy-profile
+  title: "the policy export profile sends the fields rules match on and no content"
+  category: privacy
+  tier: P0
+  guarantee: "Under the built-in policy profile, an export digests prompts and content, drops every secret, pii and unknown_sensitive value, keeps the command with the query and the userinfo of its URLs removed and the redactor run once more, and never carries the raw event."
+  labels: [privacy, export, cloud]
+
+- id: privacy/export/field-match
+  title: "an export rule can match a value by its field"
+  category: privacy
+  tier: P0
+  guarantee: "An export rule with fields applies its treatment to the named content fields whatever their labels. A rule that names a field no event has is a config error, and the export fails for that profile instead of falling back."
+  labels: [privacy, export]
+
+- id: cloud/collection/level-notice
+  title: "the collection level of a managed host is set once and told once"
+  category: cloud
+  tier: P1
+  guarantee: "The managed configuration sets collection.level to evidence, policy or full. The decision service tells the developer once on the first hook after the managed file sets a level and after each change, records the change on the self-audit log, and gryph doctor and gryph doctor --managed show the level, the profile and the target. A level the file does not know is a configuration error. Privileged job only."
+  labels: [cloud, collection, supervisor, privileged, linux]
 
 - id: privacy/export/invalid-profile
   title: "an invalid export profile fails closed for that profile only"
@@ -230,6 +286,355 @@
   guarantee: "A session end hook with a transcript path makes gryph cost report the session's tokens and model."
   labels: [cost, tokens]
 
+- id: cost/session-end/totals
+  title: "the hook process sends the session cost totals as a client report"
+  category: cost
+  tier: P1
+  guarantee: "On session end the hook process reads the transcript as the user and the session stores the totals with cost source client_reported:transcript. A missing transcript leaves no cost data."
+  labels: [cost, tokens, session]
+
+- id: install/managed/claude-code-entry
+  title: "install --managed writes the Claude Code managed hook entry"
+  category: install
+  tier: P0
+  guarantee: "As root, gryph install --managed --config writes the managed configuration to the system directory and the Claude Code drop-in under managed-settings.d with the Gryph hooks, before any user has the agent, and the lock switch adds allowManagedHooksOnly. Under that configuration gryph doctor puts the Claude Code hook_config row at prevent_same_user. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: install/managed/codex-entry
+  title: "install --managed writes the Codex managed hook entries"
+  category: install
+  tier: P0
+  guarantee: "gryph install --managed writes the Gryph entries into /etc/codex/requirements.toml, pins the hooks feature on, keeps the administrator keys, and sets allow_managed_hooks_only only with the lock. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: install/managed/idempotent
+  title: "install --managed is idempotent and follows the allowlist"
+  category: install
+  tier: P0
+  guarantee: "A second run with the same input changes nothing and exits 0. A dry run with a changed policy reports a change and writes nothing. An agent removed from the allowlist loses its managed entries on the next run. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: install/managed/invalid-config-exit-3
+  title: "install --managed exits 3 on invalid input and changes nothing"
+  category: install
+  tier: P0
+  guarantee: "A file that does not parse, an unknown agent, a lock outside the allowlist, a missing --config, or an input file another user can write exits 3 with nothing written. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: install/managed/binary-chain-refused
+  title: "install --managed refuses a binary that another user can replace"
+  category: install
+  tier: P0
+  guarantee: "A managed binary in a directory writable by group or other, or a missing binary, fails the chain check: exit 3, nothing written. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: install/managed/env-no-effect
+  title: "install --managed reads no environment variable"
+  category: install
+  tier: P0
+  guarantee: "Under --managed, HOME, XDG_* and GRYPH_* have no effect: the configuration lands in the system directory and nothing lands in the user home. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: install/managed/cursor-system-path
+  title: "install --managed writes the Cursor enterprise hooks with failClosed"
+  category: install
+  tier: P1
+  guarantee: "gryph install --managed writes the Gryph entries into the Cursor enterprise hooks.json with failClosed on every entry, keeps the administrator entries, reports the class system_path, and exits 3 on a lock for Cursor, which has none. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: install/managed/gemini-system-path
+  title: "install --managed writes the Gemini CLI system settings and doctor names the entry"
+  category: install
+  tier: P1
+  guarantee: "gryph install --managed writes the Gryph entries into the Gemini CLI system settings.json, pins hooksConfig.enabled, keeps the other settings, and gryph doctor names the managed entry on the hook_config row while the user scope stays at detect. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: install/managed/windsurf-system-path
+  title: "install --managed writes the Windsurf system hooks"
+  category: install
+  tier: P1
+  guarantee: "gryph install --managed writes the Gryph entries into the Cascade system hooks.json and reports the class system_path. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: uninstall/managed/round-trip
+  title: "uninstall --managed reverses install --managed"
+  category: uninstall
+  tier: P0
+  guarantee: "gryph uninstall --managed removes the Gryph entries from every managed hook file, keeps the administrator entries, removes the managed policy and configuration, and a second run changes nothing. Privileged job only."
+  labels: [uninstall, managed, privileged, linux]
+
+- id: uninstall/managed/uid-drop
+  title: "uninstall --managed cleans each home as that account"
+  category: uninstall
+  tier: P0
+  guarantee: "gryph uninstall --managed removes the Gryph entries from the agent hook files in every account's home through a helper that runs as that account. The helper keeps the account's other hooks and the file owner, and a link to a root-owned file changes nothing. Privileged job only."
+  labels: [uninstall, managed, privileged, linux]
+
+- id: install/managed/windows-acl-gate
+  title: "Windows ignores a planted managed config and refuses it for install --managed"
+  category: install
+  tier: P0
+  guarantee: "On Windows, Gryph reads the managed directory from the shell and not from PROGRAMDATA. A config.yml planted under a user-controlled PROGRAMDATA is ignored, and gryph install --managed with that file exits 3 with nothing changed, because the file fails the owner and DACL chain check."
+  labels: [install, managed, windows]
+
+- id: ipc/protocol/unknown-frame
+  title: "the decision service answers an unknown frame with error unsupported"
+  category: ipc
+  tier: P0
+  guarantee: "Over the wire format, hello gets welcome, a frame type the binary does not know gets error with code unsupported, a frame that fails its bounds gets error with code invalid, and the connection goes on to answer the next frame. Unknown fields are ignored."
+  labels: [ipc, protocol, supervisor]
+
+- id: supervisor/run/handle-decision
+  title: "supervisor run serves a decision on the socket and opens the partition of the peer"
+  category: supervisor
+  tier: P0
+  guarantee: "gryph supervisor run listens on a Unix socket. A client gets welcome with the profile, a decision for a hook payload, ack for a hook error report, the rows of its own partition for a read, and error invalid for a prompt reply when no prompt is open. The partition of the peer account appears under the state directory."
+  labels: [supervisor, ipc]
+
+- id: supervisor/peer/uid-partition
+  title: "the service keys every partition on the peer uid"
+  category: supervisor
+  tier: P0
+  guarantee: "Two accounts that send the same frames get two partitions under the state directory, each with its own session and nothing of the other. The tenant key is the uid the kernel reports, never a field of a request. Privileged job only."
+  labels: [supervisor, privileged, linux]
+
+- id: supervisor/limits/per-uid
+  title: "the service bounds the connections and the requests of one account"
+  category: supervisor
+  tier: P0
+  guarantee: "The newest connection of an account above the connection limit gets error rate_limited and closes. A flood of requests over the rate gets error rate_limited, the service records one tamper event in the system session of the account, and another account is not affected. Privileged job only."
+  labels: [supervisor, privileged, linux]
+
+- id: hook/client/fallback-block
+  title: "in client mode a blocking hook blocks when the service is absent"
+  category: hook
+  tier: P0
+  guarantee: "Under a managed configuration with supervisor.enabled, the hook is a client of the decision service and opens no store. With no service at the socket, a blocking hook blocks with one stderr line, supervisor.unavailable.blocking: allow lets it through, and supervisor.enabled: false keeps the in-process decision. Privileged job only."
+  labels: [hook, client, supervisor, privileged, linux]
+
+- id: hook/client/prompt-allow-spooled
+  title: "in client mode a prompt or lifecycle hook allows and spools when the service is absent"
+  category: hook
+  tier: P0
+  guarantee: "With no service at the socket, a prompt hook and a lifecycle hook allow, and the client leaves each payload in the spool of its own account, mode 0770 with files at 0640 so the service account reads them, with the verdict and the reason. Privileged job only."
+  labels: [hook, client, supervisor, privileged, linux]
+
+- id: hook/client/socket-held-no-welcome
+  title: "a socket without welcome counts as an absent service"
+  category: hook
+  tier: P0
+  guarantee: "A service that accepts the connect and never sends welcome makes the client give up within the handshake budget: a blocking hook blocks with the one stderr line and the spool holds the block. Privileged job only."
+  labels: [hook, client, supervisor, privileged, linux]
+
+- id: hook/client/old-client-new-server
+  title: "an unknown verdict from a newer service blocks"
+  category: hook
+  tier: P0
+  guarantee: "A service that answers a decision with a verdict this binary does not know makes every hook block, prompt hooks included, because the service answered and this is not the absent-service case. Privileged job only."
+  labels: [hook, client, supervisor, privileged, linux]
+
+- id: hook/client/new-client-old-server
+  title: "a service that does not know the frames of this client blocks"
+  category: hook
+  tier: P0
+  guarantee: "A service that answers error unsupported to a hook request, as an older service during an upgrade, makes a blocking hook block and a prompt hook pass, because the service answered and the phase rule decides. The spool keeps both decisions with the refusal. Privileged job only."
+  labels: [hook, client, supervisor, privileged, linux]
+
+- id: hook/client/killed-during-request
+  title: "a service that stops in the middle of a request leaves the fail mode"
+  category: hook
+  tier: P0
+  guarantee: "A stop of the decision service with SIGTERM drains the request a blocking hook waits on, so the hook gets its answer. A kill with SIGKILL cannot drain: the hook blocks with the absent-service line, exits 2, and leaves the decision in the spool with the cause. Privileged job only."
+  labels: [hook, client, supervisor, chaos, privileged, linux]
+
+- id: hook/client/fake-socket-refused
+  title: "the hook client refuses a socket that is not the system's"
+  category: hook
+  tier: P0
+  guarantee: "The hook client accepts the service socket only when root owns it and every directory above it is root-owned and not writable by others, and when the peer runs as root or the service account. A socket in a user's directory, or one whose peer is another user, blocks every hook in every mode with one stderr line, leaves a tamper entry in the spool, and never falls back. A root service passes. Privileged job only."
+  labels: [hook, client, supervisor, privileged, linux]
+
+- id: spool/ingest/owner-partition
+  title: "the service assigns a spool entry to the owner of its directory"
+  category: spool
+  tier: P0
+  guarantee: "A spool entry goes to the partition of the account that owns the directory it sits in, never to the account the directory is named for, as a receipt with the decision unverified. A file inside that another account owns is refused unread, removed, and reported as a spool_refused tamper event in the system session of the directory owner. The service makes the spool root with the set-group-ID and sticky bits. Privileged job only."
+  labels: [spool, supervisor, privileged, linux]
+
+- id: spool/ingest/fifo-symlink-refused
+  title: "the service reads a spool file from a descriptor that never follows a link or waits"
+  category: spool
+  tier: P0
+  guarantee: "A FIFO, a symbolic link and a file with two links in an account's spool are refused unread and removed, the target of the link is untouched, the service keeps answering through the pass, and one spool_refused tamper event names each file and its reason. Privileged job only."
+  labels: [spool, supervisor, privileged, linux]
+
+- id: spool/quota/bound
+  title: "one pass takes at most the quota of entries from one account"
+  category: spool
+  tier: P1
+  guarantee: "With --spool-max-files 3 and five entries, three become unverified receipts, two are removed unread, and one spool_refused tamper event records the count dropped. Privileged job only."
+  labels: [spool, supervisor, privileged, linux]
+
+- id: spool/flood/degraded-while-up
+  title: "entries decided alone while the service ran become a degraded tamper event"
+  category: spool
+  tier: P1
+  guarantee: "A spool entry whose recorded_at is after the start of the service means the client could not reach a running service. One pass records one degraded tamper event with the count of such entries, and an entry from before the start records nothing. Privileged job only."
+  labels: [spool, supervisor, privileged, linux]
+
+- id: hook/client/pilot-local-ephemeral
+  title: "a blocking hook in the pilot profile evaluates the managed policy itself when the service is out of reach"
+  category: hook
+  tier: P0
+  guarantee: "Under supervisor.profile pilot with no service at the socket, a blocking hook evaluates the managed policy and the built-in rules in process with no store, no context and no signature: an allowed command goes through, a blocked one blocks with the rule's message, a rule that reads the session context blocks, and every decision lands in the spool marked degraded. gryph doctor names the profile and the time the pilot has left. A pilot past pilot_until runs enforce. Privileged job only."
+  labels: [hook, client, supervisor, pilot, privileged, linux]
+
+- id: policy/degraded/context-rule-blocks
+  title: "the degraded evaluation blocks a rule that reads the session context"
+  category: policy
+  tier: P0
+  guarantee: "With --degraded, gryph policy test evaluates as the hook does in the pilot profile with the service out of reach: a rule whose condition reads context.* blocks with a message that names the missing context, a condition on the action alone evaluates as always, and an unmatched action allows."
+  labels: [policy, degraded, pilot]
+
+- id: policy/test/nop-not-degraded
+  title: "the Nop accumulator alone never turns the degraded gate on"
+  category: policy
+  tier: P0
+  guarantee: "gryph policy test without --degraded evaluates a rule that reads context.* against the given counters, zeros by default, so the counter rule does not fire without --context-files-written and fires with it. The degraded gate is the explicit flag, not the accumulator."
+  labels: [policy, degraded, test]
+
+- id: supervisor/reload/config-reread
+  title: "the reload signal makes the decision service read its configuration and policy again"
+  category: supervisor
+  tier: P0
+  guarantee: "The decision service decides under the managed configuration it read at start and the policy a partition read at open. A changed file on disk changes nothing until the reload signal, after which the next contact decides under the new configuration and the new policy. gryph install --managed sends the signal to a running service after a change. Privileged job only."
+  labels: [supervisor, reload, privileged, linux]
+- id: supervisor/keys/custody
+  title: "the machine key belongs to the service account and signs in the supervisor scope"
+  category: supervisor
+  tier: P0
+  guarantee: "gryph install --managed with the service on makes the receipt key, its public half and the export key under the state directory, hands them to the service account at mode 0600, puts the public half in the managed trust store, and changes nothing on a second run. The service, run as the service account, signs every receipt with that key in the supervisor scope, and the receipts verify against the managed store. doctor --managed reports the key as supervisor-owned and protected. Privileged job only."
+  labels: [supervisor, keys, privileged, linux]
+
+- id: receipts/managed/rotate-verifies
+  title: "a key rotation keeps the old receipts verifiable and re-points the running service"
+  category: receipts
+  tier: P0
+  guarantee: "gryph supervisor keys rotate writes a new key, appends its public half to the managed trust store next to the keys already there, and reloads the running service through its pid file. Receipts signed before and after the rotation both verify, each with its own key id. Privileged job only."
+  labels: [receipts, supervisor, keys, privileged, linux]
+
+- id: reads/system-mode/own-partition-only
+  title: "the read commands of a managed host read the own partition through the service"
+  category: reads
+  tier: P0
+  guarantee: "Under a managed configuration with the decision service on, sessions, query, logs, cat and policy receipts answer from the partition of the account that the kernel reports for the socket connection, through the service. An account sees its own log and nothing of another account, opens no database of its own, cannot read another partition on disk, and gets a clear error without the service. Privileged job only."
+  labels: [reads, supervisor, privileged, linux]
+
+- id: import/user-db/rows-marked
+  title: "gryph supervisor import carries the own database into the service, marked imported"
+  category: import
+  tier: P1
+  guarantee: "As the account, gryph supervisor import sends the sessions, events and receipts of the account's own database to the decision service. The service stores them in the partition of the account marked imported, the receipts keep the account's own signatures and verify against the account's trust store, a second run changes nothing, and the database in the home stays as it was. Privileged job only."
+  labels: [import, supervisor, privileged, linux]
+
+- id: approval/inline/tty-approve
+  title: "an escalate rule that accepts the terminal asks on the terminal of the hook"
+  category: approval
+  tier: P0
+  guarantee: "On a managed host with the decision service on, an escalate rule with min_assurance same-user-tty puts the prompt on the terminal of the hook. y allows the action and n blocks it with the note. The request store and the receipt record the channel, the assurance, the approver and the connection trust of each answer. Privileged job only."
+  labels: [approval, supervisor, privileged, linux]
+
+- id: approval/inline/no-stored-grant
+  title: "an answer on the terminal applies to its request only and stores no grant"
+  category: approval
+  tier: P0
+  guarantee: "After an approval on the terminal, the same action asks again. Without an answer the hook blocks with the request pending, names the request and the command that shows it, and the receipt keeps escalate until an answer or the expiry closes the request. Privileged job only."
+  labels: [approval, supervisor, privileged, linux]
+
+- id: approval/inline/wait-bounded
+  title: "the client bounds the inline wait by the configured wait and the hook timeout"
+  category: approval
+  tier: P0
+  guarantee: "A hook waits for an inline answer no longer than policy.approval.inline_wait and never past the hook timeout of the agent minus the margin. A wait under two seconds is no wait: the hook blocks at once with the request pending and shows no prompt. Privileged job only."
+  labels: [approval, supervisor, privileged, linux]
+
+- id: approval/expiry/deny
+  title: "an unanswered request expires as a deny and the next hook reports it"
+  category: approval
+  tier: P1
+  guarantee: "A request that nobody answers within policy.approval.request_ttl expires. The receipt records approval_timeout with the resolver, and the next hook of the session tells the agent once. A rule above the assurance of the terminal never asks the terminal. Privileged job only."
+  labels: [approval, supervisor, privileged, linux]
+
+- id: approval/admin/group-member
+  title: "a member of the approval group answers another account's request"
+  category: approval
+  tier: P0
+  guarantee: "On a managed host, a member of policy.approval.local_admin.group lists the pending requests of every account and answers one with gryph policy approve resolve after a confirmation on the terminal. The service checks the group and the account against the peer credentials, records the assurance of the answer, tells the requester's next hook, and a session grant lets the retries through. Privileged job only."
+  labels: [approval, supervisor, admin, privileged, linux]
+
+- id: approval/admin/grant-used-once
+  title: "a once grant lets the retry through one time"
+  category: approval
+  tier: P0
+  guarantee: "An allow with the scope once lets the same action through one time, and the second retry asks again. A scope wider than policy.approval.max_grant_scope is refused before anything changes. Privileged job only."
+  labels: [approval, supervisor, admin, privileged, linux]
+
+- id: approval/admin/non-member-refused
+  title: "an account outside the approval group cannot answer"
+  category: approval
+  tier: P0
+  guarantee: "An account outside policy.approval.local_admin.group sees its own requests only and cannot answer another account's request. The request stays pending. Privileged job only."
+  labels: [approval, supervisor, admin, privileged, linux]
+
+- id: approval/admin/requester-uid-refused
+  title: "the account that asked cannot answer its own request"
+  category: approval
+  tier: P0
+  guarantee: "The service refuses an answer from the account that asked, also when that account is in the approval group, and gryph policy approve resolve refuses --yes on a managed host. Privileged job only."
+  labels: [approval, supervisor, admin, privileged, linux]
+
+- id: approval/admin/superseded
+  title: "the first answer wins and a later one is superseded"
+  category: approval
+  tier: P1
+  guarantee: "Two approvers answer one request. The first answer decides it, the second approver is told the request was answered first, and the requester's next hook reports the first answer with its note. Privileged job only."
+  labels: [approval, supervisor, admin, privileged, linux]
+
+- id: approval/local-auth/password-required
+  title: "the service asks the approver for their password on a host with polkit"
+  category: approval
+  tier: P0
+  guarantee: "On a host with polkit, the decision service asks the approver for their password through polkit before it takes the answer. pkttyagent asks on the terminal of gryph policy approve resolve. The right password makes the answer local-auth and stores the grant. A wrong password leaves the request pending. Privileged job with polkit only."
+  labels: [approval, supervisor, local-auth, privileged, linux]
+
+- id: approval/local-auth/pty-agent-refused
+  title: "an agent that types on a pseudo terminal cannot pass the password prompt"
+  category: approval
+  tier: P0
+  guarantee: "An answer whose password prompt gets no valid password is refused and the request stays pending. Only policy.approval.local_admin.allow_without_auth in the managed configuration waives the password, and the answer then counts at a lower assurance than local-auth. Privileged job with polkit only."
+  labels: [approval, supervisor, local-auth, privileged, linux]
+
+- id: approval/low-trust/deferral-only
+  title: "an escalation from a low-trust connection asks nobody on the terminal"
+  category: approval
+  tier: P0
+  guarantee: "A session binds to the first known agent process above its hooks. A hook of the same session from outside that agent, while it lives, is low trust: an escalate rule that accepts the terminal gets no prompt, the request waits for an approver above the terminal, and the receipt and the request record the trust. Privileged job only."
+  labels: [approval, supervisor, trust, privileged, linux]
+
+- id: context/low-trust/prompt-no-reset
+  title: "a prompt from a low-trust connection does not become the latest intent"
+  category: context
+  tier: P0
+  guarantee: "A prompt from a connection outside the agent the session is bound to is recorded as an observation with peer_trust low. It does not become the latest intent and does not reset context.actions_since_intent. A prompt under the agent does. Privileged job only."
+  labels: [context, supervisor, trust, privileged, linux]
+
+- id: supervisor/install/ordering
+  title: "the managed install turns the service switch on only after the service answers"
+  category: supervisor
+  tier: P0
+  guarantee: "gryph install --managed with supervisor.enabled writes the configuration with the switch off, makes the service account, the keys and the spool root, writes the hardened socket and service units, and turns the switch on only after the service answered over the socket. A service that does not answer leaves the switch off and the run partial. gryph uninstall --managed clears the switch first and then removes the units. Privileged job only."
+  labels: [supervisor, install, privileged, linux]
+
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
   category: install
@@ -272,12 +677,117 @@
   guarantee: "A session end hook sets the session end time, and subagent events keep their subagent id and type through to the export."
   labels: [session, subagent]
 
+- id: hook/session/project-claim
+  title: "the hook process names the project of the working directory"
+  category: hook
+  tier: P1
+  guarantee: "A hook payload with a working directory makes the session record the project name from its manifest, or the directory name when there is no manifest."
+  labels: [hook, session, project]
+
 - id: hook/ingest/allow-matrix
   title: "every agent's read and write events persist correctly"
   category: hook
   tier: P1
   guarantee: "A read and a write payload for each supported agent parse and persist with the correct action type."
   labels: [hook, ingest, protocols]
+
+- id: reconcile/detect/hook-removed
+  title: "a reconcile pass detects a removed hook entry and changes nothing"
+  category: reconcile
+  tier: P0
+  guarantee: "gryph supervisor reconcile --once reports a removed hook entry as drift, records one tamper event, leaves the file as it is when repair is off, and records nothing on a repeated pass."
+  labels: [reconcile, detect, selfprotect]
+
+- id: reconcile/repair/hook-restored
+  title: "a reconcile pass with repair on restores the Gryph hook entries"
+  category: reconcile
+  tier: P0
+  guarantee: "With policy.self_protection.repair on, or with --repair, a reconcile pass rewrites the Gryph entries of a changed hook configuration, keeps the user's other settings, and records the repair as a tamper event with a receipt."
+  labels: [reconcile, repair, selfprotect]
+
+- id: reconcile/repair/symlink-no-write
+  title: "a repair refuses a hook configuration that is a symbolic link"
+  category: reconcile
+  tier: P0
+  guarantee: "A repair of a hook configuration that is a symbolic link fails, leaves the target of the link unchanged, and records a repair_failed tamper event."
+  labels: [reconcile, repair, selfprotect, symlink]
+
+- id: reconcile/repair/invalid-json-no-clobber
+  title: "a repair leaves a hook configuration that does not parse"
+  category: reconcile
+  tier: P0
+  guarantee: "A repair of a hook configuration that does not parse fails and leaves the file byte for byte as it was, for every agent, also one whose human-run install replaces a malformed file."
+  labels: [reconcile, repair, selfprotect]
+
+- id: reconcile/repair/rate-limit
+  title: "a reconcile pass stops repairing an asset after three repairs in an hour"
+  category: reconcile
+  tier: P1
+  guarantee: "After three repairs of one hook configuration within an hour, a reconcile pass leaves it as it is, reports the rate limit, and records one rate_limited tamper event."
+  labels: [reconcile, repair, selfprotect]
+
+- id: reconcile/units/installed
+  title: "install --managed writes the system-wide reconcile job for every account"
+  category: reconcile
+  tier: P1
+  guarantee: "gryph install --managed writes the systemd user units under /etc/systemd/user that run gryph supervisor reconcile --once as each account at login and every 15 minutes, with the managed binary as the program. gryph uninstall --managed removes them. Privileged job only."
+  labels: [reconcile, managed, privileged, linux]
+
+- id: reconcile/timer/units-written
+  title: "install --repair-timer writes the reconcile timer units and uninstall removes them"
+  category: reconcile
+  tier: P2
+  guarantee: "On Linux, gryph install --repair-timer writes the systemd user service and timer that run gryph supervisor reconcile --once every 15 minutes, exits zero when the scheduler is out of reach, and gryph uninstall --repair-timer removes the units."
+  labels: [reconcile, timer, linux]
+
+- id: receipts/signing/key-scope
+  title: "a user-key signature carries the key scope user"
+  category: receipts
+  tier: P1
+  guarantee: "A receipt signed with a key in the user's config directory carries signer_key_scope user. The receipt list, the JSONL and CSV exports, gryph policy receipts --verify and verify-log print the scope, so an audit does not read the signature as one of the decision service."
+  labels: [receipts, signing, key-scope]
+
+- id: receipts/managed/trust-store
+  title: "install --managed --trust-store ships the fleet trust store"
+  category: receipts
+  tier: P1
+  guarantee: "gryph install --managed --trust-store writes the administrator's receipt trust store to the managed keys directory, root-owned 0644, and refuses an invalid one with exit 3. Every user's verifier and gryph policy keys list trust its keys next to the user's own store, a user key command writes the user's store only, and gryph doctor --managed reports the store. Privileged job only."
+  labels: [receipts, managed, privileged, linux]
+
+- id: receipts/system-session/verify
+  title: "tamper events are receipts in the system session and the chain verifies"
+  category: receipts
+  tier: P0
+  guarantee: "gryph doctor records a tamper event with a receipt in the account's system session when a hook configuration drifts, when the drift clears, and not on a repeated run. gryph policy receipts --verify and verify-log pass on the chain."
+  labels: [receipts, selfprotect, tamper]
+
+- id: doctor/census/silent-agent
+  title: "doctor reports a live agent with no hook traffic as a silent agent"
+  category: doctor
+  tier: P1
+  guarantee: "A process named like an agent program that runs through the census window with no hook event is drift on the hook_traffic row and a silent_agent tamper event. A hook call clears it, as a resolved tamper event."
+  labels: [doctor, census, selfprotect]
+
+- id: doctor/managed/json-contract
+  title: "doctor --managed prints the compliance report with a stable JSON contract"
+  category: doctor
+  tier: P0
+  guarantee: "gryph doctor --managed reports schema_version, profile, issues, the config, policy and binary chain state, the per-agent class and level, the key scope, the supervisor state and the collection level. It exits 0 only for the locked profile, and it refuses a binary that root does not own. Privileged job only."
+  labels: [doctor, managed, privileged, linux]
+
+- id: doctor/posture/report
+  title: "doctor reports the host posture"
+  category: doctor
+  tier: P1
+  guarantee: "gryph doctor prints a host posture section with the Linux kernel settings that decide how far a same-user adversary gets, and for each present agent what it does when a hook fails, with its hook timeout and, for Cursor, the failClosed state."
+  labels: [doctor, posture]
+
+- id: doctor/selfprotect/asset-table
+  title: "doctor prints the self-protection level of every asset and the profile"
+  category: doctor
+  tier: P0
+  guarantee: "gryph doctor prints one row per Gryph asset with its level and detail, a drift line when a hook configuration differs from a current install, and the profile the levels earn: none with policy off, guard with policy on."
+  labels: [doctor, selfprotect]
 
 - id: health/doctor/unhealthy-flagged
   title: "doctor flags a missing database and invalid hooks"
@@ -581,3 +1091,31 @@
   tier: P2
   guarantee: "With --limit 3 and ten actions after a prompt, the window still holds the prompt."
   labels: [context, window, intent]
+
+- id: kernel/fanotify/write-denied
+  title: "the kernel watcher stops a write to a managed file by a non-privileged account"
+  category: kernel
+  tier: P1
+  guarantee: "With gryph supervisor fanotify up, a process of a non-privileged account cannot open a managed file for a write, a truncate or a create, also when the access checks of the file would let it. A read from any thread passes, an exec of the managed binary passes and root passes. A rename or an unlink of a protected file is recorded in the state file with the account that made it, the file at the path is marked again, and gryph doctor shows it as drift. Nightly kernel job only."
+  labels: [kernel, fanotify, self-protection, privileged, linux]
+
+- id: kernel/fanotify/provider-level
+  title: "the fanotify provider raises the binary, the policy and the config to prevent_same_user"
+  category: kernel
+  tier: P1
+  guarantee: "With the kernel watcher up on a managed host, gryph doctor and the reconcile pass show the binary, the policy and the configuration at prevent_same_user from the fanotify provider, and the host earns the locked profile. When the watcher stops, its state file goes and the rows fall back to the levels the built-in rules give. Nightly kernel job only."
+  labels: [kernel, fanotify, self-protection, privileged, linux]
+
+- id: kernel/landlock/write-denied
+  title: "gryph run keeps the configuration directory out of the agent's write reach"
+  category: kernel
+  tier: P1
+  guarantee: "On a Linux kernel with Landlock, gryph run starts a program under a ruleset that keeps the Gryph configuration directory readable and refuses every write, create, remove and rename in it from the program and from anything it starts, whatever path the write takes. A configuration directory that does not exist yet is made before the ruleset, so the program cannot make its own. Every launch carries the ruleset. The rest of the file system stays as it is, except that no new entry can be made directly inside an ancestor of the protected directory. A hook under the ruleset still records its event. The census shows which live agent processes started through the launcher. A program that is not on PATH is an error."
+  labels: [kernel, landlock, self-protection, linux]
+
+- id: kernel/bpf-lsm/probe-report
+  title: "doctor reports whether a BPF LSM program could attach on this host"
+  category: kernel
+  tier: P2
+  guarantee: "On Linux, gryph doctor prints a bpf lsm row under the host posture with the value available, not built, not active, not available or unknown, and a note with the kernel configuration, the active LSM list and the BTF the probe found. The row is information: no provider uses the BPF LSM yet."
+  labels: [kernel, bpf-lsm, posture, linux]

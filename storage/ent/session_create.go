@@ -342,6 +342,34 @@ func (_c *SessionCreate) SetNillableCostSource(v *string) *SessionCreate {
 	return _c
 }
 
+// SetImported sets the "imported" field.
+func (_c *SessionCreate) SetImported(v bool) *SessionCreate {
+	_c.mutation.SetImported(v)
+	return _c
+}
+
+// SetNillableImported sets the "imported" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableImported(v *bool) *SessionCreate {
+	if v != nil {
+		_c.SetImported(*v)
+	}
+	return _c
+}
+
+// SetAgentProcess sets the "agent_process" field.
+func (_c *SessionCreate) SetAgentProcess(v string) *SessionCreate {
+	_c.mutation.SetAgentProcess(v)
+	return _c
+}
+
+// SetNillableAgentProcess sets the "agent_process" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableAgentProcess(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetAgentProcess(*v)
+	}
+	return _c
+}
+
 // SetCostComputedAt sets the "cost_computed_at" field.
 func (_c *SessionCreate) SetCostComputedAt(v time.Time) *SessionCreate {
 	_c.mutation.SetCostComputedAt(v)
@@ -480,6 +508,10 @@ func (_c *SessionCreate) defaults() {
 		v := session.DefaultEstimatedCostUsd
 		_c.mutation.SetEstimatedCostUsd(v)
 	}
+	if _, ok := _c.mutation.Imported(); !ok {
+		v := session.DefaultImported
+		_c.mutation.SetImported(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := session.DefaultID()
 		_c.mutation.SetID(v)
@@ -540,6 +572,9 @@ func (_c *SessionCreate) check() error {
 	}
 	if _, ok := _c.mutation.EstimatedCostUsd(); !ok {
 		return &ValidationError{Name: "estimated_cost_usd", err: errors.New(`ent: missing required field "Session.estimated_cost_usd"`)}
+	}
+	if _, ok := _c.mutation.Imported(); !ok {
+		return &ValidationError{Name: "imported", err: errors.New(`ent: missing required field "Session.imported"`)}
 	}
 	return nil
 }
@@ -671,6 +706,14 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CostSource(); ok {
 		_spec.SetField(session.FieldCostSource, field.TypeString, value)
 		_node.CostSource = value
+	}
+	if value, ok := _c.mutation.Imported(); ok {
+		_spec.SetField(session.FieldImported, field.TypeBool, value)
+		_node.Imported = value
+	}
+	if value, ok := _c.mutation.AgentProcess(); ok {
+		_spec.SetField(session.FieldAgentProcess, field.TypeString, value)
+		_node.AgentProcess = value
 	}
 	if value, ok := _c.mutation.CostComputedAt(); ok {
 		_spec.SetField(session.FieldCostComputedAt, field.TypeTime, value)

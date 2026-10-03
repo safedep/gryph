@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
@@ -23,21 +24,24 @@ var legacyPluginDigests = []string{
 	"f4fff21552c6f379451144340ffd8f346bb953984d0eb5df49c405971beca786",
 }
 
-func processedPlugin() []byte {
-	return bytes.ReplaceAll(pluginJS, []byte(utils.GryphCommandPlaceholder), []byte(utils.GryphCommand()))
+func processedPlugin(program string) []byte {
+	return utils.RenderPlugin(pluginJS, program)
 }
 
 // Hooks declares the OpenCode hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
-var Hooks = []events.HookSpec{
+//
+// The Gryph plugin waits 5 s and lets the action through on every result
+// other than exit code 2.
+var Hooks = events.WithTimeout(5*time.Second, []events.HookSpec{
 	{Type: "chat.message", Phase: events.PhasePre, Blocking: true, Prompt: true},
 	{Type: "tool.execute.before", Phase: events.PhasePre, Blocking: true},
 	{Type: "tool.execute.after", Phase: events.PhasePost},
 	{Type: "session.created", Phase: events.PhaseUnknown},
 	{Type: "session.idle", Phase: events.PhaseUnknown},
 	{Type: "session.error", Phase: events.PhaseUnknown},
-}
+})
 
 // HookTypes are the hook type names in Hooks, in install order.
 var HookTypes = agent.HookTypeNames(Hooks)
@@ -108,12 +112,12 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	pluginDir := filepath.Dir(pluginFile)
-	if err := os.MkdirAll(pluginDir, 0700); err != nil {
+	if err := agent.EnsureHookDir(pluginDir, 0700, opts); err != nil {
 		result.Error = fmt.Errorf("failed to create plugins directory: %w", err)
 		return result, result.Error
 	}
 
-	if err := os.WriteFile(pluginFile, processedPlugin(), 0644); err != nil {
+	if err := agent.WriteHookFile(pluginFile, processedPlugin(opts.Command), 0644, opts); err != nil {
 		result.Error = fmt.Errorf("failed to write plugin file: %w", err)
 		return result, result.Error
 	}
@@ -205,7 +209,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 		return status, nil
 	}
 
-	agent.SetPluginStatus(status, data, processedPlugin(), legacyPluginDigests, Hooks,
+	agent.SetPluginStatus(status, data, processedPlugin(""), legacyPluginDigests, Hooks,
 		func(hookType string) string { return `"` + hookType + `"` },
 		"plugin file differs from expected content (may need update)")
 

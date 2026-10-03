@@ -161,11 +161,11 @@ INSERT INTO aarm_receipts (
     result_status, duration_ms, error_message,
     snapshot, action_payload, prev_hash, hash,
     subagent_id, subagent_type, policy_hash,
-    signature, signer_key_id,
+    signature, signer_key_id, signer_key_scope,
     defer_reason, deferral_of_sequence,
     human_principal, service_identity, role_scope,
-    command_digest, url_digest, hash_version, content_salt
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    command_digest, url_digest, hash_version, content_salt, peer_trust
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	var actionIDArg, eventIDArg, agentArg, toolArg, projectArg interface{}
 	if row.ActionID != uuid.Nil {
@@ -242,12 +242,15 @@ INSERT INTO aarm_receipts (
 		policyHashArg = row.PolicyHash
 	}
 
-	var signatureArg, signerKeyIDArg interface{}
+	var signatureArg, signerKeyIDArg, signerKeyScopeArg interface{}
 	if len(row.Signature) > 0 {
 		signatureArg = row.Signature
 	}
 	if row.SignerKeyID != "" {
 		signerKeyIDArg = row.SignerKeyID
+	}
+	if row.SignerKeyScope != "" {
+		signerKeyScopeArg = row.SignerKeyScope
 	}
 
 	var deferReasonArg, deferralOfSequenceArg interface{}
@@ -282,6 +285,10 @@ INSERT INTO aarm_receipts (
 	if row.HashVersion != 0 {
 		hashVersionArg = row.HashVersion
 	}
+	var peerTrustArg interface{}
+	if row.PeerTrust != "" {
+		peerTrustArg = row.PeerTrust
+	}
 
 	_, err := tx.ExecContext(ctx, stmt,
 		row.ID, row.SessionID, actionIDArg, eventIDArg, row.RecordedAt, row.Sequence,
@@ -290,10 +297,10 @@ INSERT INTO aarm_receipts (
 		row.ResultStatus, durationArg, errorMsgArg,
 		snapshotArg, payloadArg, prevHashArg, row.Hash,
 		subagentIDArg, subagentTypeArg, policyHashArg,
-		signatureArg, signerKeyIDArg,
+		signatureArg, signerKeyIDArg, signerKeyScopeArg,
 		deferReasonArg, deferralOfSequenceArg,
 		humanPrincipalArg, serviceIdentityArg, roleScopeArg,
-		commandDigestArg, urlDigestArg, hashVersionArg, contentSaltArg,
+		commandDigestArg, urlDigestArg, hashVersionArg, contentSaltArg, peerTrustArg,
 	)
 	return err
 }
@@ -338,7 +345,10 @@ func receiptCreate(client *ent.AarmReceiptClient, row *ReceiptRow) *ent.AarmRece
 		SetActionType(row.ActionType).
 		SetDecision(row.Decision).
 		SetResultStatus(aarmreceipt.ResultStatus(row.ResultStatus)).
-		SetHash(row.Hash)
+		SetHash(row.Hash).
+		SetImported(row.Imported).
+		SetApproval(row.Approval).
+		SetPeerTrust(row.PeerTrust)
 
 	if row.ActionID != uuid.Nil {
 		create.SetActionID(row.ActionID)
@@ -393,6 +403,9 @@ func receiptCreate(client *ent.AarmReceiptClient, row *ReceiptRow) *ent.AarmRece
 	}
 	if row.SignerKeyID != "" {
 		create.SetSignerKeyID(row.SignerKeyID)
+	}
+	if row.SignerKeyScope != "" {
+		create.SetSignerKeyScope(row.SignerKeyScope)
 	}
 	if row.DeferReason != "" {
 		create.SetDeferReason(row.DeferReason)
@@ -569,6 +582,24 @@ func (s *SQLiteStore) UpdateReceiptDecision(ctx context.Context, sessionID uuid.
 	}
 	if _, err := update.Save(ctx); err != nil {
 		return fmt.Errorf("storage: update receipt decision: %w", err)
+	}
+	return nil
+}
+
+// UpdateReceiptApproval implements ReceiptStore.
+func (s *SQLiteStore) UpdateReceiptApproval(ctx context.Context, sessionID uuid.UUID, sequence int64, approval map[string]interface{}) error {
+	if sessionID == uuid.Nil {
+		return fmt.Errorf("storage: UpdateReceiptApproval: nil session ID")
+	}
+	n, err := s.client.AarmReceipt.Update().
+		Where(aarmreceipt.SessionIDEQ(sessionID), aarmreceipt.SequenceEQ(sequence)).
+		SetApproval(approval).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: update receipt approval: %w", err)
+	}
+	if n == 0 {
+		return nil
 	}
 	return nil
 }
@@ -768,6 +799,7 @@ func entToReceipt(e *ent.AarmReceipt) *ReceiptRow {
 		PolicyHash:      e.PolicyHash,
 		Signature:       e.Signature,
 		SignerKeyID:     e.SignerKeyID,
+		SignerKeyScope:  e.SignerKeyScope,
 		DeferReason:     e.DeferReason,
 		HumanPrincipal:  e.HumanPrincipal,
 		ServiceIdentity: e.ServiceIdentity,
@@ -776,6 +808,9 @@ func entToReceipt(e *ent.AarmReceipt) *ReceiptRow {
 		URLDigest:       e.URLDigest,
 		HashVersion:     e.HashVersion,
 		ContentSalt:     e.ContentSalt,
+		Imported:        e.Imported,
+		Approval:        e.Approval,
+		PeerTrust:       e.PeerTrust,
 	}
 	if e.DurationMs != nil {
 		v := *e.DurationMs

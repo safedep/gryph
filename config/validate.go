@@ -6,12 +6,37 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"strings"
+	"time"
 
 	"github.com/safedep/gryph/aarm/model"
 )
 
 // validate checks the configuration for errors.
 func validate(cfg *Config) error {
+	if err := validateManagedConfig(cfg.Managed); err != nil {
+		return err
+	}
+	if cfg.Collection.Level != "" && !slices.Contains(CollectionLevels, cfg.Collection.Level) {
+		return fmt.Errorf("collection.level %q is not evidence, policy or full", cfg.Collection.Level)
+	}
+	switch cfg.Supervisor.Profile {
+	case "", SupervisorProfileEnforce:
+	case SupervisorProfilePilot:
+		if _, err := ParsePilotUntil(cfg.Supervisor.PilotUntil); err != nil {
+			return fmt.Errorf("supervisor.profile pilot needs supervisor.pilot_until, the date the pilot ends: %w", err)
+		}
+	default:
+		return fmt.Errorf("supervisor.profile %q is not enforce or pilot", cfg.Supervisor.Profile)
+	}
+	for name, v := range map[string]string{"blocking": cfg.Supervisor.Unavailable.Blocking, "prompt": cfg.Supervisor.Unavailable.Prompt, "other": cfg.Supervisor.Unavailable.Other} {
+		switch v {
+		case "", UnavailableBlock, UnavailableAllow:
+		default:
+			return fmt.Errorf("supervisor.unavailable.%s %q is not block or allow", name, v)
+		}
+	}
+
 	// Validate logging level
 	if !isValidLoggingLevel(cfg.Logging.Level) {
 		return fmt.Errorf("invalid logging level: %s (must be minimal, standard, or full)", cfg.Logging.Level)
@@ -131,6 +156,9 @@ func validatePolicyConfig(cfg PolicyConfig) error {
 	if cfg.Approval.TimeoutSeconds < 1 {
 		return fmt.Errorf("policy.approval.timeout_seconds must be >= 1")
 	}
+	if err := validateApprovalService(cfg.Approval); err != nil {
+		return err
+	}
 	mode := cfg.Receipts.EffectiveSignMode()
 	switch mode {
 	case SignModeAuto, SignModeAlways, SignModeNever:
@@ -164,6 +192,29 @@ func validatePolicyConfig(cfg PolicyConfig) error {
 // validation (e.g. forbidden providers, well-formed values) lands in one
 // place.
 func validatePolicyIdentityConfig(_ IdentityConfig) {}
+
+// validateApprovalService checks the keys of the decision service's
+// approvals. A channel or a scope the binary does not know is an error,
+// so a typo never leaves a rule without a channel.
+func validateApprovalService(cfg ApprovalConfig) error {
+	for _, c := range cfg.Channels {
+		if !slices.Contains(ApprovalChannels, c) {
+			return fmt.Errorf("invalid policy.approval.channels entry %q (must be one of %s)", c, strings.Join(ApprovalChannels, ", "))
+		}
+	}
+	if cfg.MinAssurance != "" && !slices.Contains(ApprovalChannels, cfg.MinAssurance) {
+		return fmt.Errorf("invalid policy.approval.min_assurance %q (must be one of %s)", cfg.MinAssurance, strings.Join(ApprovalChannels, ", "))
+	}
+	if cfg.MaxGrantScope != "" && !slices.Contains(ApprovalScopes, cfg.MaxGrantScope) {
+		return fmt.Errorf("invalid policy.approval.max_grant_scope %q (must be one of %s)", cfg.MaxGrantScope, strings.Join(ApprovalScopes, ", "))
+	}
+	for key, d := range map[string]time.Duration{"inline_wait": cfg.InlineWait, "request_ttl": cfg.RequestTTL, "grant_ttl": cfg.GrantTTL} {
+		if d < 0 {
+			return fmt.Errorf("policy.approval.%s must be a duration of zero or more", key)
+		}
+	}
+	return nil
+}
 
 func validatePolicyDeferConfig(cfg DeferConfig) error {
 	if cfg.FreshSessionSeconds < 0 {

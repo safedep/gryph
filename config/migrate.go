@@ -60,9 +60,13 @@ func migrateLegacyLayout() {
 		{dataDirEnvKey, legacyDataDir(), getDataDir()},
 	}
 
+	// An explicit directory override is a custom layout, not a legacy one.
+	// Under a managed config the override has no effect, so it does not
+	// stop the migration either.
+	managed := managedConfigActive()
 	seen := map[string]bool{}
 	for _, kind := range kinds {
-		if os.Getenv(kind.envKey) != "" {
+		if !managed && os.Getenv(kind.envKey) != "" {
 			continue
 		}
 		pair := kind.legacy + "\x00" + kind.target
@@ -80,7 +84,7 @@ func migrateLegacyLayout() {
 		}
 	}
 
-	if os.Getenv(cacheDirEnvKey) == "" {
+	if managed || os.Getenv(cacheDirEnvKey) == "" {
 		// EnsureDirectories created the legacy cache directory empty, so a
 		// plain remove clears it. os.Remove refuses a non-empty directory.
 		if err := os.Remove(legacyCacheDir()); err != nil && !os.IsNotExist(err) {
@@ -144,7 +148,24 @@ func normalizeConfigFileName(configDir string) {
 // XDG preference on every platform and the preexisting-directory checks.
 // They are the only source of legacy paths.
 
+// legacyAccountDir returns the legacy directory under the account base
+// directory when a managed config is active, because the environment then
+// has no say in any path. The second value is false otherwise.
+func legacyAccountDir(kind func(baseDirs) string) (string, bool) {
+	if !managedConfigActive() {
+		return "", false
+	}
+	dirs, err := accountBaseDirsResolver()
+	if err != nil {
+		return "", false
+	}
+	return filepath.Join(kind(dirs), legacyLeaf), true
+}
+
 func legacyConfigDir() string {
+	if dir, ok := legacyAccountDir(func(d baseDirs) string { return d.config }); ok {
+		return dir
+	}
 	if xdgConfig := os.Getenv("XDG_CONFIG_HOME"); xdgConfig != "" {
 		return filepath.Join(xdgConfig, legacyLeaf)
 	}
@@ -158,6 +179,9 @@ func legacyConfigDir() string {
 }
 
 func legacyDataDir() string {
+	if dir, ok := legacyAccountDir(func(d baseDirs) string { return d.data }); ok {
+		return dir
+	}
 	if xdgData := os.Getenv("XDG_DATA_HOME"); xdgData != "" {
 		return filepath.Join(xdgData, legacyLeaf)
 	}
@@ -171,6 +195,9 @@ func legacyDataDir() string {
 }
 
 func legacyCacheDir() string {
+	if dir, ok := legacyAccountDir(func(d baseDirs) string { return d.cache }); ok {
+		return dir
+	}
 	return filepath.Join(cacheBaseDir(), legacyLeaf)
 }
 

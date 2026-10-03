@@ -7,7 +7,7 @@ import (
 )
 
 type Options struct {
-	Store        storage.Store
+	Store        storage.ReadStore
 	PollInterval time.Duration
 	AgentFilter  string
 	// AgentNames is the list of agent names the filter key cycles through.

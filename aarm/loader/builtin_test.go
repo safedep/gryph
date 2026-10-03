@@ -91,6 +91,10 @@ func TestBuiltinSource_BlocksHookCommand(t *testing.T) {
 		{"eval of direnv", `eval "$(direnv export bash)"`, nil, false},
 		{"grep for the word with a variable", `grep -rn register_hook "$SRC"`, nil, false},
 		{"git log for the word with a substitution", `git log --grep=pre_hook $(git merge-base HEAD main)..HEAD`, nil, false},
+		{"approve resolve", `gryph policy approve resolve --id 1a2b3c4d --decision allow`, nil, true},
+		{"deferrals resolve in a nested shell", `bash -c 'gryph policy deferrals resolve --id 1a2b3c4d --decision allow --yes'`, nil, true},
+		{"approve list", `gryph policy approve list`, nil, false},
+		{"deferrals view", `gryph policy deferrals`, nil, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

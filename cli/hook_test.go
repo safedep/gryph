@@ -24,6 +24,8 @@ func (s *stubService) Handle(_ context.Context, req *decision.HookRequest) (*dec
 	return s.resp, nil
 }
 
+func (s *stubService) ReportHookError(context.Context, *decision.HookError) error { return nil }
+
 func TestRunHook_RendersDecision(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -53,6 +55,8 @@ func TestRunHook_RendersDecision(t *testing.T) {
 
 			require.NotNil(t, svc.req)
 			assert.Equal(t, claudecode.AgentName, svc.req.Event.AgentName)
+			assert.Equal(t, "project", svc.req.Project.Name, "the hook side claims the project")
+			assert.Nil(t, svc.req.Cost, "no cost before session end")
 
 			if tc.wantCode == 0 {
 				assert.NoError(t, err)

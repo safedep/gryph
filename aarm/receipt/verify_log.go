@@ -29,6 +29,9 @@ type LogVerifyResult struct {
 	Warnings         []string       `json:"warnings,omitempty"`
 	OK               bool           `json:"ok"`
 	Sessions         map[string]int `json:"sessions,omitempty"`
+	// KeyScopes counts the signed rows per key scope, so an audit sees
+	// whether a user key or the decision service signed the log.
+	KeyScopes map[string]int `json:"key_scopes,omitempty"`
 }
 
 // LogVerifyErr is a single per-receipt failure surfaced by VerifyExportedLog.
@@ -255,5 +258,20 @@ func verifyOneExportedChain(rows []ExportedReceipt, verifier Verifier, out *LogV
 				out.SignedOK++
 			}
 		}
+		if len(sigBytes) > 0 {
+			if out.KeyScopes == nil {
+				out.KeyScopes = map[string]int{}
+			}
+			out.KeyScopes[keyScopeLabel(row.SignerKeyScope)]++
+		}
 	}
+}
+
+// keyScopeLabel names the scope of a signed row. A row from before the
+// marker has none, and a user key signed it.
+func keyScopeLabel(scope string) string {
+	if scope == "" {
+		return KeyScopeUnmarked
+	}
+	return scope
 }

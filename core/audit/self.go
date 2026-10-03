@@ -31,6 +31,9 @@ const (
 	ActionRetentionCleanup SelfAuditAction = "retention_cleanup"
 	// ActionHookError indicates a hook invocation failed.
 	ActionHookError SelfAuditAction = "hook_error"
+	// ActionCollectionLevel records a collection level the account was told
+	// about: the level set or changed by the managed configuration.
+	ActionCollectionLevel SelfAuditAction = "collection_level"
 )
 
 // String returns the string representation of a SelfAuditAction.

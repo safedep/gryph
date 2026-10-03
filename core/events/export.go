@@ -23,7 +23,7 @@ func (e *Event) ForExport(p privacy.ExportProfile) *Event {
 		out.RawEvent = nil
 	}
 	payload, labels := e.exportLabels(&out.DiffContent)
-	out.DiffContent, _ = p.Apply(out.DiffContent)
+	out.DiffContent, _ = p.ApplyField(privacy.FieldDiffContent, out.DiffContent)
 	if payload == nil && len(e.Payload) > 0 && !p.IncludesAll() {
 		out.Payload = nil
 	}
@@ -34,7 +34,7 @@ func (e *Event) ForExport(p privacy.ExportProfile) *Event {
 	}
 
 	privacy.Project(payload, p)
-	projectPlainFields(payload, plain)
+	projectPlainFields(payload, plain, p)
 	keepHash := plain == privacy.TreatInclude && !e.IsSensitive &&
 		!slices.ContainsFunc(labels, func(l privacy.Label) bool { return !l.DigestExportable() })
 	projectContentHash(payload, p, keepHash)
@@ -130,23 +130,32 @@ func projectContentHash(payload any, p privacy.ExportProfile, keep bool) {
 }
 
 // projectPlainFields applies the treatment to the payload fields that hold
-// content in a plain string.
-func projectPlainFields(payload any, t privacy.Treatment) {
-	if t == privacy.TreatInclude {
-		return
+// content in a plain string, and the plain treatment of the profile (the
+// redactor again, the URL strip) to the ones the export includes. A path
+// gets the plain treatment only: a rule matches on it, so it stays.
+func projectPlainFields(payload any, t privacy.Treatment, profile privacy.ExportProfile) {
+	plain := func(v string) string {
+		return profile.PlainValue(t.Plain(v))
 	}
 	switch p := payload.(type) {
 	case *FileReadPayload:
-		p.Pattern = t.Plain(p.Pattern)
+		p.Path = profile.PlainValue(p.Path)
+		p.Pattern = plain(p.Pattern)
+	case *FileWritePayload:
+		p.Path = profile.PlainValue(p.Path)
+	case *FileDeletePayload:
+		p.Path = profile.PlainValue(p.Path)
 	case *CommandExecPayload:
-		p.Description = t.Plain(p.Description)
+		p.Description = plain(p.Description)
 		for i := range p.Args {
-			p.Args[i] = t.Plain(p.Args[i])
+			p.Args[i] = plain(p.Args[i])
 		}
 	case *SessionEndPayload:
-		p.Reason = t.Plain(p.Reason)
+		p.Reason = plain(p.Reason)
 	case *NotificationPayload:
-		p.Message = t.Plain(p.Message)
-		p.Details = nil
+		p.Message = plain(p.Message)
+		if t != privacy.TreatInclude {
+			p.Details = nil
+		}
 	}
 }

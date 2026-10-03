@@ -14,31 +14,20 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	aarmsec "github.com/safedep/gryph/aarm"
-	"github.com/safedep/gryph/aarm/accumulator"
-	"github.com/safedep/gryph/aarm/approval"
-	"github.com/safedep/gryph/aarm/classify"
 	"github.com/safedep/gryph/aarm/identity"
-	"github.com/safedep/gryph/aarm/injectscore"
 	"github.com/safedep/gryph/aarm/loader"
-	"github.com/safedep/gryph/aarm/mediation"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
-	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/aarm/shellcmd"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/privacy"
-	coresecurity "github.com/safedep/gryph/core/security"
-	"github.com/safedep/gryph/core/session"
-	"github.com/safedep/gryph/decision"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/schema"
-	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -194,7 +183,7 @@ func auditPolicyChange(ctx context.Context, app *App, operation, path string) {
 		return
 	}
 	details := map[string]interface{}{"operation": operation, "path": path}
-	if err := logSelfAudit(ctx, app.Store, SelfAuditActionConfigChange, "", details, SelfAuditResultSuccess, ""); err != nil {
+	if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionConfigChange, "", details, engine.SelfAuditResultSuccess, ""); err != nil {
 		log.Warnf("failed to record %s self-audit: %v", operation, err)
 	}
 }
@@ -291,7 +280,7 @@ func newPolicyInitCmd() *cobra.Command {
 // reuses rule IDs that another file already defines. It does not fail. The file
 // is written, and the author edits the IDs to make them unique.
 func warnMergedPolicyConflict(cmd *cobra.Command, app *App) {
-	if _, err := buildPolicyLoader(appConfig(app), appPaths(app)).Load(cmd.Context()); err != nil {
+	if _, err := engine.BuildPolicyLoader(appConfig(app), appPaths(app)).Load(cmd.Context()); err != nil {
 		c := policyColorizer(app)
 		out := cmd.OutOrStdout()
 		_, _ = fmt.Fprintf(out, "  %s %s\n", c.Warning("Warning:"), firstLine(err.Error()))
@@ -388,7 +377,7 @@ func newPolicyBuiltinCmd() *cobra.Command {
 				paths = config.ResolvePaths()
 			}
 
-			src := selfProtectionSource(cfg, paths)
+			src := engine.SelfProtectionSource(cfg, paths)
 			docs, err := src.Load(cmd.Context())
 			if err != nil {
 				return ErrConfig("build self-protection rules", err)
@@ -425,6 +414,15 @@ const (
 	sourceStatusIsDirectory = "is a directory"
 )
 
+// scopedKind prefixes the kind of a managed source, so the listing shows
+// who owns it.
+func scopedKind(src loader.Source, kind string) string {
+	if loader.ScopeOf(src) == loader.ScopeManaged {
+		return "managed-" + kind
+	}
+	return kind
+}
+
 func sourceRows(sources []loader.Source) []sourceRow {
 	rows := make([]sourceRow, 0, len(sources))
 	for _, src := range sources {
@@ -437,10 +435,10 @@ func sourceToRow(src loader.Source) sourceRow {
 	switch s := src.(type) {
 	case *loader.FileSource:
 		status, problem := fileSourceStatus(s.Path, s.Optional)
-		return sourceRow{Kind: "file", Path: s.Path, Optional: s.Optional, Status: status, Problem: problem}
+		return sourceRow{Kind: scopedKind(s, "file"), Path: s.Path, Optional: s.Optional, Status: status, Problem: problem}
 	case *loader.DirSource:
 		status, problem := dirSourceStatus(s.Path, s.Optional)
-		return sourceRow{Kind: "dir", Path: s.Path, Optional: s.Optional, Status: status, Problem: problem}
+		return sourceRow{Kind: scopedKind(s, "dir"), Path: s.Path, Optional: s.Optional, Status: status, Problem: problem}
 	case *loader.BuiltinSource:
 		return sourceRow{
 			Kind:     "builtin",
@@ -451,7 +449,7 @@ func sourceToRow(src loader.Source) sourceRow {
 				"Built-in rules protecting Gryph policy files, config, database, keys, and agent hook configs",
 				"Reads of the database and the receipt signing key are also blocked",
 				"Always loaded last; not affected by user disabled: lists",
-				"Toggle with policy.self_protection.enabled in the config file",
+				"Toggle with policy.self_protection.enabled in the config file. Always on under a system managed configuration",
 			},
 		}
 	default:
@@ -539,7 +537,7 @@ func decorateSourceStatus(c *tui.Colorizer, status string, problem bool) string 
 }
 
 func reportPolicyValidation(cmd *cobra.Command, app *App) error {
-	ldr := buildPolicyLoader(appConfig(app), appPaths(app))
+	ldr := engine.BuildPolicyLoader(appConfig(app), appPaths(app))
 	policy, err := ldr.Load(cmd.Context())
 	if err != nil {
 		return ErrConfig("failed to validate policy", err)
@@ -641,6 +639,7 @@ func newPolicyTestCmd() *cobra.Command {
 		contextFile  string
 		kind         string
 		origin       string
+		degraded     bool
 	)
 
 	cmd := &cobra.Command{
@@ -665,7 +664,11 @@ func newPolicyTestCmd() *cobra.Command {
 			if err != nil {
 				return ErrConfig("failed to load policy", err)
 			}
-			engine, err := pdp.New(policy)
+			var pdpOpts []pdp.Option
+			if degraded {
+				pdpOpts = append(pdpOpts, pdp.WithDegraded())
+			}
+			engine, err := pdp.New(policy, pdpOpts...)
 			if err != nil {
 				return ErrConfig("failed to compile policy", err)
 			}
@@ -754,6 +757,7 @@ func newPolicyTestCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json")
 	cmd.Flags().StringVar(&file, "file", "", "dry-run against one policy file plus the built-in rules, instead of the active policy")
+	cmd.Flags().BoolVar(&degraded, "degraded", false, "evaluate as the hook does in the pilot profile with the decision service out of reach: a rule that reads the session context blocks")
 	cmd.Flags().StringVar(&actionType, "action", string(model.ActionToolUse), "action type")
 	cmd.Flags().StringVar(&tool, "tool", "", "tool name")
 	cmd.Flags().StringVar(&path, "path", "", "file path")
@@ -1005,519 +1009,18 @@ func orderedActionKeys(m map[string]string) []string {
 	return out
 }
 
-func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.Store) (*aarmsec.Mediator, error) {
-	ldr := buildPolicyLoader(cfg, paths)
-	policy, err := ldr.Load(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	var opts []aarmsec.MediatorOption
-	if store != nil {
-		opts = append(opts, aarmsec.WithAccumulator(accumulator.NewSQLite(store)))
-		if cfg != nil {
-			opts = append(opts, aarmsec.WithCELEntries(cfg.Policy.Context.CELEntries))
-		}
-		var recOpts []receipt.GeneratorOption
-		if cfg != nil && cfg.Policy.Receipts.EffectiveSignMode() != config.SignModeNever {
-			signer, signErr := loadReceiptSignerFromConfig(cfg, paths)
-			if signErr != nil {
-				return nil, fmt.Errorf("load receipt signer: %w", signErr)
-			}
-			if signer != nil {
-				recOpts = append(recOpts, receipt.WithSigner(signer))
-			}
-		}
-		base := receipt.NewSQLite(store, recOpts...)
-		opts = append(opts, aarmsec.WithReceiptGenerator(newAuditingReceiptGenerator(base, store)))
-	}
-	if cfg != nil {
-		policyCfg := cfg.EffectivePolicy()
-		opts = append(opts, aarmsec.WithMediatorConfig(aarmsec.MediatorConfig{
-			LogAllEvaluations: policyCfg.LogAllEvaluations,
-			ApprovalTimeout:   time.Duration(policyCfg.Approval.TimeoutSeconds) * time.Second,
-		}))
-
-		var classifier classify.Classifier
-		if h := newClassifier(cfg); h != nil {
-			classifier = h
-		}
-		if !policyCfg.Classify.FailOpen {
-			classifier = classify.NewFailSafe(classifier, privacy.ClassUnknownSensitive)
-		}
-
-		var adapterOpts []mediation.CommonOption
-		if classifier != nil {
-			adapterOpts = append(adapterOpts, mediation.WithClassifier(classifier))
-		}
-
-		if policyCfg.InjectionScore.Enabled {
-			adapterOpts = append(adapterOpts, mediation.WithInjectionScorer(injectscore.NewHeuristic()))
-		}
-
-		var identityCapturer identity.Capturer
-		if policyCfg.Identity.Enabled {
-			identityCapturer = identity.NewDefaultCapturer()
-		} else {
-			identityCapturer = identity.NewStaticCapturer(identity.Capture{})
-		}
-		adapterOpts = append(adapterOpts, mediation.WithIdentityCapturer(identityCapturer))
-		adapterOpts = append(adapterOpts, mediation.WithShellBudget(policyCfg.ShellBudget))
-
-		opts = append(opts, aarmsec.WithAdapter(mediation.NewHookAdapter(adapterOpts...)))
-		opts = append(opts, aarmsec.WithContentStrip(func(e *events.Event) bool {
-			return decision.StripsContent(e, cfg.GetAgentLoggingLevel(e.AgentName))
-		}))
-		opts = append(opts, aarmsec.WithIdentityConfig(aarmsec.IdentityConfig{
-			Enabled:               policyCfg.Identity.Enabled,
-			RequireHumanPrincipal: policyCfg.Identity.RequireHumanPrincipal,
-		}))
-		if store != nil {
-			opts = append(opts, aarmsec.WithIdentityAuditHook(newIdentityAuditHook(store)))
-		}
-
-		switch policyCfg.Approval.Mode {
-		case config.ApprovalModeCLI:
-			opts = append(opts, aarmsec.WithApprovalService(approval.NewCLIPrompt(
-				approval.WithRequireNote(policyCfg.Approval.RequireNote),
-			)))
-		default:
-			opts = append(opts, aarmsec.WithApprovalService(approval.NewNop()))
-		}
-
-		if store != nil {
-			opts = append(opts, aarmsec.WithApprovalAuditHook(newApprovalAuditHook(store)))
-		}
-
-		opts = append(opts, aarmsec.WithDeferralConfig(aarmsec.DeferralConfig{
-			Enabled:               policyCfg.Defer.Enabled,
-			TimeoutSeconds:        policyCfg.Defer.TimeoutSeconds,
-			FreshSessionSeconds:   policyCfg.Defer.FreshSessionSeconds,
-			ConflictTriggersDefer: policyCfg.Defer.ConflictTriggersDefer,
-		}))
-		if store != nil {
-			opts = append(opts, aarmsec.WithDeferralHook(newDeferralHook(store)))
-		}
-	}
-	return aarmsec.NewMediator(policy, opts...)
-}
-
-// auditingReceiptGenerator wraps a receipt.Generator and emits a
-// receipt_signed self-audit row after each signed receipt insert completes.
-// The audit is emitted after the receipt's write transaction has committed
-// so the audit insert does not contend with the receipt insert for the
-// SQLite writer lock.
-type auditingReceiptGenerator struct {
-	inner receipt.Generator
-	store storage.Store
-}
-
-func newAuditingReceiptGenerator(inner receipt.Generator, store storage.Store) *auditingReceiptGenerator {
-	return &auditingReceiptGenerator{inner: inner, store: store}
-}
-
-func (a *auditingReceiptGenerator) Record(ctx context.Context, in *receipt.RecordInput) (*receipt.Record, error) {
-	rec, err := a.inner.Record(ctx, in)
-	if err != nil {
-		return rec, err
-	}
-	if rec != nil && rec.SignerKeyID != "" && a.store != nil {
-		details := map[string]interface{}{
-			"key_id":     rec.SignerKeyID,
-			"session_id": in.SessionID.String(),
-			"sequence":   rec.Sequence,
-		}
-		if logErr := logSelfAudit(ctx, a.store, SelfAuditActionReceiptSigned, "",
-			details, SelfAuditResultSuccess, ""); logErr != nil {
-			log.Errorf("failed to record receipt_signed audit: %v", logErr)
-		}
-	}
-	return rec, nil
-}
-
-func (a *auditingReceiptGenerator) UpdateResult(ctx context.Context, sessionID uuid.UUID, sequence int64, result model.Result) error {
-	return a.inner.UpdateResult(ctx, sessionID, sequence, result)
-}
-
-func (a *auditingReceiptGenerator) UpdateDecision(ctx context.Context, sessionID uuid.UUID, sequence int64, decision string, resultStatus string, note string) error {
-	return a.inner.UpdateDecision(ctx, sessionID, sequence, decision, resultStatus, note)
-}
-
-// newDeferralHook returns the Mediator DeferralHook that persists the
-// pending-deferral row, emits the deferral_requested self-audit row, and
-// renders the CLI-shaped operator hint the Mediator splices into the
-// agent-facing block message. Keeping the hint here (instead of inside
-// aarm) lets aarm stay decoupled from CLI command spellings.
-func newDeferralHook(store storage.Store) aarmsec.DeferralHook {
-	return func(ctx context.Context, r aarmsec.DeferralRecord) (uuid.UUID, string, error) {
-		if store == nil {
-			return uuid.Nil, "", nil
-		}
-		row := &storage.DeferredActionRow{
-			ID:              uuid.New(),
-			SessionID:       r.SessionID,
-			ReceiptSequence: r.ReceiptSequence,
-			ActionID:        r.ActionID,
-			DeferredAt:      r.DeferredAt,
-			ExpiresAt:       r.ExpiresAt,
-			Reason:          r.Reason,
-			Status:          storage.DeferredActionStatusPending,
-		}
-		if err := store.InsertDeferredAction(ctx, row); err != nil {
-			log.Errorf("failed to insert deferred action: %v", err)
-			return uuid.Nil, "", err
-		}
-		details := map[string]interface{}{
-			"session_id":         r.SessionID.String(),
-			"action_id":          r.ActionID.String(),
-			"receipt_sequence":   r.ReceiptSequence,
-			"deferred_action_id": row.ID.String(),
-			"reason":             r.Reason,
-			"expires_at":         r.ExpiresAt.Format(time.RFC3339),
-		}
-		agent := ""
-		if r.Action != nil {
-			agent = r.Action.Agent
-			details["agent"] = r.Action.Agent
-			details["tool"] = r.Action.Tool
-			details["action_type"] = string(r.Action.Type)
-		}
-		if r.Decision != nil {
-			details["matched_rule_ids"] = r.Decision.MatchedRuleIDs
-		}
-		if err := logSelfAudit(ctx, store, SelfAuditActionDeferralRequested, agent,
-			details, SelfAuditResultSuccess, ""); err != nil {
-			log.Errorf("failed to record deferral_requested audit: %v", err)
-		}
-		hint := fmt.Sprintf("Resolve with `gryph policy deferrals resolve --id %s`.",
-			shortDeferralID(row.ID))
-		return row.ID, hint, nil
-	}
-}
-
-// shortDeferralID renders the 8-character prefix used in operator hints.
-// Falls back to the full string for IDs that are somehow shorter so the
-// hint always references something the operator can act on.
-func shortDeferralID(id uuid.UUID) string {
-	s := id.String()
-	if len(s) >= 8 {
-		return s[:8]
-	}
-	return s
-}
-
-func newApprovalAuditHook(store storage.Store) aarmsec.ApprovalAuditHook {
-	return func(ctx context.Context, e aarmsec.ApprovalAudit) {
-		if store == nil {
-			return
-		}
-		details := map[string]interface{}{}
-		agentName := ""
-		if e.Request != nil {
-			details["session_id"] = e.Request.SessionID.String()
-			details["action_id"] = e.Request.ActionID.String()
-			if e.Request.Action != nil {
-				agentName = e.Request.Action.Agent
-				details["agent"] = e.Request.Action.Agent
-				details["tool"] = e.Request.Action.Tool
-				details["action_type"] = string(e.Request.Action.Type)
-			}
-		}
-		if e.Decision != nil {
-			details["matched_rule_ids"] = e.Decision.MatchedRuleIDs
-		}
-		if e.Outcome != nil {
-			details["approver"] = e.Outcome.Approver
-			if e.Outcome.Note != "" {
-				details["note"] = e.Outcome.Note
-			}
-		}
-		result := SelfAuditResultSuccess
-		errMsg := ""
-		if e.Error != nil {
-			result = SelfAuditResultError
-			errMsg = e.Error.Error()
-		}
-		if e.Action == SelfAuditActionApprovalDenied || e.Action == SelfAuditActionApprovalTimeout {
-			result = SelfAuditResultSkipped
-		}
-		if err := logSelfAudit(ctx, store, e.Action, agentName, details, result, errMsg); err != nil {
-			log.Errorf("failed to record %s audit: %v", e.Action, err)
-		}
-	}
-}
-
-// newIdentityAuditHook returns a Mediator IdentityAuditHook that emits the
-// identity_missing self-audit row on the pre-PDP block path.
-func newIdentityAuditHook(store storage.Store) aarmsec.IdentityAuditHook {
-	return func(ctx context.Context, e aarmsec.IdentityAudit) {
-		if store == nil {
-			return
-		}
-		details := map[string]interface{}{}
-		agentName := ""
-		if e.Action != nil {
-			agentName = e.Action.Agent
-			details["session_id"] = e.Action.SessionID.String()
-			details["action_id"] = e.Action.ID.String()
-			details["agent"] = e.Action.Agent
-			details["tool"] = e.Action.Tool
-			details["action_type"] = string(e.Action.Type)
-		}
-		errMsg := ""
-		if e.Decision != nil {
-			errMsg = e.Decision.Reason
-		}
-		if err := logSelfAudit(ctx, store, SelfAuditActionIdentityMissing, agentName,
-			details, SelfAuditResultError, errMsg); err != nil {
-			log.Errorf("failed to record identity_missing audit: %v", err)
-		}
-	}
-}
-
-// lazyPolicyCheck defers policy load until the first hook event so a broken
-// policy file does not lock the user out of `gryph policy validate/test`,
-// the very commands they need to diagnose and fix it. Load errors propagate
-// to the security evaluator, which applies policy.fail_mode. The first load
-// failure is also recorded in the self-audit log so it surfaces under
-// `gryph self-log` even when fail_mode=open silently allows the action.
-type lazyPolicyCheck struct {
-	cfg      *config.Config
-	paths    *config.Paths
-	getStore func() storage.Store
-
-	once sync.Once
-	med  *aarmsec.Mediator
-	err  error
-}
-
-func newLazyPolicyCheck(cfg *config.Config, paths *config.Paths, getStore func() storage.Store) *lazyPolicyCheck {
-	return &lazyPolicyCheck{cfg: cfg, paths: paths, getStore: getStore}
-}
-
-func (l *lazyPolicyCheck) load() (*aarmsec.Mediator, error) {
-	l.once.Do(func() {
-		var store storage.Store
-		if l.getStore != nil {
-			store = l.getStore()
-		}
-		l.med, l.err = loadPolicyMediator(l.cfg, l.paths, store)
-		if l.err != nil {
-			l.recordLoadFailure(l.err)
-		}
-	})
-	return l.med, l.err
-}
-
-func (l *lazyPolicyCheck) recordLoadFailure(loadErr error) {
-	if l.getStore == nil {
-		return
-	}
-	store := l.getStore()
-	if store == nil {
-		return
-	}
-	details := map[string]interface{}{
-		"fail_mode": l.cfg.EffectivePolicy().FailMode,
-	}
-	if err := logSelfAudit(context.Background(), store, SelfAuditActionPolicyLoadError, "",
-		details, SelfAuditResultError, loadErr.Error()); err != nil {
-		log.Errorf("failed to record policy load failure: %v", err)
-	}
-}
-
-// Mediator returns the underlying aarm Mediator if it has been loaded
-// successfully. Returns nil if the policy has not yet been loaded or load
-// failed. Used by cli/hook.go to drive post-hook RecordResult calls.
-func (l *lazyPolicyCheck) Mediator() *aarmsec.Mediator {
-	if l == nil {
-		return nil
-	}
-	return l.med
-}
-
-func (l *lazyPolicyCheck) Name() string { return aarmsec.CheckName }
-
-func (l *lazyPolicyCheck) Enabled() bool {
-	if l == nil || l.cfg == nil {
-		return false
-	}
-	return l.cfg.EffectivePolicy().Enabled
-}
-
-func (l *lazyPolicyCheck) Check(ctx context.Context, event *events.Event, sess *session.Session) (*coresecurity.CheckResult, error) {
-	med, err := l.load()
-	if err != nil {
-		return nil, fmt.Errorf("policy load failed: %w", err)
-	}
-	result, checkErr := med.Check(ctx, event, sess)
-	if checkErr != nil {
-		if errors.Is(checkErr, accumulator.ErrSnapshot) {
-			l.recordAarmFailure(event, SelfAuditActionContextSnapshotError, "accumulator snapshot", checkErr)
-		}
-		if errors.Is(checkErr, accumulator.ErrAppend) {
-			l.recordAarmFailure(event, SelfAuditActionContextAppendError, "accumulator append", checkErr)
-		}
-		if errors.Is(checkErr, receipt.ErrInsert) {
-			l.recordAarmFailure(event, SelfAuditActionReceiptInsertError, "receipt insert", checkErr)
-		}
-	}
-	return result, checkErr
-}
-
-// recordAarmFailure is the shared shape behind every AARM-component self-audit
-// emission. label is the short human string used in the fallback log line
-// when no store is available. action selects the SelfAudit action constant.
-func (l *lazyPolicyCheck) recordAarmFailure(event *events.Event, action, label string, recErr error) {
-	if l.getStore == nil {
-		log.Warnf("aarm: %s failure (no store): %v", label, recErr)
-		return
-	}
-	store := l.getStore()
-	if store == nil {
-		log.Warnf("aarm: %s failure (nil store): %v", label, recErr)
-		return
-	}
-	details := map[string]interface{}{}
-	agentName := ""
-	if event != nil {
-		details["session_id"] = event.SessionID.String()
-		details["agent"] = event.AgentName
-		agentName = event.AgentName
-	}
-	details["error"] = recErr.Error()
-	if err := logSelfAudit(context.Background(), store, action, agentName,
-		details, SelfAuditResultError, recErr.Error()); err != nil {
-		log.Errorf("failed to record %s failure: %v", label, err)
-	}
-}
-
-var _ coresecurity.Check = (*lazyPolicyCheck)(nil)
-
-func buildPolicyLoader(cfg *config.Config, paths *config.Paths) *loader.Loader {
-	return loader.New(policyLoaderSources(cfg, paths)...)
-}
-
-// policyLoaderSources returns the ordered policy sources: the global file, the
-// policies directory, and (when self-protection is on) the built-in source.
-// It is the single definition of the resolution order shared by the loader and
-// the inspection commands.
-func policyLoaderSources(cfg *config.Config, paths *config.Paths) []loader.Source {
-	if paths == nil {
-		paths = config.ResolvePaths()
-	}
-	sources := []loader.Source{
-		loader.NewOptionalFileSource(config.DefaultPolicyFilePath(paths)),
-		loader.NewOptionalDirSource(config.DefaultPolicyDirPath(paths)),
-	}
-	return appendBuiltinSource(sources, cfg, paths)
-}
-
-// appendBuiltinSource adds the self-protection source when it is enabled.
-func appendBuiltinSource(sources []loader.Source, cfg *config.Config, paths *config.Paths) []loader.Source {
-	if selfProtectionEnabled(cfg) {
-		sources = append(sources, selfProtectionSource(cfg, paths))
-	}
-	return sources
-}
-
-func selfProtectionEnabled(cfg *config.Config) bool {
-	if cfg == nil {
-		return false
-	}
-	return cfg.EffectivePolicy().SelfProtection.Enabled
-}
-
 // testPolicyLoader builds the loader for `policy test`. With no file, it returns
 // the active merged policy. With a file, it returns that one file plus the
 // built-in rules, so an author can dry-run a workspace draft with faithful
 // precedence, without resolving the active policy.
 func testPolicyLoader(app *App, file string) (*loader.Loader, error) {
 	if file == "" {
-		return buildPolicyLoader(appConfig(app), appPaths(app)), nil
+		return engine.BuildPolicyLoader(appConfig(app), appPaths(app)), nil
 	}
 	p, err := expandUserPath(file)
 	if err != nil {
 		return nil, err
 	}
-	sources := appendBuiltinSource([]loader.Source{loader.NewFileSource(p)}, appConfig(app), appPaths(app))
+	sources := engine.AppendBuiltinSource([]loader.Source{loader.NewFileSource(p)}, appConfig(app), appPaths(app))
 	return loader.New(sources...), nil
-}
-
-// newClassifier builds the heuristic classifier from the config. It returns
-// nil when classification is off. The mediator and the decision service
-// share it.
-func newClassifier(cfg *config.Config) *classify.Heuristic {
-	if cfg == nil {
-		return nil
-	}
-	policyCfg := cfg.EffectivePolicy()
-	if !policyCfg.Classify.Enabled {
-		return nil
-	}
-	secretPaths := cfg.Privacy.SensitivePaths
-	if len(secretPaths) == 0 {
-		secretPaths = privacy.DefaultSensitivePatterns()
-	}
-	opts := []classify.HeuristicOption{classify.WithSecretPaths(secretPaths)}
-	if len(policyCfg.Classify.ExtraPatterns) > 0 {
-		extra := make(map[privacy.Class][]string, len(policyCfg.Classify.ExtraPatterns))
-		for class, patterns := range policyCfg.Classify.ExtraPatterns {
-			extra[privacy.Class(class)] = patterns
-		}
-		opts = append(opts, classify.WithExtraPatterns(extra))
-	}
-	return classify.NewHeuristic(opts...)
-}
-
-func selfProtectionSource(cfg *config.Config, paths *config.Paths) *loader.BuiltinSource {
-	return loader.NewBuiltinSource(selfProtectionGlobs(cfg, paths)...).
-		WithReadGlobs(selfProtectionReadGlobs(cfg, paths)...)
-}
-
-// selfProtectionReadGlobs returns the paths an agent must not read: the
-// database with its SQLite side files, the receipt signing key and the
-// export key. An agent may read the policy files and the hook configs, so
-// they are not here.
-func selfProtectionReadGlobs(cfg *config.Config, paths *config.Paths) []string {
-	if cfg == nil {
-		return nil
-	}
-	return append(databaseGlobs(cfg), keyGlobs(cfg, paths)...)
-}
-
-// keyGlobs returns the secret keys of the install. An agent that reads the
-// receipt key can sign receipts. An agent that reads the export key, or
-// writes a known one, can reverse the keyed digests of an export with a
-// dictionary.
-func keyGlobs(cfg *config.Config, paths *config.Paths) []string {
-	globs := []string{filepath.ToSlash(cfg.ResolveReceiptKeyPath(paths))}
-	if cfg.GetDatabasePath() != "" {
-		globs = append(globs, filepath.ToSlash(cfg.ExportKeyFile()))
-	}
-	return globs
-}
-
-// databaseGlobs returns the database path and its SQLite side files. The
-// WAL file holds committed rows until a checkpoint copies them.
-func databaseGlobs(cfg *config.Config) []string {
-	db := cfg.GetDatabasePath()
-	if db == "" {
-		return nil
-	}
-	db = filepath.ToSlash(db)
-	return []string{db, db + "-wal", db + "-shm", db + "-journal"}
-}
-
-func selfProtectionGlobs(cfg *config.Config, paths *config.Paths) []string {
-	var globs []string
-	if paths != nil && paths.ConfigDir != "" {
-		globs = append(globs, filepath.ToSlash(paths.ConfigDir)+"/**")
-	}
-	if cfg != nil {
-		globs = append(globs, databaseGlobs(cfg)...)
-		globs = append(globs, keyGlobs(cfg, paths)...)
-		globs = append(globs, filepath.ToSlash(cfg.ResolveReceiptTrustStorePath(paths)))
-	}
-	globs = append(globs, hookConfigGlobs()...)
-	return globs
 }

@@ -1,0 +1,46 @@
+# A change to a hook configuration becomes a tamper event in the system
+# session of the account, with a receipt in that session's chain. Doctor
+# records one event per change, not one per run. The chain verifies with
+# the same commands as an agent session.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+
+# A clean install records nothing.
+exec gryph doctor --no-color
+! stdout 'Tamper events recorded'
+
+# The first run that sees the drift records it. The second run does not.
+replace $HOME/.claude/settings.json PreToolUse XPreToolUse
+exec gryph doctor --no-color
+stdout 'Tamper events recorded: 1'
+exec gryph doctor --no-color
+! stdout 'Tamper events recorded'
+
+# The repair records the end of the drift.
+exec gryph install --force --agent claude-code
+exec gryph doctor --no-color
+stdout 'Tamper events recorded: 1'
+exec gryph doctor --no-color
+! stdout 'Tamper events recorded'
+
+exec gryph sessions --format json --no-color
+stdout '"AgentName": "gryph"'
+
+exec gryph policy receipts --format json --no-color
+stdout '"action_type":\s*"tamper"'
+stdout '"decision":\s*"tamper"'
+stdout '"result_status":\s*"recorded"'
+stdout 'hook_config claude-code drift: level detect to detect, hooks are invalid: PreToolUse'
+stdout 'hook_config claude-code resolved: level detect to detect'
+
+exec gryph policy receipts --verify --all-sessions --no-color
+stdout 'Chain verification: OK'
+
+exec gryph policy receipts export --format jsonl --output receipts.jsonl
+grep -count=2 '"action_type":"tamper"' receipts.jsonl
+exec gryph policy receipts verify-log --input receipts.jsonl --no-color
+stdout 'chain_breaks\s+0'

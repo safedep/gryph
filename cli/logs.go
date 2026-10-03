@@ -65,7 +65,7 @@ the results.`,
 				return err
 			}
 
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 
@@ -129,7 +129,7 @@ func runLiveLogs(app *App, p logParams) error {
 	slices.Sort(agentNames)
 
 	opts := livelog.Options{
-		Store:        app.Store,
+		Store:        app.Reads,
 		PollInterval: p.interval,
 		AgentFilter:  p.agent,
 		AgentNames:   agentNames,
@@ -214,7 +214,7 @@ func runListLogs(ctx context.Context, app *App, p logParams) error {
 		return err
 	}
 
-	evts, err := app.Store.QueryEvents(ctx, filter)
+	evts, err := app.Reads.QueryEvents(ctx, filter)
 	if err != nil {
 		return err
 	}
@@ -241,7 +241,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 	// to chronological order for streaming display.
 	filter = filter.WithSort(events.SortDesc)
 
-	evts, err := app.Store.QueryEvents(ctx, filter)
+	evts, err := app.Reads.QueryEvents(ctx, filter)
 	if err != nil {
 		return err
 	}
@@ -280,7 +280,7 @@ func runFollowLogs(ctx context.Context, app *App, p logParams) error {
 				pollFilter = pollFilter.WithAgents(p.agent)
 			}
 
-			newEvts, err := app.Store.QueryEvents(sigCtx, pollFilter)
+			newEvts, err := app.Reads.QueryEvents(sigCtx, pollFilter)
 			if err != nil {
 				continue
 			}
@@ -352,6 +352,7 @@ func eventToView(reg *agent.Registry, e *events.Event) *tui.EventView {
 	view := &tui.EventView{
 		ID:               e.ID.String(),
 		ShortID:          tui.FormatShortID(e.ID.String()),
+		Imported:         e.Imported,
 		SessionID:        e.SessionID.String(),
 		ShortSessionID:   tui.FormatShortID(e.SessionID.String()),
 		Sequence:         e.Sequence,
@@ -365,6 +366,8 @@ func eventToView(reg *agent.Registry, e *events.Event) *tui.EventView {
 		ErrorMessage:     e.ErrorMessage,
 		IsSensitive:      e.IsSensitive,
 		HasDiff:          e.DiffContent.Value != "",
+		Kind:             string(e.Kind),
+		PeerTrust:        e.PeerTrust,
 	}
 
 	// Extract path/command from payload

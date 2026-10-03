@@ -117,7 +117,7 @@ export const MILESTONES: Milestone[] = [
       { text: 'Find the agent with the highest cost this week.', cmd: 'gryph cost --by agent' } ],
     question: 'Where do the model prices come from?',
     answers: ['From models.dev', 'From a Gryph cloud service'],
-    why: 'At the end of a session, Gryph calculates the cost with prices from models.dev. Gryph does not have a cloud service.' },
+    why: 'At the end of a session, Gryph calculates the cost with prices from models.dev. Gryph sends nothing by default. SafeDep Cloud is opt-in.' },
 
   { id: 'housekeeping', title: 'Maintain and remove Gryph',
     lede: 'Keep the database small. Examine the actions that Gryph did on itself. Learn how to remove Gryph.',

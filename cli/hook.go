@@ -12,6 +12,7 @@ import (
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/decision"
+	"github.com/safedep/gryph/hookside"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +28,23 @@ func NewHookCmd() *cobra.Command {
 			agentName := args[0]
 			hookType := args[1]
 
-			app, err := loadApp()
+			// The payload comes first: a client needs it before it talks
+			// to the service, and nothing else needs the store yet.
+			rawData, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				return fmt.Errorf("failed to read stdin: %w", err)
+			}
+
+			cfg, err := config.Load(globalFlags.ConfigPath)
+			if err != nil {
+				log.Warnf("config: %v. Gryph uses the default config.", err)
+				cfg = config.Default()
+			}
+			if clientMode(cfg) {
+				return runClientHook(ctx, cfg, agentName, hookType, rawData)
+			}
+
+			app, err := NewApp(cfg)
 			if err != nil {
 				return err
 			}
@@ -43,14 +60,19 @@ func NewHookCmd() *cobra.Command {
 				}
 			}()
 
-			rawData, err := io.ReadAll(os.Stdin)
-			if err != nil {
-				return fmt.Errorf("failed to read stdin: %w", err)
-			}
-
-			hookErr := runHook(ctx, app.Registry, app.DecisionService(), agentName, hookType, rawData)
+			svc := app.DecisionService()
+			hookErr := runHook(ctx, app.Registry, svc, agentName, hookType, rawData)
 			if hookErr != nil && !isExitError(hookErr) {
-				logHookError(ctx, app, agentName, hookType, len(rawData), rawData, hookErr)
+				report := &decision.HookError{
+					Agent:    agentName,
+					HookType: hookType,
+					RawSize:  len(rawData),
+					RawEvent: rawData,
+					Message:  hookErr.Error(),
+				}
+				if err := svc.ReportHookError(ctx, report); err != nil {
+					log.Errorf("failed to log hook error: %v", err)
+				}
 			}
 
 			return hookErr
@@ -73,7 +95,7 @@ func runHook(ctx context.Context, registry *agent.Registry, svc decision.Service
 		return fmt.Errorf("failed to parse event: %w", err)
 	}
 
-	resp, err := svc.Handle(ctx, decision.NewHookRequest(event))
+	resp, err := svc.Handle(ctx, hookside.NewRequest(ctx, event))
 	if err != nil {
 		return err
 	}
@@ -101,38 +123,6 @@ func renderDecision(resp *decision.HookResponse) (agent.HookDecision, string) {
 		return agent.DecisionGuidance, resp.Guidance
 	default:
 		return agent.DecisionBlock, resp.Reason
-	}
-}
-
-// logHookError logs a self-audit entry when hook processing fails.
-func logHookError(ctx context.Context, app *App, agentName, hookType string, rawDataSize int, rawData []byte, hookErr error) {
-	if app.Store == nil {
-		return
-	}
-
-	details := map[string]interface{}{
-		"hook_type":     hookType,
-		"raw_data_size": rawDataSize,
-	}
-
-	loggingLevel := app.Config.GetAgentLoggingLevel(agentName)
-	if loggingLevel.IsAtLeast(config.LoggingFull) {
-		const maxRawEventSize = 64 * 1024
-		rawEvent := string(rawData)
-		if len(rawEvent) > maxRawEventSize {
-			rawEvent = rawEvent[:maxRawEventSize]
-		}
-
-		if app.Redactor != nil {
-			rawEvent = app.Redactor.Redact(rawEvent)
-		}
-
-		details["raw_event"] = rawEvent
-	}
-
-	if err := logSelfAudit(ctx, app.Store, SelfAuditActionHookError,
-		agentName, details, SelfAuditResultError, hookErr.Error()); err != nil {
-		log.Errorf("failed to log hook error: %v", err)
 	}
 }
 
