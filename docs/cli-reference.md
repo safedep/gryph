@@ -41,6 +41,9 @@ under another name keeps the bare program name.
 | `--force`     | bool                | false   | Overwrite existing hooks without prompting |
 | `--no-backup` | bool                | false   | Skip backup of existing hooks              |
 | `--repair-timer` | bool             | false   | Also install the timer that runs `gryph supervisor reconcile --once` every 15 minutes |
+| `--managed`   | bool                | false   | As root: write the managed configuration and the managed hook entries for every user of the host |
+| `--policy`    | string              |         | With `--managed`: the managed policy file to install |
+| `--json`      | bool                | false   | With `--managed`: print the report as JSON |
 
 `--repair-timer` writes a per-user job for the scheduler of the operating
 system and asks the scheduler to run it: a systemd user timer on Linux
@@ -426,6 +429,70 @@ Reset all configuration to defaults.
 
 ```bash
 gryph config reset
+```
+
+#### Managed install
+
+An administrator, or an MDM script that runs as root, installs Gryph for every
+user of a host with one command:
+
+```bash
+sudo gryph install --managed --config /path/to/managed.yml [--policy /path/to/policy.yaml] [--json]
+```
+
+The command validates the whole input first. An invalid input exits 3 and
+changes nothing. It then writes the configuration to the
+[system managed location](#system-managed-configuration), the policy to the
+managed `policy.yaml` when `--policy` is given, and the managed hook entry of
+every agent in `managed.agents`, also when the agent is not installed yet. An
+agent that left the list loses its entry on the next run. A second run with
+the same input changes nothing and exits 0.
+
+```yaml
+# managed.yml
+policy:
+  enabled: true
+managed:
+  agents: [claude-code, codex]   # the agents that get a managed hook entry
+  lock_hooks: [claude-code]      # also turn on the agent's own lock: only managed hooks run
+  binary: /usr/libexec/safedep/gryph/gryph   # optional, the default of the platform
+```
+
+The hook entries name the `gryph` binary by an absolute path. Root must own
+the binary and every directory above it, and nothing in the chain may be
+writable by group or other, or the command exits 3. The default is
+`/usr/libexec/safedep/gryph/gryph` on Linux, `/Library/SafeDep/gryph/bin/gryph`
+on macOS and `%ProgramFiles%\SafeDep\gryph\gryph.exe` on Windows. `--config`
+and `--policy` must pass the same check, so root never acts on a file another
+user wrote.
+
+| Agent | Managed file | Lock switch |
+|---|---|---|
+| Claude Code | `managed-settings.d/50-gryph.json` next to `managed-settings.json`: `/etc/claude-code/` on Linux, `/Library/Application Support/ClaudeCode/` on macOS, `C:\Program Files\ClaudeCode\` on Windows. Gryph owns this one file and never edits `managed-settings.json`. | `allowManagedHooksOnly: true` in the drop-in |
+| Codex | `/etc/codex/requirements.toml` on Linux and macOS, `%ProgramData%\OpenAI\Codex\requirements.toml` on Windows. Gryph rewrites the file: it keeps every key, pins `[features] hooks = true`, and replaces its own `[hooks]` entries. Comments do not survive the rewrite. | `allow_managed_hooks_only = true` |
+
+The lock stops the developer's own hooks too, so it is off by default. The
+managed hooks hold without it: a user `disableAllHooks` cannot turn off a
+managed Claude Code hook, and Codex marks managed hooks as trusted.
+
+Under `--managed`, Gryph reads no `HOME`, `XDG_*` or `GRYPH_*` variable and
+runs no program. Every path comes from the input file and the platform.
+
+Exit codes: 0 success, 1 failure, 3 invalid input with nothing changed, 10
+partial success. With 10, the JSON report lists the degraded agents with
+their error.
+
+```json
+{
+  "status": "ok",
+  "config": "/etc/safedep/gryph/config.yml",
+  "binary": "/usr/libexec/safedep/gryph/gryph",
+  "changed": true,
+  "agents": [
+    {"name": "claude-code", "path": "/etc/claude-code/managed-settings.d/50-gryph.json", "action": "install", "changed": true, "locked": true},
+    {"name": "codex", "path": "/etc/codex/requirements.toml", "action": "install", "changed": true, "locked": false}
+  ]
+}
 ```
 
 #### System managed configuration

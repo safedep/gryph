@@ -15,6 +15,16 @@ import (
 
 // programDataDir returns the ProgramData folder from the shell, never from
 // the environment. A user can set PROGRAMDATA to a directory they own.
+// managedBinaryDefault is where a package puts the gryph binary on
+// Windows, under the folder that only an administrator can write.
+func managedBinaryDefault() string {
+	dir, err := windows.KnownFolderPath(windows.FOLDERID_ProgramFiles, windows.KF_FLAG_DEFAULT)
+	if err != nil || dir == "" {
+		dir = `C:\Program Files`
+	}
+	return filepath.Join(dir, "SafeDep", "gryph", "gryph.exe")
+}
+
 func programDataDir() string {
 	dir, err := windows.KnownFolderPath(windows.FOLDERID_ProgramData, windows.KF_FLAG_DEFAULT)
 	if err != nil || dir == "" {

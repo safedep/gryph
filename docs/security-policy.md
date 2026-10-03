@@ -63,7 +63,7 @@ The read rule also blocks a file read of each directory that holds the database 
 
 Kernel-based self-protection is on the roadmap. Until then, treat self-protection as a guard against mistakes and simple attempts, not as a security boundary. `gryph doctor` prints the level of each protected asset and the profile they earn, detects a change to a hook configuration, and repairs it when you turn repair on. The [self-protection guide](./self-protection.md) explains the levels, the reconcile pass and the repair. The [threat model](./security-policy-threat-model.md) lists the claims and the lower-level controls for a hardened deployment.
 
-Write a file with `gryph policy init [name|path]` or open one with `gryph policy edit [name|path]`. See [Commands](#commands). Run `gryph policy list` to see every active source. Per-host managed policy is a planned future iteration. Today, one host governs its own policy.
+Write a file with `gryph policy init [name|path]` or open one with `gryph policy edit [name|path]`. See [Commands](#commands). Run `gryph policy list` to see every active source. An administrator installs a managed policy for every user of a host with `gryph install --managed --policy <file>`. See [Managed install](./cli-reference.md#managed-install).
 
 Use `disabled:` to suppress a rule by ID. `disabled:` is scoped to the file that declares it. It removes only rules defined in the same file. A file cannot disable a rule from another file, and no user file can disable a built-in rule. Rule IDs must be unique across all files. User rules may not use the `gryph-builtin-` prefix. Namespace your rule IDs by the file's purpose to avoid collisions.
 

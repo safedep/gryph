@@ -9,6 +9,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.0.0
 	github.com/google/cel-go v0.27.0
 	github.com/google/uuid v1.6.0
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 	github.com/rogpeppe/go-internal v1.16.0
 	github.com/safedep/dry v0.0.0-20260129144613-fb1274e99a19
@@ -54,7 +55,6 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
-	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect

@@ -265,6 +265,48 @@
   guarantee: "On session end the hook process reads the transcript as the user and the session stores the totals with cost source client_reported:transcript. A missing transcript leaves no cost data."
   labels: [cost, tokens, session]
 
+- id: install/managed/claude-code-entry
+  title: "install --managed writes the Claude Code managed hook entry"
+  category: install
+  tier: P0
+  guarantee: "As root, gryph install --managed --config writes the managed configuration to the system directory and the Claude Code drop-in under managed-settings.d with the Gryph hooks, before any user has the agent, and the lock switch adds allowManagedHooksOnly. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: install/managed/codex-entry
+  title: "install --managed writes the Codex managed hook entries"
+  category: install
+  tier: P0
+  guarantee: "gryph install --managed writes the Gryph entries into /etc/codex/requirements.toml, pins the hooks feature on, keeps the administrator keys, and sets allow_managed_hooks_only only with the lock. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: install/managed/idempotent
+  title: "install --managed is idempotent and follows the allowlist"
+  category: install
+  tier: P0
+  guarantee: "A second run with the same input changes nothing and exits 0. An agent removed from the allowlist loses its managed entries on the next run. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: install/managed/invalid-config-exit-3
+  title: "install --managed exits 3 on invalid input and changes nothing"
+  category: install
+  tier: P0
+  guarantee: "A file that does not parse, an unknown agent, a lock outside the allowlist, a missing --config, or an input file another user can write exits 3 with nothing written. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: install/managed/binary-chain-refused
+  title: "install --managed refuses a binary that another user can replace"
+  category: install
+  tier: P0
+  guarantee: "A managed binary in a directory writable by group or other, or a missing binary, fails the chain check: exit 3, nothing written. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
+- id: install/managed/env-no-effect
+  title: "install --managed reads no environment variable"
+  category: install
+  tier: P0
+  guarantee: "Under --managed, HOME, XDG_* and GRYPH_* have no effect: the configuration lands in the system directory and nothing lands in the user home. Privileged job only."
+  labels: [install, managed, privileged, linux]
+
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
   category: install

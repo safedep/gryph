@@ -22,6 +22,10 @@ func WithoutProgramExecution(ctx context.Context) context.Context {
 // privilegedProcess is overridable in tests.
 var privilegedProcess = isPrivileged
 
+// IsPrivileged reports whether the process runs as root, or with an
+// elevated token on Windows.
+func IsPrivileged() bool { return privilegedProcess() }
+
 // programExecutionAllowed reports whether detection may run a program. A
 // privileged process never runs one: the program comes from PATH, and a
 // user can put a binary there.

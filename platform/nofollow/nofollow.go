@@ -127,3 +127,25 @@ func checkName(name string) error {
 func tempName(name string, suffix [8]byte) string {
 	return fmt.Sprintf(".%s.tmp-%x", name, suffix)
 }
+
+// ReadFile returns the content of the file at path without following a
+// link in its last component. The directory of path is trusted.
+func ReadFile(path string) ([]byte, error) {
+	dir, err := OpenDir(filepath.Dir(path), ".")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = dir.Close() }()
+	return dir.ReadFile(filepath.Base(path))
+}
+
+// WriteFile replaces the file at path through a temporary file and a
+// rename, and refuses a link at path. The directory of path is trusted.
+func WriteFile(path string, data []byte, perm os.FileMode) error {
+	dir, err := OpenDir(filepath.Dir(path), ".")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = dir.Close() }()
+	return dir.WriteFile(filepath.Base(path), data, perm)
+}

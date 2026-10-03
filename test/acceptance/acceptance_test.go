@@ -91,6 +91,9 @@ func TestAcceptance(t *testing.T) {
 					// then report it in every script. A script that tests the
 					// census turns it on again.
 					env.Setenv("GRYPH_POLICY_SELF_PROTECTION_CENSUS", "false")
+					// A privileged script names the test binary as the
+					// root-owned managed binary.
+					env.Setenv("ACCEPTANCE_GRYPH_BIN", bin)
 					// The status and doctor commands run an async update check
 					// against the GitHub API. Forward proxy and TLS settings so
 					// the check works in proxied environments. The check fails

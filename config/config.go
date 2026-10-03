@@ -79,6 +79,7 @@ type Config struct {
 	Streams StreamsConfig `mapstructure:"streams"`
 	Policy  PolicyConfig  `mapstructure:"policy"`
 	Export  ExportConfig  `mapstructure:"export"`
+	Managed ManagedConfig `mapstructure:"managed"`
 }
 
 // ExportConfig holds the user export profiles, by name.
@@ -420,7 +421,11 @@ func Load(configPath string) (*Config, error) {
 		}
 	}
 
-	// Unmarshal into struct
+	return unmarshalConfig(v)
+}
+
+// unmarshalConfig turns the read sources of v into a validated Config.
+func unmarshalConfig(v *viper.Viper) (*Config, error) {
 	normalizeShellBudget(v)
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {

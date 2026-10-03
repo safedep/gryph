@@ -14,7 +14,7 @@ that tier today and what it cannot do.
 | Tier | Adversary | What Gryph does | What Gryph cannot do |
 |---|---|---|---|
 | A | An agent that acts only through its hooked tools, with a bad or injected instruction | Blocks the action on a pre-execution hook. The built-in rules keep the policy, the keys and the hook configuration out of the agent's write reach. | Stop an action on a hook that fires after the action, or on a tool that has no hook. |
-| B | An agent or malware that runs any process as the same user: a shell, `python -c`, a script | Detects a removed or changed hook entry when `gryph doctor` runs. A root install with the agent's managed settings (planned) keeps the hook entry and the policy out of the user's reach. | Stop a change outside the hook path: a direct write, a network call, a second agent binary, or an agent with a private config directory. |
+| B | An agent or malware that runs any process as the same user: a shell, `python -c`, a script | Detects a removed or changed hook entry when `gryph doctor` runs. A root install with `gryph install --managed` writes the hook entry into the agent's managed settings and the policy into the system directory, out of the user's reach. | Stop a change outside the hook path: a direct write, a network call, a second agent binary, or an agent with a private config directory. |
 | C | A user with root or admin rights, or an agent that runs as root | Nothing on the host. Off-host evidence (planned) reports a stopped service, a changed asset, or a receipt chain that goes back. | Prevent anything. Root can stop a service, edit any file, and replace the binary. |
 | D | A compromised kernel or firmware | Nothing on the host. | Give any local guarantee. |
 
@@ -160,13 +160,13 @@ control that changes the status. A control marked planned does not exist yet.
 
 | # | Tier | Bypass | In `guard` | Control |
 |---|---|---|---|---|
-| 1 | B | Edit the agent's hook configuration and remove the Gryph entry | D, when a reconcile pass runs. Repaired when `policy.self_protection.repair` is on, up to three times an hour. | In `locked`: the agent's managed settings, owned by root. |
+| 1 | B | Edit the agent's hook configuration and remove the Gryph entry | D, when a reconcile pass runs. Repaired when `policy.self_protection.repair` is on, up to three times an hour. | `gryph install --managed`: the hook entry sits in the agent's managed settings, owned by root. Claude Code and Codex today. |
 | 2 | B | Stop or trace the hook process until the agent times out and lets the action through | D, when the agent process runs through the census window with no hook call | The `hook_traffic` row and the `silent_agent` tamper event. Set `kernel.yama.ptrace_scope` to 1 or more. Set the agent to fail closed where the vendor offers it. See [agent-enforcement-coverage.md](./agent-enforcement-coverage.md). |
 | 3 | B | Run a second agent binary, or an agent with a private config directory | D for a binary with a known program name, O otherwise | The census matches the processes of the account by program name. An agent under another name stays out of scope. |
 | 4 | B | Run `gryph _hook` from a shell and record a forged event or prompt | P through a mediated shell command, O otherwise | Planned: a decision service that identifies the caller with kernel peer credentials. |
-| 5 | B | Patch the gryph binary, put another one earlier on `PATH`, or preload a library | O | In `locked`: the hook entry names an absolute path under a root-owned directory. |
+| 5 | B | Patch the gryph binary, put another one earlier on `PATH`, or preload a library | O | `gryph install --managed`: the hook entry names an absolute path under a root-owned directory, and refuses any other. |
 | 6 | B | Change a protected file outside the shell analysis: a script file, an interpreter, a path built at run time | O | A kernel mechanism, optional and Linux only. Planned. |
-| 7 | B | Run `gryph policy install` from an agent shell | O. The self-audit log shows it. A new file can only add rules. | In `locked`: managed policy that the user cannot change. |
+| 7 | B | Run `gryph policy install` from an agent shell | O. The self-audit log shows it. A new file can only add rules. | `gryph install --managed --policy`: a managed policy that the user cannot change, with `allow_user_policy: false` to drop the user's files. |
 | 8 | B | Read or change the database or the keys from a shell | P through a mediated shell command, O otherwise | Planned: a decision service that owns the store and the keys. |
 | 9 | C | Root stops a service, edits managed files, or replaces the binary | O | In `managed`: a report off the host that stops. |
 

@@ -12,6 +12,10 @@ import (
 
 // validate checks the configuration for errors.
 func validate(cfg *Config) error {
+	if err := validateManagedConfig(cfg.Managed); err != nil {
+		return err
+	}
+
 	// Validate logging level
 	if !isValidLoggingLevel(cfg.Logging.Level) {
 		return fmt.Errorf("invalid logging level: %s (must be minimal, standard, or full)", cfg.Logging.Level)

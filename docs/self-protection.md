@@ -57,7 +57,9 @@ row:
   every hook configuration. This is the profile of a user install with policy
   on. No root is needed.
 - `locked` and `managed`: root installs with the agent's managed settings, and
-  with evidence off the host. They are planned. `gryph doctor` reports them when
+  with evidence off the host. `gryph install --managed` writes the managed hook
+  entries today. See [Managed install](./cli-reference.md#managed-install). The
+  rows that earn these profiles are planned. `gryph doctor` reports them when
   their conditions hold.
 
 ### What you can say about `guard`

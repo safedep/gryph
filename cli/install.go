@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
@@ -19,6 +20,9 @@ func NewInstallCmd() *cobra.Command {
 		force       bool
 		noBackup    bool
 		repairTimer bool
+		managed     bool
+		policyPath  string
+		asJSON      bool
 	)
 
 	cmd := &cobra.Command{
@@ -32,8 +36,15 @@ to enable audit logging. Existing hooks are backed up by default.`,
   gryph install --agent claude-code
   gryph install --dry-run
   gryph install --force
-  gryph install --repair-timer`,
+  gryph install --repair-timer
+  sudo gryph install --managed --config /path/to/managed.yml --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if managed {
+				return runManagedInstall(cmd, globalFlags.ConfigPath, policyPath, dryRun, asJSON)
+			}
+			if policyPath != "" || asJSON {
+				return ErrConfig("invalid flags", fmt.Errorf("--policy and --json need --managed"))
+			}
 			ctx := context.Background()
 
 			app, err := loadApp()
@@ -156,6 +167,9 @@ to enable audit logging. Existing hooks are backed up by default.`,
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing hooks without prompting")
 	cmd.Flags().BoolVar(&noBackup, "no-backup", false, "skip backup of existing hooks")
 	cmd.Flags().BoolVar(&repairTimer, "repair-timer", false, "also install the timer that runs gryph supervisor reconcile --once every 15 minutes")
+	cmd.Flags().BoolVar(&managed, "managed", false, "as root: write the managed configuration from --config and the managed hook entries for every host user")
+	cmd.Flags().StringVar(&policyPath, "policy", "", "with --managed: the managed policy file to install")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "with --managed: print the report as JSON")
 
 	return cmd
 }

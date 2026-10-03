@@ -188,6 +188,43 @@ type Adapter interface {
 	Hooks() []events.HookSpec
 }
 
+// ManagedInstaller is an optional interface of an adapter whose agent reads
+// a machine-wide hook configuration that an administrator owns. gryph
+// install --managed writes it once for every user of the host, so a hook
+// entry exists before the agent is installed and the user cannot remove it.
+type ManagedInstaller interface {
+	// ManagedHookPath returns the file that holds the Gryph entries on this
+	// platform.
+	ManagedHookPath() string
+	// InstallManaged writes the Gryph entries, and the agent's own lock
+	// when opts.Lock is set. It changes nothing when the file already holds
+	// them, so a repeated run is safe.
+	InstallManaged(ctx context.Context, opts ManagedInstallOptions) (*ManagedInstallResult, error)
+	// UninstallManaged removes the Gryph entries and the lock.
+	UninstallManaged(ctx context.Context, opts ManagedInstallOptions) (*ManagedInstallResult, error)
+}
+
+// ManagedInstallOptions configures a managed install.
+type ManagedInstallOptions struct {
+	// Command is the absolute path of the root-owned gryph binary.
+	Command string
+	// Lock turns on the agent's own switch that lets only managed hooks run.
+	Lock bool
+	// DryRun reports the change without making it.
+	DryRun bool
+}
+
+// ManagedInstallResult is the outcome of a managed install or uninstall.
+type ManagedInstallResult struct {
+	// Path is the managed file.
+	Path string
+	// Changed is true when the call wrote or removed the file, or would
+	// have in a dry run.
+	Changed bool
+	// Locked is true when the file turns on the agent's lock.
+	Locked bool
+}
+
 // ProcessNamer is an optional interface of an adapter. It names the
 // programs of the agent as the kernel reports them, so a census can match
 // a live agent process to the adapter.
