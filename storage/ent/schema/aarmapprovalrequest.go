@@ -46,6 +46,12 @@ func (AarmApprovalRequest) Fields() []ent.Field {
 		// inline marks a request that offered the prompt on the hook's own
 		// connection.
 		field.Bool("inline").Default(false),
+		// review marks a request from a hook that ran after the action. An
+		// answer records a review and stores no grant.
+		field.Bool("review").Default(false),
+		// requester_audit is the login identity of the process that asked,
+		// for the comparison with the one that answers.
+		field.String("requester_audit").Optional(),
 
 		field.Time("decided_at").Optional().Nillable(),
 		field.String("channel").Optional(),

@@ -45,6 +45,10 @@ const (
 	FieldExpiresAt = "expires_at"
 	// FieldInline holds the string denoting the inline field in the database.
 	FieldInline = "inline"
+	// FieldReview holds the string denoting the review field in the database.
+	FieldReview = "review"
+	// FieldRequesterAudit holds the string denoting the requester_audit field in the database.
+	FieldRequesterAudit = "requester_audit"
 	// FieldDecidedAt holds the string denoting the decided_at field in the database.
 	FieldDecidedAt = "decided_at"
 	// FieldChannel holds the string denoting the channel field in the database.
@@ -83,6 +87,8 @@ var Columns = []string{
 	FieldRequestedAt,
 	FieldExpiresAt,
 	FieldInline,
+	FieldReview,
+	FieldRequesterAudit,
 	FieldDecidedAt,
 	FieldChannel,
 	FieldAssurance,
@@ -110,6 +116,8 @@ var (
 	DefaultRequestedAt func() time.Time
 	// DefaultInline holds the default value on creation for the "inline" field.
 	DefaultInline bool
+	// DefaultReview holds the default value on creation for the "review" field.
+	DefaultReview bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -218,6 +226,16 @@ func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
 // ByInline orders the results by the inline field.
 func ByInline(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInline, opts...).ToFunc()
+}
+
+// ByReview orders the results by the review field.
+func ByReview(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReview, opts...).ToFunc()
+}
+
+// ByRequesterAudit orders the results by the requester_audit field.
+func ByRequesterAudit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequesterAudit, opts...).ToFunc()
 }
 
 // ByDecidedAt orders the results by the decided_at field.

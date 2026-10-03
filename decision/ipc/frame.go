@@ -41,6 +41,8 @@ const (
 	TypeImportReceipts  = "import_receipts"
 	TypeImportSession   = "import_session"
 	TypeImportResult    = "import_result"
+	TypeApprove         = "approve"
+	TypeApproveResult   = "approve_result"
 	TypeError           = "error"
 )
 

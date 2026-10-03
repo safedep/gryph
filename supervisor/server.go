@@ -43,6 +43,7 @@ type Server struct {
 	rootDir    *nofollow.Dir
 	partitions map[uint32]*partition
 	wg         sync.WaitGroup
+	approvers  approverCache
 }
 
 // Options configure a Server.
@@ -181,7 +182,7 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 	welcome := ipc.Welcome{Proto: ipc.Proto, ServerVersion: s.version, Mode: s.cfg.Supervisor.EffectiveProfile()}
 	rw := &idleConn{Conn: conn, timeout: s.limits.IdleTimeout}
 	err = ipc.ServeConn(ctx, rw, welcome, ipc.HandlerFunc(func(ctx context.Context, f *ipc.Frame, body ipc.Body) (*ipc.Frame, error) {
-		return s.dispatch(ctx, part, rw, f, body)
+		return s.dispatch(ctx, part, peer, rw, f, body)
 	}))
 	if err != nil && !errors.Is(err, io.EOF) && !isTimeout(err) {
 		log.Debugf("supervisor: connection of uid %d ended: %v", peer.UID, err)
@@ -189,11 +190,15 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 }
 
 // dispatch answers one frame for one partition. conn is the connection
-// of the frame, for a prompt that a decision needs.
-func (s *Server) dispatch(ctx context.Context, part *partition, conn *idleConn, f *ipc.Frame, body ipc.Body) (*ipc.Frame, error) {
+// of the frame, for a prompt that a decision needs, and peer the account
+// and process behind it.
+func (s *Server) dispatch(ctx context.Context, part *partition, peer *peercred.Peer, conn *idleConn, f *ipc.Frame, body ipc.Body) (*ipc.Frame, error) {
 	switch b := body.(type) {
 	case *ipc.Handle:
-		return part.handle(withPrompter(ctx, &prompter{conn: conn, wait: b.InlineWait}), b)
+		audit, _ := peer.LoginIdentity()
+		return part.handle(withPrompter(ctx, &prompter{conn: conn, wait: b.InlineWait, audit: audit}), b)
+	case *ipc.Approve:
+		return s.approve(ctx, part, peer, b)
 	case *ipc.PromptReply:
 		// A reply reaches the loop only when no prompt is open: the open
 		// prompt reads its reply itself. A nonce never counts twice.
@@ -207,7 +212,9 @@ func (s *Server) dispatch(ctx context.Context, part *partition, conn *idleConn, 
 		}
 		return nil, nil
 	case *ipc.Query:
-		return part.query(ctx, b)
+		return part.query(ctx, b, func(ctx context.Context, q *ipc.Query) ([]any, bool, error) {
+			return s.approverRead(ctx, part, peer, q)
+		})
 	case *ipc.SessionCost:
 		if !part.bucket.take(time.Now()) {
 			part.recordRateLimit(ctx, "session_cost")

@@ -165,6 +165,32 @@ type ImportResult struct {
 	Taken int `json:"taken"`
 }
 
+// Approve answers an approval request of another account: the frame of
+// gryph policy approve resolve. The server checks who sends it against
+// the peer credentials, never against a field of the frame.
+type Approve struct {
+	RequestID uuid.UUID `json:"request_id"`
+	Decision  string    `json:"decision"`
+	Scope     string    `json:"scope,omitempty"`
+	Note      string    `json:"note,omitempty"`
+}
+
+// The decisions of an Approve frame.
+const (
+	ApproveAllow = "allow"
+	ApproveDeny  = "deny"
+)
+
+// ApproveResult answers Approve. State is the state of the request after
+// the answer: approved, denied, or superseded when an earlier answer won.
+type ApproveResult struct {
+	RequestID uuid.UUID `json:"request_id"`
+	State     string    `json:"state"`
+	Assurance string    `json:"assurance,omitempty"`
+	GrantID   string    `json:"grant_id,omitempty"`
+	Note      string    `json:"note,omitempty"`
+}
+
 // Error answers a frame the server refuses. Code is one of the Code
 // constants. A client maps a code it does not know like CodeInternal.
 type Error struct {
@@ -407,6 +433,36 @@ func (i *ImportSession) Validate() error {
 func (*ImportResult) Validate() error { return nil }
 
 // Validate implements Body.
+func (a *Approve) Validate() error {
+	if a.RequestID == uuid.Nil {
+		return fmt.Errorf("%w: approve without a request", ErrInvalid)
+	}
+	switch a.Decision {
+	case ApproveAllow, ApproveDeny:
+	default:
+		return fmt.Errorf("%w: approve decision %q is not allow or deny", ErrInvalid, a.Decision)
+	}
+	if err := boundString("scope", a.Scope, MaxName); err != nil {
+		return err
+	}
+	return boundString("note", a.Note, MaxText)
+}
+
+// Validate implements Body.
+func (r *ApproveResult) Validate() error {
+	if err := boundString("state", r.State, MaxName); err != nil {
+		return err
+	}
+	if err := boundString("assurance", r.Assurance, MaxName); err != nil {
+		return err
+	}
+	if err := boundString("grant_id", r.GrantID, MaxName); err != nil {
+		return err
+	}
+	return boundString("note", r.Note, MaxText)
+}
+
+// Validate implements Body.
 func (q *QueryResult) Validate() error {
 	if len(q.Rows) > MaxQueryItems {
 		return fmt.Errorf("%w: more than %d rows", ErrInvalid, MaxQueryItems)
@@ -469,6 +525,10 @@ func Decode(f *Frame) (Body, error) {
 		body = &ImportSession{}
 	case TypeImportResult:
 		body = &ImportResult{}
+	case TypeApprove:
+		body = &Approve{}
+	case TypeApproveResult:
+		body = &ApproveResult{}
 	case TypeError:
 		body = &Error{}
 	default:

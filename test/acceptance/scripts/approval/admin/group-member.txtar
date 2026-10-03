@@ -1,0 +1,181 @@
+# A member of the approval group answers the request of another account
+# from the host. The service checks the group and the account against the
+# peer credentials. The answer records its assurance, the next hook of
+# the requester reports it, and a grant lets the retry through for the
+# session. Runs only in the privileged job on a Linux host.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the account tools of this script are the Linux ones'
+[!exec:useradd] skip 'needs useradd'
+[!exec:python3] skip 'needs python3 for a pseudo terminal'
+! exists /etc/safedep/gryph
+! exists /home/gryphacc1
+! exists /home/gryphacc2
+! exists /usr/local/bin/gryph-acceptance
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+exec cp $ACCEPTANCE_GRYPH_BIN /usr/local/bin/gryph-acceptance
+exec groupadd gryph-acceptance-admins
+exec useradd -m -s /bin/bash gryphacc1
+exec useradd -m -s /bin/bash -G gryph-acceptance-admins gryphacc2
+exec id -u gryphacc1
+cp stdout uid1.txt
+capture UID1 '([0-9]+)' uid1.txt
+exec install -D -m 644 managed.yml /etc/safedep/gryph/config.yml
+exec install -m 644 policy.yaml /etc/safedep/gryph/policy.yaml
+exec cp deploy.json /tmp/gryph-acceptance-deploy.json
+exec cp deploy2.json /tmp/gryph-acceptance-deploy2.json
+exec cp read.json /tmp/gryph-acceptance-read.json
+exec cp terminal.py /tmp/gryph-acceptance-terminal.py
+exec chmod 644 /tmp/gryph-acceptance-deploy.json /tmp/gryph-acceptance-deploy2.json /tmp/gryph-acceptance-read.json /tmp/gryph-acceptance-terminal.py
+exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir /tmp/gryph-acceptance-state --spool-dir /tmp/gryph-acceptance-spool --allow-root &
+exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do test -S /tmp/gryph-acceptance-hook.sock && break; sleep 0.2; done'
+
+# The requester has no terminal: the request waits for an approver.
+! exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PreToolUse < /tmp/gryph-acceptance-deploy.json'
+stderr 'This action needs approval\. Request [0-9a-f]{8} is pending\.'
+
+# A member of the approval group sees the request of the other account.
+exec runuser -u gryphacc2 -- env HOME=/home/gryphacc2 XDG_CONFIG_HOME=/home/gryphacc2/.config XDG_DATA_HOME=/home/gryphacc2/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance policy approve list --format json --no-color'
+stdout '"state": "pending"'
+stdout '"requester": "'$UID1' \(gryphacc1\)"'
+cp stdout list.json
+capture REQ '"id": "([0-9a-f]{8})' list.json
+
+exec runuser -u gryphacc2 -- env HOME=/home/gryphacc2 XDG_CONFIG_HOME=/home/gryphacc2/.config XDG_DATA_HOME=/home/gryphacc2/.local/share /bin/sh -c 'python3 /tmp/gryph-acceptance-terminal.py y - /usr/local/bin/gryph-acceptance policy approve resolve --id '$REQ' --decision allow --scope session --note release'
+stdout 'Answer request [0-9a-f]{8} with ALLOW\? \[y/N\]'
+stdout 'is approved \(self-elevated\), grant [0-9a-f]{8}'
+exec runuser -u gryphacc2 -- env HOME=/home/gryphacc2 XDG_CONFIG_HOME=/home/gryphacc2/.config XDG_DATA_HOME=/home/gryphacc2/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance policy approve show '$REQ' --no-color'
+stdout 'state +approved'
+stdout 'assurance +self-elevated'
+stdout 'approver +[0-9]+ \(gryphacc2\)'
+stdout 'scope +session'
+
+# The requester hears the outcome once, and the retries go through.
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PreToolUse < /tmp/gryph-acceptance-read.json'
+stderr 'Request [0-9a-f]{8} was approved\. You can retry\.'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PreToolUse < /tmp/gryph-acceptance-deploy.json'
+! stderr 'pending'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance _hook claude-code PreToolUse < /tmp/gryph-acceptance-deploy2.json'
+! stderr 'pending'
+exec runuser -u gryphacc1 -- env HOME=/home/gryphacc1 XDG_CONFIG_HOME=/home/gryphacc1/.config XDG_DATA_HOME=/home/gryphacc1/.local/share /bin/sh -c '/usr/local/bin/gryph-acceptance policy approve history --format json --no-color'
+stdout -count=3 '"decision": "approved"'
+stdout -count=3 '"grant_id": "[0-9a-f-]{36}"'
+stdout '"channel": "self-elevated"'
+
+exec sh -c 'kill $(cat /tmp/gryph-acceptance-state/supervisor.pid); sleep 0.3; true'
+exec rm -rf /etc/safedep/gryph /tmp/gryph-acceptance-state /tmp/gryph-acceptance-spool /tmp/gryph-acceptance-hook.sock /tmp/gryph-acceptance-deploy.json /tmp/gryph-acceptance-deploy2.json /tmp/gryph-acceptance-read.json /tmp/gryph-acceptance-terminal.py /usr/local/bin/gryph-acceptance
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+exec sh -c 'pkill -u gryphacc1; pkill -u gryphacc2; pkill -u gryphacc3; sleep 0.2; true'
+exec userdel -r gryphacc1
+exec userdel -r gryphacc2
+exec sh -c 'id gryphacc3 >/dev/null 2>&1 && userdel -r gryphacc3; true'
+exec groupdel gryph-acceptance-admins
+-- managed.yml --
+policy:
+  enabled: true
+  log_all_evaluations: true
+  approval:
+    channels: [same-user-tty, local-admin]
+    min_assurance: local-admin
+    local_admin:
+      group: gryph-acceptance-admins
+      allow_self_elevated: true
+    max_grant_scope: session
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  spool_dir: /tmp/gryph-acceptance-spool
+-- policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-escalate-deploy
+    action: escalate
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "make deploy"
+    message: "a deploy needs an admin"
+-- deploy.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {"command": "make deploy", "description": "x"},
+  "tool_use_id": "tool-use-001"
+}
+-- deploy2.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {"command": "make deploy", "description": "x"},
+  "tool_use_id": "tool-use-002"
+}
+-- read.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {"file_path": "/home/user/project/main.go"},
+  "tool_use_id": "tool-use-003"
+}
+-- terminal.py --
+# Run a hook with a pseudo terminal as its controlling terminal and answer
+# the approval prompt there.
+# usage: python3 terminal.py <answer|-> <payload|-> <command...>
+# The payload file is the stdin of the hook, or a dash keeps the stdin of
+# the helper. Stdout and stderr of the hook
+# are pipes, as under an agent. The terminal gets the answer when a
+# question that ends in [y/N] shows. A dash gives no answer. A command
+# that stays silent for a minute is killed. Everything the hook writes goes to
+# stdout, and the exit code is the hook's.
+import os
+import pty
+import select
+import sys
+
+answer, payload, command = sys.argv[1], sys.argv[2], sys.argv[3:]
+out_r, out_w = os.pipe()
+err_r, err_w = os.pipe()
+pid, fd = pty.fork()
+if pid == 0:
+    # One descriptor keeps the terminal open after the standard ones
+    # change, else the master reads end of file before the prompt.
+    os.set_inheritable(os.dup(0), True)
+    if payload != "-":
+        os.dup2(os.open(payload, os.O_RDONLY), 0)
+    os.dup2(out_w, 1)
+    os.dup2(err_w, 2)
+    os.execvp(command[0], command)
+os.close(out_w)
+os.close(err_w)
+seen = b""
+sent = False
+open_fds = {fd, out_r, err_r}
+while open_fds:
+    ready, _, _ = select.select(list(open_fds), [], [], 60)
+    if not ready:
+        os.kill(pid, 9)
+        break
+    for r in ready:
+        try:
+            data = os.read(r, 4096)
+        except OSError:
+            data = b""
+        if not data:
+            open_fds.discard(r)
+            continue
+        sys.stdout.write(data.decode("utf-8", "replace"))
+        sys.stdout.flush()
+        if r == fd:
+            seen += data
+            if not sent and answer != "-" and b"[y/N]" in seen:
+                os.write(fd, (answer + "\n").encode())
+                sent = True
+_, status = os.waitpid(pid, 0)
+sys.exit(os.waitstatus_to_exitcode(status))

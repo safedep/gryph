@@ -500,6 +500,18 @@ type ApprovalConfig struct {
 	// MaxGrantScope is the widest scope an approver can give: once,
 	// session or window.
 	MaxGrantScope string `mapstructure:"max_grant_scope"`
+	// LocalAdmin configures the local-admin channel.
+	LocalAdmin LocalAdminConfig `mapstructure:"local_admin"`
+}
+
+// LocalAdminConfig names who answers on the local-admin channel.
+type LocalAdminConfig struct {
+	// Group is the group whose members answer. Empty leaves the channel
+	// with nobody.
+	Group string `mapstructure:"group"`
+	// AllowSelfElevated accepts an answer from the person who asked, through
+	// another account of theirs, at the self-elevated assurance.
+	AllowSelfElevated bool `mapstructure:"allow_self_elevated"`
 }
 
 // The approval channels, named by the assurance each one gives.

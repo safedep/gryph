@@ -72,6 +72,15 @@ func (a *App) SetSessionCost(ctx context.Context, sess *session.Session, sc *cos
 	return a.Store.UpdateSession(ctx, sess)
 }
 
+// Approve sends an answer to an approval request to the decision service.
+// Only the service keeps the queue, so there is no local path.
+func (a *App) Approve(ctx context.Context, req ipc.Approve) (*ipc.ApproveResult, error) {
+	if a.remote == nil {
+		return nil, errApprovalNeedsService
+	}
+	return a.remote.Approve(ctx, req)
+}
+
 // Close releases the store and the connection to the service.
 func (a *App) Close() error {
 	var errs []error

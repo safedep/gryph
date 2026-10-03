@@ -517,6 +517,41 @@
   guarantee: "A request that nobody answers within policy.approval.request_ttl expires. The receipt records approval_timeout with the resolver, and the next hook of the session tells the agent once. A rule above the assurance of the terminal never asks the terminal. Privileged job only."
   labels: [approval, supervisor, privileged, linux]
 
+- id: approval/admin/group-member
+  title: "a member of the approval group answers another account's request"
+  category: approval
+  tier: P0
+  guarantee: "On a managed host, a member of policy.approval.local_admin.group lists the pending requests of every account and answers one with gryph policy approve resolve after a confirmation on the terminal. The service checks the group and the account against the peer credentials, records the assurance of the answer, tells the requester's next hook, and a session grant lets the retries through. Privileged job only."
+  labels: [approval, supervisor, admin, privileged, linux]
+
+- id: approval/admin/grant-used-once
+  title: "a once grant lets the retry through one time"
+  category: approval
+  tier: P0
+  guarantee: "An allow with the scope once lets the same action through one time, and the second retry asks again. A scope wider than policy.approval.max_grant_scope is refused before anything changes. Privileged job only."
+  labels: [approval, supervisor, admin, privileged, linux]
+
+- id: approval/admin/non-member-refused
+  title: "an account outside the approval group cannot answer"
+  category: approval
+  tier: P0
+  guarantee: "An account outside policy.approval.local_admin.group sees its own requests only and cannot answer another account's request. The request stays pending. Privileged job only."
+  labels: [approval, supervisor, admin, privileged, linux]
+
+- id: approval/admin/requester-uid-refused
+  title: "the account that asked cannot answer its own request"
+  category: approval
+  tier: P0
+  guarantee: "The service refuses an answer from the account that asked, also when that account is in the approval group, and gryph policy approve resolve refuses --yes on a managed host. Privileged job only."
+  labels: [approval, supervisor, admin, privileged, linux]
+
+- id: approval/admin/superseded
+  title: "the first answer wins and a later one is superseded"
+  category: approval
+  tier: P1
+  guarantee: "Two approvers answer one request. The first answer decides it, the second approver is told the request was answered first, and the requester's next hook reports the first answer with its note. Privileged job only."
+  labels: [approval, supervisor, admin, privileged, linux]
+
 - id: supervisor/install/ordering
   title: "the managed install turns the service switch on only after the service answers"
   category: supervisor

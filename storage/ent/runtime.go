@@ -52,6 +52,10 @@ func init() {
 	aarmapprovalrequestDescInline := aarmapprovalrequestFields[15].Descriptor()
 	// aarmapprovalrequest.DefaultInline holds the default value on creation for the inline field.
 	aarmapprovalrequest.DefaultInline = aarmapprovalrequestDescInline.Default.(bool)
+	// aarmapprovalrequestDescReview is the schema descriptor for review field.
+	aarmapprovalrequestDescReview := aarmapprovalrequestFields[16].Descriptor()
+	// aarmapprovalrequest.DefaultReview holds the default value on creation for the review field.
+	aarmapprovalrequest.DefaultReview = aarmapprovalrequestDescReview.Default.(bool)
 	// aarmapprovalrequestDescID is the schema descriptor for id field.
 	aarmapprovalrequestDescID := aarmapprovalrequestFields[0].Descriptor()
 	// aarmapprovalrequest.DefaultID holds the default value on creation for the id field.

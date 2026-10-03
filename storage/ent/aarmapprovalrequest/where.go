@@ -120,6 +120,16 @@ func Inline(v bool) predicate.AarmApprovalRequest {
 	return predicate.AarmApprovalRequest(sql.FieldEQ(FieldInline, v))
 }
 
+// Review applies equality check predicate on the "review" field. It's identical to ReviewEQ.
+func Review(v bool) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldEQ(FieldReview, v))
+}
+
+// RequesterAudit applies equality check predicate on the "requester_audit" field. It's identical to RequesterAuditEQ.
+func RequesterAudit(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldEQ(FieldRequesterAudit, v))
+}
+
 // DecidedAt applies equality check predicate on the "decided_at" field. It's identical to DecidedAtEQ.
 func DecidedAt(v time.Time) predicate.AarmApprovalRequest {
 	return predicate.AarmApprovalRequest(sql.FieldEQ(FieldDecidedAt, v))
@@ -913,6 +923,91 @@ func InlineEQ(v bool) predicate.AarmApprovalRequest {
 // InlineNEQ applies the NEQ predicate on the "inline" field.
 func InlineNEQ(v bool) predicate.AarmApprovalRequest {
 	return predicate.AarmApprovalRequest(sql.FieldNEQ(FieldInline, v))
+}
+
+// ReviewEQ applies the EQ predicate on the "review" field.
+func ReviewEQ(v bool) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldEQ(FieldReview, v))
+}
+
+// ReviewNEQ applies the NEQ predicate on the "review" field.
+func ReviewNEQ(v bool) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldNEQ(FieldReview, v))
+}
+
+// RequesterAuditEQ applies the EQ predicate on the "requester_audit" field.
+func RequesterAuditEQ(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldEQ(FieldRequesterAudit, v))
+}
+
+// RequesterAuditNEQ applies the NEQ predicate on the "requester_audit" field.
+func RequesterAuditNEQ(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldNEQ(FieldRequesterAudit, v))
+}
+
+// RequesterAuditIn applies the In predicate on the "requester_audit" field.
+func RequesterAuditIn(vs ...string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldIn(FieldRequesterAudit, vs...))
+}
+
+// RequesterAuditNotIn applies the NotIn predicate on the "requester_audit" field.
+func RequesterAuditNotIn(vs ...string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldNotIn(FieldRequesterAudit, vs...))
+}
+
+// RequesterAuditGT applies the GT predicate on the "requester_audit" field.
+func RequesterAuditGT(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldGT(FieldRequesterAudit, v))
+}
+
+// RequesterAuditGTE applies the GTE predicate on the "requester_audit" field.
+func RequesterAuditGTE(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldGTE(FieldRequesterAudit, v))
+}
+
+// RequesterAuditLT applies the LT predicate on the "requester_audit" field.
+func RequesterAuditLT(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldLT(FieldRequesterAudit, v))
+}
+
+// RequesterAuditLTE applies the LTE predicate on the "requester_audit" field.
+func RequesterAuditLTE(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldLTE(FieldRequesterAudit, v))
+}
+
+// RequesterAuditContains applies the Contains predicate on the "requester_audit" field.
+func RequesterAuditContains(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldContains(FieldRequesterAudit, v))
+}
+
+// RequesterAuditHasPrefix applies the HasPrefix predicate on the "requester_audit" field.
+func RequesterAuditHasPrefix(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldHasPrefix(FieldRequesterAudit, v))
+}
+
+// RequesterAuditHasSuffix applies the HasSuffix predicate on the "requester_audit" field.
+func RequesterAuditHasSuffix(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldHasSuffix(FieldRequesterAudit, v))
+}
+
+// RequesterAuditIsNil applies the IsNil predicate on the "requester_audit" field.
+func RequesterAuditIsNil() predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldIsNull(FieldRequesterAudit))
+}
+
+// RequesterAuditNotNil applies the NotNil predicate on the "requester_audit" field.
+func RequesterAuditNotNil() predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldNotNull(FieldRequesterAudit))
+}
+
+// RequesterAuditEqualFold applies the EqualFold predicate on the "requester_audit" field.
+func RequesterAuditEqualFold(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldEqualFold(FieldRequesterAudit, v))
+}
+
+// RequesterAuditContainsFold applies the ContainsFold predicate on the "requester_audit" field.
+func RequesterAuditContainsFold(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldContainsFold(FieldRequesterAudit, v))
 }
 
 // DecidedAtEQ applies the EQ predicate on the "decided_at" field.

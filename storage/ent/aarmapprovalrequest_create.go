@@ -183,6 +183,34 @@ func (_c *AarmApprovalRequestCreate) SetNillableInline(v *bool) *AarmApprovalReq
 	return _c
 }
 
+// SetReview sets the "review" field.
+func (_c *AarmApprovalRequestCreate) SetReview(v bool) *AarmApprovalRequestCreate {
+	_c.mutation.SetReview(v)
+	return _c
+}
+
+// SetNillableReview sets the "review" field if the given value is not nil.
+func (_c *AarmApprovalRequestCreate) SetNillableReview(v *bool) *AarmApprovalRequestCreate {
+	if v != nil {
+		_c.SetReview(*v)
+	}
+	return _c
+}
+
+// SetRequesterAudit sets the "requester_audit" field.
+func (_c *AarmApprovalRequestCreate) SetRequesterAudit(v string) *AarmApprovalRequestCreate {
+	_c.mutation.SetRequesterAudit(v)
+	return _c
+}
+
+// SetNillableRequesterAudit sets the "requester_audit" field if the given value is not nil.
+func (_c *AarmApprovalRequestCreate) SetNillableRequesterAudit(v *string) *AarmApprovalRequestCreate {
+	if v != nil {
+		_c.SetRequesterAudit(*v)
+	}
+	return _c
+}
+
 // SetDecidedAt sets the "decided_at" field.
 func (_c *AarmApprovalRequestCreate) SetDecidedAt(v time.Time) *AarmApprovalRequestCreate {
 	_c.mutation.SetDecidedAt(v)
@@ -356,6 +384,10 @@ func (_c *AarmApprovalRequestCreate) defaults() {
 		v := aarmapprovalrequest.DefaultInline
 		_c.mutation.SetInline(v)
 	}
+	if _, ok := _c.mutation.Review(); !ok {
+		v := aarmapprovalrequest.DefaultReview
+		_c.mutation.SetReview(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := aarmapprovalrequest.DefaultID()
 		_c.mutation.SetID(v)
@@ -397,6 +429,9 @@ func (_c *AarmApprovalRequestCreate) check() error {
 	}
 	if _, ok := _c.mutation.Inline(); !ok {
 		return &ValidationError{Name: "inline", err: errors.New(`ent: missing required field "AarmApprovalRequest.inline"`)}
+	}
+	if _, ok := _c.mutation.Review(); !ok {
+		return &ValidationError{Name: "review", err: errors.New(`ent: missing required field "AarmApprovalRequest.review"`)}
 	}
 	return nil
 }
@@ -492,6 +527,14 @@ func (_c *AarmApprovalRequestCreate) createSpec() (*AarmApprovalRequest, *sqlgra
 	if value, ok := _c.mutation.Inline(); ok {
 		_spec.SetField(aarmapprovalrequest.FieldInline, field.TypeBool, value)
 		_node.Inline = value
+	}
+	if value, ok := _c.mutation.Review(); ok {
+		_spec.SetField(aarmapprovalrequest.FieldReview, field.TypeBool, value)
+		_node.Review = value
+	}
+	if value, ok := _c.mutation.RequesterAudit(); ok {
+		_spec.SetField(aarmapprovalrequest.FieldRequesterAudit, field.TypeString, value)
+		_node.RequesterAudit = value
 	}
 	if value, ok := _c.mutation.DecidedAt(); ok {
 		_spec.SetField(aarmapprovalrequest.FieldDecidedAt, field.TypeTime, value)

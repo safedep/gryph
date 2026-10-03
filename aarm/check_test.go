@@ -1093,13 +1093,21 @@ rules:
 	med, err := NewMediator(policy, WithReceiptGenerator(rec), WithApprovalService(svc))
 	require.NoError(t, err)
 
-	event := &events.Event{ID: uuid.New(), SessionID: uuid.New(), Timestamp: time.Now(), ActionType: events.ActionFileWrite, AgentName: "claude-code", Payload: []byte(`{"path":"/etc/hosts"}`)}
+	event := &events.Event{ID: uuid.New(), SessionID: uuid.New(), Timestamp: time.Now(), ActionType: events.ActionFileWrite, AgentName: "claude-code", Phase: events.PhasePre, Payload: []byte(`{"path":"/etc/hosts"}`)}
 	res, err := med.Check(context.Background(), event, nil)
 	require.NoError(t, err)
 	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
 	assert.Equal(t, svc.outcome.Note, res.Reason)
+
+	// After the action nothing can stop it: the note goes as guidance.
+	post := *event
+	post.ID, post.Phase = uuid.New(), events.PhasePost
+	res, err = med.Check(context.Background(), &post, nil)
+	require.NoError(t, err)
+	assert.Equal(t, coresecurity.DecisionGuidance, res.Decision)
+	assert.Equal(t, svc.outcome.Note, res.Guidance)
 	assert.Empty(t, rec.decisionCalls, "the receipt keeps escalate until an answer")
-	require.Len(t, rec.approvalCalls, 1)
+	require.Len(t, rec.approvalCalls, 2, "both receipts record the request")
 	assert.Equal(t, requestID.String(), rec.approvalCalls[0].approval["request_id"])
 }
 

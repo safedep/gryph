@@ -128,9 +128,28 @@ type managedSupervisorReport struct {
 	Profile        string `json:"profile,omitempty"`
 	PilotUntil     string `json:"pilot_until,omitempty"`
 	PilotRemaining int64  `json:"pilot_remaining_seconds,omitempty"`
-	// ApprovalChannels are the channels that answer an escalation. An
-	// empty list leaves every escalated action to expire.
+	// ApprovalChannels are the channels that answer an escalation, and
+	// ApprovalGroup the group of the local-admin channel. With no channel
+	// above the terminal that has anyone behind it, every escalated action
+	// above the floor expires.
 	ApprovalChannels []string `json:"approval_channels"`
+	ApprovalGroup    string   `json:"approval_group,omitempty"`
+}
+
+// hasApprover reports whether a channel above the developer's terminal
+// has someone behind it.
+func (r managedSupervisorReport) hasApprover() bool {
+	for _, c := range r.ApprovalChannels {
+		switch c {
+		case config.ApprovalChannelLocalAdmin, config.ApprovalChannelSelfElevated:
+			if r.ApprovalGroup != "" {
+				return true
+			}
+		case config.ApprovalChannelLocalAuth, config.ApprovalChannelOutOfBand:
+			return true
+		}
+	}
+	return false
 }
 
 type managedCollectionReport struct {
@@ -217,6 +236,7 @@ func (r *managedDoctorReport) readSupervisor(cfg *config.Config) {
 	r.Supervisor.Profile = cfg.Supervisor.EffectiveProfile()
 	r.Supervisor.PilotUntil = cfg.Supervisor.PilotUntil
 	r.Supervisor.ApprovalChannels = append([]string{}, cfg.Policy.Approval.Channels...)
+	r.Supervisor.ApprovalGroup = cfg.Policy.Approval.LocalAdmin.Group
 	if left, ok := cfg.Supervisor.PilotRemaining(); ok {
 		r.Supervisor.PilotRemaining = int64(left.Seconds())
 	}
@@ -450,10 +470,13 @@ func supervisorProfileSuffix(r managedSupervisorReport) string {
 	if r.PilotRemaining > 0 {
 		out += fmt.Sprintf("  pilot ends in %s (%s)", humanizeDuration(time.Duration(r.PilotRemaining)*time.Second), r.PilotUntil)
 	}
-	if len(r.ApprovalChannels) == 0 {
+	if !r.hasApprover() {
 		out += "  no approver channel"
 	} else {
 		out += "  approvers " + strings.Join(r.ApprovalChannels, ", ")
+		if r.ApprovalGroup != "" {
+			out += " (group " + r.ApprovalGroup + ")"
+		}
 	}
 	return out
 }

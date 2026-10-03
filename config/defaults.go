@@ -82,6 +82,8 @@ func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".approval.request_ttl", DefaultApprovalRequestTTL.String())
 	v.SetDefault(prefix+".approval.grant_ttl", DefaultApprovalGrantTTL.String())
 	v.SetDefault(prefix+".approval.max_grant_scope", ApprovalScopeOnce)
+	v.SetDefault(prefix+".approval.local_admin.group", "")
+	v.SetDefault(prefix+".approval.local_admin.allow_self_elevated", false)
 	v.SetDefault(prefix+".classify.enabled", true)
 	v.SetDefault(prefix+".classify.fail_open", false)
 	v.SetDefault(prefix+".classify.extra_patterns", map[string][]string{})

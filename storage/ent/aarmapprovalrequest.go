@@ -49,6 +49,10 @@ type AarmApprovalRequest struct {
 	ExpiresAt time.Time `json:"expires_at,omitempty"`
 	// Inline holds the value of the "inline" field.
 	Inline bool `json:"inline,omitempty"`
+	// Review holds the value of the "review" field.
+	Review bool `json:"review,omitempty"`
+	// RequesterAudit holds the value of the "requester_audit" field.
+	RequesterAudit string `json:"requester_audit,omitempty"`
 	// DecidedAt holds the value of the "decided_at" field.
 	DecidedAt *time.Time `json:"decided_at,omitempty"`
 	// Channel holds the value of the "channel" field.
@@ -75,11 +79,11 @@ func (*AarmApprovalRequest) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case aarmapprovalrequest.FieldRuleIds:
 			values[i] = new([]byte)
-		case aarmapprovalrequest.FieldInline:
+		case aarmapprovalrequest.FieldInline, aarmapprovalrequest.FieldReview:
 			values[i] = new(sql.NullBool)
 		case aarmapprovalrequest.FieldReceiptSequence:
 			values[i] = new(sql.NullInt64)
-		case aarmapprovalrequest.FieldActionDigest, aarmapprovalrequest.FieldRequester, aarmapprovalrequest.FieldHost, aarmapprovalrequest.FieldAgent, aarmapprovalrequest.FieldSummary, aarmapprovalrequest.FieldProject, aarmapprovalrequest.FieldMinAssurance, aarmapprovalrequest.FieldState, aarmapprovalrequest.FieldChannel, aarmapprovalrequest.FieldAssurance, aarmapprovalrequest.FieldApprover, aarmapprovalrequest.FieldPeerTrust, aarmapprovalrequest.FieldNote, aarmapprovalrequest.FieldScope:
+		case aarmapprovalrequest.FieldActionDigest, aarmapprovalrequest.FieldRequester, aarmapprovalrequest.FieldHost, aarmapprovalrequest.FieldAgent, aarmapprovalrequest.FieldSummary, aarmapprovalrequest.FieldProject, aarmapprovalrequest.FieldMinAssurance, aarmapprovalrequest.FieldState, aarmapprovalrequest.FieldRequesterAudit, aarmapprovalrequest.FieldChannel, aarmapprovalrequest.FieldAssurance, aarmapprovalrequest.FieldApprover, aarmapprovalrequest.FieldPeerTrust, aarmapprovalrequest.FieldNote, aarmapprovalrequest.FieldScope:
 			values[i] = new(sql.NullString)
 		case aarmapprovalrequest.FieldRequestedAt, aarmapprovalrequest.FieldExpiresAt, aarmapprovalrequest.FieldDecidedAt, aarmapprovalrequest.FieldNotifiedAt:
 			values[i] = new(sql.NullTime)
@@ -197,6 +201,18 @@ func (_m *AarmApprovalRequest) assignValues(columns []string, values []any) erro
 				return fmt.Errorf("unexpected type %T for field inline", values[i])
 			} else if value.Valid {
 				_m.Inline = value.Bool
+			}
+		case aarmapprovalrequest.FieldReview:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field review", values[i])
+			} else if value.Valid {
+				_m.Review = value.Bool
+			}
+		case aarmapprovalrequest.FieldRequesterAudit:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field requester_audit", values[i])
+			} else if value.Valid {
+				_m.RequesterAudit = value.String
 			}
 		case aarmapprovalrequest.FieldDecidedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -328,6 +344,12 @@ func (_m *AarmApprovalRequest) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("inline=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Inline))
+	builder.WriteString(", ")
+	builder.WriteString("review=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Review))
+	builder.WriteString(", ")
+	builder.WriteString("requester_audit=")
+	builder.WriteString(_m.RequesterAudit)
 	builder.WriteString(", ")
 	if v := _m.DecidedAt; v != nil {
 		builder.WriteString("decided_at=")

@@ -47,6 +47,8 @@ type ApprovalRequestRow struct {
 	RequestedAt     time.Time
 	ExpiresAt       time.Time
 	Inline          bool
+	Review          bool
+	RequesterAudit  string
 	DecidedAt       *time.Time
 	Channel         string
 	Assurance       string
@@ -65,7 +67,11 @@ type ApprovalRequestFilter struct {
 	ExpiredBefore *time.Time
 	// Unnotified keeps decided rows that no later hook reported yet.
 	Unnotified bool
-	Limit      int
+	// AllAccounts asks the decision service for the requests of every
+	// account. The service honors it for an approver and ignores it for
+	// anyone else. A store of one account ignores it.
+	AllAccounts bool
+	Limit       int
 }
 
 // ApprovalResolution is the answer that closes a request.
@@ -152,6 +158,8 @@ func (s *SQLiteStore) InsertApprovalRequest(ctx context.Context, row *ApprovalRe
 		SetRequestedAt(row.RequestedAt).
 		SetExpiresAt(row.ExpiresAt).
 		SetInline(row.Inline).
+		SetReview(row.Review).
+		SetRequesterAudit(row.RequesterAudit).
 		SetChannel(row.Channel).
 		SetAssurance(row.Assurance).
 		SetApprover(row.Approver).
@@ -380,6 +388,8 @@ func entToApprovalRequest(e *ent.AarmApprovalRequest) *ApprovalRequestRow {
 		RequestedAt:     e.RequestedAt,
 		ExpiresAt:       e.ExpiresAt,
 		Inline:          e.Inline,
+		Review:          e.Review,
+		RequesterAudit:  e.RequesterAudit,
 		DecidedAt:       e.DecidedAt,
 		Channel:         e.Channel,
 		Assurance:       e.Assurance,

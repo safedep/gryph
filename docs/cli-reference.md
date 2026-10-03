@@ -494,10 +494,14 @@ developer guide.
 The service answers every escalation of the policy. It keeps the requests
 of each account, asks on the terminal of the hook when the rule accepts
 it, and expires a request that nobody answers. `gryph policy approve
-list` shows the open requests of the account and `gryph policy approve
-show ID` one of them. The keys under `policy.approval` set the channels,
-the floor, the waits and the grant scope. See [the approval
-workflow](./security-policy.md#approval-workflow).
+list` shows the open requests and `gryph policy approve show ID` one of
+them. A member of `policy.approval.local_admin.group` sees the requests of
+every account and answers with `gryph policy approve resolve --id ID
+--decision allow|deny [--scope once|session|window] [--note TEXT]`, which
+confirms on the terminal and refuses `--yes`. `gryph policy approve watch`
+prints each new request. The keys under `policy.approval` set the
+channels, the floor, the waits, the grant scope and the admin group. See
+[the approval workflow](./security-policy.md#approval-workflow).
 
 At start the service makes the machine keys below the state directory when
 they are missing: `keys/receipt.key` (the receipt signing key, mode 0600),

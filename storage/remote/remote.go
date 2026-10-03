@@ -47,6 +47,8 @@ const (
 	ParamPage   = "page"
 	ParamAfter  = "after"
 	ParamLimit  = "limit"
+	// ParamAll asks for the rows of every account, for an approver.
+	ParamAll = "all"
 )
 
 // PageSize is the count of rows in one query_result. A longer answer
@@ -146,7 +148,7 @@ func (s *Store) QueryApprovalRequests(ctx context.Context, filter *storage.Appro
 }
 
 func (s *Store) GetApprovalRequestByPrefix(ctx context.Context, prefix string) (*storage.ApprovalRequestRow, error) {
-	return one[storage.ApprovalRequestRow](ctx, s, ipc.Query{Kind: KindApprovalRequestByPrefix, Params: map[string]string{ParamPrefix: prefix}})
+	return one[storage.ApprovalRequestRow](ctx, s, ipc.Query{Kind: KindApprovalRequestByPrefix, Params: map[string]string{ParamPrefix: prefix, ParamAll: "1"}})
 }
 
 func (s *Store) GetContextStateByPrefix(ctx context.Context, prefix string) (*storage.ContextStateRow, error) {

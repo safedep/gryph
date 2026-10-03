@@ -637,9 +637,14 @@ func (m *Mediator) applyApprovalOutcome(ctx context.Context, action *model.Actio
 	case approval.DecisionPending:
 		// The request is open. The receipt keeps the escalate decision
 		// until an answer or the expiry closes it. The note is the text the
-		// agent and the user read.
+		// agent and the user read. A hook after the action cannot stop
+		// it, so the note goes as guidance.
 		resultStatus = string(model.ResultBlocked)
 		coreDecision = coresecurity.DecisionBlock
+		if action.Phase != model.PhasePre {
+			resultStatus = string(model.ResultSuccess)
+			coreDecision = coresecurity.DecisionGuidance
+		}
 		message = "Approval pending"
 		if outcome.Note != "" {
 			message = outcome.Note

@@ -52,6 +52,12 @@ func LookupID(id string) (Account, error) {
 	return lookupID(id)
 }
 
+// MemberOf reports whether the account with id is in the named group, by
+// the primary and the supplementary groups of the OS database.
+func MemberOf(id, group string) (bool, error) {
+	return memberOf(id, group)
+}
+
 // IsSystemID reports whether id is the identifier of a system account: a
 // service account below the first human uid on Unix. It reports false
 // where the platform does not tell.

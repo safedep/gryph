@@ -20,12 +20,15 @@ import (
 // method. The store runs the same filter as a local read would, so a
 // managed host reads what a user install reads, and the answer goes out
 // in pages of remote.PageSize rows.
-func (p *partition) query(ctx context.Context, q *ipc.Query) (*ipc.Frame, error) {
+func (p *partition) query(ctx context.Context, q *ipc.Query, extra queryReader) (*ipc.Frame, error) {
 	if !p.bucket.take(time.Now()) {
 		p.recordRateLimit(ctx, "query")
 		return ipc.ErrorFrame(ipc.CodeRateLimited, "too many requests from this account"), nil
 	}
-	rows, err := p.read(ctx, q)
+	rows, served, err := extra(ctx, q)
+	if err == nil && !served {
+		rows, err = p.read(ctx, q)
+	}
 	if err != nil {
 		return ipc.ErrorFrame(ipc.CodeInvalid, err.Error()), nil
 	}
@@ -39,6 +42,10 @@ func (p *partition) query(ctx context.Context, q *ipc.Query) (*ipc.Frame, error)
 	}
 	return ipc.NewFrame(ipc.TypeQueryResult, res)
 }
+
+// queryReader answers the kinds that reach past one partition. It reports
+// false when the kind is not one of them.
+type queryReader func(ctx context.Context, q *ipc.Query) ([]any, bool, error)
 
 // read runs the method the query names and returns its rows as values to
 // encode. An unknown kind is an error, and so is a parameter that does

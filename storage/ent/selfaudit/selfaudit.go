@@ -93,6 +93,9 @@ const (
 	ActionApprovalGranted         Action = "approval_granted"
 	ActionApprovalDenied          Action = "approval_denied"
 	ActionApprovalTimeout         Action = "approval_timeout"
+	ActionApprovalPending         Action = "approval_pending"
+	ActionApprovalSuperseded      Action = "approval_superseded"
+	ActionApprovalRefused         Action = "approval_refused"
 	ActionDeferralRequested       Action = "deferral_requested"
 	ActionDeferralResolved        Action = "deferral_resolved"
 	ActionDeferralTimeout         Action = "deferral_timeout"
@@ -109,7 +112,7 @@ func (a Action) String() string {
 // ActionValidator is a validator for the "action" field enum values. It is called by the builders before save.
 func ActionValidator(a Action) error {
 	switch a {
-	case ActionInstall, ActionUninstall, ActionConfigChange, ActionExport, ActionPurge, ActionUpgrade, ActionDatabaseInit, ActionRetentionCleanup, ActionHookError, ActionPolicyLoadError, ActionContextCleanup, ActionContextSnapshotError, ActionContextAppendError, ActionContextChainBroken, ActionReceiptCleanup, ActionReceiptInsertError, ActionReceiptChainBroken, ActionReceiptSigned, ActionReceiptSignatureInvalid, ActionReceiptKeyRotated, ActionApprovalRequested, ActionApprovalGranted, ActionApprovalDenied, ActionApprovalTimeout, ActionDeferralRequested, ActionDeferralResolved, ActionDeferralTimeout, ActionDeferralSweep, ActionDeferralCleanup, ActionIdentityMissing, ActionPathMigration:
+	case ActionInstall, ActionUninstall, ActionConfigChange, ActionExport, ActionPurge, ActionUpgrade, ActionDatabaseInit, ActionRetentionCleanup, ActionHookError, ActionPolicyLoadError, ActionContextCleanup, ActionContextSnapshotError, ActionContextAppendError, ActionContextChainBroken, ActionReceiptCleanup, ActionReceiptInsertError, ActionReceiptChainBroken, ActionReceiptSigned, ActionReceiptSignatureInvalid, ActionReceiptKeyRotated, ActionApprovalRequested, ActionApprovalGranted, ActionApprovalDenied, ActionApprovalTimeout, ActionApprovalPending, ActionApprovalSuperseded, ActionApprovalRefused, ActionDeferralRequested, ActionDeferralResolved, ActionDeferralTimeout, ActionDeferralSweep, ActionDeferralCleanup, ActionIdentityMissing, ActionPathMigration:
 		return nil
 	default:
 		return fmt.Errorf("selfaudit: invalid enum value for action field: %q", a)

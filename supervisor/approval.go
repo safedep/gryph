@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/approval"
+	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/decision/ipc"
@@ -126,7 +127,10 @@ func (a *approver) Request(ctx context.Context, r *approval.Request) (*approval.
 	min := a.floor(r)
 	channels := a.channels(min)
 	pr := prompterFrom(ctx)
-	inline := pr != nil && pr.wait > 0 && a.cfg.HasChannel(config.ApprovalChannelSameUserTTY) && approval.AssuranceSameUserTTY.Meets(min)
+	// A hook after the action cannot stop it. The request is a review
+	// item: an approver sees it, and nobody waits.
+	review := r.Action != nil && r.Action.Phase != model.PhasePre
+	inline := !review && pr != nil && pr.wait > 0 && a.cfg.HasChannel(config.ApprovalChannelSameUserTTY) && approval.AssuranceSameUserTTY.Meets(min)
 	row := &storage.ApprovalRequestRow{
 		SessionID:       r.SessionID,
 		ActionID:        r.ActionID,
@@ -140,6 +144,10 @@ func (a *approver) Request(ctx context.Context, r *approval.Request) (*approval.
 		RequestedAt:     now,
 		ExpiresAt:       now.Add(a.requestTTL()),
 		Inline:          inline,
+		Review:          review,
+	}
+	if pr != nil {
+		row.RequesterAudit = pr.audit
 	}
 	if r.Action != nil {
 		row.Agent = r.Action.Agent
@@ -152,6 +160,9 @@ func (a *approver) Request(ctx context.Context, r *approval.Request) (*approval.
 		return nil, fmt.Errorf("supervisor: store the approval request: %w", err)
 	}
 
+	if review {
+		return a.review(row), nil
+	}
 	if len(channels) == 0 {
 		return a.pending(row, fmt.Sprintf("No approval channel meets min_assurance %s.", min)), nil
 	}
@@ -236,6 +247,19 @@ func (a *approver) pending(row *storage.ApprovalRequestRow, detail string) *appr
 		Decision:  approval.DecisionPending,
 		Approver:  "",
 		Note:      note,
+		DecidedAt: row.RequestedAt,
+		PeerTrust: approval.PeerTrustUnknown,
+		RequestID: row.ID,
+	}
+}
+
+// review is the outcome of a request from a hook after the action. The
+// action ran, so the note tells the agent what an approver will see.
+func (a *approver) review(row *storage.ApprovalRequestRow) *approval.Outcome {
+	id := shortID(row.ID)
+	return &approval.Outcome{
+		Decision:  approval.DecisionPending,
+		Note:      fmt.Sprintf("This action needs approval, and it ran before the rule could stop it. Request %s is a review item for an approver. Tell the user.", id),
 		DecidedAt: row.RequestedAt,
 		PeerTrust: approval.PeerTrustUnknown,
 		RequestID: row.ID,

@@ -69,11 +69,26 @@ func newPolicyDeferralsCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to query deferred actions: %w", err)
 			}
+			// An escalation that waits for an approver is a deferral too.
+			// It lives in the request store of the decision service, so
+			// the queue shows it next to the deferral rows.
+			var requests []*storage.ApprovalRequestRow
+			if status == "" || status == "all" || status == storage.DeferredActionStatusPending {
+				requests, err = app.Reads.QueryApprovalRequests(ctx, &storage.ApprovalRequestFilter{State: storage.ApprovalRequestPending, SessionID: filter.SessionID, AllAccounts: true, Limit: limit})
+				if err != nil {
+					return fmt.Errorf("failed to query approval requests: %w", err)
+				}
+			}
 			out := cmd.OutOrStdout()
 			if format == "json" {
-				return writeDeferralsJSON(out, rows)
+				return writeDeferralsJSON(out, rows, requests)
 			}
-			renderDeferralsTable(out, policyColorizer(app), rows)
+			c := policyColorizer(app)
+			renderDeferralsTable(out, c, rows)
+			if len(requests) > 0 {
+				_, _ = fmt.Fprintln(out)
+				renderApprovalRequestsTable(out, c, requests)
+			}
 			return nil
 		},
 	}
@@ -139,6 +154,9 @@ func newPolicyDeferralsResolveCmd() *cobra.Command {
 				return fmt.Errorf("failed to resolve deferral id: %w", err)
 			}
 			if row == nil {
+				if req, rerr := app.Store.GetApprovalRequestByPrefix(ctx, id); rerr == nil && req != nil {
+					return ErrConfig("the id names an approval request", fmt.Errorf("answer request %s with gryph policy approve resolve", tui.FormatShortID(req.ID.String())))
+				}
 				return ErrConfig("no deferral matches id", fmt.Errorf("id %q did not match any deferred-action row", id))
 			}
 			if row.Status != storage.DeferredActionStatusPending {
@@ -495,12 +513,20 @@ func deferralToView(r *storage.DeferredActionRow) deferralView {
 	return v
 }
 
-func writeDeferralsJSON(w io.Writer, rows []*storage.DeferredActionRow) error {
+func writeDeferralsJSON(w io.Writer, rows []*storage.DeferredActionRow, requests []*storage.ApprovalRequestRow) error {
 	views := make([]deferralView, 0, len(rows))
 	for _, r := range rows {
 		views = append(views, deferralToView(r))
 	}
+	doc := map[string]interface{}{"deferrals": views}
+	if len(requests) > 0 {
+		reqs := make([]approvalRequestView, 0, len(requests))
+		for _, r := range requests {
+			reqs = append(reqs, approvalRequestToView(r))
+		}
+		doc["approval_requests"] = reqs
+	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	return enc.Encode(map[string]interface{}{"deferrals": views})
+	return enc.Encode(doc)
 }

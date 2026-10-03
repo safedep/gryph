@@ -273,6 +273,40 @@ func (_u *AarmApprovalRequestUpdate) SetNillableInline(v *bool) *AarmApprovalReq
 	return _u
 }
 
+// SetReview sets the "review" field.
+func (_u *AarmApprovalRequestUpdate) SetReview(v bool) *AarmApprovalRequestUpdate {
+	_u.mutation.SetReview(v)
+	return _u
+}
+
+// SetNillableReview sets the "review" field if the given value is not nil.
+func (_u *AarmApprovalRequestUpdate) SetNillableReview(v *bool) *AarmApprovalRequestUpdate {
+	if v != nil {
+		_u.SetReview(*v)
+	}
+	return _u
+}
+
+// SetRequesterAudit sets the "requester_audit" field.
+func (_u *AarmApprovalRequestUpdate) SetRequesterAudit(v string) *AarmApprovalRequestUpdate {
+	_u.mutation.SetRequesterAudit(v)
+	return _u
+}
+
+// SetNillableRequesterAudit sets the "requester_audit" field if the given value is not nil.
+func (_u *AarmApprovalRequestUpdate) SetNillableRequesterAudit(v *string) *AarmApprovalRequestUpdate {
+	if v != nil {
+		_u.SetRequesterAudit(*v)
+	}
+	return _u
+}
+
+// ClearRequesterAudit clears the value of the "requester_audit" field.
+func (_u *AarmApprovalRequestUpdate) ClearRequesterAudit() *AarmApprovalRequestUpdate {
+	_u.mutation.ClearRequesterAudit()
+	return _u
+}
+
 // SetDecidedAt sets the "decided_at" field.
 func (_u *AarmApprovalRequestUpdate) SetDecidedAt(v time.Time) *AarmApprovalRequestUpdate {
 	_u.mutation.SetDecidedAt(v)
@@ -562,6 +596,15 @@ func (_u *AarmApprovalRequestUpdate) sqlSave(ctx context.Context) (_node int, er
 	}
 	if value, ok := _u.mutation.Inline(); ok {
 		_spec.SetField(aarmapprovalrequest.FieldInline, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Review(); ok {
+		_spec.SetField(aarmapprovalrequest.FieldReview, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.RequesterAudit(); ok {
+		_spec.SetField(aarmapprovalrequest.FieldRequesterAudit, field.TypeString, value)
+	}
+	if _u.mutation.RequesterAuditCleared() {
+		_spec.ClearField(aarmapprovalrequest.FieldRequesterAudit, field.TypeString)
 	}
 	if value, ok := _u.mutation.DecidedAt(); ok {
 		_spec.SetField(aarmapprovalrequest.FieldDecidedAt, field.TypeTime, value)
@@ -871,6 +914,40 @@ func (_u *AarmApprovalRequestUpdateOne) SetNillableInline(v *bool) *AarmApproval
 	if v != nil {
 		_u.SetInline(*v)
 	}
+	return _u
+}
+
+// SetReview sets the "review" field.
+func (_u *AarmApprovalRequestUpdateOne) SetReview(v bool) *AarmApprovalRequestUpdateOne {
+	_u.mutation.SetReview(v)
+	return _u
+}
+
+// SetNillableReview sets the "review" field if the given value is not nil.
+func (_u *AarmApprovalRequestUpdateOne) SetNillableReview(v *bool) *AarmApprovalRequestUpdateOne {
+	if v != nil {
+		_u.SetReview(*v)
+	}
+	return _u
+}
+
+// SetRequesterAudit sets the "requester_audit" field.
+func (_u *AarmApprovalRequestUpdateOne) SetRequesterAudit(v string) *AarmApprovalRequestUpdateOne {
+	_u.mutation.SetRequesterAudit(v)
+	return _u
+}
+
+// SetNillableRequesterAudit sets the "requester_audit" field if the given value is not nil.
+func (_u *AarmApprovalRequestUpdateOne) SetNillableRequesterAudit(v *string) *AarmApprovalRequestUpdateOne {
+	if v != nil {
+		_u.SetRequesterAudit(*v)
+	}
+	return _u
+}
+
+// ClearRequesterAudit clears the value of the "requester_audit" field.
+func (_u *AarmApprovalRequestUpdateOne) ClearRequesterAudit() *AarmApprovalRequestUpdateOne {
+	_u.mutation.ClearRequesterAudit()
 	return _u
 }
 
@@ -1193,6 +1270,15 @@ func (_u *AarmApprovalRequestUpdateOne) sqlSave(ctx context.Context) (_node *Aar
 	}
 	if value, ok := _u.mutation.Inline(); ok {
 		_spec.SetField(aarmapprovalrequest.FieldInline, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Review(); ok {
+		_spec.SetField(aarmapprovalrequest.FieldReview, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.RequesterAudit(); ok {
+		_spec.SetField(aarmapprovalrequest.FieldRequesterAudit, field.TypeString, value)
+	}
+	if _u.mutation.RequesterAuditCleared() {
+		_spec.ClearField(aarmapprovalrequest.FieldRequesterAudit, field.TypeString)
 	}
 	if value, ok := _u.mutation.DecidedAt(); ok {
 		_spec.SetField(aarmapprovalrequest.FieldDecidedAt, field.TypeTime, value)

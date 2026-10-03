@@ -106,10 +106,12 @@ rules:
 -- terminal.py --
 # Run a hook with a pseudo terminal as its controlling terminal and answer
 # the approval prompt there.
-# usage: python3 terminal.py <answer|-> <payload> <command...>
-# The payload file is the stdin of the hook. Stdout and stderr of the hook
-# are pipes, as under an agent. The terminal gets the answer when the
-# prompt shows. A dash gives no answer. Everything the hook writes goes to
+# usage: python3 terminal.py <answer|-> <payload|-> <command...>
+# The payload file is the stdin of the hook, or a dash keeps the stdin of
+# the helper. Stdout and stderr of the hook
+# are pipes, as under an agent. The terminal gets the answer when a
+# question that ends in [y/N] shows. A dash gives no answer. A command
+# that stays silent for a minute is killed. Everything the hook writes goes to
 # stdout, and the exit code is the hook's.
 import os
 import pty
@@ -124,7 +126,8 @@ if pid == 0:
     # One descriptor keeps the terminal open after the standard ones
     # change, else the master reads end of file before the prompt.
     os.set_inheritable(os.dup(0), True)
-    os.dup2(os.open(payload, os.O_RDONLY), 0)
+    if payload != "-":
+        os.dup2(os.open(payload, os.O_RDONLY), 0)
     os.dup2(out_w, 1)
     os.dup2(err_w, 2)
     os.execvp(command[0], command)
@@ -136,6 +139,7 @@ open_fds = {fd, out_r, err_r}
 while open_fds:
     ready, _, _ = select.select(list(open_fds), [], [], 60)
     if not ready:
+        os.kill(pid, 9)
         break
     for r in ready:
         try:
@@ -149,7 +153,7 @@ while open_fds:
         sys.stdout.flush()
         if r == fd:
             seen += data
-            if not sent and answer != "-" and b"Approve? [y/N]" in seen:
+            if not sent and answer != "-" and b"[y/N]" in seen:
                 os.write(fd, (answer + "\n").encode())
                 sent = True
 _, status = os.waitpid(pid, 0)

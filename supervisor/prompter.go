@@ -17,6 +17,9 @@ import (
 type prompter struct {
 	conn *idleConn
 	wait time.Duration
+	// audit is the login identity of the process that asked, for the
+	// comparison with the one that answers later.
+	audit string
 }
 
 type prompterKey struct{}

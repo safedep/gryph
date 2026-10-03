@@ -223,6 +223,25 @@ func (c *Client) Import(ctx context.Context, frameType string, body Body) (int, 
 	return res.Taken, nil
 }
 
+// Approve answers an approval request and returns the state of the
+// request after the answer.
+func (c *Client) Approve(ctx context.Context, a Approve) (*ApproveResult, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, ReadTimeout)
+		defer cancel()
+	}
+	reply, err := c.call(ctx, MustFrame(TypeApprove, a))
+	if err != nil {
+		return nil, err
+	}
+	res, ok := reply.(*ApproveResult)
+	if !ok {
+		return nil, fmt.Errorf("%w: %T", ErrProtocol, reply)
+	}
+	return res, nil
+}
+
 // ReportHookError tells the service that the hook produced no decision.
 func (c *Client) ReportHookError(ctx context.Context, r ReportHookError) error {
 	reply, err := c.call(ctx, MustFrame(TypeReportHookError, r))

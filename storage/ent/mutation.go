@@ -1059,6 +1059,8 @@ type AarmApprovalRequestMutation struct {
 	requested_at        *time.Time
 	expires_at          *time.Time
 	inline              *bool
+	review              *bool
+	requester_audit     *string
 	decided_at          *time.Time
 	channel             *string
 	assurance           *string
@@ -1844,6 +1846,91 @@ func (m *AarmApprovalRequestMutation) ResetInline() {
 	m.inline = nil
 }
 
+// SetReview sets the "review" field.
+func (m *AarmApprovalRequestMutation) SetReview(b bool) {
+	m.review = &b
+}
+
+// Review returns the value of the "review" field in the mutation.
+func (m *AarmApprovalRequestMutation) Review() (r bool, exists bool) {
+	v := m.review
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReview returns the old "review" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldReview(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReview is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReview requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReview: %w", err)
+	}
+	return oldValue.Review, nil
+}
+
+// ResetReview resets all changes to the "review" field.
+func (m *AarmApprovalRequestMutation) ResetReview() {
+	m.review = nil
+}
+
+// SetRequesterAudit sets the "requester_audit" field.
+func (m *AarmApprovalRequestMutation) SetRequesterAudit(s string) {
+	m.requester_audit = &s
+}
+
+// RequesterAudit returns the value of the "requester_audit" field in the mutation.
+func (m *AarmApprovalRequestMutation) RequesterAudit() (r string, exists bool) {
+	v := m.requester_audit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequesterAudit returns the old "requester_audit" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldRequesterAudit(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequesterAudit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequesterAudit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequesterAudit: %w", err)
+	}
+	return oldValue.RequesterAudit, nil
+}
+
+// ClearRequesterAudit clears the value of the "requester_audit" field.
+func (m *AarmApprovalRequestMutation) ClearRequesterAudit() {
+	m.requester_audit = nil
+	m.clearedFields[aarmapprovalrequest.FieldRequesterAudit] = struct{}{}
+}
+
+// RequesterAuditCleared returns if the "requester_audit" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) RequesterAuditCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldRequesterAudit]
+	return ok
+}
+
+// ResetRequesterAudit resets all changes to the "requester_audit" field.
+func (m *AarmApprovalRequestMutation) ResetRequesterAudit() {
+	m.requester_audit = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldRequesterAudit)
+}
+
 // SetDecidedAt sets the "decided_at" field.
 func (m *AarmApprovalRequestMutation) SetDecidedAt(t time.Time) {
 	m.decided_at = &t
@@ -2270,7 +2357,7 @@ func (m *AarmApprovalRequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AarmApprovalRequestMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 25)
 	if m.session_id != nil {
 		fields = append(fields, aarmapprovalrequest.FieldSessionID)
 	}
@@ -2315,6 +2402,12 @@ func (m *AarmApprovalRequestMutation) Fields() []string {
 	}
 	if m.inline != nil {
 		fields = append(fields, aarmapprovalrequest.FieldInline)
+	}
+	if m.review != nil {
+		fields = append(fields, aarmapprovalrequest.FieldReview)
+	}
+	if m.requester_audit != nil {
+		fields = append(fields, aarmapprovalrequest.FieldRequesterAudit)
 	}
 	if m.decided_at != nil {
 		fields = append(fields, aarmapprovalrequest.FieldDecidedAt)
@@ -2378,6 +2471,10 @@ func (m *AarmApprovalRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.ExpiresAt()
 	case aarmapprovalrequest.FieldInline:
 		return m.Inline()
+	case aarmapprovalrequest.FieldReview:
+		return m.Review()
+	case aarmapprovalrequest.FieldRequesterAudit:
+		return m.RequesterAudit()
 	case aarmapprovalrequest.FieldDecidedAt:
 		return m.DecidedAt()
 	case aarmapprovalrequest.FieldChannel:
@@ -2433,6 +2530,10 @@ func (m *AarmApprovalRequestMutation) OldField(ctx context.Context, name string)
 		return m.OldExpiresAt(ctx)
 	case aarmapprovalrequest.FieldInline:
 		return m.OldInline(ctx)
+	case aarmapprovalrequest.FieldReview:
+		return m.OldReview(ctx)
+	case aarmapprovalrequest.FieldRequesterAudit:
+		return m.OldRequesterAudit(ctx)
 	case aarmapprovalrequest.FieldDecidedAt:
 		return m.OldDecidedAt(ctx)
 	case aarmapprovalrequest.FieldChannel:
@@ -2563,6 +2664,20 @@ func (m *AarmApprovalRequestMutation) SetField(name string, value ent.Value) err
 		}
 		m.SetInline(v)
 		return nil
+	case aarmapprovalrequest.FieldReview:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReview(v)
+		return nil
+	case aarmapprovalrequest.FieldRequesterAudit:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequesterAudit(v)
+		return nil
 	case aarmapprovalrequest.FieldDecidedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -2685,6 +2800,9 @@ func (m *AarmApprovalRequestMutation) ClearedFields() []string {
 	if m.FieldCleared(aarmapprovalrequest.FieldMinAssurance) {
 		fields = append(fields, aarmapprovalrequest.FieldMinAssurance)
 	}
+	if m.FieldCleared(aarmapprovalrequest.FieldRequesterAudit) {
+		fields = append(fields, aarmapprovalrequest.FieldRequesterAudit)
+	}
 	if m.FieldCleared(aarmapprovalrequest.FieldDecidedAt) {
 		fields = append(fields, aarmapprovalrequest.FieldDecidedAt)
 	}
@@ -2743,6 +2861,9 @@ func (m *AarmApprovalRequestMutation) ClearField(name string) error {
 		return nil
 	case aarmapprovalrequest.FieldMinAssurance:
 		m.ClearMinAssurance()
+		return nil
+	case aarmapprovalrequest.FieldRequesterAudit:
+		m.ClearRequesterAudit()
 		return nil
 	case aarmapprovalrequest.FieldDecidedAt:
 		m.ClearDecidedAt()
@@ -2820,6 +2941,12 @@ func (m *AarmApprovalRequestMutation) ResetField(name string) error {
 		return nil
 	case aarmapprovalrequest.FieldInline:
 		m.ResetInline()
+		return nil
+	case aarmapprovalrequest.FieldReview:
+		m.ResetReview()
+		return nil
+	case aarmapprovalrequest.FieldRequesterAudit:
+		m.ResetRequesterAudit()
 		return nil
 	case aarmapprovalrequest.FieldDecidedAt:
 		m.ResetDecidedAt()

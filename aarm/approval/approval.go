@@ -38,6 +38,12 @@ const (
 	AuditActionDenied    = "approval_denied"
 	AuditActionTimeout   = "approval_timeout"
 	AuditActionPending   = "approval_pending"
+	// AuditActionSuperseded records an answer that came after the first
+	// one and did not apply.
+	AuditActionSuperseded = "approval_superseded"
+	// AuditActionRefused records an answer the service refused: not an
+	// approver, or the person who asked.
+	AuditActionRefused = "approval_refused"
 )
 
 // Request carries the data the operator (or an automated frontend) needs to

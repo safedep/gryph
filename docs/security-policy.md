@@ -472,6 +472,8 @@ Do these steps each time you change a policy file.
 | `gryph policy receipts verify-log --input FILE` | Verify an exported chain stand-alone. No database access needed. Verifies signatures when `--trust-store` resolves to a populated store. NOTE: `verify-log` reads a file, not the database. Run `gryph policy receipts export --include-signatures` first, or pipe: `gryph policy receipts export --include-signatures \| gryph policy receipts verify-log --input -`. |
 | `gryph policy approve list` | List the approval requests of this account. `--state` filters to `pending` (the default), `approved`, `denied`, `expired`, or `all`. On a managed host the decision service keeps the queue. A hook that decides in process asks on its own terminal and keeps no queue, so the list is then empty. |
 | `gryph policy approve show ID` | Show one request by id or id prefix: the action, the rules, the floor, the state, and the answer with its channel, assurance and approver. |
+| `gryph policy approve watch` | Print each new pending request as it arrives, until Ctrl-C. `--interval` sets the poll interval (default `2s`). |
+| `gryph policy approve resolve --id ID --decision allow\|deny [--scope once\|session\|window] [--note TEXT]` | Answer a request of another account as an approver, on a managed host. The command confirms on the terminal and refuses `--yes`. An allow stores a grant with the scope. |
 | `gryph policy approve history` | Show receipts whose decision was `escalate`, `approved`, `denied`, or `approval_timeout`, with the `approval` record of each answer. |
 | `gryph policy deferrals` | List the pending-deferral queue. `--status` filters to `pending`, `resolved_allow`, `resolved_deny`, `resolved_timeout`, or `all`. `--session ID` scopes to one session. |
 | `gryph policy deferrals resolve --id ID --decision allow|deny [--note TEXT]` | Resolve a queued deferral by id (or id-prefix). Writes a follow-up receipt with `deferral_of_sequence` set, emits a `deferral_resolved` self-audit row. |
@@ -671,6 +673,9 @@ policy:
     request_ttl: 30m                         # an unanswered request expires as a deny
     grant_ttl: 15m                           # how long a stored approval stays usable
     max_grant_scope: once                    # once | session | window
+    local_admin:
+      group: gryph-admins                    # who answers on the local-admin channel
+      allow_self_elevated: false             # accept an answer from the person who asked
 ```
 
 Each channel gives one assurance. The order, lowest first:
@@ -703,6 +708,32 @@ What happens on an escalation:
 4. With no answer, the action blocks and the request stays pending. The agent reads: `This action needs approval. Request 7f3k2a1b is pending. Tell the user. Do not retry until the user confirms that it is approved. Check status: gryph policy approve show 7f3k2a1b`.
 5. A request that nobody answers within `request_ttl` expires as a deny. The receipt records `approval_timeout`.
 6. The next hook of the same session tells the agent what happened to its open requests, once: `Request 7f3k2a1b was approved. You can retry.`, `Request 7f3k2a1b was denied: <note>`, or `Request 7f3k2a1b expired without an answer.`
+
+### The local admin
+
+A member of `policy.approval.local_admin.group` answers from the host, locally or over SSH, with no `sudo`:
+
+```
+$ gryph policy approve list
+$ gryph policy approve show 7f3k2a1b
+$ gryph policy approve resolve --id 7f3k2a1b --decision allow --scope once --note "release window"
+$ gryph policy approve resolve --id 7f3k2a1b --decision deny --note "use the staging target"
+$ gryph policy approve watch
+```
+
+The decision service checks every answer against the peer credentials of the connection, never against a field of the command:
+
+- The account must be in the group. The group comes from the OS group database, primary and supplementary groups, and the service reads it again every 30 seconds. An empty group has no members, and `gryph doctor --managed` then reports `no approver channel`.
+- The account that asked cannot answer its own request, whatever its groups.
+- The service compares the login identity of the process that asked with the one that answers (`loginuid` on Linux). The same identity, or none on either side, means the person who asked answers through another account, for example through `sudo`. That answer is `self-elevated`. The configuration refuses it unless `allow_self_elevated: true`, which lets it stand in for `local-admin`. The receipt still records `self-elevated`.
+- The first answer wins, by the clock of the service. A later answer is `superseded` and changes nothing. A deny is final.
+- `--scope` is bounded by `max_grant_scope`.
+
+`resolve` confirms on the terminal of the approver before it sends an allow, and refuses `--yes` on a managed host, so an agent with a shell under the approver's account cannot answer with a flag. An agent that allocates a pseudo terminal can still type the confirmation. An approver who runs an agent under their own account can be puppeted at the `local-admin` assurance. On a shared host, approve from an account that runs no agent. The `local-auth` channel adds an authentication prompt of the operating system behind the answer.
+
+A refused answer is on the self-audit log of the account that asked as `approval_refused`, a superseded one as `approval_superseded`.
+
+A rule with `action: escalate` on a hook that runs after the action, for example a post-tool-use hook, cannot stop the action. The request is then a review item: an approver sees it in the same queue, nobody waits, and an allow stores no grant.
 
 A later answer from a stronger channel can store a grant. A grant binds to the account, the action digest, the agent session and its scope. The digest covers the normalized action and its working directory, so the same command in another directory is another action. `once` matches the same action one time. `session` matches it for the rest of the agent session. `window` matches it for the account until `grant_ttl`. A grant never matches a whole rule. A retry that matches a grant is allowed, and the receipt names the grant. `max_grant_scope` bounds what an approver can give.
 

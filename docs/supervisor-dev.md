@@ -46,6 +46,8 @@ down. A first frame of another type ends the connection with `error`.
 | `import_receipts` | client to server | `session_id`, `receipts` (up to 64 receipts, with their hashes and signatures) | `import_result` or `error` |
 | `import_session` | client to server | `session` (the session row, sent first) | `import_result` or `error` |
 | `import_result` | server to client | `taken` (the count of rows the server stored) | |
+| `approve` | client to server | `request_id`, `decision` (`allow` or `deny`), `scope` (64), `note` (4096). The answer of an approver to a request of another account. | `approve_result` or `error` |
+| `approve_result` | server to client | `request_id`, `state` (`approved`, `denied` or `superseded`), `assurance`, `grant_id`, `note` | |
 | `ack` | server to client | empty | |
 | `error` | server to client | `code` (64), `message` (4096) | |
 
@@ -163,6 +165,28 @@ digest (`approval.ActionDigest`: type, tool, operation, agent, the clean
 working directory, path, command, args and URL), the session and the
 scope. `MatchApprovalGrant` runs before a new request. An answer from the
 terminal stores no grant.
+
+The local admin answers with `approve` (`Server.approve`). The server
+finds the request across every partition under `users/`, then checks the
+peer: in the group of `policy.approval.local_admin.group`
+(`account.MemberOf`, cached 30 s), not the uid of the partition that
+holds the request, and the login identity (`peercred.Peer.LoginIdentity`,
+`/proc/<pid>/loginuid` on Linux) against the one stored on the request
+from the hook's connection. The same identity, or none, is
+`self-elevated`, refused unless `allow_self_elevated`, which also lets it
+meet a `local-admin` floor. A refusal is `error unauthorized` and a self-
+audit row `approval_refused` in the requester's partition. The answer
+resolves the request under the write lock of that partition, stores the
+grant on an allow that is not a review item, updates the receipt
+(`approved` or `denied`, plus the `approval` record), and audits
+`approval_granted` or `approval_denied`. `ErrApprovalRequestDecided`
+answers `superseded` and audits `approval_superseded`. The approval query
+kinds take `all_accounts` in the filter, or `all=1` for a prefix lookup,
+and the server honors it for a member of the group only.
+
+A `handle` of a hook after the action (`Action.Phase` is not `pre`) makes
+a review item: `review` on the row, no prompt, no wait, the note as
+guidance, and no grant on an allow.
 
 ## The units
 

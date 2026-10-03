@@ -26,7 +26,7 @@ func newPolicyApproveCmd() *cobra.Command {
 			"list shows the open requests of this account, show prints one. " +
 			"History queries the receipt log for approval-related decisions.",
 	}
-	cmd.AddCommand(newPolicyApproveListCmd(), newPolicyApproveShowCmd(), newPolicyApproveHistoryCmd())
+	cmd.AddCommand(newPolicyApproveListCmd(), newPolicyApproveShowCmd(), newPolicyApproveWatchCmd(), newPolicyApproveResolveCmd(), newPolicyApproveHistoryCmd())
 	return cmd
 }
 
@@ -58,7 +58,7 @@ func newPolicyApproveListCmd() *cobra.Command {
 					log.Errorf("failed to close app: %v", cerr)
 				}
 			}()
-			filter := &storage.ApprovalRequestFilter{Limit: limit}
+			filter := &storage.ApprovalRequestFilter{Limit: limit, AllAccounts: true}
 			if state != "all" {
 				if !isValidApprovalState(state) {
 					return ErrConfig("invalid state filter", fmt.Errorf("state %q must be one of pending, approved, denied, expired, all", state))
