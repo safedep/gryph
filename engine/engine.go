@@ -186,6 +186,9 @@ func (a *Runtime) ExportProfile(name string) (privacy.ExportProfile, error) {
 		}
 		a.exportKey = key
 	}
+	if a.Redactor != nil {
+		p = p.WithRedactor(a.Redactor.Redact)
+	}
 	return p.WithDigestKey(a.exportKey), nil
 }
 

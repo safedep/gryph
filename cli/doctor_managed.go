@@ -153,8 +153,13 @@ func (r managedSupervisorReport) hasApprover() bool {
 	return false
 }
 
+// managedCollectionReport is the collection level of the host and the
+// target that receives it. The target is none until a cloud target
+// exists: the level then names what the export profile would send.
 type managedCollectionReport struct {
-	Level string `json:"level"`
+	Level   string `json:"level"`
+	Profile string `json:"profile,omitempty"`
+	Target  string `json:"target"`
 }
 
 // runManagedDoctor is gryph doctor --managed: the compliance report of a
@@ -180,11 +185,12 @@ func buildManagedDoctorReport(ctx context.Context) *managedDoctorReport {
 		Agents:        []managedAgentState{},
 		Key:           managedKeyReport{Scope: managedKeyScopeUser},
 		Supervisor:    managedSupervisorReport{State: managedSupervisorAbsent},
-		Collection:    managedCollectionReport{Level: managedCollectionNone},
+		Collection:    managedCollectionReport{Level: managedCollectionNone, Target: managedCollectionNone},
 	}
 
 	cfg := report.readConfig()
 	report.readSupervisor(cfg)
+	report.readCollection(cfg)
 	report.readKey(cfg)
 	report.readPolicy(cfg)
 	report.readTrustStore()
@@ -232,6 +238,16 @@ func (r *managedDoctorReport) readKey(cfg *config.Config) {
 	if !r.Key.Protected {
 		r.Issues = append(r.Issues, "machine key "+path+" is readable by others or owned by a human account")
 	}
+}
+
+// readCollection fills the collection level from the managed
+// configuration. Without a trusted managed file nothing is collected.
+func (r *managedDoctorReport) readCollection(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	r.Collection.Level = cfg.Collection.EffectiveLevel()
+	r.Collection.Profile = cfg.Collection.Profile()
 }
 
 // readSupervisor fills the profile of the decision service from the
@@ -443,7 +459,7 @@ func renderManagedDoctor(w io.Writer, report *managedDoctorReport, asJSON bool) 
 		fmt.Sprintf("  %-11s %s  chain %s", "Binary", report.Binary.Path, report.Binary.Chain),
 		"  "+keySummary(report.Key),
 		fmt.Sprintf("  %-11s %s%s", "Supervisor", report.Supervisor.State, supervisorProfileSuffix(report.Supervisor)),
-		fmt.Sprintf("  %-11s %s", "Collection", report.Collection.Level),
+		fmt.Sprintf("  %-11s level %s, target %s", "Collection", report.Collection.Level, report.Collection.Target),
 	)
 	for _, a := range report.Agents {
 		line := fmt.Sprintf("  %-12s %-11s %-18s %s", a.Name, a.Class, a.Level, a.Path)

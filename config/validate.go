@@ -17,6 +17,9 @@ func validate(cfg *Config) error {
 	if err := validateManagedConfig(cfg.Managed); err != nil {
 		return err
 	}
+	if cfg.Collection.Level != "" && !slices.Contains(CollectionLevels, cfg.Collection.Level) {
+		return fmt.Errorf("collection.level %q is not evidence, policy or full", cfg.Collection.Level)
+	}
 	switch cfg.Supervisor.Profile {
 	case "", SupervisorProfileEnforce:
 	case SupervisorProfilePilot:

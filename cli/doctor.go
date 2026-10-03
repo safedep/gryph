@@ -129,6 +129,9 @@ per-user state. The exit code is 0 for the locked profile and 1 otherwise.`,
 				if clientMode(app.Config) {
 					v.Checks = append(v.Checks, decisionServiceCheck(app.Config))
 				}
+				if config.ManagedConfigActive() {
+					v.Checks = append(v.Checks, collectionCheck(app.Config))
+				}
 
 				// Check each agent's hooks
 				for _, adapter := range app.Registry.All() {
@@ -312,6 +315,20 @@ func decisionServiceCheck(cfg *config.Config) tui.DoctorCheck {
 		}
 	}
 	return check
+}
+
+// collectionCheck is the doctor row of the collection level of a managed
+// host: the level, the export profile it names, and the target that
+// receives it. No cloud target exists yet, so the target is none and
+// nothing leaves the host.
+func collectionCheck(cfg *config.Config) tui.DoctorCheck {
+	level := cfg.Collection.EffectiveLevel()
+	return tui.DoctorCheck{
+		Name:        "Collection",
+		Description: "What leaves the host for the team",
+		Status:      tui.CheckOK,
+		Message:     fmt.Sprintf("level %s, export profile %s, target none", level, cfg.Collection.Profile()),
+	}
 }
 
 // humanizeDuration renders a duration in days or hours.

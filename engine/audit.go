@@ -50,6 +50,7 @@ const (
 	SelfAuditActionDeferralCleanup         = "deferral_cleanup"
 	SelfAuditActionIdentityMissing         = "identity_missing"
 	SelfAuditActionPathMigration           = "path_migration"
+	SelfAuditActionCollectionLevel         = "collection_level"
 	SelfAuditResultSuccess                 = "success"
 	SelfAuditResultError                   = "error"
 	SelfAuditResultSkipped                 = "skipped"

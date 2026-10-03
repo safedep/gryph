@@ -86,6 +86,9 @@ type Config struct {
 	// the managed file sets it: a user cannot point the hook at a service
 	// of their own.
 	Supervisor SupervisorConfig `mapstructure:"supervisor"`
+	// Collection is what leaves the host for the team. Only the managed
+	// file sets it: a user cannot raise or lower what the team collects.
+	Collection CollectionConfig `mapstructure:"collection"`
 	// ExportKey is the export key file in force when it is not the one
 	// next to the database. No file sets it: the decision service sets it
 	// to the machine key.
@@ -120,6 +123,62 @@ type SupervisorConfig struct {
 	// accepts the socket only when its peer is root or this account. Empty
 	// takes the service account of the platform.
 	ServerIdentity string `mapstructure:"server_identity"`
+}
+
+// CollectionConfig sets the collection level of a managed host: how much
+// of each event leaves the host for the team, through the export profile
+// the level names.
+type CollectionConfig struct {
+	// Level is evidence, policy or full. Empty takes the default of a
+	// managed host, policy.
+	Level string `mapstructure:"level"`
+}
+
+// The collection levels, from the one that sends the least to the one
+// that sends the most.
+const (
+	// CollectionNone is the level of a host with no managed
+	// configuration: nothing is collected.
+	CollectionNone = "none"
+	// CollectionEvidence sends the receipts and the facts of each action
+	// with every content value digested. It is always on in a managed
+	// host.
+	CollectionEvidence = "evidence"
+	// CollectionPolicy sends the fields that rules match on, with prompts
+	// and content digested and every secret dropped. It is the default.
+	CollectionPolicy = "policy"
+	// CollectionFull sends every value. A team opts in.
+	CollectionFull = "full"
+)
+
+// CollectionLevels lists the levels a managed file can set.
+var CollectionLevels = []string{CollectionEvidence, CollectionPolicy, CollectionFull}
+
+// EffectiveLevel returns the collection level in force: none without a
+// managed configuration, else the configured level or policy.
+func (c CollectionConfig) EffectiveLevel() string {
+	if !ManagedConfigActive() {
+		return CollectionNone
+	}
+	if c.Level == "" {
+		return CollectionPolicy
+	}
+	return c.Level
+}
+
+// Profile returns the export profile that the level in force names:
+// metadata for evidence, policy for policy, full for full, and the
+// default profile when nothing is collected.
+func (c CollectionConfig) Profile() string {
+	switch c.EffectiveLevel() {
+	case CollectionEvidence:
+		return privacy.ProfileMetadata
+	case CollectionPolicy:
+		return privacy.ProfilePolicy
+	case CollectionFull:
+		return privacy.ProfileFull
+	}
+	return privacy.ProfileDefault
 }
 
 // SupervisorAccount is the service account of the decision service.
@@ -293,8 +352,10 @@ type ExportConfig struct {
 
 // ExportProfileConfig is one user export profile. See privacy.ExportProfile.
 type ExportProfileConfig struct {
-	Default string               `mapstructure:"default"`
-	Rules   []privacy.ExportRule `mapstructure:"rules"`
+	Default     string               `mapstructure:"default"`
+	Rules       []privacy.ExportRule `mapstructure:"rules"`
+	StripURLs   bool                 `mapstructure:"strip_urls"`
+	RedactAgain bool                 `mapstructure:"redact_again"`
 }
 
 // ExportProfile returns the export profile with the name. An empty name
@@ -319,7 +380,7 @@ func (c *Config) ExportProfile(name string) (privacy.ExportProfile, error) {
 	case !isUser:
 		return privacy.ExportProfile{}, fmt.Errorf("unknown export profile %q", name)
 	}
-	p := privacy.ExportProfile{Name: name, Default: privacy.Treatment(pc.Default), Rules: pc.Rules}
+	p := privacy.ExportProfile{Name: name, Default: privacy.Treatment(pc.Default), Rules: pc.Rules, StripURLs: pc.StripURLs, RedactAgain: pc.RedactAgain}
 	if err := p.Validate(); err != nil {
 		return privacy.ExportProfile{}, err
 	}

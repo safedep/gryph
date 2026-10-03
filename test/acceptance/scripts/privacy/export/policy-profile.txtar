@@ -1,0 +1,53 @@
+# The built-in policy export profile keeps the fields that rules match on
+# and sends no content: a prompt and the content of a write or a command
+# output are digested, a secret is dropped, a command stays with its URLs
+# stripped of the query and the userinfo, and the redactor runs once more
+# on the values that leave. The raw event never leaves under it.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin prompt.json
+exec gryph _hook claude-code UserPromptSubmit
+stdin write.json
+exec gryph _hook claude-code PostToolUse
+stdin curl.json
+exec gryph _hook claude-code PostToolUse
+stdin env.json
+exec gryph _hook claude-code PostToolUse
+
+exec gryph export --since 1h --export-profile policy
+stderr 'Exported 4 events'
+# The prompt and the written content leave as keyed digests.
+! stdout 'Rename the config loader'
+! stdout 'WRITE_MARKER_7Q'
+stdout '"prompt":\{"value":"","label":\{"origin":"user","level":"full","size":[0-9]+,"digest":"hmac-sha256:'
+stdout '"content_preview":\{"value":"","label":\{[^}]*"digest":"hmac-sha256:'
+# The command stays, with the query and the userinfo of its URL gone. The
+# token went at store time, and the redactor runs again on what leaves.
+stdout '"command":\{"value":"curl -H .\[REDACTED\] https://api.example.com/v1/items"'
+! stdout 'QUERY_MARKER'
+! stdout 'hunter2'
+! stdout 'abc123'
+# The secret in the environment command never leaves.
+! stdout 'SECRET_MARKER_9Z'
+! stdout '"raw_event"'
+
+-- home/.config/safedep/gryph/config.yml --
+logging:
+  level: full
+-- prompt.json --
+{"session_id": "s-policy-profile", "cwd": "/home/user/project", "hook_event_name": "UserPromptSubmit",
+ "prompt": "Rename the config loader"}
+-- write.json --
+{"session_id": "s-policy-profile", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "Write",
+ "tool_input": {"file_path": "/home/user/project/main.go", "content": "package main // WRITE_MARKER_7Q"},
+ "tool_response": {"success": true}, "tool_use_id": "tu-write"}
+-- curl.json --
+{"session_id": "s-policy-profile", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "curl -H 'token=abc123' https://deploy:hunter2@api.example.com/v1/items?key=QUERY_MARKER", "description": "fetch the items"},
+ "tool_response": {"stdout": "[]", "stderr": "", "interrupted": false}, "tool_use_id": "tu-curl"}
+-- env.json --
+{"session_id": "s-policy-profile", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "export AWS_SECRET_ACCESS_KEY=SECRET_MARKER_9Z", "description": "set the key"},
+ "tool_response": {"stdout": "", "stderr": "", "interrupted": false}, "tool_use_id": "tu-env"}

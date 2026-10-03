@@ -185,17 +185,35 @@ Every profile removes the digest and the size of a value that:
 The local store keeps the plain digest, so `gryph cat --format json` shows
 it.
 
-Gryph has three built-in profiles:
+Gryph has four built-in profiles:
 
 - `default` drops content with class `secret`, `pii` or `unknown_sensitive`,
   digests content with origin `user` (prompts), and includes the rest.
 - `metadata` digests every value.
 - `full` includes every value.
+- `policy` keeps the fields that rules match on and sends no content. It
+  drops content with class `secret`, `pii` or `unknown_sensitive`, digests
+  prompts and every content field (`output`, `stdout_preview`,
+  `stderr_preview`, `input`, `output_preview`, `content_preview`,
+  `old_string`, `new_string`, `last_assistant_message`, `diff_content`),
+  and includes the command and the paths. On every value it includes, it
+  removes the userinfo, the query and the fragment of each URL, and runs
+  the redactor once more with the patterns in force at export time, so a
+  pattern added after the row was stored applies. The raw event never
+  leaves under it. The [collection level](./supervisor.md#the-collection-level)
+  of a managed host names it.
 
 Add a profile under `export.profiles`. A rule matches a value when its label
-has any of the classes or any of the origins. The first matching rule wins.
-A value that no rule matches gets `default`. A profile cannot use a
-built-in name.
+has any of the classes or any of the origins, or when the value sits in any
+of the fields. The first matching rule wins. A value that no rule matches
+gets `default`. A profile cannot use a built-in name. A field is the JSON
+name of a content field: `command`, `output`, `stdout_preview`,
+`stderr_preview`, `input`, `output_preview`, `content_preview`,
+`old_string`, `new_string`, `last_assistant_message`, `prompt` or
+`diff_content`. A rule that names a field no event has is an error, so a
+typo cannot leave a field with a weaker treatment. A profile can also set
+`strip_urls: true` and `redact_again: true`, which do what the `policy`
+profile does on the values it includes.
 
 An invalid profile, such as one with an unknown class, does not make the
 config fail. The hooks keep the rest of the config. Gryph logs a warning,
@@ -209,11 +227,14 @@ export:
   profiles:
     team:
       default: digest
+      strip_urls: true
       rules:
         - classes: [secret, pii]
           then: drop
         - origins: [user]
           then: redact
+        - fields: [command]
+          then: include
 ```
 
 `Event.ForExport(profile)` makes the copy that leaves the machine. `gryph
@@ -229,7 +250,9 @@ export --export-profile` and stream sync use it.
   `error_message`, the command `description` and `args`, the read
   `pattern`, the session end `reason`, and the notification `message` and
   `details`. Each gets the most restrictive treatment of any value in the
-  event.
+  event. A path has no label either, and a rule matches on it, so the
+  export keeps it. A profile with `redact_again` or `strip_urls` applies
+  both to every plain value and path it includes.
 - The `content_hash` of a file read or write is a plain sha256 of the
   whole file content. The export keys it as a digest, with the scope
   `content_hash` in place of the origin. It removes the hash

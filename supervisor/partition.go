@@ -172,7 +172,7 @@ func (p *partition) handle(ctx context.Context, h *ipc.Handle) (*ipc.Frame, erro
 	var lines []string
 	if err == nil {
 		p.bindSession(ctx, event.SessionID, bind)
-		lines = p.notices(ctx, event.SessionID, now)
+		lines = append(p.collectionNotice(ctx), p.notices(ctx, event.SessionID, now)...)
 	}
 	p.write.Unlock()
 	if err != nil {

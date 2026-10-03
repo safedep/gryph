@@ -757,7 +757,7 @@ directory another user can write, is refused.
   ],
   "key": {"scope": "supervisor", "protected": true, "path": "/var/lib/safedep/gryph/keys/receipt.key", "owner": "_gryph"},
   "supervisor": {"state": "absent", "profile": "pilot", "pilot_until": "2026-12-31", "pilot_remaining_seconds": 7603200},
-  "collection": {"level": "none"}
+  "collection": {"level": "policy", "profile": "policy", "target": "none"}
 }
 ```
 
@@ -773,7 +773,7 @@ directory another user can write, is refused.
 | `agents` | One row per agent in `managed.agents`: `class`, `path`, `level` (`prevent_same_user` for a `locked` entry that matches, `detect` for a `system_path` entry that matches, `none` otherwise), `match`, `locked` (the lock switch), `error`. |
 | `key` | `scope` is `user` while the receipt signing key lives in each user's home, with `protected` false. With `supervisor.enabled` and the machine key in place, `scope` is `supervisor`, `path` and `owner` name the key, and `protected` is true when a system account owns it and nobody else can read it. |
 | `supervisor` | `state` is `absent`, because the command runs no program and asks no socket. With `supervisor.enabled`, `profile` is the profile in force, `pilot_until` the end of the pilot as the file sets it, `pilot_remaining_seconds` the time left while the pilot runs, and `approval_channels` and `approval_group` the approver channel. See [the decision service](./supervisor.md). |
-| `collection` | `level` is `none`: no evidence leaves the host. |
+| `collection` | `level` is the [collection level](./supervisor.md#the-collection-level) of the managed configuration (`evidence`, `policy` or `full`, `none` without a managed file), `profile` the export profile it names, and `target` the receiver. The target is `none` until a cloud target exists: nothing leaves the host. |
 
 The text form prints the same facts, with "Key: user-owned (not protected)" or "Key: supervisor-owned (protected)"
 on its own line.

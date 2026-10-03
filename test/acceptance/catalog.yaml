@@ -153,6 +153,27 @@
   guarantee: "A profile under export.profiles redacts a user prompt by its origin and digests other values by its default. A value that no rule matches gets the default treatment of the profile."
   labels: [privacy, export, config]
 
+- id: privacy/export/policy-profile
+  title: "the policy export profile sends the fields rules match on and no content"
+  category: privacy
+  tier: P0
+  guarantee: "Under the built-in policy profile, an export digests prompts and content, drops every secret, pii and unknown_sensitive value, keeps the command with the query and the userinfo of its URLs removed and the redactor run once more, and never carries the raw event."
+  labels: [privacy, export, cloud]
+
+- id: privacy/export/field-match
+  title: "an export rule can match a value by its field"
+  category: privacy
+  tier: P0
+  guarantee: "An export rule with fields applies its treatment to the named content fields whatever their labels. A rule that names a field no event has is a config error, and the export fails for that profile instead of falling back."
+  labels: [privacy, export]
+
+- id: cloud/collection/level-notice
+  title: "the collection level of a managed host is set once and told once"
+  category: cloud
+  tier: P1
+  guarantee: "The managed configuration sets collection.level to evidence, policy or full. The decision service tells the developer once on the first hook after the managed file sets a level and after each change, records the change on the self-audit log, and gryph doctor and gryph doctor --managed show the level, the profile and the target. A level the file does not know is a configuration error. Privileged job only."
+  labels: [cloud, collection, supervisor, privileged, linux]
+
 - id: privacy/export/invalid-profile
   title: "an invalid export profile fails closed for that profile only"
   category: privacy

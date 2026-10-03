@@ -65,6 +65,7 @@ the hook at a service of its own.
 | `supervisor.unavailable.prompt` | `allow` | The same for a prompt hook. A block there stops the user, not the agent. |
 | `supervisor.unavailable.other` | `allow` | The same for a lifecycle or a post-action hook. |
 | `policy.approval.*` | see the [approval workflow](./security-policy.md#a-managed-host-with-the-decision-service) | The channels, the floor, the waits, the grant scope and the admin group. |
+| `collection.level` | `policy` | `evidence`, `policy` or `full`: what leaves the host for the team. See [the collection level](#the-collection-level). |
 
 `gryph doctor --managed --json` reports the profile of the service, the
 key scope and whether the host has an approver channel. `gryph doctor`
@@ -167,6 +168,33 @@ channel, the assurance, the approver and the trust of the connection. The
 [approval workflow](./security-policy.md#approval-workflow) has the
 channels, the floor, the grants and
 [the trust of a connection](./security-policy.md#the-trust-of-a-connection).
+
+## The collection level
+
+The managed configuration sets how much of each event leaves the host for
+the team, with `collection.level`. Only the managed file sets it. A user
+configuration cannot raise or lower it, and a host without a managed
+configuration collects nothing.
+
+| Level | What leaves | Export profile |
+|---|---|---|
+| `evidence` | The receipts and the facts of each action, with every content value digested. | `metadata` |
+| `policy` | The fields that rules match on: the command with its URLs stripped, the paths, the tool, the agent, the rules. Prompts and content digested, every secret dropped. The default. | `policy` |
+| `full` | Every value. A team opts in. | `full` |
+
+No cloud target exists yet, so the target is `none` and nothing leaves the
+host. The level says what the export profile would send. `gryph doctor`
+shows the level, the profile and the target on a managed host, and `gryph
+doctor --managed --json` reports them under `collection`.
+
+The decision service tells the developer once: the first hook after the
+managed file sets a level, and the first hook after each change, carries
+one line as guidance, "Collection level policy is in force on this host.
+Your log stays readable with gryph logs." A managed file that sets no
+level gives no notice. The change is on the self-audit log of the account
+as `collection_level`. The service reads the level at start, so a change
+reaches the accounts after the next restart. The local log stays readable
+by the developer at every level.
 
 ## The units
 
