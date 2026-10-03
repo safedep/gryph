@@ -70,6 +70,32 @@ func supervisorStateDefault() string {
 	return "/var/lib/safedep/gryph"
 }
 
+// verifyManagedSocket accepts a socket whose directory chain passes the
+// managed path check and that root owns. The socket itself is open to
+// every account by design: a write to it is a connect. The root-owned
+// chain above it is what proves it is the system's.
+func verifyManagedSocket(path string) error {
+	path = filepath.Clean(path)
+	if err := verifyManagedChain(filepath.Dir(path), 0); err != nil {
+		return err
+	}
+	info, err := lstatManaged(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return fmt.Errorf("%s is not a socket", path)
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return fmt.Errorf("%s: no ownership information", path)
+	}
+	if st.Uid != 0 {
+		return fmt.Errorf("%s is not owned by root", path)
+	}
+	return nil
+}
+
 func verifyManagedPathTrust(path string) error {
 	return verifyManagedChain(path, 0)
 }

@@ -20,11 +20,18 @@ import (
 // Entry is one spooled item: the frame the client could not send, the
 // verdict it gave in its place, and why.
 type Entry struct {
-	RecordedAt time.Time  `json:"recorded_at"`
-	Verdict    string     `json:"verdict,omitempty"`
-	Reason     string     `json:"reason"`
-	Frame      *ipc.Frame `json:"frame"`
+	RecordedAt time.Time `json:"recorded_at"`
+	// Kind is empty for an action the client decided without the service,
+	// and KindTamper for a tamper event the client found itself.
+	Kind    string     `json:"kind,omitempty"`
+	Verdict string     `json:"verdict,omitempty"`
+	Reason  string     `json:"reason"`
+	Frame   *ipc.Frame `json:"frame,omitempty"`
 }
+
+// KindTamper marks an entry that the service turns into a tamper event in
+// the system session of the account.
+const KindTamper = "tamper"
 
 // Write puts entry under root/<account>/, as a file that the writer alone
 // can read. The root must exist: the service creates it, root-owned with

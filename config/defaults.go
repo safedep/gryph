@@ -23,6 +23,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("supervisor.unavailable.blocking", "")
 	v.SetDefault("supervisor.unavailable.prompt", "")
 	v.SetDefault("supervisor.unavailable.other", "")
+	v.SetDefault("supervisor.server_identity", "")
 	v.SetDefault("storage.retention_days", 90)
 
 	// Privacy defaults

@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
 	"time"
 
 	"github.com/safedep/dry/log"
@@ -69,10 +71,19 @@ func runClientHook(ctx context.Context, cfg *config.Config, agentName, hookType 
 		handle.Cost = hookside.CollectCost(ctx, event.AgentName, event.TranscriptPath, event.SessionID)
 	}
 
-	client, err := ipc.Dial(ctx, cfg.Supervisor.SocketPath(), ipc.DialOptions{Version: version.Version})
+	socket := cfg.Supervisor.SocketPath()
+	client, err := ipc.Dial(ctx, socket, ipc.DialOptions{Version: version.Version, VerifyServer: func(conn net.Conn) error {
+		return hookside.VerifyServer(conn, socket, cfg.Supervisor.ServerAccount())
+	}})
 	switch {
 	case errors.Is(err, ipc.ErrConnect):
 		return fail(err.Error(), cfg.Supervisor.EffectiveUnavailable(column))
+	case errors.Is(err, ipc.ErrServerIdentity):
+		// A socket that is not the system's blocks in every mode and never
+		// triggers the fallback. The spool carries the finding to the
+		// service, as a tamper event of this account.
+		spoolEntry(cfg, spool.Entry{Kind: spool.KindTamper, Verdict: config.UnavailableBlock, Reason: err.Error()})
+		return sendResponse(adapter, hookType, agent.DecisionBlock, fmt.Sprintf("Gryph refused the decision service at %s: %v. Run `gryph doctor`.", socket, err))
 	case err != nil:
 		// The service answered, so it runs, and still refused the
 		// handshake. The phase rule applies.
@@ -137,7 +148,10 @@ func spoolEntry(cfg *config.Config, entry spool.Entry) {
 // when it is reachable, so the audit trail shows the hook that decided
 // nothing. It is best effort and bounded by the handshake budget.
 func hookErrorToService(ctx context.Context, cfg *config.Config, report *decision.HookError) {
-	client, err := ipc.Dial(ctx, cfg.Supervisor.SocketPath(), ipc.DialOptions{Version: version.Version})
+	socket := cfg.Supervisor.SocketPath()
+	client, err := ipc.Dial(ctx, socket, ipc.DialOptions{Version: version.Version, VerifyServer: func(conn net.Conn) error {
+		return hookside.VerifyServer(conn, socket, cfg.Supervisor.ServerAccount())
+	}})
 	if err != nil {
 		return
 	}

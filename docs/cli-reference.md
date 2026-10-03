@@ -484,7 +484,9 @@ on macOS), `supervisor.profile` (`enforce` or `pilot`), `supervisor.state_dir`
 `supervisor.spool_dir` (default `/var/spool/safedep/gryph`) and
 `supervisor.unavailable.{blocking,prompt,other}` (`block` or `allow`: what a
 hook does when the service is out of reach, default `block` for a blocking
-hook and `allow` for the rest). Only the managed file sets them. The
+hook and `allow` for the rest) and `supervisor.server_identity` (the account
+behind the socket that the hook client accepts next to root, default
+`_gryph`). Only the managed file sets them. The
 [developer guide](./supervisor-dev.md) has the wire format, the limits and
 the fail-mode table of the client.
 

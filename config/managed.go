@@ -74,6 +74,13 @@ func VerifyManagedPath(path string) error {
 	return managedPathTrusted(path)
 }
 
+// VerifyManagedSocket checks that a socket is the system's: root owns it,
+// and its directory chain passes the managed path check. The socket's own
+// mode does not count, because every account may connect to it.
+func VerifyManagedSocket(path string) error {
+	return verifyManagedSocket(path)
+}
+
 // ReadTrustedFile reads a file that an administrator hands to Gryph, such
 // as the input of gryph install --managed. The file must pass
 // VerifyManagedPath, and the open does not follow a link in its last

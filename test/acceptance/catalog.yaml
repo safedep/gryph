@@ -405,6 +405,13 @@
   guarantee: "A service that answers a decision with a verdict this binary does not know makes every hook block, prompt hooks included, because the service answered and this is not the absent-service case. Privileged job only."
   labels: [hook, client, supervisor, privileged, linux]
 
+- id: hook/client/fake-socket-refused
+  title: "the hook client refuses a socket that is not the system's"
+  category: hook
+  tier: P0
+  guarantee: "The hook client accepts the service socket only when root owns it and every directory above it is root-owned and not writable by others, and when the peer runs as root or the service account. A socket in a user's directory, or one whose peer is another user, blocks every hook in every mode with one stderr line, leaves a tamper entry in the spool, and never falls back. A root service passes. Privileged job only."
+  labels: [hook, client, supervisor, privileged, linux]
+
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
   category: install

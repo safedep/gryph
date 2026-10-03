@@ -106,6 +106,22 @@ type SupervisorConfig struct {
 	// Unavailable says what a hook does when the service is out of reach,
 	// per fail-mode column. Empty takes the default of the profile.
 	Unavailable UnavailableConfig `mapstructure:"unavailable"`
+	// ServerIdentity is the account that runs the service. The hook client
+	// accepts the socket only when its peer is root or this account. Empty
+	// takes the service account of the platform.
+	ServerIdentity string `mapstructure:"server_identity"`
+}
+
+// SupervisorAccount is the service account of the decision service.
+const SupervisorAccount = "_gryph"
+
+// ServerAccount returns the account the hook client expects behind the
+// socket.
+func (s SupervisorConfig) ServerAccount() string {
+	if s.ServerIdentity != "" {
+		return s.ServerIdentity
+	}
+	return SupervisorAccount
 }
 
 // UnavailableConfig holds one verdict per fail-mode column: block or

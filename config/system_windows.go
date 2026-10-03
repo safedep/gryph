@@ -28,6 +28,12 @@ func managedBinaryDefault() string {
 // supervisorSocketDefault names the pipe of the decision service.
 func supervisorSocketDefault() string { return `\\.\pipe\safedep-gryph-hook` }
 
+// verifyManagedSocket has no Unix socket to check on Windows. The pipe
+// server identity comes with the Windows service.
+func verifyManagedSocket(path string) error {
+	return fmt.Errorf("%s: a socket check is not supported on Windows", path)
+}
+
 // supervisorSpoolDefault is the drop directory of the hook clients.
 func supervisorSpoolDefault() string {
 	return filepath.Join(programDataDir(), "safedep", "gryph", "spool")

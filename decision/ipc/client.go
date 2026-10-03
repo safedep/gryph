@@ -45,7 +45,14 @@ type DialOptions struct {
 	Handshake time.Duration
 	// Version is what Hello reports as the client version.
 	Version string
+	// VerifyServer runs on the open connection before hello. An error
+	// from it ends the dial with ErrServerIdentity, never with ErrConnect:
+	// a socket that is not the system's must block, not fall back.
+	VerifyServer func(conn net.Conn) error
 }
+
+// ErrServerIdentity says the peer behind the socket is not the service.
+var ErrServerIdentity = errors.New("ipc: the socket is not the decision service")
 
 // Client is one connection to the decision service after the handshake.
 type Client struct {
@@ -71,6 +78,12 @@ func Dial(ctx context.Context, socket string, opts DialOptions) (*Client, error)
 	if err := conn.SetDeadline(deadline); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("%w: %v", ErrConnect, err)
+	}
+	if opts.VerifyServer != nil {
+		if err := opts.VerifyServer(conn); err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("%w: %v", ErrServerIdentity, err)
+		}
 	}
 	if err := WriteFrame(conn, MustFrame(TypeHello, Hello{Proto: Proto, ClientVersion: opts.Version})); err != nil {
 		_ = conn.Close()

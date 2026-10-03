@@ -121,6 +121,19 @@ failed:
 | A decision with a verdict this binary does not know | `block` | `block` |
 | The payload does not parse | as `ErrConnect`, and the client reports the error to the service when it can | as `ErrConnect` |
 
+Before hello the client checks that the socket is the system's. The socket
+path and the expected service account come from the managed configuration
+only (`supervisor.socket`, `supervisor.server_identity`, default `_gryph`).
+Two checks, both from the kernel and the file system and never from the
+peer: root owns the socket and every directory above it, with no directory
+writable by group or other (a sticky directory passes), and the peer of the
+socket runs as root or as the service account. With socket activation the
+peer is the service manager, so the path check is the one that proves the
+socket is the system's. A failure blocks every hook in every mode, prints
+"Gryph refused the decision service at <socket>: <reason>", leaves a tamper
+entry in the spool, and never triggers the fallback: a same-user process
+that binds a socket of its own gets a block, not an allow.
+
 Every failure leaves an entry in the spool of the account
 (`supervisor.spool_dir`, default `/var/spool/safedep/gryph/<uid>/`): the
 frame the service did not see, the verdict the client gave, and the reason.
