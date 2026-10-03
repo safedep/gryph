@@ -12,6 +12,7 @@ import (
 	"github.com/safedep/gryph/aarm/loader"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -35,7 +36,7 @@ func newPolicyListCmd() *cobra.Command {
 			cfg := appConfig(app)
 			paths := appPaths(app)
 			rows := gatherPolicyListRows(cfg, paths)
-			merged, mergeErr := buildPolicyLoader(cfg, paths).Load(cmd.Context())
+			merged, mergeErr := engine.BuildPolicyLoader(cfg, paths).Load(cmd.Context())
 			renderPolicyList(cmd.OutOrStdout(), policyColorizer(app), rows, merged, mergeErr)
 			return nil
 		},
@@ -68,7 +69,7 @@ func gatherPolicyListRows(cfg *config.Config, paths *config.Paths) []policyListR
 		rows = append(rows, policyFileRow("policies", f))
 	}
 
-	if selfProtectionEnabled(cfg) {
+	if engine.SelfProtectionEnabled(cfg) {
 		rows = append(rows, builtinListRow(cfg, paths))
 	}
 	return rows
@@ -103,7 +104,7 @@ func activeRuleCount(p *pdp.Policy) int {
 }
 
 func builtinListRow(cfg *config.Config, paths *config.Paths) policyListRow {
-	src := selfProtectionSource(cfg, paths)
+	src := engine.SelfProtectionSource(cfg, paths)
 	docs, err := src.Load(context.Background())
 	if err != nil {
 		return policyListRow{source: "builtin", file: "(embedded self-protection)", err: firstLine(err.Error())}
@@ -283,7 +284,7 @@ func checkMergedWithCandidate(cfg *config.Config, paths *config.Paths, dest, can
 		sources = append(sources, loader.NewFileSource(f))
 	}
 	sources = append(sources, loader.NewStaticSource(candidateName, candidate))
-	sources = appendBuiltinSource(sources, cfg, paths)
+	sources = engine.AppendBuiltinSource(sources, cfg, paths)
 	if _, err := loader.New(sources...).Load(context.Background()); err != nil {
 		return ErrConfig("candidate conflicts with the active policy", err)
 	}

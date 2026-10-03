@@ -12,6 +12,7 @@ import (
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/decision"
+	"github.com/safedep/gryph/engine"
 	"github.com/spf13/cobra"
 )
 
@@ -130,8 +131,8 @@ func logHookError(ctx context.Context, app *App, agentName, hookType string, raw
 		details["raw_event"] = rawEvent
 	}
 
-	if err := logSelfAudit(ctx, app.Store, SelfAuditActionHookError,
-		agentName, details, SelfAuditResultError, hookErr.Error()); err != nil {
+	if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionHookError,
+		agentName, details, engine.SelfAuditResultError, hookErr.Error()); err != nil {
 		log.Errorf("failed to log hook error: %v", err)
 	}
 }

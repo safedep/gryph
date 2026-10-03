@@ -18,6 +18,7 @@ import (
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/privacy"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -477,8 +478,8 @@ func emitContextChainBrokenAudit(ctx context.Context, store storage.Store, break
 		})
 	}
 	details["breaks"] = summary
-	if err := logSelfAudit(ctx, store, SelfAuditActionContextChainBroken, "",
-		details, SelfAuditResultError, "context chain verification failed"); err != nil {
+	if err := engine.LogSelfAudit(ctx, store, engine.SelfAuditActionContextChainBroken, "",
+		details, engine.SelfAuditResultError, "context chain verification failed"); err != nil {
 		log.Errorf("failed to record context chain failure: %v", err)
 	}
 }

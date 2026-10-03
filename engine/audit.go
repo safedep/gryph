@@ -1,4 +1,4 @@
-package cli
+package engine
 
 import (
 	"context"
@@ -52,8 +52,8 @@ const (
 	SelfAuditResultSkipped                 = "skipped"
 )
 
-// logSelfAudit logs a self-audit entry.
-func logSelfAudit(ctx context.Context, store storage.Store, action string, agentName string, details map[string]interface{}, result string, errorMsg string) error {
+// LogSelfAudit logs a self-audit entry.
+func LogSelfAudit(ctx context.Context, store storage.Store, action string, agentName string, details map[string]interface{}, result string, errorMsg string) error {
 	if store == nil {
 		return nil
 	}
@@ -66,14 +66,14 @@ func logSelfAudit(ctx context.Context, store storage.Store, action string, agent
 		Details:      details,
 		Result:       result,
 		ErrorMessage: errorMsg,
-		ToolVersion:  getVersion(),
+		ToolVersion:  toolVersion(),
 	}
 
 	return store.SaveSelfAudit(ctx, entry)
 }
 
-// getVersion returns the tool version, with a fallback for dev builds.
-func getVersion() string {
+// toolVersion returns the tool version, with a fallback for dev builds.
+func toolVersion() string {
 	if version.Version != "" && version.Version != "(devel)" {
 		return version.Version
 	}

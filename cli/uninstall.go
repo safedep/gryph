@@ -8,6 +8,7 @@ import (
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -85,9 +86,9 @@ removes the database and configuration files as well.`,
 
 					// Log self-audit for failed uninstall
 					if !dryRun {
-						if err := logSelfAudit(ctx, app.Store, SelfAuditActionUninstall, adapter.Name(),
+						if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionUninstall, adapter.Name(),
 							map[string]interface{}{"error": err.Error()},
-							SelfAuditResultError, err.Error()); err != nil {
+							engine.SelfAuditResultError, err.Error()); err != nil {
 							return fmt.Errorf("failed to log self-audit: %w", err)
 						}
 					}
@@ -104,13 +105,13 @@ removes the database and configuration files as well.`,
 
 				// Log self-audit for successful uninstall
 				if !dryRun && len(result.HooksRemoved) > 0 {
-					if err := logSelfAudit(ctx, app.Store, SelfAuditActionUninstall, adapter.Name(),
+					if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionUninstall, adapter.Name(),
 						map[string]interface{}{
 							"hooks_removed":    result.HooksRemoved,
 							"backups_restored": result.BackupsRestored,
 							"restore_backup":   restoreBackup,
 						},
-						SelfAuditResultSuccess, ""); err != nil {
+						engine.SelfAuditResultSuccess, ""); err != nil {
 						return fmt.Errorf("failed to log self-audit: %w", err)
 					}
 				}
@@ -119,12 +120,12 @@ removes the database and configuration files as well.`,
 			// Purge database and config if requested
 			if purge && !dryRun {
 				// Log purge before removing files
-				if err := logSelfAudit(ctx, app.Store, SelfAuditActionPurge, "",
+				if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionPurge, "",
 					map[string]interface{}{
 						"database_removed": app.Config.GetDatabasePath(),
 						"config_removed":   app.Paths.ConfigFile,
 					},
-					SelfAuditResultSuccess, ""); err != nil {
+					engine.SelfAuditResultSuccess, ""); err != nil {
 					return fmt.Errorf("failed to log self-audit: %w", err)
 				}
 

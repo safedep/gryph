@@ -6,6 +6,7 @@ import (
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -109,9 +110,9 @@ to enable audit logging. Existing hooks are backed up by default.`,
 						if err != nil {
 							agentView.Error = err.Error()
 							if !dryRun {
-								if err := logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
+								if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionInstall, adapter.Name(),
 									map[string]interface{}{"error": err.Error()},
-									SelfAuditResultError, err.Error()); err != nil {
+									engine.SelfAuditResultError, err.Error()); err != nil {
 									log.Errorf("failed to log self-audit: %w", err)
 								}
 							}
@@ -119,12 +120,12 @@ to enable audit logging. Existing hooks are backed up by default.`,
 							agentView.HooksInstalled = result.HooksInstalled
 							agentView.Warnings = result.Warnings
 							if !dryRun && len(result.HooksInstalled) > 0 {
-								if err := logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
+								if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionInstall, adapter.Name(),
 									map[string]interface{}{
 										"hooks_installed": result.HooksInstalled,
 										"warnings":        result.Warnings,
 									},
-									SelfAuditResultSuccess, ""); err != nil {
+									engine.SelfAuditResultSuccess, ""); err != nil {
 									log.Errorf("failed to log self-audit: %w", err)
 								}
 							}

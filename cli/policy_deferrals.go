@@ -14,6 +14,7 @@ import (
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/receipt"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -241,8 +242,8 @@ func newPolicyDeferralsSweepCmd() *cobra.Command {
 				"candidates":   len(pending),
 				"swept_before": now.Format(time.RFC3339),
 			}
-			if err := logSelfAudit(ctx, app.Store, SelfAuditActionDeferralSweep, "",
-				details, SelfAuditResultSuccess, ""); err != nil {
+			if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionDeferralSweep, "",
+				details, engine.SelfAuditResultSuccess, ""); err != nil {
 				log.Errorf("failed to record deferral_sweep audit: %v", err)
 			}
 			_, _ = fmt.Fprintf(out, "Swept %d expired deferral(s) (of %d candidates)\n", processed, len(pending))
@@ -339,8 +340,8 @@ func applyDeferralResolution(ctx context.Context, store storage.Store, row *stor
 	for k, v := range spec.ExtraDetails {
 		details[k] = v
 	}
-	if err := logSelfAudit(ctx, store, spec.AuditAction, "",
-		details, SelfAuditResultSuccess, ""); err != nil {
+	if err := engine.LogSelfAudit(ctx, store, spec.AuditAction, "",
+		details, engine.SelfAuditResultSuccess, ""); err != nil {
 		log.Errorf("failed to record %s audit: %v", spec.AuditAction, err)
 	}
 	return nil
@@ -357,7 +358,7 @@ func resolveDeferralRow(ctx context.Context, store storage.Store, row *storage.D
 		FollowUpResult:   model.ResultRejected,
 		Resolver:         resolver,
 		Note:             note,
-		AuditAction:      SelfAuditActionDeferralResolved,
+		AuditAction:      engine.SelfAuditActionDeferralResolved,
 	}
 	if decision == "allow" {
 		spec.Status = storage.DeferredActionStatusResolvedAllow
@@ -384,7 +385,7 @@ func timeoutDeferralRow(ctx context.Context, store storage.Store, row *storage.D
 		FollowUpMessage:  fmt.Sprintf("deferral %s timed out", row.ID.String()[:8]),
 		Resolver:         "system:timeout",
 		Note:             "deferral expired",
-		AuditAction:      SelfAuditActionDeferralTimeout,
+		AuditAction:      engine.SelfAuditActionDeferralTimeout,
 		ExtraDetails: map[string]interface{}{
 			"expires_at": row.ExpiresAt.Format(time.RFC3339),
 		},
@@ -503,4 +504,3 @@ func writeDeferralsJSON(w io.Writer, rows []*storage.DeferredActionRow) error {
 	enc.SetIndent("", "  ")
 	return enc.Encode(map[string]interface{}{"deferrals": views})
 }
-

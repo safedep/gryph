@@ -1,6 +1,6 @@
 # AARM / Policy Layer Developer Guide
 
-This guide covers the `aarm/` packages and their CLI wiring in `cli/policy.go`.
+This guide covers the `aarm/` packages and their wiring in `engine/policy.go`.
 It targets contributors and AI agents that change policy evaluation, receipts,
 context, approvals, or deferrals.
 
@@ -12,8 +12,8 @@ guidance decision, and records a tamper-evident receipt. The requirement set
 
 ## Entry point
 
-The layer implements the `core/security.Check` interface. `cli/root.go`
-registers `lazyPolicyCheck` (in `cli/policy.go`) with the security `Evaluator`.
+The layer implements the `core/security.Check` interface. `engine.New`
+registers `lazyPolicyCheck` (in `engine/policy.go`) with the security `Evaluator`.
 The hook side in `cli/hook.go` parses the agent payload and calls
 `decision.Service.Handle`. The in-process `decision.Local` labels each
 content value, redacts, applies the logging level (see
@@ -24,7 +24,7 @@ which calls the check. The session is an explicit argument to `Evaluate` and
 - `lazyPolicyCheck` defers policy load until the first hook event. A broken
   policy file must not lock the user out of `gryph policy validate` and `test`.
 - `lazyPolicyCheck.load` builds the `aarm.Mediator` through
-  `loadPolicyMediator`. That function is the single wiring site: it reads
+  `engine.LoadPolicyMediator`. That function is the single wiring site: it reads
   `config.PolicyConfig`, opens sources, and installs every optional component
   through `MediatorOption` values.
 - The `Mediator` is the AARM implementation of `security.Check`.
@@ -241,7 +241,7 @@ does not become a block. `message` is a Go
 
 ## Loader and self-protection
 
-`buildPolicyLoader` in `cli/policy.go` resolves three sources in order: the
+`engine.BuildPolicyLoader` resolves three sources in order: the
 global file `${ConfigDir}/policy.yaml` (`FileSource`), the directory
 `${ConfigDir}/policies/*.yaml` (`DirSource`, one document per file, sorted by
 name), and the built-in source. `policyLoaderSources` is the single definition
@@ -519,11 +519,11 @@ order, so `tar xfC a.tar dir` reads `a.tar` into `dir`.
 The operator toggles self-protection only through
 `policy.self_protection.enabled`. Inspect it with `gryph policy builtin`.
 
-`selfProtectionGlobs` in `cli/policy.go` builds the write globs, and
-`selfProtectionReadGlobs` builds the read globs. The Gryph paths come
+`engine.SelfProtectionGlobs` builds the write globs, and
+`engine.SelfProtectionReadGlobs` builds the read globs. The Gryph paths come
 from the config. The hook config paths come from each adapter's
 `HookConfigPaths()`, collected by `Registry.HookConfigGlobs()` over the adapters
-that `registerAdapters` in `cli/root.go` registers. To protect a new agent,
+that `engine.RegisterAdapters` registers. To protect a new agent,
 implement `HookConfigPaths()` in its adapter. Do not edit the loader.
 
 Self-protection is best effort. The shell parse cannot resolve unknown
@@ -696,13 +696,13 @@ so its classes must reach `context_states`.
 ## Extension points
 
 - Add a Mediator dependency: define a `MediatorOption` in `aarm/check.go` and
-  wire it in `loadPolicyMediator`.
+  wire it in `engine.LoadPolicyMediator`.
 - Add an agent adapter: implement `mediation.Adapter`. See
   `docs/agent-adapter.md`. Reuse `Common` for classify / injectscore / identity
   enrichment and `populateWellKnownParams` for argument promotion.
 - Cross-cutting audit or storage: the Mediator stays decoupled from `storage`
-  and `cli`. Hooks (`DeferralHook`, `ApprovalAuditHook`, `IdentityAuditHook`)
-  carry the CLI-shaped side effects out of `aarm`. Keep it that way.
+  and `engine`. Hooks (`DeferralHook`, `ApprovalAuditHook`, `IdentityAuditHook`)
+  carry the storage side effects out of `aarm`. Keep it that way.
 
 ## CLI surface
 

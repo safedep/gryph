@@ -1,4 +1,4 @@
-package cli
+package engine
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 )
 
 // testCheck is a minimal security.Check implementation used to exercise
-// the check factory registration path in NewApp.
+// the check factory registration path in New.
 type testCheck struct {
 	name     string
 	decision security.Decision
@@ -52,11 +52,11 @@ func TestRegisterCheckFactory_RegisteredCheckIsInvoked(t *testing.T) {
 		}
 	})
 
-	app, err := NewApp(config.Default())
+	rt, err := New(config.Default())
 	require.NoError(t, err)
-	require.NotNil(t, app.Security)
+	require.NotNil(t, rt.Security)
 
-	result := app.Security.Evaluate(context.Background(), &events.Event{}, nil)
+	result := rt.Security.Evaluate(context.Background(), &events.Event{}, nil)
 	assert.False(t, result.IsAllowed(), "registered factory's blocking check should block evaluation")
 	assert.Equal(t, "factory-registered block for test", result.BlockReason)
 	assert.Equal(t, "extension-block", result.BlockedBy)
@@ -69,11 +69,11 @@ func TestRegisterCheckFactory_NilFactoryReturnIsIgnored(t *testing.T) {
 		return nil
 	})
 
-	app, err := NewApp(config.Default())
+	rt, err := New(config.Default())
 	require.NoError(t, err)
 
 	// Only the built-in PlaceholderCheck should be active; it always allows.
-	result := app.Security.Evaluate(context.Background(), &events.Event{}, nil)
+	result := rt.Security.Evaluate(context.Background(), &events.Event{}, nil)
 	assert.True(t, result.IsAllowed(), "nil factory return should not register any check")
 }
 
@@ -84,23 +84,23 @@ func TestRegisterCheckFactory_NilFunctionIsIgnored(t *testing.T) {
 	// or pollute the registry.
 	RegisterCheckFactory(nil)
 
-	app, err := NewApp(config.Default())
+	rt, err := New(config.Default())
 	require.NoError(t, err)
 
-	result := app.Security.Evaluate(context.Background(), &events.Event{}, nil)
+	result := rt.Security.Evaluate(context.Background(), &events.Event{}, nil)
 	assert.True(t, result.IsAllowed())
 }
 
-func TestNewApp_NoFactoriesStillBuildsCleanly(t *testing.T) {
+func TestNew_NoFactoriesStillBuildsCleanly(t *testing.T) {
 	withCleanFactories(t)
 
-	// Backward compatibility: if nobody registers a factory, NewApp behaves
+	// Backward compatibility: if nobody registers a factory, New behaves
 	// exactly as it did before the extension point existed.
-	app, err := NewApp(config.Default())
+	rt, err := New(config.Default())
 	require.NoError(t, err)
-	require.NotNil(t, app.Security)
+	require.NotNil(t, rt.Security)
 
-	result := app.Security.Evaluate(context.Background(), &events.Event{}, nil)
+	result := rt.Security.Evaluate(context.Background(), &events.Event{}, nil)
 	assert.True(t, result.IsAllowed())
 }
 
@@ -120,10 +120,10 @@ func TestRegisterCheckFactory_MultipleFactoriesAllInvoked(t *testing.T) {
 		}
 	})
 
-	app, err := NewApp(config.Default())
+	rt, err := New(config.Default())
 	require.NoError(t, err)
 
-	result := app.Security.Evaluate(context.Background(), &events.Event{}, nil)
+	result := rt.Security.Evaluate(context.Background(), &events.Event{}, nil)
 	assert.False(t, result.IsAllowed())
 	assert.Equal(t, "factory-b-block", result.BlockedBy)
 }

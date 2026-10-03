@@ -12,6 +12,7 @@ import (
 	"github.com/safedep/gryph/agent/openclaw"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/engine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +27,7 @@ const (
 // then the inactive OpenClaw adapter, which the doc lists as planned.
 func coverageAdapters() []agent.Adapter {
 	registry := agent.NewRegistry()
-	registerAdapters(registry, nil, config.Default())
+	engine.RegisterAdapters(registry, nil, config.Default())
 	adapters := registry.All()
 	sort.Slice(adapters, func(i, j int) bool { return adapters[i].DisplayName() < adapters[j].DisplayName() })
 	return append(adapters, openclaw.New(nil, config.LoggingStandard, false))
@@ -55,7 +56,7 @@ func TestAdapterHooks_Valid(t *testing.T) {
 // in TestEnforcementCoverageDoc pins every hook.
 func TestAdapterHooks_Phases(t *testing.T) {
 	registry := agent.NewRegistry()
-	registerAdapters(registry, nil, config.Default())
+	engine.RegisterAdapters(registry, nil, config.Default())
 	registry.Register(openclaw.New(nil, config.LoggingStandard, false))
 
 	cases := []struct {
@@ -153,7 +154,7 @@ func TestEnforcementCoverageDoc(t *testing.T) {
 
 func TestAdapters_ParseToolCallID(t *testing.T) {
 	registry := agent.NewRegistry()
-	registerAdapters(registry, nil, config.Default())
+	engine.RegisterAdapters(registry, nil, config.Default())
 
 	cases := []struct {
 		agent   string

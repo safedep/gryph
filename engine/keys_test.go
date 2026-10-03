@@ -1,4 +1,4 @@
-package cli
+package engine
 
 import (
 	"fmt"
@@ -32,7 +32,7 @@ func TestLoadReceiptSigner_NeverReturnsNil(t *testing.T) {
 	keyPath := filepath.Join(tmp, "missing.key")
 	cfg, paths := newSignerConfigWithMode(config.SignModeNever, keyPath)
 
-	signer, err := loadReceiptSignerFromConfig(cfg, paths)
+	signer, err := LoadReceiptSignerFromConfig(cfg, paths)
 	require.NoError(t, err)
 	assert.Nil(t, signer)
 }
@@ -42,7 +42,7 @@ func TestLoadReceiptSigner_AutoMissingKeyReturnsNil(t *testing.T) {
 	keyPath := filepath.Join(tmp, "missing.key")
 	cfg, paths := newSignerConfigWithMode(config.SignModeAuto, keyPath)
 
-	signer, err := loadReceiptSignerFromConfig(cfg, paths)
+	signer, err := LoadReceiptSignerFromConfig(cfg, paths)
 	require.NoError(t, err)
 	assert.Nil(t, signer, "auto with no key must return a nil signer")
 }
@@ -53,7 +53,7 @@ func TestLoadReceiptSigner_AutoWithKeyLoadsSigner(t *testing.T) {
 	writeTestKey(t, keyPath)
 	cfg, paths := newSignerConfigWithMode(config.SignModeAuto, keyPath)
 
-	signer, err := loadReceiptSignerFromConfig(cfg, paths)
+	signer, err := LoadReceiptSignerFromConfig(cfg, paths)
 	require.NoError(t, err)
 	require.NotNil(t, signer)
 	assert.NotEmpty(t, signer.KeyID())
@@ -64,7 +64,7 @@ func TestLoadReceiptSigner_AlwaysMissingKeyFails(t *testing.T) {
 	keyPath := filepath.Join(tmp, "missing.key")
 	cfg, paths := newSignerConfigWithMode(config.SignModeAlways, keyPath)
 
-	signer, err := loadReceiptSignerFromConfig(cfg, paths)
+	signer, err := LoadReceiptSignerFromConfig(cfg, paths)
 	assert.Error(t, err, "always must hard-fail when the key is absent")
 	assert.Nil(t, signer)
 }
@@ -75,7 +75,7 @@ func TestLoadReceiptSigner_AlwaysWithKeyLoadsSigner(t *testing.T) {
 	writeTestKey(t, keyPath)
 	cfg, paths := newSignerConfigWithMode(config.SignModeAlways, keyPath)
 
-	signer, err := loadReceiptSignerFromConfig(cfg, paths)
+	signer, err := LoadReceiptSignerFromConfig(cfg, paths)
 	require.NoError(t, err)
 	require.NotNil(t, signer)
 }
@@ -101,7 +101,7 @@ policy:
 		"Load must normalize legacy sign:true to sign_mode=always")
 	require.Equal(t, config.SignModeAlways, cfg.Policy.Receipts.EffectiveSignMode())
 
-	signer, err := loadReceiptSignerFromConfig(cfg, &config.Paths{})
+	signer, err := LoadReceiptSignerFromConfig(cfg, &config.Paths{})
 	require.NoError(t, err)
 	require.NotNil(t, signer)
 }

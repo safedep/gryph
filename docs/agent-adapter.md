@@ -188,7 +188,7 @@ Required edits outside the adapter package:
 | File | Change |
 |---|---|
 | `agent/adapter.go` | Add the `AgentYourAgent` name constant |
-| `cli/root.go` | Import the package and call `Register()` in `registerAdapters` |
+| `engine/engine.go` | Import the package and call `Register()` in `RegisterAdapters` |
 | `config/defaults.go` | Add `v.SetDefault("agents.youragent.enabled", true)` |
 
 Optional:
@@ -203,8 +203,8 @@ livelog filter cycle comes from `Registry.List()`. The self-protection globs
 come from `Registry.HookConfigGlobs()`.
 
 An adapter can exist in code but stay out of the registry. To deactivate an
-adapter, comment out its `Register()` call in `registerAdapters` in
-`cli/root.go`. See the
+adapter, comment out its `Register()` call in `RegisterAdapters` in
+`engine/engine.go`. See the
 `openclaw` adapter for this pattern.
 
 ### 7. Write tests

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/receipt"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/storage/storagetest"
 	"github.com/safedep/gryph/tui"
@@ -73,7 +74,7 @@ func TestResolveDeferralRow_AllowInsertsFollowUpReceipt(t *testing.T) {
 	require.NotNil(t, follow.DeferralOfSequence)
 	assert.Equal(t, row.ReceiptSequence, *follow.DeferralOfSequence)
 
-	audits, err := store.QuerySelfAudits(ctx, &storage.SelfAuditFilter{Action: SelfAuditActionDeferralResolved})
+	audits, err := store.QuerySelfAudits(ctx, &storage.SelfAuditFilter{Action: engine.SelfAuditActionDeferralResolved})
 	require.NoError(t, err)
 	assert.NotEmpty(t, audits)
 }
@@ -111,7 +112,7 @@ func TestTimeoutDeferralRow_FlipsAndEmitsAudit(t *testing.T) {
 	assert.Equal(t, storage.DeferredActionStatusResolvedTimeout, got.Status)
 	assert.Equal(t, "system:timeout", got.Resolver)
 
-	audits, err := store.QuerySelfAudits(ctx, &storage.SelfAuditFilter{Action: SelfAuditActionDeferralTimeout})
+	audits, err := store.QuerySelfAudits(ctx, &storage.SelfAuditFilter{Action: engine.SelfAuditActionDeferralTimeout})
 	require.NoError(t, err)
 	assert.NotEmpty(t, audits)
 

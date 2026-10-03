@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/receipt"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -124,7 +125,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 			}
 
 			if verify {
-				verifier, verifyErr := loadReceiptVerifierFromConfig(app.Config, app.Paths)
+				verifier, verifyErr := engine.LoadReceiptVerifierFromConfig(app.Config, app.Paths)
 				if verifyErr != nil {
 					return ErrConfig("load trust store", verifyErr)
 				}
@@ -288,8 +289,8 @@ func emitChainBrokenAudit(ctx context.Context, store storage.Store, breaks []rec
 		})
 	}
 	details["breaks"] = summary
-	if err := logSelfAudit(ctx, store, SelfAuditActionReceiptChainBroken, "",
-		details, SelfAuditResultError, "receipt chain verification failed"); err != nil {
+	if err := engine.LogSelfAudit(ctx, store, engine.SelfAuditActionReceiptChainBroken, "",
+		details, engine.SelfAuditResultError, "receipt chain verification failed"); err != nil {
 		log.Errorf("failed to record receipt chain failure: %v", err)
 	}
 }
@@ -554,8 +555,8 @@ func emitSignatureInvalidAudit(ctx context.Context, store storage.Store, r *stor
 		"sequence":      r.Sequence,
 		"signer_key_id": r.SignerKeyID,
 	}
-	if err := logSelfAudit(ctx, store, SelfAuditActionReceiptSignatureInvalid, "",
-		details, SelfAuditResultError, reason); err != nil {
+	if err := engine.LogSelfAudit(ctx, store, engine.SelfAuditActionReceiptSignatureInvalid, "",
+		details, engine.SelfAuditResultError, reason); err != nil {
 		log.Errorf("failed to record receipt_signature_invalid audit: %v", err)
 	}
 }

@@ -41,7 +41,7 @@ when the two differ. Run
 
 <!-- END generated hook table -->
 
-The OpenClaw adapter is not registered (`cli/root.go`), because it is
+The OpenClaw adapter is not registered (`engine/engine.go`), because it is
 non-functional. Installation cannot select it, and `runHook` returns
 `unknown agent` for it. Gryph enforces no OpenClaw hook until the adapter is
 registered. The row above records the planned mapping only.
