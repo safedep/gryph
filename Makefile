@@ -8,7 +8,9 @@ VERSION := "$(shell git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)-$
 GO_CFLAGS=-X 'github.com/safedep/gryph/internal/version.Commit=$(GITCOMMIT)' -X 'github.com/safedep/gryph/internal/version.Version=$(VERSION)'
 GO_LDFLAGS=-ldflags "-w $(GO_CFLAGS)"
 
-.PHONY: all deps generate generate-schema verify-schema gryph clean test conformance conformance-json conformance-markdown
+BENCHTIME ?= 50x
+
+.PHONY: all deps generate generate-schema verify-schema gryph clean test conformance conformance-json conformance-markdown bench-hook
 
 all: gryph
 
@@ -53,6 +55,11 @@ fmt:
 # Run linter
 lint:
 	golangci-lint run
+
+# Hook latency benchmark through the real binary. Writes a Markdown report
+# with the percentiles of each benchmark.
+bench-hook:
+	GRYPH_PERF_REPORT=$(CURDIR)/perf-reports/hook-latency.md $(GO) test -tags perf -run '^$$' -bench . -benchtime=$(BENCHTIME) -count=1 ./test/perf/
 
 # AARM conformance suite. Builds the gryph binary (which the CLI invokes
 # to drive the test runner) and the standalone conformance test binary
