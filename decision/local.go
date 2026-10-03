@@ -33,7 +33,16 @@ type Local struct {
 	onSessionEnd func(*session.Session)
 	hookSpec     HookSpecLookup
 	classifier   Classifier
+	hookError    HookErrorRecorder
 }
+
+// HookErrorRecorder writes the self-audit row of one hook error. The
+// details hold the hook type, the payload size and, at the full logging
+// level, the capped and redacted payload.
+type HookErrorRecorder func(ctx context.Context, agentName string, details map[string]any, errorMessage string) error
+
+// maxRawEventSize caps the payload that a hook error row keeps.
+const maxRawEventSize = 64 * 1024
 
 // Classifier returns the classes of the content an event holds. The
 // aarm/classify heuristic implements it.
@@ -71,6 +80,14 @@ func WithSessionEndHook(fn func(*session.Session)) LocalOption {
 func WithHookSpecs(lookup HookSpecLookup) LocalOption {
 	return func(l *Local) {
 		l.hookSpec = lookup
+	}
+}
+
+// WithHookErrorRecorder installs the writer of hook error self-audit rows.
+// Without it, ReportHookError records nothing.
+func WithHookErrorRecorder(fn HookErrorRecorder) LocalOption {
+	return func(l *Local) {
+		l.hookError = fn
 	}
 }
 
@@ -136,6 +153,31 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 		return &HookResponse{Decision: VerdictOf(security.DecisionGuidance), Guidance: result.AggregatedGuidance()}, nil
 	}
 	return &HookResponse{Decision: VerdictOf(security.DecisionAllow)}, nil
+}
+
+// ReportHookError implements Service. The payload goes into the row only at
+// the full logging level of the agent, capped and redacted, because it can
+// hold anything the agent sent.
+func (l *Local) ReportHookError(ctx context.Context, e *HookError) error {
+	if l.hookError == nil || e == nil {
+		return nil
+	}
+	details := map[string]any{
+		"hook_type":     e.HookType,
+		"raw_data_size": e.RawSize,
+	}
+	if len(e.RawEvent) > 0 && l.loggingLevel != nil && l.loggingLevel(e.Agent).IsAtLeast(config.LoggingFull) {
+		raw := e.RawEvent
+		if len(raw) > maxRawEventSize {
+			raw = raw[:maxRawEventSize]
+		}
+		text := string(raw)
+		if l.redactor != nil {
+			text = l.redactor.Redact(text)
+		}
+		details["raw_event"] = text
+	}
+	return l.hookError(ctx, e.Agent, details, e.Message)
 }
 
 // classify sets the event's phase from the adapter's hook spec, links a post

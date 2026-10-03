@@ -2,9 +2,6 @@
 // agent user, and the decision service, which audits and decides. Requests
 // and responses hold data only, so a later privileged supervisor can serve
 // the same Service over IPC.
-//
-// Known gap: the hook command still opens the store to write the hook-error
-// self-audit row. The supervisor work moves that write behind the service.
 package decision
 
 import (
@@ -18,6 +15,20 @@ import (
 // Service handles one hook invocation end to end.
 type Service interface {
 	Handle(ctx context.Context, req *HookRequest) (*HookResponse, error)
+	// ReportHookError records a hook invocation that produced no decision,
+	// so the audit trail shows that the agent acted without one.
+	ReportHookError(ctx context.Context, e *HookError) error
+}
+
+// HookError describes a hook invocation that produced no decision: an
+// unknown agent, a payload that did not parse, or a failed Handle. The
+// service caps and redacts RawEvent before it stores anything.
+type HookError struct {
+	Agent    string `json:"agent"`
+	HookType string `json:"hook_type"`
+	RawSize  int    `json:"raw_size"`
+	RawEvent []byte `json:"raw_event,omitempty"`
+	Message  string `json:"message"`
 }
 
 // HookRequest is what the hook side sends to the decision service. A service

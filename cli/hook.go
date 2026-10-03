@@ -9,10 +9,8 @@ import (
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
-	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/decision"
-	"github.com/safedep/gryph/engine"
 	"github.com/spf13/cobra"
 )
 
@@ -49,9 +47,19 @@ func NewHookCmd() *cobra.Command {
 				return fmt.Errorf("failed to read stdin: %w", err)
 			}
 
-			hookErr := runHook(ctx, app.Registry, app.DecisionService(), agentName, hookType, rawData)
+			svc := app.DecisionService()
+			hookErr := runHook(ctx, app.Registry, svc, agentName, hookType, rawData)
 			if hookErr != nil && !isExitError(hookErr) {
-				logHookError(ctx, app, agentName, hookType, len(rawData), rawData, hookErr)
+				report := &decision.HookError{
+					Agent:    agentName,
+					HookType: hookType,
+					RawSize:  len(rawData),
+					RawEvent: rawData,
+					Message:  hookErr.Error(),
+				}
+				if err := svc.ReportHookError(ctx, report); err != nil {
+					log.Errorf("failed to log hook error: %v", err)
+				}
 			}
 
 			return hookErr
@@ -102,38 +110,6 @@ func renderDecision(resp *decision.HookResponse) (agent.HookDecision, string) {
 		return agent.DecisionGuidance, resp.Guidance
 	default:
 		return agent.DecisionBlock, resp.Reason
-	}
-}
-
-// logHookError logs a self-audit entry when hook processing fails.
-func logHookError(ctx context.Context, app *App, agentName, hookType string, rawDataSize int, rawData []byte, hookErr error) {
-	if app.Store == nil {
-		return
-	}
-
-	details := map[string]interface{}{
-		"hook_type":     hookType,
-		"raw_data_size": rawDataSize,
-	}
-
-	loggingLevel := app.Config.GetAgentLoggingLevel(agentName)
-	if loggingLevel.IsAtLeast(config.LoggingFull) {
-		const maxRawEventSize = 64 * 1024
-		rawEvent := string(rawData)
-		if len(rawEvent) > maxRawEventSize {
-			rawEvent = rawEvent[:maxRawEventSize]
-		}
-
-		if app.Redactor != nil {
-			rawEvent = app.Redactor.Redact(rawEvent)
-		}
-
-		details["raw_event"] = rawEvent
-	}
-
-	if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionHookError,
-		agentName, details, engine.SelfAuditResultError, hookErr.Error()); err != nil {
-		log.Errorf("failed to log hook error: %v", err)
 	}
 }
 

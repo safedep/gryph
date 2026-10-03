@@ -24,6 +24,8 @@ func (s *stubService) Handle(_ context.Context, req *decision.HookRequest) (*dec
 	return s.resp, nil
 }
 
+func (s *stubService) ReportHookError(context.Context, *decision.HookError) error { return nil }
+
 func TestRunHook_RendersDecision(t *testing.T) {
 	cases := []struct {
 		name     string
