@@ -64,7 +64,11 @@ row:
   managed entry reads `prevent_same_user`, and the row of an agent with a
   `system_path` entry stays at `detect` with a note. With the
   [decision service](./supervisor.md) the store and the keys are the
-  service's, out of the user's reach. The `managed` profile is planned.
+  service's, out of the user's reach. With the
+  [kernel watcher](./supervisor.md#the-kernel-watcher) on Linux, the
+  `binary`, `policy` and `config` rows read `prevent_same_user` from the
+  provider `fanotify`, and `gryph doctor` reports `locked` when every row
+  earns it. The `managed` profile is planned.
 
 ### What you can say about `guard`
 

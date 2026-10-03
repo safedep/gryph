@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/rogpeppe/go-internal/testscript"
+	"github.com/safedep/gryph/platform/fanotify"
 	"github.com/stretchr/testify/require"
 )
 
@@ -118,6 +119,11 @@ func TestAcceptance(t *testing.T) {
 						// asks on a terminal. A host without either skips the
 						// local-auth scripts.
 						return polkitAvailable(), nil
+					case "fanotify":
+						// The kernel watcher needs CAP_SYS_ADMIN. A container
+						// without it, the normal privileged job included,
+						// skips the kernel scripts.
+						return fanotify.Available() == nil, nil
 					}
 					return false, fmt.Errorf("unknown condition %q", cond)
 				},

@@ -1085,3 +1085,17 @@
   tier: P2
   guarantee: "With --limit 3 and ten actions after a prompt, the window still holds the prompt."
   labels: [context, window, intent]
+
+- id: kernel/fanotify/write-denied
+  title: "the kernel watcher stops a write to a managed file by a non-privileged account"
+  category: kernel
+  tier: P1
+  guarantee: "With gryph supervisor fanotify up, a process of a non-privileged account cannot open a managed file for a write, a truncate or a create, also when the access checks of the file would let it. A read passes and root passes. A rename or an unlink of a protected file is recorded in the state file with the account that made it, the file at the path is marked again, and gryph doctor shows it as drift. Nightly kernel job only."
+  labels: [kernel, fanotify, self-protection, privileged, linux]
+
+- id: kernel/fanotify/provider-level
+  title: "the fanotify provider raises the binary, the policy and the config to prevent_same_user"
+  category: kernel
+  tier: P1
+  guarantee: "With the kernel watcher up on a managed host, gryph doctor and the reconcile pass show the binary, the policy and the configuration at prevent_same_user from the fanotify provider, and the host earns the locked profile. When the watcher stops, its state file goes and the rows fall back to the levels the built-in rules give. Nightly kernel job only."
+  labels: [kernel, fanotify, self-protection, privileged, linux]

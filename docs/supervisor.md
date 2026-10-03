@@ -66,6 +66,8 @@ the hook at a service of its own.
 | `supervisor.unavailable.other` | `allow` | The same for a lifecycle or a post-action hook. |
 | `policy.approval.*` | see the [approval workflow](./security-policy.md#a-managed-host-with-the-decision-service) | The channels, the floor, the waits, the grant scope and the admin group. |
 | `collection.level` | `policy` | `evidence`, `policy` or `full`: what leaves the host for the team. See [the collection level](#the-collection-level). |
+| `supervisor.fanotify.enabled` | `false` | Linux: start the [kernel watcher](#the-kernel-watcher) that stops a write to the managed files by a non-privileged account. |
+| `supervisor.fanotify.state_file` | `fanotify.json` next to the socket | Where the watcher reports what it protects. |
 
 `gryph doctor --managed --json` reports the profile of the service, the
 key scope and whether the host has an approver channel. `gryph doctor`
@@ -215,6 +217,53 @@ hook that connects in that window waits for the welcome instead of taking
 the absent-service verdict. `gryph uninstall --managed` turns the switch
 off first, then stops and removes the units. macOS and Windows have no
 service installer yet.
+
+## The kernel watcher
+
+On Linux, `supervisor.fanotify.enabled: true` in the managed configuration
+adds a second process, `gryph supervisor fanotify`, in its own unit
+`gryph-fanotify.service`. It runs as the service account with two
+capabilities and nothing else: `CAP_SYS_ADMIN` for the fanotify
+permission group, `CAP_SYS_PTRACE` to read the open flags of the process
+that asks. It is not part of the decision service and talks to nobody.
+
+The watcher marks the managed directory and its files, the `policies` and
+`keys` directories, the binary the hook entries name, and the managed hook
+file of every agent with a locked entry. When a process opens one of them,
+the kernel holds the open until the watcher answers. A read passes. An
+open for a write, a truncate or a create by a process that is not root
+and not the service account is refused with "Operation not permitted",
+whatever the mode of the file says. So a managed file whose chain became
+writable by mistake stays out of the user's reach, and a user namespace
+that mounts over the path is still the limit of the access checks, not of
+the watcher.
+
+The watcher writes a state file next to the socket,
+`/run/safedep/gryph/fanotify.json`, readable by every account: its pid,
+the paths it marks, the count of opens it refused, and the last changes it
+noticed. `gryph doctor` and the reconcile pass read it: while the watcher
+lives, the `binary`, `policy` and `config` rows, and the `hook_config` row
+of an agent with a locked entry, read `prevent_same_user` with the
+provider `fanotify`, and a host with no weaker row earns the `locked`
+profile. A watcher that is gone reports nothing, and the rows fall back to
+what the built-in rules give.
+
+Known limits:
+
+- Root can stop the watcher and write anything. The watcher does not
+  defend against root, and `gryph doctor` shows when it is gone.
+- A rename or an unlink has no permission event in the kernel. The
+  watcher records it in the state file with the account that made it,
+  marks the file at the path again when one exists, and `gryph doctor`
+  shows the change as the drift of the row until the watcher restarts.
+- An open with `O_CREAT` creates the entry before the kernel asks, so a
+  refused create leaves an empty file behind.
+- The watcher reads the open flags from `/proc/<pid>/syscall`. A 32-bit
+  process, or a process that opens with `openat2`, gives no flags, and the
+  watcher refuses its open, read or write: the protection fails closed.
+- A process in another mount namespace that reaches the file through a
+  bind mount is seen, because the mark is on the inode. A copy of the file
+  in another place is not the protected file.
 
 ## What the service logs
 

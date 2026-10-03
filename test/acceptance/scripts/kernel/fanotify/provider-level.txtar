@@ -1,0 +1,63 @@
+# With the kernel watcher up, the binary, the policy and the configuration
+# of a managed host read prevent_same_user from the fanotify provider, and
+# the host earns the locked profile in gryph doctor. When the watcher
+# stops, the rows fall back to what the built-in rules give. Runs only
+# with CAP_SYS_ADMIN, as root, on a Linux host.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'fanotify is a Linux API'
+[!fanotify] skip 'needs CAP_SYS_ADMIN for a fanotify permission group'
+! exists /etc/safedep/gryph
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+exec cp $ACCEPTANCE_GRYPH_BIN /usr/local/bin/gryph-acceptance
+expandenv managed.yml
+exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
+exec install -m 644 policy.yaml /etc/safedep/gryph/policy.yaml
+
+# Without the watcher the built-in rules protect the binary and the policy.
+exec gryph doctor --no-color
+stdout 'Profile: guard'
+stdout 'binary\s+mediated'
+stdout 'policy\s+mediated'
+stdout 'config\s+prevent_same_user'
+
+exec gryph supervisor fanotify --state-file $WORK/fanotify.json --pid-file $WORK/fanotify.pid --allow-root &
+exec gryph supervisor ready --until-exists $WORK/fanotify.json
+exec gryph doctor --no-color
+stdout 'Profile: locked'
+stdout 'binary\s+prevent_same_user\s+watched by fanotify \(pid [0-9]+\): /usr/local/bin/gryph-acceptance'
+stdout 'policy\s+prevent_same_user\s+watched by fanotify \(pid [0-9]+\): /etc/safedep/gryph/policy.yaml'
+stdout 'config\s+prevent_same_user'
+exec gryph supervisor reconcile --once --no-color
+stdout 'binary\s+prevent_same_user'
+! stdout 'Tamper events recorded'
+
+# A stopped watcher reports nothing, and the rows fall back.
+exec gryph supervisor stop --pid-file $WORK/fanotify.pid
+! exists $WORK/fanotify.json
+exec gryph doctor --no-color
+stdout 'Profile: guard'
+stdout 'binary\s+mediated'
+stdout 'policy\s+mediated'
+
+exec rm -rf /etc/safedep/gryph /usr/local/bin/gryph-acceptance /root/.local/share/safedep /root/.config/safedep /root/.cache/safedep
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+-- managed.yml --
+policy:
+  enabled: true
+managed:
+  agents: []
+  binary: /usr/local/bin/gryph-acceptance
+supervisor:
+  fanotify:
+    enabled: true
+    state_file: ${WORK}/fanotify.json
+-- policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-fanotify-level
+    action: warn
+    match:
+      action_types: [file_write]
+    message: marker

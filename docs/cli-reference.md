@@ -516,6 +516,27 @@ had, the current one last, readable by every account) and
 directory and reloads its partitions on `SIGHUP`, so a key rotation
 reaches it without a restart.
 
+#### supervisor fanotify
+
+Run the kernel watcher that stops a write to the managed files and the
+binary by a process of a non-privileged account. Linux only. The managed
+install starts it in its own unit when `supervisor.fanotify.enabled` is
+on. See [the kernel watcher](./supervisor.md#the-kernel-watcher).
+
+```bash
+gryph supervisor fanotify
+gryph supervisor fanotify --state-file /tmp/fanotify.json --pid-file /tmp/fanotify.pid --allow-root
+```
+
+| Flag           | Type   | Default                           | Description |
+| -------------- | ------ | --------------------------------- | ----------- |
+| `--state-file` | string | `fanotify.json` next to the socket | Report the watched paths and the changes here |
+| `--pid-file`   | string | `fanotify.pid` next to the state file | Write the pid here |
+| `--allow-root` | bool   | false                             | Allow a run as root, for a test |
+
+The watcher refuses to run without a managed configuration, and without
+`CAP_SYS_ADMIN`. It removes its state file when it stops.
+
 #### supervisor import
 
 Carry this account's own database into the decision service. The command
@@ -562,9 +583,10 @@ a pilot needs one, and after it the host runs `enforce`), `supervisor.state_dir`
 `supervisor.spool_dir` (default `/var/spool/safedep/gryph`) and
 `supervisor.unavailable.{blocking,prompt,other}` (`block` or `allow`: what a
 hook does when the service is out of reach, default `block` for a blocking
-hook and `allow` for the rest) and `supervisor.server_identity` (the account
+hook and `allow` for the rest), `supervisor.server_identity` (the account
 behind the socket that the hook client accepts next to root, default
-`_gryph`). Only the managed file sets them. The
+`_gryph`) and `supervisor.fanotify.enabled` (Linux: the kernel watcher,
+off by default). Only the managed file sets them. The
 [developer guide](./supervisor-dev.md) has the wire format, the limits and
 the fail-mode table of the client.
 
@@ -616,7 +638,11 @@ of a hook, and only then writes the configuration as given, with the
 switch on. A service that does not answer leaves the switch off, degrades
 the run (exit 10) and names the next step. The JSON report carries this
 under `service`: `account`, `units`, `changed`, `enabled`, `next`,
-`running`, `switch`, `error`. With socket activation the socket stays open
+`running`, `switch`, `error`. With `supervisor.fanotify.enabled` the
+command also writes `gryph-fanotify.service`, which runs the kernel
+watcher as the service account with `CAP_SYS_ADMIN` and
+`CAP_SYS_PTRACE`, waits for its state file, and reports it under
+`fanotify` with the same fields. With socket activation the socket stays open
 across a restart or an upgrade of the service: a hook that connects in
 that window waits for the welcome.
 

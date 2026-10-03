@@ -10,6 +10,7 @@ import (
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/platform/procs"
 	"github.com/safedep/gryph/selfprotect"
 )
 
@@ -40,6 +41,34 @@ func (a *Runtime) ProtectionProvider() selfprotect.Provider {
 		assets.HookConfigs = append(assets.HookConfigs, assessor)
 	}
 	return selfprotect.NewUserProvider(assets)
+}
+
+// FanotifyProvider returns the provider that reports the kernel watcher
+// of a managed host, or nil without a managed configuration: the watcher
+// protects the managed paths and nothing else.
+func (a *Runtime) FanotifyProvider() selfprotect.Provider {
+	if !config.ManagedConfigActive() {
+		return nil
+	}
+	managed := config.ManagedConfigDir()
+	assets := selfprotect.FanotifyAssets{
+		Binary:      config.ManagedBinaryPath(a.Config),
+		ConfigFile:  config.ManagedConfigPath(),
+		PolicyFile:  filepath.Join(managed, "policy.yaml"),
+		PoliciesDir: filepath.Join(managed, "policies"),
+		HookConfigs: map[string]string{},
+	}
+	for _, name := range a.Config.Managed.Agents {
+		adapter, ok := a.Registry.Get(name)
+		if !ok {
+			continue
+		}
+		installer, ok := adapter.(agent.ManagedInstaller)
+		if ok && installer.ManagedClass() == agent.ManagedClassLocked {
+			assets.HookConfigs[name] = installer.ManagedHookPath()
+		}
+	}
+	return selfprotect.NewFanotifyProvider(a.Config.Supervisor.FanotifyStatePath(), procs.Running, assets)
 }
 
 // rulesOff names the config key that keeps the built-in rules from running,

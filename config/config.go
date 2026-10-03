@@ -123,6 +123,29 @@ type SupervisorConfig struct {
 	// accepts the socket only when its peer is root or this account. Empty
 	// takes the service account of the platform.
 	ServerIdentity string `mapstructure:"server_identity"`
+	// Fanotify is the kernel watcher that stops a write to the managed
+	// files by a process of a non-privileged account. Linux only, off by
+	// default.
+	Fanotify FanotifyConfig `mapstructure:"fanotify"`
+}
+
+// FanotifyConfig configures the fanotify watcher, a separate process in
+// its own unit with the capabilities the kernel API needs.
+type FanotifyConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+	// StateFile is where the watcher reports what it protects. Empty puts
+	// it next to the socket.
+	StateFile string `mapstructure:"state_file"`
+}
+
+// FanotifyStatePath returns the state file of the fanotify watcher, which
+// gryph doctor reads: the configured path, or fanotify.json next to the
+// socket, in the runtime directory every account can read.
+func (s SupervisorConfig) FanotifyStatePath() string {
+	if s.Fanotify.StateFile != "" {
+		return s.Fanotify.StateFile
+	}
+	return filepath.Join(filepath.Dir(s.SocketPath()), "fanotify.json")
 }
 
 // CollectionConfig sets the collection level of a managed host: how much

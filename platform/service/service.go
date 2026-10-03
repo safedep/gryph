@@ -26,14 +26,24 @@ type Spec struct {
 	// Command is the program by its absolute path, with its arguments.
 	Command []string
 	// Socket is the path of the socket the service manager opens for the
-	// service. Every account connects to it.
+	// service. Every account connects to it. Empty gives a service with no
+	// socket unit, which the service manager starts on its own.
 	Socket string
 	// User is the account the service runs as.
 	User string
 	// StateDir and SpoolDir are the directories the service writes. The
-	// rest of the file system is read-only to it.
+	// rest of the file system is read-only to it. SpoolDir may be empty.
 	StateDir string
 	SpoolDir string
+	// Capabilities are the capabilities the service keeps, by name, for a
+	// service that needs one. Empty keeps none.
+	Capabilities []string
+	// RuntimeDir is the directory under /run the service writes, relative
+	// to /run. It stays in place when the service stops. Empty gives none.
+	RuntimeDir string
+	// SyscallAllow names the system calls the service needs beyond the
+	// system-service set.
+	SyscallAllow []string
 }
 
 // Result is the outcome of an Install or a Remove.
@@ -84,14 +94,19 @@ func (s Spec) validate() error {
 	if len(s.Command) == 0 || !strings.HasPrefix(s.Command[0], "/") {
 		return errors.New("service: the command needs the absolute path of the program")
 	}
-	if !strings.HasPrefix(s.Socket, "/") {
+	if s.Socket != "" && !strings.HasPrefix(s.Socket, "/") {
 		return errors.New("service: the socket needs an absolute path")
 	}
 	if s.User == "" {
 		return errors.New("service: the service needs an account")
 	}
-	if !strings.HasPrefix(s.StateDir, "/") || !strings.HasPrefix(s.SpoolDir, "/") {
+	if !strings.HasPrefix(s.StateDir, "/") || (s.SpoolDir != "" && !strings.HasPrefix(s.SpoolDir, "/")) {
 		return errors.New("service: the state and spool directories need absolute paths")
+	}
+	for _, c := range s.Capabilities {
+		if !strings.HasPrefix(c, "CAP_") || strings.ContainsAny(c, " \t\n") {
+			return fmt.Errorf("service: %q is not a capability name", c)
+		}
 	}
 	return nil
 }

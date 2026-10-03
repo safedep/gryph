@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/safedep/gryph/platform/localauth"
+	"github.com/safedep/gryph/selfprotect"
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/safedep/gryph/aarm/pdp"
@@ -52,6 +55,10 @@ type managedInstallReport struct {
 	// switch. Present when the managed configuration turns the service on,
 	// absent in a dry run.
 	Service *managedServiceReport `json:"service,omitempty"`
+	// Fanotify is the kernel watcher: its unit and whether it reported.
+	// Present when the managed configuration turns it on, absent in a dry
+	// run.
+	Fanotify *managedServiceReport `json:"fanotify,omitempty"`
 }
 
 // managedServiceReport is the outcome of the decision service install:
@@ -82,8 +89,10 @@ const (
 	// serviceHealthTimeout bounds the wait for the first welcome of the
 	// service after its units start.
 	serviceHealthTimeout = 10 * time.Second
-	// supervisorServiceName is the unit name of the decision service.
+	// supervisorServiceName is the unit name of the decision service, and
+	// fanotifyServiceName the unit name of the kernel watcher.
 	supervisorServiceName = "gryph-supervisor"
+	fanotifyServiceName   = "gryph-fanotify"
 )
 
 // managedKeysReport is the outcome of the machine keys of the decision
@@ -257,6 +266,13 @@ func runManagedInstall(cmd *cobra.Command, args managedInstallArgs) error {
 				degraded++
 			}
 			report.Changed = report.Changed || report.Service.Changed
+			if in.cfg.Supervisor.Fanotify.Enabled {
+				report.Fanotify = installFanotifyService(ctx, in)
+				if report.Fanotify.Error != "" {
+					degraded++
+				}
+				report.Changed = report.Changed || report.Fanotify.Changed
+			}
 		}
 	}
 
@@ -403,6 +419,47 @@ func installSupervisorService(ctx context.Context, in *managedInstallInput, repo
 	}
 	report.Changed = report.Changed || changed
 	svc.Switch = managedSwitchOn
+}
+
+// installFanotifyService writes the unit of the kernel watcher and starts
+// it. The watcher runs as the service account with the two capabilities
+// the fanotify API needs, and reports in the runtime directory next to
+// the socket. A watcher that does not report within the wait degrades the
+// install and names the next step.
+func installFanotifyService(ctx context.Context, in *managedInstallInput) *managedServiceReport {
+	sup := in.cfg.Supervisor
+	svc := &managedServiceReport{Account: sup.ServerAccount(), Units: []string{}, Switch: managedSwitchOn}
+	res, err := service.Install(ctx, service.Spec{
+		Name:         fanotifyServiceName,
+		Description:  "Gryph kernel watcher",
+		Command:      []string{in.binary, "supervisor", "fanotify"},
+		User:         sup.ServerAccount(),
+		StateDir:     sup.StatePath(),
+		Capabilities: []string{"CAP_SYS_ADMIN", "CAP_SYS_PTRACE"},
+		RuntimeDir:   strings.TrimPrefix(filepath.Dir(sup.FanotifyStatePath()), "/run/"),
+		SyscallAllow: []string{"fanotify_init", "fanotify_mark", "name_to_handle_at"},
+	})
+	if err != nil {
+		svc.Error = err.Error()
+		return svc
+	}
+	svc.Units = res.Paths
+	svc.Changed = res.Changed
+	svc.Enabled = res.Enabled
+	svc.Next = res.Next
+	if !res.Enabled {
+		return svc
+	}
+	deadline := time.Now().Add(serviceHealthTimeout)
+	for time.Now().Before(deadline) {
+		if state, err := selfprotect.ReadFanotifyState(sup.FanotifyStatePath()); err == nil && state.PID > 0 {
+			svc.Running = true
+			return svc
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	svc.Error = "the watcher did not report within " + serviceHealthTimeout.String() + ": see journalctl -u " + fanotifyServiceName
+	return svc
 }
 
 // writeRootFile writes a root-owned file readable by every account, and

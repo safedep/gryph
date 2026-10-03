@@ -182,6 +182,10 @@ func stopSupervisorService(ctx context.Context) *managedServiceReport {
 			}
 		}
 	}
+	if fan, ferr := service.Remove(ctx, fanotifyServiceName); ferr == nil && fan != nil && fan.Changed {
+		svc.Units = append(svc.Units, fan.Paths...)
+		svc.Changed = true
+	}
 	res, err := service.Remove(ctx, supervisorServiceName)
 	switch {
 	case errors.Is(err, service.ErrUnsupported):

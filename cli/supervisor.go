@@ -21,7 +21,7 @@ func NewSupervisorCmd() *cobra.Command {
 		Use:   "supervisor",
 		Short: "Keep Gryph in place on this host",
 	}
-	cmd.AddCommand(newSupervisorReconcileCmd(), newSupervisorProtocolCmd(), newSupervisorRunCmd(), newSupervisorSendCmd(), newSupervisorReadyCmd(), newSupervisorStopCmd(), newSupervisorFakeCmd(), newSupervisorKeysCmd(), newSupervisorImportCmd())
+	cmd.AddCommand(newSupervisorReconcileCmd(), newSupervisorProtocolCmd(), newSupervisorRunCmd(), newSupervisorSendCmd(), newSupervisorReadyCmd(), newSupervisorStopCmd(), newSupervisorFanotifyCmd(), newSupervisorFakeCmd(), newSupervisorKeysCmd(), newSupervisorImportCmd())
 	return cmd
 }
 

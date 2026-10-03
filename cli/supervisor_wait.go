@@ -22,7 +22,8 @@ const waitStep = 50 * time.Millisecond
 // newSupervisorReadyCmd is the hidden health check of the acceptance
 // scripts. It dials the socket until the service answers hello with
 // welcome, then waits until every --until-exists path exists and every
-// --until-empty directory holds no entry. It looks again every 50 ms until
+// --until-empty directory holds no entry. Without a socket it waits on
+// the paths alone. It looks again every 50 ms until
 // --timeout, so a script states the condition it waits for instead of a
 // fixed sleep.
 func newSupervisorReadyCmd() *cobra.Command {
@@ -37,12 +38,14 @@ func newSupervisorReadyCmd() *cobra.Command {
 		Hidden: true,
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if socket == "" {
+			if socket == "" && len(untilExist) == 0 && len(untilEmpty) == 0 {
 				return ErrConfig("invalid flags", errNoSocket)
 			}
 			deadline := time.Now().Add(timeout)
-			if err := awaitWelcome(socket, deadline); err != nil {
-				return WrapError(ExitGeneral, "the service does not answer", err)
+			if socket != "" {
+				if err := awaitWelcome(socket, deadline); err != nil {
+					return WrapError(ExitGeneral, "the service does not answer", err)
+				}
 			}
 			if err := awaitPaths(untilExist, untilEmpty, deadline); err != nil {
 				return WrapError(ExitGeneral, "the condition did not come", err)

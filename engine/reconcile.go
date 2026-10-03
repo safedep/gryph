@@ -55,6 +55,9 @@ func RepairEnabled(cfg *config.Config) bool {
 func (a *Runtime) Reconcile(ctx context.Context, repair bool) (*ReconcileReport, error) {
 	provider := a.ProtectionProvider()
 	report := &ReconcileReport{Statuses: provider.Assess(ctx)}
+	if kernel := a.FanotifyProvider(); kernel != nil {
+		report.Statuses = selfprotect.Strongest(append(report.Statuses, kernel.Assess(ctx)...))
+	}
 	if a.Config.Policy.SelfProtection.Census {
 		census, err := a.Census(ctx)
 		if err != nil {

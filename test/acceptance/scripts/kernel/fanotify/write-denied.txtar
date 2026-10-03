@@ -1,0 +1,77 @@
+# The kernel watcher stops a write to a managed file by a process of a
+# non-privileged account, with the permission events of fanotify, also
+# when the access checks of the file would let it through. A read passes.
+# Root passes. A rename has no permission event: the watcher records it
+# in its state file and marks the file again. Runs only with
+# CAP_SYS_ADMIN, as root, on a Linux host with the account tools.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'fanotify is a Linux API'
+[!fanotify] skip 'needs CAP_SYS_ADMIN for a fanotify permission group'
+[!exec:useradd] skip 'needs useradd'
+! exists /etc/safedep/gryph
+! exists /home/gryphacc1
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+exec useradd -m -s /bin/bash gryphacc1
+exec cp $ACCEPTANCE_GRYPH_BIN /usr/local/bin/gryph-acceptance
+expandenv managed.yml
+exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
+exec install -m 644 policy.yaml /etc/safedep/gryph/policy.yaml
+exec gryph supervisor fanotify --state-file $WORK/fanotify.json --pid-file $WORK/fanotify.pid --allow-root &
+exec gryph supervisor ready --until-exists $WORK/fanotify.json
+
+# The access checks would let the account write. Only the watcher stops it.
+exec chmod 666 /etc/safedep/gryph/policy.yaml
+exec runuser -u gryphacc1 -- sh -c 'cat /etc/safedep/gryph/policy.yaml'
+stdout 'acceptance-fanotify-marker'
+! exec runuser -u gryphacc1 -- sh -c 'echo "# changed" >> /etc/safedep/gryph/policy.yaml'
+stderr 'Operation not permitted'
+! exec runuser -u gryphacc1 -- sh -c 'cp /dev/null /etc/safedep/gryph/policy.yaml'
+stderr 'Operation not permitted'
+exec cat /etc/safedep/gryph/policy.yaml
+stdout 'acceptance-fanotify-marker'
+! stdout 'changed'
+
+# Root writes, and the watcher records the change it could not stop.
+exec sh -c 'echo "# by root" >> /etc/safedep/gryph/policy.yaml'
+exec mv /etc/safedep/gryph/policy.yaml /etc/safedep/gryph/policy.yaml.bak
+exec mv /etc/safedep/gryph/policy.yaml.bak /etc/safedep/gryph/policy.yaml
+exec gryph supervisor ready --until-exists $WORK/fanotify.json
+exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do grep -q moved '$WORK'/fanotify.json && break; sleep 0.1; done; cat '$WORK'/fanotify.json'
+stdout '"denied": 2'
+stdout '"op": "modify"'
+stdout '"op": "moved"'
+stdout '"path": "/etc/safedep/gryph/policy.yaml"'
+
+# The file at the path is marked again after the rename.
+! exec runuser -u gryphacc1 -- sh -c 'echo "# again" >> /etc/safedep/gryph/policy.yaml'
+stderr 'Operation not permitted'
+
+# gryph doctor shows the rename as the drift of the policy row.
+exec gryph doctor --no-color
+stdout 'policy\s+prevent_same_user\s+watched by fanotify'
+stdout 'drift: /etc/safedep/gryph/policy.yaml moved by uid 0 at'
+
+exec gryph supervisor stop --pid-file $WORK/fanotify.pid --user gryphacc1
+exec userdel -r gryphacc1
+exec rm -rf /etc/safedep/gryph /usr/local/bin/gryph-acceptance /root/.local/share/safedep /root/.config/safedep /root/.cache/safedep
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+-- managed.yml --
+policy:
+  enabled: true
+managed:
+  agents: []
+  binary: /usr/local/bin/gryph-acceptance
+supervisor:
+  fanotify:
+    enabled: true
+    state_file: ${WORK}/fanotify.json
+-- policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-fanotify-marker
+    action: warn
+    match:
+      action_types: [file_write]
+    message: marker

@@ -19,6 +19,9 @@ func install(ctx context.Context, spec Spec) (*Result, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
+	if spec.Socket == "" {
+		return installService(ctx, dir, spec)
+	}
 	socket := filepath.Join(dir, spec.Name+".socket")
 	service := filepath.Join(dir, spec.Name+".service")
 	wroteSocket, err := writeIfChanged(socket, []byte(renderSocket(spec)))
@@ -42,6 +45,34 @@ func install(ctx context.Context, spec Spec) (*Result, error) {
 		// A changed service unit takes effect on the next start. The
 		// socket stays open through the restart, so a hook waits for the
 		// welcome instead of taking the fallback.
+		if err := runCommand(ctx, "systemctl", "try-restart", spec.Name+".service"); err != nil {
+			res.Next = "systemctl restart " + spec.Name + ".service (" + err.Error() + ")"
+			return res, nil
+		}
+	}
+	res.Enabled = true
+	return res, nil
+}
+
+// installService writes a service with no socket and starts it. A changed
+// unit restarts the service, which has no socket to hold its clients, so
+// the caller picks a service that can restart at any time.
+func installService(ctx context.Context, dir string, spec Spec) (*Result, error) {
+	service := filepath.Join(dir, spec.Name+".service")
+	wrote, err := writeIfChanged(service, []byte(renderService(spec)))
+	if err != nil {
+		return nil, err
+	}
+	res := &Result{Paths: []string{service}, Changed: wrote, Next: "systemctl daemon-reload && systemctl enable --now " + spec.Name + ".service"}
+	if err := runCommand(ctx, "systemctl", "daemon-reload"); err != nil {
+		res.Next += " (" + err.Error() + ")"
+		return res, nil
+	}
+	if err := runCommand(ctx, "systemctl", "enable", "--now", spec.Name+".service"); err != nil {
+		res.Next += " (" + err.Error() + ")"
+		return res, nil
+	}
+	if wrote {
 		if err := runCommand(ctx, "systemctl", "try-restart", spec.Name+".service"); err != nil {
 			res.Next = "systemctl restart " + spec.Name + ".service (" + err.Error() + ")"
 			return res, nil
@@ -118,11 +149,21 @@ func renderService(spec Spec) string {
 	for _, part := range spec.Command {
 		command = append(command, systemdQuote(part))
 	}
+	var unit, paths strings.Builder
+	if spec.Socket != "" {
+		fmt.Fprintf(&unit, "Requires=%s.socket\nAfter=%s.socket\n", spec.Name, spec.Name)
+	}
+	if spec.SpoolDir != "" {
+		fmt.Fprintf(&paths, "ReadWritePaths=%s\n", spec.SpoolDir)
+	}
+	if spec.RuntimeDir != "" {
+		fmt.Fprintf(&paths, "RuntimeDirectory=%s\nRuntimeDirectoryMode=0755\nRuntimeDirectoryPreserve=yes\n", spec.RuntimeDir)
+	}
+	caps := strings.Join(spec.Capabilities, " ")
+	calls := strings.Join(append([]string{"@system-service"}, spec.SyscallAllow...), " ")
 	return fmt.Sprintf(`[Unit]
 Description=%s
-Requires=%s.socket
-After=%s.socket
-
+%s
 [Service]
 Type=simple
 ExecStart=%s
@@ -133,10 +174,9 @@ Restart=always
 RestartSec=1
 StateDirectory=%s
 StateDirectoryMode=0750
-ReadWritePaths=%s
-NoNewPrivileges=yes
-CapabilityBoundingSet=
-AmbientCapabilities=
+%sNoNewPrivileges=yes
+CapabilityBoundingSet=%s
+AmbientCapabilities=%s
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
@@ -151,14 +191,14 @@ RestrictSUIDSGID=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 RestrictAddressFamilies=AF_UNIX
-SystemCallFilter=@system-service
+SystemCallFilter=%s
 SystemCallErrorNumber=EPERM
 UMask=0077
 
 [Install]
 WantedBy=multi-user.target
-`, spec.Description, spec.Name, spec.Name, strings.Join(command, " "), spec.User, spec.User,
-		strings.TrimPrefix(spec.StateDir, "/var/lib/"), spec.SpoolDir)
+`, spec.Description, unit.String(), strings.Join(command, " "), spec.User, spec.User,
+		strings.TrimPrefix(spec.StateDir, "/var/lib/"), paths.String(), caps, caps, calls)
 }
 
 // systemdQuote quotes one argument for a unit file.

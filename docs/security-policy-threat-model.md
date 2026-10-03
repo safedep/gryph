@@ -188,7 +188,7 @@ marked planned does not exist yet.
 | 3 | B | Run a second agent binary, or an agent with a private config directory | D for a binary with a known program name, O otherwise | D, the same. A hook from outside the agent of its session is a low-trust connection, and its prompts and escalations count less. | The census matches the processes of the account by program name. An agent under another name stays out of scope. |
 | 4 | B | Run `gryph _hook` from a shell and record a forged event or prompt | P through a mediated shell command, O otherwise | D: the service knows the caller from the kernel and records the trust of every connection. A forged prompt from a low-trust connection does not become the intent and does not reset the counters. | The built-in `gryph-builtin-hook-command` rule, and [the trust of a connection](./security-policy.md#the-trust-of-a-connection). |
 | 5 | B | Patch the gryph binary, put another one earlier on `PATH`, or preload a library | O | P for the hook entry: it names an absolute path under a root-owned directory. O for a binary the user starts by hand. | `gryph install --managed`. Set `kernel.apparmor_restrict_unprivileged_userns` or `user.max_user_namespaces`, so a user namespace cannot mount over the path. |
-| 6 | B | Change a protected file outside the shell analysis: a script file, an interpreter, a path built at run time | O | P for the policy, the configuration, the store and the keys: they are root's or the service account's. O for the user's own policy files when `allow_user_policy` is on. | `gryph install --managed` with the decision service, and `allow_user_policy: false`. A kernel mechanism for the rest, optional and Linux only. Planned. |
+| 6 | B | Change a protected file outside the shell analysis: a script file, an interpreter, a path built at run time | O | P for the policy, the configuration, the store and the keys: they are root's or the service account's. O for the user's own policy files when `allow_user_policy` is on. With the [kernel watcher](./supervisor.md#the-kernel-watcher), a write to a managed file or the binary is refused by the kernel whatever the mode of the file says. | `gryph install --managed` with the decision service, `allow_user_policy: false`, and `supervisor.fanotify.enabled` on Linux. |
 | 7 | B | Run `gryph policy install` from an agent shell | O. The self-audit log shows it. A new file can only add rules. | O with `allow_user_policy: true`, P with `false`. | `gryph install --managed --policy`: a managed policy that the user cannot change, with `allow_user_policy: false` to drop the user's files. |
 | 8 | B | Read or change the database or the keys from a shell | P through a mediated shell command, O otherwise | P: the service account owns the store and the keys, mode 0700 and 0600, and the service serves an account its own partition only. | The decision service. |
 | 9 | B | Answer an approval request from an agent, with `gryph policy approve resolve` | O | P for the developer's own request: the account that asked cannot answer. P for an answer from under a known agent process. D for an agent that allocates a terminal under an admin account that runs no known agent. The `local-auth` channel asks for the password. | The admin group, the login identity check, polkit, and the built-in rule that blocks the command from a shell. |
@@ -212,9 +212,14 @@ user's reach. Two surfaces stay with the user:
   allows by default.
 
 A hardened deployment adds a lower-level control, for example an EDR agent
-or a kernel mechanism, to protect both. Until then, Gryph on a managed
-host makes tampering by a same-user adversary a visible event, and on a
-user install makes it harder, but does not stop a determined one.
+or a kernel mechanism, to protect both. On Linux, Gryph ships one for the
+first surface: the [kernel watcher](./supervisor.md#the-kernel-watcher)
+refuses a write to the managed files and the binary by a non-privileged
+account, whatever the mode of the file says, and records a rename or an
+unlink it cannot stop. Until the second surface has a control, Gryph on a
+managed host makes tampering by a same-user adversary a visible event,
+and on a user install makes it harder, but does not stop a determined
+one.
 
 On a Linux fleet, set two kernel settings through the configuration management
 of the fleet. `gryph doctor` reports both under "Host posture".
