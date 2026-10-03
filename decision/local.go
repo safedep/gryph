@@ -3,18 +3,17 @@ package decision
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage"
-	"github.com/safedep/gryph/utils/projectdetection"
 )
 
 // ResultRecorder records the execution outcome of an allowed action. The
@@ -30,7 +29,6 @@ type Local struct {
 	redactor     *privacy.Redactor
 	loggingLevel func(agent string) config.LoggingLevel
 	recorder     func() ResultRecorder
-	onSessionEnd func(*session.Session)
 	hookSpec     HookSpecLookup
 	classifier   Classifier
 	hookError    HookErrorRecorder
@@ -64,14 +62,6 @@ type LocalOption func(*Local)
 func WithResultRecorder(fn func() ResultRecorder) LocalOption {
 	return func(l *Local) {
 		l.recorder = fn
-	}
-}
-
-// WithSessionEndHook installs a callback that runs when a session ends,
-// before the ended session is saved.
-func WithSessionEndHook(fn func(*session.Session)) LocalOption {
-	return func(l *Local) {
-		l.onSessionEnd = fn
 	}
 }
 
@@ -129,7 +119,7 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 	}
 	labelEvent(event, l.redactor, classes)
 
-	sess, err := l.loadSession(ctx, event)
+	sess, err := l.loadSession(ctx, event, req.Project)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +133,7 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 		return &HookResponse{Decision: VerdictOf(security.DecisionBlock), Reason: result.BlockReason}, nil
 	}
 
-	if err := l.recordAllowed(ctx, sess, event); err != nil {
+	if err := l.recordAllowed(ctx, sess, event, req.Cost); err != nil {
 		return nil, err
 	}
 
@@ -209,7 +199,10 @@ func (l *Local) classify(ctx context.Context, event *events.Event) {
 	event.Kind = events.KindOf(event, event.LinkedEventID != uuid.Nil)
 }
 
-func (l *Local) loadSession(ctx context.Context, event *events.Event) (*session.Session, error) {
+// loadSession returns the stored session of the event, or creates it. The
+// project name comes from the hook side's claim, because the service does
+// not read the working directory.
+func (l *Local) loadSession(ctx context.Context, event *events.Event, project ProjectClaim) (*session.Session, error) {
 	sess, err := l.store.GetSession(ctx, event.SessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session: %w", err)
@@ -220,14 +213,7 @@ func (l *Local) loadSession(ctx context.Context, event *events.Event) (*session.
 		sess.AgentSessionID = event.AgentSessionID
 		sess.WorkingDirectory = event.WorkingDirectory
 		sess.TranscriptPath = event.TranscriptPath
-
-		if event.WorkingDirectory != "" {
-			if info, err := projectdetection.DetectProject(event.WorkingDirectory); err == nil && info != nil && info.Name != "" {
-				sess.ProjectName = info.Name
-			} else {
-				sess.ProjectName = filepath.Base(event.WorkingDirectory)
-			}
-		}
+		sess.ProjectName = project.Name
 
 		if err := l.store.SaveSession(ctx, sess); err != nil {
 			existing, getErr := l.store.GetSession(ctx, event.SessionID)
@@ -275,15 +261,17 @@ func (l *Local) recordEvent(ctx context.Context, sess *session.Session, event *e
 	return nil
 }
 
-func (l *Local) recordAllowed(ctx context.Context, sess *session.Session, event *events.Event) error {
+// recordAllowed saves the event. On session end it closes the session and
+// stores the cost totals the hook side sent, marked as client reported.
+func (l *Local) recordAllowed(ctx context.Context, sess *session.Session, event *events.Event, reported *cost.SessionCost) error {
 	if err := l.recordEvent(ctx, sess, event); err != nil {
 		return fmt.Errorf("failed to save event: %w", err)
 	}
 
 	if event.ActionType == events.ActionSessionEnd {
 		sess.End()
-		if l.onSessionEnd != nil {
-			l.onSessionEnd(sess)
+		if reported != nil {
+			sess.SetCost(reported, cost.ClientReported(reported.Source))
 		}
 		if err := l.store.UpdateSession(ctx, sess); err != nil {
 			return fmt.Errorf("failed to end session: %w", err)

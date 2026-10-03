@@ -135,7 +135,6 @@ func (a *Runtime) DecisionService() decision.Service {
 			}
 			return nil
 		}),
-		decision.WithSessionEndHook(CollectSessionCost),
 		decision.WithHookSpecs(a.Registry.HookSpec),
 		decision.WithClassifier(a.classifier()),
 		decision.WithHookErrorRecorder(func(ctx context.Context, agentName string, details map[string]any, errorMessage string) error {

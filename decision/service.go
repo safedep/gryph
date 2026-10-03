@@ -7,6 +7,7 @@ package decision
 import (
 	"context"
 
+	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/security"
@@ -47,6 +48,18 @@ type HookRequest struct {
 	OutputTruncated bool           `json:"output_truncated,omitempty"`
 	Origin          privacy.Origin `json:"origin,omitempty"`
 	OriginSource    string         `json:"origin_source,omitempty"`
+	// Project is what the hook side found in the working directory. The
+	// service does not read the directory itself.
+	Project ProjectClaim `json:"project"`
+	// Cost holds the totals the hook side collected from the transcript on
+	// session end. The service stores them as client reported and does not
+	// open TranscriptPath.
+	Cost *cost.SessionCost `json:"cost,omitempty"`
+}
+
+// ProjectClaim names the project of the session's working directory.
+type ProjectClaim struct {
+	Name string `json:"name,omitempty"`
 }
 
 // HookResponse is the decision the hook side renders for the agent.

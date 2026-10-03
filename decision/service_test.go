@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/security"
@@ -46,7 +49,18 @@ func fullRequest() *HookRequest {
 	event.FullContent = "full content"
 	event.OutputTruncated = true
 
-	return NewHookRequest(event)
+	req := NewHookRequest(event)
+	req.Project = ProjectClaim{Name: "work"}
+	req.Cost = &cost.SessionCost{
+		SessionID:  event.SessionID,
+		Usage:      cost.SessionUsage{Models: []cost.ModelUsage{{Model: "m", InputTokens: 10, OutputTokens: 5}}, InputTokens: 10, OutputTokens: 5},
+		Models:     []cost.ModelCost{{Model: "m", InputCost: 1, OutputCost: 2, TotalCost: 3}},
+		TotalCost:  3,
+		Currency:   "USD",
+		Source:     cost.CostSourceTranscript,
+		ComputedAt: ts,
+	}
+	return req
 }
 
 func TestHookRequest_JSONRoundTrip(t *testing.T) {
@@ -61,6 +75,8 @@ func TestHookRequest_JSONRoundTrip(t *testing.T) {
 	assert.Equal(t, req.event(), got.event())
 	assert.Equal(t, "claude-code", got.Event.AgentName)
 	assert.Equal(t, req.HookType, got.HookType)
+	assert.Equal(t, req.Project, got.Project)
+	assert.Equal(t, req.Cost, got.Cost)
 }
 
 func TestHookRequest_CarriesInMemoryEventFields(t *testing.T) {
@@ -223,7 +239,108 @@ func writeRequest(sessionID uuid.UUID) *HookRequest {
 	event := events.NewEvent(sessionID, "claude-code", events.ActionFileWrite)
 	event.WorkingDirectory = "/work/project"
 	event.Payload = json.RawMessage(`{"path":"/work/project/a.txt","content_preview":"password=hunter2"}`)
-	return NewHookRequest(event)
+	req := NewHookRequest(event)
+	req.Project = ProjectClaim{Name: "project"}
+	return req
+}
+
+// manifestDir returns a directory that holds a package.json, so a service
+// that reads the working directory would find the name "from-manifest".
+func manifestDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"from-manifest"}`), 0o600))
+	return dir
+}
+
+// transcriptFile returns a Claude Code transcript with token usage.
+func transcriptFile(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "transcript.jsonl")
+	line := `{"type":"assistant","message":{"model":"claude-sonnet-4-20250514","usage":{"input_tokens":1500,"output_tokens":700}}}` + "\n"
+	require.NoError(t, os.WriteFile(path, []byte(line), 0o600))
+	return path
+}
+
+func TestLocal_Handle_ProjectComesFromClaim(t *testing.T) {
+	cases := []struct {
+		name  string
+		claim ProjectClaim
+		want  string
+	}{
+		{name: "the claim names the project", claim: ProjectClaim{Name: "claimed"}, want: "claimed"},
+		{name: "no claim leaves the project empty", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			store := storagetest.NewStore(t)
+			svc := NewLocal(store, security.New(&security.Config{FailOpen: true}), nil, fullLevel)
+
+			event := events.NewEvent(uuid.New(), "claude-code", events.ActionFileRead)
+			event.WorkingDirectory = manifestDir(t)
+			req := NewHookRequest(event)
+			req.Project = tc.claim
+			_, err := svc.Handle(ctx, req)
+			require.NoError(t, err)
+
+			sess, err := store.GetSession(ctx, event.SessionID)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, sess.ProjectName, "the service does not read the working directory")
+		})
+	}
+}
+
+func TestLocal_Handle_SessionEndStoresClientReportedCost(t *testing.T) {
+	ctx := context.Background()
+	store := storagetest.NewStore(t)
+	svc := NewLocal(store, security.New(&security.Config{FailOpen: true}), nil, fullLevel)
+	sessionID := uuid.New()
+	computedAt := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+
+	event := events.NewEvent(sessionID, "claude-code", events.ActionSessionEnd)
+	event.TranscriptPath = transcriptFile(t)
+	req := NewHookRequest(event)
+	req.Cost = &cost.SessionCost{
+		SessionID:  uuid.New(),
+		Usage:      cost.SessionUsage{Models: []cost.ModelUsage{{Model: "m", InputTokens: 10, OutputTokens: 5}}, InputTokens: 10, OutputTokens: 5, CacheReadTokens: 2, CacheWriteTokens: 1},
+		TotalCost:  0.25,
+		Source:     cost.CostSourceTranscript,
+		ComputedAt: computedAt,
+	}
+	_, err := svc.Handle(ctx, req)
+	require.NoError(t, err)
+
+	sess, err := store.GetSession(ctx, sessionID)
+	require.NoError(t, err)
+	assert.False(t, sess.EndedAt.IsZero())
+	assert.Equal(t, int64(10), sess.InputTokens, "the totals come from the claim, not the transcript")
+	assert.Equal(t, int64(5), sess.OutputTokens)
+	assert.Equal(t, int64(2), sess.CacheReadTokens)
+	assert.Equal(t, int64(1), sess.CacheWriteTokens)
+	assert.InDelta(t, 0.25, sess.EstimatedCostUSD, 1e-9)
+	assert.Equal(t, "client_reported:transcript", sess.CostSource)
+	require.NotNil(t, sess.CostComputedAt)
+	assert.True(t, computedAt.Equal(*sess.CostComputedAt))
+	require.Len(t, sess.ModelUsage, 1)
+	assert.Equal(t, "m", sess.ModelUsage[0].Model)
+}
+
+func TestLocal_Handle_SessionEndWithoutClaimReadsNoTranscript(t *testing.T) {
+	ctx := context.Background()
+	store := storagetest.NewStore(t)
+	svc := NewLocal(store, security.New(&security.Config{FailOpen: true}), nil, fullLevel)
+
+	event := events.NewEvent(uuid.New(), "claude-code", events.ActionSessionEnd)
+	event.TranscriptPath = transcriptFile(t)
+	_, err := svc.Handle(ctx, NewHookRequest(event))
+	require.NoError(t, err)
+
+	sess, err := store.GetSession(ctx, event.SessionID)
+	require.NoError(t, err)
+	assert.False(t, sess.EndedAt.IsZero())
+	assert.False(t, sess.HasCostData(), "the service does not open the transcript")
+	assert.Equal(t, event.TranscriptPath, sess.TranscriptPath, "the path stays on the session row")
 }
 
 func TestLocal_Handle(t *testing.T) {
@@ -493,32 +610,6 @@ func TestLocal_Handle_StoreFaults(t *testing.T) {
 			assert.Equal(t, tc.wantDecision, resp.Decision)
 		})
 	}
-}
-
-func TestLocal_Handle_SessionEndRunsHook(t *testing.T) {
-	ctx := context.Background()
-	store := storagetest.NewStore(t)
-	evaluator := security.New(&security.Config{FailOpen: true})
-	var ended *session.Session
-
-	svc := NewLocal(store, evaluator, nil, fullLevel,
-		WithSessionEndHook(func(s *session.Session) {
-			assert.False(t, s.EndedAt.IsZero(), "the hook sees an ended session")
-			s.ProjectName = "set-by-hook"
-			ended = s
-		}))
-
-	sessionID := uuid.New()
-	event := events.NewEvent(sessionID, "claude-code", events.ActionSessionEnd)
-	_, err := svc.Handle(ctx, NewHookRequest(event))
-	require.NoError(t, err)
-
-	require.NotNil(t, ended)
-	assert.Equal(t, sessionID, ended.ID)
-	sess, err := store.GetSession(ctx, sessionID)
-	require.NoError(t, err)
-	assert.False(t, sess.EndedAt.IsZero())
-	assert.Equal(t, "set-by-hook", sess.ProjectName, "the hook runs before the session is saved")
 }
 
 func TestLocal_Handle_NotInitialized(t *testing.T) {

@@ -21,6 +21,7 @@ core/           Domain models (events, sessions, audit, security) - most stable
 config/         Viper-based configuration
 storage/        SQLite + ent ORM
 agent/          Adapter pattern (claudecode/, cursor/ and more)
+hookside/       Work the hook process does as the agent user: project claim, transcript cost
 decision/       Decision service: label, redact, evaluate, and record one hook event
 engine/         Runtime assembly: config, store, registry, policy check, decision service
 cli/            Cobra commands as an App pattern over the engine runtime
@@ -32,6 +33,7 @@ tui/            Output formatters (table, json, csv)
 - `cmd/gryph/main.go` - Entry point
 - `engine/engine.go` - Runtime struct, dependency injection
 - `cli/root.go` - Root command, global flags, App wrapper over the runtime
+- `hookside/hookside.go` - Builds the decision request with the hook side's claims
 - `decision/service.go` - Boundary between the hook side and the decision service
 - `agent/adapter.go` - Agent adapter interface
 - `storage/storage.go` - Store interface

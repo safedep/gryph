@@ -14,6 +14,12 @@ const (
 	CostSourceHook       CostSource = "hook"
 )
 
+// ClientReported marks totals that the hook process computed as the agent
+// user and sent to the decision service. The service did not verify them.
+func ClientReported(source CostSource) CostSource {
+	return "client_reported:" + source
+}
+
 // ModelUsage represents token usage for a single model within a session.
 type ModelUsage struct {
 	Model            string `json:"model"`

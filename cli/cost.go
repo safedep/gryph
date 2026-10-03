@@ -12,7 +12,7 @@ import (
 	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
-	"github.com/safedep/gryph/engine"
+	"github.com/safedep/gryph/hookside"
 	"github.com/safedep/gryph/pricing"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
@@ -182,7 +182,9 @@ func syncSessionCosts(ctx context.Context, app *App, sessions []*session.Session
 		pw.Update("Syncing cost data (%d/%d) ...", i+1, len(sessions))
 
 		recoverTranscriptPath(ctx, app.Store, sess)
-		engine.CollectSessionCost(sess)
+		if sc := hookside.CollectCost(ctx, sess.AgentName, sess.TranscriptPath, sess.ID); sc != nil {
+			sess.SetCost(sc, sc.Source)
+		}
 
 		if sess.HasCostData() {
 			synced++

@@ -178,6 +178,20 @@ func (s *Session) CountEvent(e *events.Event) {
 	s.Add(EventCounts(e))
 }
 
+// SetCost records the totals of one cost computation under the given
+// source.
+func (s *Session) SetCost(sc *cost.SessionCost, source cost.CostSource) {
+	s.InputTokens = sc.Usage.InputTokens
+	s.OutputTokens = sc.Usage.OutputTokens
+	s.CacheReadTokens = sc.Usage.CacheReadTokens
+	s.CacheWriteTokens = sc.Usage.CacheWriteTokens
+	s.EstimatedCostUSD = sc.TotalCost
+	s.ModelUsage = sc.Usage.Models
+	s.CostSource = string(source)
+	at := sc.ComputedAt
+	s.CostComputedAt = &at
+}
+
 // HasCostData returns true if cost data has been computed for this session.
 func (s *Session) HasCostData() bool {
 	return s.CostComputedAt != nil

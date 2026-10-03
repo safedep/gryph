@@ -11,6 +11,7 @@ import (
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/decision"
+	"github.com/safedep/gryph/hookside"
 	"github.com/spf13/cobra"
 )
 
@@ -82,7 +83,7 @@ func runHook(ctx context.Context, registry *agent.Registry, svc decision.Service
 		return fmt.Errorf("failed to parse event: %w", err)
 	}
 
-	resp, err := svc.Handle(ctx, decision.NewHookRequest(event))
+	resp, err := svc.Handle(ctx, hookside.NewRequest(ctx, event))
 	if err != nil {
 		return err
 	}

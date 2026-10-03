@@ -244,6 +244,13 @@
   guarantee: "A session end hook with a transcript path makes gryph cost report the session's tokens and model."
   labels: [cost, tokens]
 
+- id: cost/session-end/totals
+  title: "the hook process sends the session cost totals as a client report"
+  category: cost
+  tier: P1
+  guarantee: "On session end the hook process reads the transcript as the user and the session stores the totals with cost source client_reported:transcript. A missing transcript leaves no cost data."
+  labels: [cost, tokens, session]
+
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
   category: install
@@ -285,6 +292,13 @@
   tier: P1
   guarantee: "A session end hook sets the session end time, and subagent events keep their subagent id and type through to the export."
   labels: [session, subagent]
+
+- id: hook/session/project-claim
+  title: "the hook process names the project of the working directory"
+  category: hook
+  tier: P1
+  guarantee: "A hook payload with a working directory makes the session record the project name from its manifest, or the directory name when there is no manifest."
+  labels: [hook, session, project]
 
 - id: hook/ingest/allow-matrix
   title: "every agent's read and write events persist correctly"
