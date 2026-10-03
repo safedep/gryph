@@ -50,9 +50,10 @@ type Server struct {
 	authCache  authCache
 	// agentNames are the programs of the known agents. ancestors walks
 	// the parents of a peer.
-	agentNames []string
-	ancestors  func(pid int) ([]procs.Process, error)
-	lookup     func(pid int) []procs.Process
+	agentNames   []string
+	ancestors    func(pid int) ([]procs.Process, error)
+	lookup       func(pid int) []procs.Process
+	reloadConfig func() (*config.Config, error)
 }
 
 // Options configure a Server.
@@ -81,6 +82,9 @@ type Options struct {
 	// takes the platform.
 	Ancestors func(pid int) ([]procs.Process, error)
 	Processes func(pid int) []procs.Process
+	// ReloadConfig reads the configuration again for Reload. Nil keeps
+	// the configuration the server started with.
+	ReloadConfig func() (*config.Config, error)
 }
 
 // New builds a server for the managed configuration cfg.
@@ -119,7 +123,7 @@ func New(cfg *config.Config, opts Options) *Server {
 		ancestors = procs.Ancestors
 	}
 	return &Server{
-		cfg: cfg, root: root, limits: limits, version: opts.Version,
+		cfg: cfg, root: root, limits: limits, version: opts.Version, reloadConfig: opts.ReloadConfig,
 		spoolDir: spoolDir, spoolLimits: spoolLimits, ingestInterval: interval,
 		partitions: map[uint32]*partition{}, auth: auth,
 		agentNames: agentProcessNames(cfg), ancestors: ancestors, lookup: opts.Processes,
@@ -284,13 +288,24 @@ func (s *Server) partition(ctx context.Context, uid uint32) (*partition, error) 
 	return p, nil
 }
 
-// Reload retires every open partition, so the next contact of an account
-// opens a fresh one that reads the keys and the policy again. A partition
-// with open connections closes when the last one ends. Rotation of the
-// machine key calls it through a signal.
+// Reload reads the configuration again and retires every open partition,
+// so the next contact of an account opens a fresh one that reads the
+// keys and the policy again. A partition with open connections closes
+// when the last one ends. Rotation of the machine key and a managed
+// install call it through a signal.
 func (s *Server) Reload() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.reloadConfig != nil {
+		cfg, err := s.reloadConfig()
+		if err != nil {
+			log.Warnf("supervisor: the configuration did not load, the one in force stays: %v", err)
+		} else {
+			own := *cfg
+			own.Supervisor.StateDir = s.cfg.Supervisor.StateDir
+			s.cfg = &own
+		}
+	}
 	for uid, p := range s.partitions {
 		if p.retire() {
 			if err := p.close(); err != nil {

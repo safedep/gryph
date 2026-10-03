@@ -107,8 +107,10 @@ func (a *approver) Request(ctx context.Context, r *approval.Request) (*approval.
 	if g, err := store.MatchApprovalGrant(ctx, r.SessionID, r.Digest, now); err != nil {
 		log.Warnf("supervisor: grant lookup: %v", err)
 	} else if g != nil {
+		// A grant that cannot be marked used does not approve: a once
+		// grant would then answer the same action again.
 		if err := store.UseApprovalGrant(ctx, g.ID, now); err != nil {
-			log.Warnf("supervisor: grant use: %v", err)
+			return nil, fmt.Errorf("supervisor: use grant %s: %w", shortID(g.ID), err)
 		}
 		return &approval.Outcome{
 			Decision:  approval.DecisionApprove,

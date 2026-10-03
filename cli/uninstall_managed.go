@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/safedep/gryph/agent"
@@ -182,10 +183,6 @@ func stopSupervisorService(ctx context.Context) *managedServiceReport {
 			}
 		}
 	}
-	if fan, ferr := service.Remove(ctx, fanotifyServiceName); ferr == nil && fan != nil && fan.Changed {
-		svc.Units = append(svc.Units, fan.Paths...)
-		svc.Changed = true
-	}
 	res, err := service.Remove(ctx, supervisorServiceName)
 	switch {
 	case errors.Is(err, service.ErrUnsupported):
@@ -201,6 +198,20 @@ func stopSupervisorService(ctx context.Context) *managedServiceReport {
 	svc.Changed = svc.Changed || res.Changed
 	svc.Enabled = res.Enabled
 	svc.Next = res.Next
+	fan, err := service.Remove(ctx, fanotifyServiceName)
+	switch {
+	case errors.Is(err, service.ErrUnsupported):
+	case err != nil:
+		svc.Error = "remove the kernel watcher: " + err.Error()
+		return svc
+	default:
+		svc.Units = append(svc.Units, fan.Paths...)
+		svc.Changed = svc.Changed || fan.Changed
+		if !fan.Enabled {
+			svc.Enabled = false
+			svc.Next = strings.TrimPrefix(svc.Next+"; "+fan.Next, "; ")
+		}
+	}
 	if path, _ := localauth.PolicyFile(); path != "" {
 		removed, err := removeManagedPath(path, false)
 		if err != nil {

@@ -14,7 +14,12 @@ func TestAncestors_ThisProcess(t *testing.T) {
 	require.NotEmpty(t, chain)
 	assert.Equal(t, os.Getppid(), chain[0].PID, "the nearest ancestor is the parent")
 	assert.NotEmpty(t, chain[0].Name)
-	assert.Equal(t, 1, chain[len(chain)-1].PID, "the chain ends at the first process")
+	// The chain ends at a process with no parent: pid 1, or the top of a
+	// pid namespace that does not show it.
+	last := chain[len(chain)-1]
+	if ppid, _, err := parentOf(last.PID); err == nil {
+		assert.Equal(t, 0, ppid, "the chain ends at a process with no parent")
+	}
 }
 
 func TestParentOf(t *testing.T) {

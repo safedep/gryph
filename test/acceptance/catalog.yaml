@@ -311,7 +311,7 @@
   title: "install --managed is idempotent and follows the allowlist"
   category: install
   tier: P0
-  guarantee: "A second run with the same input changes nothing and exits 0. An agent removed from the allowlist loses its managed entries on the next run. Privileged job only."
+  guarantee: "A second run with the same input changes nothing and exits 0. A dry run with a changed policy reports a change and writes nothing. An agent removed from the allowlist loses its managed entries on the next run. Privileged job only."
   labels: [install, managed, privileged, linux]
 
 - id: install/managed/invalid-config-exit-3
@@ -503,6 +503,12 @@
   guarantee: "gryph policy test without --degraded evaluates a rule that reads context.* against the given counters, zeros by default, so the counter rule does not fire without --context-files-written and fires with it. The degraded gate is the explicit flag, not the accumulator."
   labels: [policy, degraded, test]
 
+- id: supervisor/reload/config-reread
+  title: "the reload signal makes the decision service read its configuration and policy again"
+  category: supervisor
+  tier: P0
+  guarantee: "The decision service decides under the managed configuration it read at start and the policy a partition read at open. A changed file on disk changes nothing until the reload signal, after which the next contact decides under the new configuration and the new policy. gryph install --managed sends the signal to a running service after a change. Privileged job only."
+  labels: [supervisor, reload, privileged, linux]
 - id: supervisor/keys/custody
   title: "the machine key belongs to the service account and signs in the supervisor scope"
   category: supervisor

@@ -121,11 +121,8 @@ func Parse(data []byte) (*Config, error) {
 // nothing when the file already holds data, so a repeated run changes
 // nothing.
 func WriteManagedFile(path string, data []byte) (changed bool, err error) {
-	existing, err := nofollow.ReadFile(path)
-	switch {
-	case err == nil && bytes.Equal(existing, data):
-		return false, nil
-	case err != nil && !errors.Is(err, fs.ErrNotExist):
+	changed, err = ManagedFileChanged(path, data)
+	if err != nil || !changed {
 		return false, err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -135,6 +132,20 @@ func WriteManagedFile(path string, data []byte) (changed bool, err error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// ManagedFileChanged reports whether a write of data to path would change
+// the file: the file differs or does not exist. A dry run of the managed
+// install reports with it.
+func ManagedFileChanged(path string, data []byte) (bool, error) {
+	existing, err := nofollow.ReadFile(path)
+	switch {
+	case err == nil:
+		return !bytes.Equal(existing, data), nil
+	case errors.Is(err, fs.ErrNotExist):
+		return true, nil
+	}
+	return false, err
 }
 
 // ManagedConfigPath returns the path of the managed configuration file,

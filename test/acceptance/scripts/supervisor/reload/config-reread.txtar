@@ -1,0 +1,83 @@
+# The decision service reads the managed configuration at start and the
+# policy when a partition opens. The reload signal makes it read both
+# again: the next contact opens a fresh partition under the new
+# configuration and the new policy. gryph install --managed sends that
+# signal after a change, and systemctl reload sends it too. Runs only in
+# the privileged job on a Linux host with no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+! exists /tmp/gryph-acceptance-state
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+mkdir $WORK/spool
+expandenv managed.yml off.yml
+exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
+exec install -m 644 block.yaml /etc/safedep/gryph/policy.yaml
+exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir /tmp/gryph-acceptance-state --spool-dir $WORK/spool --allow-root &
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
+
+# The service decides under the policy it read.
+stdin deploy.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'deploy is blocked'
+
+# A new policy on disk changes nothing until the reload.
+exec install -m 644 allow.yaml /etc/safedep/gryph/policy.yaml
+stdin deploy.json
+execexit 2 gryph _hook claude-code PreToolUse
+exec sh -c 'kill -HUP $(cat /tmp/gryph-acceptance-state/supervisor.pid)'
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
+stdin deploy.json
+exec gryph _hook claude-code PreToolUse
+
+# A changed configuration takes effect the same way: the policy goes off,
+# so the blocking policy decides nothing.
+exec install -m 644 block.yaml /etc/safedep/gryph/policy.yaml
+exec install -m 644 $WORK/off.yml /etc/safedep/gryph/config.yml
+exec sh -c 'kill -HUP $(cat /tmp/gryph-acceptance-state/supervisor.pid)'
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
+stdin deploy.json
+exec gryph _hook claude-code PreToolUse
+
+exec gryph supervisor stop --pid-file /tmp/gryph-acceptance-state/supervisor.pid
+exec rm -rf /etc/safedep/gryph /tmp/gryph-acceptance-state /root/.local/share/safedep /root/.config/safedep /root/.cache/safedep
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+-- managed.yml --
+policy:
+  enabled: true
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  spool_dir: ${WORK}/spool
+-- off.yml --
+policy:
+  enabled: false
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  spool_dir: ${WORK}/spool
+-- block.yaml --
+version: "1"
+rules:
+  - id: acceptance-block-deploy
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bmake\\s+deploy\\b"
+    message: "deploy is blocked"
+-- allow.yaml --
+version: "1"
+rules: []
+-- deploy.json --
+{
+  "session_id": "test-session-reload",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {"command": "make deploy", "description": "deploy"},
+  "tool_use_id": "tool-use-001"
+}

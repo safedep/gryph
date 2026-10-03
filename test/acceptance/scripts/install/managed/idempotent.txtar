@@ -1,4 +1,5 @@
-# A second run with the same input changes nothing and exits 0. A run that
+# A second run with the same input changes nothing and exits 0. A dry run
+# with a changed policy reports the change and writes nothing. A run that
 # removes an agent from the allowlist removes its entries. Runs only in the
 # privileged job on a Linux host with no managed state.
 [!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
@@ -17,6 +18,13 @@ exec gryph install --managed --config $WORK/both.yml --json
 stdout '"status": "ok"'
 stdout '"changed": false'
 ! stdout '"changed": true'
+
+# A dry run compares the files: a new policy is a change, and nothing is
+# written.
+exec gryph install --managed --config $WORK/both.yml --policy $WORK/policy.yaml --dry-run --json
+stdout '"status": "dry-run"'
+stdout '"changed": true'
+! exists /etc/safedep/gryph/policy.yaml
 
 exec gryph install --managed --config $WORK/claude-only.yml --json
 stdout '"name": "codex"'
@@ -37,3 +45,11 @@ managed:
 managed:
   agents: [claude-code]
   binary: ${ACCEPTANCE_GRYPH_BIN}
+-- policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-dry-run-marker
+    action: warn
+    match:
+      action_types: [file_write]
+    message: marker

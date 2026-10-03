@@ -10,6 +10,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -143,7 +145,13 @@ func (h dirHandle) readDir() ([]fs.DirEntry, error) {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
-	return f.ReadDir(-1)
+	entries, err := f.ReadDir(-1)
+	if err != nil {
+		return nil, err
+	}
+	// File.ReadDir returns the order of the file system.
+	slices.SortFunc(entries, func(a, b fs.DirEntry) int { return strings.Compare(a.Name(), b.Name()) })
+	return entries, nil
 }
 
 func (h dirHandle) remove(name string) error {

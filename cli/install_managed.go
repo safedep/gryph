@@ -227,11 +227,26 @@ func runManagedInstall(cmd *cobra.Command, args managedInstallArgs) error {
 			report.Changed = report.Changed || changed
 		}
 	} else {
+		changed, err := config.ManagedFileChanged(report.Config, in.configData)
+		if err != nil {
+			return WrapError(ExitGeneral, "read the managed configuration", err)
+		}
+		report.Changed = report.Changed || changed
 		if in.policyData != nil {
 			report.Policy = config.ManagedPolicyState().File
+			changed, err := config.ManagedFileChanged(report.Policy, in.policyData)
+			if err != nil {
+				return WrapError(ExitGeneral, "read the managed policy", err)
+			}
+			report.Changed = report.Changed || changed
 		}
 		if in.trustStoreData != nil {
 			report.TrustStore = config.ManagedTrustStorePath()
+			changed, err := config.ManagedFileChanged(report.TrustStore, in.trustStoreData)
+			if err != nil {
+				return WrapError(ExitGeneral, "read the managed trust store", err)
+			}
+			report.Changed = report.Changed || changed
 		}
 	}
 
@@ -419,6 +434,14 @@ func installSupervisorService(ctx context.Context, in *managedInstallInput, repo
 	}
 	report.Changed = report.Changed || changed
 	svc.Switch = managedSwitchOn
+	// The service read its configuration at start and a partition its
+	// policy at open, and a unit that did not change restarts nothing. A
+	// reload makes a running service read both again.
+	if report.Changed {
+		if _, reloaded, note := reloadService(sup.PIDFile()); !reloaded {
+			svc.Next = "systemctl reload " + supervisorServiceName + ".service (" + note + ")"
+		}
+	}
 }
 
 // installFanotifyService writes the unit of the kernel watcher and starts

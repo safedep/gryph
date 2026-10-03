@@ -92,6 +92,14 @@ exists for a test.`,
 			srv := supervisor.New(cfg, supervisor.Options{
 				StateDir: stateDir, Limits: limits, Version: version.Version,
 				SpoolDir: spoolDir, SpoolLimits: spoolLimits, IngestInterval: ingestInterval,
+				ReloadConfig: func() (*config.Config, error) {
+					cfg, err := config.Load(globalFlags.ConfigPath)
+					if err != nil {
+						return nil, err
+					}
+					cfg.Supervisor.StateDir = stateDir
+					return cfg, nil
+				},
 			})
 
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

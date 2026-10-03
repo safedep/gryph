@@ -5,6 +5,7 @@ package supervisor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -567,4 +568,31 @@ func TestServer_ImportsTheUsersRowsMarked(t *testing.T) {
 	_, err = client.Import(ctx, ipc.TypeImportEvents, &ipc.ImportEvents{SessionID: sess.ID, Events: []*events.Event{wrong}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "belongs to session")
+}
+
+func TestServer_ReloadReadsTheConfigurationAgain(t *testing.T) {
+	dir := t.TempDir()
+	state := filepath.Join(dir, "state")
+	require.NoError(t, os.Mkdir(state, 0o700))
+	cfg := config.Default()
+	cfg.Policy.Approval.InlineWait = time.Second
+	calls := 0
+	srv := New(cfg, Options{StateDir: state, IngestInterval: -1, ReloadConfig: func() (*config.Config, error) {
+		calls++
+		if calls == 2 {
+			return nil, errors.New("no file")
+		}
+		next := config.Default()
+		next.Policy.Approval.InlineWait = 7 * time.Second
+		next.Supervisor.StateDir = "/elsewhere"
+		return next, nil
+	}})
+
+	srv.Reload()
+	assert.Equal(t, 7*time.Second, srv.cfg.Policy.Approval.InlineWait, "the new configuration is in force")
+	assert.Equal(t, state, srv.cfg.Supervisor.StateDir, "the state directory of the server stays")
+
+	srv.Reload()
+	assert.Equal(t, 2, calls)
+	assert.Equal(t, 7*time.Second, srv.cfg.Policy.Approval.InlineWait, "a configuration that does not load keeps the one in force")
 }
