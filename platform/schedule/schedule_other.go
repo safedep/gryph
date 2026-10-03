@@ -15,3 +15,11 @@ func install(context.Context, Job) (*Result, error) {
 func remove(context.Context, string) (*Result, error) {
 	return nil, fmt.Errorf("schedule: no scheduler support on %s", runtime.GOOS)
 }
+
+func installSystemWide(context.Context, Job) (*Result, error) {
+	return nil, fmt.Errorf("schedule: no scheduler support on %s", runtime.GOOS)
+}
+
+func removeSystemWide(context.Context, string) (*Result, error) {
+	return nil, fmt.Errorf("schedule: no scheduler support on %s", runtime.GOOS)
+}

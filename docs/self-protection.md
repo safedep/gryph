@@ -159,6 +159,11 @@ a systemd user instance that is not running, the files stay in place and the
 output names the command to finish by hand. The
 [install reference](./cli-reference.md#install) has the paths.
 
+On a managed host the administrator installs the job once for every account
+with `gryph install --managed`. The scheduler of each account then runs it as
+that account, at login and every 15 minutes. See
+[Managed install](./cli-reference.md#managed-install).
+
 ## The silent agent
 
 A removed hook is one way to run an agent without Gryph. Another is to leave

@@ -16,6 +16,7 @@ grep '_hook windsurf pre_run_command' /etc/devin/hooks.json
 grep '_hook windsurf pre_user_prompt' /etc/devin/hooks.json
 
 exec rm -rf /etc/safedep/gryph /etc/devin
+exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
 exec rmdir --ignore-fail-on-non-empty /etc/safedep
 
 -- managed.yml --

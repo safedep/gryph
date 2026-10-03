@@ -433,6 +433,13 @@
   guarantee: "After three repairs of one hook configuration within an hour, a reconcile pass leaves it as it is, reports the rate limit, and records one rate_limited tamper event."
   labels: [reconcile, repair, selfprotect]
 
+- id: reconcile/units/installed
+  title: "install --managed writes the system-wide reconcile job for every account"
+  category: reconcile
+  tier: P1
+  guarantee: "gryph install --managed writes the systemd user units under /etc/systemd/user that run gryph supervisor reconcile --once as each account at login and every 15 minutes, with the managed binary as the program. gryph uninstall --managed removes them. Privileged job only."
+  labels: [reconcile, managed, privileged, linux]
+
 - id: reconcile/timer/units-written
   title: "install --repair-timer writes the reconcile timer units and uninstall removes them"
   category: reconcile

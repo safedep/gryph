@@ -14,6 +14,7 @@ import (
 	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/engine"
+	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -27,6 +28,28 @@ type managedInstallReport struct {
 	// Changed is true when any file changed, or would change in a dry run.
 	Changed bool                 `json:"changed"`
 	Agents  []managedAgentReport `json:"agents"`
+	// Timer is the system-wide job that runs the reconcile pass as each
+	// account. Absent in a dry run.
+	Timer *managedTimerReport `json:"timer,omitempty"`
+}
+
+// managedTimerReport is the outcome of the system-wide reconcile job.
+type managedTimerReport struct {
+	Paths   []string `json:"paths"`
+	Changed bool     `json:"changed"`
+	// Enabled is true when the scheduler took the job. Otherwise Next
+	// names the command to finish by hand.
+	Enabled bool   `json:"enabled"`
+	Next    string `json:"next,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+func timerReport(v *tui.RepairTimerView) *managedTimerReport {
+	r := &managedTimerReport{Paths: v.Paths, Changed: v.Changed, Enabled: v.Enabled, Next: v.Next, Error: v.Error}
+	if r.Paths == nil {
+		r.Paths = []string{}
+	}
+	return r
 }
 
 type managedAgentReport struct {
@@ -111,6 +134,14 @@ func runManagedInstall(cmd *cobra.Command, configPath, policyPath string, dryRun
 		report.Changed = report.Changed || row.Changed
 		report.Agents = append(report.Agents, row)
 	}
+	if !dryRun {
+		report.Timer = timerReport(installSystemRepairTimer(ctx, in.binary))
+		if report.Timer.Error != "" {
+			degraded++
+		}
+		report.Changed = report.Changed || report.Timer.Changed
+	}
+
 	switch {
 	case dryRun:
 		report.Status = managedStatusDryRun
@@ -236,6 +267,32 @@ func renderManagedReport(w io.Writer, report *managedInstallReport, asJSON bool)
 			line += "  error: " + a.Error
 		}
 		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+	if report.Timer != nil {
+		if err := renderTimerLines(w, "Reconcile job", report.Timer); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// renderTimerLines prints the system-wide reconcile job: its files, and
+// the command to finish by hand when the scheduler did not take it.
+func renderTimerLines(w io.Writer, label string, t *managedTimerReport) error {
+	state := "enabled for every account"
+	switch {
+	case t.Error != "":
+		state = "error: " + t.Error
+	case !t.Enabled:
+		state = "files written, run by hand: " + t.Next
+	}
+	if _, err := fmt.Fprintf(w, "  %-12s %s\n", label, state); err != nil {
+		return err
+	}
+	for _, p := range t.Paths {
+		if _, err := fmt.Fprintf(w, "  %-12s %s\n", "", p); err != nil {
 			return err
 		}
 	}

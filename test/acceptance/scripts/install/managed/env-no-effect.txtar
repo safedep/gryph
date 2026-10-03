@@ -25,6 +25,7 @@ exists /etc/claude-code/managed-settings.d/50-gryph.json
 ! grep 'enabled: true' /etc/safedep/gryph/config.yml
 
 exec rm -rf /etc/safedep/gryph /etc/claude-code
+exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
 exec rmdir --ignore-fail-on-non-empty /etc/safedep
 
 -- managed.yml --

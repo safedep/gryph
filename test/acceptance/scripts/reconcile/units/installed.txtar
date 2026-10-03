@@ -1,0 +1,43 @@
+# gryph install --managed writes the system-wide reconcile job: systemd
+# user units under /etc/systemd/user that every account's user manager
+# runs as that account, at login and every 15 minutes. The job names the
+# managed binary. gryph uninstall --managed removes the units. The
+# scheduler itself may be out of reach, for example in a container. The
+# install then names the command to finish by hand and still exits zero.
+# Runs only in the privileged job on a Linux host with no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the systemd user units exist on Linux only'
+! exists /etc/safedep/gryph
+! exists /etc/claude-code
+! exists /etc/systemd/user/gryph-reconcile.timer
+! exists /usr/local/bin/gryph-acceptance
+expandenv managed.yml
+exec cp $ACCEPTANCE_GRYPH_BIN /usr/local/bin/gryph-acceptance
+
+exec gryph install --managed --config $WORK/managed.yml --json
+stdout '"timer": \{'
+stdout '"/etc/systemd/user/gryph-reconcile.service"'
+stdout '"/etc/systemd/user/gryph-reconcile.timer"'
+exists /etc/systemd/user/gryph-reconcile.service
+exists /etc/systemd/user/gryph-reconcile.timer
+grep 'ExecStart=.*/gryph supervisor reconcile --once' /etc/systemd/user/gryph-reconcile.service
+grep 'OnUnitActiveSec=15min' /etc/systemd/user/gryph-reconcile.timer
+grep 'WantedBy=timers.target' /etc/systemd/user/gryph-reconcile.timer
+
+exec gryph install --managed --config $WORK/managed.yml
+stdout 'Reconcile job'
+stdout '/etc/systemd/user/gryph-reconcile.timer'
+
+exec /usr/local/bin/gryph-acceptance uninstall --managed --json
+stdout '"timer": \{'
+! exists /etc/systemd/user/gryph-reconcile.service
+! exists /etc/systemd/user/gryph-reconcile.timer
+! exists /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
+
+exec rm -rf /etc/claude-code /usr/local/bin/gryph-acceptance
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- managed.yml --
+managed:
+  agents: [claude-code]
+  binary: ${ACCEPTANCE_GRYPH_BIN}

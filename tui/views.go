@@ -181,8 +181,10 @@ type InstallView struct {
 
 // RepairTimerView is the outcome of a change to the repair timer.
 type RepairTimerView struct {
-	// Paths lists the files the change wrote or removed.
+	// Paths lists the files of the job.
 	Paths []string
+	// Changed is true when the change wrote or removed a file.
+	Changed bool
 	// Enabled is true when the scheduler took the change. When it is
 	// false, Next names the command to finish by hand.
 	Enabled bool

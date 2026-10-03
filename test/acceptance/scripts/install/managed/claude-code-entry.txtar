@@ -35,6 +35,7 @@ stdout 'hook_config\s+claude-code\s+prevent_same_user\s+managed entry at /etc/cl
 ! stdout 'drift: hooks not installed'
 
 exec rm -rf /etc/safedep/gryph /etc/claude-code
+exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
 exec rmdir --ignore-fail-on-non-empty /etc/safedep
 
 -- managed.yml --

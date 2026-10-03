@@ -5,9 +5,11 @@
 package schedule
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -29,8 +31,12 @@ type Job struct {
 
 // Result is the outcome of an Install or a Remove.
 type Result struct {
-	// Paths lists the files that the call wrote or removed.
+	// Paths lists the files of the job that the call wrote, kept as they
+	// were, or removed.
 	Paths []string
+	// Changed is true when the call wrote or removed a file. A repeated
+	// install of the same job changes nothing.
+	Changed bool
 	// Enabled is true when the scheduler took the change. When it is false
 	// the files are in place and Next names the command to run by hand.
 	Enabled bool
@@ -57,6 +63,29 @@ func Remove(ctx context.Context, name string) (*Result, error) {
 	return remove(ctx, name)
 }
 
+// InstallSystemWide writes the job once for every account of the host, as
+// root: a systemd user unit under /etc/systemd/user enabled for every user
+// manager, a launchd agent under /Library/LaunchAgents, or a scheduled task
+// that runs for every member of the Users group. The scheduler of each
+// account runs the job as that account, at login and on the interval, so
+// no process of root ever touches a home. A logged-in account picks the
+// job up at its next login, or when it reloads its scheduler by hand.
+func InstallSystemWide(ctx context.Context, job Job) (*Result, error) {
+	if err := job.validate(); err != nil {
+		return nil, err
+	}
+	return installSystemWide(ctx, job)
+}
+
+// RemoveSystemWide removes the system-wide job. A job that is not installed
+// is not an error.
+func RemoveSystemWide(ctx context.Context, name string) (*Result, error) {
+	if err := checkName(name); err != nil {
+		return nil, err
+	}
+	return removeSystemWide(ctx, name)
+}
+
 func (j Job) validate() error {
 	if err := checkName(j.Name); err != nil {
 		return err
@@ -75,6 +104,19 @@ func checkName(name string) error {
 		return fmt.Errorf("schedule: %q is not a job name", name)
 	}
 	return nil
+}
+
+// writeIfChanged writes data to path unless the file already holds it,
+// so a repeated install changes nothing.
+func writeIfChanged(path string, data []byte) (bool, error) {
+	existing, err := os.ReadFile(path)
+	if err == nil && bytes.Equal(existing, data) {
+		return false, nil
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // minutes returns the interval in whole minutes, at least one.

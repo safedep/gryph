@@ -81,8 +81,8 @@ gryph uninstall --restore-backup
 `sudo gryph uninstall --managed [--purge] [--dry-run] [--json]` reverses
 [Managed install](#managed-install). It removes the Gryph entries from the
 managed hook file of every agent and keeps the other entries. It then removes
-the Gryph entries from the agent hook files in every account's home, and last
-the managed policy and configuration. The per-user state (the database, the
+the Gryph entries from the agent hook files in every account's home, the
+system-wide reconcile job, and last the managed policy and configuration. The per-user state (the database, the
 keys, the receipts) stays unless `--purge`. A second run changes nothing.
 
 The walk of the homes is the one place where a root process touches a user's
@@ -514,6 +514,19 @@ The lock stops the developer's own hooks too, so it is off by default, and
 only a `locked` agent accepts it. The managed hooks hold without it: a user
 `disableAllHooks` cannot turn off a managed Claude Code hook, and Codex marks
 managed hooks as trusted.
+
+The install also writes the system-wide reconcile job, so every account of
+the host runs `gryph supervisor reconcile --once` as itself at login and
+every 15 minutes, with the managed binary as the program: systemd user units
+under `/etc/systemd/user/` enabled with `systemctl --global` on Linux, a
+launchd agent at `/Library/LaunchAgents/io.safedep.gryph-reconcile.plist` on
+macOS, and a scheduled task for the Users group on Windows. The job runs as
+the account, never as root, so the install never touches a home. An account
+that is logged in picks the job up at its next login, or on Linux after
+`systemctl --user daemon-reload`. When the scheduler is out of reach the
+files stay in place and the report names the command to finish by hand.
+Under a managed configuration `policy.self_protection.repair` is on by
+default, so the job repairs as well as detects.
 
 Under `--managed`, Gryph reads no `HOME`, `XDG_*` or `GRYPH_*` variable and
 runs no program. Every path comes from the input file and the platform.

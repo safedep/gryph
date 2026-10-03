@@ -61,6 +61,7 @@ stdout 'is not owned by root'
 stdout 'a user could replace it'
 
 exec rm -rf /etc/safedep/gryph /etc/claude-code /etc/cursor
+exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
 exec rmdir --ignore-fail-on-non-empty /etc/safedep
 
 -- bin/.keep --

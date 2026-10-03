@@ -38,6 +38,9 @@ type managedUninstallReport struct {
 	// UsersSkipped says why no home was visited, when the platform cannot
 	// list accounts or run a command as one.
 	UsersSkipped string `json:"users_skipped,omitempty"`
+	// Timer is the system-wide reconcile job the run removed. Absent in a
+	// dry run.
+	Timer *managedTimerReport `json:"timer,omitempty"`
 }
 
 // managedUserUninstall is the outcome of the helper for one account.
@@ -93,6 +96,14 @@ func runManagedUninstall(cmd *cobra.Command, purge, dryRun, asJSON bool) error {
 	}
 
 	degraded += walkHomes(ctx, report, purge, dryRun)
+
+	if !dryRun {
+		report.Timer = timerReport(removeSystemRepairTimer(ctx))
+		if report.Timer.Error != "" {
+			degraded++
+		}
+		report.Changed = report.Changed || report.Timer.Changed
+	}
 
 	policy := config.ManagedPolicyState()
 	for _, path := range []string{policy.File, policy.Dir, config.ManagedConfigPath()} {
@@ -284,6 +295,9 @@ func renderManagedUninstall(w io.Writer, report *managedUninstallReport, asJSON 
 		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}
+	}
+	if report.Timer != nil {
+		return renderTimerLines(w, "Reconcile job", report.Timer)
 	}
 	return nil
 }

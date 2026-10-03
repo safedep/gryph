@@ -107,7 +107,12 @@ const (
 // the running binary by its absolute path, so the job does not depend on
 // PATH.
 func repairTimerJob() (schedule.Job, error) {
-	program := utils.GryphCommand()
+	return repairTimerJobFor(utils.GryphCommand())
+}
+
+// repairTimerJobFor returns the scheduled job that runs program, the
+// absolute path of a gryph binary.
+func repairTimerJobFor(program string) (schedule.Job, error) {
 	if !filepath.IsAbs(program) {
 		return schedule.Job{}, fmt.Errorf("the running program %q has no absolute path", program)
 	}
@@ -131,6 +136,30 @@ func installRepairTimer(ctx context.Context) *tui.RepairTimerView {
 		return &tui.RepairTimerView{Error: err.Error()}
 	}
 	return &tui.RepairTimerView{Paths: res.Paths, Enabled: res.Enabled, Next: res.Next}
+}
+
+// installSystemRepairTimer installs the job for every account of the host,
+// with the managed binary as the program. A failure is in the view, because
+// the managed files are in place either way.
+func installSystemRepairTimer(ctx context.Context, program string) *tui.RepairTimerView {
+	job, err := repairTimerJobFor(program)
+	if err != nil {
+		return &tui.RepairTimerView{Error: err.Error()}
+	}
+	res, err := schedule.InstallSystemWide(ctx, job)
+	if err != nil {
+		return &tui.RepairTimerView{Error: err.Error()}
+	}
+	return &tui.RepairTimerView{Paths: res.Paths, Changed: res.Changed, Enabled: res.Enabled, Next: res.Next}
+}
+
+// removeSystemRepairTimer removes the system-wide job and returns its view.
+func removeSystemRepairTimer(ctx context.Context) *tui.RepairTimerView {
+	res, err := schedule.RemoveSystemWide(ctx, repairTimerName)
+	if err != nil {
+		return &tui.RepairTimerView{Error: err.Error()}
+	}
+	return &tui.RepairTimerView{Paths: res.Paths, Changed: res.Changed, Enabled: res.Enabled, Next: res.Next}
 }
 
 // removeRepairTimer removes the timer and returns its view.

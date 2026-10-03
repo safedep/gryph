@@ -24,6 +24,7 @@ grep 'timeout = 30' /etc/codex/requirements.toml
 ! exists /etc/claude-code
 
 exec rm -rf /etc/safedep/gryph /etc/codex
+exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
 exec rmdir --ignore-fail-on-non-empty /etc/safedep
 
 -- requirements.toml --

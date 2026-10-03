@@ -38,3 +38,29 @@ func TestInstallRemove_Darwin(t *testing.T) {
 	_, err = os.Stat(plist)
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
+
+func TestInstallRemoveSystemWide_Darwin(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "Library", "LaunchAgents")
+	restore := systemAgentsDir
+	systemAgentsDir = func() (string, error) { return dir, nil }
+	t.Cleanup(func() { systemAgentsDir = restore })
+	calls := stubRunner(t)
+
+	job := Job{Name: "gryph-reconcile", Description: "Gryph reconcile", Command: []string{"/Library/SafeDep/gryph/bin/gryph", "supervisor", "reconcile", "--once"}, Interval: 15 * time.Minute}
+	res, err := InstallSystemWide(context.Background(), job)
+	require.NoError(t, err)
+	assert.True(t, res.Enabled)
+	path := filepath.Join(dir, "io.safedep.gryph-reconcile.plist")
+	assert.Equal(t, []string{path}, res.Paths)
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "<string>/Library/SafeDep/gryph/bin/gryph</string>")
+	assert.Contains(t, string(data), "<integer>900</integer>")
+	assert.Empty(t, *calls, "launchd loads the agent at login, no command runs")
+
+	res, err = RemoveSystemWide(context.Background(), "gryph-reconcile")
+	require.NoError(t, err)
+	assert.Equal(t, []string{path}, res.Paths)
+	_, err = os.Stat(path)
+	assert.ErrorIs(t, err, os.ErrNotExist)
+}
