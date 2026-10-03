@@ -238,6 +238,16 @@ Two kernel settings on Linux decide how far a same-user adversary gets, and
 - `kernel.yama.ptrace_scope = 1` or more. With scope 0, a process of the user
   can attach to the hook process and change its answer.
 
+A third row, `bpf lsm`, is information: whether a BPF LSM program could
+attach on this host. The probe reads `CONFIG_BPF_LSM` from the kernel
+configuration (`/proc/config.gz` or `/boot/config-<release>`), the active
+LSM list from `/sys/kernel/security/lsm`, and the BTF at
+`/sys/kernel/btf/vmlinux`. The value is `available` when all three hold,
+`not built`, `not active` (add `lsm=...,bpf` to the kernel command line)
+or `unknown` when a source is not readable. No provider uses the BPF LSM
+yet. The row says what a later kernel-assisted provider would find on
+this host.
+
 For every present agent, doctor also names what the agent does when the hook
 fails. Every supported agent lets the action through on a hook error or a
 timeout, so a block exists only while Gryph answers in time. The

@@ -1106,3 +1106,10 @@
   tier: P1
   guarantee: "On a Linux kernel with Landlock, gryph run starts a program under a ruleset that keeps the Gryph configuration directory readable and refuses every write, create, remove and rename in it from the program and from anything it starts, whatever path the write takes. The rest of the file system stays as it is, except that no new entry can be made directly inside an ancestor of the protected directory. A hook under the ruleset still records its event. The census shows which live agent processes started through the launcher. A program that is not on PATH is an error."
   labels: [kernel, landlock, self-protection, linux]
+
+- id: kernel/bpf-lsm/probe-report
+  title: "doctor reports whether a BPF LSM program could attach on this host"
+  category: kernel
+  tier: P2
+  guarantee: "On Linux, gryph doctor prints a bpf lsm row under the host posture with the value available, not built, not active, not available or unknown, and a note with the kernel configuration, the active LSM list and the BTF the probe found. The row is information: no provider uses the BPF LSM yet."
+  labels: [kernel, bpf-lsm, posture, linux]

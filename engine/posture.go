@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/safedep/gryph/agent"
@@ -74,7 +75,63 @@ func kernelPosture() []PostureItem {
 		items = append(items, PostureItem{Name: "kernel.yama.ptrace_scope", Value: value, Status: PostureOK,
 			Note: "only a parent can trace the hook"})
 	}
+	if item, ok := bpfLSMPosture(); ok {
+		items = append(items, item)
+	}
 	return items
+}
+
+// bpfLSMPosture reports whether a BPF LSM program could attach on this
+// host. No provider uses it yet, so the row is information: it says what
+// a later kernel-assisted provider would find, per host.
+func bpfLSMPosture() (PostureItem, bool) {
+	probe, err := kernel.ProbeBPFLSM()
+	if errors.Is(err, kernel.ErrUnsupported) {
+		return PostureItem{}, false
+	}
+	if err != nil {
+		return PostureItem{Name: "bpf lsm", Value: "unreadable", Status: PostureInfo, Note: err.Error()}, true
+	}
+	item := PostureItem{Name: "bpf lsm", Status: PostureInfo}
+	var facts []string
+	switch probe.Built {
+	case "y":
+		facts = append(facts, "CONFIG_BPF_LSM=y ("+probe.ConfigSource+")")
+	case "":
+		facts = append(facts, "kernel configuration not readable")
+	default:
+		facts = append(facts, "CONFIG_BPF_LSM="+probe.Built+" ("+probe.ConfigSource+")")
+	}
+	switch {
+	case probe.Active == nil:
+		facts = append(facts, "active LSM list not readable, securityfs not mounted")
+	case probe.BPFActive:
+		facts = append(facts, "bpf in the active LSM list ("+strings.Join(probe.Active, ",")+")")
+	default:
+		facts = append(facts, "bpf not in the active LSM list ("+strings.Join(probe.Active, ",")+"). Add lsm=...,bpf to the kernel command line")
+	}
+	if probe.BTF {
+		facts = append(facts, "BTF at /sys/kernel/btf/vmlinux")
+	} else {
+		facts = append(facts, "no BTF at /sys/kernel/btf/vmlinux")
+	}
+	switch {
+	case probe.Ready():
+		item.Value = "available"
+	case probe.Built == "n":
+		item.Value = "not built"
+	case probe.Active != nil && !probe.BPFActive:
+		item.Value = "not active"
+	case probe.Built == "" || probe.Active == nil:
+		item.Value = "unknown"
+	default:
+		item.Value = "not available"
+	}
+	item.Note = "a kernel-assisted provider could attach here: " + strings.Join(facts, "; ") + ". No provider uses it yet"
+	if !probe.Ready() {
+		item.Note = "a kernel-assisted provider could not attach here: " + strings.Join(facts, "; ") + ". No provider uses it yet"
+	}
+	return item, true
 }
 
 // usernsPosture reads the two settings that stop an unprivileged user
