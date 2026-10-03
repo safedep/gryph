@@ -40,3 +40,7 @@ func isSystemID(string) bool {
 func lookupID(string) (Account, error) {
 	return Account{}, ErrUnsupported
 }
+
+func createSystem(context.Context, string, string) error {
+	return ErrUnsupported
+}

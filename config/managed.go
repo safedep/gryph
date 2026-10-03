@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -144,4 +145,64 @@ func ManagedConfigPath() string {
 		return ""
 	}
 	return filepath.Join(dir, configFileName)
+}
+
+// SetSupervisorEnabled returns the managed configuration data with
+// supervisor.enabled set to on. It edits the document in place and keeps
+// the rest of it, comments included, so a managed file that an
+// administrator wrote stays theirs. The install writes the file with the
+// switch off until the service answers, then with the switch on.
+func SetSupervisorEnabled(data []byte, on bool) ([]byte, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("config: %w", err)
+	}
+	if doc.Kind == 0 || len(doc.Content) == 0 {
+		doc = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode}}}
+	}
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("config: the document is not a mapping")
+	}
+	supervisor := mappingValue(root, "supervisor")
+	if supervisor == nil {
+		root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "supervisor"}, &yaml.Node{Kind: yaml.MappingNode})
+		supervisor = root.Content[len(root.Content)-1]
+	}
+	if supervisor.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("config: supervisor is not a mapping")
+	}
+	value := "false"
+	if on {
+		value = "true"
+	}
+	enabled := mappingValue(supervisor, "enabled")
+	if enabled == nil {
+		supervisor.Content = append(supervisor.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "enabled"}, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: value})
+	} else {
+		enabled.Kind = yaml.ScalarNode
+		enabled.Tag = "!!bool"
+		enabled.Value = value
+		enabled.Content = nil
+	}
+	var out bytes.Buffer
+	enc := yaml.NewEncoder(&out)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
+		return nil, fmt.Errorf("config: %w", err)
+	}
+	if err := enc.Close(); err != nil {
+		return nil, fmt.Errorf("config: %w", err)
+	}
+	return out.Bytes(), nil
+}
+
+// mappingValue returns the value node of key in a mapping node, or nil.
+func mappingValue(mapping *yaml.Node, key string) *yaml.Node {
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			return mapping.Content[i+1]
+		}
+	}
+	return nil
 }

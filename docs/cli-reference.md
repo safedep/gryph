@@ -80,7 +80,10 @@ gryph uninstall --restore-backup
 #### Managed uninstall
 
 `sudo gryph uninstall --managed [--purge] [--dry-run] [--json]` reverses
-[Managed install](#managed-install). It removes the Gryph entries from the
+[Managed install](#managed-install). With the decision service on, it
+first writes the configuration with the switch off, so the hooks decide in
+process again, and then stops and removes the units of the service (the
+`service` section of the report). It removes the Gryph entries from the
 managed hook file of every agent and keeps the other entries. It then removes
 the Gryph entries from the agent hook files in every account's home, the
 system-wide reconcile job, and last the managed policy and configuration. The per-user state (the database, the
@@ -576,7 +579,31 @@ managed:
   binary: /opt/safedep/gryph/bin/gryph   # optional, the default of the platform
 ```
 
-With `supervisor.enabled: true` the command also makes the machine keys of
+With `supervisor.enabled: true` the command installs the decision service
+in an order that cannot block the agents of the host by mistake. It writes
+the configuration with the switch off first, so the hooks keep deciding in
+process. It makes the service account (`supervisor.server_identity`,
+default `_gryph`, a system account with no login shell) when the host does
+not have it, the state directory, the spool root and the machine keys,
+hands them to the account, and writes the units of the service manager:
+on Linux `/etc/systemd/system/gryph-supervisor.socket` (root-owned socket
+at `supervisor.socket`, mode 0666, backlog 1024) and
+`gryph-supervisor.service` (`User=_gryph`, `Restart=always`, the hardening
+set: no new privileges, no capability, `ProtectSystem=strict`,
+`ProtectHome=yes`, private tmp and devices, kernel and cgroup protection,
+no namespaces, no SUID, locked personality, no writable and executable
+memory, Unix sockets only, the `@system-service` call filter, umask 0077;
+`ProtectProc` stays off for the peer check). It starts the socket, waits
+up to 10 seconds for the service to answer over it with the identity check
+of a hook, and only then writes the configuration as given, with the
+switch on. A service that does not answer leaves the switch off, degrades
+the run (exit 10) and names the next step. The JSON report carries this
+under `service`: `account`, `units`, `changed`, `enabled`, `next`,
+`running`, `switch`, `error`. With socket activation the socket stays open
+across a restart or an upgrade of the service: a hook that connects in
+that window waits for the welcome.
+
+The command also makes the machine keys of
 the decision service when they are missing, under the state directory
 (`supervisor.state_dir`, default `/var/lib/safedep/gryph`): the receipt
 signing key `keys/receipt.key`, its published public half

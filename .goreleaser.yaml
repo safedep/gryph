@@ -39,8 +39,9 @@ checksum:
 
 # The deb and rpm packages are the managed install for a Linux fleet. The
 # binary sits at the root-owned path that the managed hook entries name,
-# with a link on PATH. The package writes no managed configuration: an MDM
-# script runs gryph install --managed after the package.
+# with a link on PATH. The post-install script makes the service account
+# of the decision service. The package writes no managed configuration: an
+# MDM script runs gryph install --managed after the package.
 nfpms:
   - id: linux-packages
     package_name: gryph
@@ -55,6 +56,8 @@ nfpms:
       - src: /opt/safedep/gryph/bin/gryph
         dst: /usr/bin/gryph
         type: symlink
+    scripts:
+      postinstall: scripts/postinstall.sh
     rpm:
       group: Applications/System
 

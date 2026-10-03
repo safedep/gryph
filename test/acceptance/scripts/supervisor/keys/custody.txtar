@@ -17,7 +17,12 @@ exec cp $ACCEPTANCE_GRYPH_BIN /usr/local/bin/gryph-acceptance
 exec useradd -r -s /usr/sbin/nologin -d /nonexistent _gryph
 expandenv managed.yml
 
-exec gryph install --managed --config $WORK/managed.yml --json
+# With the service on, the install also writes the units and waits for
+# the service. A host without a running service manager leaves the switch
+# off and exits 10, a host with one exits 0. The keys are what this script
+# checks.
+exec sh -c 'gryph install --managed --config '$WORK'/managed.yml --json; echo "exit $?"'
+stdout 'exit (0|10)$'
 stdout '"keys": \{'
 stdout '"receipt_key": "/tmp/gryph-acceptance-state/keys/receipt.key"'
 stdout '"export_key": "/tmp/gryph-acceptance-state/keys/export.key"'
@@ -35,9 +40,10 @@ stdout '644:root'
 grep $KEYID /etc/safedep/gryph/keys/receipt-pub.json
 
 # A second run changes nothing and keeps the key.
-exec gryph install --managed --config $WORK/managed.yml --json
+exec sh -c 'gryph install --managed --config '$WORK'/managed.yml --json; echo "exit $?"'
+stdout 'exit (0|10)$'
 stdout '"key_id": "'$KEYID'"'
-stdout '"changed": false'
+stdout '"receipt_key": "/tmp/gryph-acceptance-state/keys/receipt.key",\n\s*"key_id": "'$KEYID'",\n\s*"export_key": "[^"]*",\n\s*"trust_store": "[^"]*",\n\s*"owner": "_gryph",\n\s*"changed": false'
 
 # The service runs as the service account and signs with the key.
 exec sh -c 'runuser -u _gryph -- /usr/local/bin/gryph-acceptance supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir /tmp/gryph-acceptance-state --spool-dir /tmp/gryph-acceptance-spool >/dev/null 2>&1 &'
@@ -75,7 +81,7 @@ stdout 'Key: supervisor-owned \(protected\) /tmp/gryph-acceptance-state/keys/rec
 
 exec sh -c 'pkill -u _gryph; sleep 0.3; true'
 exec userdel _gryph
-exec rm -rf /etc/safedep/gryph /etc/claude-code /tmp/gryph-acceptance-state /tmp/gryph-acceptance-spool /tmp/gryph-acceptance-hook.sock /usr/local/bin/gryph-acceptance
+exec rm -rf /etc/safedep/gryph /etc/claude-code /tmp/gryph-acceptance-state /tmp/gryph-acceptance-spool /tmp/gryph-acceptance-hook.sock /usr/local/bin/gryph-acceptance /etc/systemd/system/gryph-supervisor.socket /etc/systemd/system/gryph-supervisor.service
 exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
 exec rmdir --ignore-fail-on-non-empty /etc/safedep
 

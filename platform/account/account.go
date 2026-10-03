@@ -39,6 +39,13 @@ func Lookup(name string) (Account, error) {
 	return lookup(name)
 }
 
+// CreateSystem makes the system account name with home as its home
+// directory and no login shell, for a service. It runs the account tool
+// of the platform, so only root can call it.
+func CreateSystem(ctx context.Context, name, home string) error {
+	return createSystem(ctx, name, home)
+}
+
 // LookupID returns the account with the identifier id, in the form that
 // CurrentID returns.
 func LookupID(id string) (Account, error) {

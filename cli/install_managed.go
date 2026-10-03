@@ -6,16 +6,23 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/decision/ipc"
 	"github.com/safedep/gryph/engine"
+	"github.com/safedep/gryph/hookside"
+	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/platform/account"
+	"github.com/safedep/gryph/platform/service"
+	"github.com/safedep/gryph/spool"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -39,7 +46,40 @@ type managedInstallReport struct {
 	// Keys are the machine keys of the decision service. Present when the
 	// managed configuration turns the service on, absent in a dry run.
 	Keys *managedKeysReport `json:"keys,omitempty"`
+	// Service is the decision service: its account, its units and the
+	// switch. Present when the managed configuration turns the service on,
+	// absent in a dry run.
+	Service *managedServiceReport `json:"service,omitempty"`
 }
+
+// managedServiceReport is the outcome of the decision service install:
+// the units, whether the service manager took them, whether the service
+// answered, and the switch the configuration ends with.
+type managedServiceReport struct {
+	Account string   `json:"account"`
+	Units   []string `json:"units"`
+	Changed bool     `json:"changed"`
+	// Enabled is true when the service manager took the units. Otherwise
+	// Next names the command to finish by hand.
+	Enabled bool   `json:"enabled"`
+	Next    string `json:"next,omitempty"`
+	// Running is true when the service answered the health check over
+	// the socket. Switch is on only then: a hook never takes the service
+	// fallback before the service answers.
+	Running bool   `json:"running"`
+	Switch  string `json:"switch"`
+	Error   string `json:"error,omitempty"`
+}
+
+const (
+	managedSwitchOn  = "on"
+	managedSwitchOff = "off"
+	// serviceHealthTimeout bounds the wait for the first welcome of the
+	// service after its units start.
+	serviceHealthTimeout = 10 * time.Second
+	// supervisorServiceName is the unit name of the decision service.
+	supervisorServiceName = "gryph-supervisor"
+)
 
 // managedKeysReport is the outcome of the machine keys of the decision
 // service: the receipt signing key under the state directory, its public
@@ -141,7 +181,17 @@ func runManagedInstall(cmd *cobra.Command, args managedInstallArgs) error {
 
 	report := &managedInstallReport{Status: managedStatusOK, Config: config.ManagedConfigPath(), Binary: in.binary}
 	if !dryRun {
-		changed, err := config.WriteManagedFile(report.Config, in.configData)
+		// With the service on, the configuration goes in with the switch
+		// off first. The hooks keep deciding in process until the service
+		// answers, and the switch turns on at the end of the run.
+		configData := in.configData
+		if in.cfg.Supervisor.Enabled {
+			configData, err = config.SetSupervisorEnabled(in.configData, false)
+			if err != nil {
+				return WrapError(ExitGeneral, "write the managed configuration", err)
+			}
+		}
+		changed, err := config.WriteManagedFile(report.Config, configData)
 		if err != nil {
 			return WrapError(ExitGeneral, "write the managed configuration", err)
 		}
@@ -188,11 +238,20 @@ func runManagedInstall(cmd *cobra.Command, args managedInstallArgs) error {
 		}
 		report.Changed = report.Changed || report.Timer.Changed
 		if in.cfg.Supervisor.Enabled {
+			report.Service = &managedServiceReport{Account: in.cfg.Supervisor.ServerAccount(), Units: []string{}, Switch: managedSwitchOff}
+			if err := ensureServiceAccount(ctx, in.cfg); err != nil {
+				report.Service.Error = err.Error()
+			}
 			report.Keys = installMachineKeys(in.cfg)
 			if report.Keys.Error != "" {
 				degraded++
 			}
 			report.Changed = report.Changed || report.Keys.Changed
+			installSupervisorService(ctx, in, report)
+			if report.Service.Error != "" {
+				degraded++
+			}
+			report.Changed = report.Changed || report.Service.Changed
 		}
 	}
 
@@ -267,6 +326,94 @@ func handStateToServiceAccount(cfg *config.Config) (string, error) {
 		return "", fmt.Errorf("hand %s to %s: %w", cfg.Supervisor.StatePath(), acct.Name, err)
 	}
 	return handMachineKeysToServiceAccount(cfg)
+}
+
+// ensureServiceAccount makes the service account when the host does not
+// have it. The package of the platform makes it too, so a host that got
+// the package has it already.
+func ensureServiceAccount(ctx context.Context, cfg *config.Config) error {
+	name := cfg.Supervisor.ServerAccount()
+	if _, err := account.Lookup(name); err == nil {
+		return nil
+	}
+	if err := account.CreateSystem(ctx, name, cfg.Supervisor.StatePath()); err != nil {
+		return fmt.Errorf("account %s: %w", name, err)
+	}
+	return nil
+}
+
+// installSupervisorService makes the spool root, writes the units, starts
+// the socket, waits for the service to answer, and only then writes the
+// configuration with the switch on. A service that does not answer leaves
+// the switch off and degrades the install, so a rollout cannot block the
+// agents of a host by mistake.
+func installSupervisorService(ctx context.Context, in *managedInstallInput, report *managedInstallReport) {
+	sup := in.cfg.Supervisor
+	svc := report.Service
+	if err := spool.EnsureRoot(sup.SpoolPath()); err != nil {
+		svc.Error = err.Error()
+		return
+	}
+	if acct, err := account.Lookup(sup.ServerAccount()); err == nil {
+		if err := os.Chown(sup.SpoolPath(), int(acct.UID), int(acct.GID)); err != nil {
+			svc.Error = fmt.Sprintf("hand %s to %s: %v", sup.SpoolPath(), acct.Name, err)
+			return
+		}
+	}
+	res, err := service.Install(ctx, service.Spec{
+		Name:        supervisorServiceName,
+		Description: "Gryph decision service",
+		Command:     []string{in.binary, "supervisor", "run"},
+		Socket:      sup.SocketPath(),
+		User:        sup.ServerAccount(),
+		StateDir:    sup.StatePath(),
+		SpoolDir:    sup.SpoolPath(),
+	})
+	if err != nil {
+		svc.Error = err.Error()
+		return
+	}
+	svc.Units = res.Paths
+	svc.Changed = res.Changed
+	svc.Enabled = res.Enabled
+	svc.Next = res.Next
+	if err := waitForService(ctx, in.cfg); err != nil {
+		svc.Error = "the service did not answer: " + err.Error() + ". The switch stays off until a later run finds it running"
+		return
+	}
+	svc.Running = true
+	changed, err := config.WriteManagedFile(report.Config, in.configData)
+	if err != nil {
+		svc.Error = "write the managed configuration with the switch on: " + err.Error()
+		return
+	}
+	report.Changed = report.Changed || changed
+	svc.Switch = managedSwitchOn
+}
+
+// waitForService connects to the socket of the service and waits for its
+// welcome, with the identity check of a hook, until the health timeout.
+func waitForService(ctx context.Context, cfg *config.Config) error {
+	socket := cfg.Supervisor.SocketPath()
+	deadline := time.Now().Add(serviceHealthTimeout)
+	var last error
+	for time.Now().Before(deadline) {
+		attempt, cancel := context.WithTimeout(ctx, time.Second)
+		client, err := ipc.Dial(attempt, socket, ipc.DialOptions{Version: version.Version, VerifyServer: func(conn net.Conn) error {
+			return hookside.VerifyServer(conn, socket, cfg.Supervisor.ServerAccount())
+		}})
+		cancel()
+		if err == nil {
+			_ = client.Close()
+			return nil
+		}
+		if errors.Is(err, ipc.ErrServerIdentity) {
+			return err
+		}
+		last = err
+		time.Sleep(200 * time.Millisecond)
+	}
+	return last
 }
 
 // readManagedInput reads and validates every input file. Each file must
@@ -404,6 +551,20 @@ func renderManagedReport(w io.Writer, report *managedInstallReport, asJSON bool)
 	}
 	if report.Timer != nil {
 		if err := renderTimerLines(w, "Reconcile job", report.Timer); err != nil {
+			return err
+		}
+	}
+	if svc := report.Service; svc != nil {
+		line := fmt.Sprintf("  %-8s account %s  switch %s", "Service", svc.Account, svc.Switch)
+		switch {
+		case svc.Error != "":
+			line += "  error: " + svc.Error
+		case svc.Running:
+			line += "  running"
+		case svc.Next != "":
+			line += "  next: " + svc.Next
+		}
+		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}
 	}

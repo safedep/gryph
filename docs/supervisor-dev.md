@@ -124,6 +124,39 @@ sends the frames on stdin to a service and prints the replies. With
 `--idle` it first opens that many connections that send hello and hold.
 The acceptance scripts under `supervisor/` use it.
 
+## The units
+
+On Linux the service runs under systemd with socket activation
+(`platform/service`). `gryph-supervisor.socket` holds the socket at
+`supervisor.socket`, root-owned, mode 0666, backlog 1024: every account
+connects, and the root-owned path chain is what a hook client verifies.
+`gryph-supervisor.service` runs `gryph supervisor run` as the service
+account with `Restart=always` and the hardening set: `NoNewPrivileges`, an
+empty capability set, `ProtectSystem=strict` with the state directory
+(`StateDirectory=safedep/gryph`) and the spool root (`ReadWritePaths`) as
+the only writable paths, `ProtectHome=yes` (the service cannot open a home
+even by mistake), `PrivateTmp`, `PrivateDevices`, the kernel and cgroup
+protections, `RestrictNamespaces`, `RestrictRealtime`, `RestrictSUIDSGID`,
+`LockPersonality`, `MemoryDenyWriteExecute`,
+`RestrictAddressFamilies=AF_UNIX`, `SystemCallFilter=@system-service` and
+`UMask=0077`. `ProtectProc` stays off: the peer check reads `/proc/<pid>`.
+`ExecReload` sends `SIGHUP`, the key reload. The socket stays open across
+a restart or an upgrade of the service, so a hook that connects in that
+window waits for the welcome instead of taking the absent-service
+fallback.
+
+`gryph install --managed` controls the order: the configuration goes in
+with `supervisor.enabled` off, then the service account (the package
+post-install script makes it too), the state directory, the spool root
+and the keys, then the units. The command waits up to 10 seconds for the
+service to answer a hello over the socket, with the identity check of a
+hook, and only then writes the configuration as the administrator gave
+it, with the switch on. A service that does not answer leaves the switch
+off and the run partial, so a rollout cannot block the agents of a host.
+`gryph uninstall --managed` turns the switch off first, then stops and
+removes the units. macOS (launchd) and Windows have no service installer
+yet.
+
 ## Keys
 
 The service signs with the machine key, never with a user's key. A key in

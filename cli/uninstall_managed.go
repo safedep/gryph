@@ -16,6 +16,7 @@ import (
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/platform/account"
+	"github.com/safedep/gryph/platform/service"
 	"github.com/spf13/cobra"
 )
 
@@ -41,6 +42,10 @@ type managedUninstallReport struct {
 	// Timer is the system-wide reconcile job the run removed. Absent in a
 	// dry run.
 	Timer *managedTimerReport `json:"timer,omitempty"`
+	// Service is the decision service the run stopped: the switch went
+	// off first, then the units. Absent when no managed configuration
+	// turned the service on, and in a dry run.
+	Service *managedServiceReport `json:"service,omitempty"`
 }
 
 // managedUserUninstall is the outcome of the helper for one account.
@@ -72,6 +77,19 @@ func runManagedUninstall(cmd *cobra.Command, purge, dryRun, asJSON bool) error {
 	ctx := utils.WithoutProgramExecution(context.Background())
 	report := &managedUninstallReport{Status: managedStatusOK, Removed: []string{}, Agents: []managedAgentReport{}, Users: []managedUserUninstall{}}
 	degraded := 0
+
+	// The switch goes off before anything else: the hooks decide in
+	// process again from this moment, and the units can stop without a
+	// hook taking the absent-service fallback.
+	if !dryRun {
+		report.Service = stopSupervisorService(ctx)
+		if report.Service != nil {
+			if report.Service.Error != "" {
+				degraded++
+			}
+			report.Changed = report.Changed || report.Service.Changed
+		}
+	}
 
 	registry := agent.NewRegistry()
 	engine.RegisterAdapters(registry, nil, config.Default())
@@ -131,6 +149,57 @@ func runManagedUninstall(cmd *cobra.Command, purge, dryRun, asJSON bool) error {
 		return &exitError{code: ExitManagedPartial, message: fmt.Sprintf("uninstall --managed: %d item(s) degraded", degraded)}
 	}
 	return nil
+}
+
+// stopSupervisorService clears supervisor.enabled in the managed
+// configuration, then stops and removes the units of the decision
+// service. It returns nil when no managed configuration turns the service
+// on and no units are installed.
+func stopSupervisorService(ctx context.Context) *managedServiceReport {
+	path := config.ManagedConfigPath()
+	data, err := config.ReadTrustedFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return &managedServiceReport{Switch: managedSwitchOff, Error: err.Error()}
+	}
+	svc := &managedServiceReport{Units: []string{}, Switch: managedSwitchOff}
+	if err == nil {
+		cfg, perr := config.Parse(data)
+		if perr == nil {
+			svc.Account = cfg.Supervisor.ServerAccount()
+			if cfg.Supervisor.Enabled {
+				off, serr := config.SetSupervisorEnabled(data, false)
+				if serr != nil {
+					svc.Error = serr.Error()
+					return svc
+				}
+				changed, werr := config.WriteManagedFile(path, off)
+				if werr != nil {
+					svc.Error = werr.Error()
+					return svc
+				}
+				svc.Changed = changed
+			}
+		}
+	}
+	res, err := service.Remove(ctx, supervisorServiceName)
+	switch {
+	case errors.Is(err, service.ErrUnsupported):
+		if !svc.Changed {
+			return nil
+		}
+		return svc
+	case err != nil:
+		svc.Error = err.Error()
+		return svc
+	}
+	svc.Units = res.Paths
+	svc.Changed = svc.Changed || res.Changed
+	svc.Enabled = res.Enabled
+	svc.Next = res.Next
+	if !svc.Changed && len(res.Paths) == 0 {
+		return nil
+	}
+	return svc
 }
 
 // walkHomes runs the per-user helper for every human account and returns
@@ -258,6 +327,13 @@ func renderManagedUninstall(w io.Writer, report *managedUninstallReport, asJSON 
 		return enc.Encode(report)
 	}
 	lines := []string{"Managed uninstall: " + report.Status}
+	if svc := report.Service; svc != nil {
+		line := fmt.Sprintf("  %-12s switch %s, %d unit(s) removed", "Service", svc.Switch, len(svc.Units))
+		if svc.Error != "" {
+			line += "  error: " + svc.Error
+		}
+		lines = append(lines, line)
+	}
 	for _, a := range report.Agents {
 		state := "unchanged"
 		if a.Changed {

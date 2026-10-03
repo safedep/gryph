@@ -489,6 +489,13 @@
   guarantee: "As the account, gryph supervisor import sends the sessions, events and receipts of the account's own database to the decision service. The service stores them in the partition of the account marked imported, the receipts keep the account's own signatures and verify against the account's trust store, a second run changes nothing, and the database in the home stays as it was. Privileged job only."
   labels: [import, supervisor, privileged, linux]
 
+- id: supervisor/install/ordering
+  title: "the managed install turns the service switch on only after the service answers"
+  category: supervisor
+  tier: P0
+  guarantee: "gryph install --managed with supervisor.enabled writes the configuration with the switch off, makes the service account, the keys and the spool root, writes the hardened socket and service units, and turns the switch on only after the service answered over the socket. A service that does not answer leaves the switch off and the run partial. gryph uninstall --managed clears the switch first and then removes the units. Privileged job only."
+  labels: [supervisor, install, privileged, linux]
+
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
   category: install
