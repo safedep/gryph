@@ -193,6 +193,24 @@ nothing. With `--repair`, the pass also repairs hook configurations. See
 | ---------- | ----- | ---- | ------- | --------------------------------------------------------------------- |
 | `--repair` |       | bool | false   | Rewrite a hook configuration that differs from a current install      |
 
+### run
+
+Start an agent under a Landlock ruleset that keeps the Gryph configuration
+directory out of its write reach. Linux 5.13 or later, no root. See
+[the Landlock launcher](./self-protection.md#the-landlock-launcher).
+
+```bash
+gryph run claude-code
+gryph run claude-code --resume
+gryph run codex
+```
+
+The first argument is an agent name or a program on `PATH`. The rest of
+the arguments go to the program. The launcher replaces itself with the
+program, so the exit code is the program's. A kernel without Landlock, or
+a program that is not on `PATH`, is an error: the launcher never starts a
+program without the ruleset.
+
 ### supervisor reconcile
 
 Run one self-protection pass: assess every Gryph asset, record each change

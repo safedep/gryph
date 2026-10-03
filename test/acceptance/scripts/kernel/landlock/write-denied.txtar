@@ -1,0 +1,89 @@
+# gryph run starts a program under a Landlock ruleset: the configuration
+# directory of Gryph stays readable and takes no write from the program
+# and from anything it starts, whatever path a write takes. The rest of
+# the file system stays as it is, except that the program cannot create a
+# new entry directly inside an ancestor of the protected directory. A hook
+# that runs under the ruleset still records its event. The census tells an
+# agent that started through the launcher from one that did not. Needs a
+# Linux kernel with Landlock. No root.
+[!linux] skip 'Landlock is a Linux API'
+[!landlock] skip 'needs a kernel with Landlock and a seccomp filter that lets it through'
+env GRYPH_POLICY_SELF_PROTECTION_CENSUS=true
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+
+# A write to the policy by any path fails. A read passes.
+! exec gryph run sh -c 'echo "# changed" >> '$XDG_CONFIG_HOME'/safedep/gryph/policy.yaml'
+stderr 'Permission denied'
+! exec gryph run sh -c 'cp /dev/null '$XDG_CONFIG_HOME'/safedep/gryph/config.yml'
+stderr 'Permission denied'
+! exec gryph run sh -c 'mv '$XDG_CONFIG_HOME'/safedep/gryph '$XDG_CONFIG_HOME'/safedep/elsewhere'
+stderr 'Permission denied'
+! exec gryph run python3 -c 'open("'$XDG_CONFIG_HOME'/safedep/gryph/policy.yaml", "a").write("x")'
+exec gryph run sh -c 'cat '$XDG_CONFIG_HOME'/safedep/gryph/policy.yaml'
+stdout 'acceptance-landlock-marker'
+exec cat $XDG_CONFIG_HOME/safedep/gryph/policy.yaml
+! stdout 'changed'
+
+# The project and the data directory stay writable, so a hook under the
+# ruleset records its event. The kernel keeps a new entry out of the
+# ancestors of the protected directory.
+exec gryph run sh -c 'echo ok > '$WORK'/project/out.txt && cat '$WORK'/project/out.txt'
+stdout 'ok'
+! exec gryph run sh -c 'echo x > '$XDG_CONFIG_HOME'/new.txt'
+stderr 'Permission denied'
+stdin read.json
+exec gryph run sh -c 'gryph _hook claude-code PreToolUse'
+exec gryph query --agent claude-code --format json --no-color
+stdout '"file_read"'
+
+# The census tells an agent under the launcher from one outside it. The
+# agent here is a script named like the Claude Code program, which marks
+# its start and waits. The marker sits in the project directory, because
+# the work directory is an ancestor of the protected directory. The host
+# that runs the suite may run a Claude Code of its own, so the counts are
+# not fixed.
+exec install -m 755 claude $WORK/bin/claude
+env PATH=$WORK/bin${:}$PATH
+exec gryph run claude-code $WORK/project/started-run &
+exec gryph supervisor ready --until-exists $WORK/project/started-run
+exec gryph doctor --no-color
+stdout 'hook_traffic\s+claude-code\s+detect\s+[0-9]+ process\(es\), pid [0-9 ]+, ([0-9]+ of [0-9]+ )?under gryph run'
+exec $WORK/bin/claude $WORK/project/started-plain &
+exec gryph supervisor ready --until-exists $WORK/project/started-plain
+exec gryph doctor --no-color
+stdout 'hook_traffic\s+claude-code\s+detect\s+[0-9]+ process\(es\), pid [0-9 ]+, 1 of [0-9]+ under gryph run'
+
+# A program that is not on PATH is an error, and a kernel without Landlock
+# is reported, never a start without the ruleset.
+! exec gryph run no-such-program-7q
+stderr 'no-such-program-7q is not on PATH'
+
+-- bin/.keep --
+-- claude --
+#!/bin/sh
+# The harness ends the agent with an interrupt at the end of the script.
+# The shell forwards it to the sleep, so no process holds the pipes.
+touch "$1"
+sleep 300 &
+child=$!
+trap 'kill $child 2>/dev/null; exit 0' INT TERM
+wait $child
+-- project/.keep --
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-landlock-marker
+    action: warn
+    match:
+      action_types: [file_write]
+    message: marker
+-- read.json --
+{"session_id": "s-landlock", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "/home/user/project/main.go"}, "tool_use_id": "tu-read"}

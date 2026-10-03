@@ -1099,3 +1099,10 @@
   tier: P1
   guarantee: "With the kernel watcher up on a managed host, gryph doctor and the reconcile pass show the binary, the policy and the configuration at prevent_same_user from the fanotify provider, and the host earns the locked profile. When the watcher stops, its state file goes and the rows fall back to the levels the built-in rules give. Nightly kernel job only."
   labels: [kernel, fanotify, self-protection, privileged, linux]
+
+- id: kernel/landlock/write-denied
+  title: "gryph run keeps the configuration directory out of the agent's write reach"
+  category: kernel
+  tier: P1
+  guarantee: "On a Linux kernel with Landlock, gryph run starts a program under a ruleset that keeps the Gryph configuration directory readable and refuses every write, create, remove and rename in it from the program and from anything it starts, whatever path the write takes. The rest of the file system stays as it is, except that no new entry can be made directly inside an ancestor of the protected directory. A hook under the ruleset still records its event. The census shows which live agent processes started through the launcher. A program that is not on PATH is an error."
+  labels: [kernel, landlock, self-protection, linux]

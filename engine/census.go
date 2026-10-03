@@ -73,7 +73,7 @@ func (a *Runtime) censusStatus(ctx context.Context, name string, processes []pro
 		Agent:    name,
 		Level:    selfprotect.LevelDetect,
 		Provider: CensusProviderName,
-		Detail:   fmt.Sprintf("%d process(es), pid %s", len(processes), pidList(processes)),
+		Detail:   fmt.Sprintf("%d process(es), pid %s%s", len(processes), pidList(processes), launcherDetail(processes)),
 	}
 
 	rows, err := a.Store.QueryEvents(ctx, events.NewEventFilter().WithAgents(name).WithLimit(1))
@@ -93,6 +93,34 @@ func (a *Runtime) censusStatus(ctx context.Context, name string, processes []pro
 	}
 	status.Drift = fmt.Sprintf("silent agent: no hook event for %s while %d process(es) run", window, len(processes))
 	return status, nil
+}
+
+// RunEnv is the variable gryph run sets in the environment of the agent.
+// The census reads it from the process, as a signal that the agent runs
+// under the Landlock ruleset of the launcher. It is a signal: any process
+// can set a variable.
+const RunEnv = "GRYPH_RUN"
+
+// launcherDetail says how many of the processes started through gryph
+// run, on a platform that shows the environment of a process.
+func launcherDetail(processes []procs.Process) string {
+	under := 0
+	for _, p := range processes {
+		ok, err := procs.HasEnv(p.PID, RunEnv)
+		if errors.Is(err, procs.ErrUnsupported) {
+			return ""
+		}
+		if ok {
+			under++
+		}
+	}
+	switch {
+	case under == len(processes):
+		return ", under gryph run"
+	case under == 0:
+		return ", not under gryph run"
+	}
+	return fmt.Sprintf(", %d of %d under gryph run", under, len(processes))
 }
 
 // anyOlderThan reports whether a process started before t. A process with

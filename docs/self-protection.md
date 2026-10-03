@@ -169,6 +169,45 @@ with `gryph install --managed`. See the [managed install guide](./mdm.md). The s
 that account, at login and every 15 minutes. See
 [Managed install](./cli-reference.md#managed-install).
 
+## The Landlock launcher
+
+On Linux (kernel 5.13 or later), `gryph run <agent>` starts the agent
+under a Landlock ruleset. No root is needed. The configuration directory
+of Gryph, with the policy, the configuration file and the keys, stays
+readable and takes no write from the agent and from anything it starts: a
+shell, a script, an interpreter, a path built at run time. The ruleset
+holds for the life of the process tree and cannot be lifted from inside
+it. The first argument is an agent name, such as `claude-code`, or a
+program on `PATH`; the rest goes to the program.
+
+```bash
+gryph run claude-code
+gryph run codex --model o3
+```
+
+What the launcher does not cover:
+
+- An agent started without it. The census shows which live processes of
+  an agent run under the launcher: the `hook_traffic` row says `under
+  gryph run`, `not under gryph run`, or how many of the processes are.
+  The signal is an environment variable the launcher sets, which any
+  process can set too.
+- The hook configuration of the agent. The agent writes next to it, in
+  its own directory, and Landlock grants a right to a whole directory or
+  not at all, so the hook file stays at `detect`.
+- The audit database and the export key. The hook that runs inside the
+  agent's process tree writes them, so they stay writable.
+- Landlock allows what a rule names and nothing else, and a rule on a
+  directory reaches every entry in it. So the launcher grants every right
+  to every entry of the file system except the protected directory, and
+  the agent cannot create a new entry directly inside an ancestor of the
+  protected directory: `/`, `/home`, the home directory, `~/.config` and
+  `~/.config/safedep`. It can create anything inside the entries that
+  exist there, and anywhere else.
+
+The launcher is a control on the agent's writes, not on the user's. A
+process the user starts outside the launcher writes as before.
+
 ## The silent agent
 
 A removed hook is one way to run an agent without Gryph. Another is to leave

@@ -19,6 +19,7 @@ import (
 
 	"github.com/rogpeppe/go-internal/testscript"
 	"github.com/safedep/gryph/platform/fanotify"
+	"github.com/safedep/gryph/platform/landlock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -119,6 +120,11 @@ func TestAcceptance(t *testing.T) {
 						// asks on a terminal. A host without either skips the
 						// local-auth scripts.
 						return polkitAvailable(), nil
+					case "landlock":
+						// The launcher needs a kernel with Landlock, and a
+						// container whose seccomp filter lets it through.
+						_, err := landlock.ABI()
+						return err == nil, nil
 					case "fanotify":
 						// The kernel watcher needs CAP_SYS_ADMIN. A container
 						// without it, the normal privileged job included,

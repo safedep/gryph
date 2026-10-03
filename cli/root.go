@@ -182,6 +182,7 @@ native hook systems to create a comprehensive audit trail of all agent actions.`
 		NewVersionCmd(),
 		NewAarmCmd(),
 		NewSupervisorCmd(),
+		NewRunCmd(),
 	)
 
 	return rootCmd

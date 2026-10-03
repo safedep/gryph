@@ -216,10 +216,13 @@ or a kernel mechanism, to protect both. On Linux, Gryph ships one for the
 first surface: the [kernel watcher](./supervisor.md#the-kernel-watcher)
 refuses a write to the managed files and the binary by a non-privileged
 account, whatever the mode of the file says, and records a rename or an
-unlink it cannot stop. Until the second surface has a control, Gryph on a
-managed host makes tampering by a same-user adversary a visible event,
-and on a user install makes it harder, but does not stop a determined
-one.
+unlink it cannot stop. On a user install, the
+[Landlock launcher](./self-protection.md#the-landlock-launcher) keeps the
+policy, the configuration and the keys out of the write reach of an agent
+started through it, with no root. Until the second surface has a control,
+Gryph on a managed host makes tampering by a same-user adversary a
+visible event, and on a user install makes it harder, but does not stop a
+determined one.
 
 On a Linux fleet, set two kernel settings through the configuration management
 of the fleet. `gryph doctor` reports both under "Host posture".

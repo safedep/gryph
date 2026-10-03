@@ -37,3 +37,10 @@ func ListUID(uid int) ([]Process, error) {
 func (p Process) Matches(name string) bool {
 	return strings.EqualFold(strings.TrimSuffix(strings.ToLower(p.Name), ".exe"), strings.ToLower(name))
 }
+
+// HasEnv reports whether the environment of the process holds the variable.
+// Only Linux shows the environment of another process, and to the same
+// account only.
+func HasEnv(pid int, key string) (bool, error) {
+	return hasEnv(pid, key)
+}

@@ -27,7 +27,7 @@ exec gryph doctor --no-color
 stdin pre_tool_use.json
 exec gryph _hook claude-code PreToolUse
 exec gryph doctor --no-color
-stdout 'hook_traffic\s+claude-code\s+detect\s+[0-9]+ process\(es\), pid [0-9 ]+, last hook event'
+stdout 'hook_traffic\s+claude-code\s+detect\s+[0-9]+ process\(es\), pid [0-9 ]+(, [0-9a-z ]*gryph run)?, last hook event'
 ! stdout 'silent agent'
 stdout 'Tamper events recorded: 1'
 
