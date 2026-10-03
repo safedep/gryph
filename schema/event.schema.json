@@ -78,6 +78,9 @@
         }
       ]
     },
+    "peer_trust": {
+      "type": "string"
+    },
     "phase": {
       "type": "string"
     },

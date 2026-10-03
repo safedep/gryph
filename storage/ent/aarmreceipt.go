@@ -92,7 +92,9 @@ type AarmReceipt struct {
 	// ContentSalt holds the value of the "content_salt" field.
 	ContentSalt []byte `json:"content_salt,omitempty"`
 	// Approval holds the value of the "approval" field.
-	Approval     map[string]interface{} `json:"approval,omitempty"`
+	Approval map[string]interface{} `json:"approval,omitempty"`
+	// PeerTrust holds the value of the "peer_trust" field.
+	PeerTrust    string `json:"peer_trust,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -107,7 +109,7 @@ func (*AarmReceipt) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case aarmreceipt.FieldSequence, aarmreceipt.FieldDurationMs, aarmreceipt.FieldDeferralOfSequence, aarmreceipt.FieldHashVersion:
 			values[i] = new(sql.NullInt64)
-		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSubagentID, aarmreceipt.FieldSubagentType, aarmreceipt.FieldSignerKeyID, aarmreceipt.FieldSignerKeyScope, aarmreceipt.FieldDeferReason, aarmreceipt.FieldHumanPrincipal, aarmreceipt.FieldServiceIdentity, aarmreceipt.FieldRoleScope, aarmreceipt.FieldCommandDigest, aarmreceipt.FieldURLDigest:
+		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSubagentID, aarmreceipt.FieldSubagentType, aarmreceipt.FieldSignerKeyID, aarmreceipt.FieldSignerKeyScope, aarmreceipt.FieldDeferReason, aarmreceipt.FieldHumanPrincipal, aarmreceipt.FieldServiceIdentity, aarmreceipt.FieldRoleScope, aarmreceipt.FieldCommandDigest, aarmreceipt.FieldURLDigest, aarmreceipt.FieldPeerTrust:
 			values[i] = new(sql.NullString)
 		case aarmreceipt.FieldRecordedAt:
 			values[i] = new(sql.NullTime)
@@ -366,6 +368,12 @@ func (_m *AarmReceipt) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field approval: %w", err)
 				}
 			}
+		case aarmreceipt.FieldPeerTrust:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field peer_trust", values[i])
+			} else if value.Valid {
+				_m.PeerTrust = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -516,6 +524,9 @@ func (_m *AarmReceipt) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("approval=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Approval))
+	builder.WriteString(", ")
+	builder.WriteString("peer_trust=")
+	builder.WriteString(_m.PeerTrust)
 	builder.WriteByte(')')
 	return builder.String()
 }

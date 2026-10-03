@@ -176,6 +176,11 @@ func Imported(v bool) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldImported, v))
 }
 
+// AgentProcess applies equality check predicate on the "agent_process" field. It's identical to AgentProcessEQ.
+func AgentProcess(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldAgentProcess, v))
+}
+
 // CostComputedAt applies equality check predicate on the "cost_computed_at" field. It's identical to CostComputedAtEQ.
 func CostComputedAt(v time.Time) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldCostComputedAt, v))
@@ -1364,6 +1369,81 @@ func ImportedEQ(v bool) predicate.Session {
 // ImportedNEQ applies the NEQ predicate on the "imported" field.
 func ImportedNEQ(v bool) predicate.Session {
 	return predicate.Session(sql.FieldNEQ(FieldImported, v))
+}
+
+// AgentProcessEQ applies the EQ predicate on the "agent_process" field.
+func AgentProcessEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldEQ(FieldAgentProcess, v))
+}
+
+// AgentProcessNEQ applies the NEQ predicate on the "agent_process" field.
+func AgentProcessNEQ(v string) predicate.Session {
+	return predicate.Session(sql.FieldNEQ(FieldAgentProcess, v))
+}
+
+// AgentProcessIn applies the In predicate on the "agent_process" field.
+func AgentProcessIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldIn(FieldAgentProcess, vs...))
+}
+
+// AgentProcessNotIn applies the NotIn predicate on the "agent_process" field.
+func AgentProcessNotIn(vs ...string) predicate.Session {
+	return predicate.Session(sql.FieldNotIn(FieldAgentProcess, vs...))
+}
+
+// AgentProcessGT applies the GT predicate on the "agent_process" field.
+func AgentProcessGT(v string) predicate.Session {
+	return predicate.Session(sql.FieldGT(FieldAgentProcess, v))
+}
+
+// AgentProcessGTE applies the GTE predicate on the "agent_process" field.
+func AgentProcessGTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldGTE(FieldAgentProcess, v))
+}
+
+// AgentProcessLT applies the LT predicate on the "agent_process" field.
+func AgentProcessLT(v string) predicate.Session {
+	return predicate.Session(sql.FieldLT(FieldAgentProcess, v))
+}
+
+// AgentProcessLTE applies the LTE predicate on the "agent_process" field.
+func AgentProcessLTE(v string) predicate.Session {
+	return predicate.Session(sql.FieldLTE(FieldAgentProcess, v))
+}
+
+// AgentProcessContains applies the Contains predicate on the "agent_process" field.
+func AgentProcessContains(v string) predicate.Session {
+	return predicate.Session(sql.FieldContains(FieldAgentProcess, v))
+}
+
+// AgentProcessHasPrefix applies the HasPrefix predicate on the "agent_process" field.
+func AgentProcessHasPrefix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasPrefix(FieldAgentProcess, v))
+}
+
+// AgentProcessHasSuffix applies the HasSuffix predicate on the "agent_process" field.
+func AgentProcessHasSuffix(v string) predicate.Session {
+	return predicate.Session(sql.FieldHasSuffix(FieldAgentProcess, v))
+}
+
+// AgentProcessIsNil applies the IsNil predicate on the "agent_process" field.
+func AgentProcessIsNil() predicate.Session {
+	return predicate.Session(sql.FieldIsNull(FieldAgentProcess))
+}
+
+// AgentProcessNotNil applies the NotNil predicate on the "agent_process" field.
+func AgentProcessNotNil() predicate.Session {
+	return predicate.Session(sql.FieldNotNull(FieldAgentProcess))
+}
+
+// AgentProcessEqualFold applies the EqualFold predicate on the "agent_process" field.
+func AgentProcessEqualFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldEqualFold(FieldAgentProcess, v))
+}
+
+// AgentProcessContainsFold applies the ContainsFold predicate on the "agent_process" field.
+func AgentProcessContainsFold(v string) predicate.Session {
+	return predicate.Session(sql.FieldContainsFold(FieldAgentProcess, v))
 }
 
 // CostComputedAtEQ applies the EQ predicate on the "cost_computed_at" field.

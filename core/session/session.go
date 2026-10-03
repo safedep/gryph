@@ -21,6 +21,9 @@ type Session struct {
 	AgentName string `json:"agent_name"`
 	// AgentVersion is the agent version if detectable.
 	AgentVersion string `json:"agent_version,omitempty"`
+	// AgentProcess names the first agent process seen above a hook of the
+	// session, as name:pid:start, set by the decision service.
+	AgentProcess string `json:"agent_process,omitempty"`
 	// StartedAt is the session start time (UTC).
 	StartedAt time.Time `json:"started_at"`
 	// EndedAt is the session end time (UTC), zero if ongoing.

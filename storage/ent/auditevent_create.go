@@ -283,6 +283,20 @@ func (_c *AuditEventCreate) SetNillableImported(v *bool) *AuditEventCreate {
 	return _c
 }
 
+// SetPeerTrust sets the "peer_trust" field.
+func (_c *AuditEventCreate) SetPeerTrust(v string) *AuditEventCreate {
+	_c.mutation.SetPeerTrust(v)
+	return _c
+}
+
+// SetNillablePeerTrust sets the "peer_trust" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillablePeerTrust(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetPeerTrust(*v)
+	}
+	return _c
+}
+
 // SetLinkedEventID sets the "linked_event_id" field.
 func (_c *AuditEventCreate) SetLinkedEventID(v uuid.UUID) *AuditEventCreate {
 	_c.mutation.SetLinkedEventID(v)
@@ -540,6 +554,10 @@ func (_c *AuditEventCreate) createSpec() (*AuditEvent, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Imported(); ok {
 		_spec.SetField(auditevent.FieldImported, field.TypeBool, value)
 		_node.Imported = value
+	}
+	if value, ok := _c.mutation.PeerTrust(); ok {
+		_spec.SetField(auditevent.FieldPeerTrust, field.TypeString, value)
+		_node.PeerTrust = value
 	}
 	if value, ok := _c.mutation.LinkedEventID(); ok {
 		_spec.SetField(auditevent.FieldLinkedEventID, field.TypeUUID, value)

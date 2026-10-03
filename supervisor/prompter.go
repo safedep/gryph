@@ -20,6 +20,9 @@ type prompter struct {
 	// audit is the login identity of the process that asked, for the
 	// comparison with the one that answers later.
 	audit string
+	// ancestor is the nearest known agent above the peer, when found.
+	ancestor agentProcess
+	found    bool
 }
 
 type prompterKey struct{}

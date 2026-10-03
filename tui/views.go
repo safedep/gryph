@@ -71,6 +71,9 @@ type SessionView struct {
 	ModelUsage       []ModelUsageView
 	CostSource       string
 	CostComputedAt   *time.Time
+	// AgentProcess is the agent process the decision service bound the
+	// session to, as name:pid:start. Empty for a session with none.
+	AgentProcess string `json:"agent_process,omitempty"`
 }
 
 // ModelUsageView represents per-model token usage for display.
@@ -146,6 +149,11 @@ type EventView struct {
 	DurationMs       int64
 	IsSensitive      bool
 	HasDiff          bool
+	// Kind and PeerTrust come from the decision service: the kind of the
+	// event in the session context, and the trust of the connection that
+	// carried it.
+	Kind      string `json:"kind,omitempty"`
+	PeerTrust string `json:"peer_trust,omitempty"`
 }
 
 // EventDetailView represents the full details of a single event.

@@ -76,6 +76,10 @@ func (Session) Fields() []ent.Field {
 		// The user could have changed it before the import, so a reader
 		// keeps it apart from a row the service recorded itself.
 		field.Bool("imported").Default(false),
+		// agent_process names the first agent process seen above a hook
+		// of the session, as name:pid:start. A later hook from elsewhere
+		// is low trust while that process lives.
+		field.String("agent_process").Optional(),
 		field.Time("cost_computed_at").
 			Optional().
 			Nillable(),

@@ -307,6 +307,26 @@ func (_u *AarmApprovalRequestUpdate) ClearRequesterAudit() *AarmApprovalRequestU
 	return _u
 }
 
+// SetRequesterTrust sets the "requester_trust" field.
+func (_u *AarmApprovalRequestUpdate) SetRequesterTrust(v string) *AarmApprovalRequestUpdate {
+	_u.mutation.SetRequesterTrust(v)
+	return _u
+}
+
+// SetNillableRequesterTrust sets the "requester_trust" field if the given value is not nil.
+func (_u *AarmApprovalRequestUpdate) SetNillableRequesterTrust(v *string) *AarmApprovalRequestUpdate {
+	if v != nil {
+		_u.SetRequesterTrust(*v)
+	}
+	return _u
+}
+
+// ClearRequesterTrust clears the value of the "requester_trust" field.
+func (_u *AarmApprovalRequestUpdate) ClearRequesterTrust() *AarmApprovalRequestUpdate {
+	_u.mutation.ClearRequesterTrust()
+	return _u
+}
+
 // SetDecidedAt sets the "decided_at" field.
 func (_u *AarmApprovalRequestUpdate) SetDecidedAt(v time.Time) *AarmApprovalRequestUpdate {
 	_u.mutation.SetDecidedAt(v)
@@ -605,6 +625,12 @@ func (_u *AarmApprovalRequestUpdate) sqlSave(ctx context.Context) (_node int, er
 	}
 	if _u.mutation.RequesterAuditCleared() {
 		_spec.ClearField(aarmapprovalrequest.FieldRequesterAudit, field.TypeString)
+	}
+	if value, ok := _u.mutation.RequesterTrust(); ok {
+		_spec.SetField(aarmapprovalrequest.FieldRequesterTrust, field.TypeString, value)
+	}
+	if _u.mutation.RequesterTrustCleared() {
+		_spec.ClearField(aarmapprovalrequest.FieldRequesterTrust, field.TypeString)
 	}
 	if value, ok := _u.mutation.DecidedAt(); ok {
 		_spec.SetField(aarmapprovalrequest.FieldDecidedAt, field.TypeTime, value)
@@ -951,6 +977,26 @@ func (_u *AarmApprovalRequestUpdateOne) ClearRequesterAudit() *AarmApprovalReque
 	return _u
 }
 
+// SetRequesterTrust sets the "requester_trust" field.
+func (_u *AarmApprovalRequestUpdateOne) SetRequesterTrust(v string) *AarmApprovalRequestUpdateOne {
+	_u.mutation.SetRequesterTrust(v)
+	return _u
+}
+
+// SetNillableRequesterTrust sets the "requester_trust" field if the given value is not nil.
+func (_u *AarmApprovalRequestUpdateOne) SetNillableRequesterTrust(v *string) *AarmApprovalRequestUpdateOne {
+	if v != nil {
+		_u.SetRequesterTrust(*v)
+	}
+	return _u
+}
+
+// ClearRequesterTrust clears the value of the "requester_trust" field.
+func (_u *AarmApprovalRequestUpdateOne) ClearRequesterTrust() *AarmApprovalRequestUpdateOne {
+	_u.mutation.ClearRequesterTrust()
+	return _u
+}
+
 // SetDecidedAt sets the "decided_at" field.
 func (_u *AarmApprovalRequestUpdateOne) SetDecidedAt(v time.Time) *AarmApprovalRequestUpdateOne {
 	_u.mutation.SetDecidedAt(v)
@@ -1279,6 +1325,12 @@ func (_u *AarmApprovalRequestUpdateOne) sqlSave(ctx context.Context) (_node *Aar
 	}
 	if _u.mutation.RequesterAuditCleared() {
 		_spec.ClearField(aarmapprovalrequest.FieldRequesterAudit, field.TypeString)
+	}
+	if value, ok := _u.mutation.RequesterTrust(); ok {
+		_spec.SetField(aarmapprovalrequest.FieldRequesterTrust, field.TypeString, value)
+	}
+	if _u.mutation.RequesterTrustCleared() {
+		_spec.ClearField(aarmapprovalrequest.FieldRequesterTrust, field.TypeString)
 	}
 	if value, ok := _u.mutation.DecidedAt(); ok {
 		_spec.SetField(aarmapprovalrequest.FieldDecidedAt, field.TypeTime, value)

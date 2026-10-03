@@ -103,10 +103,17 @@ func (a Scope) Wider(b Scope) bool {
 	return slices.Index(Scopes, a) > slices.Index(Scopes, b)
 }
 
-// Peer trust levels of the connection that carried an approval. The
-// decision service records one on every approval receipt.
+// Peer trust levels of the connection that carried a request or an
+// answer. The decision service records one on every receipt.
 const (
-	// PeerTrustUnknown says the service did not check the process behind
-	// the connection.
+	// PeerTrustAgent says a known agent process is an ancestor of the
+	// peer, and it is the one the session is bound to.
+	PeerTrustAgent = "agent"
+	// PeerTrustUnknown says no agent process is an ancestor of the peer,
+	// and the session is bound to none: a CLI read, or a host where the
+	// walk is not possible.
 	PeerTrustUnknown = "unknown"
+	// PeerTrustLow says the peer is not under the agent the session is
+	// bound to. The walk is a signal, not proof.
+	PeerTrustLow = "low"
 )

@@ -3,6 +3,7 @@ package decision
 import (
 	"context"
 	"fmt"
+	"github.com/safedep/gryph/aarm/approval"
 
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
@@ -112,6 +113,7 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 
 	event := req.event()
 	event.ClaimOrigin()
+	event.PeerTrust = req.PeerTrust
 
 	var classes []privacy.Class
 	if l.classifier != nil {
@@ -197,6 +199,12 @@ func (l *Local) classify(ctx context.Context, event *events.Event) {
 	}
 
 	event.Kind = events.KindOf(event, event.LinkedEventID != uuid.Nil)
+	// A prompt from a connection the service does not trust is a fact
+	// about the session, not the intent of the user: it never becomes the
+	// latest intent, so it cannot reset the counters a rule reads.
+	if event.Kind == events.KindIntent && event.PeerTrust == approval.PeerTrustLow {
+		event.Kind = events.KindObservation
+	}
 }
 
 // loadSession returns the stored session of the event, or creates it. The

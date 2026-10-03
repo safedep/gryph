@@ -81,6 +81,9 @@ func (AuditEvent) Fields() []ent.Field {
 		// The user could have changed it before the import, so a reader
 		// keeps it apart from a row the service recorded itself.
 		field.Bool("imported").Default(false),
+		// peer_trust is the trust of the connection that carried the event
+		// to the decision service.
+		field.String("peer_trust").Optional(),
 		field.UUID("linked_event_id", uuid.UUID{}).
 			Optional().
 			Nillable().

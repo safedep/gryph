@@ -164,8 +164,8 @@ INSERT INTO aarm_receipts (
     signature, signer_key_id, signer_key_scope,
     defer_reason, deferral_of_sequence,
     human_principal, service_identity, role_scope,
-    command_digest, url_digest, hash_version, content_salt
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    command_digest, url_digest, hash_version, content_salt, peer_trust
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	var actionIDArg, eventIDArg, agentArg, toolArg, projectArg interface{}
 	if row.ActionID != uuid.Nil {
@@ -285,6 +285,10 @@ INSERT INTO aarm_receipts (
 	if row.HashVersion != 0 {
 		hashVersionArg = row.HashVersion
 	}
+	var peerTrustArg interface{}
+	if row.PeerTrust != "" {
+		peerTrustArg = row.PeerTrust
+	}
 
 	_, err := tx.ExecContext(ctx, stmt,
 		row.ID, row.SessionID, actionIDArg, eventIDArg, row.RecordedAt, row.Sequence,
@@ -296,7 +300,7 @@ INSERT INTO aarm_receipts (
 		signatureArg, signerKeyIDArg, signerKeyScopeArg,
 		deferReasonArg, deferralOfSequenceArg,
 		humanPrincipalArg, serviceIdentityArg, roleScopeArg,
-		commandDigestArg, urlDigestArg, hashVersionArg, contentSaltArg,
+		commandDigestArg, urlDigestArg, hashVersionArg, contentSaltArg, peerTrustArg,
 	)
 	return err
 }
@@ -343,7 +347,8 @@ func receiptCreate(client *ent.AarmReceiptClient, row *ReceiptRow) *ent.AarmRece
 		SetResultStatus(aarmreceipt.ResultStatus(row.ResultStatus)).
 		SetHash(row.Hash).
 		SetImported(row.Imported).
-		SetApproval(row.Approval)
+		SetApproval(row.Approval).
+		SetPeerTrust(row.PeerTrust)
 
 	if row.ActionID != uuid.Nil {
 		create.SetActionID(row.ActionID)
@@ -805,6 +810,7 @@ func entToReceipt(e *ent.AarmReceipt) *ReceiptRow {
 		ContentSalt:     e.ContentSalt,
 		Imported:        e.Imported,
 		Approval:        e.Approval,
+		PeerTrust:       e.PeerTrust,
 	}
 	if e.DurationMs != nil {
 		v := *e.DurationMs

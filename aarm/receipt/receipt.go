@@ -69,6 +69,10 @@ type RecordInput struct {
 	// defer row and on non-resolution receipts.
 	DeferralOfSequence *int64
 
+	// PeerTrust is the trust of the connection that carried the action to
+	// the decision service. The hash does not cover it.
+	PeerTrust string
+
 	// ErrorMessage is an optional explanation persisted on the receipt row's
 	// error_message column at insert time. The hash chain ignores
 	// error_message (the verifier zeros it via DeriveInsertResultStatus), so

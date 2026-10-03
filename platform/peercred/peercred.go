@@ -18,9 +18,24 @@ type Peer struct {
 	UID uint32
 	GID uint32
 	PID int32
+	// StartTime is the start time of the peer process in clock ticks
+	// since boot, read at accept on Linux. A later read of the process
+	// compares against it, so a process that took the same pid is not
+	// mistaken for the peer. Zero elsewhere.
+	StartTime uint64
 	// pidfd is a handle on the peer process on Linux, so a later check of
 	// the process does not race with pid reuse. Zero elsewhere.
 	pidfd int
+}
+
+// SameProcess reports whether pid still names the process seen at
+// accept. Without a start time there is nothing to compare, and the
+// answer is true.
+func (p *Peer) SameProcess() bool {
+	if p == nil || p.StartTime == 0 {
+		return true
+	}
+	return sameProcess(p)
 }
 
 // Open reads the credentials of the peer of conn. The caller closes the

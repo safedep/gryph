@@ -28,6 +28,7 @@ func list() ([]Process, error) {
 			PID:     int(kp.Proc.P_pid),
 			Name:    string(name),
 			Started: time.Unix(kp.Proc.P_starttime.Sec, int64(kp.Proc.P_starttime.Usec)*1000),
+			UID:     os.Getuid(),
 		})
 	}
 	return out, nil

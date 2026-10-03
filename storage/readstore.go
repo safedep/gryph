@@ -39,6 +39,10 @@ type ReadStore interface {
 	// GetContextStateByPrefix resolves a session reference of the policy
 	// commands, which take a context state id as well as a session id.
 	GetContextStateByPrefix(ctx context.Context, prefix string) (*ContextStateRow, error)
+	GetContextState(ctx context.Context, sessionID uuid.UUID) (*ContextStateRow, error)
+	QueryAllContextStates(ctx context.Context, limit int) ([]*ContextStateRow, error)
+	QueryContextEntries(ctx context.Context, filter *ContextEntryFilter) ([]*ContextEntryRow, error)
+	ListContextSessionIDs(ctx context.Context) ([]uuid.UUID, error)
 }
 
 var _ ReadStore = (*SQLiteStore)(nil)

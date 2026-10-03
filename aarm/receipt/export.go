@@ -214,6 +214,7 @@ type ExportedReceipt struct {
 	HumanPrincipal     string                 `json:"human_principal,omitempty"`
 	ServiceIdentity    string                 `json:"service_identity,omitempty"`
 	Approval           map[string]interface{} `json:"approval,omitempty"`
+	PeerTrust          string                 `json:"peer_trust,omitempty"`
 	RoleScope          string                 `json:"role_scope,omitempty"`
 	CommandDigest      string                 `json:"command_digest,omitempty"`
 	URLDigest          string                 `json:"url_digest,omitempty"`
@@ -280,6 +281,7 @@ func ToExported(r *storage.ReceiptRow, includeSig bool) ExportedReceipt {
 	out.HumanPrincipal = r.HumanPrincipal
 	out.ServiceIdentity = r.ServiceIdentity
 	out.Approval = r.Approval
+	out.PeerTrust = r.PeerTrust
 	out.RoleScope = r.RoleScope
 	out.CommandDigest = r.CommandDigest
 	out.URLDigest = r.URLDigest

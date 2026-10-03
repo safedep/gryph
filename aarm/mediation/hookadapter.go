@@ -59,6 +59,7 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 		Agent:          event.AgentName,
 		AgentSessionID: event.AgentSessionID,
 		WorkingDir:     event.WorkingDirectory,
+		PeerTrust:      event.PeerTrust,
 		SubagentID:     event.SubagentID,
 		SubagentType:   event.SubagentType,
 		Kind:           entryKind(event),

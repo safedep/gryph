@@ -341,6 +341,11 @@ type ReceiptRow struct {
 	// The hash does not cover it.
 	Approval map[string]interface{}
 
+	// PeerTrust is the trust of the connection that carried the action to
+	// the decision service: agent, unknown or low. Empty for a receipt a
+	// hook wrote in process.
+	PeerTrust string
+
 	// DeferReason is the operator-facing rationale recorded on defer receipts
 	// (explicit defer rules carry the rule's reason; synthetic defers carry
 	// the trigger name). Empty for non-defer receipts.

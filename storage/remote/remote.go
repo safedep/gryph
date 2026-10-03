@@ -35,6 +35,10 @@ const (
 	KindDeferredActions         = "deferred_actions"
 	KindDeferredActionByPrefix  = "deferred_action_by_prefix"
 	KindContextStateByPrefix    = "context_state_by_prefix"
+	KindContextState            = "context_state"
+	KindContextStates           = "context_states"
+	KindContextEntries          = "context_entries"
+	KindContextSessionIDs       = "context_session_ids"
 	KindApprovalRequests        = "approval_requests"
 	KindApprovalRequestByPrefix = "approval_request_by_prefix"
 )
@@ -149,6 +153,30 @@ func (s *Store) QueryApprovalRequests(ctx context.Context, filter *storage.Appro
 
 func (s *Store) GetApprovalRequestByPrefix(ctx context.Context, prefix string) (*storage.ApprovalRequestRow, error) {
 	return one[storage.ApprovalRequestRow](ctx, s, ipc.Query{Kind: KindApprovalRequestByPrefix, Params: map[string]string{ParamPrefix: prefix, ParamAll: "1"}})
+}
+
+func (s *Store) GetContextState(ctx context.Context, sessionID uuid.UUID) (*storage.ContextStateRow, error) {
+	return one[storage.ContextStateRow](ctx, s, ipc.Query{Kind: KindContextState, Params: map[string]string{ParamID: sessionID.String()}})
+}
+
+func (s *Store) QueryAllContextStates(ctx context.Context, limit int) ([]*storage.ContextStateRow, error) {
+	return pages[storage.ContextStateRow](ctx, s, ipc.Query{Kind: KindContextStates, Params: map[string]string{ParamLimit: strconv.Itoa(limit)}})
+}
+
+func (s *Store) QueryContextEntries(ctx context.Context, filter *storage.ContextEntryFilter) ([]*storage.ContextEntryRow, error) {
+	return many[storage.ContextEntryRow](ctx, s, KindContextEntries, filter)
+}
+
+func (s *Store) ListContextSessionIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := pages[uuid.UUID](ctx, s, ipc.Query{Kind: KindContextSessionIDs})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]uuid.UUID, 0, len(rows))
+	for _, id := range rows {
+		out = append(out, *id)
+	}
+	return out, nil
 }
 
 func (s *Store) GetContextStateByPrefix(ctx context.Context, prefix string) (*storage.ContextStateRow, error) {

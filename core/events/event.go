@@ -78,6 +78,11 @@ type Event struct {
 	// LinkedEventID is the ID of the pre event of the same tool call, set on
 	// a post event when Gryph recorded the pre event.
 	LinkedEventID uuid.UUID `json:"linked_event_id,omitempty,omitzero"`
+	// PeerTrust is the trust of the connection that carried the event to
+	// the decision service: agent, unknown or low. The service sets it
+	// from the process behind the socket. A hook that decides in process
+	// leaves it empty.
+	PeerTrust string `json:"peer_trust,omitempty"`
 	// Imported marks an event that gryph supervisor import copied from
 	// the user's own database into the partition of the decision service.
 	Imported bool `json:"imported,omitempty"`

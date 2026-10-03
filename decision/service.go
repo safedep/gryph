@@ -55,6 +55,10 @@ type HookRequest struct {
 	// session end. The service stores them as client reported and does not
 	// open TranscriptPath.
 	Cost *cost.SessionCost `json:"cost,omitempty"`
+	// PeerTrust is what the decision service found out about the process
+	// behind the connection: agent, unknown or low. The service sets it
+	// and never reads it from the hook side.
+	PeerTrust string `json:"-"`
 }
 
 // ProjectClaim names the project of the session's working directory.

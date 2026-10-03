@@ -511,6 +511,26 @@ func (_u *SessionUpdate) SetNillableImported(v *bool) *SessionUpdate {
 	return _u
 }
 
+// SetAgentProcess sets the "agent_process" field.
+func (_u *SessionUpdate) SetAgentProcess(v string) *SessionUpdate {
+	_u.mutation.SetAgentProcess(v)
+	return _u
+}
+
+// SetNillableAgentProcess sets the "agent_process" field if the given value is not nil.
+func (_u *SessionUpdate) SetNillableAgentProcess(v *string) *SessionUpdate {
+	if v != nil {
+		_u.SetAgentProcess(*v)
+	}
+	return _u
+}
+
+// ClearAgentProcess clears the value of the "agent_process" field.
+func (_u *SessionUpdate) ClearAgentProcess() *SessionUpdate {
+	_u.mutation.ClearAgentProcess()
+	return _u
+}
+
 // SetCostComputedAt sets the "cost_computed_at" field.
 func (_u *SessionUpdate) SetCostComputedAt(v time.Time) *SessionUpdate {
 	_u.mutation.SetCostComputedAt(v)
@@ -763,6 +783,12 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Imported(); ok {
 		_spec.SetField(session.FieldImported, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.AgentProcess(); ok {
+		_spec.SetField(session.FieldAgentProcess, field.TypeString, value)
+	}
+	if _u.mutation.AgentProcessCleared() {
+		_spec.ClearField(session.FieldAgentProcess, field.TypeString)
 	}
 	if value, ok := _u.mutation.CostComputedAt(); ok {
 		_spec.SetField(session.FieldCostComputedAt, field.TypeTime, value)
@@ -1315,6 +1341,26 @@ func (_u *SessionUpdateOne) SetNillableImported(v *bool) *SessionUpdateOne {
 	return _u
 }
 
+// SetAgentProcess sets the "agent_process" field.
+func (_u *SessionUpdateOne) SetAgentProcess(v string) *SessionUpdateOne {
+	_u.mutation.SetAgentProcess(v)
+	return _u
+}
+
+// SetNillableAgentProcess sets the "agent_process" field if the given value is not nil.
+func (_u *SessionUpdateOne) SetNillableAgentProcess(v *string) *SessionUpdateOne {
+	if v != nil {
+		_u.SetAgentProcess(*v)
+	}
+	return _u
+}
+
+// ClearAgentProcess clears the value of the "agent_process" field.
+func (_u *SessionUpdateOne) ClearAgentProcess() *SessionUpdateOne {
+	_u.mutation.ClearAgentProcess()
+	return _u
+}
+
 // SetCostComputedAt sets the "cost_computed_at" field.
 func (_u *SessionUpdateOne) SetCostComputedAt(v time.Time) *SessionUpdateOne {
 	_u.mutation.SetCostComputedAt(v)
@@ -1597,6 +1643,12 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 	}
 	if value, ok := _u.mutation.Imported(); ok {
 		_spec.SetField(session.FieldImported, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.AgentProcess(); ok {
+		_spec.SetField(session.FieldAgentProcess, field.TypeString, value)
+	}
+	if _u.mutation.AgentProcessCleared() {
+		_spec.ClearField(session.FieldAgentProcess, field.TypeString)
 	}
 	if value, ok := _u.mutation.CostComputedAt(); ok {
 		_spec.SetField(session.FieldCostComputedAt, field.TypeTime, value)

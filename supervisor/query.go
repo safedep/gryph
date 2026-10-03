@@ -149,6 +149,34 @@ func (p *partition) read(ctx context.Context, q *ipc.Query) ([]any, error) {
 		return rowOf(store.GetApprovalRequestByPrefix(ctx, q.Params[remote.ParamPrefix]))
 	case remote.KindContextStateByPrefix:
 		return rowOf(store.GetContextStateByPrefix(ctx, q.Params[remote.ParamPrefix]))
+	case remote.KindContextState:
+		id, err := uuidParam(q, remote.ParamID)
+		if err != nil {
+			return nil, err
+		}
+		return rowOf(store.GetContextState(ctx, id))
+	case remote.KindContextStates:
+		limit, err := strconv.Atoi(q.Params[remote.ParamLimit])
+		if err != nil {
+			return nil, fmt.Errorf("limit: %w", err)
+		}
+		return rowsOf(store.QueryAllContextStates(ctx, limit))
+	case remote.KindContextEntries:
+		filter, err := filterParam[storage.ContextEntryFilter](q)
+		if err != nil {
+			return nil, err
+		}
+		return rowsOf(store.QueryContextEntries(ctx, filter))
+	case remote.KindContextSessionIDs:
+		ids, err := store.ListContextSessionIDs(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]any, 0, len(ids))
+		for _, id := range ids {
+			out = append(out, id)
+		}
+		return out, nil
 	default:
 		return nil, fmt.Errorf("unknown query kind %q", q.Kind)
 	}

@@ -435,6 +435,20 @@ func (_c *AarmReceiptCreate) SetApproval(v map[string]interface{}) *AarmReceiptC
 	return _c
 }
 
+// SetPeerTrust sets the "peer_trust" field.
+func (_c *AarmReceiptCreate) SetPeerTrust(v string) *AarmReceiptCreate {
+	_c.mutation.SetPeerTrust(v)
+	return _c
+}
+
+// SetNillablePeerTrust sets the "peer_trust" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillablePeerTrust(v *string) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetPeerTrust(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AarmReceiptCreate) SetID(v uuid.UUID) *AarmReceiptCreate {
 	_c.mutation.SetID(v)
@@ -740,6 +754,10 @@ func (_c *AarmReceiptCreate) createSpec() (*AarmReceipt, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Approval(); ok {
 		_spec.SetField(aarmreceipt.FieldApproval, field.TypeJSON, value)
 		_node.Approval = value
+	}
+	if value, ok := _c.mutation.PeerTrust(); ok {
+		_spec.SetField(aarmreceipt.FieldPeerTrust, field.TypeString, value)
+		_node.PeerTrust = value
 	}
 	return _node, _spec
 }

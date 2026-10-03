@@ -60,6 +60,8 @@ const (
 	FieldToolCallID = "tool_call_id"
 	// FieldImported holds the string denoting the imported field in the database.
 	FieldImported = "imported"
+	// FieldPeerTrust holds the string denoting the peer_trust field in the database.
+	FieldPeerTrust = "peer_trust"
 	// FieldLinkedEventID holds the string denoting the linked_event_id field in the database.
 	FieldLinkedEventID = "linked_event_id"
 	// EdgeSession holds the string denoting the session edge name in mutations.
@@ -100,6 +102,7 @@ var Columns = []string{
 	FieldKind,
 	FieldToolCallID,
 	FieldImported,
+	FieldPeerTrust,
 	FieldLinkedEventID,
 }
 
@@ -292,6 +295,11 @@ func ByToolCallID(opts ...sql.OrderTermOption) OrderOption {
 // ByImported orders the results by the imported field.
 func ByImported(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldImported, opts...).ToFunc()
+}
+
+// ByPeerTrust orders the results by the peer_trust field.
+func ByPeerTrust(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPeerTrust, opts...).ToFunc()
 }
 
 // ByLinkedEventID orders the results by the linked_event_id field.

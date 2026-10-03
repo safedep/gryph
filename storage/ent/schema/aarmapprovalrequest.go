@@ -52,6 +52,8 @@ func (AarmApprovalRequest) Fields() []ent.Field {
 		// requester_audit is the login identity of the process that asked,
 		// for the comparison with the one that answers.
 		field.String("requester_audit").Optional(),
+		// requester_trust is the trust of the connection that asked.
+		field.String("requester_trust").Optional(),
 
 		field.Time("decided_at").Optional().Nillable(),
 		field.String("channel").Optional(),

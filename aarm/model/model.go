@@ -68,6 +68,10 @@ type Action struct {
 	ServiceIdentity string
 	RoleScope       string
 
+	// PeerTrust is the trust of the connection that carried the event to
+	// the decision service: agent, unknown or low. Empty in process.
+	PeerTrust string
+
 	DataClassifications []privacy.Class
 	InjectionScore      float32
 

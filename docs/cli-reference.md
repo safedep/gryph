@@ -484,9 +484,11 @@ gryph supervisor run --socket /tmp/hook.sock --state-dir /tmp/gryph-state
 
 With the service on, the read commands of every account (`logs`, `query`,
 `sessions`, `session`, `cat`, `diff`, `stats`, `cost`, `policy receipts`,
-`policy approve list`, `policy approve show`, `policy approve history`,
-`policy deferrals list`) read through the service and see the partition
-of their own account, nothing else. A developer keeps access to their own
+`policy context`, `policy approve list`, `policy approve show`, `policy
+approve history`, `policy deferrals list`) read through the service and
+see the partition of their own account, nothing else. `policy context
+--window` reads a local database and is not available through the
+service. A developer keeps access to their own
 log on a managed host. Without the service the commands fail with the
 socket path in the error. See [reads](./supervisor-dev.md#reads) in the
 developer guide.

@@ -211,6 +211,20 @@ func (_c *AarmApprovalRequestCreate) SetNillableRequesterAudit(v *string) *AarmA
 	return _c
 }
 
+// SetRequesterTrust sets the "requester_trust" field.
+func (_c *AarmApprovalRequestCreate) SetRequesterTrust(v string) *AarmApprovalRequestCreate {
+	_c.mutation.SetRequesterTrust(v)
+	return _c
+}
+
+// SetNillableRequesterTrust sets the "requester_trust" field if the given value is not nil.
+func (_c *AarmApprovalRequestCreate) SetNillableRequesterTrust(v *string) *AarmApprovalRequestCreate {
+	if v != nil {
+		_c.SetRequesterTrust(*v)
+	}
+	return _c
+}
+
 // SetDecidedAt sets the "decided_at" field.
 func (_c *AarmApprovalRequestCreate) SetDecidedAt(v time.Time) *AarmApprovalRequestCreate {
 	_c.mutation.SetDecidedAt(v)
@@ -535,6 +549,10 @@ func (_c *AarmApprovalRequestCreate) createSpec() (*AarmApprovalRequest, *sqlgra
 	if value, ok := _c.mutation.RequesterAudit(); ok {
 		_spec.SetField(aarmapprovalrequest.FieldRequesterAudit, field.TypeString, value)
 		_node.RequesterAudit = value
+	}
+	if value, ok := _c.mutation.RequesterTrust(); ok {
+		_spec.SetField(aarmapprovalrequest.FieldRequesterTrust, field.TypeString, value)
+		_node.RequesterTrust = value
 	}
 	if value, ok := _c.mutation.DecidedAt(); ok {
 		_spec.SetField(aarmapprovalrequest.FieldDecidedAt, field.TypeTime, value)

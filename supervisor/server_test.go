@@ -22,6 +22,7 @@ import (
 	"github.com/safedep/gryph/decision"
 	"github.com/safedep/gryph/decision/ipc"
 	"github.com/safedep/gryph/engine"
+	"github.com/safedep/gryph/platform/procs"
 	"github.com/safedep/gryph/spool"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/storage/remote"
@@ -88,6 +89,14 @@ func startServerWithOptions(t *testing.T, cfg *config.Config, opts Options) (*Se
 	spoolDir := filepath.Join(dir, "spool")
 	require.NoError(t, spool.EnsureRoot(spoolDir))
 	opts.StateDir, opts.Version, opts.SpoolDir, opts.IngestInterval = state, "test", spoolDir, -1
+	// The host that runs the tests may run an agent above the test
+	// binary. A test sees a tree with no agent unless it brings one.
+	if opts.Ancestors == nil {
+		opts.Ancestors = func(int) ([]procs.Process, error) { return []procs.Process{{PID: 1, Name: "init"}}, nil }
+	}
+	if opts.Processes == nil {
+		opts.Processes = func(int) []procs.Process { return nil }
+	}
 	srv := New(cfg, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

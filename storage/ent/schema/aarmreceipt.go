@@ -84,6 +84,9 @@ func (AarmReceipt) Fields() []ent.Field {
 		// grant_id and scope. The hash does not cover it: the answer comes
 		// after the insert, as the decision update does.
 		field.JSON("approval", map[string]interface{}{}).Optional(),
+		// peer_trust is the trust of the connection that carried the
+		// action to the decision service.
+		field.String("peer_trust").Optional(),
 	}
 }
 

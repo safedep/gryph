@@ -406,6 +406,26 @@ func (_u *AuditEventUpdate) SetNillableImported(v *bool) *AuditEventUpdate {
 	return _u
 }
 
+// SetPeerTrust sets the "peer_trust" field.
+func (_u *AuditEventUpdate) SetPeerTrust(v string) *AuditEventUpdate {
+	_u.mutation.SetPeerTrust(v)
+	return _u
+}
+
+// SetNillablePeerTrust sets the "peer_trust" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillablePeerTrust(v *string) *AuditEventUpdate {
+	if v != nil {
+		_u.SetPeerTrust(*v)
+	}
+	return _u
+}
+
+// ClearPeerTrust clears the value of the "peer_trust" field.
+func (_u *AuditEventUpdate) ClearPeerTrust() *AuditEventUpdate {
+	_u.mutation.ClearPeerTrust()
+	return _u
+}
+
 // SetLinkedEventID sets the "linked_event_id" field.
 func (_u *AuditEventUpdate) SetLinkedEventID(v uuid.UUID) *AuditEventUpdate {
 	_u.mutation.SetLinkedEventID(v)
@@ -616,6 +636,12 @@ func (_u *AuditEventUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if value, ok := _u.mutation.Imported(); ok {
 		_spec.SetField(auditevent.FieldImported, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.PeerTrust(); ok {
+		_spec.SetField(auditevent.FieldPeerTrust, field.TypeString, value)
+	}
+	if _u.mutation.PeerTrustCleared() {
+		_spec.ClearField(auditevent.FieldPeerTrust, field.TypeString)
 	}
 	if value, ok := _u.mutation.LinkedEventID(); ok {
 		_spec.SetField(auditevent.FieldLinkedEventID, field.TypeUUID, value)
@@ -1048,6 +1074,26 @@ func (_u *AuditEventUpdateOne) SetNillableImported(v *bool) *AuditEventUpdateOne
 	return _u
 }
 
+// SetPeerTrust sets the "peer_trust" field.
+func (_u *AuditEventUpdateOne) SetPeerTrust(v string) *AuditEventUpdateOne {
+	_u.mutation.SetPeerTrust(v)
+	return _u
+}
+
+// SetNillablePeerTrust sets the "peer_trust" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillablePeerTrust(v *string) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetPeerTrust(*v)
+	}
+	return _u
+}
+
+// ClearPeerTrust clears the value of the "peer_trust" field.
+func (_u *AuditEventUpdateOne) ClearPeerTrust() *AuditEventUpdateOne {
+	_u.mutation.ClearPeerTrust()
+	return _u
+}
+
 // SetLinkedEventID sets the "linked_event_id" field.
 func (_u *AuditEventUpdateOne) SetLinkedEventID(v uuid.UUID) *AuditEventUpdateOne {
 	_u.mutation.SetLinkedEventID(v)
@@ -1288,6 +1334,12 @@ func (_u *AuditEventUpdateOne) sqlSave(ctx context.Context) (_node *AuditEvent, 
 	}
 	if value, ok := _u.mutation.Imported(); ok {
 		_spec.SetField(auditevent.FieldImported, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.PeerTrust(); ok {
+		_spec.SetField(auditevent.FieldPeerTrust, field.TypeString, value)
+	}
+	if _u.mutation.PeerTrustCleared() {
+		_spec.ClearField(auditevent.FieldPeerTrust, field.TypeString)
 	}
 	if value, ok := _u.mutation.LinkedEventID(); ok {
 		_spec.SetField(auditevent.FieldLinkedEventID, field.TypeUUID, value)

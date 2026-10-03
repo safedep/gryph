@@ -566,6 +566,20 @@
   guarantee: "An answer whose password prompt gets no valid password is refused and the request stays pending. Only policy.approval.local_admin.allow_without_auth in the managed configuration waives the password, and the answer then counts at a lower assurance than local-auth. Privileged job with polkit only."
   labels: [approval, supervisor, local-auth, privileged, linux]
 
+- id: approval/low-trust/deferral-only
+  title: "an escalation from a low-trust connection asks nobody on the terminal"
+  category: approval
+  tier: P0
+  guarantee: "A session binds to the first known agent process above its hooks. A hook of the same session from outside that agent, while it lives, is low trust: an escalate rule that accepts the terminal gets no prompt, the request waits for an approver above the terminal, and the receipt and the request record the trust. Privileged job only."
+  labels: [approval, supervisor, trust, privileged, linux]
+
+- id: context/low-trust/prompt-no-reset
+  title: "a prompt from a low-trust connection does not become the latest intent"
+  category: context
+  tier: P0
+  guarantee: "A prompt from a connection outside the agent the session is bound to is recorded as an observation with peer_trust low. It does not become the latest intent and does not reset context.actions_since_intent. A prompt under the agent does. Privileged job only."
+  labels: [context, supervisor, trust, privileged, linux]
+
 - id: supervisor/install/ordering
   title: "the managed install turns the service switch on only after the service answers"
   category: supervisor

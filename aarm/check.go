@@ -546,6 +546,7 @@ func (m *Mediator) handleEscalate(ctx context.Context, action, stored *model.Act
 		Timeout:      m.cfg.ApprovalTimeout,
 		MinAssurance: approval.Assurance(decision.MinAssurance),
 		Digest:       approval.ActionDigest(action),
+		PeerTrust:    action.PeerTrust,
 	}
 	if rec != nil {
 		req.ReceiptSequence = rec.Sequence

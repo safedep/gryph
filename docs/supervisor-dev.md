@@ -205,6 +205,27 @@ Tests give the server a fake `Authorizer` through `Options.Authorizer`.
 The acceptance condition `[polkit]` needs the system bus socket,
 `pkcheck` and `pkttyagent`.
 
+## Trust
+
+`Server.agentAncestor` walks the parents of the peer (`procs.Ancestors`,
+`/proc/<pid>/stat` field 4 on Linux) while the peer is still the process
+seen at accept (`peercred.Peer.SameProcess`, by the start time read at
+accept), and returns the nearest process of the peer's uid whose name an adapter
+declares through `ProcessNamer`. A process of another uid in the chain
+is skipped. `partition.trustFor` compares it with the
+`agent_process` of the session (`name:pid:start`): the first agent seen
+binds the session, the same agent is `agent`, another agent or none while
+the bound one lives is `low`, and none with no binding is `unknown`. A
+bound agent that is gone (`procs.StartedAt`) releases the binding. The
+trust travels on `HookRequest.PeerTrust`, which the service sets and never
+reads from the hook side, to `Event.PeerTrust`, the `peer_trust` column of
+the event and the receipt, and `approval.Request.PeerTrust`. The decision
+service turns a low-trust intent into an observation before the context
+sees it. The approver skips the prompt and raises the floor to
+`local-admin` for a low-trust request, and `Server.approve` refuses an
+answer from under an agent. Tests give the server a process tree through
+`Options.Ancestors` and `Options.Processes`.
+
 ## The units
 
 On Linux the service runs under systemd with socket activation

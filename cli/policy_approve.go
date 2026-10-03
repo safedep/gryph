@@ -149,6 +149,8 @@ type approvalRequestView struct {
 	RequestedAt  string   `json:"requested_at"`
 	ExpiresAt    string   `json:"expires_at"`
 	Inline       bool     `json:"inline"`
+	Review       bool     `json:"review,omitempty"`
+	PeerTrustIn  string   `json:"requester_trust,omitempty"`
 	DecidedAt    string   `json:"decided_at,omitempty"`
 	Channel      string   `json:"channel,omitempty"`
 	Assurance    string   `json:"assurance,omitempty"`
@@ -176,6 +178,8 @@ func approvalRequestToView(r *storage.ApprovalRequestRow) approvalRequestView {
 		RequestedAt:  r.RequestedAt.Format(time.RFC3339Nano),
 		ExpiresAt:    r.ExpiresAt.Format(time.RFC3339Nano),
 		Inline:       r.Inline,
+		Review:       r.Review,
+		PeerTrustIn:  r.RequesterTrust,
 		Channel:      r.Channel,
 		Assurance:    r.Assurance,
 		Approver:     r.Approver,
@@ -233,6 +237,7 @@ func renderApprovalRequest(w io.Writer, c *tui.Colorizer, r *storage.ApprovalReq
 		{"rules", strings.Join(v.Rules, ", ")}, {"user", v.Requester}, {"host", v.Host}, {"agent", v.Agent},
 		{"project", v.Project}, {"session", v.SessionID}, {"min_assurance", v.MinAssurance},
 		{"requested_at", v.RequestedAt}, {"expires_at", v.ExpiresAt}, {"inline", strconv.FormatBool(v.Inline)},
+		{"requester_trust", v.PeerTrustIn},
 		{"decided_at", v.DecidedAt}, {"channel", v.Channel}, {"assurance", v.Assurance}, {"approver", v.Approver},
 		{"peer_trust", v.PeerTrust}, {"scope", v.Scope}, {"note", v.Note},
 	}

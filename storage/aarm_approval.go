@@ -49,6 +49,7 @@ type ApprovalRequestRow struct {
 	Inline          bool
 	Review          bool
 	RequesterAudit  string
+	RequesterTrust  string
 	DecidedAt       *time.Time
 	Channel         string
 	Assurance       string
@@ -160,6 +161,7 @@ func (s *SQLiteStore) InsertApprovalRequest(ctx context.Context, row *ApprovalRe
 		SetInline(row.Inline).
 		SetReview(row.Review).
 		SetRequesterAudit(row.RequesterAudit).
+		SetRequesterTrust(row.RequesterTrust).
 		SetChannel(row.Channel).
 		SetAssurance(row.Assurance).
 		SetApprover(row.Approver).
@@ -390,6 +392,7 @@ func entToApprovalRequest(e *ent.AarmApprovalRequest) *ApprovalRequestRow {
 		Inline:          e.Inline,
 		Review:          e.Review,
 		RequesterAudit:  e.RequesterAudit,
+		RequesterTrust:  e.RequesterTrust,
 		DecidedAt:       e.DecidedAt,
 		Channel:         e.Channel,
 		Assurance:       e.Assurance,

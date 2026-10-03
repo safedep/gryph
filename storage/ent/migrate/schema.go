@@ -62,6 +62,7 @@ var (
 		{Name: "inline", Type: field.TypeBool, Default: false},
 		{Name: "review", Type: field.TypeBool, Default: false},
 		{Name: "requester_audit", Type: field.TypeString, Nullable: true},
+		{Name: "requester_trust", Type: field.TypeString, Nullable: true},
 		{Name: "decided_at", Type: field.TypeTime, Nullable: true},
 		{Name: "channel", Type: field.TypeString, Nullable: true},
 		{Name: "assurance", Type: field.TypeString, Nullable: true},
@@ -176,6 +177,7 @@ var (
 		{Name: "imported", Type: field.TypeBool, Default: false},
 		{Name: "content_salt", Type: field.TypeBytes, Nullable: true, Size: 32},
 		{Name: "approval", Type: field.TypeJSON, Nullable: true},
+		{Name: "peer_trust", Type: field.TypeString, Nullable: true},
 	}
 	// AarmReceiptsTable holds the schema information for the "aarm_receipts" table.
 	AarmReceiptsTable = &schema.Table{
@@ -242,6 +244,7 @@ var (
 		{Name: "kind", Type: field.TypeString, Nullable: true},
 		{Name: "tool_call_id", Type: field.TypeString, Nullable: true},
 		{Name: "imported", Type: field.TypeBool, Default: false},
+		{Name: "peer_trust", Type: field.TypeString, Nullable: true},
 		{Name: "linked_event_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "session_id", Type: field.TypeUUID},
 	}
@@ -253,7 +256,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "audit_events_sessions_events",
-				Columns:    []*schema.Column{AuditEventsColumns[23]},
+				Columns:    []*schema.Column{AuditEventsColumns[24]},
 				RefColumns: []*schema.Column{SessionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -267,7 +270,7 @@ var (
 			{
 				Name:    "auditevent_session_id",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[23]},
+				Columns: []*schema.Column{AuditEventsColumns[24]},
 			},
 			{
 				Name:    "auditevent_agent_name",
@@ -287,7 +290,7 @@ var (
 			{
 				Name:    "auditevent_session_id_tool_call_id",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[23], AuditEventsColumns[20]},
+				Columns: []*schema.Column{AuditEventsColumns[24], AuditEventsColumns[20]},
 			},
 		},
 	}
@@ -452,6 +455,7 @@ var (
 		{Name: "model_usage", Type: field.TypeJSON, Nullable: true},
 		{Name: "cost_source", Type: field.TypeString, Nullable: true},
 		{Name: "imported", Type: field.TypeBool, Default: false},
+		{Name: "agent_process", Type: field.TypeString, Nullable: true},
 		{Name: "cost_computed_at", Type: field.TypeTime, Nullable: true},
 	}
 	// SessionsTable holds the schema information for the "sessions" table.

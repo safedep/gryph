@@ -36,7 +36,7 @@ func list() ([]Process, error) {
 		if err != nil {
 			continue
 		}
-		p := Process{PID: pid, Name: strings.TrimSpace(string(comm))}
+		p := Process{PID: pid, Name: strings.TrimSpace(string(comm)), UID: os.Getuid()}
 		if exe, err := os.Readlink(filepath.Join(dir, "exe")); err == nil {
 			p.Path = exe
 		}

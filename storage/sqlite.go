@@ -363,6 +363,9 @@ func eventCreate(client *ent.Client, event *events.Event) (*ent.AuditEventCreate
 	if event.Kind != "" {
 		create.SetKind(string(event.Kind))
 	}
+	if event.PeerTrust != "" {
+		create.SetPeerTrust(event.PeerTrust)
+	}
 	if event.ToolCallID != "" {
 		create.SetToolCallID(event.ToolCallID)
 	}
@@ -571,7 +574,8 @@ func (s *SQLiteStore) SaveSession(ctx context.Context, sess *session.Session) er
 		SetErrors(sess.Errors).
 		SetSensitiveActions(sess.SensitiveActions).
 		SetBlockedActions(sess.BlockedActions).
-		SetImported(sess.Imported)
+		SetImported(sess.Imported).
+		SetAgentProcess(sess.AgentProcess)
 
 	// Set optional fields
 	if sess.AgentSessionID != "" {
@@ -608,6 +612,9 @@ func (s *SQLiteStore) UpdateSession(ctx context.Context, sess *session.Session) 
 	// Update optional fields
 	if sess.AgentVersion != "" {
 		update.SetAgentVersion(sess.AgentVersion)
+	}
+	if sess.AgentProcess != "" {
+		update.SetAgentProcess(sess.AgentProcess)
 	}
 	if sess.WorkingDirectory != "" {
 		update.SetWorkingDirectory(sess.WorkingDirectory)
@@ -1084,6 +1091,7 @@ func entToEvent(e *ent.AuditEvent) *events.Event {
 		Kind:             events.Kind(e.Kind),
 		ToolCallID:       e.ToolCallID,
 		Imported:         e.Imported,
+		PeerTrust:        e.PeerTrust,
 	}
 
 	if e.LinkedEventID != nil {
@@ -1130,6 +1138,7 @@ func entToSession(e *ent.Session) *session.Session {
 		SensitiveActions: e.SensitiveActions,
 		BlockedActions:   e.BlockedActions,
 		Imported:         e.Imported,
+		AgentProcess:     e.AgentProcess,
 	}
 
 	if e.EndedAt != nil {

@@ -89,6 +89,8 @@ const (
 	FieldContentSalt = "content_salt"
 	// FieldApproval holds the string denoting the approval field in the database.
 	FieldApproval = "approval"
+	// FieldPeerTrust holds the string denoting the peer_trust field in the database.
+	FieldPeerTrust = "peer_trust"
 	// Table holds the table name of the aarmreceipt in the database.
 	Table = "aarm_receipts"
 )
@@ -133,6 +135,7 @@ var Columns = []string{
 	FieldImported,
 	FieldContentSalt,
 	FieldApproval,
+	FieldPeerTrust,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -340,4 +343,9 @@ func ByHashVersion(opts ...sql.OrderTermOption) OrderOption {
 // ByImported orders the results by the imported field.
 func ByImported(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldImported, opts...).ToFunc()
+}
+
+// ByPeerTrust orders the results by the peer_trust field.
+func ByPeerTrust(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPeerTrust, opts...).ToFunc()
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/safedep/gryph/decision/ipc"
 	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/platform/nofollow"
+	"github.com/safedep/gryph/platform/procs"
 	"github.com/safedep/gryph/selfprotect"
 )
 
@@ -45,6 +46,10 @@ type partition struct {
 
 	eventMu       sync.Mutex
 	lastRateEvent time.Time
+
+	// lookup returns the process with a pid when it runs. Nil takes the
+	// platform. A test sets it.
+	lookup func(pid int) []procs.Process
 }
 
 // openPartition opens or creates the partition of uid under root. The
@@ -159,9 +164,14 @@ func (p *partition) handle(ctx context.Context, h *ipc.Handle) (*ipc.Frame, erro
 	now := time.Now().UTC()
 	p.write.Lock()
 	p.expireRequests(ctx, now)
+	var bind string
+	if pr := prompterFrom(ctx); pr != nil {
+		req.PeerTrust, bind = p.trustFor(ctx, event.SessionID, pr.ancestor, pr.found)
+	}
 	resp, err := p.service.Handle(ctx, req)
 	var lines []string
 	if err == nil {
+		p.bindSession(ctx, event.SessionID, bind)
 		lines = p.notices(ctx, event.SessionID, now)
 	}
 	p.write.Unlock()

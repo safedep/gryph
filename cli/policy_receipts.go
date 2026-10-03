@@ -334,6 +334,7 @@ type policyReceiptView struct {
 	ServiceIdentity string                 `json:"service_identity,omitempty"`
 	RoleScope       string                 `json:"role_scope,omitempty"`
 	Approval        map[string]interface{} `json:"approval,omitempty"`
+	PeerTrust       string                 `json:"peer_trust,omitempty"`
 }
 
 func receiptToView(r *storage.ReceiptRow) policyReceiptView {
@@ -364,6 +365,7 @@ func receiptToView(r *storage.ReceiptRow) policyReceiptView {
 		ServiceIdentity: r.ServiceIdentity,
 		RoleScope:       r.RoleScope,
 		Approval:        r.Approval,
+		PeerTrust:       r.PeerTrust,
 	}
 	if r.DurationMS != nil {
 		d := *r.DurationMS

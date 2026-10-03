@@ -65,6 +65,8 @@ const (
 	FieldCostSource = "cost_source"
 	// FieldImported holds the string denoting the imported field in the database.
 	FieldImported = "imported"
+	// FieldAgentProcess holds the string denoting the agent_process field in the database.
+	FieldAgentProcess = "agent_process"
 	// FieldCostComputedAt holds the string denoting the cost_computed_at field in the database.
 	FieldCostComputedAt = "cost_computed_at"
 	// EdgeEvents holds the string denoting the events edge name in mutations.
@@ -108,6 +110,7 @@ var Columns = []string{
 	FieldModelUsage,
 	FieldCostSource,
 	FieldImported,
+	FieldAgentProcess,
 	FieldCostComputedAt,
 }
 
@@ -286,6 +289,11 @@ func ByCostSource(opts ...sql.OrderTermOption) OrderOption {
 // ByImported orders the results by the imported field.
 func ByImported(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldImported, opts...).ToFunc()
+}
+
+// ByAgentProcess orders the results by the agent_process field.
+func ByAgentProcess(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAgentProcess, opts...).ToFunc()
 }
 
 // ByCostComputedAt orders the results by the cost_computed_at field.

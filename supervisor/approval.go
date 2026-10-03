@@ -125,12 +125,18 @@ func (a *approver) Request(ctx context.Context, r *approval.Request) (*approval.
 	}
 
 	min := a.floor(r)
+	// A connection the service does not trust gets no prompt: only a
+	// channel above the developer's terminal answers it.
+	lowTrust := r.PeerTrust == approval.PeerTrustLow
+	if lowTrust && !min.Meets(approval.AssuranceLocalAdmin) {
+		min = approval.AssuranceLocalAdmin
+	}
 	channels := a.channels(min)
 	pr := prompterFrom(ctx)
 	// A hook after the action cannot stop it. The request is a review
 	// item: an approver sees it, and nobody waits.
 	review := r.Action != nil && r.Action.Phase != model.PhasePre
-	inline := !review && pr != nil && pr.wait > 0 && a.cfg.HasChannel(config.ApprovalChannelSameUserTTY) && approval.AssuranceSameUserTTY.Meets(min)
+	inline := !review && !lowTrust && pr != nil && pr.wait > 0 && a.cfg.HasChannel(config.ApprovalChannelSameUserTTY) && approval.AssuranceSameUserTTY.Meets(min)
 	row := &storage.ApprovalRequestRow{
 		SessionID:       r.SessionID,
 		ActionID:        r.ActionID,
@@ -149,6 +155,7 @@ func (a *approver) Request(ctx context.Context, r *approval.Request) (*approval.
 	if pr != nil {
 		row.RequesterAudit = pr.audit
 	}
+	row.RequesterTrust = r.PeerTrust
 	if r.Action != nil {
 		row.Agent = r.Action.Agent
 		row.Project = r.Action.Project
@@ -162,6 +169,9 @@ func (a *approver) Request(ctx context.Context, r *approval.Request) (*approval.
 
 	if review {
 		return a.review(row), nil
+	}
+	if lowTrust {
+		return a.pending(row, "The connection is not under the agent of the session, so only an approver answers."), nil
 	}
 	if len(channels) == 0 {
 		return a.pending(row, fmt.Sprintf("No approval channel meets min_assurance %s.", min)), nil
@@ -198,7 +208,7 @@ func (a *approver) Request(ctx context.Context, r *approval.Request) (*approval.
 		Channel:   config.ApprovalChannelSameUserTTY,
 		Assurance: string(approval.AssuranceSameUserTTY),
 		Approver:  a.requester + " on the terminal",
-		PeerTrust: approval.PeerTrustUnknown,
+		PeerTrust: trustOr(r.PeerTrust),
 		Note:      reply.Note,
 	}
 	switch reply.Decision {
@@ -248,9 +258,17 @@ func (a *approver) pending(row *storage.ApprovalRequestRow, detail string) *appr
 		Approver:  "",
 		Note:      note,
 		DecidedAt: row.RequestedAt,
-		PeerTrust: approval.PeerTrustUnknown,
+		PeerTrust: trustOr(row.RequesterTrust),
 		RequestID: row.ID,
 	}
+}
+
+// trustOr returns the trust, or unknown when the connection has none.
+func trustOr(trust string) string {
+	if trust == "" {
+		return approval.PeerTrustUnknown
+	}
+	return trust
 }
 
 // review is the outcome of a request from a hook after the action. The
@@ -261,7 +279,7 @@ func (a *approver) review(row *storage.ApprovalRequestRow) *approval.Outcome {
 		Decision:  approval.DecisionPending,
 		Note:      fmt.Sprintf("This action needs approval, and it ran before the rule could stop it. Request %s is a review item for an approver. Tell the user.", id),
 		DecidedAt: row.RequestedAt,
-		PeerTrust: approval.PeerTrustUnknown,
+		PeerTrust: trustOr(row.RequesterTrust),
 		RequestID: row.ID,
 	}
 }

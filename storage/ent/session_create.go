@@ -356,6 +356,20 @@ func (_c *SessionCreate) SetNillableImported(v *bool) *SessionCreate {
 	return _c
 }
 
+// SetAgentProcess sets the "agent_process" field.
+func (_c *SessionCreate) SetAgentProcess(v string) *SessionCreate {
+	_c.mutation.SetAgentProcess(v)
+	return _c
+}
+
+// SetNillableAgentProcess sets the "agent_process" field if the given value is not nil.
+func (_c *SessionCreate) SetNillableAgentProcess(v *string) *SessionCreate {
+	if v != nil {
+		_c.SetAgentProcess(*v)
+	}
+	return _c
+}
+
 // SetCostComputedAt sets the "cost_computed_at" field.
 func (_c *SessionCreate) SetCostComputedAt(v time.Time) *SessionCreate {
 	_c.mutation.SetCostComputedAt(v)
@@ -696,6 +710,10 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Imported(); ok {
 		_spec.SetField(session.FieldImported, field.TypeBool, value)
 		_node.Imported = value
+	}
+	if value, ok := _c.mutation.AgentProcess(); ok {
+		_spec.SetField(session.FieldAgentProcess, field.TypeString, value)
+		_node.AgentProcess = value
 	}
 	if value, ok := _c.mutation.CostComputedAt(); ok {
 		_spec.SetField(session.FieldCostComputedAt, field.TypeTime, value)

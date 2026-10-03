@@ -20,6 +20,7 @@ import (
 	"github.com/safedep/gryph/platform/localauth"
 	"github.com/safedep/gryph/platform/nofollow"
 	"github.com/safedep/gryph/platform/peercred"
+	"github.com/safedep/gryph/platform/procs"
 	"github.com/safedep/gryph/spool"
 )
 
@@ -47,6 +48,11 @@ type Server struct {
 	approvers  approverCache
 	auth       localauth.Authorizer
 	authCache  authCache
+	// agentNames are the programs of the known agents. ancestors walks
+	// the parents of a peer.
+	agentNames []string
+	ancestors  func(pid int) ([]procs.Process, error)
+	lookup     func(pid int) []procs.Process
 }
 
 // Options configure a Server.
@@ -70,6 +76,11 @@ type Options struct {
 	// Authorizer is the authority that authenticates an approver. Nil
 	// takes the one of the platform.
 	Authorizer localauth.Authorizer
+	// Ancestors walks the parents of a process, and Processes returns
+	// the process with a pid when it runs. Both exist for a test. Nil
+	// takes the platform.
+	Ancestors func(pid int) ([]procs.Process, error)
+	Processes func(pid int) []procs.Process
 }
 
 // New builds a server for the managed configuration cfg.
@@ -103,10 +114,15 @@ func New(cfg *config.Config, opts Options) *Server {
 	if auth == nil {
 		auth = localauth.Default()
 	}
+	ancestors := opts.Ancestors
+	if ancestors == nil {
+		ancestors = procs.Ancestors
+	}
 	return &Server{
 		cfg: cfg, root: root, limits: limits, version: opts.Version,
 		spoolDir: spoolDir, spoolLimits: spoolLimits, ingestInterval: interval,
 		partitions: map[uint32]*partition{}, auth: auth,
+		agentNames: agentProcessNames(cfg), ancestors: ancestors, lookup: opts.Processes,
 	}
 }
 
@@ -206,7 +222,8 @@ func (s *Server) dispatch(ctx context.Context, part *partition, peer *peercred.P
 	switch b := body.(type) {
 	case *ipc.Handle:
 		audit, _ := peer.LoginIdentity()
-		return part.handle(withPrompter(ctx, &prompter{conn: conn, wait: b.InlineWait, audit: audit}), b)
+		ancestor, found := s.agentAncestor(peer)
+		return part.handle(withPrompter(ctx, &prompter{conn: conn, wait: b.InlineWait, audit: audit, ancestor: ancestor, found: found}), b)
 	case *ipc.Approve:
 		return s.approve(ctx, part, peer, b)
 	case *ipc.PromptReply:
@@ -262,6 +279,7 @@ func (s *Server) partition(ctx context.Context, uid uint32) (*partition, error) 
 	if err != nil {
 		return nil, err
 	}
+	p.lookup = s.lookup
 	s.partitions[uid] = p
 	return p, nil
 }

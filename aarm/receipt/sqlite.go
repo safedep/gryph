@@ -91,6 +91,9 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 			next.HumanPrincipal = in.Action.HumanPrincipal
 			next.ServiceIdentity = in.Action.ServiceIdentity
 			next.RoleScope = in.Action.RoleScope
+			if next.PeerTrust == "" {
+				next.PeerTrust = in.Action.PeerTrust
+			}
 		}
 		if next.Agent == "" {
 			next.Agent = in.Agent
@@ -108,6 +111,9 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 		}
 
 		next.PolicyHash = in.PolicyHash
+		if in.PeerTrust != "" {
+			next.PeerTrust = in.PeerTrust
+		}
 		next.DeferReason = in.DeferReason
 		next.ErrorMessage = in.ErrorMessage
 		if in.DeferralOfSequence != nil {

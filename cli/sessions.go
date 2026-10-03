@@ -121,6 +121,7 @@ func sessionToView(reg *agent.Registry, s *session.Session) *tui.SessionView {
 		EstimatedCostUSD: s.EstimatedCostUSD,
 		CostSource:       s.CostSource,
 		CostComputedAt:   s.CostComputedAt,
+		AgentProcess:     s.AgentProcess,
 	}
 
 	if s.ModelUsage != nil {

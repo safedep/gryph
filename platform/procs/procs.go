@@ -18,6 +18,8 @@ type Process struct {
 	Path string
 	// Started is when the process started. It is zero when unknown.
 	Started time.Time
+	// UID is the real user of the process. It is -1 when unknown.
+	UID int
 }
 
 // List returns the processes of the current account.

@@ -32,3 +32,5 @@ func open(conn net.Conn) (*Peer, error) {
 }
 
 func (p *Peer) close() error { return nil }
+
+func sameProcess(*Peer) bool { return true }

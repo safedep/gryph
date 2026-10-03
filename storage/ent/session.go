@@ -69,6 +69,8 @@ type Session struct {
 	CostSource string `json:"cost_source,omitempty"`
 	// Imported holds the value of the "imported" field.
 	Imported bool `json:"imported,omitempty"`
+	// AgentProcess holds the value of the "agent_process" field.
+	AgentProcess string `json:"agent_process,omitempty"`
 	// CostComputedAt holds the value of the "cost_computed_at" field.
 	CostComputedAt *time.Time `json:"cost_computed_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -108,7 +110,7 @@ func (*Session) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case session.FieldTotalActions, session.FieldFilesRead, session.FieldFilesWritten, session.FieldCommandsExecuted, session.FieldNetworkRequests, session.FieldEventCount, session.FieldErrors, session.FieldSensitiveActions, session.FieldBlockedActions, session.FieldInputTokens, session.FieldOutputTokens, session.FieldCacheReadTokens, session.FieldCacheWriteTokens:
 			values[i] = new(sql.NullInt64)
-		case session.FieldAgentSessionID, session.FieldAgentName, session.FieldAgentVersion, session.FieldWorkingDirectory, session.FieldProjectName, session.FieldTranscriptPath, session.FieldCostSource:
+		case session.FieldAgentSessionID, session.FieldAgentName, session.FieldAgentVersion, session.FieldWorkingDirectory, session.FieldProjectName, session.FieldTranscriptPath, session.FieldCostSource, session.FieldAgentProcess:
 			values[i] = new(sql.NullString)
 		case session.FieldStartedAt, session.FieldEndedAt, session.FieldCostComputedAt:
 			values[i] = new(sql.NullTime)
@@ -288,6 +290,12 @@ func (_m *Session) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Imported = value.Bool
 			}
+		case session.FieldAgentProcess:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field agent_process", values[i])
+			} else if value.Valid {
+				_m.AgentProcess = value.String
+			}
 		case session.FieldCostComputedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field cost_computed_at", values[i])
@@ -412,6 +420,9 @@ func (_m *Session) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("imported=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Imported))
+	builder.WriteString(", ")
+	builder.WriteString("agent_process=")
+	builder.WriteString(_m.AgentProcess)
 	builder.WriteString(", ")
 	if v := _m.CostComputedAt; v != nil {
 		builder.WriteString("cost_computed_at=")

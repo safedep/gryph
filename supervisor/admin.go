@@ -254,6 +254,9 @@ func (s *Server) approve(ctx context.Context, own *partition, peer *peercred.Pee
 	if part.uid == peer.UID {
 		return refuse("the account that asked cannot answer its own request")
 	}
+	if anc, found := s.agentAncestor(peer); found {
+		return refuse(fmt.Sprintf("an answer from under the agent process %s (pid %d) is refused", anc.name, anc.pid))
+	}
 	// The assurance of the answer is what the receipt records. The floor
 	// of the rule compares against it, with one exception: an
 	// administrator who allows self-elevated answers accepts them in

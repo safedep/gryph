@@ -669,6 +669,26 @@ func (_u *AarmReceiptUpdate) ClearApproval() *AarmReceiptUpdate {
 	return _u
 }
 
+// SetPeerTrust sets the "peer_trust" field.
+func (_u *AarmReceiptUpdate) SetPeerTrust(v string) *AarmReceiptUpdate {
+	_u.mutation.SetPeerTrust(v)
+	return _u
+}
+
+// SetNillablePeerTrust sets the "peer_trust" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillablePeerTrust(v *string) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetPeerTrust(*v)
+	}
+	return _u
+}
+
+// ClearPeerTrust clears the value of the "peer_trust" field.
+func (_u *AarmReceiptUpdate) ClearPeerTrust() *AarmReceiptUpdate {
+	_u.mutation.ClearPeerTrust()
+	return _u
+}
+
 // Mutation returns the AarmReceiptMutation object of the builder.
 func (_u *AarmReceiptUpdate) Mutation() *AarmReceiptMutation {
 	return _u.mutation
@@ -959,6 +979,12 @@ func (_u *AarmReceiptUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.ApprovalCleared() {
 		_spec.ClearField(aarmreceipt.FieldApproval, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.PeerTrust(); ok {
+		_spec.SetField(aarmreceipt.FieldPeerTrust, field.TypeString, value)
+	}
+	if _u.mutation.PeerTrustCleared() {
+		_spec.ClearField(aarmreceipt.FieldPeerTrust, field.TypeString)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -1620,6 +1646,26 @@ func (_u *AarmReceiptUpdateOne) ClearApproval() *AarmReceiptUpdateOne {
 	return _u
 }
 
+// SetPeerTrust sets the "peer_trust" field.
+func (_u *AarmReceiptUpdateOne) SetPeerTrust(v string) *AarmReceiptUpdateOne {
+	_u.mutation.SetPeerTrust(v)
+	return _u
+}
+
+// SetNillablePeerTrust sets the "peer_trust" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillablePeerTrust(v *string) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetPeerTrust(*v)
+	}
+	return _u
+}
+
+// ClearPeerTrust clears the value of the "peer_trust" field.
+func (_u *AarmReceiptUpdateOne) ClearPeerTrust() *AarmReceiptUpdateOne {
+	_u.mutation.ClearPeerTrust()
+	return _u
+}
+
 // Mutation returns the AarmReceiptMutation object of the builder.
 func (_u *AarmReceiptUpdateOne) Mutation() *AarmReceiptMutation {
 	return _u.mutation
@@ -1940,6 +1986,12 @@ func (_u *AarmReceiptUpdateOne) sqlSave(ctx context.Context) (_node *AarmReceipt
 	}
 	if _u.mutation.ApprovalCleared() {
 		_spec.ClearField(aarmreceipt.FieldApproval, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.PeerTrust(); ok {
+		_spec.SetField(aarmreceipt.FieldPeerTrust, field.TypeString, value)
+	}
+	if _u.mutation.PeerTrustCleared() {
+		_spec.ClearField(aarmreceipt.FieldPeerTrust, field.TypeString)
 	}
 	_node = &AarmReceipt{config: _u.config}
 	_spec.Assign = _node.assignValues

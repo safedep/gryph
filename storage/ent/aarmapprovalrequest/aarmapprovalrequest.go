@@ -49,6 +49,8 @@ const (
 	FieldReview = "review"
 	// FieldRequesterAudit holds the string denoting the requester_audit field in the database.
 	FieldRequesterAudit = "requester_audit"
+	// FieldRequesterTrust holds the string denoting the requester_trust field in the database.
+	FieldRequesterTrust = "requester_trust"
 	// FieldDecidedAt holds the string denoting the decided_at field in the database.
 	FieldDecidedAt = "decided_at"
 	// FieldChannel holds the string denoting the channel field in the database.
@@ -89,6 +91,7 @@ var Columns = []string{
 	FieldInline,
 	FieldReview,
 	FieldRequesterAudit,
+	FieldRequesterTrust,
 	FieldDecidedAt,
 	FieldChannel,
 	FieldAssurance,
@@ -236,6 +239,11 @@ func ByReview(opts ...sql.OrderTermOption) OrderOption {
 // ByRequesterAudit orders the results by the requester_audit field.
 func ByRequesterAudit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRequesterAudit, opts...).ToFunc()
+}
+
+// ByRequesterTrust orders the results by the requester_trust field.
+func ByRequesterTrust(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequesterTrust, opts...).ToFunc()
 }
 
 // ByDecidedAt orders the results by the decided_at field.

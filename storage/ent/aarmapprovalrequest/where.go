@@ -130,6 +130,11 @@ func RequesterAudit(v string) predicate.AarmApprovalRequest {
 	return predicate.AarmApprovalRequest(sql.FieldEQ(FieldRequesterAudit, v))
 }
 
+// RequesterTrust applies equality check predicate on the "requester_trust" field. It's identical to RequesterTrustEQ.
+func RequesterTrust(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldEQ(FieldRequesterTrust, v))
+}
+
 // DecidedAt applies equality check predicate on the "decided_at" field. It's identical to DecidedAtEQ.
 func DecidedAt(v time.Time) predicate.AarmApprovalRequest {
 	return predicate.AarmApprovalRequest(sql.FieldEQ(FieldDecidedAt, v))
@@ -1008,6 +1013,81 @@ func RequesterAuditEqualFold(v string) predicate.AarmApprovalRequest {
 // RequesterAuditContainsFold applies the ContainsFold predicate on the "requester_audit" field.
 func RequesterAuditContainsFold(v string) predicate.AarmApprovalRequest {
 	return predicate.AarmApprovalRequest(sql.FieldContainsFold(FieldRequesterAudit, v))
+}
+
+// RequesterTrustEQ applies the EQ predicate on the "requester_trust" field.
+func RequesterTrustEQ(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldEQ(FieldRequesterTrust, v))
+}
+
+// RequesterTrustNEQ applies the NEQ predicate on the "requester_trust" field.
+func RequesterTrustNEQ(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldNEQ(FieldRequesterTrust, v))
+}
+
+// RequesterTrustIn applies the In predicate on the "requester_trust" field.
+func RequesterTrustIn(vs ...string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldIn(FieldRequesterTrust, vs...))
+}
+
+// RequesterTrustNotIn applies the NotIn predicate on the "requester_trust" field.
+func RequesterTrustNotIn(vs ...string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldNotIn(FieldRequesterTrust, vs...))
+}
+
+// RequesterTrustGT applies the GT predicate on the "requester_trust" field.
+func RequesterTrustGT(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldGT(FieldRequesterTrust, v))
+}
+
+// RequesterTrustGTE applies the GTE predicate on the "requester_trust" field.
+func RequesterTrustGTE(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldGTE(FieldRequesterTrust, v))
+}
+
+// RequesterTrustLT applies the LT predicate on the "requester_trust" field.
+func RequesterTrustLT(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldLT(FieldRequesterTrust, v))
+}
+
+// RequesterTrustLTE applies the LTE predicate on the "requester_trust" field.
+func RequesterTrustLTE(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldLTE(FieldRequesterTrust, v))
+}
+
+// RequesterTrustContains applies the Contains predicate on the "requester_trust" field.
+func RequesterTrustContains(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldContains(FieldRequesterTrust, v))
+}
+
+// RequesterTrustHasPrefix applies the HasPrefix predicate on the "requester_trust" field.
+func RequesterTrustHasPrefix(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldHasPrefix(FieldRequesterTrust, v))
+}
+
+// RequesterTrustHasSuffix applies the HasSuffix predicate on the "requester_trust" field.
+func RequesterTrustHasSuffix(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldHasSuffix(FieldRequesterTrust, v))
+}
+
+// RequesterTrustIsNil applies the IsNil predicate on the "requester_trust" field.
+func RequesterTrustIsNil() predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldIsNull(FieldRequesterTrust))
+}
+
+// RequesterTrustNotNil applies the NotNil predicate on the "requester_trust" field.
+func RequesterTrustNotNil() predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldNotNull(FieldRequesterTrust))
+}
+
+// RequesterTrustEqualFold applies the EqualFold predicate on the "requester_trust" field.
+func RequesterTrustEqualFold(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldEqualFold(FieldRequesterTrust, v))
+}
+
+// RequesterTrustContainsFold applies the ContainsFold predicate on the "requester_trust" field.
+func RequesterTrustContainsFold(v string) predicate.AarmApprovalRequest {
+	return predicate.AarmApprovalRequest(sql.FieldContainsFold(FieldRequesterTrust, v))
 }
 
 // DecidedAtEQ applies the EQ predicate on the "decided_at" field.

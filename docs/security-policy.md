@@ -742,6 +742,24 @@ A refused answer is on the self-audit log of the account that asked as `approval
 
 A rule with `action: escalate` on a hook that runs after the action, for example a post-tool-use hook, cannot stop the action. The request is then a review item: an approver sees it in the same queue, nobody waits, and an allow stores no grant.
 
+### The trust of a connection
+
+The decision service knows the process behind every connection from the kernel. On Linux it also walks the parents of that process and looks for a known agent program, for example `claude`, that runs as the same account. An agent of another account above the hook, such as one that runs the hook through `sudo -u`, is not the agent of this account. A session binds to the first agent process seen above one of its hooks, and the service records on every event and every receipt how much it trusts the connection that carried it (`peer_trust`):
+
+| Trust | Meaning |
+|---|---|
+| `agent` | A known agent is an ancestor of the hook, and it is the one the session is bound to. |
+| `unknown` | No agent is an ancestor, and the session is bound to none: a host without the walk, or an agent Gryph does not know. |
+| `low` | The hook is not under the agent the session is bound to, while that agent lives. A process of the same account sent it. |
+
+The walk is a signal, not proof: a process can leave the tree of its agent. What `low` changes:
+
+- A prompt from a low-trust connection is recorded as an observation. It does not become the latest intent and does not reset `context.actions_since_intent`, so a forged prompt cannot make a rule lenient.
+- An escalation from a low-trust connection gets no prompt on the terminal, whatever the rule's `min_assurance`. The request waits for an approver at `local-admin` or above.
+- An answer to a request from a process under a known agent is refused, whoever the account is.
+
+When the bound agent process ends, the next agent above a hook binds the session again, so an agent that resumes a session is not low trust.
+
 A later answer from a stronger channel can store a grant. A grant binds to the account, the action digest, the agent session and its scope. The digest covers the normalized action and its working directory, so the same command in another directory is another action. `once` matches the same action one time. `session` matches it for the rest of the agent session. `window` matches it for the account until `grant_ttl`. A grant never matches a whole rule. A retry that matches a grant is allowed, and the receipt names the grant. `max_grant_scope` bounds what an approver can give.
 
 Every answer, and every use of a grant, is on the receipt chain: `gryph policy approve history --format json` prints the `approval` record of each row.

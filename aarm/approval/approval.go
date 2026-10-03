@@ -64,6 +64,8 @@ type Request struct {
 	MinAssurance Assurance
 	// Digest is the identity of the action for a request and a grant.
 	Digest string
+	// PeerTrust is the trust of the connection that carried the action.
+	PeerTrust string
 }
 
 // Outcome is the result of an approval request.

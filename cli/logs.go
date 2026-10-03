@@ -366,6 +366,8 @@ func eventToView(reg *agent.Registry, e *events.Event) *tui.EventView {
 		ErrorMessage:     e.ErrorMessage,
 		IsSensitive:      e.IsSensitive,
 		HasDiff:          e.DiffContent.Value != "",
+		Kind:             string(e.Kind),
+		PeerTrust:        e.PeerTrust,
 	}
 
 	// Extract path/command from payload

@@ -80,7 +80,7 @@ func newPolicyContextCmd() *cobra.Command {
 				return err
 			}
 
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 			defer func() {
@@ -93,7 +93,7 @@ func newPolicyContextCmd() *cobra.Command {
 			out := cmd.OutOrStdout()
 
 			if verify {
-				return runPolicyContextVerify(ctx, out, c, app.Store, sessionID, limit, allSessions, format)
+				return runPolicyContextVerify(ctx, out, c, app.Reads, sessionID, limit, allSessions, format)
 			}
 
 			if window {
@@ -105,13 +105,13 @@ func newPolicyContextCmd() *cobra.Command {
 				if cmd.Flags().Changed("limit") {
 					spec.MaxEntries = limit
 				}
-				return renderPolicyContextWindow(ctx, out, c, app.Store, sessionID, spec, format)
+				return renderPolicyContextWindow(ctx, out, c, app.Reads, sessionID, spec, format)
 			}
 
 			if sessionID != "" {
-				return renderPolicyContextSession(ctx, out, c, app.Store, sessionID, limit, format)
+				return renderPolicyContextSession(ctx, out, c, app.Reads, sessionID, limit, format)
 			}
-			return renderPolicyContextList(ctx, out, c, app.Store, limit, format)
+			return renderPolicyContextList(ctx, out, c, app.Reads, limit, format)
 		},
 	}
 
@@ -165,7 +165,7 @@ type policyContextSessionView struct {
 	Entries []policyContextEntryView `json:"entries"`
 }
 
-func renderPolicyContextSession(ctx context.Context, w io.Writer, c *tui.Colorizer, store storage.Store, sessionRef string, limit int, format string) error {
+func renderPolicyContextSession(ctx context.Context, w io.Writer, c *tui.Colorizer, store storage.ReadStore, sessionRef string, limit int, format string) error {
 	sessionID, err := resolveAarmSessionID(ctx, store, sessionRef)
 	if err != nil {
 		return err
@@ -203,7 +203,7 @@ func renderPolicyContextSession(ctx context.Context, w io.Writer, c *tui.Coloriz
 	return nil
 }
 
-func renderPolicyContextList(ctx context.Context, w io.Writer, c *tui.Colorizer, store storage.Store, limit int, format string) error {
+func renderPolicyContextList(ctx context.Context, w io.Writer, c *tui.Colorizer, store storage.ReadStore, limit int, format string) error {
 	states, err := store.QueryAllContextStates(ctx, limit)
 	if err != nil {
 		return fmt.Errorf("failed to query context states: %w", err)
@@ -363,7 +363,7 @@ type contextVerifySummary struct {
 	Broken int `json:"broken"`
 }
 
-func runPolicyContextVerify(ctx context.Context, w io.Writer, c *tui.Colorizer, store storage.Store, sessionRef string, limit int, allSessions bool, format string) error {
+func runPolicyContextVerify(ctx context.Context, w io.Writer, c *tui.Colorizer, store storage.ReadStore, sessionRef string, limit int, allSessions bool, format string) error {
 	sessionIDs, err := collectContextVerifySessionIDs(ctx, store, sessionRef, limit, allSessions)
 	if err != nil {
 		return err
@@ -431,7 +431,7 @@ func runPolicyContextVerify(ctx context.Context, w io.Writer, c *tui.Colorizer, 
 	return nil
 }
 
-func collectContextVerifySessionIDs(ctx context.Context, store storage.Store, sessionRef string, limit int, allSessions bool) ([]uuid.UUID, error) {
+func collectContextVerifySessionIDs(ctx context.Context, store storage.ReadStore, sessionRef string, limit int, allSessions bool) ([]uuid.UUID, error) {
 	if sessionRef != "" {
 		sid, err := resolveAarmSessionID(ctx, store, sessionRef)
 		if err != nil {
@@ -462,7 +462,14 @@ func collectContextVerifySessionIDs(ctx context.Context, store storage.Store, se
 	return ids, nil
 }
 
-func emitContextChainBrokenAudit(ctx context.Context, store storage.Store, breaks []contextVerifyBreak) {
+// emitContextChainBrokenAudit writes the audit row on a store that takes
+// writes. A read over the socket has none: the service keeps its own.
+func emitContextChainBrokenAudit(ctx context.Context, reads storage.ReadStore, breaks []contextVerifyBreak) {
+	store, ok := reads.(storage.Store)
+	if !ok {
+		log.Warnf("context verify: %d broken chain(s) found through the decision service, no audit row written here", len(breaks))
+		return
+	}
 	if store == nil || len(breaks) == 0 {
 		return
 	}
@@ -537,12 +544,18 @@ func writeContextVerifyJSON(w io.Writer, rows []*storage.ContextEntryRow, breaks
 	return enc.Encode(out)
 }
 
-func renderPolicyContextWindow(ctx context.Context, w io.Writer, c *tui.Colorizer, store storage.Store, sessionRef string, spec model.WindowSpec, format string) error {
+func renderPolicyContextWindow(ctx context.Context, w io.Writer, c *tui.Colorizer, store storage.ReadStore, sessionRef string, spec model.WindowSpec, format string) error {
 	sessionID, err := resolveAarmSessionID(ctx, store, sessionRef)
 	if err != nil {
 		return err
 	}
-	win, err := accumulator.NewSQLite(store).Window(ctx, sessionID, spec)
+	// The window comes from the accumulator over the local store. A read
+	// through the decision service has no such store.
+	local, ok := store.(accumulator.Store)
+	if !ok {
+		return ErrConfig("the window is local", fmt.Errorf("gryph policy context --window reads the window of a session from a local database, and a managed host with the decision service keeps none. Use gryph policy context --session %s", sessionRef))
+	}
+	win, err := accumulator.NewSQLite(local).Window(ctx, sessionID, spec)
 	if err != nil {
 		return fmt.Errorf("failed to load the window: %w", err)
 	}
