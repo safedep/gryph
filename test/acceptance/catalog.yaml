@@ -349,6 +349,13 @@
   guarantee: "On Windows, Gryph reads the managed directory from the shell and not from PROGRAMDATA. A config.yml planted under a user-controlled PROGRAMDATA is ignored, and gryph install --managed with that file exits 3 with nothing changed, because the file fails the owner and DACL chain check."
   labels: [install, managed, windows]
 
+- id: ipc/protocol/unknown-frame
+  title: "the decision service answers an unknown frame with error unsupported"
+  category: ipc
+  tier: P0
+  guarantee: "Over the wire format, hello gets welcome, a frame type the binary does not know gets error with code unsupported, a frame that fails its bounds gets error with code invalid, and the connection goes on to answer the next frame. Unknown fields are ignored."
+  labels: [ipc, protocol, supervisor]
+
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
   category: install

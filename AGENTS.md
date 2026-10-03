@@ -23,6 +23,7 @@ storage/        SQLite + ent ORM
 agent/          Adapter pattern (claudecode/, cursor/ and more)
 hookside/       Work the hook process does as the agent user: project claim, transcript cost
 decision/       Decision service: label, redact, evaluate, and record one hook event
+decision/ipc/   Wire format between the hook client and the decision service: frames, bounds, the connection loop
 engine/         Runtime assembly: config, store, registry, policy check, decision service
 selfprotect/    Self-protection vocabulary: assets, levels, profiles, and the user-scope provider
 platform/       Operating-system specific code behind small interfaces (account identity, no-follow file access, scheduler, processes, kernel settings)
@@ -86,6 +87,7 @@ tui/            Output formatters (table, json, csv)
 - `docs/agent-adapter.md` - Adding a new agent adapter
 - `docs/aarm-dev.md` - AARM / policy layer (`aarm/`, `cli/policy.go`)
 - `docs/content-labels.md` - Content labels, redaction, and logging levels (`core/privacy`, `decision/label.go`)
+- `docs/supervisor-dev.md` - The wire format between the hook client and the decision service (`decision/ipc`)
 
 ## IMPORTANT
 

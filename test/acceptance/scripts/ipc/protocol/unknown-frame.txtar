@@ -1,0 +1,33 @@
+# The wire format between the hook client and the decision service: hello
+# gets welcome, a frame type this binary does not know gets error with
+# code unsupported, a frame that fails its bounds gets error with code
+# invalid, and the connection answers the next frame after both. Unknown
+# fields are ignored. The hidden protocol command runs the real connection
+# loop over stdin and stdout with no decision service behind it.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+ipcframe frames.bin hello.json shutdown.json bad-query.json query.json
+stdin frames.bin
+exec gryph supervisor protocol --text
+stdout -count=4 '"type"'
+stdout '^\{"type":"welcome","body":\{"proto":1,'
+stdout '"type":"error","body":\{"code":"unsupported","message":"ipc: unsupported frame type: .*shutdown'
+stdout '"type":"error","body":\{"code":"invalid","message":"ipc: invalid frame: query without a kind'
+stdout '"type":"error","body":\{"code":"unsupported","message":"no decision service behind this command: query'
+
+# A first frame that is not hello ends the connection with one error.
+ipcframe nohello.bin query.json
+stdin nohello.bin
+! exec gryph supervisor protocol --text
+stdout '"code":"invalid","message":"the first frame must be hello'
+
+-- hello.json --
+{"type":"hello","body":{"proto":1,"client_version":"test","caps":["prompt"],"future_field":true}}
+-- shutdown.json --
+{"type":"shutdown","body":{}}
+-- bad-query.json --
+{"type":"query","body":{"params":{"a":"b"}}}
+-- query.json --
+{"type":"query","body":{"kind":"sessions","limit":5}}

@@ -3,6 +3,8 @@
 package acceptance
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
@@ -118,6 +120,7 @@ func TestAcceptance(t *testing.T) {
 					"expandenv": cmdExpandEnv,
 					"replace":   cmdReplace,
 					"capture":   cmdCapture,
+					"ipcframe":  cmdIPCFrame,
 				},
 			})
 		})
@@ -230,6 +233,28 @@ func cmdCapture(ts *testscript.TestScript, neg bool, args []string) {
 		ts.Fatalf("capture: pattern %q did not match or has no capture group", args[1])
 	}
 	ts.Setenv(args[0], m[1])
+}
+
+// cmdIPCFrame writes the JSON files as length-prefixed frames into one
+// file: ipcframe <out> <json-file>... A script pipes the file into a
+// command that speaks the wire format.
+func cmdIPCFrame(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("ipcframe does not support negation")
+	}
+	if len(args) < 2 {
+		ts.Fatalf("usage: ipcframe <out> <json-file>...")
+	}
+	var out bytes.Buffer
+	for _, name := range args[1:] {
+		data, err := os.ReadFile(ts.MkAbs(name))
+		ts.Check(err)
+		var header [4]byte
+		binary.BigEndian.PutUint32(header[:], uint32(len(data)))
+		out.Write(header[:])
+		out.Write(data)
+	}
+	ts.Check(os.WriteFile(ts.MkAbs(args[0]), out.Bytes(), 0o644))
 }
 
 type scriptFile struct {
