@@ -341,8 +341,9 @@ type Paths struct {
 //
 // Precedence: the system managed file is authoritative when present. It
 // wins over an explicit configPath and over the per-user config file, so a
-// user cannot bypass it with --config. Without a managed file, an explicit
-// configPath wins over the per-user file.
+// user cannot bypass it with --config. Gryph also reads no GRYPH_* variable
+// while it is active. Without a managed file, an explicit configPath wins
+// over the per-user file, and GRYPH_* variables win over both.
 func Load(configPath string) (*Config, error) {
 	MigrateLegacyLayout()
 
@@ -367,11 +368,6 @@ func Load(configPath string) (*Config, error) {
 		v.AddConfigPath(paths.ConfigDir)
 	}
 
-	// Bind environment variables
-	v.SetEnvPrefix("GRYPH")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.AutomaticEnv()
-
 	// Read config file
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -384,16 +380,12 @@ func Load(configPath string) (*Config, error) {
 		}
 	}
 
-	// viper's Unmarshal does not consult environment variables, only Get does
-	// (spf13/viper#761). AllKeys only reports keys with a default, a file
-	// entry, or an explicit binding, so bind every Config key first. Then
-	// materialize each key through Get so a GRYPH_* variable reaches the
-	// struct, including optional keys absent from defaults and file.
-	if err := bindStructEnvKeys(v, reflect.TypeOf(Config{}), ""); err != nil {
-		return nil, fmt.Errorf("bind config env keys: %w", err)
-	}
-	for _, key := range v.AllKeys() {
-		v.Set(key, v.Get(key))
+	// The managed file is the only source of settings while it is active. A
+	// GRYPH_* variable would let a user override the administrator.
+	if managed == "" {
+		if err := applyEnvOverrides(v); err != nil {
+			return nil, err
+		}
 	}
 
 	// Unmarshal into struct
@@ -545,6 +537,26 @@ func signModeFromLegacyBool(b bool) string {
 		return SignModeAlways
 	}
 	return SignModeNever
+}
+
+// applyEnvOverrides lets GRYPH_* variables override the defaults and the
+// config file. viper's Unmarshal does not consult environment variables,
+// only Get does (spf13/viper#761). AllKeys only reports keys with a default,
+// a file entry, or an explicit binding, so bind every Config key first. Then
+// materialize each key through Get so a GRYPH_* variable reaches the struct,
+// including optional keys absent from defaults and file.
+func applyEnvOverrides(v *viper.Viper) error {
+	v.SetEnvPrefix("GRYPH")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
+	if err := bindStructEnvKeys(v, reflect.TypeOf(Config{}), ""); err != nil {
+		return fmt.Errorf("bind config env keys: %w", err)
+	}
+	for _, key := range v.AllKeys() {
+		v.Set(key, v.Get(key))
+	}
+	return nil
 }
 
 // bindStructEnvKeys walks the mapstructure tags of t and binds each leaf key
