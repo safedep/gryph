@@ -440,6 +440,13 @@
   guarantee: "A process named like an agent program that runs through the census window with no hook event is drift on the hook_traffic row and a silent_agent tamper event. A hook call clears it, as a resolved tamper event."
   labels: [doctor, census, selfprotect]
 
+- id: doctor/managed/json-contract
+  title: "doctor --managed prints the compliance report with a stable JSON contract"
+  category: doctor
+  tier: P0
+  guarantee: "gryph doctor --managed reports schema_version, profile, issues, the config, policy and binary chain state, the per-agent class and level, the key scope, the supervisor state and the collection level. It exits 0 only for the locked profile, and it refuses a binary that root does not own. Privileged job only."
+  labels: [doctor, managed, privileged, linux]
+
 - id: doctor/posture/report
   title: "doctor reports the host posture"
   category: doctor

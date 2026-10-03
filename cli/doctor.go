@@ -22,8 +22,10 @@ import (
 // NewDoctorCmd creates the doctor command.
 func NewDoctorCmd() *cobra.Command {
 	var (
-		format string
-		repair bool
+		format  string
+		repair  bool
+		managed bool
+		asJSON  bool
 	)
 
 	cmd := &cobra.Command{
@@ -44,9 +46,20 @@ event in the system session. With --repair, doctor also rewrites a hook
 configuration that differs from a current install, the same pass as gryph
 supervisor reconcile --once. The host posture section lists the kernel
 settings and the agent behavior that decide how far a same-user adversary
-gets.`,
+gets.
+
+With --managed, doctor prints the compliance report of a managed install
+instead: the managed configuration, the managed policy, the binary chain
+and the managed hook entry of every agent in the allowlist. It reads no
+per-user state. The exit code is 0 for the locked profile and 1 otherwise.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+			if managed {
+				return runManagedDoctor(ctx, cmd.OutOrStdout(), asJSON || format == "json")
+			}
+			if asJSON {
+				return ErrConfig("invalid flags", fmt.Errorf("--json needs --managed, use --format json"))
+			}
 
 			app, err := loadApp()
 			if err != nil {
@@ -203,6 +216,8 @@ gets.`,
 
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json, jsonl, csv")
 	cmd.Flags().BoolVar(&repair, "repair", false, "rewrite a hook configuration that differs from a current install")
+	cmd.Flags().BoolVar(&managed, "managed", false, "print the compliance report of the managed install, for an MDM tool")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "with --managed: print the report as JSON")
 
 	return cmd
 }

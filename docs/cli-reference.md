@@ -511,6 +511,63 @@ their error.
 }
 ```
 
+#### Managed doctor
+
+An MDM tool reads the state of a managed install with one command and
+treats the JSON as a compliance attribute:
+
+```bash
+gryph doctor --managed --json
+```
+
+The command reads the managed configuration, the managed policy, the binary
+that the hook entries name, and the managed hook entry of every agent in
+`managed.agents`. It reads no per-user state, so it gives the same answer
+for every user of the host. The exit code is 0 for the `locked` profile and
+1 otherwise, so a script can gate on it.
+
+The profile is `locked` when every part is in place: a trusted managed
+configuration, a trusted managed policy, a binary that passes the chain
+check, and a managed entry that matches the configuration for every agent in
+the allowlist. Anything missing puts the profile at `none` and names the
+reason in `issues`. A binary that root does not own, or that sits below a
+directory another user can write, is refused.
+
+```json
+{
+  "schema_version": 1,
+  "profile": "locked",
+  "summary": "Locked (hook entry and policy files, decision and audit trail not protected)",
+  "issues": [],
+  "config": {"path": "/etc/safedep/gryph/config.yml", "chain": "ok"},
+  "policy": {"path": "/etc/safedep/gryph/policy.yaml", "chain": "ok", "version": "1", "sha256": "...", "allow_user_policy": false},
+  "binary": {"path": "/usr/libexec/safedep/gryph/gryph", "chain": "ok"},
+  "agents": [
+    {"name": "claude-code", "class": "locked", "path": "/etc/claude-code/managed-settings.d/50-gryph.json", "level": "prevent_same_user", "match": true, "locked": true},
+    {"name": "cursor", "class": "system_path", "path": "/etc/cursor/hooks.json", "level": "detect", "match": true, "locked": false}
+  ],
+  "key": {"scope": "user", "protected": false},
+  "supervisor": {"state": "absent"},
+  "collection": {"level": "none"}
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | The version of this contract. A field never changes meaning. A new field raises nothing. A removed or renamed field raises the version. |
+| `profile` | `locked` or `none`. |
+| `summary` | One line for a human. Until the supervisor ships it reads "Locked (hook entry and policy files, decision and audit trail not protected)". |
+| `issues` | What keeps the profile from `locked`. Empty for `locked`. |
+| `config`, `binary` | `path` and `chain`: `ok`, `missing`, `untrusted` (with `error`), or `absent` when the platform has no managed location. |
+| `policy` | The same, plus `version` (the file's version field), `sha256` of the file, and `allow_user_policy` from the managed configuration. |
+| `agents` | One row per agent in `managed.agents`: `class`, `path`, `level` (`prevent_same_user` for a `locked` entry that matches, `detect` for a `system_path` entry that matches, `none` otherwise), `match`, `locked` (the lock switch), `error`. |
+| `key` | `scope` is `user`: the receipt signing key lives in each user's home, and `protected` is false. |
+| `supervisor` | `state` is `absent`: no decision service runs outside the user yet. |
+| `collection` | `level` is `none`: no evidence leaves the host. |
+
+The text form prints the same facts, with "Key: user-owned (not protected)"
+on its own line.
+
 #### System managed configuration
 
 An administrator can place a configuration file at a system location. When it
