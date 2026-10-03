@@ -20,9 +20,9 @@ import (
 // classifier and injection scorer run after normalization to populate the
 // reserved risk-signal fields on Action. The AARM safe-by-default
 // classification safety net lives in classify.NewFailSafe so callers can
-// wrap any Classifier (including nil) once at construction. The shared
-// Common holds the classifier, scorer, and identity capturer so both
-// adapters configure them through the same option helpers.
+// wrap any Classifier (including nil) once at construction. Common holds
+// the classifier, scorer, identity capturer and shell budget, and the
+// CommonOption helpers set them.
 type HookAdapter struct {
 	Common
 }
@@ -95,7 +95,7 @@ func (h *HookAdapter) Normalize(ctx context.Context, event *events.Event, sess *
 	}
 	applyContentMatch(action, event.FullContent, event.OutputTruncated)
 
-	h.applyEnrichment(ctx, action, nil)
+	h.applyEnrichment(ctx, action)
 
 	return action, newEntry(event, action), nil
 }

@@ -38,9 +38,8 @@ type Adapter interface {
 // Common collects the optional dependencies every adapter needs to enrich a
 // normalized action: a Classifier for data classifications, an InjectionScorer
 // for tool-use risk scoring, and an identity Capturer for the principal /
-// service identity / role scope fields. HookAdapter and MCPAdapter embed
-// Common so option helpers and the runtime call sites that use them stay in
-// one place.
+// service identity / role scope fields. HookAdapter embeds Common, and the
+// options configure it.
 type Common struct {
 	Classifier      Classifier
 	Scorer          InjectionScorer
@@ -97,10 +96,8 @@ func WithIdentityCapturer(c identity.Capturer) CommonOption {
 // applyEnrichment populates the classification, injection score, and identity
 // fields on a freshly normalized Action from the Common's wired collaborators.
 // Adapters call this from Normalize after they have populated the
-// adapter-specific fields. metaOverrides is consulted for the three identity
-// fields when non-nil, mirroring the MCP adapter's per-event overrides; pass
-// nil to skip.
-func (c *Common) applyEnrichment(ctx context.Context, action *model.Action, metaOverrides map[string]any) {
+// adapter-specific fields.
+func (c *Common) applyEnrichment(ctx context.Context, action *model.Action) {
 	if c == nil || action == nil {
 		return
 	}
@@ -116,24 +113,11 @@ func (c *Common) applyEnrichment(ctx context.Context, action *model.Action, meta
 		action.ServiceIdentity = ident.ServiceIdentity
 		action.RoleScope = ident.RoleScope
 	}
-	if len(metaOverrides) == 0 {
-		return
-	}
-	if v, ok := metaOverrides["human_principal"].(string); ok && v != "" {
-		action.HumanPrincipal = v
-	}
-	if v, ok := metaOverrides["service_identity"].(string); ok && v != "" {
-		action.ServiceIdentity = v
-	}
-	if v, ok := metaOverrides["role_scope"].(string); ok && v != "" {
-		action.RoleScope = v
-	}
 }
 
 // populateWellKnownParams promotes a handful of well-known argument keys
 // (url, file_path / path, command) onto typed fields on Parameters when the
-// caller has not already set them. Both the hook adapter and the MCP adapter
-// use this to keep the canonical parameter shape consistent.
+// caller has not already set them.
 func populateWellKnownParams(p *model.Parameters, args map[string]any) {
 	if p == nil || len(args) == 0 {
 		return
