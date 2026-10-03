@@ -160,6 +160,8 @@ gryph config set policy.enabled true
 
 See [security policy](./docs/security-policy.md) for more details.
 
+Gryph also protects its own hooks, policy and audit trail. `gryph doctor` shows the level of each asset and the profile they earn. In the `guard` profile, Gryph guards against agent mistakes and simple attempts to change it, detects a change to a hook configuration, and repairs it when you turn repair on. It does not stop a determined same-user adversary or root. See [self-protection](./docs/self-protection.md) for the limits and the claims you can make.
+
 ## Commands
 
 > For a complete reference of all commands and flags, see [CLI Reference](docs/cli-reference.md).
@@ -244,9 +246,13 @@ gryph self-log                 # View gryph's own audit trail
 ### Health Check
 
 ```bash
-gryph status  # Check installation status
-gryph doctor  # Diagnose issues
+gryph status                       # Check installation status
+gryph doctor                       # Diagnose issues, show the self-protection table and the host posture
+gryph doctor --repair              # Also repair a changed hook configuration
+gryph supervisor reconcile --once  # The self-protection pass alone, for a timer
 ```
+
+See [self-protection](./docs/self-protection.md).
 
 ## Configuration
 

@@ -48,7 +48,9 @@ close this today.
 ## Assets, levels and profiles
 
 Gryph describes its own protection per asset. `gryph doctor` prints one row per
-asset with its level, and the profile that the levels earn.
+asset with its level, and the profile that the levels earn. The
+[self-protection guide](./self-protection.md) explains how to read the table
+and how the reconcile pass and the repair work.
 
 | Asset | What it is |
 |---|---|

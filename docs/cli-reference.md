@@ -109,9 +109,22 @@ Self-protection
 
   ASSET        AGENT         LEVEL                     DETAIL
   hook_config  claude-code   detect                    /home/me/.claude
+  hook_traffic claude-code   detect                    1 process(es), pid 4242, last hook event 12s ago
   binary                     mediated                  /opt/safedep/gryph/bin/gryph
   policy                     mediated                  /home/me/.config/safedep/gryph/policy.yaml, ...
+  config                     mediated                  /home/me/.config/safedep/gryph/config.yml
+  store                      mediated                  /home/me/.local/share/safedep/gryph/audit.db
+  key                        mediated                  /home/me/.config/safedep/gryph/keys/receipt.key
+  key                        mediated                  /home/me/.local/share/safedep/gryph/export.key
+
+Host posture
+  [ok]  kernel.yama.ptrace_scope = 1
+        only a parent can trace the hook
+  [..]  claude-code on a hook error or timeout = lets the action through
+        hook timeout 600 s
 ```
+
+The [self-protection guide](./self-protection.md) explains the table.
 
 With `policy.enabled: false`, the default, the built-in rules do not run. Every
 asset that only they protect is at `none`, the row names the config key, and
