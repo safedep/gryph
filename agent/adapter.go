@@ -83,6 +83,10 @@ type UninstallOptions struct {
 	RestoreBackup bool
 	// BackupDir is the directory containing backups.
 	BackupDir string
+	// Repair applies the repair rules to the removal: no link in the path
+	// below the home directory, a temporary file and a rename, Gryph
+	// entries only. A process that runs for another user sets it.
+	Repair bool
 }
 
 // UninstallResult contains the result of hook removal.

@@ -314,7 +314,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 
 	configFile := detection.HooksPath
 
-	raw, err := readDevinConfig(configFile, agent.InstallOptions{})
+	raw, err := readDevinConfig(configFile, agent.InstallOptions{Repair: opts.Repair})
 	if err != nil {
 		if os.IsNotExist(err) {
 			result.Success = true
@@ -376,7 +376,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		return result, result.Error
 	}
 
-	if err := writeDevinConfig(configFile, raw, agent.InstallOptions{}); err != nil {
+	if err := writeDevinConfig(configFile, raw, agent.InstallOptions{Repair: opts.Repair}); err != nil {
 		result.Error = fmt.Errorf("failed to write config.json: %w", err)
 		return result, result.Error
 	}

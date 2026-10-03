@@ -211,8 +211,8 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 
 	hooksFile := detection.HooksPath
 
-	data, err := os.ReadFile(hooksFile)
-	if os.IsNotExist(err) {
+	data, err := agent.ReadHookFile(hooksFile, agent.InstallOptions{Repair: opts.Repair})
+	if agent.IsNotExist(err) {
 		result.Success = true
 		return result, nil
 	} else if err != nil {
@@ -266,7 +266,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		return result, result.Error
 	}
 
-	if err := agent.WriteHookFile(hooksFile, newData, 0600, agent.InstallOptions{}); err != nil {
+	if err := agent.WriteHookFile(hooksFile, newData, 0600, agent.InstallOptions{Repair: opts.Repair}); err != nil {
 		result.Error = fmt.Errorf("failed to write hooks.json: %w", err)
 		return result, result.Error
 	}

@@ -328,6 +328,20 @@
   guarantee: "gryph install --managed writes the Gryph entries into the Cascade system hooks.json and reports the class system_path. Privileged job only."
   labels: [install, managed, privileged, linux]
 
+- id: uninstall/managed/round-trip
+  title: "uninstall --managed reverses install --managed"
+  category: uninstall
+  tier: P0
+  guarantee: "gryph uninstall --managed removes the Gryph entries from every managed hook file, keeps the administrator entries, removes the managed policy and configuration, and a second run changes nothing. Privileged job only."
+  labels: [uninstall, managed, privileged, linux]
+
+- id: uninstall/managed/uid-drop
+  title: "uninstall --managed cleans each home as that account"
+  category: uninstall
+  tier: P0
+  guarantee: "gryph uninstall --managed removes the Gryph entries from the agent hook files in every account's home through a helper that runs as that account. The helper keeps the account's other hooks and the file owner, and a link to a root-owned file changes nothing. Privileged job only."
+  labels: [uninstall, managed, privileged, linux]
+
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
   category: install

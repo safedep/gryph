@@ -88,6 +88,7 @@ native hook systems to create a comprehensive audit trail of all agent actions.`
 	rootCmd.AddCommand(
 		NewInstallCmd(),
 		NewUninstallCmd(),
+		newUninstallUserCmd(),
 		NewStatusCmd(),
 		NewDoctorCmd(),
 		NewLogsCmd(),

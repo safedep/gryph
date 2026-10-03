@@ -73,6 +73,31 @@ gryph uninstall --restore-backup
 | `--dry-run`        | bool                | false   | Show what would be removed             |
 | `--restore-backup` | bool                | false   | Restore backed-up hooks if available   |
 | `--repair-timer`   | bool                | false   | Also remove the timer that runs `gryph supervisor reconcile` |
+| `--managed`        | bool                | false   | As root: remove the managed hook entries, the Gryph entries in every home, and the managed policy and configuration |
+| `--json`           | bool                | false   | With `--managed`: print the report as JSON |
+
+#### Managed uninstall
+
+`sudo gryph uninstall --managed [--purge] [--dry-run] [--json]` reverses
+[Managed install](#managed-install). It removes the Gryph entries from the
+managed hook file of every agent and keeps the other entries. It then removes
+the Gryph entries from the agent hook files in every account's home, and last
+the managed policy and configuration. The per-user state (the database, the
+keys, the receipts) stays unless `--purge`. A second run changes nothing.
+
+The walk of the homes is the one place where a root process touches a user's
+home, and it never does so as root. For each account with a home directory,
+Gryph starts a helper that drops to the account's uid and gid before it opens
+a file, with the account's home as `HOME` and a minimal environment. The
+helper applies the repair rules: no link in the path below the home, a
+temporary file and a rename, Gryph entries only. A link in a home reaches only
+what the account can already write. On Windows, Gryph cannot drop to another
+account, so the report says the homes were skipped.
+
+Exit codes: 0 success, 1 failure, 10 partial, with the JSON naming the
+degraded agent or account. The JSON lists `agents` (the managed files),
+`users` (one row per account, with the hooks removed per agent or the error),
+`removed` (the managed files) and `users_skipped`.
 
 ### status
 

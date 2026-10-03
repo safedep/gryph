@@ -21,6 +21,11 @@ that tier today and what it cannot do.
 In one sentence: Gryph prevents tier A, contains part of tier B, and detects
 tier C only with evidence off the host.
 
+Root never writes into a user's home. The reconcile pass and the repair run
+as the user. The one exception is `gryph uninstall --managed`, which cleans
+the agent hook files of every account through a helper that drops to that
+account's uid and gid before it opens a file.
+
 The largest tier B gap: an agent with a shell can work outside the hook path.
 The pre-execution hook sees the command, and Gryph parses it for the paths it
 changes, but a script file, an interpreter, or a path built at run time escapes

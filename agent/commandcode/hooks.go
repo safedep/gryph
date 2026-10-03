@@ -344,7 +344,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		return result, nil
 	}
 
-	settings, err := readSettings(settingsPath, agent.InstallOptions{})
+	settings, err := readSettings(settingsPath, agent.InstallOptions{Repair: opts.Repair})
 	if err != nil {
 		result.Error = fmt.Errorf("failed to read settings.json: %w", err)
 		return result, result.Error
@@ -429,7 +429,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 	}
 
 	// Write updated settings
-	if err := writeSettings(settingsPath, settings, agent.InstallOptions{}); err != nil {
+	if err := writeSettings(settingsPath, settings, agent.InstallOptions{Repair: opts.Repair}); err != nil {
 		result.Error = fmt.Errorf("failed to write settings.json: %w", err)
 		return result, result.Error
 	}

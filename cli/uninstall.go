@@ -21,6 +21,8 @@ func NewUninstallCmd() *cobra.Command {
 		dryRun        bool
 		restoreBackup bool
 		repairTimer   bool
+		managed       bool
+		asJSON        bool
 	)
 
 	cmd := &cobra.Command{
@@ -33,8 +35,15 @@ removes the database and configuration files as well.`,
 		Example: `  gryph uninstall
   gryph uninstall --agent claude-code
   gryph uninstall --purge
-  gryph uninstall --restore-backup`,
+  gryph uninstall --restore-backup
+  sudo gryph uninstall --managed --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if managed {
+				return runManagedUninstall(cmd, purge, dryRun, asJSON)
+			}
+			if asJSON {
+				return ErrConfig("invalid flags", fmt.Errorf("--json needs --managed"))
+			}
 			ctx := context.Background()
 
 			app, err := loadApp()
@@ -152,6 +161,8 @@ removes the database and configuration files as well.`,
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be removed")
 	cmd.Flags().BoolVar(&restoreBackup, "restore-backup", false, "restore backed-up hooks if available")
 	cmd.Flags().BoolVar(&repairTimer, "repair-timer", false, "also remove the timer that runs gryph supervisor reconcile")
+	cmd.Flags().BoolVar(&managed, "managed", false, "as root: remove the managed hook entries, the Gryph entries in every home, and the managed policy and configuration")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "with --managed: print the report as JSON")
 
 	return cmd
 }
