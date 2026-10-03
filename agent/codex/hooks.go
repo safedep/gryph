@@ -100,19 +100,26 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	hooksFile := detection.HooksPath
 
 	if !opts.DryRun {
-		if err := os.MkdirAll(configDir, 0700); err != nil {
+		if err := agent.EnsureHookDir(configDir, 0700, opts); err != nil {
 			result.Error = fmt.Errorf("failed to create config directory: %w", err)
 			return result, result.Error
 		}
 	}
 
 	var existingConfig *HooksConfig
-	if data, err := os.ReadFile(hooksFile); err == nil {
+	if data, err := agent.ReadHookFile(hooksFile, opts); err == nil {
 		existingConfig = &HooksConfig{}
 		if err := json.Unmarshal(data, existingConfig); err != nil {
+			if opts.Repair {
+				result.Error = fmt.Errorf("hooks.json does not parse, so the repair leaves it: %w", err)
+				return result, result.Error
+			}
 			result.Warnings = append(result.Warnings, "existing hooks.json is malformed, will be replaced")
 			existingConfig = nil
 		}
+	} else if !agent.IsNotExist(err) {
+		result.Error = fmt.Errorf("failed to read hooks.json: %w", err)
+		return result, result.Error
 	}
 
 	if existingConfig != nil {
@@ -168,7 +175,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		return result, result.Error
 	}
 
-	if err := os.WriteFile(hooksFile, data, 0600); err != nil {
+	if err := agent.WriteHookFile(hooksFile, data, 0600, opts); err != nil {
 		result.Error = fmt.Errorf("failed to write hooks.json: %w", err)
 		return result, result.Error
 	}
@@ -290,7 +297,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		return result, result.Error
 	}
 
-	if err := os.WriteFile(hooksFile, newData, 0600); err != nil {
+	if err := agent.WriteHookFile(hooksFile, newData, 0600, agent.InstallOptions{}); err != nil {
 		result.Error = fmt.Errorf("failed to write hooks.json: %w", err)
 		return result, result.Error
 	}

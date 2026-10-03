@@ -105,10 +105,55 @@ With `policy.enabled: false`, the default, the built-in rules do not run. Every
 asset that only they protect is at `none`, the row names the config key, and
 the profile is `none`.
 
-`doctor` records a tamper event in the system session of the account when a
-hook configuration drifts, when the drift changes or clears, and when the
-level of an asset changes. The line `Tamper events recorded: N` names the
-count. A repeated run with no change records nothing. See
+`doctor` runs one reconcile pass. It records a tamper event in the system
+session of the account when a hook configuration drifts, when the drift
+changes or clears, and when the level of an asset changes. The line `Tamper
+events recorded: N` names the count. A repeated run with no change records
+nothing. With `--repair`, the pass also repairs hook configurations. See
+[supervisor reconcile](#supervisor-reconcile) and
+[system session and tamper events](./security-policy.md#system-session-and-tamper-events).
+
+| Flag       | Short | Type | Default | Description                                                           |
+| ---------- | ----- | ---- | ------- | --------------------------------------------------------------------- |
+| `--repair` |       | bool | false   | Rewrite a hook configuration that differs from a current install      |
+
+### supervisor reconcile
+
+Run one self-protection pass: assess every Gryph asset, record each change
+since the last pass as a tamper event, print the self-protection table, and
+repair hook configurations.
+
+```bash
+gryph supervisor reconcile --once
+gryph supervisor reconcile --once --repair
+gryph supervisor reconcile --once --format json
+```
+
+| Flag       | Short | Type   | Default | Description                                                                             |
+| ---------- | ----- | ------ | ------- | --------------------------------------------------------------------------------------- |
+| `--once`   |       | bool   | false   | Run one pass and exit. Required in this version.                                        |
+| `--repair` |       | bool   | false   | Repair in this pass, also when `policy.self_protection.repair` is off                   |
+| `--format` |       | string | table   | Output format: `table`, `json`, `jsonl`, `csv`                                          |
+
+The pass repairs when `policy.self_protection.repair` is `true` or `--repair`
+is set. The key is `false` by default in the user scope and `true` by default
+under a system managed configuration. A repair follows these rules:
+
+- It runs as the user who owns the home directory. Root never repairs a file
+  in a user's home.
+- It refuses a symbolic link in the path of the file below the home
+  directory, and leaves the link and its target as they are.
+- It writes a temporary file in the same directory and renames it into
+  place, so a crash leaves the old file.
+- It rewrites only the Gryph entries. The user's other settings stay.
+- It leaves a file that does not parse. A human must look at it.
+- After three repairs of one asset within an hour, failed or not, it stops
+  repairing that asset and records a `rate_limited` tamper event. A pass
+  that fights an agent over a file must not loop.
+
+The command exits with code 1 when a repair failed or an asset reached the
+rate limit, so a timer job shows up in its log. The outcome of each repair
+is a tamper event: `repair`, `repair_failed` or `rate_limited`. See
 [system session and tamper events](./security-policy.md#system-session-and-tamper-events).
 
 ### logs

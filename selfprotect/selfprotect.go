@@ -7,7 +7,7 @@ package selfprotect
 
 import (
 	"context"
-	"errors"
+	"fmt"
 )
 
 // Asset is a part of Gryph that an adversary can change to weaken it.
@@ -92,7 +92,37 @@ type AssetStatus struct {
 type RepairOptions struct {
 	// DryRun reports the repairs without making them.
 	DryRun bool
+	// Only limits the repair to these assets. Empty repairs every asset
+	// with drift that the provider owns.
+	Only []AssetRef
 }
+
+// AssetRef names one asset: the asset kind and, for a hook configuration,
+// the agent.
+type AssetRef struct {
+	Asset Asset
+	Agent string
+}
+
+// Ref returns the reference of the status.
+func (s AssetStatus) Ref() AssetRef { return AssetRef{Asset: s.Asset, Agent: s.Agent} }
+
+// RepairError is the error of one asset that a repair did not restore. A
+// Repair call returns it joined with the others, so the caller can name
+// each asset.
+type RepairError struct {
+	Ref AssetRef
+	Err error
+}
+
+func (e *RepairError) Error() string {
+	if e.Ref.Agent != "" {
+		return fmt.Sprintf("%s %s: %v", e.Ref.Asset, e.Ref.Agent, e.Err)
+	}
+	return fmt.Sprintf("%s: %v", e.Ref.Asset, e.Err)
+}
+
+func (e *RepairError) Unwrap() error { return e.Err }
 
 // Provider assesses and repairs the assets it owns.
 type Provider interface {
@@ -104,10 +134,6 @@ type Provider interface {
 	// assets it changed.
 	Repair(ctx context.Context, opts RepairOptions) ([]AssetStatus, error)
 }
-
-// ErrRepairUnsupported is the error of a provider that assesses but does not
-// repair.
-var ErrRepairUnsupported = errors.New("selfprotect: this provider does not repair")
 
 // Profile is the label that the minimum levels of an install earn.
 type Profile string

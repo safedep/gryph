@@ -404,10 +404,16 @@
         "drift": {
           "type": "string"
         },
+        "error": {
+          "type": "string"
+        },
         "level_after": {
           "type": "string"
         },
         "level_before": {
+          "type": "string"
+        },
+        "operation": {
           "type": "string"
         },
         "provider": {
@@ -415,6 +421,7 @@
         }
       },
       "required": [
+        "operation",
         "asset",
         "level_before",
         "level_after",

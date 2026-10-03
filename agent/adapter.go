@@ -54,6 +54,11 @@ type InstallOptions struct {
 	// Command is the program that the hook entries name. Empty names the
 	// running binary by its absolute path.
 	Command string
+	// Repair marks an unattended rewrite of the Gryph entries. The adapter
+	// then refuses a symbolic link in the path of the file, keeps a file
+	// that does not parse, and makes no backup. Read and write the file with
+	// ReadHookFile and WriteHookFile, which apply these rules.
+	Repair bool
 }
 
 // InstallResult contains the result of hook installation.

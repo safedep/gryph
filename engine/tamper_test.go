@@ -55,9 +55,8 @@ func TestTamperRecorder_RecordChanges(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, recorded, 1)
 	p := payloadOf(t, recorded[0])
-	assert.Equal(t, events.TamperPayload{Asset: "hook_config", Agent: "claude-code", LevelBefore: "detect", LevelAfter: "detect",
+	assert.Equal(t, events.TamperPayload{Operation: "drift", Asset: "hook_config", Agent: "claude-code", LevelBefore: "detect", LevelAfter: "detect",
 		Drift: "hooks not installed", Provider: "user", Detail: "/home/u/.claude-code"}, p)
-	assert.Equal(t, "drift", p.Operation())
 	assert.Equal(t, events.ActionTamper, recorded[0].ActionType)
 	assert.Equal(t, session.SystemAgentName, recorded[0].AgentName)
 	assert.Equal(t, rec.SessionID(), recorded[0].SessionID)
@@ -83,7 +82,7 @@ func TestTamperRecorder_RecordChanges(t *testing.T) {
 	require.Len(t, recorded, 1)
 	p = payloadOf(t, recorded[0])
 	assert.Empty(t, p.Drift)
-	assert.Equal(t, "resolved", p.Operation())
+	assert.Equal(t, "resolved", p.Operation)
 	assert.Equal(t, "hook_config claude-code resolved: level detect to detect", p.Summary())
 
 	lowered := []selfprotect.AssetStatus{hookConfig("claude-code", selfprotect.LevelMediated, ""), store(selfprotect.LevelNone)}
@@ -91,7 +90,7 @@ func TestTamperRecorder_RecordChanges(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, recorded, 1, "the store has no history, so only the hook config level change records")
 	p = payloadOf(t, recorded[0])
-	assert.Equal(t, "level", p.Operation())
+	assert.Equal(t, "level", p.Operation)
 	assert.Equal(t, "detect", p.LevelBefore)
 	assert.Equal(t, "mediated", p.LevelAfter)
 
@@ -123,7 +122,7 @@ func TestTamperRecorder_RecordChanges(t *testing.T) {
 func TestTamperRecorder_Record_ReceiptFailure(t *testing.T) {
 	st := storagetest.NewStore(t)
 	rec := newTamperRecorder(st, receipt.NewSQLite(nil), "42")
-	_, err := rec.Record(context.Background(), events.TamperPayload{Asset: "store", LevelBefore: "mediated", LevelAfter: "none"})
+	_, err := rec.Record(context.Background(), events.TamperPayload{Operation: "level", Asset: "store", LevelBefore: "mediated", LevelAfter: "none"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, receipt.ErrInsert)
 }

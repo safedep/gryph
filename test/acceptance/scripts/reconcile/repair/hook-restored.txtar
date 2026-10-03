@@ -1,0 +1,39 @@
+# With policy.self_protection.repair on, a reconcile pass rewrites the Gryph
+# entries of a hook configuration that differs from a current install. The
+# user's other settings stay. The repair is a tamper event with a receipt.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+replace $HOME/.claude/settings.json '{' '{"theme": "dark",'
+
+replace $HOME/.claude/settings.json PreToolUse XPreToolUse
+exec gryph supervisor reconcile --once --no-color
+stdout 'Repaired: hook_config claude-code'
+stdout 'Tamper events recorded: 2'
+! stdout 'drift:'
+grep 'gryph _hook claude-code PreToolUse' $HOME/.claude/settings.json
+grep '"theme": "dark"' $HOME/.claude/settings.json
+
+exec gryph doctor --no-color
+stdout '\[ok\]\s+Claude Code hooks'
+! stdout 'Tamper events recorded'
+
+exec gryph policy receipts --format json --no-color
+stdout 'hook_config claude-code drift: level detect to detect, hooks are invalid: PreToolUse'
+stdout 'hook_config claude-code repair: level detect to detect'
+
+# Without the config key, --repair asks for the same pass.
+env XDG_CONFIG_HOME=$WORK/home2/.config
+replace $HOME/.claude/settings.json PreToolUse XPreToolUse
+exec gryph supervisor reconcile --once --no-color
+! stdout 'Repaired'
+exec gryph supervisor reconcile --once --repair --no-color
+stdout 'Repaired: hook_config claude-code'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  self_protection:
+    repair: true

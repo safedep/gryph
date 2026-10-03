@@ -307,6 +307,41 @@
   guarantee: "A read and a write payload for each supported agent parse and persist with the correct action type."
   labels: [hook, ingest, protocols]
 
+- id: reconcile/detect/hook-removed
+  title: "a reconcile pass detects a removed hook entry and changes nothing"
+  category: reconcile
+  tier: P0
+  guarantee: "gryph supervisor reconcile --once reports a removed hook entry as drift, records one tamper event, leaves the file as it is when repair is off, and records nothing on a repeated pass."
+  labels: [reconcile, detect, selfprotect]
+
+- id: reconcile/repair/hook-restored
+  title: "a reconcile pass with repair on restores the Gryph hook entries"
+  category: reconcile
+  tier: P0
+  guarantee: "With policy.self_protection.repair on, or with --repair, a reconcile pass rewrites the Gryph entries of a changed hook configuration, keeps the user's other settings, and records the repair as a tamper event with a receipt."
+  labels: [reconcile, repair, selfprotect]
+
+- id: reconcile/repair/symlink-no-write
+  title: "a repair refuses a hook configuration that is a symbolic link"
+  category: reconcile
+  tier: P0
+  guarantee: "A repair of a hook configuration that is a symbolic link fails, leaves the target of the link unchanged, and records a repair_failed tamper event."
+  labels: [reconcile, repair, selfprotect, symlink]
+
+- id: reconcile/repair/invalid-json-no-clobber
+  title: "a repair leaves a hook configuration that does not parse"
+  category: reconcile
+  tier: P0
+  guarantee: "A repair of a hook configuration that does not parse fails and leaves the file byte for byte as it was, for every agent, also one whose human-run install replaces a malformed file."
+  labels: [reconcile, repair, selfprotect]
+
+- id: reconcile/repair/rate-limit
+  title: "a reconcile pass stops repairing an asset after three repairs in an hour"
+  category: reconcile
+  tier: P1
+  guarantee: "After three repairs of one hook configuration within an hour, a reconcile pass leaves it as it is, reports the rate limit, and records one rate_limited tamper event."
+  labels: [reconcile, repair, selfprotect]
+
 - id: receipts/system-session/verify
   title: "tamper events are receipts in the system session and the chain verifies"
   category: receipts

@@ -79,18 +79,27 @@ func (p *JSONLPresenter) RenderDoctor(result *DoctorView) error {
 			return err
 		}
 	}
-	for _, row := range result.Protection {
+	if result.Profile == "" {
+		return nil
+	}
+	return p.RenderProtection(&result.ProtectionView)
+}
+
+// RenderProtection renders a self-protection pass as JSONL: one line per
+// asset row, then one line with the profile and the outcome of the pass.
+func (p *JSONLPresenter) RenderProtection(view *ProtectionView) error {
+	for _, row := range view.Protection {
 		if err := p.encoder.Encode(struct{ Protection ProtectionRow }{row}); err != nil {
 			return err
 		}
 	}
-	if result.Profile == "" {
-		return nil
-	}
 	return p.encoder.Encode(struct {
 		Profile        string
 		TamperRecorded int
-	}{result.Profile, result.TamperRecorded})
+		Repaired       []string
+		RepairFailed   []string
+		RateLimited    []string
+	}{view.Profile, view.TamperRecorded, view.Repaired, view.RepairFailed, view.RateLimited})
 }
 
 // RenderConfig renders the configuration as JSONL.

@@ -24,7 +24,7 @@ func TestPayloadStringFields(t *testing.T) {
 		"SubagentStartPayload": {"AgentID", "AgentType"},
 		"SubagentStopPayload":  {"AgentID", "AgentType", "AgentTranscriptPath"},
 		"UserPromptPayload":    nil,
-		"TamperPayload":        {"Asset", "Agent", "LevelBefore", "LevelAfter", "Drift", "Provider", "Detail"},
+		"TamperPayload":        {"Operation", "Asset", "Agent", "LevelBefore", "LevelAfter", "Drift", "Provider", "Detail", "Error"},
 	}
 	for _, at := range []ActionType{
 		ActionFileRead, ActionFileWrite, ActionFileDelete, ActionCommandExec, ActionToolUse,

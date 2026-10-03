@@ -71,9 +71,9 @@ func GenerateHooksConfig(program string) SettingsHooks {
 	return hooks
 }
 
-func readSettings(path string) (map[string]interface{}, error) {
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
+func readSettings(path string, opts agent.InstallOptions) (map[string]interface{}, error) {
+	data, err := agent.ReadHookFile(path, opts)
+	if agent.IsNotExist(err) {
 		return make(map[string]interface{}), nil
 	}
 	if err != nil {
@@ -88,13 +88,13 @@ func readSettings(path string) (map[string]interface{}, error) {
 	return settings, nil
 }
 
-func writeSettings(path string, settings map[string]interface{}) error {
+func writeSettings(path string, settings map[string]interface{}, opts agent.InstallOptions) error {
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0600)
+	return agent.WriteHookFile(path, data, 0600, opts)
 }
 
 func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.InstallResult, error) {
@@ -115,7 +115,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 
 	settingsPath := filepath.Join(detection.ConfigPath, "settings.json")
 
-	settings, err := readSettings(settingsPath)
+	settings, err := readSettings(settingsPath, opts)
 	if err != nil {
 		result.Error = fmt.Errorf("failed to read settings.json: %w", err)
 		return result, result.Error
@@ -194,7 +194,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		result.HooksInstalled = append(result.HooksInstalled, hookType)
 	}
 
-	if err := writeSettings(settingsPath, settings); err != nil {
+	if err := writeSettings(settingsPath, settings, opts); err != nil {
 		result.Error = fmt.Errorf("failed to write settings.json: %w", err)
 		return result, result.Error
 	}
@@ -272,7 +272,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		}
 	}
 
-	settings, err := readSettings(settingsPath)
+	settings, err := readSettings(settingsPath, agent.InstallOptions{})
 	if err != nil {
 		result.Error = fmt.Errorf("failed to read settings.json: %w", err)
 		return result, result.Error
@@ -341,7 +341,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		}
 	}
 
-	if err := writeSettings(settingsPath, settings); err != nil {
+	if err := writeSettings(settingsPath, settings, agent.InstallOptions{}); err != nil {
 		result.Error = fmt.Errorf("failed to write settings.json: %w", err)
 		return result, result.Error
 	}
@@ -363,7 +363,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 	}
 
 	settingsPath := filepath.Join(detection.ConfigPath, "settings.json")
-	settings, err := readSettings(settingsPath)
+	settings, err := readSettings(settingsPath, agent.InstallOptions{})
 	if err != nil {
 		status.Issues = append(status.Issues, fmt.Sprintf("cannot read settings.json: %v", err))
 		return status, nil

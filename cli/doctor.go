@@ -10,6 +10,7 @@ import (
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/internal/selfupdate"
 	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/selfprotect"
@@ -20,7 +21,10 @@ import (
 
 // NewDoctorCmd creates the doctor command.
 func NewDoctorCmd() *cobra.Command {
-	var format string
+	var (
+		format string
+		repair bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "doctor",
@@ -34,7 +38,10 @@ Performs various health checks:
 - Database schema is up to date
 
 It also prints the self-protection table: the level at which each Gryph
-asset resists a change, and the profile that the levels earn.`,
+asset resists a change, and the profile that the levels earn. A change
+since the last run becomes a tamper event in the system session. With
+--repair, doctor also rewrites a hook configuration that differs from a
+current install, the same pass as gryph supervisor reconcile --once.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
@@ -158,18 +165,12 @@ asset resists a change, and the profile that the levels earn.`,
 				}
 				v.Checks = append(v.Checks, schemaCheck)
 
-				statuses := app.ProtectionProvider().Assess(ctx)
-				v.Profile = string(selfprotect.ProfileOf(statuses))
-				v.TamperRecorded = recordTamper(ctx, app, statuses)
-				for _, s := range statuses {
-					v.Protection = append(v.Protection, tui.ProtectionRow{
-						Asset:    string(s.Asset),
-						Agent:    s.Agent,
-						Level:    s.Level.String(),
-						Provider: s.Provider,
-						Drift:    s.Drift,
-						Detail:   s.Detail,
-					})
+				report, err := app.Reconcile(ctx, repair)
+				if err != nil {
+					log.Warnf("doctor: self-protection pass incomplete: %v", err)
+				}
+				if report != nil {
+					v.ProtectionView = protectionView(report)
 				}
 
 				return v, nil
@@ -195,24 +196,41 @@ asset resists a change, and the profile that the levels earn.`,
 	}
 
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json, jsonl, csv")
+	cmd.Flags().BoolVar(&repair, "repair", false, "rewrite a hook configuration that differs from a current install")
 
 	return cmd
 }
 
-// recordTamper writes a tamper event for each change since the last run
-// and returns the count. A failure to record is a warning, because the
-// table above still shows the state.
-func recordTamper(ctx context.Context, app *App, statuses []selfprotect.AssetStatus) int {
-	recorder, err := app.TamperRecorder()
-	if err != nil {
-		log.Warnf("doctor: tamper events not recorded: %v", err)
-		return 0
+// protectionView turns a reconcile report into its view.
+func protectionView(report *engine.ReconcileReport) tui.ProtectionView {
+	v := tui.ProtectionView{Profile: string(report.Profile), TamperRecorded: len(report.Recorded)}
+	for _, s := range report.Statuses {
+		v.Protection = append(v.Protection, tui.ProtectionRow{
+			Asset:    string(s.Asset),
+			Agent:    s.Agent,
+			Level:    s.Level.String(),
+			Provider: s.Provider,
+			Drift:    s.Drift,
+			Detail:   s.Detail,
+		})
 	}
-	recorded, err := recorder.RecordChanges(ctx, statuses)
-	if err != nil {
-		log.Warnf("doctor: tamper events not recorded: %v", err)
+	for _, s := range report.Repaired {
+		v.Repaired = append(v.Repaired, assetName(s))
 	}
-	return len(recorded)
+	for _, f := range report.Failed {
+		v.RepairFailed = append(v.RepairFailed, assetName(f.Status)+": "+f.Err.Error())
+	}
+	for _, s := range report.RateLimited {
+		v.RateLimited = append(v.RateLimited, assetName(s))
+	}
+	return v
+}
+
+func assetName(s selfprotect.AssetStatus) string {
+	if s.Agent != "" {
+		return string(s.Asset) + " " + s.Agent
+	}
+	return string(s.Asset)
 }
 
 // hooksAboveVersion returns the hooks, with their minimum version, that the

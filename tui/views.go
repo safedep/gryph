@@ -208,12 +208,24 @@ type AgentUninstallView struct {
 type DoctorView struct {
 	Checks []DoctorCheck
 	AllOK  bool
+	ProtectionView
+}
+
+// ProtectionView is the outcome of one self-protection pass: the state of
+// every asset, the profile, and what the pass recorded and repaired.
+type ProtectionView struct {
 	// Protection holds one row per Gryph asset, and Profile the label that
 	// the levels earn.
 	Protection []ProtectionRow
 	Profile    string
 	// TamperRecorded is the count of tamper events this run recorded.
 	TamperRecorded int
+	// Repaired names the assets the pass restored, RepairFailed the ones it
+	// could not restore with the reason, and RateLimited the ones it left
+	// alone because their repairs reached the limit.
+	Repaired     []string
+	RepairFailed []string
+	RateLimited  []string
 }
 
 // ProtectionRow is the self-protection level of one asset.

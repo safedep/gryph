@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 
@@ -64,6 +65,22 @@ type hookConfigAssessor struct {
 }
 
 func (h hookConfigAssessor) Name() string { return h.adapter.Name() }
+
+// RepairHookConfig implements selfprotect.HookConfigRepairer. It rewrites
+// the Gryph entries with a forced install under the repair rules: no link
+// in the path, no backup, and a file that does not parse stays as it is.
+func (h hookConfigAssessor) RepairHookConfig(ctx context.Context) error {
+	result, err := h.adapter.Install(ctx, agent.InstallOptions{Force: true, Repair: true})
+	switch {
+	case err != nil:
+		return err
+	case result != nil && result.Error != nil:
+		return result.Error
+	case result == nil || !result.Success:
+		return errors.New("the install did not succeed")
+	}
+	return nil
+}
 
 // AssessHookConfig implements selfprotect.HookConfigAssessor. It runs no
 // agent binary, because the version plays no part in the assessment.

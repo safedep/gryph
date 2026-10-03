@@ -80,6 +80,7 @@ func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".identity.enabled", true)
 	v.SetDefault(prefix+".identity.require_human_principal", false)
 	v.SetDefault(prefix+".self_protection.enabled", true)
+	v.SetDefault(prefix+".self_protection.repair", false)
 }
 
 // defaultSensitivePaths returns the default list of sensitive path patterns.

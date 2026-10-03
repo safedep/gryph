@@ -86,7 +86,7 @@ profile of the whole host.
 
 | Profile | Minimum levels | What it is |
 |---|---|---|
-| `guard` | `mediated` on every asset, and `detect` on every hook configuration | The profile of a user install with policy on. No root. |
+| `guard` | `mediated` on every asset, and `detect` on every hook configuration | The profile of a user install with policy on. No root. Repair of a hook configuration is a choice: `policy.self_protection.repair`. |
 | `locked` | `guard`, plus `prevent_same_user` on `binary`, `policy` and `config`, and at least `repair` on every hook configuration | A root install that uses the agent's managed settings. Planned. |
 | `managed` | `locked`, plus `attest` on every asset | Locked with off-host evidence. Planned. |
 
@@ -151,7 +151,7 @@ control that changes the status. A control marked planned does not exist yet.
 
 | # | Tier | Bypass | In `guard` | Control |
 |---|---|---|---|---|
-| 1 | B | Edit the agent's hook configuration and remove the Gryph entry | D, when `gryph doctor` runs | Planned: a reconcile pass that repairs the entry. In `locked`: the agent's managed settings, owned by root. |
+| 1 | B | Edit the agent's hook configuration and remove the Gryph entry | D, when a reconcile pass runs. Repaired when `policy.self_protection.repair` is on, up to three times an hour. | In `locked`: the agent's managed settings, owned by root. |
 | 2 | B | Stop or trace the hook process until the agent times out and lets the action through | O | Planned: a process census in `doctor` that reports an agent with no hook traffic. Set the agent to fail closed where the vendor offers it. See [agent-enforcement-coverage.md](./agent-enforcement-coverage.md). |
 | 3 | B | Run a second agent binary, or an agent with a private config directory | O | Planned: a census of known agent binaries. An unknown agent stays out of scope. |
 | 4 | B | Run `gryph _hook` from a shell and record a forged event or prompt | P through a mediated shell command, O otherwise | Planned: a decision service that identifies the caller with kernel peer credentials. |

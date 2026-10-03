@@ -198,6 +198,8 @@ type UserPromptPayload struct {
 // selfprotect levels. Drift is empty when the asset matches its desired
 // state again.
 type TamperPayload struct {
+	// Operation is the kind of change. See the Tamper constants.
+	Operation   string `json:"operation"`
 	Asset       string `json:"asset"`
 	Agent       string `json:"agent,omitempty"`
 	LevelBefore string `json:"level_before"`
@@ -205,21 +207,27 @@ type TamperPayload struct {
 	Drift       string `json:"drift,omitempty"`
 	Provider    string `json:"provider"`
 	Detail      string `json:"detail,omitempty"`
+	// Error is the reason a repair failed.
+	Error string `json:"error,omitempty"`
 }
 
-// Operation names the kind of change: drift when the asset differs from
-// its desired state, level when only its protection level changed, and
-// resolved when a drift cleared.
-func (p TamperPayload) Operation() string {
-	switch {
-	case p.Drift != "":
-		return "drift"
-	case p.LevelBefore != p.LevelAfter:
-		return "level"
-	default:
-		return "resolved"
-	}
-}
+// The operations of a tamper event.
+const (
+	// TamperDrift records an asset that differs from its desired state.
+	TamperDrift = "drift"
+	// TamperLevel records a change of the protection level of an asset
+	// with no drift.
+	TamperLevel = "level"
+	// TamperResolved records a drift that cleared without a repair.
+	TamperResolved = "resolved"
+	// TamperRepair records a repair that restored the asset.
+	TamperRepair = "repair"
+	// TamperRepairFailed records a repair that did not restore the asset.
+	TamperRepairFailed = "repair_failed"
+	// TamperRateLimited records an asset that Gryph stopped repairing,
+	// because the repairs in the window reached the limit.
+	TamperRateLimited = "rate_limited"
+)
 
 // Summary is the one-line form of the payload. The receipt stores and
 // hashes it, so the chain binds the facts of the change.
@@ -228,9 +236,12 @@ func (p TamperPayload) Summary() string {
 	if p.Agent != "" {
 		subject += " " + p.Agent
 	}
-	s := subject + " " + p.Operation() + ": level " + p.LevelBefore + " to " + p.LevelAfter
+	s := subject + " " + p.Operation + ": level " + p.LevelBefore + " to " + p.LevelAfter
 	if p.Drift != "" {
 		s += ", " + p.Drift
+	}
+	if p.Error != "" {
+		s += ", error: " + p.Error
 	}
 	return s
 }

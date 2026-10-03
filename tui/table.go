@@ -451,7 +451,7 @@ func (p *TablePresenter) RenderDoctor(result *DoctorView) error {
 	tw.println()
 
 	if result.Profile != "" {
-		p.renderProtection(tw, result)
+		p.renderProtection(tw, &result.ProtectionView)
 	}
 
 	if result.AllOK {
@@ -463,20 +463,37 @@ func (p *TablePresenter) RenderDoctor(result *DoctorView) error {
 	return tw.Err()
 }
 
-// renderProtection prints the self-protection table and the profile.
-func (p *TablePresenter) renderProtection(tw *tableWriter, result *DoctorView) {
+// RenderProtection renders the outcome of a self-protection pass.
+func (p *TablePresenter) RenderProtection(view *ProtectionView) error {
+	tw := &tableWriter{w: p.w}
+	p.renderProtection(tw, view)
+	return tw.Err()
+}
+
+// renderProtection prints the self-protection table, the profile, and what
+// the pass recorded and repaired.
+func (p *TablePresenter) renderProtection(tw *tableWriter, view *ProtectionView) {
 	tw.printf("%s\n", p.color.Header("Self-protection"))
-	tw.printf("  Profile: %s\n", result.Profile)
+	tw.printf("  Profile: %s\n", view.Profile)
 	tw.println()
 	tw.printf("  %-12s %-13s %-25s %s\n", "ASSET", "AGENT", "LEVEL", "DETAIL")
-	for _, row := range result.Protection {
+	for _, row := range view.Protection {
 		tw.printf("  %-12s %-13s %-25s %s\n", row.Asset, row.Agent, row.Level, row.Detail)
 		if row.Drift != "" {
 			tw.printf("  %-12s %-13s %s\n", "", "", p.color.Warning("drift: "+row.Drift))
 		}
 	}
-	if result.TamperRecorded > 0 {
-		tw.printf("  Tamper events recorded: %d\n", result.TamperRecorded)
+	if view.TamperRecorded > 0 {
+		tw.printf("  Tamper events recorded: %d\n", view.TamperRecorded)
+	}
+	for _, name := range view.Repaired {
+		tw.printf("  %s\n", p.color.Success("Repaired: "+name))
+	}
+	for _, name := range view.RepairFailed {
+		tw.printf("  %s\n", p.color.Warning("Repair failed: "+name))
+	}
+	for _, name := range view.RateLimited {
+		tw.printf("  %s\n", p.color.Warning("Repair rate limit reached: "+name))
 	}
 	tw.println()
 }

@@ -1,0 +1,23 @@
+# A repair refuses a hook configuration that is a symbolic link, and leaves
+# the file the link points to as it is. The failure is a tamper event.
+[!symlink] skip 'the host has no symbolic links'
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+replace $HOME/.claude/settings.json PreToolUse XPreToolUse
+cp $HOME/.claude/settings.json $WORK/elsewhere/settings.json
+rm $HOME/.claude/settings.json
+symlink $HOME/.claude/settings.json -> $WORK/elsewhere/settings.json
+
+execexit 1 gryph supervisor reconcile --once --repair --no-color
+stdout 'Repair failed: hook_config claude-code: .*symbolic link'
+grep XPreToolUse $WORK/elsewhere/settings.json
+! grep 'gryph _hook claude-code PreToolUse' $WORK/elsewhere/settings.json
+
+exec gryph policy receipts --format json --no-color
+stdout 'repair_failed'
+
+-- elsewhere/.keep --

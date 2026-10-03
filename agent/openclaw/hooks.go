@@ -107,12 +107,12 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	}
 
 	dir := pluginDir(detection.HooksPath)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := agent.EnsureHookDir(dir, 0700, opts); err != nil {
 		result.Error = fmt.Errorf("failed to create extensions directory: %w", err)
 		return result, result.Error
 	}
 
-	if err := os.WriteFile(pluginFile, processedPlugin(opts.Command), 0644); err != nil {
+	if err := agent.WriteHookFile(pluginFile, processedPlugin(opts.Command), 0644, opts); err != nil {
 		result.Error = fmt.Errorf("failed to write plugin file: %w", err)
 		return result, result.Error
 	}

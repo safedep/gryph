@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/model"
@@ -56,22 +57,18 @@ func (r *TamperRecorder) SessionID() uuid.UUID { return r.session.ID }
 // recorded state and no drift records nothing. It returns the events it
 // recorded.
 func (r *TamperRecorder) RecordChanges(ctx context.Context, statuses []selfprotect.AssetStatus) ([]*events.Event, error) {
-	last, err := r.lastRecorded(ctx)
+	history, err := r.loadHistory(ctx)
 	if err != nil {
 		return nil, err
 	}
+	return r.recordChanges(ctx, history, statuses)
+}
+
+func (r *TamperRecorder) recordChanges(ctx context.Context, history *tamperHistory, statuses []selfprotect.AssetStatus) ([]*events.Event, error) {
 	var recorded []*events.Event
 	for _, s := range statuses {
-		payload := events.TamperPayload{
-			Asset:       string(s.Asset),
-			Agent:       s.Agent,
-			LevelBefore: s.Level.String(),
-			LevelAfter:  s.Level.String(),
-			Drift:       s.Drift,
-			Provider:    s.Provider,
-			Detail:      s.Detail,
-		}
-		prev, seen := last[tamperKey(payload.Asset, payload.Agent)]
+		payload := newTamperPayload(s)
+		prev, seen := history.latest[tamperKey(s.Ref())]
 		switch {
 		case !seen && s.Drift == "":
 			continue
@@ -80,7 +77,15 @@ func (r *TamperRecorder) RecordChanges(ctx context.Context, statuses []selfprote
 		case seen:
 			payload.LevelBefore = prev.LevelAfter
 		}
-		event, err := r.Record(ctx, payload)
+		switch {
+		case payload.Drift != "":
+			payload.Operation = events.TamperDrift
+		case seen && prev.Drift != "":
+			payload.Operation = events.TamperResolved
+		default:
+			payload.Operation = events.TamperLevel
+		}
+		event, err := r.record(ctx, history, payload)
 		if err != nil {
 			return recorded, err
 		}
@@ -89,8 +94,26 @@ func (r *TamperRecorder) RecordChanges(ctx context.Context, statuses []selfprote
 	return recorded, nil
 }
 
+// newTamperPayload returns the payload of a status with no change recorded
+// yet. The caller sets the operation and the level before.
+func newTamperPayload(s selfprotect.AssetStatus) events.TamperPayload {
+	return events.TamperPayload{
+		Asset:       string(s.Asset),
+		Agent:       s.Agent,
+		LevelBefore: s.Level.String(),
+		LevelAfter:  s.Level.String(),
+		Drift:       s.Drift,
+		Provider:    s.Provider,
+		Detail:      s.Detail,
+	}
+}
+
 // Record writes one tamper event and its receipt.
 func (r *TamperRecorder) Record(ctx context.Context, payload events.TamperPayload) (*events.Event, error) {
+	return r.record(ctx, nil, payload)
+}
+
+func (r *TamperRecorder) record(ctx context.Context, history *tamperHistory, payload events.TamperPayload) (*events.Event, error) {
 	if err := r.ensureSession(ctx); err != nil {
 		return nil, err
 	}
@@ -119,7 +142,7 @@ func (r *TamperRecorder) Record(ctx context.Context, payload events.TamperPayloa
 			EventID:   event.ID,
 			Type:      model.ActionTamper,
 			Tool:      payload.Asset,
-			Operation: payload.Operation(),
+			Operation: payload.Operation,
 			Agent:     session.SystemAgentName,
 		},
 		Decision: &model.EvaluationResult{
@@ -131,32 +154,64 @@ func (r *TamperRecorder) Record(ctx context.Context, payload events.TamperPayloa
 	if err != nil {
 		return nil, fmt.Errorf("tamper: record receipt: %w", err)
 	}
+	if history != nil {
+		history.add(event.Timestamp, payload)
+	}
 	return event, nil
 }
 
-// lastRecorded returns the latest tamper payload per asset. The system
-// session is small, so it reads every tamper event in it.
-func (r *TamperRecorder) lastRecorded(ctx context.Context) (map[string]events.TamperPayload, error) {
+// tamperHistory is the recorded state of the system session: the latest
+// payload per asset and the time of every repair attempt.
+type tamperHistory struct {
+	latest   map[string]events.TamperPayload
+	attempts map[string][]time.Time
+}
+
+func newTamperHistory() *tamperHistory {
+	return &tamperHistory{latest: map[string]events.TamperPayload{}, attempts: map[string][]time.Time{}}
+}
+
+// add records a payload that is newer than every one before it.
+func (h *tamperHistory) add(at time.Time, p events.TamperPayload) {
+	key := tamperKey(selfprotect.AssetRef{Asset: selfprotect.Asset(p.Asset), Agent: p.Agent})
+	h.latest[key] = p
+	if p.Operation == events.TamperRepair || p.Operation == events.TamperRepairFailed {
+		h.attempts[key] = append(h.attempts[key], at)
+	}
+}
+
+// repairAttempts returns the count of repairs of one asset, failed or not,
+// since the given time.
+func (h *tamperHistory) repairAttempts(ref selfprotect.AssetRef, since time.Time) int {
+	n := 0
+	for _, at := range h.attempts[tamperKey(ref)] {
+		if !at.Before(since) {
+			n++
+		}
+	}
+	return n
+}
+
+// loadHistory reads every tamper event in the system session, oldest
+// first. The system session is small.
+func (r *TamperRecorder) loadHistory(ctx context.Context) (*tamperHistory, error) {
 	rows, err := r.store.QueryEvents(ctx, events.NewEventFilter().
 		WithSession(r.session.ID).
 		WithActions(events.ActionTamper).
-		WithSort(events.SortDesc).
+		WithSort(events.SortAsc).
 		WithLimit(0))
 	if err != nil {
 		return nil, fmt.Errorf("tamper: read the system session: %w", err)
 	}
-	last := map[string]events.TamperPayload{}
+	history := newTamperHistory()
 	for _, row := range rows {
 		var payload events.TamperPayload
 		if err := json.Unmarshal(row.Payload, &payload); err != nil {
 			return nil, fmt.Errorf("tamper: decode event %s: %w", row.ID, err)
 		}
-		key := tamperKey(payload.Asset, payload.Agent)
-		if _, seen := last[key]; !seen {
-			last[key] = payload
-		}
+		history.add(row.Timestamp, payload)
 	}
-	return last, nil
+	return history, nil
 }
 
 // ensureSession creates the system session row on first use. A concurrent
@@ -178,13 +233,13 @@ func (r *TamperRecorder) ensureSession(ctx context.Context) error {
 	return nil
 }
 
-func tamperKey(asset, agent string) string { return asset + "/" + agent }
+func tamperKey(ref selfprotect.AssetRef) string { return string(ref.Asset) + "/" + ref.Agent }
 
 func tamperSeverity(p events.TamperPayload) model.Severity {
-	switch p.Operation() {
-	case "drift":
+	switch p.Operation {
+	case events.TamperDrift, events.TamperRepairFailed:
 		return model.SeverityHigh
-	case "level":
+	case events.TamperLevel, events.TamperRateLimited:
 		return model.SeverityMedium
 	default:
 		return model.SeverityInfo

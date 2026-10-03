@@ -2,6 +2,8 @@ package selfprotect
 
 import (
 	"context"
+	"errors"
+	"slices"
 	"sort"
 )
 
@@ -25,6 +27,13 @@ type HookConfigState struct {
 type HookConfigAssessor interface {
 	Name() string
 	AssessHookConfig(ctx context.Context) HookConfigState
+}
+
+// HookConfigRepairer rewrites the Gryph hook entries of one agent to the
+// current install. An assessor without it is assessed only.
+type HookConfigRepairer interface {
+	HookConfigAssessor
+	RepairHookConfig(ctx context.Context) error
 }
 
 // UserAssets names the assets of an install in the user scope.
@@ -95,9 +104,44 @@ func (p *userProvider) Assess(ctx context.Context) []AssetStatus {
 	return out
 }
 
-// Repair implements Provider. The user provider assesses only.
-func (p *userProvider) Repair(context.Context, RepairOptions) ([]AssetStatus, error) {
-	return nil, ErrRepairUnsupported
+// Repair implements Provider. It rewrites the Gryph entries of every hook
+// configuration with drift, or of the ones in opts.Only, and returns the
+// state of each after the repair. A failed asset is a RepairError in the
+// joined error, and the other assets are still repaired.
+func (p *userProvider) Repair(ctx context.Context, opts RepairOptions) ([]AssetStatus, error) {
+	var (
+		out  []AssetStatus
+		errs []error
+	)
+	for _, a := range p.assets.HookConfigs {
+		repairer, ok := a.(HookConfigRepairer)
+		if !ok {
+			continue
+		}
+		ref := AssetRef{Asset: AssetHookConfig, Agent: a.Name()}
+		if len(opts.Only) > 0 && !slices.Contains(opts.Only, ref) {
+			continue
+		}
+		before := a.AssessHookConfig(ctx)
+		if !before.Present || before.Drift == "" {
+			continue
+		}
+		if opts.DryRun {
+			out = append(out, p.status(AssetHookConfig, a.Name(), LevelDetect, before.Path, before.Drift))
+			continue
+		}
+		if err := repairer.RepairHookConfig(ctx); err != nil {
+			errs = append(errs, &RepairError{Ref: ref, Err: err})
+			out = append(out, p.status(AssetHookConfig, a.Name(), LevelDetect, before.Path, before.Drift))
+			continue
+		}
+		after := a.AssessHookConfig(ctx)
+		if after.Drift != "" {
+			errs = append(errs, &RepairError{Ref: ref, Err: errors.New("the entries still differ after the repair: " + after.Drift)})
+		}
+		out = append(out, p.status(AssetHookConfig, a.Name(), LevelDetect, after.Path, after.Drift))
+	}
+	return out, errors.Join(errs...)
 }
 
 // mediated builds the row of an asset that only the built-in rules protect.

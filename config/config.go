@@ -168,6 +168,10 @@ const DefaultWindowMaxBytes = 65536
 // only from the operator-owned config file, never a repo-local policy.
 type SelfProtectionConfig struct {
 	Enabled bool `mapstructure:"enabled"`
+	// Repair lets a reconcile pass rewrite a hook configuration that
+	// differs from a current install. It is off by default in the user
+	// scope, and on by default under a system managed configuration.
+	Repair bool `mapstructure:"repair"`
 }
 
 // IdentityConfig controls the AARM identity-capture layer. Enabled gates the
@@ -359,6 +363,9 @@ func Load(configPath string) (*Config, error) {
 	managed := ""
 	if managed = ManagedConfigFile(); managed != "" {
 		v.SetConfigFile(managed)
+		// An administrator who manages the host wants the hooks to stay in
+		// place. A user who installed Gryph for themself opts in.
+		v.SetDefault("policy.self_protection.repair", true)
 	} else if configPath != "" {
 		v.SetConfigFile(configPath)
 	} else {

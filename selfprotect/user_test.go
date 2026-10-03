@@ -2,6 +2,7 @@ package selfprotect
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,6 +16,25 @@ type fakeAssessor struct {
 
 func (f fakeAssessor) Name() string                                     { return f.name }
 func (f fakeAssessor) AssessHookConfig(context.Context) HookConfigState { return f.state }
+
+// fakeRepairer clears its drift on repair, unless fail is set.
+type fakeRepairer struct {
+	name    string
+	state   *HookConfigState
+	fail    error
+	repairs int
+}
+
+func (f *fakeRepairer) Name() string                                     { return f.name }
+func (f *fakeRepairer) AssessHookConfig(context.Context) HookConfigState { return *f.state }
+func (f *fakeRepairer) RepairHookConfig(context.Context) error {
+	f.repairs++
+	if f.fail != nil {
+		return f.fail
+	}
+	f.state.Drift = ""
+	return nil
+}
 
 func userAssets() UserAssets {
 	return UserAssets{
@@ -113,7 +133,39 @@ func TestUserProvider_Assess_ManagedConfig(t *testing.T) {
 }
 
 func TestUserProvider_Repair(t *testing.T) {
-	changed, err := NewUserProvider(userAssets()).Repair(context.Background(), RepairOptions{})
-	assert.ErrorIs(t, err, ErrRepairUnsupported)
-	assert.Nil(t, changed)
+	ctx := context.Background()
+	broken := &fakeRepairer{name: "claude-code", state: &HookConfigState{Present: true, Path: "/home/u/.claude", Drift: "hooks not installed"}}
+	stuck := &fakeRepairer{name: "cursor", state: &HookConfigState{Present: true, Path: "/home/u/.cursor", Drift: "hooks are invalid"}, fail: errors.New("settings.json is a symbolic link")}
+	fine := &fakeRepairer{name: "gemini", state: &HookConfigState{Present: true, Path: "/home/u/.gemini"}}
+	absent := &fakeRepairer{name: "codex", state: &HookConfigState{Present: false, Drift: "hooks not installed"}}
+	readOnly := fakeAssessor{name: "devin", state: HookConfigState{Present: true, Drift: "hooks not installed"}}
+	assets := userAssets()
+	assets.HookConfigs = []HookConfigAssessor{broken, stuck, fine, absent, readOnly}
+	p := NewUserProvider(assets)
+
+	dry, err := p.Repair(ctx, RepairOptions{DryRun: true})
+	require.NoError(t, err)
+	require.Len(t, dry, 2, "the two present assets with drift")
+	assert.Equal(t, 0, broken.repairs, "a dry run repairs nothing")
+
+	out, err := p.Repair(ctx, RepairOptions{})
+	require.Error(t, err)
+	var repairErr *RepairError
+	require.ErrorAs(t, err, &repairErr)
+	assert.Equal(t, AssetRef{Asset: AssetHookConfig, Agent: "cursor"}, repairErr.Ref)
+	assert.EqualError(t, repairErr, "hook_config cursor: settings.json is a symbolic link")
+	require.Len(t, out, 2)
+	assert.Equal(t, AssetStatus{Asset: AssetHookConfig, Agent: "claude-code", Level: LevelDetect, Provider: "user", Detail: "/home/u/.claude"}, out[0], "repaired")
+	assert.Equal(t, "hooks are invalid", out[1].Drift, "the failed asset keeps its drift")
+	assert.Equal(t, 1, broken.repairs)
+	assert.Equal(t, 1, stuck.repairs)
+	assert.Equal(t, 0, fine.repairs, "no drift, no repair")
+	assert.Equal(t, 0, absent.repairs, "an absent agent is not repaired")
+
+	broken.state.Drift = "hooks not installed"
+	out, err = p.Repair(ctx, RepairOptions{Only: []AssetRef{{Asset: AssetHookConfig, Agent: "claude-code"}}})
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	assert.Equal(t, 2, broken.repairs)
+	assert.Equal(t, 1, stuck.repairs, "not in Only")
 }

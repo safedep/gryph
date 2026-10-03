@@ -1,0 +1,32 @@
+# After three repairs of one asset within an hour, a reconcile pass stops
+# repairing it, records one tamper event, and leaves the file as it is.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+
+replace $HOME/.claude/settings.json PreToolUse XPreToolUse
+exec gryph supervisor reconcile --once --repair --no-color
+stdout 'Repaired: hook_config claude-code'
+replace $HOME/.claude/settings.json PreToolUse XPreToolUse
+exec gryph supervisor reconcile --once --repair --no-color
+stdout 'Repaired: hook_config claude-code'
+replace $HOME/.claude/settings.json PreToolUse XPreToolUse
+exec gryph supervisor reconcile --once --repair --no-color
+stdout 'Repaired: hook_config claude-code'
+
+replace $HOME/.claude/settings.json PreToolUse XPreToolUse
+execexit 1 gryph supervisor reconcile --once --repair --no-color
+stdout 'Repair rate limit reached: hook_config claude-code'
+! stdout 'Repaired'
+grep XPreToolUse $HOME/.claude/settings.json
+
+# The next pass records nothing new and still does not repair.
+execexit 1 gryph supervisor reconcile --once --repair --no-color
+stdout 'Repair rate limit reached: hook_config claude-code'
+! stdout 'Tamper events recorded'
+
+exec gryph policy receipts --format json --no-color
+stdout -count=1 'claude-code rate_limited: level'
