@@ -106,7 +106,8 @@ func runManagedUninstall(cmd *cobra.Command, purge, dryRun, asJSON bool) error {
 	}
 
 	policy := config.ManagedPolicyState()
-	for _, path := range []string{policy.File, policy.Dir, config.ManagedConfigPath()} {
+	trustStore := config.ManagedTrustStorePath()
+	for _, path := range []string{policy.File, policy.Dir, trustStore, filepath.Dir(trustStore), config.ManagedConfigPath()} {
 		removed, err := removeManagedPath(path, dryRun)
 		if err != nil {
 			return WrapError(ExitGeneral, "remove "+path, err)

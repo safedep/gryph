@@ -79,6 +79,7 @@ var (
 		{Name: "policy_hash", Type: field.TypeBytes, Nullable: true, Size: 32},
 		{Name: "signature", Type: field.TypeBytes, Nullable: true},
 		{Name: "signer_key_id", Type: field.TypeString, Nullable: true},
+		{Name: "signer_key_scope", Type: field.TypeString, Nullable: true},
 		{Name: "defer_reason", Type: field.TypeString, Nullable: true},
 		{Name: "deferral_of_sequence", Type: field.TypeInt64, Nullable: true},
 		{Name: "human_principal", Type: field.TypeString, Nullable: true},
@@ -123,7 +124,7 @@ var (
 			{
 				Name:    "aarmreceipt_session_id_deferral_of_sequence",
 				Unique:  false,
-				Columns: []*schema.Column{AarmReceiptsColumns[1], AarmReceiptsColumns[27]},
+				Columns: []*schema.Column{AarmReceiptsColumns[1], AarmReceiptsColumns[28]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "deferral_of_sequence IS NOT NULL",
 				},

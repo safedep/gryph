@@ -61,6 +61,7 @@ func (AarmReceipt) Fields() []ent.Field {
 
 		field.Bytes("signature").Optional(),
 		field.String("signer_key_id").Optional(),
+		field.String("signer_key_scope").Optional(),
 
 		field.String("defer_reason").Optional(),
 		field.Int64("deferral_of_sequence").Optional().Nillable(),

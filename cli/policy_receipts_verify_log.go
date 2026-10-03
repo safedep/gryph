@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/safedep/dry/log"
@@ -53,13 +54,13 @@ func newPolicyReceiptsVerifyLogCmd() *cobra.Command {
 				log.Warnf("loadApp failed during verify-log, using defaults: %v", err)
 			}
 
-			path := trustStore
-			if path == "" && app != nil {
-				path = app.Config.ResolveReceiptTrustStorePath(app.Paths)
+			paths := []string{trustStore}
+			if trustStore == "" && app != nil {
+				paths = app.Config.ReceiptTrustStorePaths(app.Paths)
 			}
 			var verifier *receipt.Ed25519Verifier
-			if path != "" {
-				ts, err := receipt.LoadTrustStore(path)
+			if len(paths) > 0 && paths[0] != "" {
+				ts, err := receipt.LoadTrustStores(paths...)
 				if err != nil {
 					return ErrConfig("load trust store", err)
 				}
@@ -109,6 +110,9 @@ func renderLogVerifyResult(w io.Writer, res *receipt.LogVerifyResult) {
 	_, _ = fmt.Fprintf(w, "  signed_invalid    %d\n", res.SignedInvalid)
 	_, _ = fmt.Fprintf(w, "  signed_unverified %d\n", res.SignedUnverified)
 	_, _ = fmt.Fprintf(w, "  chain_breaks      %d\n", res.ChainBreaks)
+	for _, scope := range sortedScopes(res.KeyScopes) {
+		_, _ = fmt.Fprintf(w, "  key_scope %-9s %d\n", scope, res.KeyScopes[scope])
+	}
 	if len(res.Warnings) > 0 {
 		_, _ = fmt.Fprintln(w)
 		_, _ = fmt.Fprintln(w, "Warnings:")
@@ -123,4 +127,13 @@ func renderLogVerifyResult(w io.Writer, res *receipt.LogVerifyResult) {
 			_, _ = fmt.Fprintf(w, "  session=%s seq=%d %s\n", e.SessionID, e.Sequence, e.Reason)
 		}
 	}
+}
+
+func sortedScopes(scopes map[string]int) []string {
+	out := make([]string, 0, len(scopes))
+	for s := range scopes {
+		out = append(out, s)
+	}
+	sort.Strings(out)
+	return out
 }

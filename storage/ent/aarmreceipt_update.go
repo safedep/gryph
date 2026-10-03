@@ -437,6 +437,26 @@ func (_u *AarmReceiptUpdate) ClearSignerKeyID() *AarmReceiptUpdate {
 	return _u
 }
 
+// SetSignerKeyScope sets the "signer_key_scope" field.
+func (_u *AarmReceiptUpdate) SetSignerKeyScope(v string) *AarmReceiptUpdate {
+	_u.mutation.SetSignerKeyScope(v)
+	return _u
+}
+
+// SetNillableSignerKeyScope sets the "signer_key_scope" field if the given value is not nil.
+func (_u *AarmReceiptUpdate) SetNillableSignerKeyScope(v *string) *AarmReceiptUpdate {
+	if v != nil {
+		_u.SetSignerKeyScope(*v)
+	}
+	return _u
+}
+
+// ClearSignerKeyScope clears the value of the "signer_key_scope" field.
+func (_u *AarmReceiptUpdate) ClearSignerKeyScope() *AarmReceiptUpdate {
+	_u.mutation.ClearSignerKeyScope()
+	return _u
+}
+
 // SetDeferReason sets the "defer_reason" field.
 func (_u *AarmReceiptUpdate) SetDeferReason(v string) *AarmReceiptUpdate {
 	_u.mutation.SetDeferReason(v)
@@ -838,6 +858,12 @@ func (_u *AarmReceiptUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.SignerKeyIDCleared() {
 		_spec.ClearField(aarmreceipt.FieldSignerKeyID, field.TypeString)
+	}
+	if value, ok := _u.mutation.SignerKeyScope(); ok {
+		_spec.SetField(aarmreceipt.FieldSignerKeyScope, field.TypeString, value)
+	}
+	if _u.mutation.SignerKeyScopeCleared() {
+		_spec.ClearField(aarmreceipt.FieldSignerKeyScope, field.TypeString)
 	}
 	if value, ok := _u.mutation.DeferReason(); ok {
 		_spec.SetField(aarmreceipt.FieldDeferReason, field.TypeString, value)
@@ -1327,6 +1353,26 @@ func (_u *AarmReceiptUpdateOne) ClearSignerKeyID() *AarmReceiptUpdateOne {
 	return _u
 }
 
+// SetSignerKeyScope sets the "signer_key_scope" field.
+func (_u *AarmReceiptUpdateOne) SetSignerKeyScope(v string) *AarmReceiptUpdateOne {
+	_u.mutation.SetSignerKeyScope(v)
+	return _u
+}
+
+// SetNillableSignerKeyScope sets the "signer_key_scope" field if the given value is not nil.
+func (_u *AarmReceiptUpdateOne) SetNillableSignerKeyScope(v *string) *AarmReceiptUpdateOne {
+	if v != nil {
+		_u.SetSignerKeyScope(*v)
+	}
+	return _u
+}
+
+// ClearSignerKeyScope clears the value of the "signer_key_scope" field.
+func (_u *AarmReceiptUpdateOne) ClearSignerKeyScope() *AarmReceiptUpdateOne {
+	_u.mutation.ClearSignerKeyScope()
+	return _u
+}
+
 // SetDeferReason sets the "defer_reason" field.
 func (_u *AarmReceiptUpdateOne) SetDeferReason(v string) *AarmReceiptUpdateOne {
 	_u.mutation.SetDeferReason(v)
@@ -1758,6 +1804,12 @@ func (_u *AarmReceiptUpdateOne) sqlSave(ctx context.Context) (_node *AarmReceipt
 	}
 	if _u.mutation.SignerKeyIDCleared() {
 		_spec.ClearField(aarmreceipt.FieldSignerKeyID, field.TypeString)
+	}
+	if value, ok := _u.mutation.SignerKeyScope(); ok {
+		_spec.SetField(aarmreceipt.FieldSignerKeyScope, field.TypeString, value)
+	}
+	if _u.mutation.SignerKeyScopeCleared() {
+		_spec.ClearField(aarmreceipt.FieldSignerKeyScope, field.TypeString)
 	}
 	if value, ok := _u.mutation.DeferReason(); ok {
 		_spec.SetField(aarmreceipt.FieldDeferReason, field.TypeString, value)

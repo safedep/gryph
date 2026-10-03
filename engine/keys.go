@@ -10,13 +10,12 @@ import (
 	"github.com/safedep/gryph/config"
 )
 
-// LoadReceiptVerifierFromConfig loads the trust store for the configured
-// path. Returns an empty verifier when the trust store is missing.
+// LoadReceiptVerifierFromConfig loads the configured trust store and the
+// managed one. Returns an empty verifier when both are missing.
 func LoadReceiptVerifierFromConfig(cfg *config.Config, paths *config.Paths) (*receipt.Ed25519Verifier, error) {
-	trustPath := cfg.ResolveReceiptTrustStorePath(paths)
-	ts, err := receipt.LoadTrustStore(trustPath)
+	ts, err := receipt.LoadTrustStores(cfg.ReceiptTrustStorePaths(paths)...)
 	if err != nil {
-		return nil, fmt.Errorf("load trust store %s: %w", trustPath, err)
+		return nil, fmt.Errorf("load trust store: %w", err)
 	}
 	return receipt.NewEd25519Verifier(ts)
 }

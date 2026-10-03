@@ -311,6 +311,11 @@ type ReceiptRow struct {
 
 	Signature   []byte
 	SignerKeyID string
+	// SignerKeyScope says which key signed the row: user for a key in the
+	// user's config directory, supervisor for the key of the decision
+	// service. Empty on a row from before the marker, which a user key
+	// signed.
+	SignerKeyScope string
 
 	// DeferReason is the operator-facing rationale recorded on defer receipts
 	// (explicit defer rules carry the rule's reason; synthetic defers carry

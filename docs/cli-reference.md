@@ -43,6 +43,7 @@ under another name keeps the bare program name.
 | `--repair-timer` | bool             | false   | Also install the timer that runs `gryph supervisor reconcile --once` every 15 minutes |
 | `--managed`   | bool                | false   | As root: write the managed configuration and the managed hook entries for every user of the host |
 | `--policy`    | string              |         | With `--managed`: the managed policy file to install |
+| `--trust-store` | string            |         | With `--managed`: the receipt trust store to install, whose public keys every user's verifier trusts |
 | `--json`      | bool                | false   | With `--managed`: print the report as JSON |
 
 `--repair-timer` writes a per-user job for the scheduler of the operating
@@ -462,7 +463,7 @@ An administrator, or an MDM script that runs as root, installs Gryph for every
 user of a host with one command:
 
 ```bash
-sudo gryph install --managed --config /path/to/managed.yml [--policy /path/to/policy.yaml] [--json]
+sudo gryph install --managed --config /path/to/managed.yml [--policy /path/to/policy.yaml] [--trust-store /path/to/receipt-pub.json] [--json]
 ```
 
 The command validates the whole input first. An invalid input exits 3 and
@@ -514,6 +515,13 @@ The lock stops the developer's own hooks too, so it is off by default, and
 only a `locked` agent accepts it. The managed hooks hold without it: a user
 `disableAllHooks` cannot turn off a managed Claude Code hook, and Codex marks
 managed hooks as trusted.
+
+`--trust-store` installs the receipt trust store of the fleet at
+`keys/receipt-pub.json` in the managed directory, root-owned and readable by
+every user. The verifier of every user trusts its public keys next to the
+user's own store, and `gryph policy keys list` shows both. A key command of a
+user (`generate`, `trust`, `revoke`) writes the user's own store, never the
+managed one. An entry whose `key_id` does not match its `pub` exits 3.
 
 The install also writes the system-wide reconcile job, so every account of
 the host runs `gryph supervisor reconcile --once` as itself at login and
@@ -598,6 +606,7 @@ directory another user can write, is refused.
 | `issues` | What keeps the profile from `locked`. Empty for `locked`. |
 | `config`, `binary` | `path` and `chain`: `ok`, `missing`, `untrusted` (with `error`), or `absent` when the platform has no managed location. |
 | `policy` | The same, plus `version` (the file's version field), `sha256` of the file, and `allow_user_policy` from the managed configuration. |
+| `trust_store` | The managed receipt trust store: `path`, `chain`, `keys` (the count of public keys). A missing store is a fact, not an issue. |
 | `agents` | One row per agent in `managed.agents`: `class`, `path`, `level` (`prevent_same_user` for a `locked` entry that matches, `detect` for a `system_path` entry that matches, `none` otherwise), `match`, `locked` (the lock switch), `error`. |
 | `key` | `scope` is `user`: the receipt signing key lives in each user's home, and `protected` is false. |
 | `supervisor` | `state` is `absent`: no decision service runs outside the user yet. |

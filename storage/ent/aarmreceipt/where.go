@@ -160,6 +160,11 @@ func SignerKeyID(v string) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldSignerKeyID, v))
 }
 
+// SignerKeyScope applies equality check predicate on the "signer_key_scope" field. It's identical to SignerKeyScopeEQ.
+func SignerKeyScope(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldSignerKeyScope, v))
+}
+
 // DeferReason applies equality check predicate on the "defer_reason" field. It's identical to DeferReasonEQ.
 func DeferReason(v string) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldEQ(FieldDeferReason, v))
@@ -1518,6 +1523,81 @@ func SignerKeyIDEqualFold(v string) predicate.AarmReceipt {
 // SignerKeyIDContainsFold applies the ContainsFold predicate on the "signer_key_id" field.
 func SignerKeyIDContainsFold(v string) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldContainsFold(FieldSignerKeyID, v))
+}
+
+// SignerKeyScopeEQ applies the EQ predicate on the "signer_key_scope" field.
+func SignerKeyScopeEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEQ(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeNEQ applies the NEQ predicate on the "signer_key_scope" field.
+func SignerKeyScopeNEQ(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNEQ(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeIn applies the In predicate on the "signer_key_scope" field.
+func SignerKeyScopeIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIn(FieldSignerKeyScope, vs...))
+}
+
+// SignerKeyScopeNotIn applies the NotIn predicate on the "signer_key_scope" field.
+func SignerKeyScopeNotIn(vs ...string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotIn(FieldSignerKeyScope, vs...))
+}
+
+// SignerKeyScopeGT applies the GT predicate on the "signer_key_scope" field.
+func SignerKeyScopeGT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGT(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeGTE applies the GTE predicate on the "signer_key_scope" field.
+func SignerKeyScopeGTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldGTE(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeLT applies the LT predicate on the "signer_key_scope" field.
+func SignerKeyScopeLT(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLT(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeLTE applies the LTE predicate on the "signer_key_scope" field.
+func SignerKeyScopeLTE(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldLTE(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeContains applies the Contains predicate on the "signer_key_scope" field.
+func SignerKeyScopeContains(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContains(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeHasPrefix applies the HasPrefix predicate on the "signer_key_scope" field.
+func SignerKeyScopeHasPrefix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasPrefix(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeHasSuffix applies the HasSuffix predicate on the "signer_key_scope" field.
+func SignerKeyScopeHasSuffix(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldHasSuffix(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeIsNil applies the IsNil predicate on the "signer_key_scope" field.
+func SignerKeyScopeIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldSignerKeyScope))
+}
+
+// SignerKeyScopeNotNil applies the NotNil predicate on the "signer_key_scope" field.
+func SignerKeyScopeNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldSignerKeyScope))
+}
+
+// SignerKeyScopeEqualFold applies the EqualFold predicate on the "signer_key_scope" field.
+func SignerKeyScopeEqualFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldEqualFold(FieldSignerKeyScope, v))
+}
+
+// SignerKeyScopeContainsFold applies the ContainsFold predicate on the "signer_key_scope" field.
+func SignerKeyScopeContainsFold(v string) predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldContainsFold(FieldSignerKeyScope, v))
 }
 
 // DeferReasonEQ applies the EQ predicate on the "defer_reason" field.

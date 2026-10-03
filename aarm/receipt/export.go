@@ -207,6 +207,7 @@ type ExportedReceipt struct {
 	SubagentType       string                 `json:"subagent_type,omitempty"`
 	PolicyHash         string                 `json:"policy_hash,omitempty"`
 	SignerKeyID        string                 `json:"signer_key_id,omitempty"`
+	SignerKeyScope     string                 `json:"signer_key_scope,omitempty"`
 	Signature          string                 `json:"signature,omitempty"`
 	DeferReason        string                 `json:"defer_reason,omitempty"`
 	DeferralOfSequence *int64                 `json:"deferral_of_sequence,omitempty"`
@@ -263,6 +264,7 @@ func ToExported(r *storage.ReceiptRow, includeSig bool) ExportedReceipt {
 	}
 	if includeSig {
 		out.SignerKeyID = r.SignerKeyID
+		out.SignerKeyScope = r.SignerKeyScope
 		if len(r.Signature) > 0 {
 			out.Signature = base64.StdEncoding.EncodeToString(r.Signature)
 		}
@@ -424,7 +426,7 @@ func csvHeaders(includeSig bool) []string {
 		"command_digest", "url_digest", "hash_version",
 	}
 	if includeSig {
-		h = append(h, "signature", "signer_key_id")
+		h = append(h, "signature", "signer_key_id", "signer_key_scope")
 	}
 	return h
 }
@@ -487,7 +489,7 @@ func csvRow(r *storage.ReceiptRow, errorMessage string, includeSig bool) []strin
 		strconv.Itoa(r.HashVersion),
 	}
 	if includeSig {
-		row = append(row, base64.StdEncoding.EncodeToString(r.Signature), r.SignerKeyID)
+		row = append(row, base64.StdEncoding.EncodeToString(r.Signature), r.SignerKeyID, r.SignerKeyScope)
 	}
 	return row
 }

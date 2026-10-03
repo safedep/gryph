@@ -765,6 +765,36 @@ func (c *Config) ResolveReceiptTrustStorePath(paths *Paths) string {
 	return DefaultReceiptTrustStorePath(paths)
 }
 
+// ReceiptTrustStorePaths returns the trust stores a verifier loads: the
+// configured or default store, and the managed store when it exists and is
+// another file. The managed store passes the path chain check, so a key in
+// it is one the administrator trusts.
+func (c *Config) ReceiptTrustStorePaths(paths *Paths) []string {
+	out := []string{c.ResolveReceiptTrustStorePath(paths)}
+	managed := ManagedTrustStorePath()
+	if managed == "" || managed == out[0] {
+		return out
+	}
+	if _, err := os.Stat(managed); err != nil {
+		return out
+	}
+	if err := managedPathTrusted(managed); err != nil {
+		return out
+	}
+	return append(out, managed)
+}
+
+// WritableTrustStorePath returns the trust store that a key command of the
+// user writes. The managed store is root's, so when the configuration
+// points at it the user's own store takes the write.
+func (c *Config) WritableTrustStorePath(paths *Paths) string {
+	path := c.ResolveReceiptTrustStorePath(paths)
+	if managed := ManagedTrustStorePath(); managed != "" && path == managed {
+		return DefaultReceiptTrustStorePath(paths)
+	}
+	return path
+}
+
 // ShouldUseColors returns true if colors should be used based on config and terminal.
 func (c *Config) ShouldUseColors() bool {
 	switch c.Display.Colors {

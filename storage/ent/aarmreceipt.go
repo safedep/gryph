@@ -69,6 +69,8 @@ type AarmReceipt struct {
 	Signature []byte `json:"signature,omitempty"`
 	// SignerKeyID holds the value of the "signer_key_id" field.
 	SignerKeyID string `json:"signer_key_id,omitempty"`
+	// SignerKeyScope holds the value of the "signer_key_scope" field.
+	SignerKeyScope string `json:"signer_key_scope,omitempty"`
 	// DeferReason holds the value of the "defer_reason" field.
 	DeferReason string `json:"defer_reason,omitempty"`
 	// DeferralOfSequence holds the value of the "deferral_of_sequence" field.
@@ -99,7 +101,7 @@ func (*AarmReceipt) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case aarmreceipt.FieldSequence, aarmreceipt.FieldDurationMs, aarmreceipt.FieldDeferralOfSequence, aarmreceipt.FieldHashVersion:
 			values[i] = new(sql.NullInt64)
-		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSubagentID, aarmreceipt.FieldSubagentType, aarmreceipt.FieldSignerKeyID, aarmreceipt.FieldDeferReason, aarmreceipt.FieldHumanPrincipal, aarmreceipt.FieldServiceIdentity, aarmreceipt.FieldRoleScope, aarmreceipt.FieldCommandDigest, aarmreceipt.FieldURLDigest:
+		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSubagentID, aarmreceipt.FieldSubagentType, aarmreceipt.FieldSignerKeyID, aarmreceipt.FieldSignerKeyScope, aarmreceipt.FieldDeferReason, aarmreceipt.FieldHumanPrincipal, aarmreceipt.FieldServiceIdentity, aarmreceipt.FieldRoleScope, aarmreceipt.FieldCommandDigest, aarmreceipt.FieldURLDigest:
 			values[i] = new(sql.NullString)
 		case aarmreceipt.FieldRecordedAt:
 			values[i] = new(sql.NullTime)
@@ -283,6 +285,12 @@ func (_m *AarmReceipt) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SignerKeyID = value.String
 			}
+		case aarmreceipt.FieldSignerKeyScope:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field signer_key_scope", values[i])
+			} else if value.Valid {
+				_m.SignerKeyScope = value.String
+			}
 		case aarmreceipt.FieldDeferReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field defer_reason", values[i])
@@ -450,6 +458,9 @@ func (_m *AarmReceipt) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("signer_key_id=")
 	builder.WriteString(_m.SignerKeyID)
+	builder.WriteString(", ")
+	builder.WriteString("signer_key_scope=")
+	builder.WriteString(_m.SignerKeyScope)
 	builder.WriteString(", ")
 	builder.WriteString("defer_reason=")
 	builder.WriteString(_m.DeferReason)

@@ -10,6 +10,7 @@ import (
 	"sort"
 
 	"github.com/safedep/gryph/aarm/pdp"
+	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/config"
@@ -24,7 +25,10 @@ type managedInstallReport struct {
 	Status string `json:"status"`
 	Config string `json:"config"`
 	Policy string `json:"policy,omitempty"`
-	Binary string `json:"binary"`
+	// TrustStore is the managed receipt trust store, when --trust-store
+	// gave one.
+	TrustStore string `json:"trust_store,omitempty"`
+	Binary     string `json:"binary"`
 	// Changed is true when any file changed, or would change in a dry run.
 	Changed bool                 `json:"changed"`
 	Agents  []managedAgentReport `json:"agents"`
@@ -75,11 +79,21 @@ const (
 // managedInstallInput is the validated input of a managed install. Nothing
 // is written before it is complete, so an invalid input changes nothing.
 type managedInstallInput struct {
-	configData []byte
-	cfg        *config.Config
-	policyData []byte
-	binary     string
-	installers map[string]agent.ManagedInstaller
+	configData     []byte
+	cfg            *config.Config
+	policyData     []byte
+	trustStoreData []byte
+	binary         string
+	installers     map[string]agent.ManagedInstaller
+}
+
+// managedInstallArgs are the flags of gryph install --managed.
+type managedInstallArgs struct {
+	configPath     string
+	policyPath     string
+	trustStorePath string
+	dryRun         bool
+	asJSON         bool
 }
 
 // runManagedInstall is gryph install --managed: the command an MDM script
@@ -89,7 +103,8 @@ type managedInstallInput struct {
 // agent in the allowlist, and removes the entry of every agent that left
 // it. It reads no environment variable and runs no program: every path
 // comes from the input and the platform.
-func runManagedInstall(cmd *cobra.Command, configPath, policyPath string, dryRun, asJSON bool) error {
+func runManagedInstall(cmd *cobra.Command, args managedInstallArgs) error {
+	configPath, policyPath, dryRun, asJSON := args.configPath, args.policyPath, args.dryRun, args.asJSON
 	if !utils.IsPrivileged() {
 		return NewCLIError(ExitGeneral, "install --managed must run as root")
 	}
@@ -100,7 +115,7 @@ func runManagedInstall(cmd *cobra.Command, configPath, policyPath string, dryRun
 		return NewCLIError(ExitManagedInvalidConfig, "install --managed needs --config <file>")
 	}
 
-	in, err := readManagedInput(configPath, policyPath)
+	in, err := readManagedInput(configPath, policyPath, args.trustStorePath)
 	if err != nil {
 		return WrapError(ExitManagedInvalidConfig, "invalid managed input, nothing changed", err)
 	}
@@ -120,8 +135,21 @@ func runManagedInstall(cmd *cobra.Command, configPath, policyPath string, dryRun
 			}
 			report.Changed = report.Changed || changed
 		}
-	} else if in.policyData != nil {
-		report.Policy = config.ManagedPolicyState().File
+		if in.trustStoreData != nil {
+			report.TrustStore = config.ManagedTrustStorePath()
+			changed, err := config.WriteManagedFile(report.TrustStore, in.trustStoreData)
+			if err != nil {
+				return WrapError(ExitGeneral, "write the managed trust store", err)
+			}
+			report.Changed = report.Changed || changed
+		}
+	} else {
+		if in.policyData != nil {
+			report.Policy = config.ManagedPolicyState().File
+		}
+		if in.trustStoreData != nil {
+			report.TrustStore = config.ManagedTrustStorePath()
+		}
 	}
 
 	ctx := utils.WithoutProgramExecution(context.Background())
@@ -160,7 +188,7 @@ func runManagedInstall(cmd *cobra.Command, configPath, policyPath string, dryRun
 
 // readManagedInput reads and validates every input file. Each file must
 // pass the trust check of the managed configuration.
-func readManagedInput(configPath, policyPath string) (*managedInstallInput, error) {
+func readManagedInput(configPath, policyPath, trustStorePath string) (*managedInstallInput, error) {
 	configData, err := config.ReadTrustedFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("config: %w", err)
@@ -196,6 +224,22 @@ func readManagedInput(configPath, policyPath string) (*managedInstallInput, erro
 		}
 		if _, err := pdp.ParsePolicy(in.policyData); err != nil {
 			return nil, fmt.Errorf("policy: %w", err)
+		}
+	}
+
+	if trustStorePath != "" {
+		in.trustStoreData, err = config.ReadTrustedFile(trustStorePath)
+		if err != nil {
+			return nil, fmt.Errorf("trust store: %w", err)
+		}
+		ts, err := receipt.ParseTrustStore(in.trustStoreData)
+		if err != nil {
+			return nil, fmt.Errorf("trust store: %w", err)
+		}
+		for _, entry := range ts.Keys {
+			if _, err := receipt.ValidateTrustEntry(entry); err != nil {
+				return nil, fmt.Errorf("trust store: key %s: %w", entry.KeyID, err)
+			}
 		}
 	}
 
@@ -251,6 +295,11 @@ func renderManagedReport(w io.Writer, report *managedInstallReport, asJSON bool)
 	}
 	if report.Policy != "" {
 		if _, err := fmt.Fprintf(w, "  %-8s %s\n", "Policy", report.Policy); err != nil {
+			return err
+		}
+	}
+	if report.TrustStore != "" {
+		if _, err := fmt.Fprintf(w, "  %-8s %s\n", "Keys", report.TrustStore); err != nil {
 			return err
 		}
 	}

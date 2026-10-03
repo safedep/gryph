@@ -22,6 +22,7 @@ func NewInstallCmd() *cobra.Command {
 		repairTimer bool
 		managed     bool
 		policyPath  string
+		trustStore  string
 		asJSON      bool
 	)
 
@@ -40,10 +41,10 @@ to enable audit logging. Existing hooks are backed up by default.`,
   sudo gryph install --managed --config /path/to/managed.yml --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if managed {
-				return runManagedInstall(cmd, globalFlags.ConfigPath, policyPath, dryRun, asJSON)
+				return runManagedInstall(cmd, managedInstallArgs{configPath: globalFlags.ConfigPath, policyPath: policyPath, trustStorePath: trustStore, dryRun: dryRun, asJSON: asJSON})
 			}
-			if policyPath != "" || asJSON {
-				return ErrConfig("invalid flags", fmt.Errorf("--policy and --json need --managed"))
+			if policyPath != "" || trustStore != "" || asJSON {
+				return ErrConfig("invalid flags", fmt.Errorf("--policy, --trust-store and --json need --managed"))
 			}
 			ctx := context.Background()
 
@@ -169,6 +170,7 @@ to enable audit logging. Existing hooks are backed up by default.`,
 	cmd.Flags().BoolVar(&repairTimer, "repair-timer", false, "also install the timer that runs gryph supervisor reconcile --once every 15 minutes")
 	cmd.Flags().BoolVar(&managed, "managed", false, "as root: write the managed configuration from --config and the managed hook entries for every host user")
 	cmd.Flags().StringVar(&policyPath, "policy", "", "with --managed: the managed policy file to install")
+	cmd.Flags().StringVar(&trustStore, "trust-store", "", "with --managed: the receipt trust store to install, whose public keys every user's verifier trusts")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "with --managed: print the report as JSON")
 
 	return cmd

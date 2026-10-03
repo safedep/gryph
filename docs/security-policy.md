@@ -485,6 +485,21 @@ Do these steps each time you change a policy file.
 | `gryph policy keys trust --pub FILE` | Add an external public key from a JSON file. Rejects entries whose `key_id` does not match `sha256(pub)[:8]`. |
 | `gryph policy keys revoke --key-id ID` | Remove a key from the trust store. The private key file is left in place. |
 
+Every signed receipt carries `signer_key_scope` next to `signer_key_id`. Today
+the scope is `user`: the key lives in the user's config directory, the user
+can read it, and the signature proves nothing against that user. The scope
+`supervisor` is reserved for the key of the decision service, which runs
+outside the user. A receipt signed before the marker existed has no scope, and
+the verifiers print it as `unmarked`. `gryph policy receipts --verify` and
+`gryph policy receipts verify-log` count the signed receipts per scope, so an
+audit never reads a user signature as one of the decision service.
+
+An administrator ships a trust store for the whole host with
+`gryph install --managed --trust-store`. It lands at `keys/receipt-pub.json`
+in the [managed directory](./cli-reference.md#managed-install), root-owned.
+The verifier trusts its keys next to the user's own store. A user key command
+writes the user's store only.
+
 ## Receipts
 
 Gryph writes a receipt row for each `block`, `guidance`, `warn`, `escalate` and `defer` decision. By default Gryph does not write a receipt for an `allow` decision, because `policy.log_all_evaluations` is `false`. Set it to `true` to record every evaluation, which AARM's "receipt for every action" requirement asks for:

@@ -574,7 +574,9 @@ func SelfProtectionGlobs(cfg *config.Config, paths *config.Paths) []string {
 	if cfg != nil {
 		globs = append(globs, databaseGlobs(cfg)...)
 		globs = append(globs, keyGlobs(cfg, paths)...)
-		globs = append(globs, filepath.ToSlash(cfg.ResolveReceiptTrustStorePath(paths)))
+		for _, p := range cfg.ReceiptTrustStorePaths(paths) {
+			globs = append(globs, filepath.ToSlash(p))
+		}
 	}
 	globs = append(globs, HookConfigGlobs()...)
 	return globs

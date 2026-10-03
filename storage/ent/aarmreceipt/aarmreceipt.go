@@ -65,6 +65,8 @@ const (
 	FieldSignature = "signature"
 	// FieldSignerKeyID holds the string denoting the signer_key_id field in the database.
 	FieldSignerKeyID = "signer_key_id"
+	// FieldSignerKeyScope holds the string denoting the signer_key_scope field in the database.
+	FieldSignerKeyScope = "signer_key_scope"
 	// FieldDeferReason holds the string denoting the defer_reason field in the database.
 	FieldDeferReason = "defer_reason"
 	// FieldDeferralOfSequence holds the string denoting the deferral_of_sequence field in the database.
@@ -115,6 +117,7 @@ var Columns = []string{
 	FieldPolicyHash,
 	FieldSignature,
 	FieldSignerKeyID,
+	FieldSignerKeyScope,
 	FieldDeferReason,
 	FieldDeferralOfSequence,
 	FieldHumanPrincipal,
@@ -279,6 +282,11 @@ func BySubagentType(opts ...sql.OrderTermOption) OrderOption {
 // BySignerKeyID orders the results by the signer_key_id field.
 func BySignerKeyID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSignerKeyID, opts...).ToFunc()
+}
+
+// BySignerKeyScope orders the results by the signer_key_scope field.
+func BySignerKeyScope(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSignerKeyScope, opts...).ToFunc()
 }
 
 // ByDeferReason orders the results by the defer_reason field.

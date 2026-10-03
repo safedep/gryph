@@ -89,6 +89,8 @@ type Record struct {
 	// CLI uses this to emit a SelfAuditActionReceiptSigned row without
 	// re-querying the receipt.
 	SignerKeyID string
+	// SignerKeyScope is the scope of the key that signed the row.
+	SignerKeyScope string
 }
 
 // GeneratorOption configures a Generator at construction time. Today the

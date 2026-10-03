@@ -447,6 +447,20 @@
   guarantee: "On Linux, gryph install --repair-timer writes the systemd user service and timer that run gryph supervisor reconcile --once every 15 minutes, exits zero when the scheduler is out of reach, and gryph uninstall --repair-timer removes the units."
   labels: [reconcile, timer, linux]
 
+- id: receipts/signing/key-scope
+  title: "a user-key signature carries the key scope user"
+  category: receipts
+  tier: P1
+  guarantee: "A receipt signed with a key in the user's config directory carries signer_key_scope user. The receipt list, the JSONL and CSV exports, gryph policy receipts --verify and verify-log print the scope, so an audit does not read the signature as one of the decision service."
+  labels: [receipts, signing, key-scope]
+
+- id: receipts/managed/trust-store
+  title: "install --managed --trust-store ships the fleet trust store"
+  category: receipts
+  tier: P1
+  guarantee: "gryph install --managed --trust-store writes the administrator's receipt trust store to the managed keys directory, root-owned 0644, and refuses an invalid one with exit 3. Every user's verifier and gryph policy keys list trust its keys next to the user's own store, a user key command writes the user's store only, and gryph doctor --managed reports the store. Privileged job only."
+  labels: [receipts, managed, privileged, linux]
+
 - id: receipts/system-session/verify
   title: "tamper events are receipts in the system session and the chain verifies"
   category: receipts

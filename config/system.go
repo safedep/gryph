@@ -123,6 +123,18 @@ func ManagedPolicyState() ManagedPolicy {
 	}
 }
 
+// ManagedTrustStorePath returns the receipt trust store that an
+// administrator ships with the managed configuration, root-owned, or ""
+// when the platform has no managed location. Its public keys count as
+// trusted on every user's host next to the user's own store.
+func ManagedTrustStorePath() string {
+	dir := systemConfigDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, "keys", "receipt-pub.json")
+}
+
 // ManagedConfigFile returns the system managed config file when it exists,
 // is a regular file, and passes the trust check. It returns "" otherwise.
 // While a managed file is active, it is authoritative and the per-user

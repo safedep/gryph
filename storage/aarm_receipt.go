@@ -161,11 +161,11 @@ INSERT INTO aarm_receipts (
     result_status, duration_ms, error_message,
     snapshot, action_payload, prev_hash, hash,
     subagent_id, subagent_type, policy_hash,
-    signature, signer_key_id,
+    signature, signer_key_id, signer_key_scope,
     defer_reason, deferral_of_sequence,
     human_principal, service_identity, role_scope,
     command_digest, url_digest, hash_version, content_salt
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	var actionIDArg, eventIDArg, agentArg, toolArg, projectArg interface{}
 	if row.ActionID != uuid.Nil {
@@ -242,12 +242,15 @@ INSERT INTO aarm_receipts (
 		policyHashArg = row.PolicyHash
 	}
 
-	var signatureArg, signerKeyIDArg interface{}
+	var signatureArg, signerKeyIDArg, signerKeyScopeArg interface{}
 	if len(row.Signature) > 0 {
 		signatureArg = row.Signature
 	}
 	if row.SignerKeyID != "" {
 		signerKeyIDArg = row.SignerKeyID
+	}
+	if row.SignerKeyScope != "" {
+		signerKeyScopeArg = row.SignerKeyScope
 	}
 
 	var deferReasonArg, deferralOfSequenceArg interface{}
@@ -290,7 +293,7 @@ INSERT INTO aarm_receipts (
 		row.ResultStatus, durationArg, errorMsgArg,
 		snapshotArg, payloadArg, prevHashArg, row.Hash,
 		subagentIDArg, subagentTypeArg, policyHashArg,
-		signatureArg, signerKeyIDArg,
+		signatureArg, signerKeyIDArg, signerKeyScopeArg,
 		deferReasonArg, deferralOfSequenceArg,
 		humanPrincipalArg, serviceIdentityArg, roleScopeArg,
 		commandDigestArg, urlDigestArg, hashVersionArg, contentSaltArg,
@@ -393,6 +396,9 @@ func receiptCreate(client *ent.AarmReceiptClient, row *ReceiptRow) *ent.AarmRece
 	}
 	if row.SignerKeyID != "" {
 		create.SetSignerKeyID(row.SignerKeyID)
+	}
+	if row.SignerKeyScope != "" {
+		create.SetSignerKeyScope(row.SignerKeyScope)
 	}
 	if row.DeferReason != "" {
 		create.SetDeferReason(row.DeferReason)
@@ -768,6 +774,7 @@ func entToReceipt(e *ent.AarmReceipt) *ReceiptRow {
 		PolicyHash:      e.PolicyHash,
 		Signature:       e.Signature,
 		SignerKeyID:     e.SignerKeyID,
+		SignerKeyScope:  e.SignerKeyScope,
 		DeferReason:     e.DeferReason,
 		HumanPrincipal:  e.HumanPrincipal,
 		ServiceIdentity: e.ServiceIdentity,

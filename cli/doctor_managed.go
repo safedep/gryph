@@ -11,6 +11,7 @@ import (
 	"os"
 
 	"github.com/safedep/gryph/aarm/pdp"
+	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/config"
@@ -51,8 +52,11 @@ type managedDoctorReport struct {
 
 	Config managedFileReport   `json:"config"`
 	Policy managedPolicyReport `json:"policy"`
-	Binary managedFileReport   `json:"binary"`
-	Agents []managedAgentState `json:"agents"`
+	// TrustStore is the managed receipt trust store. It is optional: a
+	// missing one does not lower the profile.
+	TrustStore managedTrustStoreReport `json:"trust_store"`
+	Binary     managedFileReport       `json:"binary"`
+	Agents     []managedAgentState     `json:"agents"`
 
 	Key        managedKeyReport        `json:"key"`
 	Supervisor managedSupervisorReport `json:"supervisor"`
@@ -80,6 +84,12 @@ type managedPolicyReport struct {
 }
 
 // managedAgentState is the managed entry of one agent in the allowlist.
+type managedTrustStoreReport struct {
+	managedFileReport
+	// Keys is the count of public keys in the store.
+	Keys int `json:"keys"`
+}
+
 type managedAgentState struct {
 	Name  string `json:"name"`
 	Class string `json:"class"`
@@ -134,6 +144,7 @@ func buildManagedDoctorReport(ctx context.Context) *managedDoctorReport {
 
 	cfg := report.readConfig()
 	report.readPolicy(cfg)
+	report.readTrustStore()
 	report.readBinary(cfg)
 	report.readAgents(ctx, cfg)
 
@@ -215,6 +226,38 @@ func (r *managedDoctorReport) readPolicy(cfg *config.Config) {
 	}
 	r.Policy.Chain = managedChainOK
 	r.Policy.Version = policy.Version
+}
+
+// readTrustStore reads the managed trust store. It is optional, so a
+// missing file is a fact and not an issue. A file that another user can
+// write, or that does not parse, is an issue: a verifier would trust its
+// keys.
+func (r *managedDoctorReport) readTrustStore() {
+	path := config.ManagedTrustStorePath()
+	r.TrustStore = managedTrustStoreReport{managedFileReport: managedFileReport{Path: path, Chain: managedChainMissing}}
+	if path == "" {
+		r.TrustStore.Chain = managedChainAbsent
+		return
+	}
+	data, err := config.ReadTrustedFile(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return
+	case err != nil:
+		r.TrustStore.Chain = managedChainUntrusted
+		r.TrustStore.Error = err.Error()
+		r.Issues = append(r.Issues, "managed trust store not trusted: "+err.Error())
+		return
+	}
+	ts, err := receipt.ParseTrustStore(data)
+	if err != nil {
+		r.TrustStore.Chain = managedChainUntrusted
+		r.TrustStore.Error = err.Error()
+		r.Issues = append(r.Issues, "managed trust store does not parse: "+err.Error())
+		return
+	}
+	r.TrustStore.Chain = managedChainOK
+	r.TrustStore.Keys = len(ts.Keys)
 }
 
 // readBinary checks the binary that the managed hook entries name. A
@@ -307,6 +350,7 @@ func renderManagedDoctor(w io.Writer, report *managedDoctorReport, asJSON bool) 
 		lines = append(lines, fmt.Sprintf("  %-11s version %s  sha256 %s", "", report.Policy.Version, report.Policy.SHA256))
 	}
 	lines = append(lines,
+		fmt.Sprintf("  %-11s %s  chain %s  keys %d", "Keys", report.TrustStore.Path, report.TrustStore.Chain, report.TrustStore.Keys),
 		fmt.Sprintf("  %-11s %s  chain %s", "Binary", report.Binary.Path, report.Binary.Chain),
 		"  "+managedKeySummary,
 		fmt.Sprintf("  %-11s %s", "Supervisor", report.Supervisor.State),

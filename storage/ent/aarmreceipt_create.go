@@ -283,6 +283,20 @@ func (_c *AarmReceiptCreate) SetNillableSignerKeyID(v *string) *AarmReceiptCreat
 	return _c
 }
 
+// SetSignerKeyScope sets the "signer_key_scope" field.
+func (_c *AarmReceiptCreate) SetSignerKeyScope(v string) *AarmReceiptCreate {
+	_c.mutation.SetSignerKeyScope(v)
+	return _c
+}
+
+// SetNillableSignerKeyScope sets the "signer_key_scope" field if the given value is not nil.
+func (_c *AarmReceiptCreate) SetNillableSignerKeyScope(v *string) *AarmReceiptCreate {
+	if v != nil {
+		_c.SetSignerKeyScope(*v)
+	}
+	return _c
+}
+
 // SetDeferReason sets the "defer_reason" field.
 func (_c *AarmReceiptCreate) SetDeferReason(v string) *AarmReceiptCreate {
 	_c.mutation.SetDeferReason(v)
@@ -651,6 +665,10 @@ func (_c *AarmReceiptCreate) createSpec() (*AarmReceipt, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SignerKeyID(); ok {
 		_spec.SetField(aarmreceipt.FieldSignerKeyID, field.TypeString, value)
 		_node.SignerKeyID = value
+	}
+	if value, ok := _c.mutation.SignerKeyScope(); ok {
+		_spec.SetField(aarmreceipt.FieldSignerKeyScope, field.TypeString, value)
+		_node.SignerKeyScope = value
 	}
 	if value, ok := _c.mutation.DeferReason(); ok {
 		_spec.SetField(aarmreceipt.FieldDeferReason, field.TypeString, value)

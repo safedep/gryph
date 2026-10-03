@@ -38,7 +38,7 @@ stdout '"version": "1"'
 stdout '"sha256": "[0-9a-f]{64}"'
 stdout '"allow_user_policy": false'
 stdout '"chain": "ok"'
-! stdout '"chain": "missing"'
+stdout -count=1 '"chain": "missing"'
 stdout '"protected": false'
 exec gryph doctor --managed
 stdout 'Managed doctor: Locked \(hook entry and policy files, decision and audit trail not protected\)'

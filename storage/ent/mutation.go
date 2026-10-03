@@ -993,6 +993,7 @@ type AarmReceiptMutation struct {
 	policy_hash             *[]byte
 	signature               *[]byte
 	signer_key_id           *string
+	signer_key_scope        *string
 	defer_reason            *string
 	deferral_of_sequence    *int64
 	adddeferral_of_sequence *int64
@@ -2305,6 +2306,55 @@ func (m *AarmReceiptMutation) ResetSignerKeyID() {
 	delete(m.clearedFields, aarmreceipt.FieldSignerKeyID)
 }
 
+// SetSignerKeyScope sets the "signer_key_scope" field.
+func (m *AarmReceiptMutation) SetSignerKeyScope(s string) {
+	m.signer_key_scope = &s
+}
+
+// SignerKeyScope returns the value of the "signer_key_scope" field in the mutation.
+func (m *AarmReceiptMutation) SignerKeyScope() (r string, exists bool) {
+	v := m.signer_key_scope
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSignerKeyScope returns the old "signer_key_scope" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldSignerKeyScope(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSignerKeyScope is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSignerKeyScope requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSignerKeyScope: %w", err)
+	}
+	return oldValue.SignerKeyScope, nil
+}
+
+// ClearSignerKeyScope clears the value of the "signer_key_scope" field.
+func (m *AarmReceiptMutation) ClearSignerKeyScope() {
+	m.signer_key_scope = nil
+	m.clearedFields[aarmreceipt.FieldSignerKeyScope] = struct{}{}
+}
+
+// SignerKeyScopeCleared returns if the "signer_key_scope" field was cleared in this mutation.
+func (m *AarmReceiptMutation) SignerKeyScopeCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldSignerKeyScope]
+	return ok
+}
+
+// ResetSignerKeyScope resets all changes to the "signer_key_scope" field.
+func (m *AarmReceiptMutation) ResetSignerKeyScope() {
+	m.signer_key_scope = nil
+	delete(m.clearedFields, aarmreceipt.FieldSignerKeyScope)
+}
+
 // SetDeferReason sets the "defer_reason" field.
 func (m *AarmReceiptMutation) SetDeferReason(s string) {
 	m.defer_reason = &s
@@ -2822,7 +2872,7 @@ func (m *AarmReceiptMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AarmReceiptMutation) Fields() []string {
-	fields := make([]string, 0, 34)
+	fields := make([]string, 0, 35)
 	if m.session_id != nil {
 		fields = append(fields, aarmreceipt.FieldSessionID)
 	}
@@ -2897,6 +2947,9 @@ func (m *AarmReceiptMutation) Fields() []string {
 	}
 	if m.signer_key_id != nil {
 		fields = append(fields, aarmreceipt.FieldSignerKeyID)
+	}
+	if m.signer_key_scope != nil {
+		fields = append(fields, aarmreceipt.FieldSignerKeyScope)
 	}
 	if m.defer_reason != nil {
 		fields = append(fields, aarmreceipt.FieldDeferReason)
@@ -2983,6 +3036,8 @@ func (m *AarmReceiptMutation) Field(name string) (ent.Value, bool) {
 		return m.Signature()
 	case aarmreceipt.FieldSignerKeyID:
 		return m.SignerKeyID()
+	case aarmreceipt.FieldSignerKeyScope:
+		return m.SignerKeyScope()
 	case aarmreceipt.FieldDeferReason:
 		return m.DeferReason()
 	case aarmreceipt.FieldDeferralOfSequence:
@@ -3060,6 +3115,8 @@ func (m *AarmReceiptMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldSignature(ctx)
 	case aarmreceipt.FieldSignerKeyID:
 		return m.OldSignerKeyID(ctx)
+	case aarmreceipt.FieldSignerKeyScope:
+		return m.OldSignerKeyScope(ctx)
 	case aarmreceipt.FieldDeferReason:
 		return m.OldDeferReason(ctx)
 	case aarmreceipt.FieldDeferralOfSequence:
@@ -3262,6 +3319,13 @@ func (m *AarmReceiptMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSignerKeyID(v)
 		return nil
+	case aarmreceipt.FieldSignerKeyScope:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSignerKeyScope(v)
+		return nil
 	case aarmreceipt.FieldDeferReason:
 		v, ok := value.(string)
 		if !ok {
@@ -3460,6 +3524,9 @@ func (m *AarmReceiptMutation) ClearedFields() []string {
 	if m.FieldCleared(aarmreceipt.FieldSignerKeyID) {
 		fields = append(fields, aarmreceipt.FieldSignerKeyID)
 	}
+	if m.FieldCleared(aarmreceipt.FieldSignerKeyScope) {
+		fields = append(fields, aarmreceipt.FieldSignerKeyScope)
+	}
 	if m.FieldCleared(aarmreceipt.FieldDeferReason) {
 		fields = append(fields, aarmreceipt.FieldDeferReason)
 	}
@@ -3554,6 +3621,9 @@ func (m *AarmReceiptMutation) ClearField(name string) error {
 		return nil
 	case aarmreceipt.FieldSignerKeyID:
 		m.ClearSignerKeyID()
+		return nil
+	case aarmreceipt.FieldSignerKeyScope:
+		m.ClearSignerKeyScope()
 		return nil
 	case aarmreceipt.FieldDeferReason:
 		m.ClearDeferReason()
@@ -3664,6 +3734,9 @@ func (m *AarmReceiptMutation) ResetField(name string) error {
 		return nil
 	case aarmreceipt.FieldSignerKeyID:
 		m.ResetSignerKeyID()
+		return nil
+	case aarmreceipt.FieldSignerKeyScope:
+		m.ResetSignerKeyScope()
 		return nil
 	case aarmreceipt.FieldDeferReason:
 		m.ResetDeferReason()

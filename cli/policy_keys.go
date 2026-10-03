@@ -56,7 +56,7 @@ func newPolicyKeysGenerateCmd() *cobra.Command {
 				return err
 			}
 			keyPath := app.Config.ResolveReceiptKeyPath(app.Paths)
-			trustPath := app.Config.ResolveReceiptTrustStorePath(app.Paths)
+			trustPath := app.Config.WritableTrustStorePath(app.Paths)
 
 			rotated := false
 			if _, statErr := os.Stat(keyPath); statErr == nil {
@@ -139,7 +139,7 @@ func newPolicyKeysListCmd() *cobra.Command {
 				return err
 			}
 			trustPath := app.Config.ResolveReceiptTrustStorePath(app.Paths)
-			ts, err := receipt.LoadTrustStore(trustPath)
+			ts, err := receipt.LoadTrustStores(app.Config.ReceiptTrustStorePaths(app.Paths)...)
 			if err != nil {
 				return ErrConfig("load trust store", err)
 			}
@@ -190,7 +190,7 @@ func newPolicyKeysTrustCmd() *cobra.Command {
 			if entry.Created.IsZero() {
 				entry.Created = time.Now().UTC()
 			}
-			trustPath := app.Config.ResolveReceiptTrustStorePath(app.Paths)
+			trustPath := app.Config.WritableTrustStorePath(app.Paths)
 			ts, err := receipt.LoadTrustStore(trustPath)
 			if err != nil {
 				return ErrConfig("load trust store", err)
@@ -224,7 +224,7 @@ func newPolicyKeysRevokeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			trustPath := app.Config.ResolveReceiptTrustStorePath(app.Paths)
+			trustPath := app.Config.WritableTrustStorePath(app.Paths)
 			ts, err := receipt.LoadTrustStore(trustPath)
 			if err != nil {
 				return ErrConfig("load trust store", err)

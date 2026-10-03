@@ -319,6 +319,7 @@ type policyReceiptView struct {
 	SubagentType    string                 `json:"subagent_type,omitempty"`
 	PolicyHash      string                 `json:"policy_hash,omitempty"`
 	SignerKeyID     string                 `json:"signer_key_id,omitempty"`
+	SignerKeyScope  string                 `json:"signer_key_scope,omitempty"`
 	HumanPrincipal  string                 `json:"human_principal,omitempty"`
 	ServiceIdentity string                 `json:"service_identity,omitempty"`
 	RoleScope       string                 `json:"role_scope,omitempty"`
@@ -346,6 +347,7 @@ func receiptToView(r *storage.ReceiptRow) policyReceiptView {
 		SubagentID:      r.SubagentID,
 		SubagentType:    r.SubagentType,
 		SignerKeyID:     r.SignerKeyID,
+		SignerKeyScope:  r.SignerKeyScope,
 		HumanPrincipal:  r.HumanPrincipal,
 		ServiceIdentity: r.ServiceIdentity,
 		RoleScope:       r.RoleScope,
@@ -503,6 +505,7 @@ type receiptSignatureResult struct {
 	Sequence  int64           `json:"sequence"`
 	ReceiptID uuid.UUID       `json:"receipt_id"`
 	KeyID     string          `json:"key_id,omitempty"`
+	KeyScope  string          `json:"key_scope,omitempty"`
 	Status    signatureStatus `json:"status"`
 	Reason    string          `json:"reason,omitempty"`
 }
@@ -511,6 +514,8 @@ type signatureSummary struct {
 	SignedOK      int `json:"signed_ok"`
 	Unsigned      int `json:"unsigned"`
 	SignedInvalid int `json:"signed_invalid"`
+	// KeyScopes counts the signed receipts per key scope.
+	KeyScopes map[string]int `json:"key_scopes,omitempty"`
 }
 
 func verifyOneSignature(ctx context.Context, store storage.Store, r *storage.ReceiptRow, verifier *receipt.Ed25519Verifier) receiptSignatureResult {
@@ -523,6 +528,10 @@ func verifyOneSignature(ctx context.Context, store storage.Store, r *storage.Rec
 	if len(r.Signature) == 0 {
 		res.Status = signatureStatusUnsigned
 		return res
+	}
+	res.KeyScope = r.SignerKeyScope
+	if res.KeyScope == "" {
+		res.KeyScope = receipt.KeyScopeUnmarked
 	}
 	if verifier == nil {
 		res.Status = signatureStatusInvalid
@@ -564,6 +573,12 @@ func emitSignatureInvalidAudit(ctx context.Context, store storage.Store, r *stor
 func summarizeSignatureResults(results []receiptSignatureResult) signatureSummary {
 	var s signatureSummary
 	for _, r := range results {
+		if r.KeyScope != "" {
+			if s.KeyScopes == nil {
+				s.KeyScopes = map[string]int{}
+			}
+			s.KeyScopes[r.KeyScope]++
+		}
 		switch r.Status {
 		case signatureStatusOK:
 			s.SignedOK++
@@ -597,6 +612,9 @@ func renderSignatureVerifyResults(w io.Writer, c *tui.Colorizer, summary signatu
 	_, _ = fmt.Fprintf(w, "%s signed_ok=%d unsigned=%d signed_invalid=%d\n",
 		c.Header("Signature verification:"),
 		summary.SignedOK, summary.Unsigned, summary.SignedInvalid)
+	for _, scope := range sortedScopes(summary.KeyScopes) {
+		_, _ = fmt.Fprintf(w, "  key_scope=%s %d\n", scope, summary.KeyScopes[scope])
+	}
 	if summary.SignedInvalid == 0 {
 		return
 	}
@@ -604,9 +622,9 @@ func renderSignatureVerifyResults(w io.Writer, c *tui.Colorizer, summary signatu
 		if r.Status != signatureStatusInvalid {
 			continue
 		}
-		_, _ = fmt.Fprintf(w, "  %s session=%s seq=%d key_id=%s %s\n",
+		_, _ = fmt.Fprintf(w, "  %s session=%s seq=%d key_id=%s key_scope=%s %s\n",
 			c.Error("INVALID"),
 			tui.FormatShortID(r.SessionID.String()),
-			r.Sequence, r.KeyID, r.Reason)
+			r.Sequence, r.KeyID, r.KeyScope, r.Reason)
 	}
 }

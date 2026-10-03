@@ -144,6 +144,7 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 			}
 			next.Signature = sig
 			next.SignerKeyID = keyID
+			next.SignerKeyScope = ScopeOf(g.signer)
 		}
 		return next, nil
 	})
@@ -152,12 +153,13 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 	}
 
 	return &Record{
-		ID:          row.ID,
-		Sequence:    row.Sequence,
-		RecordedAt:  row.RecordedAt,
-		Hash:        row.Hash,
-		PrevHash:    row.PrevHash,
-		SignerKeyID: row.SignerKeyID,
+		ID:             row.ID,
+		Sequence:       row.Sequence,
+		RecordedAt:     row.RecordedAt,
+		Hash:           row.Hash,
+		PrevHash:       row.PrevHash,
+		SignerKeyID:    row.SignerKeyID,
+		SignerKeyScope: row.SignerKeyScope,
 	}, nil
 }
 
