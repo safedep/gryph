@@ -6,6 +6,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 
 	"github.com/safedep/dry/log"
 )
@@ -22,13 +23,38 @@ const (
 	cacheDirEnvKey  = "GRYPH_CACHE_DIR"
 )
 
-// resolveDir applies the shared resolution order for one directory kind:
-// the GRYPH_* override, then the sudo guard, then the XDG base, then the
-// platform base. XDG variables are honored on every platform, not only
-// where os.UserConfigDir does, so users with an XDG layout on macOS or
+// baseDirs holds the base directories of one account. The leaf
+// defaultHomeRelativePath is appended to each.
+type baseDirs struct {
+	config string
+	data   string
+	cache  string
+}
+
+// accountBaseDirsResolver is overridable in tests.
+var accountBaseDirsResolver = accountBaseDirs
+
+// resolveDir applies the shared resolution order for one directory kind.
+// Under a managed config the environment has no say: the directory comes
+// from the account database of the real user, so a stray HOME, XDG_* or
+// GRYPH_*_DIR variable cannot move the state that a managed host governs.
+// Otherwise: the GRYPH_* override, then the sudo guard, then the XDG base,
+// then the platform base. XDG variables are honored on every platform, not
+// only where os.UserConfigDir does, so users with an XDG layout on macOS or
 // Windows keep one location across systems. A relative XDG value is
 // ignored, as the XDG spec requires.
-func resolveDir(overrideEnvKey, xdgEnvKey string, rootBase func() (string, error), platformBase func() string) string {
+func resolveDir(kind func(baseDirs) string, overrideEnvKey, xdgEnvKey string, rootBase func() (string, error), platformBase func() string) string {
+	if managedConfigActive() {
+		dirs, err := accountBaseDirsResolver()
+		if err == nil {
+			return filepath.Join(kind(dirs), defaultHomeRelativePath)
+		}
+		// No resolvable account entry, e.g. scratch containers. Without an
+		// account database there is no user switching, so the environment
+		// cannot point at another user's state.
+		log.Warnf("failed to resolve the account directories, using the platform defaults: %v", err)
+		return filepath.Join(platformBase(), defaultHomeRelativePath)
+	}
 	if dir := os.Getenv(overrideEnvKey); dir != "" {
 		return dir
 	}
@@ -50,17 +76,17 @@ func resolveDir(overrideEnvKey, xdgEnvKey string, rootBase func() (string, error
 
 // getConfigDir returns the configuration directory for gryph.
 func getConfigDir() string {
-	return resolveDir(configDirEnvKey, "XDG_CONFIG_HOME", rootConfigDirResolver, configBaseDir)
+	return resolveDir(func(d baseDirs) string { return d.config }, configDirEnvKey, "XDG_CONFIG_HOME", rootConfigDirResolver, configBaseDir)
 }
 
 // getDataDir returns the data directory for gryph.
 func getDataDir() string {
-	return resolveDir(dataDirEnvKey, "XDG_DATA_HOME", rootDataDirResolver, dataBaseDir)
+	return resolveDir(func(d baseDirs) string { return d.data }, dataDirEnvKey, "XDG_DATA_HOME", rootDataDirResolver, dataBaseDir)
 }
 
 // getCacheDir returns the cache directory for gryph.
 func getCacheDir() string {
-	return resolveDir(cacheDirEnvKey, "XDG_CACHE_HOME", rootCacheDirResolver, cacheBaseDir)
+	return resolveDir(func(d baseDirs) string { return d.cache }, cacheDirEnvKey, "XDG_CACHE_HOME", rootCacheDirResolver, cacheBaseDir)
 }
 
 func configBaseDir() string {
@@ -118,12 +144,18 @@ func isSudoElevation() bool {
 }
 
 func rootHomeDir() (string, error) {
-	u, err := user.LookupId("0")
+	return accountHomeDir(0)
+}
+
+// accountHomeDir returns the home directory of uid from the account
+// database, never from the environment.
+func accountHomeDir(uid int) (string, error) {
+	u, err := user.LookupId(strconv.Itoa(uid))
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve root home directory: %w", err)
+		return "", fmt.Errorf("failed to resolve the home directory of uid %d: %w", uid, err)
 	}
 	if u.HomeDir == "" {
-		return "", fmt.Errorf("root user has no home directory")
+		return "", fmt.Errorf("uid %d has no home directory", uid)
 	}
 	return u.HomeDir, nil
 }
@@ -133,10 +165,7 @@ func rootConfigDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if runtime.GOOS == "darwin" {
-		return filepath.Join(home, "Library", "Application Support"), nil
-	}
-	return filepath.Join(home, ".config"), nil
+	return baseDirsFor(home).config, nil
 }
 
 func rootDataDir() (string, error) {
@@ -144,10 +173,7 @@ func rootDataDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if runtime.GOOS == "darwin" {
-		return filepath.Join(home, "Library", "Application Support"), nil
-	}
-	return filepath.Join(home, ".local", "share"), nil
+	return baseDirsFor(home).data, nil
 }
 
 func rootCacheDir() (string, error) {
@@ -155,10 +181,7 @@ func rootCacheDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if runtime.GOOS == "darwin" {
-		return filepath.Join(home, "Library", "Caches"), nil
-	}
-	return filepath.Join(home, ".cache"), nil
+	return baseDirsFor(home).cache, nil
 }
 
 // Overridable in tests to exercise root path resolution and the

@@ -75,6 +75,13 @@ func ManagedConfigStatus() ManagedConfigState {
 	return state
 }
 
+// managedConfigActive reports a trusted managed config file. It logs
+// nothing, because the path resolvers call it on every lookup.
+func managedConfigActive() bool {
+	state := ManagedConfigStatus()
+	return state.Exists && state.Err == nil
+}
+
 // ManagedConfigFile returns the system managed config file when it exists,
 // is a regular file, and passes the trust check. It returns "" otherwise.
 // While a managed file is active, it is authoritative and the per-user

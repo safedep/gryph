@@ -307,6 +307,12 @@ exists, it is the only configuration source: Gryph reads no per-user file, no
 `--config` file and no `GRYPH_*` environment variable. `config set` and
 `config reset` refuse to run.
 
+Per-user state (the database, the keys, the cache) then lives under the home
+directory that the system account database gives for the real user. `HOME`,
+`XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `GRYPH_CONFIG_DIR`,
+`GRYPH_DATA_DIR` and `GRYPH_CACHE_DIR` have no effect. On Windows the
+`AppData` folders come from the shell, not from the environment.
+
 | Platform | Path                                                     |
 | -------- | -------------------------------------------------------- |
 | Linux    | `/etc/safedep/gryph/config.yml`                          |
