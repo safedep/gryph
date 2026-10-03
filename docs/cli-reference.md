@@ -539,6 +539,15 @@ default, so the job repairs as well as detects.
 Under `--managed`, Gryph reads no `HOME`, `XDG_*` or `GRYPH_*` variable and
 runs no program. Every path comes from the input file and the platform.
 
+On Windows the command runs from an elevated prompt. Gryph reads the managed
+directory from the shell, so a `PROGRAMDATA` variable has no effect. The input
+files and the binary must pass the Windows chain check of the
+[system managed configuration](#system-managed-configuration): `SYSTEM`,
+`Administrators` or `TrustedInstaller` own every component below
+`%ProgramData%` or `%ProgramFiles%`, and no access control entry lets another
+principal write. A file in a user's profile fails the check and the command
+exits 3 with nothing changed.
+
 Exit codes: 0 success, 1 failure, 3 invalid input with nothing changed, 10
 partial success. With 10, the JSON report lists the degraded agents with
 their error.

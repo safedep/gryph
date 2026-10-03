@@ -106,7 +106,7 @@ type managedInstallArgs struct {
 func runManagedInstall(cmd *cobra.Command, args managedInstallArgs) error {
 	configPath, policyPath, dryRun, asJSON := args.configPath, args.policyPath, args.dryRun, args.asJSON
 	if !utils.IsPrivileged() {
-		return NewCLIError(ExitGeneral, "install --managed must run as root")
+		return NewCLIError(ExitGeneral, "install --managed needs an administrator: root on Linux and macOS, an elevated prompt on Windows")
 	}
 	if config.ManagedConfigPath() == "" {
 		return NewCLIError(ExitGeneral, "this platform has no system managed location")

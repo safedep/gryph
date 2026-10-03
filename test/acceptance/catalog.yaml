@@ -342,6 +342,13 @@
   guarantee: "gryph uninstall --managed removes the Gryph entries from the agent hook files in every account's home through a helper that runs as that account. The helper keeps the account's other hooks and the file owner, and a link to a root-owned file changes nothing. Privileged job only."
   labels: [uninstall, managed, privileged, linux]
 
+- id: install/managed/windows-acl-gate
+  title: "Windows ignores a planted managed config and refuses it for install --managed"
+  category: install
+  tier: P0
+  guarantee: "On Windows, Gryph reads the managed directory from the shell and not from PROGRAMDATA. A config.yml planted under a user-controlled PROGRAMDATA is ignored, and gryph install --managed with that file exits 3 with nothing changed, because the file fails the owner and DACL chain check."
+  labels: [install, managed, windows]
+
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
   category: install

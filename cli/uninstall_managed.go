@@ -64,7 +64,7 @@ type managedUserUninstall struct {
 // account's uid and gid before it opens a file, under the repair rules.
 func runManagedUninstall(cmd *cobra.Command, purge, dryRun, asJSON bool) error {
 	if !utils.IsPrivileged() {
-		return NewCLIError(ExitGeneral, "uninstall --managed must run as root")
+		return NewCLIError(ExitGeneral, "uninstall --managed needs an administrator: root on Linux and macOS, an elevated prompt on Windows")
 	}
 	if config.ManagedConfigPath() == "" {
 		return NewCLIError(ExitGeneral, "this platform has no system managed location")
