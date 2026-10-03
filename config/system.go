@@ -32,40 +32,61 @@ func systemConfigDir() string {
 	case "linux":
 		return filepath.Join("/etc", defaultHomeRelativePath)
 	case "windows":
-		programData := os.Getenv("PROGRAMDATA")
-		if programData == "" {
-			programData = `C:\ProgramData`
-		}
-		return filepath.Join(programData, defaultHomeRelativePath)
+		return filepath.Join(programDataDir(), defaultHomeRelativePath)
 	}
 
 	return ""
 }
 
-// managedFileTrusted is overridable in tests, which cannot create root owned
+// managedPathTrusted is overridable in tests, which cannot create root owned
 // files.
-var managedFileTrusted = verifyManagedFileTrust
+var managedPathTrusted = verifyManagedPathTrust
+
+// ManagedConfigState describes the system managed config file of this host.
+type ManagedConfigState struct {
+	// Path is where the managed file lives on this platform. It is empty
+	// when the platform has no managed location.
+	Path string
+	// Exists is true when a regular file is at Path.
+	Exists bool
+	// Err says why Gryph ignores a file that exists. It is nil when the file
+	// is trusted or when no file exists.
+	Err error
+}
+
+// ManagedConfigStatus reports the managed config file and whether Gryph
+// trusts it. The trust check covers the file and every directory above it.
+// Without the chain, a root owned file in a user writable directory is
+// replaceable by rename, and the host silently falls back to the per-user
+// config.
+func ManagedConfigStatus() ManagedConfigState {
+	dir := systemConfigDir()
+	if dir == "" {
+		return ManagedConfigState{}
+	}
+
+	state := ManagedConfigState{Path: filepath.Join(dir, configFileName)}
+	info, err := os.Stat(state.Path)
+	if err != nil || !info.Mode().IsRegular() {
+		return state
+	}
+	state.Exists = true
+	state.Err = managedPathTrusted(state.Path)
+	return state
+}
 
 // ManagedConfigFile returns the system managed config file when it exists,
 // is a regular file, and passes the trust check. It returns "" otherwise.
 // While a managed file is active, it is authoritative and the per-user
 // config file is ignored.
 func ManagedConfigFile() string {
-	dir := systemConfigDir()
-	if dir == "" {
+	state := ManagedConfigStatus()
+	if !state.Exists {
 		return ""
 	}
-
-	path := filepath.Join(dir, configFileName)
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() {
+	if state.Err != nil {
+		log.Warnf("ignoring managed config %s: %v", state.Path, state.Err)
 		return ""
 	}
-
-	if !managedFileTrusted(info) {
-		log.Warnf("ignoring managed config %s: the file is not root owned or is writable by group or other", path)
-		return ""
-	}
-
-	return path
+	return state.Path
 }

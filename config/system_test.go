@@ -1,9 +1,9 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,12 +16,12 @@ func withManagedConfigDir(t *testing.T, dir string) {
 	t.Helper()
 
 	restoreDir := globalConfigDirOverride
-	restoreTrust := managedFileTrusted
+	restoreTrust := managedPathTrusted
 	globalConfigDirOverride = dir
-	managedFileTrusted = func(os.FileInfo) bool { return true }
+	managedPathTrusted = func(string) error { return nil }
 	t.Cleanup(func() {
 		globalConfigDirOverride = restoreDir
-		managedFileTrusted = restoreTrust
+		managedPathTrusted = restoreTrust
 	})
 }
 
@@ -39,12 +39,27 @@ func TestManagedConfigFile(t *testing.T) {
 func TestManagedConfigFile_UntrustedFileIgnored(t *testing.T) {
 	dir := t.TempDir()
 	withManagedConfigDir(t, dir)
-	managedFileTrusted = func(os.FileInfo) bool { return false }
+	managedPathTrusted = func(string) error { return errors.New("not owned by root") }
 
 	path := filepath.Join(dir, configFileName)
 	require.NoError(t, os.WriteFile(path, []byte("logging:\n  level: full\n"), 0o644))
 
 	assert.Empty(t, ManagedConfigFile())
+
+	state := ManagedConfigStatus()
+	assert.Equal(t, path, state.Path)
+	assert.True(t, state.Exists)
+	assert.EqualError(t, state.Err, "not owned by root")
+}
+
+func TestManagedConfigStatus_NoFile(t *testing.T) {
+	dir := t.TempDir()
+	withManagedConfigDir(t, dir)
+
+	state := ManagedConfigStatus()
+	assert.Equal(t, filepath.Join(dir, configFileName), state.Path)
+	assert.False(t, state.Exists)
+	assert.NoError(t, state.Err)
 }
 
 func TestLoad_ManagedConfigIsAuthoritative(t *testing.T) {
@@ -136,27 +151,4 @@ func TestLoad_GryphDirEnvDoesNotBindConfigValues(t *testing.T) {
 	cfg, err := Load("")
 	require.NoError(t, err)
 	assert.Equal(t, Default(), cfg)
-}
-
-func TestVerifyManagedFileTrust(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("the Windows build accepts every file until an ACL check lands")
-	}
-
-	path := filepath.Join(t.TempDir(), configFileName)
-	require.NoError(t, os.WriteFile(path, []byte("x"), 0o644))
-
-	info, err := os.Stat(path)
-	require.NoError(t, err)
-
-	if os.Geteuid() == 0 {
-		assert.True(t, verifyManagedFileTrust(info))
-	} else {
-		assert.False(t, verifyManagedFileTrust(info))
-	}
-
-	require.NoError(t, os.Chmod(path, 0o664))
-	info, err = os.Stat(path)
-	require.NoError(t, err)
-	assert.False(t, verifyManagedFileTrust(info), "a group writable file is never trusted")
 }

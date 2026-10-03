@@ -71,9 +71,14 @@ Performs various health checks:
 					Name:        "Config file",
 					Description: "Check if config file exists and is valid",
 				}
-				if managed := config.ManagedConfigFile(); managed != "" {
+				if managed := config.ManagedConfigStatus(); managed.Exists && managed.Err != nil {
+					configCheck.Status = tui.CheckFail
+					configCheck.Message = managed.Path + " exists but Gryph ignores it: " + managed.Err.Error()
+					configCheck.Suggestion = "Make the file and every directory above it owned by the system administrator, with no write access for other users"
+					v.AllOK = false
+				} else if managed.Exists {
 					configCheck.Status = tui.CheckOK
-					configCheck.Message = managed + " (managed by the system)"
+					configCheck.Message = managed.Path + " (managed by the system)"
 				} else if _, err := os.Stat(app.Paths.ConfigFile); os.IsNotExist(err) {
 					configCheck.Status = tui.CheckWarn
 					configCheck.Message = "Config file not found (using defaults)"

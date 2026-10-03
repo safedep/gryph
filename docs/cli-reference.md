@@ -300,6 +300,34 @@ Reset all configuration to defaults.
 gryph config reset
 ```
 
+#### System managed configuration
+
+An administrator can place a configuration file at a system location. When it
+exists, it is the only configuration source: Gryph reads no per-user file, no
+`--config` file and no `GRYPH_*` environment variable. `config set` and
+`config reset` refuse to run.
+
+| Platform | Path                                                     |
+| -------- | -------------------------------------------------------- |
+| Linux    | `/etc/safedep/gryph/config.yml`                          |
+| macOS    | `/Library/Application Support/safedep/gryph/config.yml`  |
+| Windows  | `%PROGRAMDATA%\safedep\gryph\config.yml`                 |
+
+Gryph trusts the file only when the whole path is protected:
+
+- On Linux and macOS, root must own the file and every directory above it.
+  No component may be writable by group or other, except a directory with the
+  sticky bit set. A symbolic link in the path must be owned by root, and its
+  target must pass the same check.
+- On Windows, Gryph resolves `%PROGRAMDATA%` through the shell, not from the
+  environment. `SYSTEM`, `Administrators` or `TrustedInstaller` must own every
+  component. Below `%PROGRAMDATA%`, no access control entry may let another
+  principal write, delete or take ownership. Create `safedep` and `gryph` with
+  inheritance disabled.
+
+A file that fails the check is ignored, and Gryph logs one warning. `gryph
+doctor` reports the reason.
+
 ### retention
 
 Manage data retention policy.
