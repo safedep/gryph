@@ -20,6 +20,13 @@ func validate(cfg *Config) error {
 	default:
 		return fmt.Errorf("supervisor.profile %q is not enforce or pilot", cfg.Supervisor.Profile)
 	}
+	for name, v := range map[string]string{"blocking": cfg.Supervisor.Unavailable.Blocking, "prompt": cfg.Supervisor.Unavailable.Prompt, "other": cfg.Supervisor.Unavailable.Other} {
+		switch v {
+		case "", UnavailableBlock, UnavailableAllow:
+		default:
+			return fmt.Errorf("supervisor.unavailable.%s %q is not block or allow", name, v)
+		}
+	}
 
 	// Validate logging level
 	if !isValidLoggingLevel(cfg.Logging.Level) {

@@ -52,6 +52,15 @@ func supervisorSocketDefault() string {
 	return "/run/safedep/gryph/hook.sock"
 }
 
+// supervisorSpoolDefault is the drop directory of the hook clients: root
+// owned with the sticky bit, so a user writes only under its own account.
+func supervisorSpoolDefault() string {
+	if runtime.GOOS == "darwin" {
+		return "/var/spool/safedep/gryph"
+	}
+	return "/var/spool/safedep/gryph"
+}
+
 // supervisorStateDefault holds the partitions of the accounts. The service
 // account owns it, and no user can read another user's partition.
 func supervisorStateDefault() string {

@@ -377,6 +377,34 @@
   guarantee: "The newest connection of an account above the connection limit gets error rate_limited and closes. A flood of requests over the rate gets error rate_limited, the service records one tamper event in the system session of the account, and another account is not affected. Privileged job only."
   labels: [supervisor, privileged, linux]
 
+- id: hook/client/fallback-block
+  title: "in client mode a blocking hook blocks when the service is absent"
+  category: hook
+  tier: P0
+  guarantee: "Under a managed configuration with supervisor.enabled, the hook is a client of the decision service and opens no store. With no service at the socket, a blocking hook blocks with one stderr line, supervisor.unavailable.blocking: allow lets it through, and supervisor.enabled: false keeps the in-process decision. Privileged job only."
+  labels: [hook, client, supervisor, privileged, linux]
+
+- id: hook/client/prompt-allow-spooled
+  title: "in client mode a prompt or lifecycle hook allows and spools when the service is absent"
+  category: hook
+  tier: P0
+  guarantee: "With no service at the socket, a prompt hook and a lifecycle hook allow, and the client leaves each payload in the spool of its own account, mode 0700, with the verdict and the reason. Privileged job only."
+  labels: [hook, client, supervisor, privileged, linux]
+
+- id: hook/client/socket-held-no-welcome
+  title: "a socket without welcome counts as an absent service"
+  category: hook
+  tier: P0
+  guarantee: "A service that accepts the connect and never sends welcome makes the client give up within the handshake budget: a blocking hook blocks with the one stderr line and the spool holds the block. Privileged job only."
+  labels: [hook, client, supervisor, privileged, linux]
+
+- id: hook/client/old-client-new-server
+  title: "an unknown verdict from a newer service blocks"
+  category: hook
+  tier: P0
+  guarantee: "A service that answers a decision with a verdict this binary does not know makes every hook block, prompt hooks included, because the service answered and this is not the absent-service case. Privileged job only."
+  labels: [hook, client, supervisor, privileged, linux]
+
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
   category: install

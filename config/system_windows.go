@@ -28,6 +28,11 @@ func managedBinaryDefault() string {
 // supervisorSocketDefault names the pipe of the decision service.
 func supervisorSocketDefault() string { return `\\.\pipe\safedep-gryph-hook` }
 
+// supervisorSpoolDefault is the drop directory of the hook clients.
+func supervisorSpoolDefault() string {
+	return filepath.Join(programDataDir(), "safedep", "gryph", "spool")
+}
+
 // supervisorStateDefault holds the partitions of the accounts.
 func supervisorStateDefault() string { return filepath.Join(programDataDir(), "safedep", "gryph") }
 

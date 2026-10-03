@@ -95,6 +95,47 @@ sends the frames on stdin to a service and prints the replies. With
 `--idle` it first opens that many connections that send hello and hold.
 The acceptance scripts under `supervisor/` use it.
 
+## The client
+
+A managed configuration with `supervisor.enabled: true` turns the hook into
+a client. A socket alone never does, and a user configuration cannot point
+the hook at a service of its own. In client mode the hook reads the
+payload, opens no store, reads no key, and parses the payload only for the
+claims that the agent user alone can make: the project of the working
+directory and, on session end, the cost totals of the transcript. It sends
+the raw payload and renders the answer.
+
+The client bounds every wait. Connect plus welcome has 300 ms. A decision
+has 2 s, or the agent's hook timeout minus 500 ms when that is shorter. The
+client never hangs past the agent's timeout and never returns an exit code
+that is not a block.
+
+What a failure gives depends on the fail-mode column of the hook
+(`HookSpec.FailColumn`: `blocking`, `prompt`, `other`) and on where it
+failed:
+
+| Failure | Blocking hook | Prompt or other hook |
+|---|---|---|
+| No socket, refused connect, no welcome in time (`ErrConnect`) | `supervisor.unavailable.blocking`, default `block` with the line "Gryph supervisor is not running. Run `gryph doctor`." | `supervisor.unavailable.prompt` or `.other`, default `allow` |
+| After welcome: deadline, rate limit, server error, a frame that is not a decision | `block` | `allow` |
+| A decision with a verdict this binary does not know | `block` | `block` |
+| The payload does not parse | as `ErrConnect`, and the client reports the error to the service when it can | as `ErrConnect` |
+
+Every failure leaves an entry in the spool of the account
+(`supervisor.spool_dir`, default `/var/spool/safedep/gryph/<uid>/`): the
+frame the service did not see, the verdict the client gave, and the reason.
+An allow there is an action the service records later, marked as spooled.
+The spool root must exist, root-owned with the sticky bit; the client makes
+its own account directory, mode 0700.
+
+Only the managed file sets `supervisor.unavailable.{blocking,prompt,other}`
+(`block` or `allow`). The `pilot` profile's `local-ephemeral` fallback is
+not implemented yet; until then `pilot` fails like `enforce`.
+
+The hidden `gryph supervisor fake --socket <path> [--no-welcome] [--reply
+<frame-file>]` is a service that misbehaves on purpose, for the acceptance
+scripts under `hook/client/`.
+
 ## Testing
 
 `gryph supervisor protocol [--text]` is a hidden command that runs the

@@ -1,0 +1,54 @@
+# With no service at the socket, a prompt hook and a lifecycle hook allow,
+# and the client leaves each payload in the spool of its own account with
+# the verdict it gave and the reason, so the service records them later.
+# Runs only in the privileged job on a Linux host with no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+mkdir $WORK/spool
+expandenv managed.yml
+exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
+
+stdin prompt.json
+exec gryph _hook claude-code UserPromptSubmit
+! stderr .
+stdin end.json
+exec gryph _hook claude-code SessionEnd
+! stderr .
+
+exec sh -c 'ls $WORK/spool/0/*.json | wc -l'
+stdout '^2$'
+exec sh -c 'cat $WORK/spool/0/*.json'
+stdout '"verdict":"allow"'
+stdout '"reason":"ipc: cannot reach the decision service'
+stdout '"type":"handle"'
+stdout '"hook_type":"UserPromptSubmit"'
+stdout '"hook_type":"SessionEnd"'
+exec sh -c 'stat -c %a $WORK/spool/0'
+stdout '^700$'
+
+exec rm -rf /etc/safedep/gryph
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- managed.yml --
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  spool_dir: ${WORK}/spool
+-- prompt.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "list the files"
+}
+-- end.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "SessionEnd",
+  "reason": "exit"
+}

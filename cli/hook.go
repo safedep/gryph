@@ -9,6 +9,7 @@ import (
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/decision"
 	"github.com/safedep/gryph/hookside"
@@ -27,7 +28,23 @@ func NewHookCmd() *cobra.Command {
 			agentName := args[0]
 			hookType := args[1]
 
-			app, err := loadApp()
+			// The payload comes first: a client needs it before it talks
+			// to the service, and nothing else needs the store yet.
+			rawData, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				return fmt.Errorf("failed to read stdin: %w", err)
+			}
+
+			cfg, err := config.Load(globalFlags.ConfigPath)
+			if err != nil {
+				log.Warnf("config: %v. Gryph uses the default config.", err)
+				cfg = config.Default()
+			}
+			if clientMode(cfg) {
+				return runClientHook(ctx, cfg, agentName, hookType, rawData)
+			}
+
+			app, err := NewApp(cfg)
 			if err != nil {
 				return err
 			}
@@ -42,11 +59,6 @@ func NewHookCmd() *cobra.Command {
 					log.Errorf("failed to close app: %v", err)
 				}
 			}()
-
-			rawData, err := io.ReadAll(os.Stdin)
-			if err != nil {
-				return fmt.Errorf("failed to read stdin: %w", err)
-			}
 
 			svc := app.DecisionService()
 			hookErr := runHook(ctx, app.Registry, svc, agentName, hookType, rawData)

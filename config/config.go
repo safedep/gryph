@@ -100,7 +100,27 @@ type SupervisorConfig struct {
 	// StateDir holds the partitions of the accounts. Empty takes the
 	// default of the platform.
 	StateDir string `mapstructure:"state_dir"`
+	// SpoolDir is where a hook client leaves what it could not send. Empty
+	// takes the default of the platform.
+	SpoolDir string `mapstructure:"spool_dir"`
+	// Unavailable says what a hook does when the service is out of reach,
+	// per fail-mode column. Empty takes the default of the profile.
+	Unavailable UnavailableConfig `mapstructure:"unavailable"`
 }
+
+// UnavailableConfig holds one verdict per fail-mode column: block or
+// allow. The enforce profile blocks a blocking hook and allows the rest.
+type UnavailableConfig struct {
+	Blocking string `mapstructure:"blocking"`
+	Prompt   string `mapstructure:"prompt"`
+	Other    string `mapstructure:"other"`
+}
+
+// The verdicts a hook gives when the service is out of reach.
+const (
+	UnavailableBlock = "block"
+	UnavailableAllow = "allow"
+)
 
 // The supervisor profiles.
 const (
@@ -122,6 +142,38 @@ func (s SupervisorConfig) SocketPath() string {
 		return s.Socket
 	}
 	return supervisorSocketDefault()
+}
+
+// SpoolPath returns the spool directory, or the default of the platform.
+func (s SupervisorConfig) SpoolPath() string {
+	if s.SpoolDir != "" {
+		return s.SpoolDir
+	}
+	return supervisorSpoolDefault()
+}
+
+// EffectiveUnavailable returns the verdict of the column when the service
+// is out of reach. The enforce default blocks a blocking hook, because a
+// same-user process can take the service down for its own account, and
+// allows a prompt or a lifecycle hook, because a block there stops the
+// user and not the agent.
+func (s SupervisorConfig) EffectiveUnavailable(column string) string {
+	var set string
+	switch column {
+	case "blocking":
+		set = s.Unavailable.Blocking
+	case "prompt":
+		set = s.Unavailable.Prompt
+	default:
+		set = s.Unavailable.Other
+	}
+	if set != "" {
+		return set
+	}
+	if column == "blocking" {
+		return UnavailableBlock
+	}
+	return UnavailableAllow
 }
 
 // StatePath returns the state directory, or the default of the platform.

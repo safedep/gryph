@@ -8,7 +8,6 @@
 [!exec:useradd] skip 'needs useradd'
 ! exists /home/gryphacc1
 ! exists /usr/local/bin/gryph-acceptance
-! exists /tmp/gryph-acceptance-hook.sock
 env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
 env XDG_DATA_HOME=$WORK/home/.local/share

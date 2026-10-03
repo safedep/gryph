@@ -476,13 +476,17 @@ gryph supervisor run --socket /tmp/hook.sock --state-dir /tmp/gryph-state
 | `--max-conns`  | int     | 16                   | Open connections per account |
 | `--rate`       | float   | 20                   | Requests per second per account |
 
-The managed configuration sets the service: `supervisor.enabled`,
-`supervisor.socket` (default `/run/safedep/gryph/hook.sock` on Linux,
-`/var/run/safedep/gryph/hook.sock` on macOS), `supervisor.profile`
-(`enforce` or `pilot`) and `supervisor.state_dir` (default
-`/var/lib/safedep/gryph` on Linux, the managed directory on macOS). Only the
-managed file sets them. The [developer guide](./supervisor-dev.md) has the
-wire format and the limits.
+The managed configuration sets the service: `supervisor.enabled` (the hook
+becomes a client of the service), `supervisor.socket` (default
+`/run/safedep/gryph/hook.sock` on Linux, `/var/run/safedep/gryph/hook.sock`
+on macOS), `supervisor.profile` (`enforce` or `pilot`), `supervisor.state_dir`
+(default `/var/lib/safedep/gryph` on Linux, the managed directory on macOS),
+`supervisor.spool_dir` (default `/var/spool/safedep/gryph`) and
+`supervisor.unavailable.{blocking,prompt,other}` (`block` or `allow`: what a
+hook does when the service is out of reach, default `block` for a blocking
+hook and `allow` for the rest). Only the managed file sets them. The
+[developer guide](./supervisor-dev.md) has the wire format, the limits and
+the fail-mode table of the client.
 
 #### Managed install
 

@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -116,7 +115,7 @@ func newSupervisorSendCmd() *cobra.Command {
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if socket == "" {
-				return ErrConfig("invalid flags", fmt.Errorf("--socket is required"))
+				return ErrConfig("invalid flags", errNoSocket)
 			}
 			var held []net.Conn
 			defer func() {
@@ -130,6 +129,7 @@ func newSupervisorSendCmd() *cobra.Command {
 					return WrapError(ExitGeneral, "connect", err)
 				}
 				held = append(held, c)
+				_ = c.SetDeadline(time.Now().Add(timeout))
 				if err := ipc.WriteFrame(c, ipc.MustFrame(ipc.TypeHello, ipc.Hello{Proto: ipc.Proto, ClientVersion: version.Version})); err != nil {
 					return WrapError(ExitGeneral, "hello", err)
 				}
@@ -155,6 +155,10 @@ func newSupervisorSendCmd() *cobra.Command {
 				if err != nil {
 					return WrapError(ExitGeneral, "read a frame from stdin", err)
 				}
+				// The timeout bounds every exchange, so a service that holds
+				// the connection without a word fails the test instead of
+				// hanging it.
+				_ = conn.SetDeadline(time.Now().Add(timeout))
 				writeErr := ipc.WriteFrame(conn, f)
 				reply, err := ipc.ReadFrame(conn)
 				if err != nil {
@@ -178,6 +182,8 @@ func newSupervisorSendCmd() *cobra.Command {
 	cmd.Flags().DurationVar(&timeout, "timeout", 5*time.Second, "how long to wait for the socket")
 	return cmd
 }
+
+var errNoSocket = errors.New("--socket is required")
 
 // dialWithRetry connects to the socket, and retries until the timeout
 // while the socket is not there yet, so a test can start the service in
