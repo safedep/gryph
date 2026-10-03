@@ -3,12 +3,10 @@ package commandcode
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/agent/utils"
 )
 
 // Detect checks if Command Code is installed on the system.
@@ -42,11 +40,8 @@ func Detect(ctx context.Context) (*agent.DetectionResult, error) {
 	// distributed under the shorter aliases cmdc, commandcode and cmd, so
 	// fall back through them before giving up.
 	for _, bin := range []string{"command-code", "cmdc", "commandcode"} {
-		cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		output, err := exec.CommandContext(cmdCtx, bin, "--version").Output()
-		cancel()
-		if err == nil {
-			result.Version = strings.TrimSpace(string(output))
+		if v := utils.ProgramVersion(ctx, bin, "--version"); v != "" {
+			result.Version = v
 			break
 		}
 	}

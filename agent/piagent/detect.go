@@ -3,12 +3,10 @@ package piagent
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/agent/utils"
 )
 
 func Detect(ctx context.Context) (*agent.DetectionResult, error) {
@@ -36,15 +34,7 @@ func Detect(ctx context.Context) (*agent.DetectionResult, error) {
 		HooksPath:  filepath.Join(piDir, "extensions"),
 	}
 
-	cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if output, err := exec.CommandContext(cmdCtx, "pi", "--version").Output(); err == nil {
-		version := strings.TrimSpace(string(output))
-		if idx := strings.Index(version, " "); idx > 0 {
-			version = version[:idx]
-		}
-		result.Version = version
-	}
+	result.Version = utils.ProgramVersion(ctx, "pi", "--version")
 
 	if result.Version == "" {
 		result.Version = "unknown"

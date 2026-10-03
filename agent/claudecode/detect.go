@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/agent/utils"
 )
 
 // Detect checks if Claude Code is installed on the system.
@@ -40,17 +38,7 @@ func Detect(ctx context.Context) (*agent.DetectionResult, error) {
 		HooksPath:  hooksDir,
 	}
 
-	// Try to get version from claude CLI
-	cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if output, err := exec.CommandContext(cmdCtx, "claude", "-v").Output(); err == nil {
-		// Output format: "2.1.15 (Claude Code)"
-		version := strings.TrimSpace(string(output))
-		if idx := strings.Index(version, " "); idx > 0 {
-			version = version[:idx]
-		}
-		result.Version = version
-	}
+	result.Version = utils.ProgramVersion(ctx, "claude", "-v")
 
 	// Fallback: try settings.json
 	if result.Version == "" {

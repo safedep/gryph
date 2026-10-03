@@ -124,6 +124,8 @@ interpreter. Kernel-based self-protection is on the roadmap. See
 
 Check whether the agent is installed (config directory exists, binary in PATH) and return a `DetectionResult` with version, config path, and hooks path.
 
+Read the version with `utils.ProgramVersion(ctx, "<binary>", "--version")`. It runs the binary with a time budget and returns the first field that starts with a digit, or "" when the binary is missing. It runs nothing when the process is root or elevated, or when the caller passed `utils.WithoutProgramExecution(ctx)`, because a binary found through `PATH` can belong to any user. Fall back to a file, such as a settings file, or to `"unknown"`.
+
 Key fields: `Installed`, `Version`, `ConfigPath`, `HooksPath`.
 
 See `agent/gemini/detect.go` or `agent/claudecode/detect.go`.
