@@ -40,6 +40,7 @@ const (
 	SelfAuditActionApprovalGranted         = approval.AuditActionGranted
 	SelfAuditActionApprovalDenied          = approval.AuditActionDenied
 	SelfAuditActionApprovalTimeout         = approval.AuditActionTimeout
+	SelfAuditActionApprovalPending         = approval.AuditActionPending
 	SelfAuditActionDeferralRequested       = "deferral_requested"
 	SelfAuditActionDeferralResolved        = "deferral_resolved"
 	SelfAuditActionDeferralTimeout         = "deferral_timeout"

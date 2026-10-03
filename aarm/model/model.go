@@ -226,6 +226,10 @@ type EvaluationResult struct {
 	// (fresh_session_insufficient_context, conflicting_policies) for the
 	// auto-defer triggers.
 	DeferReason string
+
+	// MinAssurance is the lowest approval assurance the escalate rule that
+	// decided accepts. Empty takes the floor of the approval service.
+	MinAssurance string
 }
 
 // AgentMessage returns the message for the agent and the operator. A result

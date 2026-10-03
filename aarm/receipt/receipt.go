@@ -28,6 +28,8 @@ type Generator interface {
 	Record(ctx context.Context, in *RecordInput) (*Record, error)
 	UpdateResult(ctx context.Context, sessionID uuid.UUID, sequence int64, result model.Result) error
 	UpdateDecision(ctx context.Context, sessionID uuid.UUID, sequence int64, decision string, resultStatus string, note string) error
+	// UpdateApproval records who answered an escalation on its receipt.
+	UpdateApproval(ctx context.Context, sessionID uuid.UUID, sequence int64, approval map[string]any) error
 }
 
 // RecordInput is the input to Generator.Record.
@@ -132,6 +134,11 @@ func (*Nop) UpdateResult(_ context.Context, _ uuid.UUID, _ int64, _ model.Result
 
 // UpdateDecision implements Generator.
 func (*Nop) UpdateDecision(_ context.Context, _ uuid.UUID, _ int64, _, _, _ string) error {
+	return nil
+}
+
+// UpdateApproval implements Generator.
+func (*Nop) UpdateApproval(_ context.Context, _ uuid.UUID, _ int64, _ map[string]any) error {
 	return nil
 }
 

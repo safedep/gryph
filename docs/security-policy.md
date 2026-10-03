@@ -470,8 +470,9 @@ Do these steps each time you change a policy file.
 | `gryph policy receipts --verify` | Recompute the hash chain and verify any signatures. `--session ID` verifies one chain in full; `--all-sessions` verifies every chain. Exits non-zero on break or invalid signature. |
 | `gryph policy receipts export` | Stream receipts as JSONL or CSV. `--include-signatures` adds the Ed25519 signature columns. |
 | `gryph policy receipts verify-log --input FILE` | Verify an exported chain stand-alone. No database access needed. Verifies signatures when `--trust-store` resolves to a populated store. NOTE: `verify-log` reads a file, not the database. Run `gryph policy receipts export --include-signatures` first, or pipe: `gryph policy receipts export --include-signatures \| gryph policy receipts verify-log --input -`. |
-| `gryph policy approve list` | List pending approval requests. CLI prompts run in-process, so this is always empty in the CLI frontend. |
-| `gryph policy approve history` | Show receipts whose decision was `escalate`, `approved`, `denied`, or `approval_timeout`. |
+| `gryph policy approve list` | List the approval requests of this account. `--state` filters to `pending` (the default), `approved`, `denied`, `expired`, or `all`. On a managed host the decision service keeps the queue. A hook that decides in process asks on its own terminal and keeps no queue, so the list is then empty. |
+| `gryph policy approve show ID` | Show one request by id or id prefix: the action, the rules, the floor, the state, and the answer with its channel, assurance and approver. |
+| `gryph policy approve history` | Show receipts whose decision was `escalate`, `approved`, `denied`, or `approval_timeout`, with the `approval` record of each answer. |
 | `gryph policy deferrals` | List the pending-deferral queue. `--status` filters to `pending`, `resolved_allow`, `resolved_deny`, `resolved_timeout`, or `all`. `--session ID` scopes to one session. |
 | `gryph policy deferrals resolve --id ID --decision allow|deny [--note TEXT]` | Resolve a queued deferral by id (or id-prefix). Writes a follow-up receipt with `deferral_of_sequence` set, emits a `deferral_resolved` self-audit row. |
 | `gryph policy deferrals sweep [--dry-run]` | Flip every expired pending deferral to `resolved_timeout`, write a deny follow-up receipt for each, emit `deferral_timeout` per row and a `deferral_sweep` summary. |
@@ -641,7 +642,11 @@ exercises the entire chain in one pass.
 
 ## Approval workflow
 
-A rule with `action: escalate` pauses the agent's tool call and prompts the operator on `/dev/tty` for approve or deny.
+A rule with `action: escalate` pauses the agent's tool call until an approver answers.
+
+### A hook that decides in process
+
+Without the decision service, the hook prompts the operator on `/dev/tty` for approve or deny.
 
 ```yaml
 policy:
@@ -652,6 +657,56 @@ policy:
 ```
 
 The receipt row records the final outcome (`approved`, `denied`, or `approval_timeout`) and the approver identity. Review past decisions with `gryph policy approve history`. If no controlling terminal is available, the request denies; the safe default applies for unattended runs.
+
+### A managed host with the decision service
+
+With `supervisor.enabled: true` the decision service answers every escalation. It keeps a request store per account, decides each request once, and records the answer on the receipt with the channel, the assurance, the approver and the trust of the connection that carried it.
+
+```yaml
+policy:
+  approval:
+    channels: [same-user-tty, local-admin]   # the channels in use
+    min_assurance: local-admin               # the floor for a rule that sets none
+    inline_wait: 15s                         # how long a hook waits for an inline answer
+    request_ttl: 30m                         # an unanswered request expires as a deny
+    grant_ttl: 15m                           # how long a stored approval stays usable
+    max_grant_scope: once                    # once | session | window
+```
+
+Each channel gives one assurance. The order, lowest first:
+
+| Channel and assurance | Who answers |
+|---|---|
+| `same-user-tty` | The developer, on the terminal of the hook. The same account can forge this answer, so it applies to one request and stores no grant. |
+| `self-elevated` | A local admin who is the same person as the developer, through `sudo`. Off by default. |
+| `local-admin` | A member of the admin group of the host. |
+| `local-auth` | An answer behind an authentication prompt of the operating system. |
+| `out-of-band` | An approver outside the host. |
+
+A rule sets its own floor with `min_assurance`. A channel below the floor never answers the rule, and the request never falls back to a weaker channel. The default floor is `local-admin`, so the developer cannot approve their own escalation unless a rule says `min_assurance: same-user-tty`:
+
+```yaml
+- id: npm-install
+  action: escalate
+  min_assurance: same-user-tty
+  match:
+    action_types: [command_exec]
+    command_patterns: ["\\bnpm\\s+install\\b"]
+  message: "npm install needs approval"
+```
+
+What happens on an escalation:
+
+1. The service records the request receipt and stores the request: the action digest, the rules, the user, the host, the session, and a one-line summary.
+2. When the floor accepts `same-user-tty` and the agent can wait, the hook shows the prompt on its terminal. The wait is `inline_wait`, bounded by the hook timeout of the agent minus a margin. A wait under two seconds is no wait. The terminal shows one status line first: `gryph: approval needed for rule npm-install (request 7f3k2a1b). Waiting up to 15s.`
+3. An answer in time allows or blocks the action now. The service accepts one answer per prompt, on the connection of the hook, before the deadline. When the hook goes away first, the request stays open and the prompt can never be answered.
+4. With no answer, the action blocks and the request stays pending. The agent reads: `This action needs approval. Request 7f3k2a1b is pending. Tell the user. Do not retry until the user confirms that it is approved. Check status: gryph policy approve show 7f3k2a1b`.
+5. A request that nobody answers within `request_ttl` expires as a deny. The receipt records `approval_timeout`.
+6. The next hook of the same session tells the agent what happened to its open requests, once: `Request 7f3k2a1b was approved. You can retry.`, `Request 7f3k2a1b was denied: <note>`, or `Request 7f3k2a1b expired without an answer.`
+
+A later answer from a stronger channel can store a grant. A grant binds to the account, the action digest, the agent session and its scope. The digest covers the normalized action and its working directory, so the same command in another directory is another action. `once` matches the same action one time. `session` matches it for the rest of the agent session. `window` matches it for the account until `grant_ttl`. A grant never matches a whole rule. A retry that matches a grant is allowed, and the receipt names the grant. `max_grant_scope` bounds what an approver can give.
+
+Every answer, and every use of a grant, is on the receipt chain: `gryph policy approve history --format json` prints the `approval` record of each row.
 
 ## Risk signals
 

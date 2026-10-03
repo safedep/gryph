@@ -429,6 +429,12 @@ func (_c *AarmReceiptCreate) SetContentSalt(v []byte) *AarmReceiptCreate {
 	return _c
 }
 
+// SetApproval sets the "approval" field.
+func (_c *AarmReceiptCreate) SetApproval(v map[string]interface{}) *AarmReceiptCreate {
+	_c.mutation.SetApproval(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AarmReceiptCreate) SetID(v uuid.UUID) *AarmReceiptCreate {
 	_c.mutation.SetID(v)
@@ -730,6 +736,10 @@ func (_c *AarmReceiptCreate) createSpec() (*AarmReceipt, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ContentSalt(); ok {
 		_spec.SetField(aarmreceipt.FieldContentSalt, field.TypeBytes, value)
 		_node.ContentSalt = value
+	}
+	if value, ok := _c.mutation.Approval(); ok {
+		_spec.SetField(aarmreceipt.FieldApproval, field.TypeJSON, value)
+		_node.Approval = value
 	}
 	return _node, _spec
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/safedep/gryph/aarm/approval"
 	"github.com/safedep/gryph/aarm/canonical"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/shellcmd"
@@ -44,6 +45,9 @@ type Rule struct {
 	Scope       Scope          `yaml:"scope,omitempty"`
 	Condition   string         `yaml:"condition,omitempty"`
 	Reason      string         `yaml:"reason,omitempty"`
+	// MinAssurance is the lowest approval assurance an escalate rule
+	// accepts. A channel below it never answers the rule.
+	MinAssurance string `yaml:"min_assurance,omitempty"`
 }
 
 // Match declares rule match criteria.
@@ -120,6 +124,14 @@ func validateRule(rule Rule) error {
 	}
 	if rule.Action == model.DecisionDefer && strings.TrimSpace(rule.Reason) == "" {
 		return fmt.Errorf("rule %q action %q requires a non-empty reason", rule.ID, rule.Action)
+	}
+	if rule.MinAssurance != "" {
+		if rule.Action != model.DecisionEscalate {
+			return fmt.Errorf("rule %q sets min_assurance, which only action escalate takes", rule.ID)
+		}
+		if _, err := approval.ParseAssurance(rule.MinAssurance); err != nil {
+			return fmt.Errorf("rule %q: %w", rule.ID, err)
+		}
 	}
 	if len(rule.Match.FileAccess) > 0 && len(rule.Match.FilePatterns) == 0 {
 		return fmt.Errorf("rule %q file_access requires file_patterns", rule.ID)

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -475,10 +476,67 @@ const (
 )
 
 // ApprovalConfig configures the approval workflow for escalated decisions.
+// Mode, TimeoutSeconds and RequireNote drive the prompt of a hook that
+// decides in process. The other keys drive the decision service, which
+// keeps a request store and answers through channels.
 type ApprovalConfig struct {
 	Mode           ApprovalMode `mapstructure:"mode"`
 	TimeoutSeconds int          `mapstructure:"timeout_seconds"`
 	RequireNote    bool         `mapstructure:"require_note"`
+
+	// Channels names the approval channels the decision service uses, by
+	// the assurance each one gives.
+	Channels []string `mapstructure:"channels"`
+	// MinAssurance is the floor for an escalate rule that sets none.
+	MinAssurance string `mapstructure:"min_assurance"`
+	// InlineWait bounds how long a hook waits for an inline answer. The
+	// client bounds it again by the hook timeout of the agent.
+	InlineWait time.Duration `mapstructure:"inline_wait"`
+	// RequestTTL is how long an unanswered request stays open. It then
+	// expires as a deny.
+	RequestTTL time.Duration `mapstructure:"request_ttl"`
+	// GrantTTL is how long a stored approval stays usable.
+	GrantTTL time.Duration `mapstructure:"grant_ttl"`
+	// MaxGrantScope is the widest scope an approver can give: once,
+	// session or window.
+	MaxGrantScope string `mapstructure:"max_grant_scope"`
+}
+
+// The approval channels, named by the assurance each one gives.
+const (
+	ApprovalChannelSameUserTTY  = "same-user-tty"
+	ApprovalChannelSelfElevated = "self-elevated"
+	ApprovalChannelLocalAdmin   = "local-admin"
+	ApprovalChannelLocalAuth    = "local-auth"
+	ApprovalChannelOutOfBand    = "out-of-band"
+)
+
+// ApprovalChannels lists every channel the configuration accepts.
+var ApprovalChannels = []string{ApprovalChannelSameUserTTY, ApprovalChannelSelfElevated, ApprovalChannelLocalAdmin, ApprovalChannelLocalAuth, ApprovalChannelOutOfBand}
+
+// The approval grant scopes, narrowest first.
+const (
+	ApprovalScopeOnce    = "once"
+	ApprovalScopeSession = "session"
+	ApprovalScopeWindow  = "window"
+)
+
+// ApprovalScopes lists every scope the configuration accepts.
+var ApprovalScopes = []string{ApprovalScopeOnce, ApprovalScopeSession, ApprovalScopeWindow}
+
+// The defaults of the decision service's approval keys.
+const (
+	DefaultApprovalInlineWait = 15 * time.Second
+	DefaultApprovalRequestTTL = 30 * time.Minute
+	DefaultApprovalGrantTTL   = 15 * time.Minute
+	// MinApprovalInlineWait is the shortest wait a client makes. A shorter
+	// budget skips the wait and blocks with the request pending.
+	MinApprovalInlineWait = 2 * time.Second
+)
+
+// HasChannel reports whether the configuration names channel.
+func (a ApprovalConfig) HasChannel(channel string) bool {
+	return slices.Contains(a.Channels, channel)
 }
 
 // ClassifyConfig configures the data-classification heuristic.

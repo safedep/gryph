@@ -90,7 +90,9 @@ type AarmReceipt struct {
 	// Imported holds the value of the "imported" field.
 	Imported bool `json:"imported,omitempty"`
 	// ContentSalt holds the value of the "content_salt" field.
-	ContentSalt  []byte `json:"content_salt,omitempty"`
+	ContentSalt []byte `json:"content_salt,omitempty"`
+	// Approval holds the value of the "approval" field.
+	Approval     map[string]interface{} `json:"approval,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -99,7 +101,7 @@ func (*AarmReceipt) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case aarmreceipt.FieldMatchedRuleIds, aarmreceipt.FieldSnapshot, aarmreceipt.FieldActionPayload, aarmreceipt.FieldPrevHash, aarmreceipt.FieldHash, aarmreceipt.FieldPolicyHash, aarmreceipt.FieldSignature, aarmreceipt.FieldContentSalt:
+		case aarmreceipt.FieldMatchedRuleIds, aarmreceipt.FieldSnapshot, aarmreceipt.FieldActionPayload, aarmreceipt.FieldPrevHash, aarmreceipt.FieldHash, aarmreceipt.FieldPolicyHash, aarmreceipt.FieldSignature, aarmreceipt.FieldContentSalt, aarmreceipt.FieldApproval:
 			values[i] = new([]byte)
 		case aarmreceipt.FieldImported:
 			values[i] = new(sql.NullBool)
@@ -356,6 +358,14 @@ func (_m *AarmReceipt) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				_m.ContentSalt = *value
 			}
+		case aarmreceipt.FieldApproval:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field approval", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Approval); err != nil {
+					return fmt.Errorf("unmarshal field approval: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -503,6 +513,9 @@ func (_m *AarmReceipt) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("content_salt=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ContentSalt))
+	builder.WriteString(", ")
+	builder.WriteString("approval=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Approval))
 	builder.WriteByte(')')
 	return builder.String()
 }

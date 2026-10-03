@@ -484,11 +484,20 @@ gryph supervisor run --socket /tmp/hook.sock --state-dir /tmp/gryph-state
 
 With the service on, the read commands of every account (`logs`, `query`,
 `sessions`, `session`, `cat`, `diff`, `stats`, `cost`, `policy receipts`,
-`policy approve history`, `policy deferrals list`) read through the
-service and see the partition of their own account, nothing else. A
-developer keeps access to their own log on a managed host. Without the
-service the commands fail with the socket path in the error. See
-[reads](./supervisor-dev.md#reads) in the developer guide.
+`policy approve list`, `policy approve show`, `policy approve history`,
+`policy deferrals list`) read through the service and see the partition
+of their own account, nothing else. A developer keeps access to their own
+log on a managed host. Without the service the commands fail with the
+socket path in the error. See [reads](./supervisor-dev.md#reads) in the
+developer guide.
+
+The service answers every escalation of the policy. It keeps the requests
+of each account, asks on the terminal of the hook when the rule accepts
+it, and expires a request that nobody answers. `gryph policy approve
+list` shows the open requests of the account and `gryph policy approve
+show ID` one of them. The keys under `policy.approval` set the channels,
+the floor, the waits and the grant scope. See [the approval
+workflow](./security-policy.md#approval-workflow).
 
 At start the service makes the machine keys below the state directory when
 they are missing: `keys/receipt.key` (the receipt signing key, mode 0600),

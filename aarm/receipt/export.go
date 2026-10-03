@@ -213,6 +213,7 @@ type ExportedReceipt struct {
 	DeferralOfSequence *int64                 `json:"deferral_of_sequence,omitempty"`
 	HumanPrincipal     string                 `json:"human_principal,omitempty"`
 	ServiceIdentity    string                 `json:"service_identity,omitempty"`
+	Approval           map[string]interface{} `json:"approval,omitempty"`
 	RoleScope          string                 `json:"role_scope,omitempty"`
 	CommandDigest      string                 `json:"command_digest,omitempty"`
 	URLDigest          string                 `json:"url_digest,omitempty"`
@@ -278,6 +279,7 @@ func ToExported(r *storage.ReceiptRow, includeSig bool) ExportedReceipt {
 	}
 	out.HumanPrincipal = r.HumanPrincipal
 	out.ServiceIdentity = r.ServiceIdentity
+	out.Approval = r.Approval
 	out.RoleScope = r.RoleScope
 	out.CommandDigest = r.CommandDigest
 	out.URLDigest = r.URLDigest

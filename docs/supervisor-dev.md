@@ -34,10 +34,10 @@ down. A first frame of another type ends the connection with `error`.
 
 | Frame | Direction | Body | Answer |
 |---|---|---|---|
-| `handle` | client to server | `agent` (64), `hook_type` (64), `raw_payload` (base64 of the agent payload, up to 6 MiB), `project_claim.name` (256), `cost_totals` (the session cost the hook side collected) | `decision` or `error` |
+| `handle` | client to server | `agent` (64), `hook_type` (64), `raw_payload` (base64 of the agent payload, up to 6 MiB), `project_claim.name` (256), `cost_totals` (the session cost the hook side collected), `inline_wait` (nanoseconds the client can wait for a prompt, zero for none) | `decision`, or `prompt` and then `decision`, or `error` |
 | `decision` | server to client | `decision` (64), `reason` (4096), `guidance` (4096). The fields of the hook response. | |
-| `prompt` | server to client | `nonce` (64), `action_digest` (128), `deadline` (RFC 3339) | `prompt_reply` |
-| `prompt_reply` | client to server | `nonce`, `decision` (64), `note` (4096) | `ack` or `error` |
+| `prompt` | server to client | `nonce` (64), `action_digest` (128), `deadline` (RFC 3339), `request_id` (64), `view` (what the terminal shows: `agent`, `tool`, `type`, `path`, `command`, `url`, `message` (4096 each), `rules` (up to 64), `wait`) | `prompt_reply` |
+| `prompt_reply` | client to server | `nonce`, `decision` (`approve`, `deny` or `none`), `note` (4096) | the `decision` of the `handle` |
 | `report_hook_error` | client to server | `agent`, `hook_type`, `raw_size`, `raw_event` (up to 64 KiB), `message` (4096). The fields of the hook error. | `ack` |
 | `query` | client to server | `kind` (64), `params` (up to 64 entries, 64 and 1024), `limit` | `query_result` or `error` |
 | `query_result` | server to client | `rows` (up to 64 JSON documents), `next` (1024) | |
@@ -123,6 +123,46 @@ The hidden `gryph supervisor send --socket <path> [--text] [--idle N]`
 sends the frames on stdin to a service and prints the replies. With
 `--idle` it first opens that many connections that send hello and hold.
 The acceptance scripts under `supervisor/` use it.
+
+## Approvals
+
+The service answers an `escalate` decision itself: the partition's
+mediator gets `supervisor.approver` as its approval service in place of
+the terminal prompt or the nop of a user install. The approver keeps the
+requests and the grants of the account in the partition store
+(`storage.ApprovalStore`) and decides each request once:
+`ResolveApprovalRequest` applies to a pending row only, so the first
+answer wins by the clock of the store and a later one gets
+`ErrApprovalRequestDecided`.
+
+The inline prompt runs on the connection of the hook. The serve loop is
+in the handler while the prompt is open, so the prompter writes `prompt`
+and reads the next frame itself, with the read deadline of the prompt
+plus one second of grace. One nonce, one connection, one reply: a
+`prompt_reply` that reaches the loop gets `error invalid`, because no
+prompt is open there, and a reply with another nonce counts as no answer.
+When the hook closes first, the prompter goes with the connection and the
+request stays pending. The partition releases its write mutex for the
+wait and takes it again for the outcome, so the other tool calls of the
+session go on.
+
+The client sets the wait: `min(policy.approval.inline_wait, hook timeout
+minus 500 ms)` in `handle.inline_wait`, zero under two seconds. The
+server bounds it again by its own `inline_wait`. The whole exchange of
+the hook ends before the hook timeout of the agent.
+
+A request expires at `request_ttl`. Every `handle` and every read of the
+approval kinds closes the overdue requests of the partition first, and
+the spool pass closes them for every open partition. An expiry sets
+`approval_timeout` on the receipt and `system:expiry` as the approver. The
+next `handle` of the session appends the outcomes nobody reported yet to
+its answer: an allow becomes guidance, so the agent reads the lines.
+
+A grant (`aarm_approval_grants`) binds to the partition, the action
+digest (`approval.ActionDigest`: type, tool, operation, agent, the clean
+working directory, path, command, args and URL), the session and the
+scope. `MatchApprovalGrant` runs before a new request. An answer from the
+terminal stores no grant.
 
 ## The units
 

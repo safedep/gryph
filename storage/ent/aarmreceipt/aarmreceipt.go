@@ -87,6 +87,8 @@ const (
 	FieldImported = "imported"
 	// FieldContentSalt holds the string denoting the content_salt field in the database.
 	FieldContentSalt = "content_salt"
+	// FieldApproval holds the string denoting the approval field in the database.
+	FieldApproval = "approval"
 	// Table holds the table name of the aarmreceipt in the database.
 	Table = "aarm_receipts"
 )
@@ -130,6 +132,7 @@ var Columns = []string{
 	FieldHashVersion,
 	FieldImported,
 	FieldContentSalt,
+	FieldApproval,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

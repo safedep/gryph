@@ -9,6 +9,30 @@ import (
 	"github.com/safedep/gryph/storage/ent"
 )
 
+// The AarmApprovalGrantFunc type is an adapter to allow the use of ordinary
+// function as AarmApprovalGrant mutator.
+type AarmApprovalGrantFunc func(context.Context, *ent.AarmApprovalGrantMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AarmApprovalGrantFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AarmApprovalGrantMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AarmApprovalGrantMutation", m)
+}
+
+// The AarmApprovalRequestFunc type is an adapter to allow the use of ordinary
+// function as AarmApprovalRequest mutator.
+type AarmApprovalRequestFunc func(context.Context, *ent.AarmApprovalRequestMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AarmApprovalRequestFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AarmApprovalRequestMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AarmApprovalRequestMutation", m)
+}
+
 // The AarmDeferredActionFunc type is an adapter to allow the use of ordinary
 // function as AarmDeferredAction mutator.
 type AarmDeferredActionFunc func(context.Context, *ent.AarmDeferredActionMutation) (ent.Value, error)

@@ -1,0 +1,194 @@
+# The client bounds the inline wait by the configured wait and by the
+# hook timeout of the agent, so a hook never outlives the agent's own
+# timeout and lets the action through. The service bounds it again by its
+# own configured wait. A wait under two seconds is no wait: the hook
+# blocks at once with the request pending and shows no prompt. Runs only
+# in the privileged job on a Linux host.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+[!exec:python3] skip 'needs python3 for a pseudo terminal'
+! exists /etc/safedep/gryph
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+mkdir $WORK/spool
+expandenv managed.yml
+exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
+exec install -m 644 policy.yaml /etc/safedep/gryph/policy.yaml
+exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir $WORK/state --spool-dir $WORK/spool --allow-root &
+exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do test -S /tmp/gryph-acceptance-hook.sock && break; sleep 0.2; done'
+
+# The service reads its own wait at start: 15 s here. An OpenCode hook
+# has 5 s, so the client waits that minus the margin.
+exec sh -c 'start=$(date +%s); python3 terminal.py - opencode.json gryph _hook opencode tool.execute.before; code=$?; echo "elapsed=$((`date +%s`-start)) code=$code"'
+stdout 'Waiting up to [45]s\.'
+stdout 'Request [0-9a-f]{8} is pending'
+stdout 'elapsed=[45] code=2'
+
+# A configured wait of 3 s ends the prompt of a Claude Code hook, whose
+# own timeout is far longer.
+expandenv three.yml
+exec install -m 644 $WORK/three.yml /etc/safedep/gryph/config.yml
+exec sh -c 'start=$(date +%s); python3 terminal.py - npm.json gryph _hook claude-code PreToolUse; code=$?; echo "elapsed=$((`date +%s`-start)) code=$code"'
+stdout 'Waiting up to 3s\.'
+stdout 'Request [0-9a-f]{8} is pending'
+stdout 'elapsed=[345] code=2'
+
+# A wait under two seconds skips the prompt.
+expandenv short.yml
+exec install -m 644 $WORK/short.yml /etc/safedep/gryph/config.yml
+exec sh -c 'start=$(date +%s); python3 terminal.py - npm.json gryph _hook claude-code PreToolUse; code=$?; echo "elapsed=$((`date +%s`-start)) code=$code"'
+! stdout 'Approve'
+stdout 'Request [0-9a-f]{8} is pending'
+stdout 'elapsed=[01] code=2'
+
+exec gryph policy approve list --format json --no-color
+stdout -count=3 '"state": "pending"'
+stdout -count=2 '"inline": true'
+stdout -count=1 '"inline": false'
+
+exec rm -rf /etc/safedep/gryph /root/.local/share/safedep /root/.config/safedep /root/.cache/safedep
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+-- managed.yml --
+policy:
+  enabled: true
+  log_all_evaluations: true
+  approval:
+    channels: [same-user-tty, local-admin]
+    min_assurance: local-admin
+    inline_wait: 15s
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  spool_dir: ${WORK}/spool
+-- three.yml --
+policy:
+  enabled: true
+  log_all_evaluations: true
+  approval:
+    channels: [same-user-tty, local-admin]
+    min_assurance: local-admin
+    inline_wait: 3s
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  spool_dir: ${WORK}/spool
+-- short.yml --
+policy:
+  enabled: true
+  log_all_evaluations: true
+  approval:
+    channels: [same-user-tty, local-admin]
+    min_assurance: local-admin
+    inline_wait: 1s
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  spool_dir: ${WORK}/spool
+-- policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-escalate-npm
+    action: escalate
+    severity: high
+    min_assurance: same-user-tty
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+    message: "npm install needs approval"
+  - id: acceptance-escalate-deploy
+    action: escalate
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "make deploy"
+    message: "a deploy needs an admin"
+-- npm.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {"command": "npm install", "description": "Install dependencies"},
+  "tool_use_id": "tool-use-001"
+}
+-- read.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {"file_path": "/home/user/project/main.go"},
+  "tool_use_id": "tool-use-002"
+}
+-- deploy.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {"command": "make deploy", "description": "Deploy"},
+  "tool_use_id": "tool-use-003"
+}
+-- opencode.json --
+{
+  "hook_type": "tool.execute.before",
+  "session_id": "opencode-session-abc123",
+  "call_id": "call-opencode-1",
+  "tool": "bash",
+  "args": {"command": "npm install", "description": "Install dependencies"},
+  "cwd": "/home/user/project"
+}
+-- terminal.py --
+# Run a hook with a pseudo terminal as its controlling terminal and answer
+# the approval prompt there.
+# usage: python3 terminal.py <answer|-> <payload> <command...>
+# The payload file is the stdin of the hook. Stdout and stderr of the hook
+# are pipes, as under an agent. The terminal gets the answer when the
+# prompt shows. A dash gives no answer. Everything the hook writes goes to
+# stdout, and the exit code is the hook's.
+import os
+import pty
+import select
+import sys
+
+answer, payload, command = sys.argv[1], sys.argv[2], sys.argv[3:]
+out_r, out_w = os.pipe()
+err_r, err_w = os.pipe()
+pid, fd = pty.fork()
+if pid == 0:
+    # One descriptor keeps the terminal open after the standard ones
+    # change, else the master reads end of file before the prompt.
+    os.set_inheritable(os.dup(0), True)
+    os.dup2(os.open(payload, os.O_RDONLY), 0)
+    os.dup2(out_w, 1)
+    os.dup2(err_w, 2)
+    os.execvp(command[0], command)
+os.close(out_w)
+os.close(err_w)
+seen = b""
+sent = False
+open_fds = {fd, out_r, err_r}
+while open_fds:
+    ready, _, _ = select.select(list(open_fds), [], [], 60)
+    if not ready:
+        break
+    for r in ready:
+        try:
+            data = os.read(r, 4096)
+        except OSError:
+            data = b""
+        if not data:
+            open_fds.discard(r)
+            continue
+        sys.stdout.write(data.decode("utf-8", "replace"))
+        sys.stdout.flush()
+        if r == fd:
+            seen += data
+            if not sent and answer != "-" and b"Approve? [y/N]" in seen:
+                os.write(fd, (answer + "\n").encode())
+                sent = True
+_, status = os.waitpid(pid, 0)
+sys.exit(os.waitstatus_to_exitcode(status))

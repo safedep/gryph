@@ -21,20 +21,22 @@ import (
 
 // The query kinds. Each names one method of storage.ReadStore.
 const (
-	KindEvent                  = "event"
-	KindEventByPrefix          = "event_by_prefix"
-	KindEvents                 = "events"
-	KindCountEvents            = "count_events"
-	KindSessionEvents          = "session_events"
-	KindEventsAfter            = "events_after"
-	KindSession                = "session"
-	KindSessionByPrefix        = "session_by_prefix"
-	KindSessions               = "sessions"
-	KindReceipts               = "receipts"
-	KindReceiptSessionIDs      = "receipt_session_ids"
-	KindDeferredActions        = "deferred_actions"
-	KindDeferredActionByPrefix = "deferred_action_by_prefix"
-	KindContextStateByPrefix   = "context_state_by_prefix"
+	KindEvent                   = "event"
+	KindEventByPrefix           = "event_by_prefix"
+	KindEvents                  = "events"
+	KindCountEvents             = "count_events"
+	KindSessionEvents           = "session_events"
+	KindEventsAfter             = "events_after"
+	KindSession                 = "session"
+	KindSessionByPrefix         = "session_by_prefix"
+	KindSessions                = "sessions"
+	KindReceipts                = "receipts"
+	KindReceiptSessionIDs       = "receipt_session_ids"
+	KindDeferredActions         = "deferred_actions"
+	KindDeferredActionByPrefix  = "deferred_action_by_prefix"
+	KindContextStateByPrefix    = "context_state_by_prefix"
+	KindApprovalRequests        = "approval_requests"
+	KindApprovalRequestByPrefix = "approval_request_by_prefix"
 )
 
 // The query parameters.
@@ -137,6 +139,14 @@ func (s *Store) QueryDeferredActions(ctx context.Context, filter *storage.Deferr
 
 func (s *Store) GetDeferredActionByPrefix(ctx context.Context, prefix string) (*storage.DeferredActionRow, error) {
 	return one[storage.DeferredActionRow](ctx, s, ipc.Query{Kind: KindDeferredActionByPrefix, Params: map[string]string{ParamPrefix: prefix}})
+}
+
+func (s *Store) QueryApprovalRequests(ctx context.Context, filter *storage.ApprovalRequestFilter) ([]*storage.ApprovalRequestRow, error) {
+	return many[storage.ApprovalRequestRow](ctx, s, KindApprovalRequests, filter)
+}
+
+func (s *Store) GetApprovalRequestByPrefix(ctx context.Context, prefix string) (*storage.ApprovalRequestRow, error) {
+	return one[storage.ApprovalRequestRow](ctx, s, ipc.Query{Kind: KindApprovalRequestByPrefix, Params: map[string]string{ParamPrefix: prefix}})
 }
 
 func (s *Store) GetContextStateByPrefix(ctx context.Context, prefix string) (*storage.ContextStateRow, error) {

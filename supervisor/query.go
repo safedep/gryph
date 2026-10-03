@@ -130,6 +130,16 @@ func (p *partition) read(ctx context.Context, q *ipc.Query) ([]any, error) {
 		return rowsOf(store.QueryDeferredActions(ctx, filter))
 	case remote.KindDeferredActionByPrefix:
 		return rowOf(store.GetDeferredActionByPrefix(ctx, q.Params[remote.ParamPrefix]))
+	case remote.KindApprovalRequests:
+		filter, err := filterParam[storage.ApprovalRequestFilter](q)
+		if err != nil {
+			return nil, err
+		}
+		p.expireNow(ctx)
+		return rowsOf(store.QueryApprovalRequests(ctx, filter))
+	case remote.KindApprovalRequestByPrefix:
+		p.expireNow(ctx)
+		return rowOf(store.GetApprovalRequestByPrefix(ctx, q.Params[remote.ParamPrefix]))
 	case remote.KindContextStateByPrefix:
 		return rowOf(store.GetContextStateByPrefix(ctx, q.Params[remote.ParamPrefix]))
 	default:

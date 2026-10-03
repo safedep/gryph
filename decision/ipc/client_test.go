@@ -76,24 +76,24 @@ func TestClient_HandleAndErrors(t *testing.T) {
 	defer func() { _ = c.Close() }()
 	assert.Equal(t, "enforce", c.Welcome().Mode)
 
-	d, err := c.Handle(context.Background(), Handle{Agent: "a", HookType: "x", RawPayload: []byte("{}")})
+	d, err := c.Handle(context.Background(), Handle{Agent: "a", HookType: "x", RawPayload: []byte("{}")}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "block", string(d.Decision))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	_, err = c.Handle(ctx, Handle{Agent: "a", HookType: "slow", RawPayload: []byte("{}")})
+	_, err = c.Handle(ctx, Handle{Agent: "a", HookType: "slow", RawPayload: []byte("{}")}, nil)
 	assert.ErrorIs(t, err, ErrDeadline)
 
 	// The connection is out of step after a deadline, so a new one.
 	c2, err := Dial(context.Background(), sock, DialOptions{})
 	require.NoError(t, err)
 	defer func() { _ = c2.Close() }()
-	_, err = c2.Handle(context.Background(), Handle{Agent: "a", HookType: "limited", RawPayload: []byte("{}")})
+	_, err = c2.Handle(context.Background(), Handle{Agent: "a", HookType: "limited", RawPayload: []byte("{}")}, nil)
 	var se *ServerError
 	require.ErrorAs(t, err, &se)
 	assert.Equal(t, CodeRateLimited, se.Code)
 
-	_, err = c2.Handle(context.Background(), Handle{Agent: "a", HookType: "odd", RawPayload: []byte("{}")})
+	_, err = c2.Handle(context.Background(), Handle{Agent: "a", HookType: "odd", RawPayload: []byte("{}")}, nil)
 	assert.ErrorIs(t, err, ErrProtocol)
 }

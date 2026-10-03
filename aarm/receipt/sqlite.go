@@ -183,6 +183,14 @@ func (g *SQLiteGenerator) UpdateDecision(ctx context.Context, sessionID uuid.UUI
 	return g.store.UpdateReceiptDecision(ctx, sessionID, sequence, decision, resultStatus, note)
 }
 
+// UpdateApproval implements Generator.
+func (g *SQLiteGenerator) UpdateApproval(ctx context.Context, sessionID uuid.UUID, sequence int64, approval map[string]any) error {
+	if g == nil || g.store == nil {
+		return fmt.Errorf("receipt: store is not initialized")
+	}
+	return g.store.UpdateReceiptApproval(ctx, sessionID, sequence, approval)
+}
+
 // snapshotMap copies snapshot fields into the JSON-friendly map persisted on
 // the receipt row. The receipt hash covers the map, and the verifier reads
 // the stored map, so a key change affects new receipts only. The map holds

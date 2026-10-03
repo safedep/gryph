@@ -22,6 +22,10 @@ const (
 	DecisionDeny Decision = "deny"
 	// DecisionTimeout indicates the request expired before a response.
 	DecisionTimeout Decision = "timeout"
+	// DecisionPending says the request is open: no channel answered in the
+	// inline wait, and the request waits for an approver. The action blocks
+	// now, and a later answer stores a grant for a retry.
+	DecisionPending Decision = "pending"
 )
 
 // Audit-action constants describing approval lifecycle events. The Mediator
@@ -33,6 +37,7 @@ const (
 	AuditActionGranted   = "approval_granted"
 	AuditActionDenied    = "approval_denied"
 	AuditActionTimeout   = "approval_timeout"
+	AuditActionPending   = "approval_pending"
 )
 
 // Request carries the data the operator (or an automated frontend) needs to
@@ -45,6 +50,14 @@ type Request struct {
 	Snapshot  *model.ContextSnapshot
 	Rule      *model.EvaluationResult
 	Timeout   time.Duration
+	// ReceiptSequence is the sequence of the receipt that records the
+	// request. The Mediator writes it before it asks.
+	ReceiptSequence int64
+	// MinAssurance is the lowest assurance the rule accepts. Empty takes
+	// the floor of the service.
+	MinAssurance Assurance
+	// Digest is the identity of the action for a request and a grant.
+	Digest string
 }
 
 // Outcome is the result of an approval request.
@@ -53,6 +66,41 @@ type Outcome struct {
 	Approver  string
 	Note      string
 	DecidedAt time.Time
+	// Channel and Assurance say who answered and how sure Gryph is of it.
+	// PeerTrust is the trust of the connection that carried the answer.
+	// The receipt records all three.
+	Channel   string
+	Assurance Assurance
+	PeerTrust string
+	// RequestID names the request in the store of the service, when the
+	// service keeps one. GrantID names the grant that approved a retry.
+	RequestID uuid.UUID
+	GrantID   uuid.UUID
+	// Scope is the scope of the grant an approval stored, empty for none.
+	Scope Scope
+}
+
+// Meta returns the outcome as the receipt records it.
+func (o *Outcome) Meta() map[string]any {
+	if o == nil {
+		return nil
+	}
+	m := map[string]any{}
+	for k, v := range map[string]string{"channel": o.Channel, "assurance": string(o.Assurance), "approver": o.Approver, "peer_trust": o.PeerTrust} {
+		if v != "" {
+			m[k] = v
+		}
+	}
+	if o.RequestID != uuid.Nil {
+		m["request_id"] = o.RequestID.String()
+	}
+	if o.GrantID != uuid.Nil {
+		m["grant_id"] = o.GrantID.String()
+	}
+	if o.Scope != "" {
+		m["scope"] = string(o.Scope)
+	}
+	return m
 }
 
 // Service requests an approval decision for an escalated action.

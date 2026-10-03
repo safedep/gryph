@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/safedep/dry/log"
+	aarmsec "github.com/safedep/gryph/aarm"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/decision"
@@ -72,14 +73,18 @@ func openPartition(ctx context.Context, cfg *config.Config, root *nofollow.Dir, 
 		_ = rt.Close()
 		return nil, fmt.Errorf("partition %d: %w", uid, err)
 	}
-	return &partition{
+	p := &partition{
 		uid:      uid,
 		dir:      dir,
 		rt:       rt,
 		service:  rt.DecisionService(),
 		spoolRec: spoolRec,
 		bucket:   newBucket(limits.Rate, limits.Burst, time.Now()),
-	}, nil
+	}
+	// The service answers escalations itself, with the request store of
+	// the partition, in place of the prompt or the nop of a user install.
+	rt.AddMediatorOptions(aarmsec.WithApprovalService(newApprover(p, cfg.EffectivePolicy().Approval)))
+	return p, nil
 }
 
 // childDir creates name inside parent when it is missing and opens it on
@@ -151,13 +156,21 @@ func (p *partition) handle(ctx context.Context, h *ipc.Handle) (*ipc.Frame, erro
 	req.Project = h.Project
 	req.Cost = h.Cost
 
+	now := time.Now().UTC()
 	p.write.Lock()
+	p.expireRequests(ctx, now)
 	resp, err := p.service.Handle(ctx, req)
+	var lines []string
+	if err == nil {
+		lines = p.notices(ctx, event.SessionID, now)
+	}
 	p.write.Unlock()
 	if err != nil {
 		return nil, err
 	}
-	return ipc.NewFrame(ipc.TypeDecision, ipc.Decision(*resp))
+	d := ipc.Decision(*resp)
+	withNotices(&d, lines)
+	return ipc.NewFrame(ipc.TypeDecision, d)
 }
 
 // reportHookError records a hook invocation that produced no decision.

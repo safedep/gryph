@@ -657,6 +657,18 @@ func (_u *AarmReceiptUpdate) ClearContentSalt() *AarmReceiptUpdate {
 	return _u
 }
 
+// SetApproval sets the "approval" field.
+func (_u *AarmReceiptUpdate) SetApproval(v map[string]interface{}) *AarmReceiptUpdate {
+	_u.mutation.SetApproval(v)
+	return _u
+}
+
+// ClearApproval clears the value of the "approval" field.
+func (_u *AarmReceiptUpdate) ClearApproval() *AarmReceiptUpdate {
+	_u.mutation.ClearApproval()
+	return _u
+}
+
 // Mutation returns the AarmReceiptMutation object of the builder.
 func (_u *AarmReceiptUpdate) Mutation() *AarmReceiptMutation {
 	return _u.mutation
@@ -941,6 +953,12 @@ func (_u *AarmReceiptUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.ContentSaltCleared() {
 		_spec.ClearField(aarmreceipt.FieldContentSalt, field.TypeBytes)
+	}
+	if value, ok := _u.mutation.Approval(); ok {
+		_spec.SetField(aarmreceipt.FieldApproval, field.TypeJSON, value)
+	}
+	if _u.mutation.ApprovalCleared() {
+		_spec.ClearField(aarmreceipt.FieldApproval, field.TypeJSON)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -1590,6 +1608,18 @@ func (_u *AarmReceiptUpdateOne) ClearContentSalt() *AarmReceiptUpdateOne {
 	return _u
 }
 
+// SetApproval sets the "approval" field.
+func (_u *AarmReceiptUpdateOne) SetApproval(v map[string]interface{}) *AarmReceiptUpdateOne {
+	_u.mutation.SetApproval(v)
+	return _u
+}
+
+// ClearApproval clears the value of the "approval" field.
+func (_u *AarmReceiptUpdateOne) ClearApproval() *AarmReceiptUpdateOne {
+	_u.mutation.ClearApproval()
+	return _u
+}
+
 // Mutation returns the AarmReceiptMutation object of the builder.
 func (_u *AarmReceiptUpdateOne) Mutation() *AarmReceiptMutation {
 	return _u.mutation
@@ -1904,6 +1934,12 @@ func (_u *AarmReceiptUpdateOne) sqlSave(ctx context.Context) (_node *AarmReceipt
 	}
 	if _u.mutation.ContentSaltCleared() {
 		_spec.ClearField(aarmreceipt.FieldContentSalt, field.TypeBytes)
+	}
+	if value, ok := _u.mutation.Approval(); ok {
+		_spec.SetField(aarmreceipt.FieldApproval, field.TypeJSON, value)
+	}
+	if _u.mutation.ApprovalCleared() {
+		_spec.ClearField(aarmreceipt.FieldApproval, field.TypeJSON)
 	}
 	_node = &AarmReceipt{config: _u.config}
 	_spec.Assign = _node.assignValues

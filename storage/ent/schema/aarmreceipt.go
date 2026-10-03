@@ -79,6 +79,11 @@ func (AarmReceipt) Fields() []ent.Field {
 		// keeps it apart from a row the service recorded itself.
 		field.Bool("imported").Default(false),
 		field.Bytes("content_salt").Optional().MaxLen(32),
+		// approval records who answered an escalation and how sure Gryph
+		// is of it: channel, assurance, approver, peer_trust, request_id,
+		// grant_id and scope. The hash does not cover it: the answer comes
+		// after the insert, as the decision update does.
+		field.JSON("approval", map[string]interface{}{}).Optional(),
 	}
 }
 

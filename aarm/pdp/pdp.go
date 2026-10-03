@@ -244,6 +244,7 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 
 	if winnerRule != nil {
 		result.MatchedRuleIDs = deciderFirst(result.MatchedRuleIDs, winnerRule.rule.ID)
+		result.MinAssurance = winnerRule.rule.MinAssurance
 		result.FullMessage = winnerRule.messageOrFallback(action, snapshot)
 		result.Message = result.FullMessage
 		if stored != action {

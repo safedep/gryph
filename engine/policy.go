@@ -183,6 +183,10 @@ func (a *auditingReceiptGenerator) UpdateDecision(ctx context.Context, sessionID
 	return a.inner.UpdateDecision(ctx, sessionID, sequence, decision, resultStatus, note)
 }
 
+func (a *auditingReceiptGenerator) UpdateApproval(ctx context.Context, sessionID uuid.UUID, sequence int64, approval map[string]any) error {
+	return a.inner.UpdateApproval(ctx, sessionID, sequence, approval)
+}
+
 // newDeferralHook returns the Mediator DeferralHook that persists the
 // pending-deferral row, emits the deferral_requested self-audit row, and
 // renders the CLI-shaped operator hint the Mediator splices into the
@@ -271,6 +275,11 @@ func newApprovalAuditHook(store storage.Store) aarmsec.ApprovalAuditHook {
 			if e.Outcome.Note != "" {
 				details["note"] = e.Outcome.Note
 			}
+			for k, v := range e.Outcome.Meta() {
+				if k != "approver" && v != "" {
+					details[k] = v
+				}
+			}
 		}
 		result := SelfAuditResultSuccess
 		errMsg := ""
@@ -278,7 +287,7 @@ func newApprovalAuditHook(store storage.Store) aarmsec.ApprovalAuditHook {
 			result = SelfAuditResultError
 			errMsg = e.Error.Error()
 		}
-		if e.Action == SelfAuditActionApprovalDenied || e.Action == SelfAuditActionApprovalTimeout {
+		if e.Action == SelfAuditActionApprovalDenied || e.Action == SelfAuditActionApprovalTimeout || e.Action == SelfAuditActionApprovalPending {
 			result = SelfAuditResultSkipped
 		}
 		if err := LogSelfAudit(ctx, store, e.Action, agentName, details, result, errMsg); err != nil {
@@ -325,6 +334,9 @@ type lazyPolicyCheck struct {
 	cfg      *config.Config
 	paths    *config.Paths
 	getStore func() storage.Store
+	// extra are options the runtime's owner adds before the first load,
+	// after the ones the configuration sets.
+	extra []aarmsec.MediatorOption
 
 	once sync.Once
 	med  *aarmsec.Mediator
@@ -341,7 +353,7 @@ func (l *lazyPolicyCheck) load() (*aarmsec.Mediator, error) {
 		if l.getStore != nil {
 			store = l.getStore()
 		}
-		l.med, l.err = LoadPolicyMediator(l.cfg, l.paths, store)
+		l.med, l.err = loadPolicyMediator(l.cfg, l.paths, store, BuildPolicyLoader(l.cfg, l.paths), l.extra...)
 		if l.err != nil {
 			l.recordLoadFailure(l.err)
 		}

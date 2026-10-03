@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/aarm/approval"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
@@ -71,6 +72,7 @@ func runClientHook(ctx context.Context, cfg *config.Config, agentName, hookType 
 	if event.ActionType == events.ActionSessionEnd {
 		handle.Cost = hookside.CollectCost(ctx, event.AgentName, event.TranscriptPath, event.SessionID)
 	}
+	handle.InlineWait = inlineWait(cfg.Policy.Approval.InlineWait, spec.Timeout)
 
 	socket := cfg.Supervisor.SocketPath()
 	client, err := ipc.Dial(ctx, socket, ipc.DialOptions{Version: version.Version, VerifyServer: func(conn net.Conn) error {
@@ -95,18 +97,67 @@ func runClientHook(ctx context.Context, cfg *config.Config, agentName, hookType 
 	}
 	defer func() { _ = client.Close() }()
 
-	budget := ipc.DecisionTimeout
-	if spec.Timeout > decisionMargin && spec.Timeout-decisionMargin < budget {
-		budget = spec.Timeout - decisionMargin
+	// Each frame of the service has the decision budget. The whole exchange,
+	// with an inline prompt in it, ends before the agent gives up.
+	total := ipc.DecisionTimeout + handle.InlineWait
+	if spec.Timeout > decisionMargin && spec.Timeout-decisionMargin < total {
+		total = spec.Timeout - decisionMargin
 	}
-	dctx, cancel := context.WithTimeout(ctx, budget)
+	dctx, cancel := context.WithTimeout(ctx, total)
 	defer cancel()
-	d, err := client.Handle(dctx, handle)
+	d, err := client.Handle(dctx, handle, promptOnTTY(cfg))
 	if err != nil {
 		return fail(err.Error(), phaseVerdict(column))
 	}
 	hookDecision, detail := renderDecision(d.Response())
 	return sendResponse(adapter, hookType, hookDecision, detail)
+}
+
+// inlineWait is how long the client waits for an inline approval: the
+// configured wait, bounded by the agent's hook timeout minus the margin. A
+// wait under the minimum is no wait, because the prompt could not be read
+// before the agent lets the action through.
+func inlineWait(configured, hookTimeout time.Duration) time.Duration {
+	wait := configured
+	if wait <= 0 {
+		wait = config.DefaultApprovalInlineWait
+	}
+	if hookTimeout > 0 && hookTimeout-decisionMargin < wait {
+		wait = hookTimeout - decisionMargin
+	}
+	if wait < config.MinApprovalInlineWait {
+		return 0
+	}
+	return wait
+}
+
+// promptOnTTY renders a prompt of the service on the terminal of the hook
+// and returns the answer. Without a terminal, or past the deadline, the
+// answer is none, and the service blocks with the request pending.
+func promptOnTTY(cfg *config.Config) ipc.PromptFunc {
+	prompt := approval.NewCLIPrompt(approval.WithRequireNote(cfg.Policy.Approval.RequireNote))
+	return func(ctx context.Context, p *ipc.Prompt) ipc.PromptReply {
+		view := p.View
+		view.RequestID = p.RequestID
+		view.Wait = time.Until(p.Deadline)
+		if deadline, ok := ctx.Deadline(); ok && deadline.Before(p.Deadline) {
+			view.Wait = time.Until(deadline)
+		}
+		reply := ipc.PromptReply{Nonce: p.Nonce, Decision: ipc.PromptNone}
+		outcome, err := prompt.Ask(ctx, view)
+		if err != nil {
+			log.Debugf("hook: no inline answer: %v", err)
+			return reply
+		}
+		switch outcome.Decision {
+		case approval.DecisionApprove:
+			reply.Decision = ipc.PromptApprove
+		case approval.DecisionDeny:
+			reply.Decision = ipc.PromptDeny
+		}
+		reply.Note = outcome.Note
+		return reply
+	}
 }
 
 // phaseVerdict is the verdict after a completed handshake: a deadline, a

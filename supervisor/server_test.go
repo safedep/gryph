@@ -156,9 +156,10 @@ func TestServer_HandleInOwnPartition(t *testing.T) {
 	assert.Equal(t, ipc.TypeQueryResult, reply.Type)
 	assert.Contains(t, string(reply.Body), `"agent_name":"claude-code"`)
 
-	reply = exchange(t, conn, ipc.MustFrame(ipc.TypePromptReply, ipc.PromptReply{Nonce: "n", Decision: "allow"}))
+	reply = exchange(t, conn, ipc.MustFrame(ipc.TypePromptReply, ipc.PromptReply{Nonce: "n", Decision: ipc.PromptApprove}))
 	assert.Equal(t, ipc.TypeError, reply.Type)
-	assert.Contains(t, string(reply.Body), ipc.CodeUnsupported)
+	assert.Contains(t, string(reply.Body), ipc.CodeInvalid)
+	assert.Contains(t, string(reply.Body), "no prompt is open")
 }
 
 func TestServer_ConnectionLimit(t *testing.T) {
@@ -386,7 +387,7 @@ func TestServer_ReadsComeFromTheOwnPartition(t *testing.T) {
 
 	for i := range 70 {
 		payload := fmt.Sprintf(`{"session_id":"test-session-123","cwd":"/home/user/project","hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"/home/user/project/f%d.go"},"tool_use_id":"tu-%d"}`, i, i)
-		d, err := client.Handle(ctx, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(payload)})
+		d, err := client.Handle(ctx, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(payload)}, nil)
 		require.NoError(t, err)
 		require.Equal(t, decision.Verdict("allow"), d.Decision)
 	}
@@ -529,7 +530,7 @@ func TestServer_ImportsTheUsersRowsMarked(t *testing.T) {
 	assert.Equal(t, "user", gotReceipts[0].SignerKeyScope)
 
 	// A session the service recorded itself refuses the user's rows.
-	d, err := client.Handle(ctx, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(readPayload)})
+	d, err := client.Handle(ctx, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(readPayload)}, nil)
 	require.NoError(t, err)
 	require.Equal(t, decision.Verdict("allow"), d.Decision)
 	own, err := reads.QuerySessions(ctx, session.NewSessionFilter())

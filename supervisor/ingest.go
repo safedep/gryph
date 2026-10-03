@@ -33,6 +33,7 @@ func (s *Server) ingestLoop(ctx context.Context) {
 		if err := s.IngestOnce(ctx); err != nil && ctx.Err() == nil {
 			log.Warnf("supervisor: spool pass: %v", err)
 		}
+		s.expireRequests(ctx)
 		select {
 		case <-ctx.Done():
 			return

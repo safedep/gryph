@@ -360,7 +360,7 @@
   title: "supervisor run serves a decision on the socket and opens the partition of the peer"
   category: supervisor
   tier: P0
-  guarantee: "gryph supervisor run listens on a Unix socket. A client gets welcome with the profile, a decision for a hook payload, ack for a hook error report, the rows of its own partition for a read, and error unsupported for a frame no service answers yet. The partition of the peer account appears under the state directory."
+  guarantee: "gryph supervisor run listens on a Unix socket. A client gets welcome with the profile, a decision for a hook payload, ack for a hook error report, the rows of its own partition for a read, and error invalid for a prompt reply when no prompt is open. The partition of the peer account appears under the state directory."
   labels: [supervisor, ipc]
 
 - id: supervisor/peer/uid-partition
@@ -488,6 +488,34 @@
   tier: P1
   guarantee: "As the account, gryph supervisor import sends the sessions, events and receipts of the account's own database to the decision service. The service stores them in the partition of the account marked imported, the receipts keep the account's own signatures and verify against the account's trust store, a second run changes nothing, and the database in the home stays as it was. Privileged job only."
   labels: [import, supervisor, privileged, linux]
+
+- id: approval/inline/tty-approve
+  title: "an escalate rule that accepts the terminal asks on the terminal of the hook"
+  category: approval
+  tier: P0
+  guarantee: "On a managed host with the decision service on, an escalate rule with min_assurance same-user-tty puts the prompt on the terminal of the hook. y allows the action and n blocks it with the note. The request store and the receipt record the channel, the assurance, the approver and the connection trust of each answer. Privileged job only."
+  labels: [approval, supervisor, privileged, linux]
+
+- id: approval/inline/no-stored-grant
+  title: "an answer on the terminal applies to its request only and stores no grant"
+  category: approval
+  tier: P0
+  guarantee: "After an approval on the terminal, the same action asks again. Without an answer the hook blocks with the request pending, names the request and the command that shows it, and the receipt keeps escalate until an answer or the expiry closes the request. Privileged job only."
+  labels: [approval, supervisor, privileged, linux]
+
+- id: approval/inline/wait-bounded
+  title: "the client bounds the inline wait by the configured wait and the hook timeout"
+  category: approval
+  tier: P0
+  guarantee: "A hook waits for an inline answer no longer than policy.approval.inline_wait and never past the hook timeout of the agent minus the margin. A wait under two seconds is no wait: the hook blocks at once with the request pending and shows no prompt. Privileged job only."
+  labels: [approval, supervisor, privileged, linux]
+
+- id: approval/expiry/deny
+  title: "an unanswered request expires as a deny and the next hook reports it"
+  category: approval
+  tier: P1
+  guarantee: "A request that nobody answers within policy.approval.request_ttl expires. The receipt records approval_timeout with the resolver, and the next hook of the session tells the agent once. A rule above the assurance of the terminal never asks the terminal. Privileged job only."
+  labels: [approval, supervisor, privileged, linux]
 
 - id: supervisor/install/ordering
   title: "the managed install turns the service switch on only after the service answers"

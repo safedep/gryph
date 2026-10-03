@@ -76,7 +76,52 @@ func (c *CLIPrompt) Request(ctx context.Context, r *Request) (*Outcome, error) {
 	if r == nil {
 		return nil, fmt.Errorf("approval: nil request")
 	}
+	return c.Ask(ctx, ViewOf(r))
+}
 
+// Assurance implements Channel. The prompt runs on the developer's own
+// terminal.
+func (c *CLIPrompt) Assurance() Assurance { return AssuranceSameUserTTY }
+
+// PromptView is what the terminal shows for one request. The decision
+// service sends it on the wire, so it holds strings only.
+type PromptView struct {
+	// RequestID names the request in the store of the service. Empty for
+	// a prompt that decides in process.
+	RequestID string   `json:"request_id,omitempty"`
+	Agent     string   `json:"agent,omitempty"`
+	Tool      string   `json:"tool,omitempty"`
+	Type      string   `json:"type,omitempty"`
+	Path      string   `json:"path,omitempty"`
+	Command   string   `json:"command,omitempty"`
+	URL       string   `json:"url,omitempty"`
+	Rules     []string `json:"rules,omitempty"`
+	Message   string   `json:"message,omitempty"`
+	// Wait is how long the prompt stays open.
+	Wait time.Duration `json:"wait,omitempty"`
+}
+
+// ViewOf returns the view of r.
+func ViewOf(r *Request) PromptView {
+	v := PromptView{Wait: r.Timeout}
+	if r.Action != nil {
+		v.Agent = r.Action.Agent
+		v.Tool = r.Action.Tool
+		v.Type = string(r.Action.Type)
+		v.Path = r.Action.Parameters.Path
+		v.Command = r.Action.Parameters.Command
+		v.URL = r.Action.Parameters.URL
+	}
+	if r.Rule != nil {
+		v.Rules = r.Rule.MatchedRuleIDs
+		v.Message = r.Rule.AgentMessage()
+	}
+	return v
+}
+
+// Ask puts one view to the operator and returns the answer. A wait of
+// zero or less takes one minute.
+func (c *CLIPrompt) Ask(ctx context.Context, v PromptView) (*Outcome, error) {
 	tty, err := c.openTTY()
 	if err != nil {
 		return &Outcome{
@@ -84,13 +129,15 @@ func (c *CLIPrompt) Request(ctx context.Context, r *Request) (*Outcome, error) {
 			Approver:  c.approver,
 			Note:      "no controlling terminal: denying by default",
 			DecidedAt: c.now(),
+			Channel:   string(AssuranceSameUserTTY),
+			Assurance: AssuranceSameUserTTY,
 		}, err
 	}
 	defer func() { _ = tty.Close() }()
 
-	c.renderRequest(tty, r)
+	c.render(tty, v)
 
-	timeout := r.Timeout
+	timeout := v.Wait
 	if timeout <= 0 {
 		timeout = 60 * time.Second
 	}
@@ -102,23 +149,13 @@ func (c *CLIPrompt) Request(ctx context.Context, r *Request) (*Outcome, error) {
 	resp, err := readLine(promptCtx, tty, reader)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return &Outcome{
-				Decision:  DecisionTimeout,
-				Approver:  c.approver,
-				Note:      fmt.Sprintf("approval timed out after %s", timeout),
-				DecidedAt: c.now(),
-			}, nil
+			return c.outcome(DecisionTimeout, fmt.Sprintf("approval timed out after %s", timeout)), nil
 		}
 		return nil, fmt.Errorf("approval: read response: %w", err)
 	}
 
 	if !parseApprove(resp) {
-		return &Outcome{
-			Decision:  DecisionDeny,
-			Approver:  c.approver,
-			Note:      "operator denied",
-			DecidedAt: c.now(),
-		}, nil
+		return c.outcome(DecisionDeny, "operator denied"), nil
 	}
 
 	note := ""
@@ -127,62 +164,69 @@ func (c *CLIPrompt) Request(ctx context.Context, r *Request) (*Outcome, error) {
 		n, nerr := readLine(promptCtx, tty, reader)
 		if nerr != nil {
 			if errors.Is(nerr, context.DeadlineExceeded) || errors.Is(nerr, context.Canceled) {
-				return &Outcome{
-					Decision:  DecisionTimeout,
-					Approver:  c.approver,
-					Note:      fmt.Sprintf("approval timed out after %s", timeout),
-					DecidedAt: c.now(),
-				}, nil
+				return c.outcome(DecisionTimeout, fmt.Sprintf("approval timed out after %s", timeout)), nil
 			}
 			return nil, fmt.Errorf("approval: read note: %w", nerr)
 		}
 		note = strings.TrimSpace(n)
 		if note == "" {
-			return &Outcome{
-				Decision:  DecisionDeny,
-				Approver:  c.approver,
-				Note:      "operator approved but no note supplied (require_note=true)",
-				DecidedAt: c.now(),
-			}, nil
+			return c.outcome(DecisionDeny, "operator approved but no note supplied (require_note=true)"), nil
 		}
 	}
 
+	return c.outcome(DecisionApprove, note), nil
+}
+
+func (c *CLIPrompt) outcome(d Decision, note string) *Outcome {
 	return &Outcome{
-		Decision:  DecisionApprove,
+		Decision:  d,
 		Approver:  c.approver,
 		Note:      note,
 		DecidedAt: c.now(),
-	}, nil
+		Channel:   string(AssuranceSameUserTTY),
+		Assurance: AssuranceSameUserTTY,
+	}
 }
 
-func (c *CLIPrompt) renderRequest(w io.Writer, r *Request) {
+func (c *CLIPrompt) render(w io.Writer, v PromptView) {
 	_, _ = fmt.Fprintln(w)
+	if v.RequestID != "" {
+		rules := strings.Join(v.Rules, ", ")
+		if rules == "" {
+			rules = "(none)"
+		}
+		_, _ = fmt.Fprintf(w, "gryph: approval needed for rule %s (request %s). Waiting up to %s.\n", rules, shortID(v.RequestID), v.Wait.Round(time.Second))
+	}
 	_, _ = fmt.Fprintln(w, "Gryph: action requires approval")
 	_, _ = fmt.Fprintln(w, strings.Repeat("-", 48))
-	if r.Action != nil {
-		_, _ = fmt.Fprintf(w, "  agent:   %s\n", strOr(r.Action.Agent, "(unknown)"))
-		_, _ = fmt.Fprintf(w, "  tool:    %s\n", strOr(r.Action.Tool, "(none)"))
-		_, _ = fmt.Fprintf(w, "  type:    %s\n", string(r.Action.Type))
-		if p := r.Action.Parameters.Path; p != "" {
-			_, _ = fmt.Fprintf(w, "  path:    %s\n", p)
-		}
-		if cmd := r.Action.Parameters.Command; cmd != "" {
-			_, _ = fmt.Fprintf(w, "  command: %s\n", cmd)
-		}
-		if u := r.Action.Parameters.URL; u != "" {
-			_, _ = fmt.Fprintf(w, "  url:     %s\n", u)
-		}
+	_, _ = fmt.Fprintf(w, "  agent:   %s\n", strOr(v.Agent, "(unknown)"))
+	_, _ = fmt.Fprintf(w, "  tool:    %s\n", strOr(v.Tool, "(none)"))
+	_, _ = fmt.Fprintf(w, "  type:    %s\n", v.Type)
+	if v.Path != "" {
+		_, _ = fmt.Fprintf(w, "  path:    %s\n", v.Path)
 	}
-	if r.Rule != nil {
-		if len(r.Rule.MatchedRuleIDs) > 0 {
-			_, _ = fmt.Fprintf(w, "  rules:   %s\n", strings.Join(r.Rule.MatchedRuleIDs, ", "))
-		}
-		if msg := r.Rule.AgentMessage(); msg != "" {
-			_, _ = fmt.Fprintf(w, "  message: %s\n", msg)
-		}
+	if v.Command != "" {
+		_, _ = fmt.Fprintf(w, "  command: %s\n", v.Command)
+	}
+	if v.URL != "" {
+		_, _ = fmt.Fprintf(w, "  url:     %s\n", v.URL)
+	}
+	if len(v.Rules) > 0 {
+		_, _ = fmt.Fprintf(w, "  rules:   %s\n", strings.Join(v.Rules, ", "))
+	}
+	if v.Message != "" {
+		_, _ = fmt.Fprintf(w, "  message: %s\n", v.Message)
 	}
 	_, _ = fmt.Fprintln(w, strings.Repeat("-", 48))
 	_, _ = fmt.Fprint(w, "Approve? [y/N]: ")
+}
+
+// shortID is the first eight characters of an id, as the CLI prints one.
+func shortID(id string) string {
+	if len(id) <= 8 {
+		return id
+	}
+	return id[:8]
 }
 
 func parseApprove(resp string) bool {

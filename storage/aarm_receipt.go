@@ -342,7 +342,8 @@ func receiptCreate(client *ent.AarmReceiptClient, row *ReceiptRow) *ent.AarmRece
 		SetDecision(row.Decision).
 		SetResultStatus(aarmreceipt.ResultStatus(row.ResultStatus)).
 		SetHash(row.Hash).
-		SetImported(row.Imported)
+		SetImported(row.Imported).
+		SetApproval(row.Approval)
 
 	if row.ActionID != uuid.Nil {
 		create.SetActionID(row.ActionID)
@@ -580,6 +581,24 @@ func (s *SQLiteStore) UpdateReceiptDecision(ctx context.Context, sessionID uuid.
 	return nil
 }
 
+// UpdateReceiptApproval implements ReceiptStore.
+func (s *SQLiteStore) UpdateReceiptApproval(ctx context.Context, sessionID uuid.UUID, sequence int64, approval map[string]interface{}) error {
+	if sessionID == uuid.Nil {
+		return fmt.Errorf("storage: UpdateReceiptApproval: nil session ID")
+	}
+	n, err := s.client.AarmReceipt.Update().
+		Where(aarmreceipt.SessionIDEQ(sessionID), aarmreceipt.SequenceEQ(sequence)).
+		SetApproval(approval).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: update receipt approval: %w", err)
+	}
+	if n == 0 {
+		return nil
+	}
+	return nil
+}
+
 // QueryReceipts returns receipts matching filter. When SessionID is set, rows
 // are ordered by (session_id, sequence) ASC. Otherwise rows are ordered by
 // recorded_at DESC.
@@ -785,6 +804,7 @@ func entToReceipt(e *ent.AarmReceipt) *ReceiptRow {
 		HashVersion:     e.HashVersion,
 		ContentSalt:     e.ContentSalt,
 		Imported:        e.Imported,
+		Approval:        e.Approval,
 	}
 	if e.DurationMs != nil {
 		v := *e.DurationMs

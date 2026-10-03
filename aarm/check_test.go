@@ -362,6 +362,12 @@ type spyReceiptGenerator struct {
 	records       []*receipt.RecordInput
 	decisionCalls []decisionCall
 	resultCalls   []resultCall
+	approvalCalls []approvalCall
+}
+
+type approvalCall struct {
+	sequence int64
+	approval map[string]any
 }
 
 type decisionCall struct {
@@ -388,6 +394,13 @@ func (s *spyReceiptGenerator) UpdateResult(_ context.Context, sessionID uuid.UUI
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.resultCalls = append(s.resultCalls, resultCall{sessionID: sessionID, sequence: sequence, result: result})
+	return nil
+}
+
+func (s *spyReceiptGenerator) UpdateApproval(_ context.Context, _ uuid.UUID, sequence int64, approval map[string]any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.approvalCalls = append(s.approvalCalls, approvalCall{sequence: sequence, approval: approval})
 	return nil
 }
 
@@ -1054,4 +1067,65 @@ rules:
 			assert.Nil(t, spy.snapshot.Entries, "the Mediator does not change the snapshot of the accumulator")
 		})
 	}
+}
+
+// A pending outcome blocks with the note of the service, keeps the escalate
+// decision on the receipt, and records the request on it.
+func TestMediator_EscalatePendingBlocksAndKeepsTheReceiptOpen(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: escalate-write
+    action: escalate
+    min_assurance: local-admin
+    match: { action_types: [file_write] }
+`))
+	require.NoError(t, err)
+
+	rec := &spyReceiptGenerator{}
+	requestID := uuid.New()
+	svc := &fakeApprovalService{outcome: &approval.Outcome{
+		Decision:  approval.DecisionPending,
+		Note:      "This action needs approval. Request abcd1234 is pending.",
+		RequestID: requestID,
+		PeerTrust: approval.PeerTrustUnknown,
+	}}
+	med, err := NewMediator(policy, WithReceiptGenerator(rec), WithApprovalService(svc))
+	require.NoError(t, err)
+
+	event := &events.Event{ID: uuid.New(), SessionID: uuid.New(), Timestamp: time.Now(), ActionType: events.ActionFileWrite, AgentName: "claude-code", Payload: []byte(`{"path":"/etc/hosts"}`)}
+	res, err := med.Check(context.Background(), event, nil)
+	require.NoError(t, err)
+	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
+	assert.Equal(t, svc.outcome.Note, res.Reason)
+	assert.Empty(t, rec.decisionCalls, "the receipt keeps escalate until an answer")
+	require.Len(t, rec.approvalCalls, 1)
+	assert.Equal(t, requestID.String(), rec.approvalCalls[0].approval["request_id"])
+}
+
+// A channel below the floor of the rule never answers: the request denies
+// before anyone sees it.
+func TestMediator_EscalateRefusesAChannelBelowTheFloor(t *testing.T) {
+	policy, err := pdp.ParsePolicy([]byte(`
+version: "1"
+rules:
+  - id: escalate-write
+    action: escalate
+    min_assurance: local-admin
+    match: { action_types: [file_write] }
+`))
+	require.NoError(t, err)
+	rec := &spyReceiptGenerator{}
+	med, err := NewMediator(policy, WithReceiptGenerator(rec), WithApprovalService(approval.NewCLIPrompt()))
+	require.NoError(t, err)
+
+	event := &events.Event{ID: uuid.New(), SessionID: uuid.New(), Timestamp: time.Now(), ActionType: events.ActionFileWrite, AgentName: "claude-code", Payload: []byte(`{"path":"/etc/hosts"}`)}
+	res, err := med.Check(context.Background(), event, nil)
+	require.NoError(t, err)
+	assert.Equal(t, coresecurity.DecisionBlock, res.Decision)
+	assert.Contains(t, res.Reason, "no approval channel meets min_assurance local-admin")
+	require.Len(t, rec.decisionCalls, 1)
+	assert.Equal(t, receipt.DecisionDenied, rec.decisionCalls[0].decision)
+	require.Len(t, rec.approvalCalls, 1)
+	assert.Equal(t, string(approval.AssuranceSameUserTTY), rec.approvalCalls[0].approval["channel"])
 }

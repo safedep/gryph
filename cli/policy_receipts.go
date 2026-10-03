@@ -333,6 +333,7 @@ type policyReceiptView struct {
 	HumanPrincipal  string                 `json:"human_principal,omitempty"`
 	ServiceIdentity string                 `json:"service_identity,omitempty"`
 	RoleScope       string                 `json:"role_scope,omitempty"`
+	Approval        map[string]interface{} `json:"approval,omitempty"`
 }
 
 func receiptToView(r *storage.ReceiptRow) policyReceiptView {
@@ -362,6 +363,7 @@ func receiptToView(r *storage.ReceiptRow) policyReceiptView {
 		HumanPrincipal:  r.HumanPrincipal,
 		ServiceIdentity: r.ServiceIdentity,
 		RoleScope:       r.RoleScope,
+		Approval:        r.Approval,
 	}
 	if r.DurationMS != nil {
 		d := *r.DurationMS

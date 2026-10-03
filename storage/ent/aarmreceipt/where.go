@@ -2215,6 +2215,16 @@ func ContentSaltNotNil() predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.FieldNotNull(FieldContentSalt))
 }
 
+// ApprovalIsNil applies the IsNil predicate on the "approval" field.
+func ApprovalIsNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldIsNull(FieldApproval))
+}
+
+// ApprovalNotNil applies the NotNil predicate on the "approval" field.
+func ApprovalNotNil() predicate.AarmReceipt {
+	return predicate.AarmReceipt(sql.FieldNotNull(FieldApproval))
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.AarmReceipt) predicate.AarmReceipt {
 	return predicate.AarmReceipt(sql.AndPredicates(predicates...))

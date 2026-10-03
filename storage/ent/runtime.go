@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/storage/ent/aarmapprovalgrant"
+	"github.com/safedep/gryph/storage/ent/aarmapprovalrequest"
 	"github.com/safedep/gryph/storage/ent/aarmdeferredaction"
 	"github.com/safedep/gryph/storage/ent/aarmreceipt"
 	"github.com/safedep/gryph/storage/ent/auditevent"
@@ -22,6 +24,38 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	aarmapprovalgrantFields := schema.AarmApprovalGrant{}.Fields()
+	_ = aarmapprovalgrantFields
+	// aarmapprovalgrantDescCreatedAt is the schema descriptor for created_at field.
+	aarmapprovalgrantDescCreatedAt := aarmapprovalgrantFields[5].Descriptor()
+	// aarmapprovalgrant.DefaultCreatedAt holds the default value on creation for the created_at field.
+	aarmapprovalgrant.DefaultCreatedAt = aarmapprovalgrantDescCreatedAt.Default.(func() time.Time)
+	// aarmapprovalgrantDescUses is the schema descriptor for uses field.
+	aarmapprovalgrantDescUses := aarmapprovalgrantFields[8].Descriptor()
+	// aarmapprovalgrant.DefaultUses holds the default value on creation for the uses field.
+	aarmapprovalgrant.DefaultUses = aarmapprovalgrantDescUses.Default.(int)
+	// aarmapprovalgrantDescID is the schema descriptor for id field.
+	aarmapprovalgrantDescID := aarmapprovalgrantFields[0].Descriptor()
+	// aarmapprovalgrant.DefaultID holds the default value on creation for the id field.
+	aarmapprovalgrant.DefaultID = aarmapprovalgrantDescID.Default.(func() uuid.UUID)
+	aarmapprovalrequestFields := schema.AarmApprovalRequest{}.Fields()
+	_ = aarmapprovalrequestFields
+	// aarmapprovalrequestDescReceiptSequence is the schema descriptor for receipt_sequence field.
+	aarmapprovalrequestDescReceiptSequence := aarmapprovalrequestFields[3].Descriptor()
+	// aarmapprovalrequest.ReceiptSequenceValidator is a validator for the "receipt_sequence" field. It is called by the builders before save.
+	aarmapprovalrequest.ReceiptSequenceValidator = aarmapprovalrequestDescReceiptSequence.Validators[0].(func(int64) error)
+	// aarmapprovalrequestDescRequestedAt is the schema descriptor for requested_at field.
+	aarmapprovalrequestDescRequestedAt := aarmapprovalrequestFields[13].Descriptor()
+	// aarmapprovalrequest.DefaultRequestedAt holds the default value on creation for the requested_at field.
+	aarmapprovalrequest.DefaultRequestedAt = aarmapprovalrequestDescRequestedAt.Default.(func() time.Time)
+	// aarmapprovalrequestDescInline is the schema descriptor for inline field.
+	aarmapprovalrequestDescInline := aarmapprovalrequestFields[15].Descriptor()
+	// aarmapprovalrequest.DefaultInline holds the default value on creation for the inline field.
+	aarmapprovalrequest.DefaultInline = aarmapprovalrequestDescInline.Default.(bool)
+	// aarmapprovalrequestDescID is the schema descriptor for id field.
+	aarmapprovalrequestDescID := aarmapprovalrequestFields[0].Descriptor()
+	// aarmapprovalrequest.DefaultID holds the default value on creation for the id field.
+	aarmapprovalrequest.DefaultID = aarmapprovalrequestDescID.Default.(func() uuid.UUID)
 	aarmdeferredactionFields := schema.AarmDeferredAction{}.Fields()
 	_ = aarmdeferredactionFields
 	// aarmdeferredactionDescReceiptSequence is the schema descriptor for receipt_sequence field.

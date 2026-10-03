@@ -16,6 +16,10 @@ const HandshakeTimeout = 300 * time.Millisecond
 // DecisionTimeout bounds one request after the handshake.
 const DecisionTimeout = 2 * time.Second
 
+// PromptReplyMargin is what a prompt leaves of the deadline of the whole
+// exchange, so the reply and the decision that follows it still fit.
+const PromptReplyMargin = 250 * time.Millisecond
+
 var (
 	// ErrConnect says the client did not complete the handshake: no socket,
 	// a refused connect, or no welcome in time. It is the one error that
@@ -119,20 +123,43 @@ func (c *Client) Welcome() Welcome { return c.welcome }
 // Close ends the connection.
 func (c *Client) Close() error { return c.conn.Close() }
 
-// Handle asks for a decision and waits for it until the deadline of ctx.
-// It returns ErrDeadline when the service does not answer in time, a
-// ServerError when it refuses, and ErrProtocol when it answers with another
-// frame.
-func (c *Client) Handle(ctx context.Context, h Handle) (*Decision, error) {
-	reply, err := c.call(ctx, MustFrame(TypeHandle, h))
-	if err != nil {
-		return nil, err
+// PromptFunc puts a prompt of the service to the human and returns the
+// answer. The deadline of ctx is the one of the prompt, bounded by the
+// hook timeout. A nil PromptFunc answers every prompt with PromptNone.
+type PromptFunc func(ctx context.Context, p *Prompt) PromptReply
+
+// Handle asks for a decision. Each frame of the service has DecisionTimeout
+// to arrive, and the whole exchange ends at the deadline of ctx. A Prompt
+// in place of the decision goes to prompt, and the reply goes back on the
+// same connection before the next frame. Handle returns ErrDeadline when
+// the service does not answer in time, a ServerError when it refuses, and
+// ErrProtocol when it answers with another frame.
+func (c *Client) Handle(ctx context.Context, h Handle, prompt PromptFunc) (*Decision, error) {
+	reply, err := c.exchange(ctx, MustFrame(TypeHandle, h), DecisionTimeout)
+	for {
+		if err != nil {
+			return nil, err
+		}
+		switch b := reply.(type) {
+		case *Decision:
+			return b, nil
+		case *Prompt:
+			answer := PromptReply{Nonce: b.Nonce, Decision: PromptNone}
+			if prompt != nil {
+				end := b.Deadline
+				if limit, ok := ctx.Deadline(); ok && limit.Add(-PromptReplyMargin).Before(end) {
+					end = limit.Add(-PromptReplyMargin)
+				}
+				pctx, cancel := context.WithDeadline(ctx, end)
+				answer = prompt(pctx, b)
+				cancel()
+				answer.Nonce = b.Nonce
+			}
+			reply, err = c.exchange(ctx, MustFrame(TypePromptReply, answer), DecisionTimeout)
+		default:
+			return nil, fmt.Errorf("%w: %T", ErrProtocol, reply)
+		}
 	}
-	d, ok := reply.(*Decision)
-	if !ok {
-		return nil, fmt.Errorf("%w: %T", ErrProtocol, reply)
-	}
-	return d, nil
 }
 
 // ReadTimeout bounds one read of the CLI over the socket. A read runs a
@@ -208,10 +235,22 @@ func (c *Client) ReportHookError(ctx context.Context, r ReportHookError) error {
 	return nil
 }
 
-// call sends one frame and decodes the answer under the deadline of ctx.
+// call sends one frame and decodes the answer under the deadline of ctx,
+// or DecisionTimeout when ctx has none.
 func (c *Client) call(ctx context.Context, f *Frame) (Body, error) {
+	return c.exchange(ctx, f, 0)
+}
+
+// exchange sends one frame and decodes the answer. The answer has wait
+// to arrive, and never longer than the deadline of ctx. A zero wait takes
+// the deadline of ctx, else DecisionTimeout.
+func (c *Client) exchange(ctx context.Context, f *Frame, wait time.Duration) (Body, error) {
 	deadline, ok := ctx.Deadline()
-	if !ok {
+	if wait > 0 {
+		if limit := time.Now().Add(wait); !ok || limit.Before(deadline) {
+			deadline = limit
+		}
+	} else if !ok {
 		deadline = time.Now().Add(DecisionTimeout)
 	}
 	if err := c.conn.SetDeadline(deadline); err != nil {

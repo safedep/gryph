@@ -247,6 +247,9 @@ type ReceiptStore interface {
 	RecordReceiptInTx(ctx context.Context, sessionID uuid.UUID, build func(prev *ReceiptRow) (*ReceiptRow, error)) (*ReceiptRow, error)
 	UpdateReceiptResult(ctx context.Context, sessionID uuid.UUID, sequence int64, status string, durationMS int64, errorMsg string) error
 	UpdateReceiptDecision(ctx context.Context, sessionID uuid.UUID, sequence int64, decision string, resultStatus string, note string) error
+	// UpdateReceiptApproval records who answered the escalation of the
+	// receipt and how sure Gryph is of it.
+	UpdateReceiptApproval(ctx context.Context, sessionID uuid.UUID, sequence int64, approval map[string]interface{}) error
 	QueryReceipts(ctx context.Context, filter *ReceiptFilter) ([]*ReceiptRow, error)
 	CountReceipts(ctx context.Context, filter *ReceiptFilter) (int, error)
 	DeleteReceiptsBefore(ctx context.Context, before time.Time) (int, error)
@@ -332,6 +335,11 @@ type ReceiptRow struct {
 	// the user's own database. Its hash and signature are the original
 	// ones, and the user could have changed the row before the import.
 	Imported bool
+
+	// Approval records the answer to an escalation: channel, assurance,
+	// approver, peer_trust, and the request or the grant that carried it.
+	// The hash does not cover it.
+	Approval map[string]interface{}
 
 	// DeferReason is the operator-facing rationale recorded on defer receipts
 	// (explicit defer rules carry the rule's reason; synthetic defers carry
@@ -471,6 +479,7 @@ type Store interface {
 	ContextStore
 	ReceiptStore
 	DeferralStore
+	ApprovalStore
 
 	// Init initializes the database schema.
 	Init(ctx context.Context) error

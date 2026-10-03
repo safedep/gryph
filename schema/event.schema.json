@@ -52,6 +52,9 @@
       "type": "string",
       "format": "uuid"
     },
+    "imported": {
+      "type": "boolean"
+    },
     "is_sensitive": {
       "type": "boolean"
     },

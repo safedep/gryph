@@ -55,6 +55,17 @@ func (a *Runtime) AarmMediator() *aarmsec.Mediator {
 	return a.policyCheck.Mediator()
 }
 
+// AddMediatorOptions adds options to the policy mediator of this runtime.
+// They apply after the ones the configuration sets, so an owner of the
+// runtime can replace a service, for example the approval service. Call
+// it before the first hook event: the mediator loads once.
+func (a *Runtime) AddMediatorOptions(opts ...aarmsec.MediatorOption) {
+	if a == nil || a.policyCheck == nil {
+		return
+	}
+	a.policyCheck.extra = append(a.policyCheck.extra, opts...)
+}
+
 // New assembles the runtime for cfg. It opens no store. Call InitStore for
 // the database.
 func New(cfg *config.Config) (*Runtime, error) {

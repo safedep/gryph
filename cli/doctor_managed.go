@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/safedep/gryph/aarm/pdp"
@@ -127,6 +128,9 @@ type managedSupervisorReport struct {
 	Profile        string `json:"profile,omitempty"`
 	PilotUntil     string `json:"pilot_until,omitempty"`
 	PilotRemaining int64  `json:"pilot_remaining_seconds,omitempty"`
+	// ApprovalChannels are the channels that answer an escalation. An
+	// empty list leaves every escalated action to expire.
+	ApprovalChannels []string `json:"approval_channels"`
 }
 
 type managedCollectionReport struct {
@@ -212,6 +216,7 @@ func (r *managedDoctorReport) readSupervisor(cfg *config.Config) {
 	}
 	r.Supervisor.Profile = cfg.Supervisor.EffectiveProfile()
 	r.Supervisor.PilotUntil = cfg.Supervisor.PilotUntil
+	r.Supervisor.ApprovalChannels = append([]string{}, cfg.Policy.Approval.Channels...)
 	if left, ok := cfg.Supervisor.PilotRemaining(); ok {
 		r.Supervisor.PilotRemaining = int64(left.Seconds())
 	}
@@ -444,6 +449,11 @@ func supervisorProfileSuffix(r managedSupervisorReport) string {
 	out := "  profile " + r.Profile
 	if r.PilotRemaining > 0 {
 		out += fmt.Sprintf("  pilot ends in %s (%s)", humanizeDuration(time.Duration(r.PilotRemaining)*time.Second), r.PilotUntil)
+	}
+	if len(r.ApprovalChannels) == 0 {
+		out += "  no approver channel"
+	} else {
+		out += "  approvers " + strings.Join(r.ApprovalChannels, ", ")
 	}
 	return out
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/safedep/gryph/aarm/approval"
 	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
@@ -57,6 +58,11 @@ type Handle struct {
 	RawPayload []byte                `json:"raw_payload"`
 	Project    decision.ProjectClaim `json:"project_claim"`
 	Cost       *cost.SessionCost     `json:"cost_totals,omitempty"`
+	// InlineWait is how long the client waits for an inline approval
+	// prompt, bounded by the hook timeout of the agent. Zero says the
+	// client cannot wait: the server then blocks with the request pending
+	// and sends no prompt.
+	InlineWait time.Duration `json:"inline_wait,omitempty"`
 }
 
 // Decision answers Handle. It is the response the hook side renders for
@@ -71,19 +77,30 @@ func (d *Decision) Response() *decision.HookResponse {
 
 // Prompt asks the client to put a question to the human: an escalation
 // that needs an answer before the deadline. The nonce ties the reply to
-// the question.
+// the question. The view is what the terminal shows.
 type Prompt struct {
-	Nonce        string    `json:"nonce"`
-	ActionDigest string    `json:"action_digest"`
-	Deadline     time.Time `json:"deadline"`
+	Nonce        string              `json:"nonce"`
+	ActionDigest string              `json:"action_digest"`
+	Deadline     time.Time           `json:"deadline"`
+	RequestID    string              `json:"request_id,omitempty"`
+	View         approval.PromptView `json:"view"`
 }
 
-// PromptReply carries the human's answer.
+// PromptReply carries the human's answer, or says that none came.
 type PromptReply struct {
-	Nonce    string           `json:"nonce"`
-	Decision decision.Verdict `json:"decision"`
-	Note     string           `json:"note,omitempty"`
+	Nonce    string `json:"nonce"`
+	Decision string `json:"decision"`
+	Note     string `json:"note,omitempty"`
 }
+
+// The decisions of a prompt reply.
+const (
+	PromptApprove = "approve"
+	PromptDeny    = "deny"
+	// PromptNone says nobody answered: the wait ended, or the client has
+	// no terminal to ask on.
+	PromptNone = "none"
+)
 
 // ReportHookError tells the server that a hook invocation produced no
 // decision, with the fields of decision.HookError. The server answers with
@@ -202,6 +219,9 @@ func (h *Handle) Validate() error {
 	if err := boundString("project_claim.name", h.Project.Name, MaxProject); err != nil {
 		return err
 	}
+	if h.InlineWait < 0 {
+		return fmt.Errorf("%w: negative inline_wait", ErrInvalid)
+	}
 	if h.Cost != nil {
 		return validateCost(h.Cost)
 	}
@@ -252,6 +272,22 @@ func (p *Prompt) Validate() error {
 	if p.Deadline.IsZero() {
 		return fmt.Errorf("%w: prompt without a deadline", ErrInvalid)
 	}
+	if err := boundString("request_id", p.RequestID, MaxName); err != nil {
+		return err
+	}
+	for name, s := range map[string]string{"view.agent": p.View.Agent, "view.tool": p.View.Tool, "view.type": p.View.Type, "view.path": p.View.Path, "view.command": p.View.Command, "view.url": p.View.URL, "view.message": p.View.Message} {
+		if err := boundString(name, s, MaxText); err != nil {
+			return err
+		}
+	}
+	if len(p.View.Rules) > MaxQueryItems {
+		return fmt.Errorf("%w: more than %d rules in the view", ErrInvalid, MaxQueryItems)
+	}
+	for _, r := range p.View.Rules {
+		if err := boundString("view.rules", r, MaxText); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -263,8 +299,10 @@ func (p *PromptReply) Validate() error {
 	if err := boundString("nonce", p.Nonce, MaxName); err != nil {
 		return err
 	}
-	if err := boundString("decision", string(p.Decision), MaxName); err != nil {
-		return err
+	switch p.Decision {
+	case PromptApprove, PromptDeny, PromptNone:
+	default:
+		return fmt.Errorf("%w: prompt reply decision %q is not approve, deny or none", ErrInvalid, p.Decision)
 	}
 	return boundString("note", p.Note, MaxText)
 }

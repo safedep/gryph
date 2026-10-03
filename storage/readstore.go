@@ -33,6 +33,9 @@ type ReadStore interface {
 	QueryDeferredActions(ctx context.Context, filter *DeferredActionFilter) ([]*DeferredActionRow, error)
 	GetDeferredActionByPrefix(ctx context.Context, prefix string) (*DeferredActionRow, error)
 
+	QueryApprovalRequests(ctx context.Context, filter *ApprovalRequestFilter) ([]*ApprovalRequestRow, error)
+	GetApprovalRequestByPrefix(ctx context.Context, prefix string) (*ApprovalRequestRow, error)
+
 	// GetContextStateByPrefix resolves a session reference of the policy
 	// commands, which take a context state id as well as a session id.
 	GetContextStateByPrefix(ctx context.Context, prefix string) (*ContextStateRow, error)

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/safedep/gryph/aarm/approval"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/shellcmd"
@@ -222,6 +223,11 @@ func generatePolicySchema() jsonSchema {
 				Type:        "string",
 				Description: "Required when action is `defer`. Surfaces on the receipt's defer_reason and in the operator-facing block message.",
 			},
+			"min_assurance": {
+				Type:        "string",
+				Description: "Only with action `escalate`. The lowest approval assurance the rule accepts. A channel below it never answers the rule. The decision service defaults to policy.approval.min_assurance.",
+				Enum:        assuranceValues(),
+			},
 		},
 	}
 
@@ -369,6 +375,14 @@ func resultStatusValues() []string {
 		string(events.ResultBlocked),
 		string(events.ResultRejected),
 	}
+}
+
+func assuranceValues() []string {
+	out := make([]string, len(approval.Assurances))
+	for i, a := range approval.Assurances {
+		out[i] = string(a)
+	}
+	return out
 }
 
 func decisionValues() []string {

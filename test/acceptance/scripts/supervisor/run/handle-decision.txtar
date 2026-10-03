@@ -1,8 +1,8 @@
 # gryph supervisor run serves the decision service on a socket. A client
 # of the same account gets welcome, a decision for a hook payload, ack for
 # a hook error report, the rows of its own partition for a read, and
-# error unsupported for a frame no service answers yet. The partition of
-# the account appears under the state directory. The hidden send command
+# error invalid for a prompt reply when no prompt is open. The partition
+# of the account appears under the state directory. The hidden send command
 # is the client of this test.
 [windows] skip 'the service listens on a Unix socket'
 env HOME=$WORK/home
@@ -18,7 +18,7 @@ stdout '^\{"type":"welcome","body":\{"proto":1,"server_version":"[^"]*","mode":"
 stdout '^\{"type":"decision","body":\{"decision":"allow"\}\}$'
 stdout '^\{"type":"ack","body":\{\}\}$'
 stdout '"type":"query_result","body":\{"rows":\[\{"id":"[0-9a-f-]+","agent_session_id":"test-session-123","agent_name":"claude-code"'
-stdout '"type":"error","body":\{"code":"unsupported","message":"prompt_reply is not served yet"'
+stdout '"type":"error","body":\{"code":"invalid","message":"no prompt is open on this connection"'
 
 exec id -u
 cp stdout uid.txt
@@ -34,4 +34,4 @@ exists $WORK/state/users/$UID/audit.db
 -- query.json --
 {"type":"query","body":{"kind":"sessions"}}
 -- reply.json --
-{"type":"prompt_reply","body":{"nonce":"n","decision":"allow"}}
+{"type":"prompt_reply","body":{"nonce":"n","decision":"approve"}}

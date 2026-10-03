@@ -69,7 +69,7 @@ write the execution outcome to the accumulator row and the receipt row.
 | `aarm/accumulator` | Context Accumulator interface. Per-session action memory feeding `context.*` CEL variables. `Nop` and SQLite implementations. |
 | `aarm/accumulator/contextchain` | Per-session hash chain over context-action rows. |
 | `aarm/receipt` | Append-only, hash-chained receipt log. Hashing, Ed25519 signing, chain verify, JSONL export, log verify. |
-| `aarm/approval` | Approval Service for `escalate`. `Nop` (deny) and `CLIPrompt`. |
+| `aarm/approval` | Approval Service for `escalate`. `Nop` (deny) and `CLIPrompt`. The assurance ladder, the grant scopes and the action digest. The decision service brings its own service. |
 | `aarm/identity` | Captures human principal, service identity, role scope at the mediation boundary. |
 | `aarm/classify` | Heuristic data classifier. It returns `privacy.Class` values (secret, pii, source_code, ...). Fail-safe wrapper defaults to `unknown_sensitive`. The decision service uses the heuristic without the wrapper for content labels. |
 | `aarm/injectscore` | Heuristic prompt-injection score for tool calls, post events and intents. |
@@ -689,9 +689,14 @@ so its classes must reach `context_states`.
   and `Action.HumanPrincipal` is empty, `Mediator.enforceIdentity` blocks before
   the PDP. A denied action is an attempt. It gets a context entry with the
   block decision, and it counts toward `context.total_actions`.
-- Escalate: `handleEscalate` calls the Approval Service. A nil outcome fails
-  closed (treated as deny). The four `approval_*` audit actions fire through
-  the `ApprovalAuditHook`.
+- Escalate: `handleEscalate` calls the Approval Service with the receipt
+  sequence, the rule's `min_assurance` and the action digest. A service that
+  implements `approval.Channel` and sits below the floor never answers: the
+  request denies first. A nil outcome fails closed (treated as deny). A
+  `pending` outcome blocks with the note of the service and keeps `escalate`
+  on the receipt. The five `approval_*` audit actions fire through the
+  `ApprovalAuditHook`, and `UpdateApproval` records the channel, the
+  assurance, the approver and the connection trust on the receipt.
 - Defer: `handleDefer` writes a defer receipt, then the `DeferralHook` persists
   the pending row and returns an operator hint spliced into the block message.
   Auto-defer triggers (fresh session, conflicting policies) live in the PDP.

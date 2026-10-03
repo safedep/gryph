@@ -9,6 +9,89 @@ import (
 )
 
 var (
+	// AarmApprovalGrantsColumns holds the columns for the "aarm_approval_grants" table.
+	AarmApprovalGrantsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "request_id", Type: field.TypeUUID},
+		{Name: "session_id", Type: field.TypeUUID},
+		{Name: "action_digest", Type: field.TypeString},
+		{Name: "scope", Type: field.TypeEnum, Enums: []string{"once", "session", "window"}, Default: "once"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "used_at", Type: field.TypeTime, Nullable: true},
+		{Name: "uses", Type: field.TypeInt, Default: 0},
+		{Name: "approver", Type: field.TypeString, Nullable: true},
+		{Name: "assurance", Type: field.TypeString, Nullable: true},
+		{Name: "channel", Type: field.TypeString, Nullable: true},
+	}
+	// AarmApprovalGrantsTable holds the schema information for the "aarm_approval_grants" table.
+	AarmApprovalGrantsTable = &schema.Table{
+		Name:       "aarm_approval_grants",
+		Columns:    AarmApprovalGrantsColumns,
+		PrimaryKey: []*schema.Column{AarmApprovalGrantsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "aarmapprovalgrant_session_id_action_digest",
+				Unique:  false,
+				Columns: []*schema.Column{AarmApprovalGrantsColumns[2], AarmApprovalGrantsColumns[3]},
+			},
+			{
+				Name:    "aarmapprovalgrant_action_digest_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{AarmApprovalGrantsColumns[3], AarmApprovalGrantsColumns[6]},
+			},
+		},
+	}
+	// AarmApprovalRequestsColumns holds the columns for the "aarm_approval_requests" table.
+	AarmApprovalRequestsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "session_id", Type: field.TypeUUID},
+		{Name: "action_id", Type: field.TypeUUID},
+		{Name: "receipt_sequence", Type: field.TypeInt64},
+		{Name: "action_digest", Type: field.TypeString},
+		{Name: "rule_ids", Type: field.TypeJSON, Nullable: true},
+		{Name: "requester", Type: field.TypeString, Nullable: true},
+		{Name: "host", Type: field.TypeString, Nullable: true},
+		{Name: "agent", Type: field.TypeString, Nullable: true},
+		{Name: "summary", Type: field.TypeString, Nullable: true},
+		{Name: "project", Type: field.TypeString, Nullable: true},
+		{Name: "min_assurance", Type: field.TypeString, Nullable: true},
+		{Name: "state", Type: field.TypeEnum, Enums: []string{"pending", "approved", "denied", "expired"}, Default: "pending"},
+		{Name: "requested_at", Type: field.TypeTime},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "inline", Type: field.TypeBool, Default: false},
+		{Name: "decided_at", Type: field.TypeTime, Nullable: true},
+		{Name: "channel", Type: field.TypeString, Nullable: true},
+		{Name: "assurance", Type: field.TypeString, Nullable: true},
+		{Name: "approver", Type: field.TypeString, Nullable: true},
+		{Name: "peer_trust", Type: field.TypeString, Nullable: true},
+		{Name: "note", Type: field.TypeString, Nullable: true},
+		{Name: "scope", Type: field.TypeString, Nullable: true},
+		{Name: "notified_at", Type: field.TypeTime, Nullable: true},
+	}
+	// AarmApprovalRequestsTable holds the schema information for the "aarm_approval_requests" table.
+	AarmApprovalRequestsTable = &schema.Table{
+		Name:       "aarm_approval_requests",
+		Columns:    AarmApprovalRequestsColumns,
+		PrimaryKey: []*schema.Column{AarmApprovalRequestsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "aarmapprovalrequest_session_id_requested_at",
+				Unique:  false,
+				Columns: []*schema.Column{AarmApprovalRequestsColumns[1], AarmApprovalRequestsColumns[13]},
+			},
+			{
+				Name:    "aarmapprovalrequest_state_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{AarmApprovalRequestsColumns[12], AarmApprovalRequestsColumns[14]},
+			},
+			{
+				Name:    "aarmapprovalrequest_session_id_receipt_sequence",
+				Unique:  true,
+				Columns: []*schema.Column{AarmApprovalRequestsColumns[1], AarmApprovalRequestsColumns[3]},
+			},
+		},
+	}
 	// AarmDeferredActionsColumns holds the columns for the "aarm_deferred_actions" table.
 	AarmDeferredActionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -90,6 +173,7 @@ var (
 		{Name: "hash_version", Type: field.TypeInt, Nullable: true},
 		{Name: "imported", Type: field.TypeBool, Default: false},
 		{Name: "content_salt", Type: field.TypeBytes, Nullable: true, Size: 32},
+		{Name: "approval", Type: field.TypeJSON, Nullable: true},
 	}
 	// AarmReceiptsTable holds the schema information for the "aarm_receipts" table.
 	AarmReceiptsTable = &schema.Table{
@@ -393,6 +477,8 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		AarmApprovalGrantsTable,
+		AarmApprovalRequestsTable,
 		AarmDeferredActionsTable,
 		AarmReceiptsTable,
 		AuditEventsTable,

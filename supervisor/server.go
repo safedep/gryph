@@ -181,18 +181,23 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 	welcome := ipc.Welcome{Proto: ipc.Proto, ServerVersion: s.version, Mode: s.cfg.Supervisor.EffectiveProfile()}
 	rw := &idleConn{Conn: conn, timeout: s.limits.IdleTimeout}
 	err = ipc.ServeConn(ctx, rw, welcome, ipc.HandlerFunc(func(ctx context.Context, f *ipc.Frame, body ipc.Body) (*ipc.Frame, error) {
-		return s.dispatch(ctx, part, f, body)
+		return s.dispatch(ctx, part, rw, f, body)
 	}))
 	if err != nil && !errors.Is(err, io.EOF) && !isTimeout(err) {
 		log.Debugf("supervisor: connection of uid %d ended: %v", peer.UID, err)
 	}
 }
 
-// dispatch answers one frame for one partition.
-func (s *Server) dispatch(ctx context.Context, part *partition, f *ipc.Frame, body ipc.Body) (*ipc.Frame, error) {
+// dispatch answers one frame for one partition. conn is the connection
+// of the frame, for a prompt that a decision needs.
+func (s *Server) dispatch(ctx context.Context, part *partition, conn *idleConn, f *ipc.Frame, body ipc.Body) (*ipc.Frame, error) {
 	switch b := body.(type) {
 	case *ipc.Handle:
-		return part.handle(ctx, b)
+		return part.handle(withPrompter(ctx, &prompter{conn: conn, wait: b.InlineWait}), b)
+	case *ipc.PromptReply:
+		// A reply reaches the loop only when no prompt is open: the open
+		// prompt reads its reply itself. A nonce never counts twice.
+		return ipc.ErrorFrame(ipc.CodeInvalid, "no prompt is open on this connection"), nil
 	case *ipc.ReportHookError:
 		if err := part.reportHookError(ctx, b); err != nil {
 			if errors.Is(err, errRateLimited) {
@@ -276,14 +281,21 @@ func (s *Server) closePartitions() error {
 }
 
 // idleConn sets a read deadline before every read, so a peer that holds a
-// connection and sends nothing lets it go after the idle timeout.
+// connection and sends nothing lets it go after the idle timeout. An open
+// prompt sets until, and the read then waits for the reply until then.
 type idleConn struct {
 	net.Conn
 	timeout time.Duration
+	until   time.Time
 }
 
 func (c *idleConn) Read(p []byte) (int, error) {
-	if c.timeout > 0 {
+	switch {
+	case !c.until.IsZero():
+		if err := c.SetReadDeadline(c.until); err != nil {
+			return 0, err
+		}
+	case c.timeout > 0:
 		if err := c.SetReadDeadline(time.Now().Add(c.timeout)); err != nil {
 			return 0, err
 		}
