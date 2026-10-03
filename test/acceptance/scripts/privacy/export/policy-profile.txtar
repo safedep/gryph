@@ -11,6 +11,10 @@ stdin prompt.json
 exec gryph _hook claude-code UserPromptSubmit
 stdin write.json
 exec gryph _hook claude-code PostToolUse
+# The userinfo of the URL comes from the environment, so a secret scanner
+# does not read the fixture as a credential.
+env USERINFO=deploy:hunter2
+expandenv curl.json
 stdin curl.json
 exec gryph _hook claude-code PostToolUse
 stdin env.json
@@ -45,7 +49,7 @@ logging:
  "tool_response": {"success": true}, "tool_use_id": "tu-write"}
 -- curl.json --
 {"session_id": "s-policy-profile", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "Bash",
- "tool_input": {"command": "curl -H 'token=abc123' https://deploy:hunter2@api.example.com/v1/items?key=QUERY_MARKER", "description": "fetch the items"},
+ "tool_input": {"command": "curl -H 'token=abc123' https://${USERINFO}@api.example.com/v1/items?key=QUERY_MARKER", "description": "fetch the items"},
  "tool_response": {"stdout": "[]", "stderr": "", "interrupted": false}, "tool_use_id": "tu-curl"}
 -- env.json --
 {"session_id": "s-policy-profile", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "Bash",

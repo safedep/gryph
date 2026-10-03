@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -55,6 +56,23 @@ func TestProgramVersion_RunsAsUser(t *testing.T) {
 
 	assert.Equal(t, "3.2.1", ProgramVersion(context.Background(), name, "--version"))
 	assert.FileExists(t, marker)
+}
+
+func TestProgramVersion_ChildHoldsThePipe(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake program is a shell script")
+	}
+	withPrivileged(t, false)
+	dir := t.TempDir()
+	// The program prints its version and exits, and a child of it keeps
+	// the output pipe open far beyond the probe.
+	script := "#!/bin/sh\necho '7.8.9'\n(sleep 30 &)\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "fake-agent"), []byte(script), 0o755))
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	start := time.Now()
+	assert.Equal(t, "7.8.9", ProgramVersion(context.Background(), "fake-agent", "--version"))
+	assert.Less(t, time.Since(start), programTimeout+pipeDelay+5*time.Second)
 }
 
 func TestProgramVersion_PrivilegedRunsNothing(t *testing.T) {

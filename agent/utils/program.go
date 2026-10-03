@@ -2,13 +2,20 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"strings"
 	"time"
 )
 
-// programTimeout bounds one version probe of an agent binary.
-const programTimeout = 5 * time.Second
+// programTimeout bounds one version probe of an agent binary, and
+// pipeDelay bounds the wait for its output pipes after it exits or the
+// deadline kills it: a program that leaves a child behind with the pipes
+// open would otherwise hold the probe until that child ends.
+const (
+	programTimeout = 5 * time.Second
+	pipeDelay      = time.Second
+)
 
 type noProgramExecutionKey struct{}
 
@@ -46,8 +53,12 @@ func ProgramVersion(ctx context.Context, program string, args ...string) string 
 	}
 	cmdCtx, cancel := context.WithTimeout(ctx, programTimeout)
 	defer cancel()
-	output, err := exec.CommandContext(cmdCtx, program, args...).Output()
-	if err != nil {
+	cmd := exec.CommandContext(cmdCtx, program, args...)
+	cmd.WaitDelay = pipeDelay
+	output, err := cmd.Output()
+	// ErrWaitDelay says the program exited but a child kept the pipes:
+	// the output read so far is the program's own.
+	if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
 		return ""
 	}
 	return VersionToken(string(output))

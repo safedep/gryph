@@ -78,6 +78,9 @@ stderr 'no-such-program-7q is not on PATH'
 -- bin/.keep --
 -- claude --
 #!/bin/sh
+# gryph doctor probes the version of the program on PATH when it runs as
+# a user, so a version flag answers at once.
+case "$1" in -v|--version) echo "1.0.0 (Claude Code)"; exit 0;; esac
 # The harness ends the agent with an interrupt at the end of the script.
 # The shell forwards it to the sleep, so no process holds the pipes.
 touch "$1"
