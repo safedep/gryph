@@ -11,6 +11,7 @@ import (
 	aarmsec "github.com/safedep/gryph/aarm"
 
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/agent/codex"
@@ -66,6 +67,7 @@ func New(cfg *config.Config) (*Runtime, error) {
 // and the user's own policy files are the ones under dir, which the
 // service account owns and no agent user can write.
 func NewPartition(ctx context.Context, cfg *config.Config, dir string) (*Runtime, error) {
+	cfg = PartitionConfig(cfg)
 	paths := &config.Paths{
 		ConfigFile:   filepath.Join(dir, "config.yml"),
 		ConfigDir:    dir,
@@ -88,6 +90,23 @@ func NewPartition(ctx context.Context, cfg *config.Config, dir string) (*Runtime
 	}
 	rt.Store = store
 	return rt, nil
+}
+
+// PartitionConfig returns the configuration of a partition of the decision
+// service: the managed configuration with the machine keys in place of
+// the per-user ones. The service signs every receipt with the machine key
+// in the supervisor scope, so a reader never takes a row of the service
+// for one that a user key signed. The managed file alone can name another
+// key path.
+func PartitionConfig(cfg *config.Config) *config.Config {
+	out := *cfg
+	if out.Policy.Receipts.KeyPath == "" {
+		out.Policy.Receipts.KeyPath = cfg.Supervisor.ReceiptKeyPath()
+	}
+	out.Policy.Receipts.SignMode = config.SignModeAlways
+	out.Policy.Receipts.KeyScope = receipt.KeyScopeSupervisor
+	out.ExportKey = cfg.Supervisor.ExportKeyPath()
+	return &out
 }
 
 func newRuntime(cfg *config.Config, paths *config.Paths) (*Runtime, error) {

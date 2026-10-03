@@ -145,6 +145,17 @@ func (s *Ed25519Signer) Sign(hash []byte) ([]byte, string, error) {
 	return sig, s.keyID, nil
 }
 
+// WithScope returns the signer with the scope that its receipts carry.
+// The decision service sets KeyScopeSupervisor on the machine key.
+func (s *Ed25519Signer) WithScope(scope string) *Ed25519Signer {
+	if s == nil {
+		return nil
+	}
+	out := *s
+	out.scope = scope
+	return &out
+}
+
 // KeyID returns the keyID this signer signs under.
 func (s *Ed25519Signer) KeyID() string {
 	if s == nil {
@@ -508,9 +519,9 @@ func ParseTrustStore(data []byte) (*TrustStore, error) {
 	return &ts, nil
 }
 
-// SaveTrustStore serializes ts to JSON and writes it to path with 0644
-// permissions. The parent directory is created with 0700 if missing.
-func SaveTrustStore(path string, ts *TrustStore) error {
+// MarshalTrustStore serializes ts as the trust store file: indented JSON
+// with lowercase key ids and a final newline.
+func MarshalTrustStore(ts *TrustStore) ([]byte, error) {
 	if ts == nil {
 		ts = &TrustStore{}
 	}
@@ -519,14 +530,24 @@ func SaveTrustStore(path string, ts *TrustStore) error {
 	}
 	data, err := json.MarshalIndent(ts, "", "  ")
 	if err != nil {
-		return fmt.Errorf("receipt: marshal trust store: %w", err)
+		return nil, fmt.Errorf("receipt: marshal trust store: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
+// SaveTrustStore serializes ts to JSON and writes it to path with 0644
+// permissions. The parent directory is created with 0700 if missing.
+func SaveTrustStore(path string, ts *TrustStore) error {
+	data, err := MarshalTrustStore(ts)
+	if err != nil {
+		return err
 	}
 	if dir := filepath.Dir(path); dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return fmt.Errorf("receipt: create trust store dir: %w", err)
 		}
 	}
-	if err := writeAtomicFile(path, append(data, '\n'), 0o644); err != nil {
+	if err := writeAtomicFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("receipt: write trust store: %w", err)
 	}
 	return nil

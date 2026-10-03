@@ -1,0 +1,93 @@
+# gryph supervisor keys rotate gives the service a new key, keeps the old
+# public key in the managed trust store, and reloads the running service.
+# A receipt from before the rotation and one from after it both verify,
+# each with its own key id. Runs only in the privileged job on a Linux
+# host with no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+! exists /tmp/gryph-acceptance-state
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+expandenv managed.yml
+exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
+
+exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir /tmp/gryph-acceptance-state --spool-dir /tmp/gryph-acceptance-spool --allow-root &
+# The service opens the socket first and makes its keys on the way into
+# the accept loop, so the export key, the last of them, says it is ready.
+exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do test -f /tmp/gryph-acceptance-state/keys/export.key && break; sleep 0.2; done'
+exists /tmp/gryph-acceptance-state/supervisor.pid
+exists /tmp/gryph-acceptance-state/keys/receipt.key
+# The service made its key at start and signs with it. No install ran, so
+# no verifier knows that key until a rotation carries its public half
+# into the managed trust store with the new one.
+ipcframe frames.bin hello.json handle.json
+stdin frames.bin
+exec gryph supervisor send --socket /tmp/gryph-acceptance-hook.sock --text
+stdout '"type":"decision"'
+exec sh -c 'grep key_id /tmp/gryph-acceptance-state/keys/receipt-pub.json'
+cp stdout first.txt
+capture KEY1 '"key_id": "([0-9a-f]{16})"' first.txt
+
+exec gryph supervisor keys rotate --json
+stdout '"reloaded": true'
+stdout '"owner": "root"'
+cp stdout rotate.json
+capture KEY2 '"key_id": "([0-9a-f]{16})"' rotate.json
+exec sh -c 'grep -c key_id /etc/safedep/gryph/keys/receipt-pub.json'
+stdout '^2$'
+grep $KEY1 /etc/safedep/gryph/keys/receipt-pub.json
+
+# The reloaded service signs with the new key.
+exec sh -c 'for i in 1 2 3 4 5; do sleep 0.2; done'
+stdin frames.bin
+exec gryph supervisor send --socket /tmp/gryph-acceptance-hook.sock --text
+stdout '"type":"decision"'
+
+# A second rotation keeps every earlier key next to the new one.
+exec gryph supervisor keys rotate --note second --json
+stdout '"reloaded": true'
+cp stdout rotate2.json
+capture KEY3 '"key_id": "([0-9a-f]{16})"' rotate2.json
+exec sh -c 'grep -c key_id /etc/safedep/gryph/keys/receipt-pub.json'
+stdout '^3$'
+grep $KEY2 /etc/safedep/gryph/keys/receipt-pub.json
+grep $KEY3 /etc/safedep/gryph/keys/receipt-pub.json
+grep second /etc/safedep/gryph/keys/receipt-pub.json
+exec sh -c 'for i in 1 2 3 4 5; do sleep 0.2; done'
+stdin frames.bin
+exec gryph supervisor send --socket /tmp/gryph-acceptance-hook.sock --text
+stdout '"type":"decision"'
+
+exec rm /etc/safedep/gryph/config.yml
+env GRYPH_DATA_DIR=/tmp/gryph-acceptance-state/users/0
+exec gryph policy receipts --format json --no-color
+stdout -count=3 '"signer_key_scope":\s*"supervisor"'
+stdout '"signer_key_id":\s*"'$KEY1'"'
+stdout '"signer_key_id":\s*"'$KEY2'"'
+stdout '"signer_key_id":\s*"'$KEY3'"'
+exec gryph policy receipts --verify --all-sessions --no-color
+stdout 'signed_ok=3'
+stdout 'key_scope=supervisor 3'
+exec gryph policy keys list --no-color
+stdout $KEY1
+stdout $KEY2
+stdout $KEY3
+
+exec rm -rf /etc/safedep/gryph /tmp/gryph-acceptance-state /tmp/gryph-acceptance-spool
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- managed.yml --
+policy:
+  enabled: true
+  log_all_evaluations: true
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  state_dir: /tmp/gryph-acceptance-state
+  spool_dir: /tmp/gryph-acceptance-spool
+-- hello.json --
+{"type":"hello","body":{"proto":1,"client_version":"test"}}
+-- handle.json --
+{"type":"handle","body":{"agent":"claude-code","hook_type":"PreToolUse","raw_payload":"eyJzZXNzaW9uX2lkIjoidGVzdC1zZXNzaW9uLTEyMyIsImN3ZCI6Ii9ob21lL3VzZXIvcHJvamVjdCIsImhvb2tfZXZlbnRfbmFtZSI6IlByZVRvb2xVc2UiLCJ0b29sX25hbWUiOiJSZWFkIiwidG9vbF9pbnB1dCI6eyJmaWxlX3BhdGgiOiIvaG9tZS91c2VyL3Byb2plY3QvbWFpbi5nbyJ9LCJ0b29sX3VzZV9pZCI6InRvb2wtdXNlLXIxIn0=","project_claim":{"name":"project"}}}

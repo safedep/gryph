@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/decision"
@@ -37,8 +38,9 @@ type partition struct {
 	// partition.
 	write sync.Mutex
 
-	connMu sync.Mutex
-	conns  int
+	connMu  sync.Mutex
+	conns   int
+	retired bool
 
 	eventMu       sync.Mutex
 	lastRateEvent time.Time
@@ -104,10 +106,28 @@ func (p *partition) acquireConn(limit int) bool {
 	return true
 }
 
+// releaseConn counts a connection out. A retired partition closes with
+// its last connection.
 func (p *partition) releaseConn() {
 	p.connMu.Lock()
-	defer p.connMu.Unlock()
 	p.conns--
+	last := p.retired && p.conns == 0
+	p.connMu.Unlock()
+	if last {
+		if err := p.close(); err != nil {
+			log.Warnf("supervisor: close the retired partition of uid %d: %v", p.uid, err)
+		}
+	}
+}
+
+// retire takes the partition out of service: the server opens a new one
+// for the account on the next contact, and this one closes when its last
+// connection ends. It reports whether it closed now.
+func (p *partition) retire() bool {
+	p.connMu.Lock()
+	defer p.connMu.Unlock()
+	p.retired = true
+	return p.conns == 0
 }
 
 // handle answers one Handle frame. The service parses the raw payload with

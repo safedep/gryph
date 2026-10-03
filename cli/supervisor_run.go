@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -71,6 +72,13 @@ exists for a test.`,
 			if err := os.MkdirAll(stateDir, 0o700); err != nil {
 				return WrapError(ExitGeneral, "create the state directory", err)
 			}
+			cfg.Supervisor.StateDir = stateDir
+			pidFile := cfg.Supervisor.PIDFile()
+			if err := os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644); err != nil {
+				log.Warnf("supervisor: pid file not written, `gryph supervisor keys rotate` cannot reload this service: %v", err)
+			} else {
+				defer func() { _ = os.Remove(pidFile) }()
+			}
 			if spoolDir == "" {
 				spoolDir = cfg.Supervisor.SpoolPath()
 			}
@@ -88,6 +96,19 @@ exists for a test.`,
 
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
+			reload := make(chan os.Signal, 1)
+			signal.Notify(reload, syscall.SIGHUP)
+			defer signal.Stop(reload)
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-reload:
+						srv.Reload()
+					}
+				}
+			}()
 			log.Infof("supervisor: serving on %s", ln.Addr())
 			if err := srv.Serve(ctx, ln); err != nil {
 				return WrapError(ExitGeneral, "supervisor", err)

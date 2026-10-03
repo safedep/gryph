@@ -119,6 +119,42 @@ sends the frames on stdin to a service and prints the replies. With
 `--idle` it first opens that many connections that send hello and hold.
 The acceptance scripts under `supervisor/` use it.
 
+## Keys
+
+The service signs with the machine key, never with a user's key. A key in
+a user's home is one that same-user malware may have read, so the service
+does not import it: the receipts a user key signed keep their signatures
+and their `user` scope, and the trust store keeps the public key.
+
+| Key | Path | Owner and mode |
+|---|---|---|
+| Receipt signing key | `<state dir>/keys/receipt.key` | the service account, 0600 |
+| The published public halves, the current key last | `<state dir>/keys/receipt-pub.json` | the service account, 0644 |
+| Export key | `<state dir>/keys/export.key` | the service account, 0600 |
+| Trust store | `<managed dir>/keys/receipt-pub.json` | root, 0644 |
+
+`gryph install --managed` makes the keys as root and hands them to the
+service account (`engine.EnsureMachineKeys`, `engine.TrustMachineKey`).
+A private key that exists is never read by root: the key id comes from
+the published file. The service makes the keys itself at start when they
+are missing, as the service account, and then only root can put the
+public half in the trust store: `gryph supervisor keys rotate` carries
+every published half, the old key's included, into the trust store on its
+way, so the receipts of a key that no install published still verify. Every
+partition signs with the machine key in the `supervisor` scope and with
+`sign_mode: always` (`engine.PartitionConfig`). The managed file alone can
+name another `policy.receipts.key_path`. The hook client never reads a
+key.
+
+`gryph supervisor keys rotate` runs as root: a new key under the state
+directory, the public half appended to the trust store, the files handed
+to the owner of the state directory, and `SIGHUP` to the pid in `<state
+dir>/supervisor.pid`. On the signal the service retires every partition
+(`Server.Reload`): a partition with no connection closes at once, one with
+connections closes with its last, and the next contact of the account
+opens a fresh partition that reads the new key. The old key signs nothing
+after that, and its public half stays in the trust store.
+
 ## The spool
 
 The spool is the drop directory of the hook clients. `gryph supervisor run`

@@ -21,11 +21,35 @@ type Account struct {
 	ID   string
 	Name string
 	Home string
+	// UID and GID are the numeric identifiers on Unix, for a chown. Both
+	// are zero on Windows.
+	UID uint32
+	GID uint32
 }
 
 // CurrentID returns the identifier of the account that runs this process.
 func CurrentID() (string, error) {
 	return currentID()
+}
+
+// Lookup returns the account named name, with its numeric identifiers
+// in UID and GID on Unix. A name that the account database does not know
+// is an error.
+func Lookup(name string) (Account, error) {
+	return lookup(name)
+}
+
+// LookupID returns the account with the identifier id, in the form that
+// CurrentID returns.
+func LookupID(id string) (Account, error) {
+	return lookupID(id)
+}
+
+// IsSystemID reports whether id is the identifier of a system account: a
+// service account below the first human uid on Unix. It reports false
+// where the platform does not tell.
+func IsSystemID(id string) bool {
+	return isSystemID(id)
 }
 
 // List returns the human accounts of the host that have a home directory

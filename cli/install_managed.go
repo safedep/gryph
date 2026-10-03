@@ -15,6 +15,7 @@ import (
 	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/engine"
+	"github.com/safedep/gryph/platform/account"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -35,6 +36,24 @@ type managedInstallReport struct {
 	// Timer is the system-wide job that runs the reconcile pass as each
 	// account. Absent in a dry run.
 	Timer *managedTimerReport `json:"timer,omitempty"`
+	// Keys are the machine keys of the decision service. Present when the
+	// managed configuration turns the service on, absent in a dry run.
+	Keys *managedKeysReport `json:"keys,omitempty"`
+}
+
+// managedKeysReport is the outcome of the machine keys of the decision
+// service: the receipt signing key under the state directory, its public
+// half in the managed trust store, and the export key.
+type managedKeysReport struct {
+	ReceiptKey string `json:"receipt_key"`
+	KeyID      string `json:"key_id,omitempty"`
+	ExportKey  string `json:"export_key"`
+	TrustStore string `json:"trust_store"`
+	// Owner is the account that owns the keys: the service account when
+	// it exists on the host, else root until it does.
+	Owner   string `json:"owner,omitempty"`
+	Changed bool   `json:"changed"`
+	Error   string `json:"error,omitempty"`
 }
 
 // managedTimerReport is the outcome of the system-wide reconcile job.
@@ -168,6 +187,13 @@ func runManagedInstall(cmd *cobra.Command, args managedInstallArgs) error {
 			degraded++
 		}
 		report.Changed = report.Changed || report.Timer.Changed
+		if in.cfg.Supervisor.Enabled {
+			report.Keys = installMachineKeys(in.cfg)
+			if report.Keys.Error != "" {
+				degraded++
+			}
+			report.Changed = report.Changed || report.Keys.Changed
+		}
 	}
 
 	switch {
@@ -184,6 +210,63 @@ func runManagedInstall(cmd *cobra.Command, args managedInstallArgs) error {
 		return &exitError{code: ExitManagedPartial, message: fmt.Sprintf("install --managed: %d agent(s) degraded", degraded)}
 	}
 	return nil
+}
+
+// installMachineKeys makes the machine keys of the decision service when
+// they are missing, hands them to the service account, and puts the public
+// half of the receipt key in the managed trust store. The service account
+// is the owner of the state directory when it exists, else the account
+// named by the configuration when the host has it, else root: the next
+// run hands the keys over once the account exists.
+func installMachineKeys(cfg *config.Config) *managedKeysReport {
+	sup := cfg.Supervisor
+	report := &managedKeysReport{ReceiptKey: sup.ReceiptKeyPath(), ExportKey: sup.ExportKeyPath(), TrustStore: config.ManagedTrustStorePath()}
+	if err := os.MkdirAll(sup.StatePath(), 0o750); err != nil {
+		report.Error = err.Error()
+		return report
+	}
+	keys, err := engine.EnsureMachineKeys(cfg)
+	if err != nil {
+		report.Error = err.Error()
+		return report
+	}
+	report.KeyID = keys.KeyID
+	report.Changed = keys.Created
+	owner, err := handStateToServiceAccount(cfg)
+	if err != nil {
+		report.Error = err.Error()
+		return report
+	}
+	report.Owner = owner
+	_, changed, err := engine.TrustMachineKey(cfg, config.ManagedTrustStorePath())
+	if err != nil {
+		report.Error = "trust store: " + err.Error()
+		return report
+	}
+	report.Changed = report.Changed || changed
+	return report
+}
+
+// handStateToServiceAccount gives the state directory and the keys to the
+// service account. The owner of an existing state directory stays, so a
+// host that runs the service under another account keeps it.
+func handStateToServiceAccount(cfg *config.Config) (string, error) {
+	info, err := os.Stat(cfg.Supervisor.StatePath())
+	if err != nil {
+		return "", err
+	}
+	uid, _, ok := ownerOf(info)
+	if ok && uid != 0 {
+		return handMachineKeysToServiceAccount(cfg)
+	}
+	acct, err := account.Lookup(cfg.Supervisor.ServerAccount())
+	if err != nil {
+		return "root", nil
+	}
+	if err := os.Chown(cfg.Supervisor.StatePath(), int(acct.UID), int(acct.GID)); err != nil {
+		return "", fmt.Errorf("hand %s to %s: %w", cfg.Supervisor.StatePath(), acct.Name, err)
+	}
+	return handMachineKeysToServiceAccount(cfg)
 }
 
 // readManagedInput reads and validates every input file. Each file must
@@ -321,6 +404,15 @@ func renderManagedReport(w io.Writer, report *managedInstallReport, asJSON bool)
 	}
 	if report.Timer != nil {
 		if err := renderTimerLines(w, "Reconcile job", report.Timer); err != nil {
+			return err
+		}
+	}
+	if k := report.Keys; k != nil {
+		line := fmt.Sprintf("  %-8s %s  key %s  owner %s  trust store %s", "Keys", k.ReceiptKey, k.KeyID, k.Owner, k.TrustStore)
+		if k.Error != "" {
+			line = fmt.Sprintf("  %-8s %s  error: %s", "Keys", k.ReceiptKey, k.Error)
+		}
+		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}
 	}

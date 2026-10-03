@@ -65,6 +65,7 @@ stdout '"verdict":"block"'
 
 # The socket of a root service passes.
 exec gryph supervisor fake --socket /tmp/gryph-acceptance-user/root.sock --reply $WORK/allow.json &
+exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do test -S /tmp/gryph-acceptance-user/root.sock && break; sleep 0.2; done'
 expandenv rootsock.yml
 exec install -m 644 $WORK/rootsock.yml /etc/safedep/gryph/config.yml
 stdin bash.json

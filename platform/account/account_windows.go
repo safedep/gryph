@@ -28,3 +28,15 @@ func list() ([]Account, error) {
 func command(context.Context, Account, string, ...string) (*exec.Cmd, error) {
 	return nil, ErrUnsupported
 }
+
+func lookup(string) (Account, error) {
+	return Account{}, ErrUnsupported
+}
+
+func isSystemID(string) bool {
+	return false
+}
+
+func lookupID(string) (Account, error) {
+	return Account{}, ErrUnsupported
+}

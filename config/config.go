@@ -85,6 +85,10 @@ type Config struct {
 	// the managed file sets it: a user cannot point the hook at a service
 	// of their own.
 	Supervisor SupervisorConfig `mapstructure:"supervisor"`
+	// ExportKey is the export key file in force when it is not the one
+	// next to the database. No file sets it: the decision service sets it
+	// to the machine key.
+	ExportKey string `mapstructure:"-"`
 }
 
 // SupervisorConfig configures the decision service and the hook's use of it.
@@ -252,6 +256,35 @@ func (s SupervisorConfig) StatePath() string {
 	return supervisorStateDefault()
 }
 
+// KeyDir returns the directory of the machine keys: the keys that the
+// decision service signs and digests with, owned by the service account.
+func (s SupervisorConfig) KeyDir() string {
+	return filepath.Join(s.StatePath(), "keys")
+}
+
+// ReceiptKeyPath returns the private receipt signing key of the machine.
+func (s SupervisorConfig) ReceiptKeyPath() string {
+	return filepath.Join(s.KeyDir(), "receipt.key")
+}
+
+// PublicKeyPath returns the file that carries the public half of the
+// current receipt key, readable by every account, so a root command can
+// put it in the managed trust store without reading the private key.
+func (s SupervisorConfig) PublicKeyPath() string {
+	return filepath.Join(s.KeyDir(), "receipt-pub.json")
+}
+
+// ExportKeyPath returns the export key of the machine.
+func (s SupervisorConfig) ExportKeyPath() string {
+	return filepath.Join(s.KeyDir(), "export.key")
+}
+
+// PIDFile returns the file that holds the pid of the running service, so
+// a root command can ask it to reload its keys.
+func (s SupervisorConfig) PIDFile() string {
+	return filepath.Join(s.StatePath(), "supervisor.pid")
+}
+
 // ExportConfig holds the user export profiles, by name.
 type ExportConfig struct {
 	Profiles map[string]ExportProfileConfig `mapstructure:"profiles"`
@@ -401,8 +434,11 @@ const DeferAutoResolveDeny = "deny"
 // key, or "never" to disable signing entirely. The legacy bool `sign` is a
 // deprecated alias mapped to `always` (true) or `never` (false).
 type ReceiptsConfig struct {
-	Sign       bool   `mapstructure:"sign"`
-	SignMode   string `mapstructure:"sign_mode"`
+	Sign     bool   `mapstructure:"sign"`
+	SignMode string `mapstructure:"sign_mode"`
+	// KeyScope is the scope the receipts of this process carry. No file
+	// sets it: the decision service sets it on the machine key.
+	KeyScope   string `mapstructure:"-"`
 	KeyPath    string `mapstructure:"key_path"`
 	TrustStore string `mapstructure:"trust_store"`
 }

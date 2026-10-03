@@ -461,6 +461,20 @@
   guarantee: "gryph policy test without --degraded evaluates a rule that reads context.* against the given counters, zeros by default, so the counter rule does not fire without --context-files-written and fires with it. The degraded gate is the explicit flag, not the accumulator."
   labels: [policy, degraded, test]
 
+- id: supervisor/keys/custody
+  title: "the machine key belongs to the service account and signs in the supervisor scope"
+  category: supervisor
+  tier: P0
+  guarantee: "gryph install --managed with the service on makes the receipt key, its public half and the export key under the state directory, hands them to the service account at mode 0600, puts the public half in the managed trust store, and changes nothing on a second run. The service, run as the service account, signs every receipt with that key in the supervisor scope, and the receipts verify against the managed store. doctor --managed reports the key as supervisor-owned and protected. Privileged job only."
+  labels: [supervisor, keys, privileged, linux]
+
+- id: receipts/managed/rotate-verifies
+  title: "a key rotation keeps the old receipts verifiable and re-points the running service"
+  category: receipts
+  tier: P0
+  guarantee: "gryph supervisor keys rotate writes a new key, appends its public half to the managed trust store next to the keys already there, and reloads the running service through its pid file. Receipts signed before and after the rotation both verify, each with its own key id. Privileged job only."
+  labels: [receipts, supervisor, keys, privileged, linux]
+
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
   category: install

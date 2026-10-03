@@ -58,5 +58,12 @@ func LoadReceiptSignerFromConfig(cfg *config.Config, paths *config.Paths) (*rece
 	if err != nil {
 		return nil, fmt.Errorf("decode private key: %w", err)
 	}
-	return receipt.NewEd25519Signer(priv)
+	signer, err := receipt.NewEd25519Signer(priv)
+	if err != nil {
+		return nil, err
+	}
+	if scope := cfg.Policy.Receipts.KeyScope; scope != "" {
+		signer = signer.WithScope(scope)
+	}
+	return signer, nil
 }

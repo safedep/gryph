@@ -12,11 +12,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/decision"
 	"github.com/safedep/gryph/decision/ipc"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/spool"
 	"github.com/safedep/gryph/storage"
 	"github.com/stretchr/testify/assert"
@@ -53,6 +55,12 @@ func startServer(t *testing.T, limits Limits) (string, string) {
 // that runs a spool pass itself.
 func startServerWithSpool(t *testing.T) (*Server, string, string) {
 	t.Helper()
+	return startServerWith(t, config.Default())
+}
+
+// startServerWith is startServerWithSpool for one configuration.
+func startServerWith(t *testing.T, cfg *config.Config) (*Server, string, string) {
+	t.Helper()
 	dir := t.TempDir()
 	sock := filepath.Join(dir, "hook.sock")
 	ln, err := net.Listen("unix", sock)
@@ -61,7 +69,7 @@ func startServerWithSpool(t *testing.T) (*Server, string, string) {
 	require.NoError(t, os.Mkdir(state, 0o700))
 	spoolDir := filepath.Join(dir, "spool")
 	require.NoError(t, spool.EnsureRoot(spoolDir))
-	srv := New(config.Default(), Options{StateDir: state, Version: "test", SpoolDir: spoolDir, IngestInterval: -1})
+	srv := New(cfg, Options{StateDir: state, Version: "test", SpoolDir: spoolDir, IngestInterval: -1})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ctx, ln) }()
@@ -296,4 +304,50 @@ func TestServer_SpoolBeforeStartIsNotDegraded(t *testing.T) {
 	rows, err := store.QueryReceipts(ctx, &storage.ReceiptFilter{Decision: "unverified"})
 	require.NoError(t, err)
 	assert.Len(t, rows, 1)
+}
+
+func TestServer_SignsWithTheMachineKeyAndReloads(t *testing.T) {
+	cfg := config.Default()
+	cfg.Policy.Enabled = true
+	cfg.Policy.LogAllEvaluations = true
+	srv, state, _ := startServerWith(t, cfg)
+	cfg.Supervisor.StateDir = state
+	first, err := receipt.ReadPrivateKeyFile(cfg.Supervisor.ReceiptKeyPath())
+	require.NoError(t, err, "the server made the machine key at start")
+
+	sock := filepath.Join(filepath.Dir(state), "hook.sock")
+	conn := dial(t, sock)
+	hello(t, conn)
+	reply := exchange(t, conn, ipc.MustFrame(ipc.TypeHandle, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(readPayload)}))
+	require.Equal(t, ipc.TypeDecision, reply.Type, string(reply.Body))
+	require.NoError(t, conn.Close())
+
+	rotated, err := engine.RotateMachineKey(cfg, "rotation")
+	require.NoError(t, err)
+	srv.Reload()
+	require.Eventually(t, func() bool {
+		srv.mu.Lock()
+		defer srv.mu.Unlock()
+		return len(srv.partitions) == 0
+	}, 5*time.Second, 10*time.Millisecond)
+
+	conn = dial(t, sock)
+	hello(t, conn)
+	reply = exchange(t, conn, ipc.MustFrame(ipc.TypeHandle, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(readPayload)}))
+	require.Equal(t, ipc.TypeDecision, reply.Type, string(reply.Body))
+	require.NoError(t, conn.Close())
+	require.NoError(t, srv.closePartitions())
+
+	store, err := storage.NewSQLiteStore(filepath.Join(state, "users", strconv.Itoa(os.Getuid()), "audit.db"))
+	require.NoError(t, err)
+	defer func() { _ = store.Close() }()
+	rows, err := store.QueryReceipts(context.Background(), &storage.ReceiptFilter{})
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	var keyIDs []string
+	for _, r := range rows {
+		assert.Equal(t, receipt.KeyScopeSupervisor, r.SignerKeyScope)
+		keyIDs = append(keyIDs, r.SignerKeyID)
+	}
+	assert.ElementsMatch(t, []string{first.KeyID, rotated.KeyID}, keyIDs, "the row before the reload carries the old key, the one after the new key")
 }

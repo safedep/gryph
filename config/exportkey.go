@@ -16,7 +16,11 @@ const exportKeySize = 32
 
 // ExportKeyFile returns the path of the export key. It sits next to the
 // database, because it keys the digests of the events in that database.
+// The decision service sets ExportKey to the machine key instead.
 func (c *Config) ExportKeyFile() string {
+	if c.ExportKey != "" {
+		return c.ExportKey
+	}
 	return filepath.Join(filepath.Dir(c.GetDatabasePath()), "export.key")
 }
 

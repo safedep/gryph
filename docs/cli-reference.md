@@ -479,6 +479,32 @@ gryph supervisor run --socket /tmp/hook.sock --state-dir /tmp/gryph-state
 | `--ingest-interval` | duration | 1m             | Time between two passes over the spool |
 | `--spool-max-files` | int | 256                 | Entries one pass takes from one account's spool |
 
+At start the service makes the machine keys below the state directory when
+they are missing: `keys/receipt.key` (the receipt signing key, mode 0600),
+`keys/receipt-pub.json` (the public halves of the keys the service has
+had, the current one last, readable by every account) and
+`keys/export.key`. Every receipt of the service carries the key scope
+`supervisor`. The service writes its pid to `supervisor.pid` in the state
+directory and reloads its partitions on `SIGHUP`, so a key rotation
+reaches it without a restart.
+
+#### supervisor keys rotate
+
+Replace the receipt signing key of the decision service. Root runs it.
+
+```bash
+sudo gryph supervisor keys rotate [--note "why"] [--no-reload] [--json]
+```
+
+The command writes a new private key under the state directory, hands it
+to the owner of the state directory (the service account), puts the public
+half in the managed trust store next to the keys already there, and sends
+the reload signal to the pid in `supervisor.pid`. The old public key stays
+in the trust store, so the receipts it signed still verify. `--no-reload`
+leaves the running service on the old key until it restarts. `--state-dir`
+names another state directory, for a test. The JSON report has `key_id`,
+`receipt_key`, `trust_store`, `owner`, `reloaded`, `pid` and `note`.
+
 The managed configuration sets the service: `supervisor.enabled` (the hook
 becomes a client of the service), `supervisor.socket` (default
 `/run/safedep/gryph/hook.sock` on Linux, `/var/run/safedep/gryph/hook.sock`
@@ -522,6 +548,24 @@ managed:
   lock_hooks: [claude-code]      # also turn on the agent's own lock: only managed hooks run
   binary: /opt/safedep/gryph/bin/gryph   # optional, the default of the platform
 ```
+
+With `supervisor.enabled: true` the command also makes the machine keys of
+the decision service when they are missing, under the state directory
+(`supervisor.state_dir`, default `/var/lib/safedep/gryph`): the receipt
+signing key `keys/receipt.key`, its published public half
+`keys/receipt-pub.json` and the export key `keys/export.key`. A key that
+exists stays, and root never reads it: the key id comes from the published
+file. It hands the state directory and the
+keys to the service account (`supervisor.server_identity`, default
+`_gryph`) when the host has it, else they stay root's until a later run
+finds the account. It puts the public half in the managed trust store
+`keys/receipt-pub.json` of the managed directory, so every verifier on the
+host trusts the key. The JSON report carries them under `keys`:
+`receipt_key`, `key_id`, `export_key`, `trust_store`, `owner`, `changed`.
+A failure degrades the install (exit 10). In managed mode
+`policy.receipts.key_path` and `policy.receipts.trust_store` come from the
+managed file alone. See [supervisor keys rotate](#supervisor-keys-rotate)
+for a later rotation.
 
 The hook entries name the `gryph` binary by an absolute path. Root must own
 the binary and every directory above it, and nothing in the chain may be
@@ -640,7 +684,7 @@ directory another user can write, is refused.
     {"name": "claude-code", "class": "locked", "path": "/etc/claude-code/managed-settings.d/50-gryph.json", "level": "prevent_same_user", "match": true, "locked": true},
     {"name": "cursor", "class": "system_path", "path": "/etc/cursor/hooks.json", "level": "detect", "match": true, "locked": false}
   ],
-  "key": {"scope": "user", "protected": false},
+  "key": {"scope": "supervisor", "protected": true, "path": "/var/lib/safedep/gryph/keys/receipt.key", "owner": "_gryph"},
   "supervisor": {"state": "absent", "profile": "pilot", "pilot_until": "2026-12-31", "pilot_remaining_seconds": 7603200},
   "collection": {"level": "none"}
 }
@@ -656,11 +700,11 @@ directory another user can write, is refused.
 | `policy` | The same, plus `version` (the file's version field), `sha256` of the file, and `allow_user_policy` from the managed configuration. |
 | `trust_store` | The managed receipt trust store: `path`, `chain`, `keys` (the count of public keys). A missing store is a fact, not an issue. |
 | `agents` | One row per agent in `managed.agents`: `class`, `path`, `level` (`prevent_same_user` for a `locked` entry that matches, `detect` for a `system_path` entry that matches, `none` otherwise), `match`, `locked` (the lock switch), `error`. |
-| `key` | `scope` is `user`: the receipt signing key lives in each user's home, and `protected` is false. |
+| `key` | `scope` is `user` while the receipt signing key lives in each user's home, with `protected` false. With `supervisor.enabled` and the machine key in place, `scope` is `supervisor`, `path` and `owner` name the key, and `protected` is true when a system account owns it and nobody else can read it. |
 | `supervisor` | `state` is `absent`: no decision service runs outside the user yet. With `supervisor.enabled`, `profile` is the profile in force, `pilot_until` the end of the pilot as the file sets it, and `pilot_remaining_seconds` the time left while the pilot runs. |
 | `collection` | `level` is `none`: no evidence leaves the host. |
 
-The text form prints the same facts, with "Key: user-owned (not protected)"
+The text form prints the same facts, with "Key: user-owned (not protected)" or "Key: supervisor-owned (protected)"
 on its own line.
 
 #### System managed configuration

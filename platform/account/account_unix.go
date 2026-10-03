@@ -36,6 +36,43 @@ func minHumanUID() int {
 	return minHumanUIDLinux
 }
 
+func lookup(name string) (Account, error) {
+	u, err := user.Lookup(name)
+	if err != nil {
+		return Account{}, err
+	}
+	return fromUser(u)
+}
+
+func lookupID(id string) (Account, error) {
+	u, err := user.LookupId(id)
+	if err != nil {
+		return Account{}, err
+	}
+	return fromUser(u)
+}
+
+func fromUser(u *user.User) (Account, error) {
+	name := u.Username
+	uid, err := strconv.ParseUint(u.Uid, 10, 32)
+	if err != nil {
+		return Account{}, fmt.Errorf("account %s: uid %q: %w", name, u.Uid, err)
+	}
+	gid, err := strconv.ParseUint(u.Gid, 10, 32)
+	if err != nil {
+		return Account{}, fmt.Errorf("account %s: gid %q: %w", name, u.Gid, err)
+	}
+	return Account{ID: u.Uid, Name: u.Username, Home: u.HomeDir, UID: uint32(uid), GID: uint32(gid)}, nil
+}
+
+func isSystemID(id string) bool {
+	uid, err := strconv.Atoi(id)
+	if err != nil {
+		return false
+	}
+	return uid < minHumanUID()
+}
+
 // list reads /etc/passwd on Linux. On macOS the local accounts live in the
 // directory service, not in /etc/passwd, so list walks /Users and asks the
 // account database for each name.

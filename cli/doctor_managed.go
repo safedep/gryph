@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/safedep/gryph/aarm/pdp"
@@ -17,6 +18,7 @@ import (
 	"github.com/safedep/gryph/agent/utils"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/engine"
+	"github.com/safedep/gryph/platform/account"
 	"github.com/safedep/gryph/selfprotect"
 )
 
@@ -31,6 +33,9 @@ const managedDoctorSchemaVersion = 1
 // home.
 const (
 	managedKeyScopeUser          = "user"
+	managedKeyScopeSupervisor    = "supervisor"
+	managedKeySupervisorSummary  = "Key: supervisor-owned (protected)"
+	managedKeySupervisorExposed  = "Key: supervisor key readable by others (not protected)"
 	managedSupervisorAbsent      = "absent"
 	managedCollectionNone        = "none"
 	managedLockedSummary         = "Locked (hook entry and policy files, decision and audit trail not protected)"
@@ -105,8 +110,13 @@ type managedAgentState struct {
 }
 
 type managedKeyReport struct {
+	// Scope is user while the hook signs with a key in the user's home,
+	// and supervisor once the decision service signs with the machine
+	// key. Protected is true when only a system account reads that key.
 	Scope     string `json:"scope"`
 	Protected bool   `json:"protected"`
+	Path      string `json:"path,omitempty"`
+	Owner     string `json:"owner,omitempty"`
 }
 
 type managedSupervisorReport struct {
@@ -151,6 +161,7 @@ func buildManagedDoctorReport(ctx context.Context) *managedDoctorReport {
 
 	cfg := report.readConfig()
 	report.readSupervisor(cfg)
+	report.readKey(cfg)
 	report.readPolicy(cfg)
 	report.readTrustStore()
 	report.readBinary(cfg)
@@ -168,6 +179,31 @@ func buildManagedDoctorReport(ctx context.Context) *managedDoctorReport {
 
 // readConfig reads the managed configuration through the same trust check
 // as the running Gryph, and from no other source.
+// readKey reports the receipt signing key: the machine key of the decision
+// service when the service is on and the key exists, else the user key.
+// The machine key is protected when a system account owns it and nobody
+// else can read it. The command reads its owner and mode, never the key.
+func (r *managedDoctorReport) readKey(cfg *config.Config) {
+	if cfg == nil || !cfg.Supervisor.Enabled {
+		return
+	}
+	path := cfg.Supervisor.ReceiptKeyPath()
+	info, err := os.Lstat(path)
+	if err != nil {
+		return
+	}
+	r.Key = managedKeyReport{Scope: managedKeyScopeSupervisor, Path: path}
+	uid, _, ok := ownerOf(info)
+	if !ok {
+		return
+	}
+	r.Key.Owner = accountName(uid)
+	r.Key.Protected = info.Mode().IsRegular() && info.Mode().Perm()&0o077 == 0 && account.IsSystemID(strconv.FormatUint(uint64(uid), 10))
+	if !r.Key.Protected {
+		r.Issues = append(r.Issues, "machine key "+path+" is readable by others or owned by a human account")
+	}
+}
+
 // readSupervisor fills the profile of the decision service from the
 // managed configuration.
 func (r *managedDoctorReport) readSupervisor(cfg *config.Config) {
@@ -373,7 +409,7 @@ func renderManagedDoctor(w io.Writer, report *managedDoctorReport, asJSON bool) 
 	lines = append(lines,
 		fmt.Sprintf("  %-11s %s  chain %s  keys %d", "Keys", report.TrustStore.Path, report.TrustStore.Chain, report.TrustStore.Keys),
 		fmt.Sprintf("  %-11s %s  chain %s", "Binary", report.Binary.Path, report.Binary.Chain),
-		"  "+managedKeySummary,
+		"  "+keySummary(report.Key),
 		fmt.Sprintf("  %-11s %s%s", "Supervisor", report.Supervisor.State, supervisorProfileSuffix(report.Supervisor)),
 		fmt.Sprintf("  %-11s %s", "Collection", report.Collection.Level),
 	)
@@ -410,4 +446,15 @@ func supervisorProfileSuffix(r managedSupervisorReport) string {
 		out += fmt.Sprintf("  pilot ends in %s (%s)", humanizeDuration(time.Duration(r.PilotRemaining)*time.Second), r.PilotUntil)
 	}
 	return out
+}
+
+func keySummary(k managedKeyReport) string {
+	switch {
+	case k.Scope != managedKeyScopeSupervisor:
+		return managedKeySummary
+	case k.Protected:
+		return managedKeySupervisorSummary + " " + k.Path + " owner " + k.Owner
+	default:
+		return managedKeySupervisorExposed + " " + k.Path + " owner " + k.Owner
+	}
 }

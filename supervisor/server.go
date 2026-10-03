@@ -16,6 +16,7 @@ import (
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/decision/ipc"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/platform/nofollow"
 	"github.com/safedep/gryph/platform/peercred"
 	"github.com/safedep/gryph/spool"
@@ -70,6 +71,11 @@ func New(cfg *config.Config, opts Options) *Server {
 	if root == "" {
 		root = cfg.Supervisor.StatePath()
 	}
+	// Every partition reads the machine keys below the state directory in
+	// force, so the configuration the partitions get names it.
+	own := *cfg
+	own.Supervisor.StateDir = root
+	cfg = &own
 	limits := opts.Limits
 	if limits.MaxConns <= 0 {
 		limits = DefaultLimits()
@@ -101,6 +107,14 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	root, err := nofollow.OpenDir(s.root, ".")
 	if err != nil {
 		return fmt.Errorf("state directory: %w", err)
+	}
+	keys, err := engine.EnsureMachineKeys(s.cfg)
+	if err != nil {
+		_ = root.Close()
+		return fmt.Errorf("machine keys: %w", err)
+	}
+	if keys.Created {
+		log.Warnf("supervisor: made the machine key %s at %s. Run `gryph install --managed` or `gryph supervisor keys rotate` as root to put its public half in the managed trust store", keys.KeyID, keys.ReceiptKey)
 	}
 	s.mu.Lock()
 	s.rootDir = root
@@ -207,6 +221,24 @@ func (s *Server) partition(ctx context.Context, uid uint32) (*partition, error) 
 	}
 	s.partitions[uid] = p
 	return p, nil
+}
+
+// Reload retires every open partition, so the next contact of an account
+// opens a fresh one that reads the keys and the policy again. A partition
+// with open connections closes when the last one ends. Rotation of the
+// machine key calls it through a signal.
+func (s *Server) Reload() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for uid, p := range s.partitions {
+		if p.retire() {
+			if err := p.close(); err != nil {
+				log.Warnf("supervisor: close the partition of uid %d: %v", uid, err)
+			}
+		}
+		delete(s.partitions, uid)
+	}
+	log.Infof("supervisor: reloaded, partitions reopen on the next contact")
 }
 
 func (s *Server) closePartitions() error {
