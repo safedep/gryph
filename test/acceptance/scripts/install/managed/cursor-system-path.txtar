@@ -1,0 +1,41 @@
+# gryph install --managed writes the Cursor entries into the enterprise
+# hooks.json with failClosed on every entry, keeps the administrator's own
+# entries, and refuses the lock switch: Cursor has none. Runs only in the
+# privileged job on a Linux host with no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+! exists /etc/cursor
+expandenv managed.yml lock.yml
+exec mkdir -p /etc/cursor
+exec cp hooks.json /etc/cursor/hooks.json
+
+execexit 3 gryph install --managed --config $WORK/lock.yml
+stderr 'cursor, which has no lock switch'
+! exists /etc/safedep/gryph
+
+exec gryph install --managed --config $WORK/managed.yml --json
+stdout '"status": "ok"'
+stdout '"name": "cursor"'
+stdout '"class": "system_path"'
+stdout '"path": "/etc/cursor/hooks.json"'
+grep '"version": 1' /etc/cursor/hooks.json
+grep '/enterprise/audit.sh' /etc/cursor/hooks.json
+grep '_hook cursor beforeShellExecution' /etc/cursor/hooks.json
+grep '"failClosed": true' /etc/cursor/hooks.json
+! grep '"failClosed": false' /etc/cursor/hooks.json
+
+exec rm -rf /etc/safedep/gryph /etc/cursor
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- hooks.json --
+{"version": 1, "hooks": {"beforeShellExecution": [{"command": "/enterprise/audit.sh"}]}}
+-- managed.yml --
+managed:
+  agents: [cursor]
+  binary: ${ACCEPTANCE_GRYPH_BIN}
+-- lock.yml --
+managed:
+  agents: [cursor]
+  lock_hooks: [cursor]
+  binary: ${ACCEPTANCE_GRYPH_BIN}

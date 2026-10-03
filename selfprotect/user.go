@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"sort"
+	"strings"
 )
 
 // UserProviderName is the name of the user-scope provider.
@@ -20,6 +21,60 @@ type HookConfigState struct {
 	// Drift says how the entries differ from a current install. It is empty
 	// when they match.
 	Drift string
+	// Managed is the state of the agent's managed entries, when a managed
+	// configuration names the agent. Nil otherwise.
+	Managed *ManagedEntry
+}
+
+// ManagedEntry is the state of the Gryph entries in an agent's managed hook
+// file, the one that root owns.
+type ManagedEntry struct {
+	// Path names the managed file.
+	Path string
+	// Locked is true when the vendor documents that the user cannot turn the
+	// managed hooks off. Then the user scope no longer decides the level.
+	Locked bool
+	// Drift says how the managed entries differ from the managed
+	// configuration. It is empty when they match. Only root repairs them.
+	Drift string
+}
+
+// effective turns the state into the level, the detail and the drift of
+// the hook_config row. A locked managed entry that matches earns
+// LevelPreventSameUser, whatever the user scope holds. A managed entry at
+// a system path only adds detail: the user scope still decides.
+func (s HookConfigState) effective() (Level, string, string) {
+	m := s.Managed
+	switch {
+	case m == nil:
+		return LevelDetect, s.Path, s.Drift
+	case m.Locked && m.Drift == "":
+		return LevelPreventSameUser, "managed entry at " + m.Path, ""
+	case m.Locked:
+		return LevelDetect, s.Path, joinDrift("managed entry: "+m.Drift, s.Drift)
+	default:
+		return LevelDetect, s.Path + ", managed entry at " + m.Path + " (system path, user scope still checked)", joinDrift(s.Drift, m.Drift)
+	}
+}
+
+// repairable reports whether a repair in the user scope changes the row. A
+// locked managed entry that matches leaves nothing for the user scope to
+// repair, and a managed entry that differs needs root.
+func (s HookConfigState) repairable() bool {
+	if s.Drift == "" {
+		return false
+	}
+	return s.Managed == nil || !s.Managed.Locked || s.Managed.Drift != ""
+}
+
+func joinDrift(parts ...string) string {
+	var out []string
+	for _, p := range parts {
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, " and ")
 }
 
 // HookConfigAssessor reads the Gryph hook entries of one agent. It compares
@@ -83,7 +138,8 @@ func (p *userProvider) Assess(ctx context.Context) []AssetStatus {
 		if !state.Present {
 			continue
 		}
-		out = append(out, p.status(AssetHookConfig, a.Name(), LevelDetect, state.Path, state.Drift))
+		level, detail, drift := state.effective()
+		out = append(out, p.status(AssetHookConfig, a.Name(), level, detail, drift))
 	}
 
 	if p.assets.Binary == "" {
@@ -123,23 +179,25 @@ func (p *userProvider) Repair(ctx context.Context, opts RepairOptions) ([]AssetS
 			continue
 		}
 		before := a.AssessHookConfig(ctx)
-		if !before.Present || before.Drift == "" {
+		if !before.Present || !before.repairable() {
 			continue
 		}
+		beforeLevel, beforeDetail, beforeDrift := before.effective()
 		if opts.DryRun {
-			out = append(out, p.status(AssetHookConfig, a.Name(), LevelDetect, before.Path, before.Drift))
+			out = append(out, p.status(AssetHookConfig, a.Name(), beforeLevel, beforeDetail, beforeDrift))
 			continue
 		}
 		if err := repairer.RepairHookConfig(ctx); err != nil {
 			errs = append(errs, &RepairError{Ref: ref, Err: err})
-			out = append(out, p.status(AssetHookConfig, a.Name(), LevelDetect, before.Path, before.Drift))
+			out = append(out, p.status(AssetHookConfig, a.Name(), beforeLevel, beforeDetail, beforeDrift))
 			continue
 		}
 		after := a.AssessHookConfig(ctx)
 		if after.Drift != "" {
 			errs = append(errs, &RepairError{Ref: ref, Err: errors.New("the entries still differ after the repair: " + after.Drift)})
 		}
-		out = append(out, p.status(AssetHookConfig, a.Name(), LevelDetect, after.Path, after.Drift))
+		level, detail, drift := after.effective()
+		out = append(out, p.status(AssetHookConfig, a.Name(), level, detail, drift))
 	}
 	return out, errors.Join(errs...)
 }

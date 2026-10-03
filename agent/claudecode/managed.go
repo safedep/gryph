@@ -40,6 +40,11 @@ func (a *Adapter) ManagedHookPath() string {
 	return filepath.Join(managedSettingsDir(), "managed-settings.d", managedDropIn)
 }
 
+// ManagedClass implements agent.ManagedInstaller. A user or project
+// disableAllHooks cannot turn off a managed hook, and allowManagedHooksOnly
+// locks out the other hooks (managed settings docs, 2026-10-03).
+func (a *Adapter) ManagedClass() agent.ManagedClass { return agent.ManagedClassLocked }
+
 // InstallManaged implements agent.ManagedInstaller.
 func (a *Adapter) InstallManaged(_ context.Context, opts agent.ManagedInstallOptions) (*agent.ManagedInstallResult, error) {
 	return installManagedAt(a.ManagedHookPath(), opts)
@@ -96,22 +101,5 @@ func installManagedAt(path string, opts agent.ManagedInstallOptions) (*agent.Man
 }
 
 func uninstallManagedAt(path string, opts agent.ManagedInstallOptions) (*agent.ManagedInstallResult, error) {
-	result := &agent.ManagedInstallResult{Path: path}
-	info, err := os.Lstat(path)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return result, nil
-	case err != nil:
-		return nil, err
-	case info.Mode()&fs.ModeSymlink != 0:
-		return nil, fmt.Errorf("%s is a symbolic link, not the Gryph drop-in", path)
-	}
-	result.Changed = true
-	if opts.DryRun {
-		return result, nil
-	}
-	if err := os.Remove(path); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return agent.RemoveManagedFile(path, opts)
 }

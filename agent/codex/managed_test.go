@@ -44,14 +44,14 @@ timeout = 10
 	assert.Equal(t, true, features["hooks"], "hooks are pinned on")
 	_, hasLock := doc[lockKey]
 	assert.False(t, hasLock)
-	pre := entryList(doc["hooks"].(map[string]any)["PreToolUse"])
+	pre := agent.EntryList(doc["hooks"].(map[string]any)["PreToolUse"])
 	require.Len(t, pre, 2, "the enterprise entry stays, the Gryph entry follows")
 	assert.Equal(t, "^Bash$", pre[0]["matcher"])
 	assert.Equal(t, "*", pre[1]["matcher"])
-	gryph := entryList(pre[1]["hooks"])[0]
+	gryph := agent.EntryList(pre[1]["hooks"])[0]
 	assert.Equal(t, "/usr/libexec/safedep/gryph/gryph _hook codex PreToolUse", gryph["command"])
 	assert.Equal(t, int64(30), gryph["timeout"])
-	assert.Len(t, entryList(doc["hooks"].(map[string]any)["Stop"]), 1)
+	assert.Len(t, agent.EntryList(doc["hooks"].(map[string]any)["Stop"]), 1)
 
 	res, err = installManagedAt(path, opts)
 	require.NoError(t, err)

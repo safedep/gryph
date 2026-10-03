@@ -13,8 +13,8 @@ exec cp requirements.toml /etc/codex/requirements.toml
 
 exec gryph install --managed --config $WORK/managed.yml
 stdout 'Managed install: ok'
-stdout 'codex\s+install\s+changed\s+/etc/codex/requirements.toml'
-! stdout 'locked'
+stdout 'codex\s+locked\s+install\s+changed\s+/etc/codex/requirements.toml'
+! stdout '\(locked\)'
 grep 'model = ''gpt-5''' /etc/codex/requirements.toml
 grep 'web_search = false' /etc/codex/requirements.toml
 grep 'hooks = true' /etc/codex/requirements.toml

@@ -32,6 +32,9 @@ type managedInstallReport struct {
 type managedAgentReport struct {
 	Name string `json:"name"`
 	Path string `json:"path"`
+	// Class says how far the managed file resists the user: locked or
+	// system_path.
+	Class string `json:"class"`
 	// Action is install for an agent in the allowlist and remove for one
 	// that left it.
 	Action  string `json:"action"`
@@ -149,6 +152,11 @@ func readManagedInput(configPath, policyPath string) (*managedInstallInput, erro
 			return nil, fmt.Errorf("managed.agents names %s, which has no managed hook entry", name)
 		}
 	}
+	for _, name := range cfg.Managed.LockHooks {
+		if in.installers[name].ManagedClass() != agent.ManagedClassLocked {
+			return nil, fmt.Errorf("managed.lock_hooks names %s, which has no lock switch", name)
+		}
+	}
 
 	if policyPath != "" {
 		in.policyData, err = config.ReadTrustedFile(policyPath)
@@ -179,7 +187,7 @@ func readManagedInput(configPath, policyPath string) (*managedInstallInput, erro
 // applyManagedAgent installs or removes the managed entry of one agent. A
 // failure degrades that agent only.
 func applyManagedAgent(ctx context.Context, name string, installer agent.ManagedInstaller, in *managedInstallInput, dryRun bool) managedAgentReport {
-	row := managedAgentReport{Name: name, Path: installer.ManagedHookPath(), Action: "remove"}
+	row := managedAgentReport{Name: name, Path: installer.ManagedHookPath(), Class: string(installer.ManagedClass()), Action: "remove"}
 	opts := agent.ManagedInstallOptions{Command: in.binary, DryRun: dryRun}
 	var (
 		res *agent.ManagedInstallResult
@@ -220,7 +228,7 @@ func renderManagedReport(w io.Writer, report *managedInstallReport, asJSON bool)
 		if a.Changed {
 			state = "changed"
 		}
-		line := fmt.Sprintf("  %-12s %-8s %-9s %s", a.Name, a.Action, state, a.Path)
+		line := fmt.Sprintf("  %-12s %-11s %-8s %-9s %s", a.Name, a.Class, a.Action, state, a.Path)
 		if a.Locked {
 			line += "  (locked)"
 		}

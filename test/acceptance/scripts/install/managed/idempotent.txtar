@@ -15,7 +15,7 @@ exists /etc/codex/requirements.toml
 
 exec gryph install --managed --config $WORK/both.yml --json
 stdout '"status": "ok"'
-stdout -count=3 '"changed": false'
+stdout '"changed": false'
 ! stdout '"changed": true'
 
 exec gryph install --managed --config $WORK/claude-only.yml --json

@@ -196,6 +196,8 @@ type ManagedInstaller interface {
 	// ManagedHookPath returns the file that holds the Gryph entries on this
 	// platform.
 	ManagedHookPath() string
+	// ManagedClass says how far the managed file resists the user.
+	ManagedClass() ManagedClass
 	// InstallManaged writes the Gryph entries, and the agent's own lock
 	// when opts.Lock is set. It changes nothing when the file already holds
 	// them, so a repeated run is safe.
@@ -203,6 +205,21 @@ type ManagedInstaller interface {
 	// UninstallManaged removes the Gryph entries and the lock.
 	UninstallManaged(ctx context.Context, opts ManagedInstallOptions) (*ManagedInstallResult, error)
 }
+
+// ManagedClass says how far an agent's managed hook file resists the user
+// of the host. The vendor documentation decides the class, and each class
+// must be checked again for every agent release.
+type ManagedClass string
+
+const (
+	// ManagedClassLocked: the vendor documents that a user cannot turn the
+	// managed hooks off, and offers a lock that lets only managed hooks run.
+	ManagedClassLocked ManagedClass = "locked"
+	// ManagedClassSystemPath: the agent reads a system file that root owns,
+	// but the vendor does not document that the user cannot override or
+	// disable its hooks. The reconcile pass keeps checking the user scope.
+	ManagedClassSystemPath ManagedClass = "system_path"
+)
 
 // ManagedInstallOptions configures a managed install.
 type ManagedInstallOptions struct {

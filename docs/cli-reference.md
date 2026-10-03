@@ -466,14 +466,29 @@ on macOS and `%ProgramFiles%\SafeDep\gryph\gryph.exe` on Windows. `--config`
 and `--policy` must pass the same check, so root never acts on a file another
 user wrote.
 
-| Agent | Managed file | Lock switch |
-|---|---|---|
-| Claude Code | `managed-settings.d/50-gryph.json` next to `managed-settings.json`: `/etc/claude-code/` on Linux, `/Library/Application Support/ClaudeCode/` on macOS, `C:\Program Files\ClaudeCode\` on Windows. Gryph owns this one file and never edits `managed-settings.json`. | `allowManagedHooksOnly: true` in the drop-in |
-| Codex | `/etc/codex/requirements.toml` on Linux and macOS, `%ProgramData%\OpenAI\Codex\requirements.toml` on Windows. Gryph rewrites the file: it keeps every key, pins `[features] hooks = true`, and replaces its own `[hooks]` entries. Comments do not survive the rewrite. | `allow_managed_hooks_only = true` |
+| Agent | Class | Managed file | Lock switch |
+|---|---|---|---|
+| Claude Code | `locked` | `managed-settings.d/50-gryph.json` next to `managed-settings.json`: `/etc/claude-code/` on Linux, `/Library/Application Support/ClaudeCode/` on macOS, `C:\Program Files\ClaudeCode\` on Windows. Gryph owns this one file and never edits `managed-settings.json`. | `allowManagedHooksOnly: true` in the drop-in |
+| Codex | `locked` | `/etc/codex/requirements.toml` on Linux and macOS, `%ProgramData%\OpenAI\Codex\requirements.toml` on Windows. Gryph rewrites the file: it keeps every key, pins `[features] hooks = true`, and replaces its own `[hooks]` entries. Comments do not survive the rewrite. | `allow_managed_hooks_only = true` |
+| Cursor | `system_path` | `/etc/cursor/hooks.json` on Linux, `/Library/Application Support/Cursor/hooks.json` on macOS, `%ProgramData%\Cursor\hooks.json` on Windows. Gryph keeps the other entries and sets `failClosed: true` on its own, so a hook crash or timeout blocks the action. | none |
+| Gemini CLI | `system_path` | `/etc/gemini-cli/settings.json` on Linux, `/Library/Application Support/GeminiCli/settings.json` on macOS, `%ProgramData%\gemini-cli\settings.json` on Windows. Gryph keeps the other settings and pins `hooksConfig.enabled: true`. | none |
+| Windsurf | `system_path` | `/etc/devin/hooks.json` on Linux, `/Library/Application Support/Devin/hooks.json` on macOS, `%ProgramData%\Devin\hooks.json` on Windows. Gryph keeps the other entries. | none |
 
-The lock stops the developer's own hooks too, so it is off by default. The
-managed hooks hold without it: a user `disableAllHooks` cannot turn off a
-managed Claude Code hook, and Codex marks managed hooks as trusted.
+The class says how far the managed file resists the user, from the vendor
+documentation. `locked`: the vendor documents that a user cannot turn the
+managed hooks off. `system_path`: the agent reads the system file first, but
+the vendor does not document that the user cannot override or disable its
+hooks, so the reconcile pass keeps checking the user scope. `gryph doctor`
+shows the difference on the `hook_config` row: a `locked` entry that matches
+the managed configuration puts the row at `prevent_same_user`, whatever the
+user scope holds, and a `system_path` entry only adds a note while the row
+stays at `detect`. Devin, OpenCode, Pi Agent and Command Code have no
+documented managed location, so `managed.agents` cannot name them.
+
+The lock stops the developer's own hooks too, so it is off by default, and
+only a `locked` agent accepts it. The managed hooks hold without it: a user
+`disableAllHooks` cannot turn off a managed Claude Code hook, and Codex marks
+managed hooks as trusted.
 
 Under `--managed`, Gryph reads no `HOME`, `XDG_*` or `GRYPH_*` variable and
 runs no program. Every path comes from the input file and the platform.
@@ -489,8 +504,9 @@ their error.
   "binary": "/usr/libexec/safedep/gryph/gryph",
   "changed": true,
   "agents": [
-    {"name": "claude-code", "path": "/etc/claude-code/managed-settings.d/50-gryph.json", "action": "install", "changed": true, "locked": true},
-    {"name": "codex", "path": "/etc/codex/requirements.toml", "action": "install", "changed": true, "locked": false}
+    {"name": "claude-code", "path": "/etc/claude-code/managed-settings.d/50-gryph.json", "class": "locked", "action": "install", "changed": true, "locked": true},
+    {"name": "codex", "path": "/etc/codex/requirements.toml", "class": "locked", "action": "install", "changed": true, "locked": false},
+    {"name": "cursor", "path": "/etc/cursor/hooks.json", "class": "system_path", "action": "install", "changed": true, "locked": false}
   ]
 }
 ```

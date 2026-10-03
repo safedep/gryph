@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/safedep/gryph/agent"
@@ -32,7 +33,11 @@ func (a *Runtime) ProtectionProvider() selfprotect.Provider {
 		assets.ConfigDrift = "managed file ignored: " + managed.Err.Error()
 	}
 	for _, adapter := range a.Registry.All() {
-		assets.HookConfigs = append(assets.HookConfigs, hookConfigAssessor{adapter: adapter})
+		assessor := hookConfigAssessor{adapter: adapter}
+		if assets.ConfigManaged {
+			assessor.managed = a.Config
+		}
+		assets.HookConfigs = append(assets.HookConfigs, assessor)
 	}
 	return selfprotect.NewUserProvider(assets)
 }
@@ -62,6 +67,10 @@ var gryphBinaryPath = func() string {
 // hookConfigAssessor reads one agent's hook entries through its adapter.
 type hookConfigAssessor struct {
 	adapter agent.Adapter
+	// managed is the configuration in force when the system managed file
+	// won. Nil otherwise. Its managed section says which agents hold a
+	// managed entry and which binary the entry names.
+	managed *config.Config
 }
 
 func (h hookConfigAssessor) Name() string { return h.adapter.Name() }
@@ -110,5 +119,30 @@ func (h hookConfigAssessor) AssessHookConfig(ctx context.Context) selfprotect.Ho
 			state.Drift = "prompt hook not installed: " + strings.Join(missing, ", ")
 		}
 	}
+	state.Managed = h.assessManaged(ctx)
 	return state
+}
+
+// assessManaged compares the agent's managed entries with the managed
+// configuration, through a dry run of the managed install: a run that
+// would change nothing means the entries match. It returns nil when no
+// managed configuration names the agent.
+func (h hookConfigAssessor) assessManaged(ctx context.Context) *selfprotect.ManagedEntry {
+	installer, ok := h.adapter.(agent.ManagedInstaller)
+	if !ok || h.managed == nil || !slices.Contains(h.managed.Managed.Agents, h.adapter.Name()) {
+		return nil
+	}
+	entry := &selfprotect.ManagedEntry{Path: installer.ManagedHookPath(), Locked: installer.ManagedClass() == agent.ManagedClassLocked}
+	res, err := installer.InstallManaged(ctx, agent.ManagedInstallOptions{
+		Command: config.ManagedBinaryPath(h.managed),
+		Lock:    h.managed.Managed.Locked(h.adapter.Name()),
+		DryRun:  true,
+	})
+	switch {
+	case err != nil:
+		entry.Drift = "cannot read the managed entry: " + err.Error()
+	case res.Changed:
+		entry.Drift = "the managed entry differs from the managed configuration"
+	}
+	return entry
 }

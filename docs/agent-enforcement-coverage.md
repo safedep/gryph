@@ -62,6 +62,23 @@ checked again for each agent release before Gryph relies on it.
 | Pi Agent | The Gryph extension waits 30 s, and 10 s on `input`. | The extension lets the action through on a timeout, a spawn error, or exit code 1. | 2026-10-03, extension source |
 | Windsurf | The reference names no timeout. | Any exit code other than 2 lets the action proceed. | 2026-10-03, Cascade hooks reference |
 
+## Managed settings
+
+`gryph install --managed` writes a hook entry into the file that an agent
+reads for every user of the host. The class says how far that file resists
+the user, from the vendor documentation. A row must be checked again for
+each agent release before Gryph relies on it. See
+[Managed install](./cli-reference.md#managed-install) for the paths.
+
+| Agent | Class | Why | Checked |
+|---|---|---|---|
+| Claude Code | `locked` | A user or project `disableAllHooks` does not turn off a managed hook. `allowManagedHooksOnly` lets only managed hooks run. | 2026-10-03, managed settings docs |
+| Codex | `locked` | Managed hooks are trusted and a user cannot disable them. `[features] hooks = true` is pinned. `allow_managed_hooks_only` lets only managed hooks run. | 2026-10-03, Codex docs |
+| Cursor | `system_path` | Enterprise entries have priority and any deny wins. The reference does not say that a user cannot turn them off. Gryph sets `failClosed` on its entries. | 2026-10-03, hooks reference |
+| Gemini CLI | `system_path` | The system file wins on a conflict and hook lists concatenate across scopes. Gryph pins `hooksConfig.enabled` there. The source does not say what `hooksConfig.disabled` in the user scope does to a system hook. | 2026-10-03, settings source |
+| Windsurf | `system_path` | The reference says a user cannot disable the system file without root, and that system, user and workspace entries all run. It documents no lock against a user entry that answers first. | 2026-10-03, Cascade hooks reference |
+| Devin, OpenCode, Pi Agent, Command Code | none | No documented managed location. | 2026-10-03 |
+
 The OpenClaw adapter is not registered (`engine/engine.go`), because it is
 non-functional. Installation cannot select it, and `runHook` returns
 `unknown agent` for it. Gryph enforces no OpenClaw hook until the adapter is

@@ -35,6 +35,10 @@ func requirementsPath() string {
 // ManagedHookPath implements agent.ManagedInstaller.
 func (a *Adapter) ManagedHookPath() string { return requirementsPath() }
 
+// ManagedClass implements agent.ManagedInstaller. Codex marks managed hooks
+// as trusted, and the user cannot disable them (Codex docs, 2026-10-03).
+func (a *Adapter) ManagedClass() agent.ManagedClass { return agent.ManagedClassLocked }
+
 // InstallManaged implements agent.ManagedInstaller.
 func (a *Adapter) InstallManaged(_ context.Context, opts agent.ManagedInstallOptions) (*agent.ManagedInstallResult, error) {
 	return installManagedAt(a.ManagedHookPath(), opts)
@@ -57,18 +61,15 @@ func installManagedAt(path string, opts agent.ManagedInstallOptions) (*agent.Man
 	if err != nil {
 		return nil, err
 	}
-	features := table(doc, "features")
-	features["hooks"] = true
+	agent.SubTable(doc, "features")["hooks"] = true
 	if opts.Lock {
 		doc[lockKey] = true
 	} else {
 		delete(doc, lockKey)
 	}
-	hooks := table(doc, "hooks")
-	for _, hookType := range HookTypes {
-		entries := withoutGryph(entryList(hooks[hookType]))
-		hooks[hookType] = append(entries, gryphEntry(opts.Command, hookType))
-	}
+	agent.ReplaceGryphEntries(agent.SubTable(doc, "hooks"), HookTypes, agent.IsGryphMatcherEntry, func(hookType string) map[string]any {
+		return gryphEntry(opts.Command, hookType)
+	}, false)
 	return writeRequirements(path, doc, existing, opts)
 }
 
@@ -84,14 +85,7 @@ func uninstallManagedAt(path string, opts agent.ManagedInstallOptions) (*agent.M
 	}
 	delete(doc, lockKey)
 	if hooks, ok := doc["hooks"].(map[string]any); ok {
-		for _, hookType := range HookTypes {
-			entries := withoutGryph(entryList(hooks[hookType]))
-			if len(entries) == 0 {
-				delete(hooks, hookType)
-			} else {
-				hooks[hookType] = entries
-			}
-		}
+		agent.ReplaceGryphEntries(hooks, HookTypes, agent.IsGryphMatcherEntry, nil, true)
 		if len(hooks) == 0 {
 			delete(doc, "hooks")
 		}
@@ -101,7 +95,8 @@ func uninstallManagedAt(path string, opts agent.ManagedInstallOptions) (*agent.M
 
 // readRequirements parses the file. A missing file is an empty document.
 // A file that does not parse is refused, because a rewrite would drop the
-// administrator's settings.
+// administrator's settings. The decode always goes into a fresh map: go-toml
+// panics on a map that already holds a slice.
 func readRequirements(path string) (map[string]any, []byte, error) {
 	existing, err := nofollow.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -137,58 +132,6 @@ func writeRequirements(path string, doc map[string]any, existing []byte, opts ag
 		return nil, err
 	}
 	return result, nil
-}
-
-// table returns the sub-table name of doc, and creates it when missing.
-func table(doc map[string]any, name string) map[string]any {
-	if t, ok := doc[name].(map[string]any); ok {
-		return t
-	}
-	t := map[string]any{}
-	doc[name] = t
-	return t
-}
-
-// entryList returns the matcher entries of one event as a list of tables.
-func entryList(v any) []map[string]any {
-	var out []map[string]any
-	switch list := v.(type) {
-	case []any:
-		for _, item := range list {
-			if m, ok := item.(map[string]any); ok {
-				out = append(out, m)
-			}
-		}
-	case []map[string]any:
-		out = list
-	}
-	return out
-}
-
-// withoutGryph drops the entries whose every command is a Gryph hook
-// command. An entry with a command of another program stays.
-func withoutGryph(entries []map[string]any) []map[string]any {
-	var out []map[string]any
-	for _, entry := range entries {
-		if !isGryphEntry(entry) {
-			out = append(out, entry)
-		}
-	}
-	return out
-}
-
-func isGryphEntry(entry map[string]any) bool {
-	commands := entryList(entry["hooks"])
-	if len(commands) == 0 {
-		return false
-	}
-	for _, cmd := range commands {
-		command, _ := cmd["command"].(string)
-		if !utils.IsGryphCommand(command) {
-			return false
-		}
-	}
-	return true
 }
 
 func gryphEntry(program, hookType string) map[string]any {
