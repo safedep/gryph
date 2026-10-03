@@ -130,7 +130,13 @@ user file may not use the reserved `gryph-builtin-` prefix, and `disabled:` acts
 only on rules in the file that declares it. The operator turns the built-in rules
 off only with `policy.self_protection.enabled` in the config file, an
 all-or-nothing switch. The rules are part of the policy, so `policy.enabled:
-false` turns them off too.
+false` turns them off too. Under a system managed configuration, the switch has
+no effect and the rules stay on.
+
+An administrator adds a fourth source: the managed policy in the system
+directory, behind the same path chain check as the managed configuration. It
+can drop the user's sources with `allow_user_policy: false`, so the user cannot
+weaken it and cannot widen it either.
 
 ## Candidate review
 

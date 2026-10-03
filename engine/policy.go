@@ -432,19 +432,42 @@ func BuildPolicyLoader(cfg *config.Config, paths *config.Paths) *loader.Loader {
 	return loader.New(policyLoaderSources(cfg, paths)...)
 }
 
-// policyLoaderSources returns the ordered policy sources: the global file, the
-// policies directory, and (when self-protection is on) the built-in source.
-// It is the single definition of the resolution order shared by the loader and
-// the inspection commands.
+// policyLoaderSources returns the ordered policy sources: the managed file
+// and directory, the user's global file and policies directory, and the
+// built-in source. It is the single definition of the resolution order
+// shared by the loader and the inspection commands.
 func policyLoaderSources(cfg *config.Config, paths *config.Paths) []loader.Source {
+	return policySources(cfg, paths, config.ManagedPolicyState())
+}
+
+// policySources assembles the sources for one host state. The managed
+// sources load whenever the platform has a managed location, each file
+// behind the trust check. The user sources load unless a managed config in
+// force sets allow_user_policy to false.
+func policySources(cfg *config.Config, paths *config.Paths, managed config.ManagedPolicy) []loader.Source {
 	if paths == nil {
 		paths = config.ResolvePaths()
 	}
-	sources := []loader.Source{
-		loader.NewOptionalFileSource(config.DefaultPolicyFilePath(paths)),
-		loader.NewOptionalDirSource(config.DefaultPolicyDirPath(paths)),
+	var sources []loader.Source
+	if managed.Dir != "" {
+		sources = append(sources,
+			loader.NewManagedFileSource(managed.File, managed.Trust),
+			loader.NewManagedDirSource(managed.Dir, managed.Trust),
+		)
+	}
+	if UserPolicyAllowed(cfg, managed) {
+		sources = append(sources,
+			loader.NewOptionalFileSource(config.DefaultPolicyFilePath(paths)),
+			loader.NewOptionalDirSource(config.DefaultPolicyDirPath(paths)),
+		)
 	}
 	return AppendBuiltinSource(sources, cfg, paths)
+}
+
+// UserPolicyAllowed reports whether the user's own policy sources load. A
+// managed config in force drops them with allow_user_policy: false.
+func UserPolicyAllowed(cfg *config.Config, managed config.ManagedPolicy) bool {
+	return !managed.Active || cfg == nil || cfg.Policy.AllowUserPolicy
 }
 
 // AppendBuiltinSource adds the self-protection source when it is enabled.
@@ -455,9 +478,16 @@ func AppendBuiltinSource(sources []loader.Source, cfg *config.Config, paths *con
 	return sources
 }
 
+// SelfProtectionEnabled reports whether the built-in rules load. A managed
+// configuration in force keeps them on whatever the file says, because the
+// administrator's policy must not be removable from the same file a user
+// cannot change anyway.
 func SelfProtectionEnabled(cfg *config.Config) bool {
 	if cfg == nil {
 		return false
+	}
+	if config.ManagedConfigActive() {
+		return true
 	}
 	return cfg.EffectivePolicy().SelfProtection.Enabled
 }
@@ -534,6 +564,9 @@ func SelfProtectionGlobs(cfg *config.Config, paths *config.Paths) []string {
 	var globs []string
 	if paths != nil && paths.ConfigDir != "" {
 		globs = append(globs, filepath.ToSlash(paths.ConfigDir)+"/**")
+	}
+	if managed := config.ManagedConfigDir(); managed != "" {
+		globs = append(globs, filepath.ToSlash(managed)+"/**")
 	}
 	if binary := gryphBinaryPath(); binary != "" {
 		globs = append(globs, filepath.ToSlash(binary))

@@ -69,6 +69,9 @@ func normalizeGlobs(globs []string) []string {
 
 func (s *BuiltinSource) Name() string { return "builtin" }
 
+// Scope implements Scoped.
+func (s *BuiltinSource) Scope() string { return ScopeBuiltin }
+
 // Load returns the built-in self-protection policy. The rules are constructed
 // in Go (rather than embedded YAML) because their file patterns are resolved
 // at runtime from the operator's config and the installed agents.

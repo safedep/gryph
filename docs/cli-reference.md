@@ -462,6 +462,15 @@ Gryph trusts the file only when the whole path is protected:
 A file that fails the check is ignored, and Gryph logs one warning. `gryph
 doctor` reports the reason.
 
+The same directory holds the managed policy: `policy.yaml` and `policies/`.
+They load as policy sources on every host that has the directory, each file
+behind the same check. A managed policy file that fails the check does not
+load, and the policy load fails. With `allow_user_policy: false` in the
+managed configuration file, the user's own policy sources do not load. While
+the managed configuration is in force, `policy.self_protection.enabled` has
+no effect: the built-in rules stay on. See
+[where policy files live](./security-policy.md#where-policy-files-live).
+
 ### retention
 
 Manage data retention policy.

@@ -4,6 +4,7 @@ package acceptance
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -99,6 +100,15 @@ func TestAcceptance(t *testing.T) {
 						"http_proxy", "https_proxy", "no_proxy",
 						"SSL_CERT_FILE", "SSL_CERT_DIR")
 					return nil
+				},
+				// privileged is true in the privileged job: root, and
+				// ACCEPTANCE_PRIVILEGED set. A script under it writes to system
+				// paths, so the job runs with -parallel 1.
+				Condition: func(cond string) (bool, error) {
+					if cond == "privileged" {
+						return os.Getenv("ACCEPTANCE_PRIVILEGED") != "" && os.Geteuid() == 0, nil
+					}
+					return false, fmt.Errorf("unknown condition %q", cond)
 				},
 				Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
 					"execexit":  cmdExecExit,

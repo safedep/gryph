@@ -41,6 +41,20 @@
   guarantee: "gryph _hook parses a real agent payload from stdin, exits zero, persists the event, and maps repeated payloads of one agent session to one gryph session."
   labels: [hook, ingest, claude-code]
 
+- id: policy/managed/sources-load
+  title: "managed policy files load as sources with the chain check"
+  category: policy
+  tier: P0
+  guarantee: "policy.yaml and policies/ in the system managed directory load as policy sources, gryph policy list shows them with the managed scope, the user's own policy still loads, and a managed file that fails the chain check fails the policy load. Privileged job only."
+  labels: [policy, managed, privileged, linux]
+
+- id: policy/managed/user-policy-dropped
+  title: "allow_user_policy false in the managed configuration drops the user sources"
+  category: policy
+  tier: P1
+  guarantee: "With allow_user_policy: false in the managed configuration, the user's policy sources do not load, gryph policy list says so, and policy.self_protection.enabled in the file cannot turn the built-in rules off. Privileged job only."
+  labels: [policy, managed, privileged, linux]
+
 - id: policy/block/dangerous-command
   title: "a policy block rule stops the action with the agent's protocol"
   category: policy

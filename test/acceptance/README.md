@@ -95,6 +95,18 @@ The harness adds three commands to the testscript builtins:
   Use it for values not known when the script is authored, such as a deferral
   id or a signature.
 
+## Privileged scripts
+
+A script that starts with `[!privileged] skip` writes to a system path, for
+example the managed directory `/etc/safedep/gryph`. It runs only in the
+privileged job: as root, with `ACCEPTANCE_PRIVILEGED=1`, with `-parallel 1`
+because every such script uses the same system path, and on a host that has
+no managed Gryph state. Each script removes what it wrote.
+
+```bash
+sudo ACCEPTANCE_PRIVILEGED=1 go test -tags acceptance -parallel 1 -run 'TestAcceptance/policy/managed' ./test/acceptance/
+```
+
 ## Run it
 
 ```bash

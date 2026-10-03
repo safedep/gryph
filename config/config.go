@@ -125,6 +125,12 @@ func (c *Config) ExportProfile(name string) (privacy.ExportProfile, error) {
 type PolicyConfig struct {
 	Enabled  bool   `mapstructure:"enabled"`
 	FailMode string `mapstructure:"fail_mode"`
+	// AllowUserPolicy, in a system managed configuration, keeps the user's
+	// own policy sources in the merge. It is true by default, because a new
+	// file can only add rules. An administrator sets it to false to make
+	// the managed policy the whole policy. It has no effect outside a
+	// managed configuration.
+	AllowUserPolicy bool `mapstructure:"allow_user_policy"`
 
 	ContextRetentionDays int  `mapstructure:"context_retention_days"`
 	ReceiptRetentionDays int  `mapstructure:"receipt_retention_days"`

@@ -414,6 +414,15 @@ const (
 	sourceStatusIsDirectory = "is a directory"
 )
 
+// scopedKind prefixes the kind of a managed source, so the listing shows
+// who owns it.
+func scopedKind(src loader.Source, kind string) string {
+	if loader.ScopeOf(src) == loader.ScopeManaged {
+		return "managed-" + kind
+	}
+	return kind
+}
+
 func sourceRows(sources []loader.Source) []sourceRow {
 	rows := make([]sourceRow, 0, len(sources))
 	for _, src := range sources {
@@ -426,10 +435,10 @@ func sourceToRow(src loader.Source) sourceRow {
 	switch s := src.(type) {
 	case *loader.FileSource:
 		status, problem := fileSourceStatus(s.Path, s.Optional)
-		return sourceRow{Kind: "file", Path: s.Path, Optional: s.Optional, Status: status, Problem: problem}
+		return sourceRow{Kind: scopedKind(s, "file"), Path: s.Path, Optional: s.Optional, Status: status, Problem: problem}
 	case *loader.DirSource:
 		status, problem := dirSourceStatus(s.Path, s.Optional)
-		return sourceRow{Kind: "dir", Path: s.Path, Optional: s.Optional, Status: status, Problem: problem}
+		return sourceRow{Kind: scopedKind(s, "dir"), Path: s.Path, Optional: s.Optional, Status: status, Problem: problem}
 	case *loader.BuiltinSource:
 		return sourceRow{
 			Kind:     "builtin",
@@ -440,7 +449,7 @@ func sourceToRow(src loader.Source) sourceRow {
 				"Built-in rules protecting Gryph policy files, config, database, keys, and agent hook configs",
 				"Reads of the database and the receipt signing key are also blocked",
 				"Always loaded last; not affected by user disabled: lists",
-				"Toggle with policy.self_protection.enabled in the config file",
+				"Toggle with policy.self_protection.enabled in the config file. Always on under a system managed configuration",
 			},
 		}
 	default:

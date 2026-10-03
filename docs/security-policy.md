@@ -28,15 +28,18 @@ Once enabled, every supported agent hook runs through the engine.
 
 ## Where policy files live
 
-Gryph loads policy from three sources, in this order:
+Gryph loads policy from four sources, in this order:
 
+0. **Managed policy** (`policy.yaml` and `policies/*.yaml` in the system managed directory, optional). An administrator owns these files. They load on every host that has a managed directory, with or without a managed configuration file, and each file must pass the same path chain check as the [managed configuration](./cli-reference.md#system-managed-configuration): root must own the file and every directory above it. A file that fails the check does not load, and the policy load fails, so the hook fails as `fail_mode` says. `gryph policy list` shows these sources as `managed` and `managed-policies`.
 1. **Global policy file** (`${ConfigDir}/policy.yaml`, optional). The single operator-owned file. On macOS this is `~/Library/Application Support/safedep/gryph/policy.yaml`; on Linux `~/.config/safedep/gryph/policy.yaml`. A missing file is not an error.
 2. **Policies directory** (`${ConfigDir}/policies/*.yaml` and `*.yml`, optional). Each file is a separate policy document. Files load in sorted name order and merge after the global file. A missing directory is not an error. This lets you author policy as many small, self-contained files instead of one large file.
 3. **Built-in self-protection rules** (always appended, never filtered). These protect the config directory, the database, the export key, and agent hook configs from agent self-modification. A second rule, `gryph-builtin-protected-reads`, blocks agent reads of the database (with its `-wal`, `-shm`, and `-journal` files), of the receipt signing key, and of the export key (`export.key` next to the database). The export key keys the digests in an export. See [Content Labels](./content-labels.md#export). A third rule, `gryph-builtin-hook-command`, blocks an agent shell command that runs `gryph _hook`. Such a command can record a forged event. An agent may read the policy files and the hook configs. Self-protection is best effort. See [Self-protection limits](#self-protection-limits).
 
 With `policy.enabled: true` and no user files on disk, the merged policy contains built-in self-protection rules only.
 
-Both the global file and the policies directory sit inside `${ConfigDir}`, so both are protected by the built-in self-protection rules. Gryph resolves no other location. A file at any other path is never loaded as policy.
+Both the global file and the policies directory sit inside `${ConfigDir}`, so both are protected by the built-in self-protection rules, and so is the managed directory. Gryph resolves no other location. A file at any other path is never loaded as policy.
+
+A managed configuration file can drop the user sources with `allow_user_policy: false`. The managed policy and the built-in rules are then the whole policy. The default is `true`, because a new file can only add rules. While a managed configuration is in force, `policy.self_protection.enabled` has no effect: the built-in rules stay on.
 
 ### Self-protection limits
 

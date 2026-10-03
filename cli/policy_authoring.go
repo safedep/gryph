@@ -22,8 +22,9 @@ func newPolicyListCmd() *cobra.Command {
 		Use:     "list",
 		Aliases: []string{"ls"},
 		Short:   "List the active policy sources and rule counts",
-		Long: "Lists every active policy source with its rule count: the global " +
-			"file, each file in the policies directory, and the built-ins. A file " +
+		Long: "Lists every active policy source with its rule count: the managed " +
+			"file and directory of the system, the global file, each file in the " +
+			"policies directory, and the built-ins. A file " +
 			"that fails to parse is shown with an error marker and does not hide " +
 			"the rest. The final line reports the merged rule total, or a conflict " +
 			"that stops the merge.",
@@ -53,7 +54,24 @@ type policyListRow struct {
 // gatherPolicyListRows loads each source on its own so one broken file does not
 // hide the rest. It shares source identity and file scanning with the loader.
 func gatherPolicyListRows(cfg *config.Config, paths *config.Paths) []policyListRow {
+	return policyListRows(cfg, paths, config.ManagedPolicyState())
+}
+
+func policyListRows(cfg *config.Config, paths *config.Paths, managed config.ManagedPolicy) []policyListRow {
 	var rows []policyListRow
+
+	if managed.Dir != "" {
+		rows = append(rows, managedPolicyRows(managed)...)
+	}
+
+	if !engine.UserPolicyAllowed(cfg, managed) {
+		rows = append(rows, policyListRow{source: "user", file: paths.ConfigDir,
+			err: "not loaded: allow_user_policy is false in the managed configuration"})
+		if engine.SelfProtectionEnabled(cfg) {
+			rows = append(rows, builtinListRow(cfg, paths))
+		}
+		return rows
+	}
 
 	globalPath := config.DefaultPolicyFilePath(paths)
 	if fileExists(globalPath) {
@@ -73,6 +91,38 @@ func gatherPolicyListRows(cfg *config.Config, paths *config.Paths) []policyListR
 		rows = append(rows, builtinListRow(cfg, paths))
 	}
 	return rows
+}
+
+// managedPolicyRows lists the managed file and the files of the managed
+// directory. A file that fails the trust check shows the reason and does
+// not load.
+func managedPolicyRows(managed config.ManagedPolicy) []policyListRow {
+	var rows []policyListRow
+	if fileExists(managed.File) {
+		rows = append(rows, trustedPolicyFileRow("managed", managed.File, managed.Trust))
+	}
+	files, err := loader.PolicyFilesInDir(managed.Dir)
+	if err != nil {
+		rows = append(rows, policyListRow{source: "managed-policies", file: managed.Dir, err: firstLine(err.Error())})
+	}
+	if len(files) > 0 && managed.Trust != nil {
+		if err := managed.Trust(managed.Dir); err != nil {
+			return append(rows, policyListRow{source: "managed-policies", file: managed.Dir, err: "not trusted: " + firstLine(err.Error())})
+		}
+	}
+	for _, f := range files {
+		rows = append(rows, trustedPolicyFileRow("managed-policies", f, managed.Trust))
+	}
+	return rows
+}
+
+func trustedPolicyFileRow(source, path string, trust func(string) error) policyListRow {
+	if trust != nil {
+		if err := trust(path); err != nil {
+			return policyListRow{source: source, file: filepath.Base(path), err: "not trusted: " + firstLine(err.Error())}
+		}
+	}
+	return policyFileRow(source, path)
 }
 
 func policyFileRow(source, path string) policyListRow {

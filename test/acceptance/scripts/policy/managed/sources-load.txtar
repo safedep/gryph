@@ -1,0 +1,81 @@
+# A policy file and a policies directory in the system managed directory load
+# as policy sources. The chain check runs on each file. gryph policy list
+# shows them with the managed scope. The user's own policy still loads,
+# because a new file can only add rules.
+#
+# The script writes to the real managed directory, so it runs only in the
+# privileged job, as root, on Linux, with -parallel 1, on a host that has no
+# managed Gryph state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed directory of this script is the Linux one'
+! exists /etc/safedep/gryph
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec mkdir -p /etc/safedep/gryph/policies
+exec cp managed-policy.yaml /etc/safedep/gryph/policy.yaml
+exec cp managed-dir.yaml /etc/safedep/gryph/policies/a.yaml
+exec chmod 755 /etc/safedep/gryph /etc/safedep/gryph/policies
+exec chmod 644 /etc/safedep/gryph/policy.yaml /etc/safedep/gryph/policies/a.yaml
+
+exec gryph policy list --no-color
+stdout 'managed\s+policy.yaml\s+1'
+stdout 'managed-policies\s+a.yaml\s+1'
+stdout 'global\s+policy.yaml\s+1'
+stdout 'rules merged'
+
+exec gryph policy validate --no-color
+stdout 'managed-file'
+stdout 'managed-dir'
+
+stdin rm_rf.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'blocked-by-managed'
+
+# A managed file that another user can write fails the chain check. The
+# policy load then fails, and the hook fails closed.
+exec chmod 666 /etc/safedep/gryph/policy.yaml
+exec gryph policy list --no-color
+stdout 'managed\s+policy.yaml\s+! not trusted'
+stdin read.json
+execexit 2 gryph _hook claude-code PreToolUse
+
+exec rm -rf /etc/safedep/gryph
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- managed-policy.yaml --
+version: "1"
+rules:
+  - id: managed-block-rm-rf
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "rm -rf"
+    message: "blocked-by-managed: rm -rf is not allowed"
+-- managed-dir.yaml --
+version: "1"
+rules:
+  - id: managed-dir-warn
+    action: warn
+    match:
+      action_types: [file_write]
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- home/.config/safedep/gryph/policy.yaml --
+version: "1"
+rules:
+  - id: user-allow-reads
+    action: allow
+    match:
+      action_types: [file_read]
+-- rm_rf.json --
+{"session_id": "managed-1", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "rm -rf /tmp/x"}, "tool_use_id": "tu-1"}
+-- read.json --
+{"session_id": "managed-1", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "/home/user/project/README.md"}, "tool_use_id": "tu-2"}

@@ -54,6 +54,7 @@ func setDefaults(v *viper.Viper) {
 
 func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".enabled", false)
+	v.SetDefault(prefix+".allow_user_policy", true)
 	v.SetDefault(prefix+".fail_mode", "closed")
 	v.SetDefault(prefix+".context_retention_days", 90)
 	v.SetDefault(prefix+".context.cel_entries", 100)

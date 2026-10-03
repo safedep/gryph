@@ -17,10 +17,10 @@ const configFileName = "config.yml"
 var globalConfigDirOverride string
 
 // systemConfigDir returns the root owned directory for system managed gryph
-// state, or "" when the platform has no such location. Today only
-// config.yml is read from it. The directory mirrors the per-user config
-// directory layout, so policy.yaml, policies/ and keys/receipt-pub.json are
-// reserved for a future managed policy and trust store.
+// state, or "" when the platform has no such location. It holds config.yml,
+// policy.yaml and policies/. The directory mirrors the per-user config
+// directory layout, so keys/receipt-pub.json is reserved for a future
+// managed trust store.
 func systemConfigDir() string {
 	if globalConfigDirOverride != "" {
 		return globalConfigDirOverride
@@ -80,6 +80,47 @@ func ManagedConfigStatus() ManagedConfigState {
 func managedConfigActive() bool {
 	state := ManagedConfigStatus()
 	return state.Exists && state.Err == nil
+}
+
+// ManagedConfigDir returns the system managed directory, or "" when the
+// platform has no such location. The built-in rules protect it.
+func ManagedConfigDir() string {
+	return systemConfigDir()
+}
+
+// ManagedConfigActive reports a trusted managed config file.
+func ManagedConfigActive() bool {
+	return managedConfigActive()
+}
+
+// ManagedPolicy describes the managed policy sources of this host.
+type ManagedPolicy struct {
+	// Active is true when a trusted managed config file is in force. Its
+	// allow_user_policy key then decides whether the user's sources load.
+	Active bool
+	// File and Dir are the managed policy file and the managed policies
+	// directory. Both are empty when the platform has no managed location.
+	File string
+	Dir  string
+	// Trust verifies the path chain of one managed file. A file that fails
+	// it does not load.
+	Trust func(path string) error
+}
+
+// ManagedPolicyState returns the managed policy sources of this host. The
+// files load whenever they exist and pass the trust check, with or without
+// a managed config file, so an administrator can ship policy alone.
+func ManagedPolicyState() ManagedPolicy {
+	dir := systemConfigDir()
+	if dir == "" {
+		return ManagedPolicy{}
+	}
+	return ManagedPolicy{
+		Active: managedConfigActive(),
+		File:   filepath.Join(dir, "policy.yaml"),
+		Dir:    filepath.Join(dir, "policies"),
+		Trust:  managedPathTrusted,
+	}
 }
 
 // ManagedConfigFile returns the system managed config file when it exists,

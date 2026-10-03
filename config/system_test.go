@@ -152,3 +152,29 @@ func TestLoad_GryphDirEnvDoesNotBindConfigValues(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, Default(), cfg)
 }
+
+func TestManagedPolicyState(t *testing.T) {
+	dir := t.TempDir()
+	withManagedConfigDir(t, dir)
+
+	state := ManagedPolicyState()
+	assert.False(t, state.Active, "no managed config file yet")
+	assert.Equal(t, filepath.Join(dir, "policy.yaml"), state.File)
+	assert.Equal(t, filepath.Join(dir, "policies"), state.Dir)
+	require.NotNil(t, state.Trust)
+	assert.NoError(t, state.Trust(filepath.Join(dir, "policy.yaml")), "the test trust check passes")
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, configFileName), []byte("policy:\n  enabled: true\n"), 0o644))
+	assert.True(t, ManagedPolicyState().Active)
+	assert.True(t, ManagedConfigActive())
+	assert.Equal(t, dir, ManagedConfigDir())
+}
+
+func TestLoad_AllowUserPolicyDefault(t *testing.T) {
+	clearPathEnv(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	withManagedConfigDir(t, t.TempDir())
+	cfg, err := Load("")
+	require.NoError(t, err)
+	assert.True(t, cfg.Policy.AllowUserPolicy)
+}
