@@ -119,21 +119,24 @@ func (s *BuiltinSource) protectedReadsRule() pdp.Rule {
 }
 
 // hookCommandMessage covers a call of gryph, or of a program that the shell
-// check cannot resolve, with the literal argument "_hook".
-const hookCommandMessage = "Blocked by Gryph self-protection: the command runs gryph _hook. Only an agent hook may run it."
+// check cannot resolve, with the literal argument "_hook", or with the
+// literal words of an approval resolve.
+const hookCommandMessage = "Blocked by Gryph self-protection: the command runs gryph _hook or resolves an approval. Only an agent hook runs gryph _hook, and only a person on a terminal resolves an approval."
 
-// hookCommandRule blocks an agent shell command that runs "gryph _hook". The
-// command can record a forged event, such as a user prompt that resets
-// context.actions_since_intent.
+// hookCommandRule blocks an agent shell command that runs "gryph _hook" or
+// "gryph policy approve resolve". The first can record a forged event, such
+// as a user prompt that resets context.actions_since_intent. The second can
+// answer the approval the agent itself waits on. The decision service
+// refuses both from under an agent. This rule is one more layer.
 func hookCommandRule() pdp.Rule {
 	return pdp.Rule{
 		ID:          builtinHookCommandRuleID,
-		Description: "Block agent shell commands that run the Gryph hook entry point, gryph _hook. The shell check is best effort.",
+		Description: "Block agent shell commands that run the Gryph hook entry point, gryph _hook, or that resolve an approval, gryph policy approve resolve. The shell check is best effort.",
 		Action:      model.DecisionBlock,
 		Severity:    model.SeverityCritical,
 		Tags:        []string{"self-protection", "builtin"},
 		Message:     hookCommandMessage,
 		Match:       pdp.Match{ActionTypes: []string{string(model.ActionCommandExec)}},
-		Condition:   "action.gryph_hook == true",
+		Condition:   "action.gryph_hook == true || action.gryph_resolve == true",
 	}
 }

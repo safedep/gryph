@@ -993,6 +993,7 @@ func actionActivation(action *model.Action, paths *actionPaths) map[string]any {
 		"service_identity":     action.ServiceIdentity,
 		"role_scope":           action.RoleScope,
 		"gryph_hook":           paths.runsGryphHook(),
+		"gryph_resolve":        paths.runsGryphResolve(),
 		"kind":                 string(action.Kind),
 		"origin":               string(action.Origin),
 		"source":               action.Source,

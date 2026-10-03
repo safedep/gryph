@@ -272,9 +272,11 @@ config, database, signing keys, agent hook configs). The rule
 `command_exec`. The rule `gryph-builtin-protected-reads` covers `file_read`
 and `command_exec` with `file_access: [read]`. The rule
 `gryph-builtin-hook-command` blocks a `command_exec` that runs
-`gryph _hook`, through `action.gryph_hook` (`shellcmd.Analysis.GryphHook`).
-The check is best effort. The walker calls `runsGryphHook` on each call that
-it visits, in the same single pass that finds the paths. So the linear
+`gryph _hook`, through `action.gryph_hook` (`shellcmd.Analysis.GryphHook`),
+or `gryph policy approve resolve` and `gryph policy deferrals resolve`,
+through `action.gryph_resolve` (`shellcmd.Analysis.GryphResolve`). The
+check is best effort. The walker calls `runsGryphHook` and
+`runsGryphResolve` on each call that it visits, in the same single pass that finds the paths. So the linear
 wrapper parsing and the call budget cover it, and the check reaches wrappers,
 `command`, `find -exec`, `bash -c`, and `eval` through the normal walk. The
 walker decodes ANSI-C quoting (`$'...'`) and expands braces first. A call

@@ -111,6 +111,13 @@
   guarantee: "With policy enabled, an agent shell command that runs gryph _hook with a literal _hook argument, directly, in a nested shell (also after a flag group such as -euo pipefail), or through ANSI-C quoting, is blocked at exit 2, so it cannot forge a user prompt. Another gryph command passes, also with a variable argument. A grep for a word that holds _hook passes."
   labels: [policy, self-protection, intent]
 
+- id: policy/self-protection/resolve-blocked
+  title: "builtin self-protection blocks agent shell commands that resolve an approval"
+  category: policy
+  tier: P1
+  guarantee: "With policy enabled, an agent shell command that runs gryph policy approve resolve or gryph policy deferrals resolve with literal words, directly, with flags between the words, or in a nested shell, is blocked at exit 2, so it cannot answer the approval the agent waits on. The approve list and show commands pass, and so does a resolve word that a variable supplies."
+  labels: [policy, self-protection, approval]
+
 - id: policy/file-access/read-rule-matches-shell-reads
   title: "file_access selects which shell targets a file rule matches"
   category: policy
