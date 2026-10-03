@@ -160,7 +160,7 @@ output names the command to finish by hand. The
 [install reference](./cli-reference.md#install) has the paths.
 
 On a managed host the administrator installs the job once for every account
-with `gryph install --managed`. The scheduler of each account then runs it as
+with `gryph install --managed`. See the [managed install guide](./mdm.md). The scheduler of each account then runs it as
 that account, at login and every 15 minutes. See
 [Managed install](./cli-reference.md#managed-install).
 

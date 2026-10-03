@@ -160,7 +160,7 @@ gryph config set policy.enabled true
 
 See [security policy](./docs/security-policy.md) for more details.
 
-Gryph also protects its own hooks, policy and audit trail. `gryph doctor` shows the level of each asset and the profile they earn. In the `guard` profile, Gryph guards against agent mistakes and simple attempts to change it, detects a change to a hook configuration, and repairs it when you turn repair on. It does not stop a determined same-user adversary or root. See [self-protection](./docs/self-protection.md) for the limits and the claims you can make.
+Gryph also protects its own hooks, policy and audit trail. `gryph doctor` shows the level of each asset and the profile they earn. In the `guard` profile, Gryph guards against agent mistakes and simple attempts to change it, detects a change to a hook configuration, and repairs it when you turn repair on. It does not stop a determined same-user adversary or root. See [self-protection](./docs/self-protection.md) for the limits and the claims you can make. An administrator installs Gryph for every user of a host with `gryph install --managed`. See the [managed install guide](./docs/mdm.md).
 
 ## Commands
 

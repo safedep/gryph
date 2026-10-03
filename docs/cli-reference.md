@@ -460,7 +460,8 @@ gryph config reset
 #### Managed install
 
 An administrator, or an MDM script that runs as root, installs Gryph for every
-user of a host with one command:
+user of a host with one command. The [managed install guide](./mdm.md) has
+the contract and the recipes for Jamf, Kandji and Intune.
 
 ```bash
 sudo gryph install --managed --config /path/to/managed.yml [--policy /path/to/policy.yaml] [--trust-store /path/to/receipt-pub.json] [--json]
