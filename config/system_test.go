@@ -74,6 +74,29 @@ func TestLoad_ManagedConfigIsAuthoritative(t *testing.T) {
 	assert.Equal(t, LoggingFull, cfg.Logging.Level, "the managed file wins over an explicit --config path")
 }
 
+func TestLoad_ManagedConfigIgnoresEnv(t *testing.T) {
+	clearPathEnv(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	managedDir := t.TempDir()
+	withManagedConfigDir(t, managedDir)
+	require.NoError(t, os.WriteFile(filepath.Join(managedDir, configFileName),
+		[]byte("logging:\n  level: full\npolicy:\n  enabled: true\n"), 0o644))
+
+	t.Setenv("GRYPH_LOGGING_LEVEL", "minimal")
+	t.Setenv("GRYPH_POLICY_ENABLED", "false")
+	t.Setenv("GRYPH_STORAGE_RETENTION_DAYS", "7")
+	t.Setenv("GRYPH_AGENTS_CURSOR_LOGGING_LEVEL", "minimal")
+
+	cfg, err := Load("")
+	require.NoError(t, err)
+	assert.Equal(t, LoggingFull, cfg.Logging.Level, "env must not override a managed key")
+	assert.True(t, cfg.Policy.Enabled, "env must not turn off managed policy")
+	assert.Equal(t, Default().Storage.RetentionDays, cfg.Storage.RetentionDays,
+		"env must not set a key that the managed file leaves unset")
+	assert.Empty(t, cfg.Agents["cursor"].LoggingLevel, "env must not set an agent override")
+}
+
 func TestLoad_ExplicitPathWinsWithoutManagedFile(t *testing.T) {
 	clearPathEnv(t)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
