@@ -29,9 +29,23 @@ type Entry struct {
 	Frame   *ipc.Frame `json:"frame,omitempty"`
 }
 
-// KindTamper marks an entry that the service turns into a tamper event in
-// the system session of the account.
-const KindTamper = "tamper"
+// The kinds of an entry.
+const (
+	// KindTamper marks an entry that the service turns into a tamper event
+	// in the system session of the account.
+	KindTamper = "tamper"
+	// KindDegraded marks an action that the client evaluated itself in
+	// local-ephemeral mode: the managed policy with no session context, no
+	// receipt and no signature.
+	KindDegraded = "degraded"
+)
+
+// Degraded reports whether the client decided the entry without the
+// service: the service was out of reach, or the client evaluated the
+// policy itself.
+func (e Entry) Degraded() bool {
+	return e.Kind == "" || e.Kind == KindDegraded
+}
 
 // The modes of the spool. The root carries the set-group-ID bit and the
 // sticky bit: an account directory made under it takes the group of the

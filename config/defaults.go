@@ -18,6 +18,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("supervisor.enabled", false)
 	v.SetDefault("supervisor.socket", "")
 	v.SetDefault("supervisor.profile", "")
+	v.SetDefault("supervisor.pilot_until", "")
 	v.SetDefault("supervisor.state_dir", "")
 	v.SetDefault("supervisor.spool_dir", "")
 	v.SetDefault("supervisor.unavailable.blocking", "")

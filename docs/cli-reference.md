@@ -482,7 +482,9 @@ gryph supervisor run --socket /tmp/hook.sock --state-dir /tmp/gryph-state
 The managed configuration sets the service: `supervisor.enabled` (the hook
 becomes a client of the service), `supervisor.socket` (default
 `/run/safedep/gryph/hook.sock` on Linux, `/var/run/safedep/gryph/hook.sock`
-on macOS), `supervisor.profile` (`enforce` or `pilot`), `supervisor.state_dir`
+on macOS), `supervisor.profile` (`enforce` or `pilot`) with
+`supervisor.pilot_until` (the date the pilot ends, `2006-01-02` or RFC 3339;
+a pilot needs one, and after it the host runs `enforce`), `supervisor.state_dir`
 (default `/var/lib/safedep/gryph` on Linux, the managed directory on macOS),
 `supervisor.spool_dir` (default `/var/spool/safedep/gryph`) and
 `supervisor.unavailable.{blocking,prompt,other}` (`block` or `allow`: what a
@@ -639,7 +641,7 @@ directory another user can write, is refused.
     {"name": "cursor", "class": "system_path", "path": "/etc/cursor/hooks.json", "level": "detect", "match": true, "locked": false}
   ],
   "key": {"scope": "user", "protected": false},
-  "supervisor": {"state": "absent"},
+  "supervisor": {"state": "absent", "profile": "pilot", "pilot_until": "2026-12-31", "pilot_remaining_seconds": 7603200},
   "collection": {"level": "none"}
 }
 ```
@@ -655,7 +657,7 @@ directory another user can write, is refused.
 | `trust_store` | The managed receipt trust store: `path`, `chain`, `keys` (the count of public keys). A missing store is a fact, not an issue. |
 | `agents` | One row per agent in `managed.agents`: `class`, `path`, `level` (`prevent_same_user` for a `locked` entry that matches, `detect` for a `system_path` entry that matches, `none` otherwise), `match`, `locked` (the lock switch), `error`. |
 | `key` | `scope` is `user`: the receipt signing key lives in each user's home, and `protected` is false. |
-| `supervisor` | `state` is `absent`: no decision service runs outside the user yet. |
+| `supervisor` | `state` is `absent`: no decision service runs outside the user yet. With `supervisor.enabled`, `profile` is the profile in force, `pilot_until` the end of the pilot as the file sets it, and `pilot_remaining_seconds` the time left while the pilot runs. |
 | `collection` | `level` is `none`: no evidence leaves the host. |
 
 The text form prints the same facts, with "Key: user-owned (not protected)"

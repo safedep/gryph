@@ -1,0 +1,116 @@
+# In the pilot profile, a blocking hook that cannot reach the decision
+# service evaluates the managed policy and the built-in rules itself, with
+# no store, no context and no signature, and leaves the decision in the
+# spool marked degraded. A rule that reads the session context blocks. A
+# pilot past its end date runs enforce and blocks every blocking hook.
+# Runs only in the privileged job on a Linux host with no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+mkdir $WORK/spool
+expandenv pilot.yml
+exec install -D -m 644 $WORK/pilot.yml /etc/safedep/gryph/config.yml
+exec install -m 644 policy.yaml /etc/safedep/gryph/policy.yaml
+
+# A command the managed policy allows goes through.
+stdin ls.json
+exec gryph _hook claude-code PreToolUse
+! stderr .
+# A command the managed policy blocks is blocked, with the rule's message.
+stdin rm.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'blocked-by-managed'
+# A write that a context rule guards blocks: the hook has no context.
+stdin write.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'reads the session context, which is not available while the decision service is out of reach'
+! exists $XDG_DATA_HOME/safedep/gryph/audit.db
+
+exec sh -c 'cat $WORK/spool/0/*.json'
+stdout -count=3 '"kind":"degraded"'
+stdout -count=1 '"verdict":"allow","reason":"local-ephemeral: ipc: cannot reach the decision service'
+stdout -count=2 '"verdict":"block","reason":"local-ephemeral: '
+stdout 'blocked-by-managed'
+
+# gryph doctor names the profile and the time the pilot has left.
+exec gryph doctor --no-color
+stdout 'Decision service'
+stdout 'profile pilot, no socket, pilot ends in [0-9]+ days \(2099-01-01\)'
+
+# A pilot past its end runs enforce: the allowed command blocks too.
+expandenv ended.yml
+exec install -m 644 $WORK/ended.yml /etc/safedep/gryph/config.yml
+stdin ls.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr '^Gryph supervisor is not running\. Run `gryph doctor`\.$'
+exec gryph doctor --no-color
+stdout 'profile enforce, no socket, pilot ended 2020-01-01'
+
+exec rm -rf /etc/safedep/gryph /root/.local/share/safedep /root/.config/safedep /root/.cache/safedep
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- pilot.yml --
+policy:
+  enabled: true
+supervisor:
+  enabled: true
+  profile: pilot
+  pilot_until: "2099-01-01"
+  socket: /tmp/gryph-acceptance-hook.sock
+  spool_dir: ${WORK}/spool
+-- ended.yml --
+policy:
+  enabled: true
+supervisor:
+  enabled: true
+  profile: pilot
+  pilot_until: "2020-01-01"
+  socket: /tmp/gryph-acceptance-hook.sock
+  spool_dir: ${WORK}/spool
+-- policy.yaml --
+version: "1"
+rules:
+  - id: managed-block-rm
+    action: block
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns: ["rm\\s+-rf"]
+    message: "blocked-by-managed: no recursive delete"
+  - id: cap-writes
+    action: block
+    severity: high
+    match:
+      action_types: [file_write]
+    condition: "context.files_written > 2"
+    message: "too many writes this session"
+-- ls.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {"command": "ls -la", "description": "list"},
+  "tool_use_id": "tool-use-b1"
+}
+-- rm.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {"command": "rm -rf /home/user/project/build", "description": "clean"},
+  "tool_use_id": "tool-use-b2"
+}
+-- write.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Write",
+  "tool_input": {"file_path": "/home/user/project/a.txt", "content": "x"},
+  "tool_use_id": "tool-use-w1"
+}

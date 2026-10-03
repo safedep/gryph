@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
@@ -124,6 +125,10 @@ per-user state. The exit code is 0 for the locked profile and 1 otherwise.`,
 					configCheck.Message = app.Paths.ConfigFile
 				}
 				v.Checks = append(v.Checks, configCheck)
+
+				if clientMode(app.Config) {
+					v.Checks = append(v.Checks, decisionServiceCheck(app.Config))
+				}
 
 				// Check each agent's hooks
 				for _, adapter := range app.Registry.All() {
@@ -282,4 +287,40 @@ func canonicalVersion(v string) string {
 		return ""
 	}
 	return semver.Canonical(v)
+}
+
+// decisionServiceCheck is the doctor row of the decision service under a
+// managed configuration: the socket, the profile, and the time a pilot
+// has left.
+func decisionServiceCheck(cfg *config.Config) tui.DoctorCheck {
+	check := tui.DoctorCheck{
+		Name:        "Decision service",
+		Description: "The hooks are clients of the decision service",
+		Status:      tui.CheckOK,
+		Message:     cfg.Supervisor.SocketPath() + ", profile " + cfg.Supervisor.EffectiveProfile(),
+	}
+	if _, err := os.Stat(cfg.Supervisor.SocketPath()); err != nil {
+		check.Status = tui.CheckWarn
+		check.Message += ", no socket"
+		check.Suggestion = "Start the service: a blocking hook blocks until it runs"
+	}
+	if cfg.Supervisor.Profile == config.SupervisorProfilePilot {
+		if left, ok := cfg.Supervisor.PilotRemaining(); ok {
+			check.Message += fmt.Sprintf(", pilot ends in %s (%s)", humanizeDuration(left), cfg.Supervisor.PilotUntil)
+		} else {
+			check.Message += ", pilot ended " + cfg.Supervisor.PilotUntil
+		}
+	}
+	return check
+}
+
+// humanizeDuration renders a duration in days or hours.
+func humanizeDuration(d time.Duration) string {
+	if d >= 48*time.Hour {
+		return fmt.Sprintf("%d days", int(d.Hours()/24))
+	}
+	if d >= time.Hour {
+		return fmt.Sprintf("%d hours", int(d.Hours()))
+	}
+	return fmt.Sprintf("%d minutes", int(d.Minutes()))
 }

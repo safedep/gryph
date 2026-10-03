@@ -16,7 +16,11 @@ func validate(cfg *Config) error {
 		return err
 	}
 	switch cfg.Supervisor.Profile {
-	case "", SupervisorProfileEnforce, SupervisorProfilePilot:
+	case "", SupervisorProfileEnforce:
+	case SupervisorProfilePilot:
+		if _, err := ParsePilotUntil(cfg.Supervisor.PilotUntil); err != nil {
+			return fmt.Errorf("supervisor.profile pilot needs supervisor.pilot_until, the date the pilot ends: %w", err)
+		}
 	default:
 		return fmt.Errorf("supervisor.profile %q is not enforce or pilot", cfg.Supervisor.Profile)
 	}

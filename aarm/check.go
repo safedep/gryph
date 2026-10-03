@@ -117,6 +117,7 @@ type Mediator struct {
 	identityCfg  IdentityConfig
 	cfg          MediatorConfig
 	policyHash   []byte
+	degraded     bool
 
 	stripsContent func(event *events.Event) bool
 }
@@ -136,6 +137,15 @@ func WithCELEntries(n int) MediatorOption {
 		if n > 0 {
 			m.celEntries = n
 		}
+	}
+}
+
+// WithDegraded marks the Mediator as one that runs with no session
+// context: every rule that reads context.* blocks. Only the hook client
+// sets it, in local-ephemeral mode.
+func WithDegraded() MediatorOption {
+	return func(m *Mediator) {
+		m.degraded = true
 	}
 }
 
@@ -267,6 +277,9 @@ func NewMediator(policy *pdp.Policy, opts ...MediatorOption) (*Mediator, error) 
 			FreshSessionSeconds:   m.deferralCfg.FreshSessionSeconds,
 			ConflictTriggersDefer: m.deferralCfg.ConflictTriggersDefer,
 		}),
+	}
+	if m.degraded {
+		pdpOpts = append(pdpOpts, pdp.WithDegraded())
 	}
 	engine, err := pdp.New(policy, pdpOpts...)
 	if err != nil {

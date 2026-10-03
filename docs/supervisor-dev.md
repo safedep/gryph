@@ -215,8 +215,26 @@ An allow there is an action the service records later, marked as
 unverified. The [spool](#the-spool) section has the layout and the pass.
 
 Only the managed file sets `supervisor.unavailable.{blocking,prompt,other}`
-(`block` or `allow`). The `pilot` profile's `local-ephemeral` fallback is
-not implemented yet; until then `pilot` fails like `enforce`.
+(`block` or `allow`).
+
+In the `pilot` profile (`supervisor.profile: pilot`, with
+`supervisor.pilot_until`, the date the pilot ends), a blocking hook that
+gets `ErrConnect` does not take the `unavailable` verdict. It runs the
+local-ephemeral evaluation instead: the managed policy and the built-in
+rules, in process, with no store, no accumulator, no receipt and no
+signature (`engine.NewEphemeralEvaluator`). Every rule whose condition
+reads `context.*` blocks (`pdp.WithDegraded`, `aarm.WithDegraded`), because
+the hook has no context and a condition over zeros would let through what
+a counter should stop. The gate is that flag, never the accumulator type:
+the Nop accumulator is the default and `gryph policy test` runs on it.
+`gryph policy test --degraded` shows the same evaluation. A managed policy
+that does not load blocks. The decision goes to the spool with `kind:
+degraded`, and the service records it as an unverified receipt and counts
+it for the `degraded` tamper event like any entry decided without it. The
+managed policy files must be readable by every account for this mode: the
+hook runs as the agent user. Prompt and lifecycle hooks keep the
+`unavailable` verdict, allow by default. After `pilot_until` the host runs
+`enforce`; `gryph doctor` shows the time the pilot has left.
 
 The hidden `gryph supervisor fake --socket <path> [--no-welcome] [--reply
 <frame-file>]` is a service that misbehaves on purpose, for the acceptance

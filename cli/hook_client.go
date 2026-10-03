@@ -11,6 +11,7 @@ import (
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/decision"
 	"github.com/safedep/gryph/decision/ipc"
 	"github.com/safedep/gryph/engine"
@@ -77,6 +78,9 @@ func runClientHook(ctx context.Context, cfg *config.Config, agentName, hookType 
 	}})
 	switch {
 	case errors.Is(err, ipc.ErrConnect):
+		if cfg.Supervisor.EffectiveProfile() == config.SupervisorProfilePilot && column == string(events.FailColumnBlocking) {
+			return localEphemeral(ctx, cfg, adapter, registry, event, hookType, err.Error(), rawData)
+		}
 		return fail(err.Error(), cfg.Supervisor.EffectiveUnavailable(column))
 	case errors.Is(err, ipc.ErrServerIdentity):
 		// A socket that is not the system's blocks in every mode and never
@@ -128,6 +132,35 @@ func failClosed(cfg *config.Config, adapter agent.Adapter, agentName, hookType, 
 		return sendResponse(adapter, hookType, agent.DecisionAllow, "")
 	}
 	return sendResponse(adapter, hookType, agent.DecisionBlock, unavailableMessage)
+}
+
+// localEphemeral is the fallback of a blocking hook in the pilot profile:
+// the client evaluates the managed policy and the built-in rules itself,
+// with no store, no context and no signature, and leaves the decision in
+// the spool marked degraded. A rule that reads the session context blocks,
+// because the client has no context to read. The policy that does not
+// load blocks too: the fallback never widens what the service would do.
+func localEphemeral(ctx context.Context, cfg *config.Config, adapter agent.Adapter, registry *agent.Registry, event *events.Event, hookType, cause string, rawData []byte) error {
+	frame := ipc.MustFrame(ipc.TypeHandle, ipc.Handle{Agent: event.AgentName, HookType: hookType, RawPayload: rawData, Project: hookside.ClaimProject(event.WorkingDirectory)})
+	evaluator, err := engine.NewEphemeralEvaluator(cfg)
+	if err != nil {
+		reason := "local-ephemeral: policy did not load: " + err.Error()
+		spoolEntry(cfg, spool.Entry{Kind: spool.KindDegraded, Verdict: config.UnavailableBlock, Reason: reason, Frame: frame})
+		return sendResponse(adapter, hookType, agent.DecisionBlock, "Gryph supervisor is not running and the managed policy did not load: "+err.Error()+". Run `gryph doctor`.")
+	}
+	if spec, ok := registry.HookSpec(event.AgentName, events.HookType(hookType)); ok {
+		event.Phase = spec.Phase
+	}
+	sess := session.NewSessionWithID(event.SessionID, event.AgentName)
+	result := evaluator.Evaluate(ctx, event, sess)
+	if !result.IsAllowed() {
+		reason := "local-ephemeral: " + result.StoredBlockReason
+		spoolEntry(cfg, spool.Entry{Kind: spool.KindDegraded, Verdict: config.UnavailableBlock, Reason: reason, Frame: frame})
+		return sendResponse(adapter, hookType, agent.DecisionBlock, result.BlockReason)
+	}
+	spoolEntry(cfg, spool.Entry{Kind: spool.KindDegraded, Verdict: config.UnavailableAllow, Reason: "local-ephemeral: " + cause, Frame: frame})
+	log.Debugf("hook: %s allowed by the local-ephemeral evaluation: %s", hookType, cause)
+	return sendResponse(adapter, hookType, agent.DecisionAllow, "")
 }
 
 // spoolEntry writes the entry under the account's spool directory. A

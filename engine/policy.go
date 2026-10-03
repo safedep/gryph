@@ -31,7 +31,12 @@ import (
 )
 
 func LoadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.Store) (*aarmsec.Mediator, error) {
-	ldr := BuildPolicyLoader(cfg, paths)
+	return loadPolicyMediator(cfg, paths, store, BuildPolicyLoader(cfg, paths))
+}
+
+// loadPolicyMediator builds the Mediator for the policy that ldr loads.
+// extra options run after the ones the config sets.
+func loadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.Store, ldr *loader.Loader, extra ...aarmsec.MediatorOption) (*aarmsec.Mediator, error) {
 	policy, err := ldr.Load(context.Background())
 	if err != nil {
 		return nil, err
@@ -116,6 +121,7 @@ func LoadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 			opts = append(opts, aarmsec.WithDeferralHook(newDeferralHook(store)))
 		}
 	}
+	opts = append(opts, extra...)
 	return aarmsec.NewMediator(policy, opts...)
 }
 
@@ -448,13 +454,7 @@ func policySources(cfg *config.Config, paths *config.Paths, managed config.Manag
 	if paths == nil {
 		paths = config.ResolvePaths()
 	}
-	var sources []loader.Source
-	if managed.Dir != "" {
-		sources = append(sources,
-			loader.NewManagedFileSource(managed.File, managed.Trust),
-			loader.NewManagedDirSource(managed.Dir, managed.Trust),
-		)
-	}
+	sources := managedSources(managed)
 	if UserPolicyAllowed(cfg, managed) {
 		sources = append(sources,
 			loader.NewOptionalFileSource(config.DefaultPolicyFilePath(paths)),
@@ -462,6 +462,19 @@ func policySources(cfg *config.Config, paths *config.Paths, managed config.Manag
 		)
 	}
 	return AppendBuiltinSource(sources, cfg, paths)
+}
+
+// managedSources returns the managed file and directory sources, each
+// behind the trust check, or nothing on a platform with no managed
+// location.
+func managedSources(managed config.ManagedPolicy) []loader.Source {
+	if managed.Dir == "" {
+		return nil
+	}
+	return []loader.Source{
+		loader.NewManagedFileSource(managed.File, managed.Trust),
+		loader.NewManagedDirSource(managed.Dir, managed.Trust),
+	}
 }
 
 // UserPolicyAllowed reports whether the user's own policy sources load. A

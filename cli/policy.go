@@ -639,6 +639,7 @@ func newPolicyTestCmd() *cobra.Command {
 		contextFile  string
 		kind         string
 		origin       string
+		degraded     bool
 	)
 
 	cmd := &cobra.Command{
@@ -663,7 +664,11 @@ func newPolicyTestCmd() *cobra.Command {
 			if err != nil {
 				return ErrConfig("failed to load policy", err)
 			}
-			engine, err := pdp.New(policy)
+			var pdpOpts []pdp.Option
+			if degraded {
+				pdpOpts = append(pdpOpts, pdp.WithDegraded())
+			}
+			engine, err := pdp.New(policy, pdpOpts...)
 			if err != nil {
 				return ErrConfig("failed to compile policy", err)
 			}
@@ -752,6 +757,7 @@ func newPolicyTestCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json")
 	cmd.Flags().StringVar(&file, "file", "", "dry-run against one policy file plus the built-in rules, instead of the active policy")
+	cmd.Flags().BoolVar(&degraded, "degraded", false, "evaluate as the hook does in the pilot profile with the decision service out of reach: a rule that reads the session context blocks")
 	cmd.Flags().StringVar(&actionType, "action", string(model.ActionToolUse), "action type")
 	cmd.Flags().StringVar(&tool, "tool", "", "tool name")
 	cmd.Flags().StringVar(&path, "path", "", "file path")

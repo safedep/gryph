@@ -1,0 +1,38 @@
+# In the degraded evaluation, which the hook runs in the pilot profile
+# while the decision service is out of reach, a rule that reads the
+# session context blocks: the hook has no context, and a condition over
+# zeros would let through what a counter should stop. A rule on the
+# action alone evaluates as always. gryph policy test --degraded shows
+# the same evaluation.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph policy test --file policy.yaml --degraded --action file_write --path /work/a.txt --format json --no-color
+stdout '"decision": "block"'
+stdout 'cap-writes'
+stdout 'reads the session context, which is not available while the decision service is out of reach'
+
+exec gryph policy test --file policy.yaml --degraded --action file_read --path /work/.env --format json --no-color
+stdout '"decision": "warn"'
+stdout 'env-read'
+
+exec gryph policy test --file policy.yaml --degraded --action command_exec --command 'ls -la' --format json --no-color
+stdout '"decision": "allow"'
+
+-- policy.yaml --
+version: "1"
+rules:
+  - id: cap-writes
+    action: warn
+    severity: medium
+    match:
+      action_types: [file_write]
+    condition: "context.files_written > 2"
+    message: "too many writes this session"
+  - id: env-read
+    action: warn
+    match:
+      action_types: [file_read]
+    condition: "action.params.path.endsWith('.env')"
+    message: "env read"

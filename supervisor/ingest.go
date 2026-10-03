@@ -72,7 +72,7 @@ func (k *spoolSink) Entry(ctx context.Context, uid uint32, entry spool.Entry) er
 	if err != nil {
 		return err
 	}
-	if entry.Kind == "" && entry.RecordedAt.After(k.server.started) {
+	if entry.Degraded() && entry.RecordedAt.After(k.server.started) {
 		k.degraded[uid]++
 	}
 	return part.recordSpooled(ctx, entry)

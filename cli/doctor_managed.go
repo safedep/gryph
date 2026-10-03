@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/receipt"
@@ -110,6 +111,12 @@ type managedKeyReport struct {
 
 type managedSupervisorReport struct {
 	State string `json:"state"`
+	// Profile is the profile in force: enforce or pilot. PilotUntil is
+	// the end of the pilot as the managed file sets it, and
+	// PilotRemaining the time left, in seconds.
+	Profile        string `json:"profile,omitempty"`
+	PilotUntil     string `json:"pilot_until,omitempty"`
+	PilotRemaining int64  `json:"pilot_remaining_seconds,omitempty"`
 }
 
 type managedCollectionReport struct {
@@ -143,6 +150,7 @@ func buildManagedDoctorReport(ctx context.Context) *managedDoctorReport {
 	}
 
 	cfg := report.readConfig()
+	report.readSupervisor(cfg)
 	report.readPolicy(cfg)
 	report.readTrustStore()
 	report.readBinary(cfg)
@@ -160,6 +168,19 @@ func buildManagedDoctorReport(ctx context.Context) *managedDoctorReport {
 
 // readConfig reads the managed configuration through the same trust check
 // as the running Gryph, and from no other source.
+// readSupervisor fills the profile of the decision service from the
+// managed configuration.
+func (r *managedDoctorReport) readSupervisor(cfg *config.Config) {
+	if cfg == nil || !cfg.Supervisor.Enabled {
+		return
+	}
+	r.Supervisor.Profile = cfg.Supervisor.EffectiveProfile()
+	r.Supervisor.PilotUntil = cfg.Supervisor.PilotUntil
+	if left, ok := cfg.Supervisor.PilotRemaining(); ok {
+		r.Supervisor.PilotRemaining = int64(left.Seconds())
+	}
+}
+
 func (r *managedDoctorReport) readConfig() *config.Config {
 	state := config.ManagedConfigStatus()
 	r.Config = managedFileReport{Path: state.Path, Chain: managedChainMissing}
@@ -353,7 +374,7 @@ func renderManagedDoctor(w io.Writer, report *managedDoctorReport, asJSON bool) 
 		fmt.Sprintf("  %-11s %s  chain %s  keys %d", "Keys", report.TrustStore.Path, report.TrustStore.Chain, report.TrustStore.Keys),
 		fmt.Sprintf("  %-11s %s  chain %s", "Binary", report.Binary.Path, report.Binary.Chain),
 		"  "+managedKeySummary,
-		fmt.Sprintf("  %-11s %s", "Supervisor", report.Supervisor.State),
+		fmt.Sprintf("  %-11s %s%s", "Supervisor", report.Supervisor.State, supervisorProfileSuffix(report.Supervisor)),
 		fmt.Sprintf("  %-11s %s", "Collection", report.Collection.Level),
 	)
 	for _, a := range report.Agents {
@@ -378,4 +399,15 @@ func renderManagedDoctor(w io.Writer, report *managedDoctorReport, asJSON bool) 
 		}
 	}
 	return nil
+}
+
+func supervisorProfileSuffix(r managedSupervisorReport) string {
+	if r.Profile == "" {
+		return ""
+	}
+	out := "  profile " + r.Profile
+	if r.PilotRemaining > 0 {
+		out += fmt.Sprintf("  pilot ends in %s (%s)", humanizeDuration(time.Duration(r.PilotRemaining)*time.Second), r.PilotUntil)
+	}
+	return out
 }

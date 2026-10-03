@@ -440,6 +440,27 @@
   guarantee: "A spool entry whose recorded_at is after the start of the service means the client could not reach a running service. One pass records one degraded tamper event with the count of such entries, and an entry from before the start records nothing. Privileged job only."
   labels: [spool, supervisor, privileged, linux]
 
+- id: hook/client/pilot-local-ephemeral
+  title: "a blocking hook in the pilot profile evaluates the managed policy itself when the service is out of reach"
+  category: hook
+  tier: P0
+  guarantee: "Under supervisor.profile pilot with no service at the socket, a blocking hook evaluates the managed policy and the built-in rules in process with no store, no context and no signature: an allowed command goes through, a blocked one blocks with the rule's message, a rule that reads the session context blocks, and every decision lands in the spool marked degraded. gryph doctor names the profile and the time the pilot has left. A pilot past pilot_until runs enforce. Privileged job only."
+  labels: [hook, client, supervisor, pilot, privileged, linux]
+
+- id: policy/degraded/context-rule-blocks
+  title: "the degraded evaluation blocks a rule that reads the session context"
+  category: policy
+  tier: P0
+  guarantee: "With --degraded, gryph policy test evaluates as the hook does in the pilot profile with the service out of reach: a rule whose condition reads context.* blocks with a message that names the missing context, a condition on the action alone evaluates as always, and an unmatched action allows."
+  labels: [policy, degraded, pilot]
+
+- id: policy/test/nop-not-degraded
+  title: "the Nop accumulator alone never turns the degraded gate on"
+  category: policy
+  tier: P0
+  guarantee: "gryph policy test without --degraded evaluates a rule that reads context.* against the given counters, zeros by default, so the counter rule does not fire without --context-files-written and fires with it. The degraded gate is the explicit flag, not the accumulator."
+  labels: [policy, degraded, test]
+
 - id: install/purge/data-removed
   title: "purge removes the database and config, dry-run changes nothing"
   category: install

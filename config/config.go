@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -97,6 +98,10 @@ type SupervisorConfig struct {
 	// Profile is enforce or pilot. It decides what a hook does when the
 	// service is out of reach.
 	Profile string `mapstructure:"profile"`
+	// PilotUntil ends the pilot profile: after this date the host runs
+	// enforce. A pilot with no end is a standing way to turn signing off,
+	// so a managed file that sets pilot sets this too.
+	PilotUntil string `mapstructure:"pilot_until"`
 	// StateDir holds the partitions of the accounts. Empty takes the
 	// default of the platform.
 	StateDir string `mapstructure:"state_dir"`
@@ -144,12 +149,59 @@ const (
 	SupervisorProfilePilot   = "pilot"
 )
 
-// EffectiveProfile returns the profile, enforce when unset.
+// EffectiveProfile returns the profile: enforce when unset, and enforce
+// when the pilot has passed its end date.
 func (s SupervisorConfig) EffectiveProfile() string {
-	if s.Profile == "" {
-		return SupervisorProfileEnforce
+	if s.Profile == SupervisorProfilePilot {
+		if until, ok := s.pilotEnd(); ok && !time.Now().Before(until) {
+			return SupervisorProfileEnforce
+		}
+		return SupervisorProfilePilot
 	}
-	return s.Profile
+	return SupervisorProfileEnforce
+}
+
+// PilotRemaining returns the time left in the pilot and true while the
+// pilot profile is in force with an end date.
+func (s SupervisorConfig) PilotRemaining() (time.Duration, bool) {
+	if s.Profile != SupervisorProfilePilot {
+		return 0, false
+	}
+	until, ok := s.pilotEnd()
+	if !ok {
+		return 0, false
+	}
+	left := time.Until(until)
+	if left <= 0 {
+		return 0, false
+	}
+	return left, true
+}
+
+// pilotEnd parses pilot_until: a date (2006-01-02, the end of that day in
+// local time) or an RFC 3339 time.
+func (s SupervisorConfig) pilotEnd() (time.Time, bool) {
+	t, err := ParsePilotUntil(s.PilotUntil)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+// ParsePilotUntil parses the value of supervisor.pilot_until. An empty
+// value is an error: a pilot needs an end.
+func ParsePilotUntil(value string) (time.Time, error) {
+	if value == "" {
+		return time.Time{}, errors.New("no date")
+	}
+	if t, err := time.Parse(time.RFC3339, value); err == nil {
+		return t, nil
+	}
+	day, err := time.ParseInLocation("2006-01-02", value, time.Local)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%q is not a date (2006-01-02) or an RFC 3339 time", value)
+	}
+	return day.AddDate(0, 0, 1), nil
 }
 
 // SocketPath returns the socket path, or the default of the platform.
