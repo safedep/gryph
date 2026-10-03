@@ -576,6 +576,12 @@ verifier, or every existing chain fails verification.
   stores its `Reason`.
 - Export with `gryph policy receipts export`. Verify a chain with
   `gryph policy receipts verify-log`.
+- A tamper event (`engine/tamper.go`) is a receipt in the system session of
+  the account (`session.NewSystemSession`, `platform/account`). It goes
+  through the same generator with the decision `receipt.DecisionTamper`, so
+  the chain code does not know about it. The event payload is
+  `events.TamperPayload`. The receipt message is `TamperPayload.Summary()`,
+  so the hash covers the asset, the agent, the levels and the drift.
 
 ### Hash versions
 

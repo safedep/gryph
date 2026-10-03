@@ -26,6 +26,7 @@
         "subagent_start",
         "subagent_stop",
         "user_prompt",
+        "tamper",
         "unknown"
       ]
     },
@@ -385,6 +386,39 @@
       "required": [
         "agent_id",
         "agent_type"
+      ]
+    },
+    "tamper_payload": {
+      "type": "object",
+      "description": "Payload for tamper events: one change to a Gryph asset, recorded in the system session.",
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "asset": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "drift": {
+          "type": "string"
+        },
+        "level_after": {
+          "type": "string"
+        },
+        "level_before": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "asset",
+        "level_before",
+        "level_after",
+        "provider"
       ]
     },
     "text": {

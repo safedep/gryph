@@ -510,6 +510,20 @@ policy:
 
 The legacy `sign: true` / `sign: false` bool is still accepted as a deprecated alias for `sign_mode: always` / `sign_mode: never`. Each receipt then carries an Ed25519 signature and `signer_key_id`. `gryph policy receipts --verify` walks the chain, recomputes every hash, and verifies signatures against the trust store. `gryph policy receipts export ... | gryph policy receipts verify-log --input -` round-trips the same checks without database access.
 
+### System session and tamper events
+
+Gryph records a change to one of its own assets as a tamper event. A tamper event is not an agent action, so it does not go into an agent session. It goes into the system session of the account: one session per operating-system account, with the agent name `gryph` and an ID that Gryph derives from the account identifier, in the same way it derives an agent session ID from the agent's session identifier. Every tamper event has a receipt in that session's chain, with the decision `tamper`, the result status `recorded`, and a message that names the asset, the agent, the level before and after, and the drift. The receipt hashes the message, so the chain binds the facts of the change.
+
+`gryph doctor` records a tamper event when a hook configuration differs from a current install, when the difference changes, when it clears, and when the level of an asset changes. A repeated run with no change records nothing. The event payload is a `tamper` action with the fields `asset`, `agent`, `level_before`, `level_after`, `drift`, `provider` and `detail`.
+
+Verify the system session with the same commands as an agent session:
+
+```
+gryph policy receipts --verify --all-sessions
+gryph policy receipts export --format jsonl --output receipts.jsonl
+gryph policy receipts verify-log --input receipts.jsonl
+```
+
 ### Context chain
 
 The session context log (`context_entries`) carries a per-session hash chain of the same shape as the receipt chain: each entry stores `sequence`, `prev_hash`, `hash`, and `hash_version`. The chain attests to the facts of the entry at mediation time, including the decision, not the post-hook result, so a result update never invalidates the chain. Verify it with:

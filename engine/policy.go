@@ -42,18 +42,11 @@ func LoadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 		if cfg != nil {
 			opts = append(opts, aarmsec.WithCELEntries(cfg.Policy.Context.CELEntries))
 		}
-		var recOpts []receipt.GeneratorOption
-		if cfg != nil && cfg.Policy.Receipts.EffectiveSignMode() != config.SignModeNever {
-			signer, signErr := LoadReceiptSignerFromConfig(cfg, paths)
-			if signErr != nil {
-				return nil, fmt.Errorf("load receipt signer: %w", signErr)
-			}
-			if signer != nil {
-				recOpts = append(recOpts, receipt.WithSigner(signer))
-			}
+		gen, err := newReceiptGenerator(cfg, paths, store)
+		if err != nil {
+			return nil, err
 		}
-		base := receipt.NewSQLite(store, recOpts...)
-		opts = append(opts, aarmsec.WithReceiptGenerator(newAuditingReceiptGenerator(base, store)))
+		opts = append(opts, aarmsec.WithReceiptGenerator(gen))
 	}
 	if cfg != nil {
 		policyCfg := cfg.EffectivePolicy()
@@ -124,6 +117,23 @@ func LoadPolicyMediator(cfg *config.Config, paths *config.Paths, store storage.S
 		}
 	}
 	return aarmsec.NewMediator(policy, opts...)
+}
+
+// newReceiptGenerator returns the receipt generator of this install: the
+// SQLite generator, signed when the config asks for it, with the self-audit
+// row per signed receipt.
+func newReceiptGenerator(cfg *config.Config, paths *config.Paths, store storage.Store) (receipt.Generator, error) {
+	var recOpts []receipt.GeneratorOption
+	if cfg != nil && cfg.Policy.Receipts.EffectiveSignMode() != config.SignModeNever {
+		signer, err := LoadReceiptSignerFromConfig(cfg, paths)
+		if err != nil {
+			return nil, fmt.Errorf("load receipt signer: %w", err)
+		}
+		if signer != nil {
+			recOpts = append(recOpts, receipt.WithSigner(signer))
+		}
+	}
+	return newAuditingReceiptGenerator(receipt.NewSQLite(store, recOpts...), store), nil
 }
 
 // auditingReceiptGenerator wraps a receipt.Generator and emits a

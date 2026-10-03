@@ -475,6 +475,9 @@ func (p *TablePresenter) renderProtection(tw *tableWriter, result *DoctorView) {
 			tw.printf("  %-12s %-13s %s\n", "", "", p.color.Warning("drift: "+row.Drift))
 		}
 	}
+	if result.TamperRecorded > 0 {
+		tw.printf("  Tamper events recorded: %d\n", result.TamperRecorded)
+	}
 	tw.println()
 }
 

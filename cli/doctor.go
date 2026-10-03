@@ -160,6 +160,7 @@ asset resists a change, and the profile that the levels earn.`,
 
 				statuses := app.ProtectionProvider().Assess(ctx)
 				v.Profile = string(selfprotect.ProfileOf(statuses))
+				v.TamperRecorded = recordTamper(ctx, app, statuses)
 				for _, s := range statuses {
 					v.Protection = append(v.Protection, tui.ProtectionRow{
 						Asset:    string(s.Asset),
@@ -196,6 +197,22 @@ asset resists a change, and the profile that the levels earn.`,
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table, json, jsonl, csv")
 
 	return cmd
+}
+
+// recordTamper writes a tamper event for each change since the last run
+// and returns the count. A failure to record is a warning, because the
+// table above still shows the state.
+func recordTamper(ctx context.Context, app *App, statuses []selfprotect.AssetStatus) int {
+	recorder, err := app.TamperRecorder()
+	if err != nil {
+		log.Warnf("doctor: tamper events not recorded: %v", err)
+		return 0
+	}
+	recorded, err := recorder.RecordChanges(ctx, statuses)
+	if err != nil {
+		log.Warnf("doctor: tamper events not recorded: %v", err)
+	}
+	return len(recorded)
 }
 
 // hooksAboveVersion returns the hooks, with their minimum version, that the

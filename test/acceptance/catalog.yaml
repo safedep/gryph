@@ -307,6 +307,13 @@
   guarantee: "A read and a write payload for each supported agent parse and persist with the correct action type."
   labels: [hook, ingest, protocols]
 
+- id: receipts/system-session/verify
+  title: "tamper events are receipts in the system session and the chain verifies"
+  category: receipts
+  tier: P0
+  guarantee: "gryph doctor records a tamper event with a receipt in the account's system session when a hook configuration drifts, when the drift clears, and not on a repeated run. gryph policy receipts --verify and verify-log pass on the chain."
+  labels: [receipts, selfprotect, tamper]
+
 - id: doctor/selfprotect/asset-table
   title: "doctor prints the self-protection level of every asset and the profile"
   category: doctor

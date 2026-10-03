@@ -155,7 +155,7 @@ func newPolicyReceiptsCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&sessionID, "session", "", "session ID (UUID or prefix) to inspect")
-	cmd.Flags().StringVar(&decision, "decision", "", "filter to a single decision (allow, block, guidance, warn, escalate, defer)")
+	cmd.Flags().StringVar(&decision, "decision", "", "filter to a single decision (allow, block, guidance, warn, escalate, defer, tamper)")
 	cmd.Flags().DurationVar(&since, "since", 0, "include receipts newer than this offset from now (e.g. 24h)")
 	cmd.Flags().DurationVar(&until, "until", 0, "include receipts older than this offset from now")
 	cmd.Flags().IntVar(&limit, "limit", policyReceiptsDefaultLimit, "maximum number of receipts to return")

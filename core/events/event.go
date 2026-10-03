@@ -193,6 +193,48 @@ type UserPromptPayload struct {
 	Prompt privacy.Text `json:"prompt"`
 }
 
+// TamperPayload is the payload of a tamper event: one change to a Gryph
+// asset, as the self-protection provider saw it. Levels are the names of
+// selfprotect levels. Drift is empty when the asset matches its desired
+// state again.
+type TamperPayload struct {
+	Asset       string `json:"asset"`
+	Agent       string `json:"agent,omitempty"`
+	LevelBefore string `json:"level_before"`
+	LevelAfter  string `json:"level_after"`
+	Drift       string `json:"drift,omitempty"`
+	Provider    string `json:"provider"`
+	Detail      string `json:"detail,omitempty"`
+}
+
+// Operation names the kind of change: drift when the asset differs from
+// its desired state, level when only its protection level changed, and
+// resolved when a drift cleared.
+func (p TamperPayload) Operation() string {
+	switch {
+	case p.Drift != "":
+		return "drift"
+	case p.LevelBefore != p.LevelAfter:
+		return "level"
+	default:
+		return "resolved"
+	}
+}
+
+// Summary is the one-line form of the payload. The receipt stores and
+// hashes it, so the chain binds the facts of the change.
+func (p TamperPayload) Summary() string {
+	subject := p.Asset
+	if p.Agent != "" {
+		subject += " " + p.Agent
+	}
+	s := subject + " " + p.Operation() + ": level " + p.LevelBefore + " to " + p.LevelAfter
+	if p.Drift != "" {
+		s += ", " + p.Drift
+	}
+	return s
+}
+
 // toolUseDisplayFields lists Input keys checked in priority order by DisplayTarget.
 var toolUseDisplayFields = []string{
 	"url", "query", "command", "file_path", "path",
@@ -350,6 +392,8 @@ func NewPayload(t ActionType) any {
 		return &SubagentStopPayload{}
 	case ActionUserPrompt:
 		return &UserPromptPayload{}
+	case ActionTamper:
+		return &TamperPayload{}
 	default:
 		return nil
 	}

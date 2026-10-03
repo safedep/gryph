@@ -135,6 +135,14 @@ const resultStatusPending = "pending"
 // times out.
 const resultStatusDeferred = "deferred"
 
+// resultStatusRecorded is the result_status of a tamper receipt. No result
+// follows it, so it is final at insert time.
+const resultStatusRecorded = "recorded"
+
+// DecisionTamper is the decision column of a tamper receipt. Gryph writes
+// it in the system session of the account. The PDP never produces it.
+const DecisionTamper = "tamper"
+
 // HashInput collects every byte that participates in the receipt hash. The
 // receipt generator constructs one of these per insert, computes the hash,
 // and persists both the input and its hash.
@@ -182,6 +190,8 @@ func DeriveInsertResultStatus(decision string) string {
 		return string(model.ResultBlocked)
 	case string(model.DecisionDefer):
 		return resultStatusDeferred
+	case DecisionTamper:
+		return resultStatusRecorded
 	}
 	return resultStatusPending
 }

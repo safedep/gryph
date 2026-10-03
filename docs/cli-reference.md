@@ -105,6 +105,12 @@ With `policy.enabled: false`, the default, the built-in rules do not run. Every
 asset that only they protect is at `none`, the row names the config key, and
 the profile is `none`.
 
+`doctor` records a tamper event in the system session of the account when a
+hook configuration drifts, when the drift changes or clears, and when the
+level of an asset changes. The line `Tamper events recorded: N` names the
+count. A repeated run with no change records nothing. See
+[system session and tamper events](./security-policy.md#system-session-and-tamper-events).
+
 ### logs
 
 Display recent agent activity, grouped by session.

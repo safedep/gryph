@@ -357,6 +357,7 @@ func actionTypeValues() []string {
 		string(events.ActionSubagentStart),
 		string(events.ActionSubagentStop),
 		string(events.ActionUserPrompt),
+		string(events.ActionTamper),
 		string(events.ActionUnknown),
 	}
 }
@@ -445,6 +446,10 @@ func addPayloadDefinitions(defs map[string]definition) {
 	defs["user_prompt_payload"] = structToDefinition(
 		reflect.TypeOf(events.UserPromptPayload{}),
 		"Payload for user prompt events.",
+	)
+	defs["tamper_payload"] = structToDefinition(
+		reflect.TypeOf(events.TamperPayload{}),
+		"Payload for tamper events: one change to a Gryph asset, recorded in the system session.",
 	)
 }
 

@@ -31,6 +31,9 @@ const (
 	ActionSubagentStop ActionType = "subagent_stop"
 	// ActionUserPrompt indicates the user submitted a prompt to the agent.
 	ActionUserPrompt ActionType = "user_prompt"
+	// ActionTamper records a change to a Gryph asset. Gryph writes it into
+	// the system session, not an agent session.
+	ActionTamper ActionType = "tamper"
 	// ActionUnknown indicates an unrecognized action type.
 	ActionUnknown ActionType = "unknown"
 )
@@ -51,6 +54,7 @@ var actionDisplayNames = map[ActionType]string{
 	ActionSubagentStart:  "subagent_start",
 	ActionSubagentStop:   "subagent_stop",
 	ActionUserPrompt:     "prompt",
+	ActionTamper:         "tamper",
 	ActionUnknown:        "unknown",
 }
 

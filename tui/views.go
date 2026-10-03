@@ -212,6 +212,8 @@ type DoctorView struct {
 	// the levels earn.
 	Protection []ProtectionRow
 	Profile    string
+	// TamperRecorded is the count of tamper events this run recorded.
+	TamperRecorded int
 }
 
 // ProtectionRow is the self-protection level of one asset.

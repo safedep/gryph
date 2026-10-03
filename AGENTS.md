@@ -25,6 +25,7 @@ hookside/       Work the hook process does as the agent user: project claim, tra
 decision/       Decision service: label, redact, evaluate, and record one hook event
 engine/         Runtime assembly: config, store, registry, policy check, decision service
 selfprotect/    Self-protection vocabulary: assets, levels, profiles, and the user-scope provider
+platform/       Operating-system specific code behind small interfaces (account identity)
 cli/            Cobra commands as an App pattern over the engine runtime
 tui/            Output formatters (table, json, csv)
 ```

@@ -75,6 +75,10 @@ are ordered.
 A row can also carry `attest`. It says that evidence of the asset's state exists
 off the host.
 
+A provider at `detect` records a change as a tamper event in the system session
+of the account, with a receipt in that session's chain. See
+[system session and tamper events](./security-policy.md#system-session-and-tamper-events).
+
 ### Profiles
 
 The profile is the label that the minimum levels earn. One weak row lowers the

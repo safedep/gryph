@@ -87,7 +87,10 @@ func (p *JSONLPresenter) RenderDoctor(result *DoctorView) error {
 	if result.Profile == "" {
 		return nil
 	}
-	return p.encoder.Encode(struct{ Profile string }{result.Profile})
+	return p.encoder.Encode(struct {
+		Profile        string
+		TamperRecorded int
+	}{result.Profile, result.TamperRecorded})
 }
 
 // RenderConfig renders the configuration as JSONL.

@@ -140,6 +140,7 @@ const (
 	ActionTypeSubagentStart  ActionType = "subagent_start"
 	ActionTypeSubagentStop   ActionType = "subagent_stop"
 	ActionTypeUserPrompt     ActionType = "user_prompt"
+	ActionTypeTamper         ActionType = "tamper"
 	ActionTypeUnknown        ActionType = "unknown"
 )
 
@@ -150,7 +151,7 @@ func (at ActionType) String() string {
 // ActionTypeValidator is a validator for the "action_type" field enum values. It is called by the builders before save.
 func ActionTypeValidator(at ActionType) error {
 	switch at {
-	case ActionTypeFileRead, ActionTypeFileWrite, ActionTypeFileDelete, ActionTypeCommandExec, ActionTypeNetworkRequest, ActionTypeToolUse, ActionTypeSessionStart, ActionTypeSessionEnd, ActionTypeNotification, ActionTypeSubagentStart, ActionTypeSubagentStop, ActionTypeUserPrompt, ActionTypeUnknown:
+	case ActionTypeFileRead, ActionTypeFileWrite, ActionTypeFileDelete, ActionTypeCommandExec, ActionTypeNetworkRequest, ActionTypeToolUse, ActionTypeSessionStart, ActionTypeSessionEnd, ActionTypeNotification, ActionTypeSubagentStart, ActionTypeSubagentStop, ActionTypeUserPrompt, ActionTypeTamper, ActionTypeUnknown:
 		return nil
 	default:
 		return fmt.Errorf("auditevent: invalid enum value for action_type field: %q", at)
