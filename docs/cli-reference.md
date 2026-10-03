@@ -765,14 +765,14 @@ directory another user can write, is refused.
 |---|---|
 | `schema_version` | The version of this contract. A field never changes meaning. A new field raises nothing. A removed or renamed field raises the version. |
 | `profile` | `locked` or `none`. |
-| `summary` | One line for a human. Until the supervisor ships it reads "Locked (hook entry and policy files, decision and audit trail not protected)". |
+| `summary` | One line for a human. "Locked (hook entry and policy files, decision and audit trail not protected)" while the hooks decide in process. "Locked (hook entry and policy files, decision and audit trail in the decision service)" with `supervisor.enabled` and a protected machine key. |
 | `issues` | What keeps the profile from `locked`. Empty for `locked`. |
 | `config`, `binary` | `path` and `chain`: `ok`, `missing`, `untrusted` (with `error`), or `absent` when the platform has no managed location. |
 | `policy` | The same, plus `version` (the file's version field), `sha256` of the file, and `allow_user_policy` from the managed configuration. |
 | `trust_store` | The managed receipt trust store: `path`, `chain`, `keys` (the count of public keys). A missing store is a fact, not an issue. |
 | `agents` | One row per agent in `managed.agents`: `class`, `path`, `level` (`prevent_same_user` for a `locked` entry that matches, `detect` for a `system_path` entry that matches, `none` otherwise), `match`, `locked` (the lock switch), `error`. |
 | `key` | `scope` is `user` while the receipt signing key lives in each user's home, with `protected` false. With `supervisor.enabled` and the machine key in place, `scope` is `supervisor`, `path` and `owner` name the key, and `protected` is true when a system account owns it and nobody else can read it. |
-| `supervisor` | `state` is `absent`: no decision service runs outside the user yet. With `supervisor.enabled`, `profile` is the profile in force, `pilot_until` the end of the pilot as the file sets it, and `pilot_remaining_seconds` the time left while the pilot runs. |
+| `supervisor` | `state` is `absent`, because the command runs no program and asks no socket. With `supervisor.enabled`, `profile` is the profile in force, `pilot_until` the end of the pilot as the file sets it, `pilot_remaining_seconds` the time left while the pilot runs, and `approval_channels` and `approval_group` the approver channel. See [the decision service](./supervisor.md). |
 | `collection` | `level` is `none`: no evidence leaves the host. |
 
 The text form prints the same facts, with "Key: user-owned (not protected)" or "Key: supervisor-owned (protected)"

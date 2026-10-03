@@ -2,8 +2,9 @@
 
 The hook client runs as the agent user. The decision service runs outside
 the user. They talk over a local socket with the frames in `decision/ipc`.
-This page is the reference of those frames. The service itself and the
-client mode of the hook come in later changes.
+This page is the reference of those frames and of the internals of the
+service, for a developer. The [administrator guide](./supervisor.md) has
+the topology, the fail modes, the configuration keys and the units.
 
 ## Framing
 

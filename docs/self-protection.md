@@ -58,12 +58,13 @@ row:
   on. No root is needed.
 - `locked` and `managed`: root installs with the agent's managed settings, and
   with evidence off the host. `gryph install --managed` writes the managed hook
-  entries today. See [Managed install](./cli-reference.md#managed-install).
+  entries, and `gryph doctor --managed` reports `locked` when every managed
+  part is in place. See [Managed install](./cli-reference.md#managed-install).
   Under that configuration the `hook_config` row of an agent with a `locked`
   managed entry reads `prevent_same_user`, and the row of an agent with a
-  `system_path` entry stays at `detect` with a note. The other rows that earn
-  these profiles are planned. `gryph doctor` reports them when their
-  conditions hold.
+  `system_path` entry stays at `detect` with a note. With the
+  [decision service](./supervisor.md) the store and the keys are the
+  service's, out of the user's reach. The `managed` profile is planned.
 
 ### What you can say about `guard`
 

@@ -506,6 +506,31 @@ in the [managed directory](./cli-reference.md#managed-install), root-owned.
 The verifier trusts its keys next to the user's own store. A user key command
 writes the user's store only.
 
+### Key custody
+
+Who holds a key decides what its signature proves.
+
+| Key | Where | Who can read it | What its signature proves |
+|---|---|---|---|
+| The user key, scope `user` | `<config dir>/keys/receipt.key` in the user's home, mode 0600 | The user, and every process of the user, an agent included | That the receipt comes from that user's host. Nothing against that user or their agents. |
+| The machine key, scope `supervisor` | `<state dir>/keys/receipt.key` under `/var/lib/safedep/gryph`, owned by the service account, mode 0600 | The service account only | That the decision service recorded the receipt. A process of the agent's user cannot forge it. |
+| The export key | next to the database, or `<state dir>/keys/export.key` for the service | the same owner as the signing key | It keys the digests of an export, so an export never carries a secret in clear. |
+
+Root never reads a private key. `gryph install --managed` makes the
+machine keys as root and hands them to the service account before the
+service starts. A key that exists is not read again: the key id comes from
+the published public half. The service makes its keys itself at start
+when they are missing. The published public halves live next to the key
+in `receipt-pub.json`, readable by every account, the current key last,
+and `gryph supervisor keys rotate` carries every one of them into the
+managed trust store, so a receipt of a key that no install published
+still verifies.
+
+The service never imports a user key. A key in a home is one that
+same-user malware may have read, so the receipts a user key signed keep
+their `user` scope, and the service signs only with the machine key. See
+[the decision service](./supervisor.md#keys-and-receipts).
+
 ## Receipts
 
 Gryph writes a receipt row for each `block`, `guidance`, `warn`, `escalate` and `defer` decision. By default Gryph does not write a receipt for an `allow` decision, because `policy.log_all_evaluations` is `false`. Set it to `true` to record every evaluation, which AARM's "receipt for every action" requirement asks for:
@@ -521,6 +546,8 @@ Receipts form a per-session hash chain (`hash`, `prev_hash`). The hash now also 
 A receipt hash covers a salted commitment of the command and of the URL, not their values. `gryph policy receipts export --export-profile <name>` applies an export profile to the command, the URL and the error message, and the export still verifies. The default profile removes a command that holds secret, pii or unknown_sensitive content, and the export then leaves out the salt too. Receipts from before this hash version cover the command itself. Export them with `--export-profile full` to verify them. The export prints a warning when a profile changed such a receipt. A rule message that quotes the command puts the command in every export, and the export prints a warning for it.
 
 Receipt rows carry the three identity fields (`human_principal`, `service_identity`, `role_scope`) captured at the mediation boundary. They surface in the `gryph policy receipts --format json` view and in the JSONL and CSV exports. Pre-Phase-6 rows have NULL identity columns and continue to verify cleanly: the hash recipe treats the empty string as the same length-prefixed zero bytes as the insert path.
+
+A receipt of the decision service also carries `signer_key_scope` (`supervisor`), `peer_trust` (the [trust of the connection](#the-trust-of-a-connection) that carried the action: `agent`, `unknown` or `low`) and, for an escalation, the `approval` record: the request id, the channel, the assurance, the approver, the scope of the grant and the note. A receipt the service took from the spool has the decision `unverified`, because the hook decided it alone. A receipt the service took from `gryph supervisor import` has the `imported` marker and keeps the signature of the user key.
 
 Signing defaults to `sign_mode: auto`: receipts carry an Ed25519 signature when a key file is present at the configured `key_path`, and skip the signature when no key is on disk. Pick the explicit mode that matches your operational policy:
 
@@ -760,6 +787,8 @@ The walk is a signal, not proof: a process can leave the tree of its agent. What
 - An answer to a request from a process under a known agent is refused, whoever the account is.
 
 When the bound agent process ends, the next agent above a hook binds the session again, so an agent that resumes a session is not low trust.
+
+### Grants
 
 A later answer from a stronger channel can store a grant. A grant binds to the account, the action digest, the agent session and its scope. The digest covers the normalized action and its working directory, so the same command in another directory is another action. `once` matches the same action one time. `session` matches it for the rest of the agent session. `window` matches it for the account until `grant_ttl`. A grant never matches a whole rule. A retry that matches a grant is allowed, and the receipt names the grant. `max_grant_scope` bounds what an approver can give.
 

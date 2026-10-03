@@ -11,9 +11,13 @@ The flags live in the [CLI reference](./cli-reference.md#managed-install).
 A managed install puts the hook entry of each agent, the policy and the
 configuration out of the user's reach. `gryph doctor --managed` then reports
 the `locked` profile: the hook entry and the policy files resist the non-admin
-user and their agents. The decision still runs in a process of the user, and
-the audit trail stays in the user's home, so the report also says "decision
-and audit trail not protected" and "Key: user-owned (not protected)". The
+user and their agents. Without the decision service the decision still runs
+in a process of the user, and the audit trail stays in the user's home, so
+the report also says "decision and audit trail not protected" and "Key:
+user-owned (not protected)". With `supervisor.enabled: true` the
+[decision service](./supervisor.md) takes the decision, the audit trail and
+the key out of the user's reach, and the report says "decision and audit
+trail in the decision service" and "Key: supervisor-owned (protected)". The
 [self-protection guide](./self-protection.md) and the
 [threat model](./security-policy-threat-model.md) say what you can claim.
 

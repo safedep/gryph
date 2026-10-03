@@ -40,6 +40,7 @@ const (
 	managedSupervisorAbsent      = "absent"
 	managedCollectionNone        = "none"
 	managedLockedSummary         = "Locked (hook entry and policy files, decision and audit trail not protected)"
+	managedLockedServiceSummary  = "Locked (hook entry and policy files, decision and audit trail in the decision service)"
 	managedKeySummary            = "Key: user-owned (not protected)"
 	managedChainOK               = "ok"
 	managedChainMissing          = "missing"
@@ -193,6 +194,12 @@ func buildManagedDoctorReport(ctx context.Context) *managedDoctorReport {
 	if len(report.Issues) == 0 {
 		report.Profile = string(selfprotect.ProfileLocked)
 		report.Summary = managedLockedSummary
+		// A protected machine key means the service holds the decision
+		// and the trail. The command asks no socket, so it reports the
+		// configuration, not whether the service runs now.
+		if report.Key.Scope == managedKeyScopeSupervisor && report.Key.Protected {
+			report.Summary = managedLockedServiceSummary
+		}
 	} else {
 		report.Profile = string(selfprotect.ProfileNone)
 		report.Summary = "None (" + report.Issues[0] + ")"
