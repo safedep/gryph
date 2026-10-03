@@ -189,6 +189,13 @@ func (p *CSVPresenter) RenderDoctor(result *DoctorView) error {
 		_ = p.writer.Write([]string{})
 		p.writeProtection(&result.ProtectionView)
 	}
+	if len(result.Posture) > 0 {
+		_ = p.writer.Write([]string{})
+		_ = p.writer.Write([]string{"posture", "value", "status", "note"})
+		for _, row := range result.Posture {
+			_ = p.writer.Write([]string{row.Name, row.Value, row.Status, row.Note})
+		}
+	}
 
 	p.writer.Flush()
 	return p.writer.Error()

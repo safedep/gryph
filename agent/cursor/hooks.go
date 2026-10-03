@@ -397,3 +397,48 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 
 	return status, nil
 }
+
+// FailClosed implements agent.FailModeReporter. Cursor lets the action
+// through on a hook error unless the entry sets failClosed. Gryph does not
+// set it in the user scope, so the posture report names the state.
+func FailClosed(ctx context.Context) (bool, error) {
+	detection, err := Detect(utils.WithoutProgramExecution(ctx))
+	if err != nil {
+		return false, err
+	}
+	if !detection.Installed {
+		return false, nil
+	}
+	data, err := agent.ReadHookFile(detection.HooksPath, agent.InstallOptions{})
+	if err != nil {
+		return false, err
+	}
+	return failClosedIn(data)
+}
+
+// failClosedIn reports whether every Gryph entry in a hooks.json sets
+// failClosed. A file with no Gryph entry reports false.
+func failClosedIn(data []byte) (bool, error) {
+	var config struct {
+		Hooks map[string][]struct {
+			Command    string `json:"command"`
+			FailClosed bool   `json:"failClosed"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return false, fmt.Errorf("hooks.json does not parse: %w", err)
+	}
+	found := false
+	for _, commands := range config.Hooks {
+		for _, cmd := range commands {
+			if !utils.IsGryphCommand(cmd.Command) {
+				continue
+			}
+			found = true
+			if !cmd.FailClosed {
+				return false, nil
+			}
+		}
+	}
+	return found, nil
+}

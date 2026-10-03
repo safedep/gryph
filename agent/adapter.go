@@ -188,6 +188,20 @@ type Adapter interface {
 	Hooks() []events.HookSpec
 }
 
+// ProcessNamer is an optional interface of an adapter. It names the
+// programs of the agent as the kernel reports them, so a census can match
+// a live agent process to the adapter.
+type ProcessNamer interface {
+	ProcessNames() []string
+}
+
+// FailModeReporter is an optional interface of an adapter whose agent can
+// block the action when the hook fails. FailClosed reports whether every
+// Gryph entry asks for that.
+type FailModeReporter interface {
+	FailClosed(ctx context.Context) (bool, error)
+}
+
 // HookTypeNames returns the hook type names of specs, in order.
 func HookTypeNames(specs []events.HookSpec) []string {
 	names := make([]string, 0, len(specs))

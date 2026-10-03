@@ -85,6 +85,11 @@ func TestAcceptance(t *testing.T) {
 					env.Setenv("PATH", binDir+string(os.PathListSeparator)+env.Getenv("PATH"))
 					env.Setenv("ACCEPTANCE_TESTDATA", testdata)
 					env.Setenv("ACCEPTANCE_EXAMPLES", examples)
+					// The host that runs the suite may run a real agent, for
+					// example the developer's own Claude Code. The census would
+					// then report it in every script. A script that tests the
+					// census turns it on again.
+					env.Setenv("GRYPH_POLICY_SELF_PROTECTION_CENSUS", "false")
 					// The status and doctor commands run an async update check
 					// against the GitHub API. Forward proxy and TLS settings so
 					// the check works in proxied environments. The check fails

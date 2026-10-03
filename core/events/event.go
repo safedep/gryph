@@ -227,6 +227,9 @@ const (
 	// TamperRateLimited records an asset that Gryph stopped repairing,
 	// because the repairs in the window reached the limit.
 	TamperRateLimited = "rate_limited"
+	// TamperSilentAgent records a live agent process that sent no hook
+	// call in the census window.
+	TamperSilentAgent = "silent_agent"
 )
 
 // Summary is the one-line form of the payload. The receipt stores and

@@ -38,10 +38,13 @@ Performs various health checks:
 - Database schema is up to date
 
 It also prints the self-protection table: the level at which each Gryph
-asset resists a change, and the profile that the levels earn. A change
-since the last run becomes a tamper event in the system session. With
---repair, doctor also rewrites a hook configuration that differs from a
-current install, the same pass as gryph supervisor reconcile --once.`,
+asset resists a change, the live agents and their hook traffic, and the
+profile that the levels earn. A change since the last run becomes a tamper
+event in the system session. With --repair, doctor also rewrites a hook
+configuration that differs from a current install, the same pass as gryph
+supervisor reconcile --once. The host posture section lists the kernel
+settings and the agent behavior that decide how far a same-user adversary
+gets.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
@@ -171,6 +174,9 @@ current install, the same pass as gryph supervisor reconcile --once.`,
 				}
 				if report != nil {
 					v.ProtectionView = protectionView(report)
+				}
+				for _, item := range app.Posture(ctx) {
+					v.Posture = append(v.Posture, tui.PostureRow{Name: item.Name, Value: item.Value, Status: string(item.Status), Note: item.Note})
 				}
 
 				return v, nil

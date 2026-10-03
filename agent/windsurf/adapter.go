@@ -85,3 +85,6 @@ func Register(registry *agent.Registry, privacyChecker *privacy.Redactor, loggin
 }
 
 var _ agent.Adapter = (*Adapter)(nil)
+
+// ProcessNames implements agent.ProcessNamer.
+func (a *Adapter) ProcessNames() []string { return []string{"windsurf", "Windsurf"} }

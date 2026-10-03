@@ -224,6 +224,18 @@ type DoctorView struct {
 	Checks []DoctorCheck
 	AllOK  bool
 	ProtectionView
+	// Posture holds the host settings and the agent behavior on a hook
+	// failure.
+	Posture []PostureRow
+}
+
+// PostureRow is one fact about the host that decides how far Gryph
+// resists a same-user adversary.
+type PostureRow struct {
+	Name   string
+	Value  string
+	Status string
+	Note   string
 }
 
 // ProtectionView is the outcome of one self-protection pass: the state of

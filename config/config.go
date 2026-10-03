@@ -172,6 +172,25 @@ type SelfProtectionConfig struct {
 	// differs from a current install. It is off by default in the user
 	// scope, and on by default under a system managed configuration.
 	Repair bool `mapstructure:"repair"`
+	// Census turns the process census on. It is on by default. Turn it off
+	// on a host where an agent runs for another reason than the user's own
+	// work, for example a build host.
+	Census bool `mapstructure:"census"`
+	// CensusWindow is how long a live agent process may run without a hook
+	// call before the census reports it as silent.
+	CensusWindow time.Duration `mapstructure:"census_window"`
+}
+
+// DefaultCensusWindow is the census window when the config sets none.
+const DefaultCensusWindow = 10 * time.Minute
+
+// EffectiveCensusWindow returns the census window, or the default when the
+// config holds none or a value that is not positive.
+func (c SelfProtectionConfig) EffectiveCensusWindow() time.Duration {
+	if c.CensusWindow <= 0 {
+		return DefaultCensusWindow
+	}
+	return c.CensusWindow
 }
 
 // IdentityConfig controls the AARM identity-capture layer. Enabled gates the

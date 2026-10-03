@@ -1,0 +1,19 @@
+# Doctor reports the host posture: the kernel settings that decide how far a
+# same-user adversary gets, and what each present agent does when a hook
+# fails.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+
+exec gryph doctor --no-color
+stdout 'Host posture'
+[linux] stdout 'kernel.yama.ptrace_scope = '
+stdout 'claude-code on a hook error or timeout = lets the action through'
+stdout 'hook timeout 600 s'
+
+exec gryph doctor --format json --no-color
+stdout '"Posture"'
+stdout '"Name": "claude-code on a hook error or timeout"'

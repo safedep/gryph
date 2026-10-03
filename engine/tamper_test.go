@@ -140,3 +140,13 @@ func TestRuntime_TamperRecorder(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// TamperRecorderForTest returns a recorder on the runtime's store for the
+// account "test".
+func (a *Runtime) TamperRecorderForTest() *TamperRecorder {
+	return newTamperRecorder(a.Store, receipt.NewSQLite(a.Store), "test")
+}
+
+func decodePayload(e *events.Event, p *events.TamperPayload) error {
+	return json.Unmarshal(e.Payload, p)
+}

@@ -474,6 +474,9 @@ func (p *TablePresenter) RenderDoctor(result *DoctorView) error {
 	if result.Profile != "" {
 		p.renderProtection(tw, &result.ProtectionView)
 	}
+	if len(result.Posture) > 0 {
+		p.renderPosture(tw, result.Posture)
+	}
 
 	if result.AllOK {
 		tw.println(p.color.Success("All checks passed."))
@@ -482,6 +485,28 @@ func (p *TablePresenter) RenderDoctor(result *DoctorView) error {
 	}
 
 	return tw.Err()
+}
+
+// renderPosture prints the host posture: one line per fact, with its
+// note below.
+func (p *TablePresenter) renderPosture(tw *tableWriter, rows []PostureRow) {
+	tw.printf("%s\n", p.color.Header("Host posture"))
+	for _, row := range rows {
+		var status string
+		switch row.Status {
+		case "ok":
+			status = p.color.StatusOK()
+		case "warn":
+			status = p.color.Warning("[!!]")
+		default:
+			status = p.color.Dim("[..]")
+		}
+		tw.printf("  %s  %s = %s\n", status, row.Name, row.Value)
+		if row.Note != "" {
+			tw.printf("        %s\n", p.color.Dim(row.Note))
+		}
+	}
+	tw.println()
 }
 
 // RenderProtection renders the outcome of a self-protection pass.

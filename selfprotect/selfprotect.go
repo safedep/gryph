@@ -30,6 +30,10 @@ const (
 	// AssetSupervisor is the decision service process. No provider assesses
 	// it until a system service exists.
 	AssetSupervisor Asset = "supervisor"
+	// AssetHookTraffic is the flow of hook calls from a live agent process.
+	// The Agent field names the agent. A live agent with no hook calls is
+	// drift: the hooks do not reach Gryph.
+	AssetHookTraffic Asset = "hook_traffic"
 )
 
 // Level is how far a provider protects an asset. The order matters: a

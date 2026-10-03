@@ -117,6 +117,25 @@ With `policy.enabled: false`, the default, the built-in rules do not run. Every
 asset that only they protect is at `none`, the row names the config key, and
 the profile is `none`.
 
+The table also has one `hook_traffic` row per agent with a live process. A
+process of an agent that ran through the census window (10 minutes by
+default, `policy.self_protection.census_window`) while the agent sent no
+hook call is drift on that row: the hooks do not reach Gryph, because they
+were removed, stopped, or never fired. Doctor records it as a `silent_agent`
+tamper event. The census matches the processes of the account by program
+name, so it does not see an agent that runs under another name. Set
+`policy.self_protection.census: false` on a host where an agent runs for
+another reason than the user's own work.
+
+After the table, `doctor` prints the host posture: the kernel settings that
+decide how far a same-user adversary gets, and what each present agent does
+when a hook fails. On Linux it reads `kernel.apparmor_restrict_unprivileged_userns`
+or `user.max_user_namespaces`, and `kernel.yama.ptrace_scope`, and warns
+when a user can make a user namespace or trace the hook. For every present
+agent it names the longest hook timeout, and for Cursor whether the Gryph
+entries set `failClosed`. The [threat model](./security-policy-threat-model.md#gaps-and-hardened-deployment)
+names the values to set on a fleet.
+
 `doctor` runs one reconcile pass. It records a tamper event in the system
 session of the account when a hook configuration drifts, when the drift
 changes or clears, and when the level of an asset changes. The line `Tamper

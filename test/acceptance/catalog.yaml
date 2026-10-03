@@ -356,6 +356,20 @@
   guarantee: "gryph doctor records a tamper event with a receipt in the account's system session when a hook configuration drifts, when the drift clears, and not on a repeated run. gryph policy receipts --verify and verify-log pass on the chain."
   labels: [receipts, selfprotect, tamper]
 
+- id: doctor/census/silent-agent
+  title: "doctor reports a live agent with no hook traffic as a silent agent"
+  category: doctor
+  tier: P1
+  guarantee: "A process named like an agent program that runs through the census window with no hook event is drift on the hook_traffic row and a silent_agent tamper event. A hook call clears it, as a resolved tamper event."
+  labels: [doctor, census, selfprotect]
+
+- id: doctor/posture/report
+  title: "doctor reports the host posture"
+  category: doctor
+  tier: P1
+  guarantee: "gryph doctor prints a host posture section with the Linux kernel settings that decide how far a same-user adversary gets, and for each present agent what it does when a hook fails, with its hook timeout and, for Cursor, the failClosed state."
+  labels: [doctor, posture]
+
 - id: doctor/selfprotect/asset-table
   title: "doctor prints the self-protection level of every asset and the profile"
   category: doctor

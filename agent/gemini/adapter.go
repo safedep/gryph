@@ -100,3 +100,6 @@ func (a *Adapter) RenderResponse(hookType string, decision agent.HookDecision, d
 		return agent.RenderedResponse{Out: []byte("{}")}
 	}
 }
+
+// ProcessNames implements agent.ProcessNamer.
+func (a *Adapter) ProcessNames() []string { return []string{"gemini"} }

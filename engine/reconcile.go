@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/selfprotect"
@@ -54,6 +55,13 @@ func RepairEnabled(cfg *config.Config) bool {
 func (a *Runtime) Reconcile(ctx context.Context, repair bool) (*ReconcileReport, error) {
 	provider := a.ProtectionProvider()
 	report := &ReconcileReport{Statuses: provider.Assess(ctx)}
+	if a.Config.Policy.SelfProtection.Census {
+		census, err := a.Census(ctx)
+		if err != nil {
+			log.Warnf("reconcile: census skipped: %v", err)
+		}
+		report.Statuses = append(report.Statuses, census...)
+	}
 	report.Profile = selfprotect.ProfileOf(report.Statuses)
 
 	recorder, err := a.TamperRecorder()

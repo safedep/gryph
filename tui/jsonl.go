@@ -79,6 +79,11 @@ func (p *JSONLPresenter) RenderDoctor(result *DoctorView) error {
 			return err
 		}
 	}
+	for _, row := range result.Posture {
+		if err := p.encoder.Encode(struct{ Posture PostureRow }{row}); err != nil {
+			return err
+		}
+	}
 	if result.Profile == "" {
 		return nil
 	}

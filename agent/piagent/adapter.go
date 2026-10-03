@@ -97,3 +97,6 @@ func (a *Adapter) RenderResponse(hookType string, decision agent.HookDecision, d
 		return agent.RenderedResponse{}
 	}
 }
+
+// ProcessNames implements agent.ProcessNamer.
+func (a *Adapter) ProcessNames() []string { return []string{"pi"} }

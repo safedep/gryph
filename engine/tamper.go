@@ -78,6 +78,8 @@ func (r *TamperRecorder) recordChanges(ctx context.Context, history *tamperHisto
 			payload.LevelBefore = prev.LevelAfter
 		}
 		switch {
+		case payload.Drift != "" && s.Asset == selfprotect.AssetHookTraffic:
+			payload.Operation = events.TamperSilentAgent
 		case payload.Drift != "":
 			payload.Operation = events.TamperDrift
 		case seen && prev.Drift != "":
@@ -237,7 +239,7 @@ func tamperKey(ref selfprotect.AssetRef) string { return string(ref.Asset) + "/"
 
 func tamperSeverity(p events.TamperPayload) model.Severity {
 	switch p.Operation {
-	case events.TamperDrift, events.TamperRepairFailed:
+	case events.TamperDrift, events.TamperRepairFailed, events.TamperSilentAgent:
 		return model.SeverityHigh
 	case events.TamperLevel, events.TamperRateLimited:
 		return model.SeverityMedium

@@ -53,6 +53,7 @@ asset with its level, and the profile that the levels earn.
 | Asset | What it is |
 |---|---|
 | `hook_config` | The hook configuration of one agent. One row per agent that is on the host. |
+| `hook_traffic` | The flow of hook calls from a live agent process. One row per agent with a process. A process that runs through the census window while the agent sends no hook call is drift. |
 | `binary` | The gryph binary that the hook entries run. |
 | `policy` | The policy file and the policies directory. |
 | `config` | The configuration file in force: the system managed file when it exists, else the user's file. |
@@ -152,8 +153,8 @@ control that changes the status. A control marked planned does not exist yet.
 | # | Tier | Bypass | In `guard` | Control |
 |---|---|---|---|---|
 | 1 | B | Edit the agent's hook configuration and remove the Gryph entry | D, when a reconcile pass runs. Repaired when `policy.self_protection.repair` is on, up to three times an hour. | In `locked`: the agent's managed settings, owned by root. |
-| 2 | B | Stop or trace the hook process until the agent times out and lets the action through | O | Planned: a process census in `doctor` that reports an agent with no hook traffic. Set the agent to fail closed where the vendor offers it. See [agent-enforcement-coverage.md](./agent-enforcement-coverage.md). |
-| 3 | B | Run a second agent binary, or an agent with a private config directory | O | Planned: a census of known agent binaries. An unknown agent stays out of scope. |
+| 2 | B | Stop or trace the hook process until the agent times out and lets the action through | D, when the agent process runs through the census window with no hook call | The `hook_traffic` row and the `silent_agent` tamper event. Set `kernel.yama.ptrace_scope` to 1 or more. Set the agent to fail closed where the vendor offers it. See [agent-enforcement-coverage.md](./agent-enforcement-coverage.md). |
+| 3 | B | Run a second agent binary, or an agent with a private config directory | D for a binary with a known program name, O otherwise | The census matches the processes of the account by program name. An agent under another name stays out of scope. |
 | 4 | B | Run `gryph _hook` from a shell and record a forged event or prompt | P through a mediated shell command, O otherwise | Planned: a decision service that identifies the caller with kernel peer credentials. |
 | 5 | B | Patch the gryph binary, put another one earlier on `PATH`, or preload a library | O | In `locked`: the hook entry names an absolute path under a root-owned directory. |
 | 6 | B | Change a protected file outside the shell analysis: a script file, an interpreter, a path built at run time | O | A kernel mechanism, optional and Linux only. Planned. |
@@ -178,6 +179,16 @@ two surfaces:
 The same lower-level control protects both surfaces, and the config-directory
 policy files gain the same protection. Until then, Gryph makes tampering harder
 for a same-user adversary, but does not stop a determined one.
+
+On a Linux fleet, set two kernel settings through the configuration management
+of the fleet. `gryph doctor` reports both under "Host posture".
+
+- `kernel.apparmor_restrict_unprivileged_userns = 1`, or on a kernel without
+  that setting `user.max_user_namespaces = 0`. An unprivileged user namespace
+  lets a user bind-mount a file of their own over a managed settings file or
+  over the binary, and the agent then runs without Gryph.
+- `kernel.yama.ptrace_scope = 1` or more. With scope 0, a process of the user
+  can attach to the hook process and change its answer.
 
 The receipt design lists further controls against audit-trail tampering. See the
 receipt sections of [security-policy.md](./security-policy.md).
