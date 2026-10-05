@@ -45,6 +45,10 @@ func (a *Adapter) ManagedHookPath() string {
 // locks out the other hooks (managed settings docs, 2026-10-03).
 func (a *Adapter) ManagedClass() agent.ManagedClass { return agent.ManagedClassLocked }
 
+// ManagedLockSwitch implements agent.ManagedLockSwitcher: the drop-in can
+// set allowManagedHooksOnly.
+func (a *Adapter) ManagedLockSwitch() bool { return true }
+
 // InstallManaged implements agent.ManagedInstaller.
 func (a *Adapter) InstallManaged(_ context.Context, opts agent.ManagedInstallOptions) (*agent.ManagedInstallResult, error) {
 	return installManagedAt(a.ManagedHookPath(), opts)

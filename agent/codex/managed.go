@@ -39,6 +39,10 @@ func (a *Adapter) ManagedHookPath() string { return requirementsPath() }
 // as trusted, and the user cannot disable them (Codex docs, 2026-10-03).
 func (a *Adapter) ManagedClass() agent.ManagedClass { return agent.ManagedClassLocked }
 
+// ManagedLockSwitch implements agent.ManagedLockSwitcher: the requirements
+// file can set allow_managed_hooks_only.
+func (a *Adapter) ManagedLockSwitch() bool { return true }
+
 // InstallManaged implements agent.ManagedInstaller.
 func (a *Adapter) InstallManaged(_ context.Context, opts agent.ManagedInstallOptions) (*agent.ManagedInstallResult, error) {
 	return installManagedAt(a.ManagedHookPath(), opts)

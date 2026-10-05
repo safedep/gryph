@@ -335,11 +335,11 @@
   guarantee: "Under --managed, HOME, XDG_* and GRYPH_* have no effect: the configuration lands in the system directory and nothing lands in the user home. Privileged job only."
   labels: [install, managed, privileged, linux]
 
-- id: install/managed/cursor-system-path
+- id: install/managed/cursor-entry
   title: "install --managed writes the Cursor enterprise hooks with failClosed"
   category: install
   tier: P1
-  guarantee: "gryph install --managed writes the Gryph entries into the Cursor enterprise hooks.json with failClosed on every entry, keeps the administrator entries, reports the class system_path, and exits 3 on a lock for Cursor, which has none. Privileged job only."
+  guarantee: "gryph install --managed writes the Gryph entries into the Cursor enterprise hooks.json with failClosed on every entry, keeps the administrator entries, reports the class locked, and exits 3 on a lock for Cursor, which has no lock switch. Under that configuration gryph doctor puts the Cursor hook_config row at prevent_same_user. Privileged job only."
   labels: [install, managed, privileged, linux]
 
 - id: install/managed/gemini-system-path

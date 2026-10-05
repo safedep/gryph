@@ -76,7 +76,7 @@ paths.
 |---|---|---|---|---|
 | Claude Code | `locked` | A user or project `disableAllHooks` does not turn off a managed hook. `allowManagedHooksOnly` lets only managed hooks run. | 2026-10-03, managed settings docs, Claude Code 2.1 | abhisek |
 | Codex | `locked` | Managed hooks are trusted and a user cannot disable them. `[features] hooks = true` is pinned. `allow_managed_hooks_only` lets only managed hooks run. | 2026-10-03, managed configuration docs | abhisek |
-| Cursor | `system_path` | Enterprise entries have priority and any deny wins. The reference does not say that a user cannot turn them off. Gryph sets `failClosed` on its entries. | 2026-10-03, hooks reference | maintainers |
+| Cursor | `locked` | Every source runs, any deny wins over ask and ask over allow whatever the source, and the enterprise file has the highest priority. The reference names no user setting that turns the enterprise file off. No lock switch exists and none is needed: a user entry cannot override an enterprise deny. Gryph sets `failClosed` on its entries. | 2026-10-05, hooks reference | abhisek |
 | Gemini CLI | `system_path` | The system file wins on a conflict and hook lists concatenate across scopes. Gryph pins `hooksConfig.enabled` there. The source does not say what `hooksConfig.disabled` in the user scope does to a system hook. | 2026-10-03, settings source on main | maintainers |
 | Windsurf | `system_path` | The reference says a user cannot disable the system file without root, and that system, user and workspace entries all run. It documents no lock against a user entry that answers first. | 2026-10-03, Cascade hooks reference | maintainers |
 | Devin, OpenCode, Pi Agent, Command Code | none | No documented managed location. | 2026-10-03 | maintainers |

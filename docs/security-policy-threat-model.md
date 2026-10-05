@@ -111,7 +111,7 @@ profile of the whole host.
 | Profile | Minimum levels | What it is |
 |---|---|---|
 | `guard` | `mediated` on every asset, and `detect` on every hook configuration | The profile of a user install with policy on. No root. Repair of a hook configuration is a choice: `policy.self_protection.repair`. |
-| `locked` | `guard`, plus `prevent_same_user` on `binary`, `policy` and `config`, and at least `repair` on every hook configuration | A root install that uses the agent's managed settings. `gryph doctor --managed` reports it. The hook entry of an agent with a `locked` managed class (Claude Code and Codex) resists the user. An agent with a `system_path` class (Cursor, Gemini, Windsurf) reads a root-owned file but has no lock of its own, so its row stays at `detect`. With the decision service, the decision and the audit trail are the service's too. |
+| `locked` | `guard`, plus `prevent_same_user` on `binary`, `policy` and `config`, and at least `repair` on every hook configuration | A root install that uses the agent's managed settings. `gryph doctor --managed` reports it. The hook entry of an agent with a `locked` managed class (Claude Code, Codex and Cursor) resists the user. An agent with a `system_path` class (Gemini, Windsurf) reads a root-owned file but has no lock of its own, so its row stays at `detect`. With the decision service, the decision and the audit trail are the service's too. |
 | `managed` | `locked`, plus `attest` on every asset | Locked with off-host evidence. Planned. |
 
 The default configuration has `policy.enabled: false`. Then the built-in rules

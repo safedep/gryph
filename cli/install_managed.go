@@ -549,7 +549,7 @@ func readManagedInput(configPath, policyPath, trustStorePath string) (*managedIn
 		}
 	}
 	for _, name := range cfg.Managed.LockHooks {
-		if in.installers[name].ManagedClass() != agent.ManagedClassLocked {
+		if switcher, ok := in.installers[name].(agent.ManagedLockSwitcher); !ok || !switcher.ManagedLockSwitch() {
 			return nil, fmt.Errorf("managed.lock_hooks names %s, which has no lock switch", name)
 		}
 	}

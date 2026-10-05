@@ -694,7 +694,7 @@ user wrote.
 |---|---|---|---|
 | Claude Code | `locked` | `managed-settings.d/50-gryph.json` next to `managed-settings.json`: `/etc/claude-code/` on Linux, `/Library/Application Support/ClaudeCode/` on macOS, `C:\Program Files\ClaudeCode\` on Windows. Gryph owns this one file and never edits `managed-settings.json`. | `allowManagedHooksOnly: true` in the drop-in |
 | Codex | `locked` | `/etc/codex/requirements.toml` on Linux and macOS, `%ProgramData%\OpenAI\Codex\requirements.toml` on Windows. Gryph rewrites the file: it keeps every key, pins `[features] hooks = true`, and replaces its own `[hooks]` entries. Comments do not survive the rewrite. | `allow_managed_hooks_only = true` |
-| Cursor | `system_path` | `/etc/cursor/hooks.json` on Linux, `/Library/Application Support/Cursor/hooks.json` on macOS, `%ProgramData%\Cursor\hooks.json` on Windows. Gryph keeps the other entries and sets `failClosed: true` on its own, so a hook crash or timeout blocks the action. | none |
+| Cursor | `locked` | `/etc/cursor/hooks.json` on Linux, `/Library/Application Support/Cursor/hooks.json` on macOS, `%ProgramData%\Cursor\hooks.json` on Windows. Gryph keeps the other entries and sets `failClosed: true` on its own, so a hook crash or timeout blocks the action. Every source runs and any deny wins, so a user entry cannot override the enterprise entry. | none |
 | Gemini CLI | `system_path` | `/etc/gemini-cli/settings.json` on Linux, `/Library/Application Support/GeminiCli/settings.json` on macOS, `%ProgramData%\gemini-cli\settings.json` on Windows. Gryph keeps the other settings and pins `hooksConfig.enabled: true`. | none |
 | Windsurf | `system_path` | `/etc/devin/hooks.json` on Linux, `/Library/Application Support/Devin/hooks.json` on macOS, `%ProgramData%\Devin\hooks.json` on Windows. Gryph keeps the other entries. | none |
 
@@ -710,9 +710,10 @@ stays at `detect`. Devin, OpenCode, Pi Agent and Command Code have no
 documented managed location, so `managed.agents` cannot name them.
 
 The lock stops the developer's own hooks too, so it is off by default, and
-only a `locked` agent accepts it. The managed hooks hold without it: a user
-`disableAllHooks` cannot turn off a managed Claude Code hook, and Codex marks
-managed hooks as trusted.
+only an agent with a lock switch accepts it: Claude Code and Codex. The
+managed hooks hold without it: a user `disableAllHooks` cannot turn off a
+managed Claude Code hook, Codex marks managed hooks as trusted, and Cursor
+runs the enterprise entry next to every other source with any deny winning.
 
 `--trust-store` installs the receipt trust store of the fleet at
 `keys/receipt-pub.json` in the managed directory, root-owned and readable by
@@ -759,7 +760,7 @@ their error.
   "agents": [
     {"name": "claude-code", "path": "/etc/claude-code/managed-settings.d/50-gryph.json", "class": "locked", "action": "install", "changed": true, "locked": true},
     {"name": "codex", "path": "/etc/codex/requirements.toml", "class": "locked", "action": "install", "changed": true, "locked": false},
-    {"name": "cursor", "path": "/etc/cursor/hooks.json", "class": "system_path", "action": "install", "changed": true, "locked": false}
+    {"name": "cursor", "path": "/etc/cursor/hooks.json", "class": "locked", "action": "install", "changed": true, "locked": false}
   ]
 }
 ```
@@ -797,7 +798,7 @@ directory another user can write, is refused.
   "binary": {"path": "/opt/safedep/gryph/bin/gryph", "chain": "ok"},
   "agents": [
     {"name": "claude-code", "class": "locked", "path": "/etc/claude-code/managed-settings.d/50-gryph.json", "level": "prevent_same_user", "match": true, "locked": true},
-    {"name": "cursor", "class": "system_path", "path": "/etc/cursor/hooks.json", "level": "detect", "match": true, "locked": false}
+    {"name": "cursor", "class": "locked", "path": "/etc/cursor/hooks.json", "level": "prevent_same_user", "match": true, "locked": false}
   ],
   "key": {"scope": "supervisor", "protected": true, "path": "/var/lib/safedep/gryph/keys/receipt.key", "owner": "_gryph"},
   "supervisor": {"state": "absent", "profile": "pilot", "pilot_until": "2026-12-31", "pilot_remaining_seconds": 7603200},

@@ -217,13 +217,22 @@ type ManagedClass string
 
 const (
 	// ManagedClassLocked: the vendor documents that a user cannot turn the
-	// managed hooks off, and offers a lock that lets only managed hooks run.
+	// managed hooks off. The agent may also offer a lock switch that lets
+	// only managed hooks run; ManagedLockSwitcher names the ones that do.
 	ManagedClassLocked ManagedClass = "locked"
 	// ManagedClassSystemPath: the agent reads a system file that root owns,
 	// but the vendor does not document that the user cannot override or
 	// disable its hooks. The reconcile pass keeps checking the user scope.
 	ManagedClassSystemPath ManagedClass = "system_path"
 )
+
+// ManagedLockSwitcher is a ManagedInstaller whose agent has a lock switch
+// that lets only managed hooks run. ManagedInstallOptions.Lock applies to
+// such an agent alone. A locked agent without the switch needs none: its
+// managed hooks run whatever the user scope holds.
+type ManagedLockSwitcher interface {
+	ManagedLockSwitch() bool
+}
 
 // ManagedInstallOptions configures a managed install.
 type ManagedInstallOptions struct {

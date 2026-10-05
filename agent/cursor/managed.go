@@ -12,9 +12,10 @@ import (
 )
 
 // managedHooksPath is the enterprise hooks.json of the platform (Cursor
-// hooks reference, 2026-10-03). Enterprise entries take priority over the
-// team, project and user entries, and any deny wins. The reference does
-// not say that a user cannot turn them off.
+// hooks reference, 2026-10-05). The reference says that every source runs,
+// that any deny wins over ask and ask over allow whatever the source, and
+// that the enterprise file has the highest priority. It names no user
+// setting that turns the enterprise file off, so the class is locked.
 func managedHooksPath() string {
 	switch runtime.GOOS {
 	case "darwin":
@@ -33,8 +34,10 @@ func managedHooksPath() string {
 // ManagedHookPath implements agent.ManagedInstaller.
 func (a *Adapter) ManagedHookPath() string { return managedHooksPath() }
 
-// ManagedClass implements agent.ManagedInstaller.
-func (a *Adapter) ManagedClass() agent.ManagedClass { return agent.ManagedClassSystemPath }
+// ManagedClass implements agent.ManagedInstaller. Cursor has no lock
+// switch and needs none: a user entry cannot override a deny of the
+// enterprise entry.
+func (a *Adapter) ManagedClass() agent.ManagedClass { return agent.ManagedClassLocked }
 
 // InstallManaged implements agent.ManagedInstaller.
 func (a *Adapter) InstallManaged(_ context.Context, opts agent.ManagedInstallOptions) (*agent.ManagedInstallResult, error) {
@@ -49,7 +52,7 @@ func (a *Adapter) UninstallManaged(_ context.Context, opts agent.ManagedInstallO
 // installManagedAt writes the Gryph entries after the entries of other
 // programs. Every Gryph entry sets failClosed, so a crash or a timeout of
 // the hook blocks the action instead of letting it through. Cursor has no
-// lock, so opts.Lock has no effect.
+// lock switch, so opts.Lock has no effect.
 func installManagedAt(path string, opts agent.ManagedInstallOptions) (*agent.ManagedInstallResult, error) {
 	if opts.Command == "" || !filepath.IsAbs(opts.Command) {
 		return nil, fmt.Errorf("the managed hook command needs an absolute path, got %q", opts.Command)

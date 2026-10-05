@@ -24,9 +24,8 @@ execexit 1 gryph doctor --managed --json
 stdout '"profile": "none"'
 stdout '"no managed policy at /etc/safedep/gryph/policy.yaml"'
 stdout '"name": "claude-code"'
-stdout '"level": "prevent_same_user"'
 stdout '"name": "cursor"'
-stdout '"level": "detect"'
+stdout -count=2 '"level": "prevent_same_user"'
 
 # The full install: locked, exit 0.
 exec gryph install --managed --config $WORK/managed.yml --policy $WORK/policy.yaml
@@ -44,7 +43,7 @@ exec gryph doctor --managed
 stdout 'Managed doctor: Locked \(hook entry and policy files, decision and audit trail not protected\)'
 stdout 'Key: user-owned \(not protected\)'
 stdout 'claude-code\s+locked\s+prevent_same_user\s+/etc/claude-code/managed-settings.d/50-gryph.json\s+\(locked\)'
-stdout 'cursor\s+system_path\s+detect\s+/etc/cursor/hooks.json'
+stdout 'cursor\s+locked\s+prevent_same_user\s+/etc/cursor/hooks.json'
 
 # A removed entry drops the profile.
 exec rm /etc/cursor/hooks.json

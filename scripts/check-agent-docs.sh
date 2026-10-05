@@ -43,8 +43,8 @@ check "codex" "https://learn.chatgpt.com/docs/enterprise/managed-configuration" 
 check "codex-hooks" "https://learn.chatgpt.com/docs/hooks" \
   "allow_managed_hooks_only" "managed_dir"
 
-# Cursor, class system_path.
-check "cursor" "https://cursor.com/docs/agent/hooks" \
+# Cursor, class locked: every source runs and any deny wins.
+check "cursor" "https://cursor.com/docs/hooks" \
   "failClosed" "/etc/cursor/hooks.json" "Application Support/Cursor/hooks.json"
 
 # Gemini CLI, class system_path. The source is the reference, the docs lag.
