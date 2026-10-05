@@ -1,0 +1,40 @@
+# gryph install --managed writes the Gemini CLI entries into the system
+# settings.json, pins hooksConfig.enabled, and keeps the other settings.
+# Under the managed configuration, gryph doctor names the managed entry on
+# the hook_config row and keeps the user scope at detect. Runs only in the
+# privileged job on a Linux host with no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+! exists /etc/gemini-cli
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+expandenv managed.yml
+exec mkdir -p /etc/gemini-cli
+exec cp settings.json /etc/gemini-cli/settings.json
+
+exec gryph install --managed --config $WORK/managed.yml
+stdout 'gemini\s+system_path\s+install\s+changed\s+/etc/gemini-cli/settings.json'
+grep '"vimMode": false' /etc/gemini-cli/settings.json
+grep '"enabled": true' /etc/gemini-cli/settings.json
+grep '_hook gemini BeforeTool' /etc/gemini-cli/settings.json
+grep '"matcher": "\*"' /etc/gemini-cli/settings.json
+
+mkdir $HOME/.gemini
+exec gryph doctor --no-color
+stdout 'hook_config\s+gemini\s+detect\s+.*managed entry at /etc/gemini-cli/settings.json \(system path, user scope still checked\)'
+stdout 'drift: hooks not installed'
+
+exec rm -rf /etc/safedep/gryph /etc/gemini-cli
+exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- settings.json --
+{"general": {"vimMode": false}}
+-- managed.yml --
+policy:
+  enabled: true
+managed:
+  agents: [gemini]
+  binary: ${ACCEPTANCE_GRYPH_BIN}

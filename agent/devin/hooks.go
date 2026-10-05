@@ -16,14 +16,21 @@ import (
 // Hooks declares the Devin hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
-var Hooks = []events.HookSpec{
+//
+// Gryph writes hookTimeout into every hook entry. Devin lets the action
+// through on any exit code other than 2 (Cascade hooks reference,
+// 2026-10-03). The reference documents no timeout behavior.
+var Hooks = events.WithTimeout(hookTimeout, []events.HookSpec{
 	{Type: "SessionStart", Phase: events.PhaseUnknown},
 	{Type: "PreToolUse", Phase: events.PhasePre, Blocking: true},
 	{Type: "PostToolUse", Phase: events.PhasePost},
 	{Type: "UserPromptSubmit", Phase: events.PhasePre, Blocking: true, Prompt: true},
 	{Type: "Stop", Phase: events.PhaseUnknown},
 	{Type: "SessionEnd", Phase: events.PhaseUnknown},
-}
+})
+
+// hookTimeout is the timeout that Gryph writes into each Devin hook entry.
+const hookTimeout = 30 * time.Second
 
 // HookTypes are the hook type names in Hooks, in install order.
 var HookTypes = agent.HookTypeNames(Hooks)
@@ -53,16 +60,16 @@ func hookMatcher(hookType string) string {
 	}
 }
 
-func gryphHookCommand(hookType string) string {
-	return fmt.Sprintf("%s _hook devin %s", utils.GryphCommand(), hookType)
+func gryphHookCommand(program, hookType string) string {
+	return utils.HookCommand(program, "devin", hookType)
 }
 
 // readDevinConfig reads the full Devin config.json as a raw JSON map. This
 // lets the installer merge the hooks section without touching unrelated
 // settings. Devin has one config file, unlike Codex which owns a dedicated
 // hooks.json.
-func readDevinConfig(configFile string) (map[string]json.RawMessage, error) {
-	data, err := os.ReadFile(configFile)
+func readDevinConfig(configFile string, opts agent.InstallOptions) (map[string]json.RawMessage, error) {
+	data, err := agent.ReadHookFile(configFile, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -102,15 +109,15 @@ func writeHooksToConfig(raw map[string]json.RawMessage, hooks map[string][]HookM
 	return nil
 }
 
-func writeDevinConfig(configFile string, raw map[string]json.RawMessage) error {
+func writeDevinConfig(configFile string, raw map[string]json.RawMessage, opts agent.InstallOptions) error {
 	data, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	return os.WriteFile(configFile, data, 0600)
+	return agent.WriteHookFile(configFile, data, 0600, opts)
 }
 
-func generateGryphHooks() map[string][]HookMatcher {
+func generateGryphHooks(program string) map[string][]HookMatcher {
 	hooks := make(map[string][]HookMatcher)
 	for _, hookType := range HookTypes {
 		hooks[hookType] = []HookMatcher{
@@ -119,8 +126,8 @@ func generateGryphHooks() map[string][]HookMatcher {
 				Hooks: []HookCommand{
 					{
 						Type:    "command",
-						Command: gryphHookCommand(hookType),
-						Timeout: 30,
+						Command: gryphHookCommand(program, hookType),
+						Timeout: int(hookTimeout / time.Second),
 					},
 				},
 			},
@@ -137,7 +144,7 @@ func hasAllGryphHooks(hooks map[string][]HookMatcher) bool {
 		found := false
 		for _, m := range hooks[hookType] {
 			for _, h := range m.Hooks {
-				if h.Command == gryphHookCommand(hookType) {
+				if utils.IsHookCommand(h.Command, "devin", hookType) {
 					found = true
 					break
 				}
@@ -153,20 +160,21 @@ func hasAllGryphHooks(hooks map[string][]HookMatcher) bool {
 	return true
 }
 
-func mergeGryphHooks(existing map[string][]HookMatcher) map[string][]HookMatcher {
-	gryph := generateGryphHooks()
+// mergeGryphHooks adds the gryph hooks to existing. A gryph entry that an
+// earlier install wrote, also with another program path, is replaced in
+// place, so a repair install updates the command.
+func mergeGryphHooks(existing map[string][]HookMatcher, program string) map[string][]HookMatcher {
+	gryph := generateGryphHooks(program)
 
 	for hookType, matchers := range gryph {
+		want := matchers[0].Hooks[0]
 		found := false
-		for _, m := range existing[hookType] {
-			for _, h := range m.Hooks {
-				if h.Command == matchers[0].Hooks[0].Command {
+		for mi := range existing[hookType] {
+			for hi, h := range existing[hookType][mi].Hooks {
+				if utils.IsHookCommand(h.Command, "devin", hookType) {
+					existing[hookType][mi].Hooks[hi] = want
 					found = true
-					break
 				}
-			}
-			if found {
-				break
 			}
 		}
 		if !found {
@@ -196,14 +204,14 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 	configFile := detection.HooksPath
 
 	if !opts.DryRun {
-		if err := os.MkdirAll(detection.ConfigPath, 0700); err != nil {
+		if err := agent.EnsureHookDir(detection.ConfigPath, 0700, opts); err != nil {
 			result.Error = fmt.Errorf("failed to create config directory: %w", err)
 			return result, result.Error
 		}
 	}
 
-	raw, err := readDevinConfig(configFile)
-	if os.IsNotExist(err) {
+	raw, err := readDevinConfig(configFile, opts)
+	if agent.IsNotExist(err) {
 		raw = make(map[string]json.RawMessage)
 	} else if err != nil {
 		// config.json holds unrelated Devin settings, so a rewrite from an
@@ -214,6 +222,10 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 
 	existingHooks, err := readHooksFromConfig(raw)
 	if err != nil {
+		if opts.Repair {
+			result.Error = fmt.Errorf("the hooks section does not parse, so the repair leaves it: %w", err)
+			return result, result.Error
+		}
 		result.Warnings = append(result.Warnings, "hooks section is malformed, will be replaced")
 		existingHooks = nil
 	}
@@ -257,9 +269,9 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 
 	var mergedHooks map[string][]HookMatcher
 	if existingHooks != nil && !opts.Force {
-		mergedHooks = mergeGryphHooks(existingHooks)
+		mergedHooks = mergeGryphHooks(existingHooks, opts.Command)
 	} else {
-		mergedHooks = generateGryphHooks()
+		mergedHooks = generateGryphHooks(opts.Command)
 	}
 
 	if err := writeHooksToConfig(raw, mergedHooks); err != nil {
@@ -267,7 +279,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		return result, result.Error
 	}
 
-	if err := writeDevinConfig(configFile, raw); err != nil {
+	if err := writeDevinConfig(configFile, raw, opts); err != nil {
 		result.Error = fmt.Errorf("failed to write config.json: %w", err)
 		return result, result.Error
 	}
@@ -302,7 +314,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 
 	configFile := detection.HooksPath
 
-	raw, err := readDevinConfig(configFile)
+	raw, err := readDevinConfig(configFile, agent.InstallOptions{Repair: opts.Repair})
 	if err != nil {
 		if os.IsNotExist(err) {
 			result.Success = true
@@ -364,7 +376,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		return result, result.Error
 	}
 
-	if err := writeDevinConfig(configFile, raw); err != nil {
+	if err := writeDevinConfig(configFile, raw, agent.InstallOptions{Repair: opts.Repair}); err != nil {
 		result.Error = fmt.Errorf("failed to write config.json: %w", err)
 		return result, result.Error
 	}
@@ -385,7 +397,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 		return status, nil
 	}
 
-	raw, err := readDevinConfig(detection.HooksPath)
+	raw, err := readDevinConfig(detection.HooksPath, agent.InstallOptions{})
 	if err != nil {
 		if os.IsNotExist(err) {
 			return status, nil
@@ -403,10 +415,9 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 	status.Valid = true
 
 	for _, hookType := range HookTypes {
-		expectedCmd := gryphHookCommand(hookType)
 		for _, m := range hooks[hookType] {
 			for _, h := range m.Hooks {
-				if h.Command == expectedCmd {
+				if utils.IsHookCommand(h.Command, "devin", hookType) {
 					status.Installed = true
 					status.Hooks = append(status.Hooks, hookType)
 					break

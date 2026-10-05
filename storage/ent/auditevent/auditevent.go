@@ -58,6 +58,10 @@ const (
 	FieldKind = "kind"
 	// FieldToolCallID holds the string denoting the tool_call_id field in the database.
 	FieldToolCallID = "tool_call_id"
+	// FieldImported holds the string denoting the imported field in the database.
+	FieldImported = "imported"
+	// FieldPeerTrust holds the string denoting the peer_trust field in the database.
+	FieldPeerTrust = "peer_trust"
 	// FieldLinkedEventID holds the string denoting the linked_event_id field in the database.
 	FieldLinkedEventID = "linked_event_id"
 	// EdgeSession holds the string denoting the session edge name in mutations.
@@ -97,6 +101,8 @@ var Columns = []string{
 	FieldPhase,
 	FieldKind,
 	FieldToolCallID,
+	FieldImported,
+	FieldPeerTrust,
 	FieldLinkedEventID,
 }
 
@@ -119,6 +125,8 @@ var (
 	AgentNameValidator func(string) error
 	// DefaultIsSensitive holds the default value on creation for the "is_sensitive" field.
 	DefaultIsSensitive bool
+	// DefaultImported holds the default value on creation for the "imported" field.
+	DefaultImported bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -140,6 +148,7 @@ const (
 	ActionTypeSubagentStart  ActionType = "subagent_start"
 	ActionTypeSubagentStop   ActionType = "subagent_stop"
 	ActionTypeUserPrompt     ActionType = "user_prompt"
+	ActionTypeTamper         ActionType = "tamper"
 	ActionTypeUnknown        ActionType = "unknown"
 )
 
@@ -150,7 +159,7 @@ func (at ActionType) String() string {
 // ActionTypeValidator is a validator for the "action_type" field enum values. It is called by the builders before save.
 func ActionTypeValidator(at ActionType) error {
 	switch at {
-	case ActionTypeFileRead, ActionTypeFileWrite, ActionTypeFileDelete, ActionTypeCommandExec, ActionTypeNetworkRequest, ActionTypeToolUse, ActionTypeSessionStart, ActionTypeSessionEnd, ActionTypeNotification, ActionTypeSubagentStart, ActionTypeSubagentStop, ActionTypeUserPrompt, ActionTypeUnknown:
+	case ActionTypeFileRead, ActionTypeFileWrite, ActionTypeFileDelete, ActionTypeCommandExec, ActionTypeNetworkRequest, ActionTypeToolUse, ActionTypeSessionStart, ActionTypeSessionEnd, ActionTypeNotification, ActionTypeSubagentStart, ActionTypeSubagentStop, ActionTypeUserPrompt, ActionTypeTamper, ActionTypeUnknown:
 		return nil
 	default:
 		return fmt.Errorf("auditevent: invalid enum value for action_type field: %q", at)
@@ -281,6 +290,16 @@ func ByKind(opts ...sql.OrderTermOption) OrderOption {
 // ByToolCallID orders the results by the tool_call_id field.
 func ByToolCallID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldToolCallID, opts...).ToFunc()
+}
+
+// ByImported orders the results by the imported field.
+func ByImported(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldImported, opts...).ToFunc()
+}
+
+// ByPeerTrust orders the results by the peer_trust field.
+func ByPeerTrust(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPeerTrust, opts...).ToFunc()
 }
 
 // ByLinkedEventID orders the results by the linked_event_id field.

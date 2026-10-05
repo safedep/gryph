@@ -13,6 +13,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/privacy"
+	"github.com/safedep/gryph/storage/ent/aarmapprovalgrant"
+	"github.com/safedep/gryph/storage/ent/aarmapprovalrequest"
 	"github.com/safedep/gryph/storage/ent/aarmdeferredaction"
 	"github.com/safedep/gryph/storage/ent/aarmreceipt"
 	"github.com/safedep/gryph/storage/ent/auditevent"
@@ -34,16 +36,3066 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeAarmDeferredAction = "AarmDeferredAction"
-	TypeAarmReceipt        = "AarmReceipt"
-	TypeAuditEvent         = "AuditEvent"
-	TypeAuditStreamCursor  = "AuditStreamCursor"
-	TypeContextEntry       = "ContextEntry"
-	TypeContextState       = "ContextState"
-	TypeEventStreamCursor  = "EventStreamCursor"
-	TypeSelfAudit          = "SelfAudit"
-	TypeSession            = "Session"
+	TypeAarmApprovalGrant   = "AarmApprovalGrant"
+	TypeAarmApprovalRequest = "AarmApprovalRequest"
+	TypeAarmDeferredAction  = "AarmDeferredAction"
+	TypeAarmReceipt         = "AarmReceipt"
+	TypeAuditEvent          = "AuditEvent"
+	TypeAuditStreamCursor   = "AuditStreamCursor"
+	TypeContextEntry        = "ContextEntry"
+	TypeContextState        = "ContextState"
+	TypeEventStreamCursor   = "EventStreamCursor"
+	TypeSelfAudit           = "SelfAudit"
+	TypeSession             = "Session"
 )
+
+// AarmApprovalGrantMutation represents an operation that mutates the AarmApprovalGrant nodes in the graph.
+type AarmApprovalGrantMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *uuid.UUID
+	request_id    *uuid.UUID
+	session_id    *uuid.UUID
+	action_digest *string
+	scope         *aarmapprovalgrant.Scope
+	created_at    *time.Time
+	expires_at    *time.Time
+	used_at       *time.Time
+	uses          *int
+	adduses       *int
+	approver      *string
+	assurance     *string
+	channel       *string
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*AarmApprovalGrant, error)
+	predicates    []predicate.AarmApprovalGrant
+}
+
+var _ ent.Mutation = (*AarmApprovalGrantMutation)(nil)
+
+// aarmapprovalgrantOption allows management of the mutation configuration using functional options.
+type aarmapprovalgrantOption func(*AarmApprovalGrantMutation)
+
+// newAarmApprovalGrantMutation creates new mutation for the AarmApprovalGrant entity.
+func newAarmApprovalGrantMutation(c config, op Op, opts ...aarmapprovalgrantOption) *AarmApprovalGrantMutation {
+	m := &AarmApprovalGrantMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAarmApprovalGrant,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAarmApprovalGrantID sets the ID field of the mutation.
+func withAarmApprovalGrantID(id uuid.UUID) aarmapprovalgrantOption {
+	return func(m *AarmApprovalGrantMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *AarmApprovalGrant
+		)
+		m.oldValue = func(ctx context.Context) (*AarmApprovalGrant, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().AarmApprovalGrant.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAarmApprovalGrant sets the old AarmApprovalGrant of the mutation.
+func withAarmApprovalGrant(node *AarmApprovalGrant) aarmapprovalgrantOption {
+	return func(m *AarmApprovalGrantMutation) {
+		m.oldValue = func(context.Context) (*AarmApprovalGrant, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AarmApprovalGrantMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AarmApprovalGrantMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of AarmApprovalGrant entities.
+func (m *AarmApprovalGrantMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AarmApprovalGrantMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AarmApprovalGrantMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().AarmApprovalGrant.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetRequestID sets the "request_id" field.
+func (m *AarmApprovalGrantMutation) SetRequestID(u uuid.UUID) {
+	m.request_id = &u
+}
+
+// RequestID returns the value of the "request_id" field in the mutation.
+func (m *AarmApprovalGrantMutation) RequestID() (r uuid.UUID, exists bool) {
+	v := m.request_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestID returns the old "request_id" field's value of the AarmApprovalGrant entity.
+// If the AarmApprovalGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalGrantMutation) OldRequestID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestID: %w", err)
+	}
+	return oldValue.RequestID, nil
+}
+
+// ResetRequestID resets all changes to the "request_id" field.
+func (m *AarmApprovalGrantMutation) ResetRequestID() {
+	m.request_id = nil
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *AarmApprovalGrantMutation) SetSessionID(u uuid.UUID) {
+	m.session_id = &u
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *AarmApprovalGrantMutation) SessionID() (r uuid.UUID, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the AarmApprovalGrant entity.
+// If the AarmApprovalGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalGrantMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *AarmApprovalGrantMutation) ResetSessionID() {
+	m.session_id = nil
+}
+
+// SetActionDigest sets the "action_digest" field.
+func (m *AarmApprovalGrantMutation) SetActionDigest(s string) {
+	m.action_digest = &s
+}
+
+// ActionDigest returns the value of the "action_digest" field in the mutation.
+func (m *AarmApprovalGrantMutation) ActionDigest() (r string, exists bool) {
+	v := m.action_digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActionDigest returns the old "action_digest" field's value of the AarmApprovalGrant entity.
+// If the AarmApprovalGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalGrantMutation) OldActionDigest(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActionDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActionDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActionDigest: %w", err)
+	}
+	return oldValue.ActionDigest, nil
+}
+
+// ResetActionDigest resets all changes to the "action_digest" field.
+func (m *AarmApprovalGrantMutation) ResetActionDigest() {
+	m.action_digest = nil
+}
+
+// SetScope sets the "scope" field.
+func (m *AarmApprovalGrantMutation) SetScope(a aarmapprovalgrant.Scope) {
+	m.scope = &a
+}
+
+// Scope returns the value of the "scope" field in the mutation.
+func (m *AarmApprovalGrantMutation) Scope() (r aarmapprovalgrant.Scope, exists bool) {
+	v := m.scope
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScope returns the old "scope" field's value of the AarmApprovalGrant entity.
+// If the AarmApprovalGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalGrantMutation) OldScope(ctx context.Context) (v aarmapprovalgrant.Scope, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScope is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScope requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScope: %w", err)
+	}
+	return oldValue.Scope, nil
+}
+
+// ResetScope resets all changes to the "scope" field.
+func (m *AarmApprovalGrantMutation) ResetScope() {
+	m.scope = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *AarmApprovalGrantMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *AarmApprovalGrantMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the AarmApprovalGrant entity.
+// If the AarmApprovalGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalGrantMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *AarmApprovalGrantMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *AarmApprovalGrantMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *AarmApprovalGrantMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the AarmApprovalGrant entity.
+// If the AarmApprovalGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalGrantMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *AarmApprovalGrantMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// SetUsedAt sets the "used_at" field.
+func (m *AarmApprovalGrantMutation) SetUsedAt(t time.Time) {
+	m.used_at = &t
+}
+
+// UsedAt returns the value of the "used_at" field in the mutation.
+func (m *AarmApprovalGrantMutation) UsedAt() (r time.Time, exists bool) {
+	v := m.used_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUsedAt returns the old "used_at" field's value of the AarmApprovalGrant entity.
+// If the AarmApprovalGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalGrantMutation) OldUsedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUsedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUsedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUsedAt: %w", err)
+	}
+	return oldValue.UsedAt, nil
+}
+
+// ClearUsedAt clears the value of the "used_at" field.
+func (m *AarmApprovalGrantMutation) ClearUsedAt() {
+	m.used_at = nil
+	m.clearedFields[aarmapprovalgrant.FieldUsedAt] = struct{}{}
+}
+
+// UsedAtCleared returns if the "used_at" field was cleared in this mutation.
+func (m *AarmApprovalGrantMutation) UsedAtCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalgrant.FieldUsedAt]
+	return ok
+}
+
+// ResetUsedAt resets all changes to the "used_at" field.
+func (m *AarmApprovalGrantMutation) ResetUsedAt() {
+	m.used_at = nil
+	delete(m.clearedFields, aarmapprovalgrant.FieldUsedAt)
+}
+
+// SetUses sets the "uses" field.
+func (m *AarmApprovalGrantMutation) SetUses(i int) {
+	m.uses = &i
+	m.adduses = nil
+}
+
+// Uses returns the value of the "uses" field in the mutation.
+func (m *AarmApprovalGrantMutation) Uses() (r int, exists bool) {
+	v := m.uses
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUses returns the old "uses" field's value of the AarmApprovalGrant entity.
+// If the AarmApprovalGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalGrantMutation) OldUses(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUses is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUses requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUses: %w", err)
+	}
+	return oldValue.Uses, nil
+}
+
+// AddUses adds i to the "uses" field.
+func (m *AarmApprovalGrantMutation) AddUses(i int) {
+	if m.adduses != nil {
+		*m.adduses += i
+	} else {
+		m.adduses = &i
+	}
+}
+
+// AddedUses returns the value that was added to the "uses" field in this mutation.
+func (m *AarmApprovalGrantMutation) AddedUses() (r int, exists bool) {
+	v := m.adduses
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUses resets all changes to the "uses" field.
+func (m *AarmApprovalGrantMutation) ResetUses() {
+	m.uses = nil
+	m.adduses = nil
+}
+
+// SetApprover sets the "approver" field.
+func (m *AarmApprovalGrantMutation) SetApprover(s string) {
+	m.approver = &s
+}
+
+// Approver returns the value of the "approver" field in the mutation.
+func (m *AarmApprovalGrantMutation) Approver() (r string, exists bool) {
+	v := m.approver
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldApprover returns the old "approver" field's value of the AarmApprovalGrant entity.
+// If the AarmApprovalGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalGrantMutation) OldApprover(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldApprover is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldApprover requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldApprover: %w", err)
+	}
+	return oldValue.Approver, nil
+}
+
+// ClearApprover clears the value of the "approver" field.
+func (m *AarmApprovalGrantMutation) ClearApprover() {
+	m.approver = nil
+	m.clearedFields[aarmapprovalgrant.FieldApprover] = struct{}{}
+}
+
+// ApproverCleared returns if the "approver" field was cleared in this mutation.
+func (m *AarmApprovalGrantMutation) ApproverCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalgrant.FieldApprover]
+	return ok
+}
+
+// ResetApprover resets all changes to the "approver" field.
+func (m *AarmApprovalGrantMutation) ResetApprover() {
+	m.approver = nil
+	delete(m.clearedFields, aarmapprovalgrant.FieldApprover)
+}
+
+// SetAssurance sets the "assurance" field.
+func (m *AarmApprovalGrantMutation) SetAssurance(s string) {
+	m.assurance = &s
+}
+
+// Assurance returns the value of the "assurance" field in the mutation.
+func (m *AarmApprovalGrantMutation) Assurance() (r string, exists bool) {
+	v := m.assurance
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssurance returns the old "assurance" field's value of the AarmApprovalGrant entity.
+// If the AarmApprovalGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalGrantMutation) OldAssurance(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssurance is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssurance requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssurance: %w", err)
+	}
+	return oldValue.Assurance, nil
+}
+
+// ClearAssurance clears the value of the "assurance" field.
+func (m *AarmApprovalGrantMutation) ClearAssurance() {
+	m.assurance = nil
+	m.clearedFields[aarmapprovalgrant.FieldAssurance] = struct{}{}
+}
+
+// AssuranceCleared returns if the "assurance" field was cleared in this mutation.
+func (m *AarmApprovalGrantMutation) AssuranceCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalgrant.FieldAssurance]
+	return ok
+}
+
+// ResetAssurance resets all changes to the "assurance" field.
+func (m *AarmApprovalGrantMutation) ResetAssurance() {
+	m.assurance = nil
+	delete(m.clearedFields, aarmapprovalgrant.FieldAssurance)
+}
+
+// SetChannel sets the "channel" field.
+func (m *AarmApprovalGrantMutation) SetChannel(s string) {
+	m.channel = &s
+}
+
+// Channel returns the value of the "channel" field in the mutation.
+func (m *AarmApprovalGrantMutation) Channel() (r string, exists bool) {
+	v := m.channel
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChannel returns the old "channel" field's value of the AarmApprovalGrant entity.
+// If the AarmApprovalGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalGrantMutation) OldChannel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChannel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChannel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChannel: %w", err)
+	}
+	return oldValue.Channel, nil
+}
+
+// ClearChannel clears the value of the "channel" field.
+func (m *AarmApprovalGrantMutation) ClearChannel() {
+	m.channel = nil
+	m.clearedFields[aarmapprovalgrant.FieldChannel] = struct{}{}
+}
+
+// ChannelCleared returns if the "channel" field was cleared in this mutation.
+func (m *AarmApprovalGrantMutation) ChannelCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalgrant.FieldChannel]
+	return ok
+}
+
+// ResetChannel resets all changes to the "channel" field.
+func (m *AarmApprovalGrantMutation) ResetChannel() {
+	m.channel = nil
+	delete(m.clearedFields, aarmapprovalgrant.FieldChannel)
+}
+
+// Where appends a list predicates to the AarmApprovalGrantMutation builder.
+func (m *AarmApprovalGrantMutation) Where(ps ...predicate.AarmApprovalGrant) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AarmApprovalGrantMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AarmApprovalGrantMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.AarmApprovalGrant, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AarmApprovalGrantMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AarmApprovalGrantMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (AarmApprovalGrant).
+func (m *AarmApprovalGrantMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AarmApprovalGrantMutation) Fields() []string {
+	fields := make([]string, 0, 11)
+	if m.request_id != nil {
+		fields = append(fields, aarmapprovalgrant.FieldRequestID)
+	}
+	if m.session_id != nil {
+		fields = append(fields, aarmapprovalgrant.FieldSessionID)
+	}
+	if m.action_digest != nil {
+		fields = append(fields, aarmapprovalgrant.FieldActionDigest)
+	}
+	if m.scope != nil {
+		fields = append(fields, aarmapprovalgrant.FieldScope)
+	}
+	if m.created_at != nil {
+		fields = append(fields, aarmapprovalgrant.FieldCreatedAt)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, aarmapprovalgrant.FieldExpiresAt)
+	}
+	if m.used_at != nil {
+		fields = append(fields, aarmapprovalgrant.FieldUsedAt)
+	}
+	if m.uses != nil {
+		fields = append(fields, aarmapprovalgrant.FieldUses)
+	}
+	if m.approver != nil {
+		fields = append(fields, aarmapprovalgrant.FieldApprover)
+	}
+	if m.assurance != nil {
+		fields = append(fields, aarmapprovalgrant.FieldAssurance)
+	}
+	if m.channel != nil {
+		fields = append(fields, aarmapprovalgrant.FieldChannel)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AarmApprovalGrantMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case aarmapprovalgrant.FieldRequestID:
+		return m.RequestID()
+	case aarmapprovalgrant.FieldSessionID:
+		return m.SessionID()
+	case aarmapprovalgrant.FieldActionDigest:
+		return m.ActionDigest()
+	case aarmapprovalgrant.FieldScope:
+		return m.Scope()
+	case aarmapprovalgrant.FieldCreatedAt:
+		return m.CreatedAt()
+	case aarmapprovalgrant.FieldExpiresAt:
+		return m.ExpiresAt()
+	case aarmapprovalgrant.FieldUsedAt:
+		return m.UsedAt()
+	case aarmapprovalgrant.FieldUses:
+		return m.Uses()
+	case aarmapprovalgrant.FieldApprover:
+		return m.Approver()
+	case aarmapprovalgrant.FieldAssurance:
+		return m.Assurance()
+	case aarmapprovalgrant.FieldChannel:
+		return m.Channel()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AarmApprovalGrantMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case aarmapprovalgrant.FieldRequestID:
+		return m.OldRequestID(ctx)
+	case aarmapprovalgrant.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case aarmapprovalgrant.FieldActionDigest:
+		return m.OldActionDigest(ctx)
+	case aarmapprovalgrant.FieldScope:
+		return m.OldScope(ctx)
+	case aarmapprovalgrant.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case aarmapprovalgrant.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case aarmapprovalgrant.FieldUsedAt:
+		return m.OldUsedAt(ctx)
+	case aarmapprovalgrant.FieldUses:
+		return m.OldUses(ctx)
+	case aarmapprovalgrant.FieldApprover:
+		return m.OldApprover(ctx)
+	case aarmapprovalgrant.FieldAssurance:
+		return m.OldAssurance(ctx)
+	case aarmapprovalgrant.FieldChannel:
+		return m.OldChannel(ctx)
+	}
+	return nil, fmt.Errorf("unknown AarmApprovalGrant field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AarmApprovalGrantMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case aarmapprovalgrant.FieldRequestID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestID(v)
+		return nil
+	case aarmapprovalgrant.FieldSessionID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case aarmapprovalgrant.FieldActionDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActionDigest(v)
+		return nil
+	case aarmapprovalgrant.FieldScope:
+		v, ok := value.(aarmapprovalgrant.Scope)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScope(v)
+		return nil
+	case aarmapprovalgrant.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case aarmapprovalgrant.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case aarmapprovalgrant.FieldUsedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUsedAt(v)
+		return nil
+	case aarmapprovalgrant.FieldUses:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUses(v)
+		return nil
+	case aarmapprovalgrant.FieldApprover:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetApprover(v)
+		return nil
+	case aarmapprovalgrant.FieldAssurance:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssurance(v)
+		return nil
+	case aarmapprovalgrant.FieldChannel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChannel(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AarmApprovalGrant field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AarmApprovalGrantMutation) AddedFields() []string {
+	var fields []string
+	if m.adduses != nil {
+		fields = append(fields, aarmapprovalgrant.FieldUses)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AarmApprovalGrantMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case aarmapprovalgrant.FieldUses:
+		return m.AddedUses()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AarmApprovalGrantMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case aarmapprovalgrant.FieldUses:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUses(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AarmApprovalGrant numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AarmApprovalGrantMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(aarmapprovalgrant.FieldUsedAt) {
+		fields = append(fields, aarmapprovalgrant.FieldUsedAt)
+	}
+	if m.FieldCleared(aarmapprovalgrant.FieldApprover) {
+		fields = append(fields, aarmapprovalgrant.FieldApprover)
+	}
+	if m.FieldCleared(aarmapprovalgrant.FieldAssurance) {
+		fields = append(fields, aarmapprovalgrant.FieldAssurance)
+	}
+	if m.FieldCleared(aarmapprovalgrant.FieldChannel) {
+		fields = append(fields, aarmapprovalgrant.FieldChannel)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AarmApprovalGrantMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AarmApprovalGrantMutation) ClearField(name string) error {
+	switch name {
+	case aarmapprovalgrant.FieldUsedAt:
+		m.ClearUsedAt()
+		return nil
+	case aarmapprovalgrant.FieldApprover:
+		m.ClearApprover()
+		return nil
+	case aarmapprovalgrant.FieldAssurance:
+		m.ClearAssurance()
+		return nil
+	case aarmapprovalgrant.FieldChannel:
+		m.ClearChannel()
+		return nil
+	}
+	return fmt.Errorf("unknown AarmApprovalGrant nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AarmApprovalGrantMutation) ResetField(name string) error {
+	switch name {
+	case aarmapprovalgrant.FieldRequestID:
+		m.ResetRequestID()
+		return nil
+	case aarmapprovalgrant.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case aarmapprovalgrant.FieldActionDigest:
+		m.ResetActionDigest()
+		return nil
+	case aarmapprovalgrant.FieldScope:
+		m.ResetScope()
+		return nil
+	case aarmapprovalgrant.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case aarmapprovalgrant.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case aarmapprovalgrant.FieldUsedAt:
+		m.ResetUsedAt()
+		return nil
+	case aarmapprovalgrant.FieldUses:
+		m.ResetUses()
+		return nil
+	case aarmapprovalgrant.FieldApprover:
+		m.ResetApprover()
+		return nil
+	case aarmapprovalgrant.FieldAssurance:
+		m.ResetAssurance()
+		return nil
+	case aarmapprovalgrant.FieldChannel:
+		m.ResetChannel()
+		return nil
+	}
+	return fmt.Errorf("unknown AarmApprovalGrant field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AarmApprovalGrantMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AarmApprovalGrantMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AarmApprovalGrantMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AarmApprovalGrantMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AarmApprovalGrantMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AarmApprovalGrantMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AarmApprovalGrantMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown AarmApprovalGrant unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AarmApprovalGrantMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown AarmApprovalGrant edge %s", name)
+}
+
+// AarmApprovalRequestMutation represents an operation that mutates the AarmApprovalRequest nodes in the graph.
+type AarmApprovalRequestMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *uuid.UUID
+	session_id          *uuid.UUID
+	action_id           *uuid.UUID
+	receipt_sequence    *int64
+	addreceipt_sequence *int64
+	action_digest       *string
+	rule_ids            *[]string
+	appendrule_ids      []string
+	requester           *string
+	host                *string
+	agent               *string
+	summary             *string
+	project             *string
+	min_assurance       *string
+	state               *aarmapprovalrequest.State
+	requested_at        *time.Time
+	expires_at          *time.Time
+	inline              *bool
+	review              *bool
+	requester_audit     *string
+	requester_trust     *string
+	decided_at          *time.Time
+	channel             *string
+	assurance           *string
+	approver            *string
+	peer_trust          *string
+	note                *string
+	scope               *string
+	notified_at         *time.Time
+	clearedFields       map[string]struct{}
+	done                bool
+	oldValue            func(context.Context) (*AarmApprovalRequest, error)
+	predicates          []predicate.AarmApprovalRequest
+}
+
+var _ ent.Mutation = (*AarmApprovalRequestMutation)(nil)
+
+// aarmapprovalrequestOption allows management of the mutation configuration using functional options.
+type aarmapprovalrequestOption func(*AarmApprovalRequestMutation)
+
+// newAarmApprovalRequestMutation creates new mutation for the AarmApprovalRequest entity.
+func newAarmApprovalRequestMutation(c config, op Op, opts ...aarmapprovalrequestOption) *AarmApprovalRequestMutation {
+	m := &AarmApprovalRequestMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAarmApprovalRequest,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAarmApprovalRequestID sets the ID field of the mutation.
+func withAarmApprovalRequestID(id uuid.UUID) aarmapprovalrequestOption {
+	return func(m *AarmApprovalRequestMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *AarmApprovalRequest
+		)
+		m.oldValue = func(ctx context.Context) (*AarmApprovalRequest, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().AarmApprovalRequest.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAarmApprovalRequest sets the old AarmApprovalRequest of the mutation.
+func withAarmApprovalRequest(node *AarmApprovalRequest) aarmapprovalrequestOption {
+	return func(m *AarmApprovalRequestMutation) {
+		m.oldValue = func(context.Context) (*AarmApprovalRequest, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AarmApprovalRequestMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AarmApprovalRequestMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of AarmApprovalRequest entities.
+func (m *AarmApprovalRequestMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AarmApprovalRequestMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AarmApprovalRequestMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().AarmApprovalRequest.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *AarmApprovalRequestMutation) SetSessionID(u uuid.UUID) {
+	m.session_id = &u
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *AarmApprovalRequestMutation) SessionID() (r uuid.UUID, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *AarmApprovalRequestMutation) ResetSessionID() {
+	m.session_id = nil
+}
+
+// SetActionID sets the "action_id" field.
+func (m *AarmApprovalRequestMutation) SetActionID(u uuid.UUID) {
+	m.action_id = &u
+}
+
+// ActionID returns the value of the "action_id" field in the mutation.
+func (m *AarmApprovalRequestMutation) ActionID() (r uuid.UUID, exists bool) {
+	v := m.action_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActionID returns the old "action_id" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldActionID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActionID: %w", err)
+	}
+	return oldValue.ActionID, nil
+}
+
+// ResetActionID resets all changes to the "action_id" field.
+func (m *AarmApprovalRequestMutation) ResetActionID() {
+	m.action_id = nil
+}
+
+// SetReceiptSequence sets the "receipt_sequence" field.
+func (m *AarmApprovalRequestMutation) SetReceiptSequence(i int64) {
+	m.receipt_sequence = &i
+	m.addreceipt_sequence = nil
+}
+
+// ReceiptSequence returns the value of the "receipt_sequence" field in the mutation.
+func (m *AarmApprovalRequestMutation) ReceiptSequence() (r int64, exists bool) {
+	v := m.receipt_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReceiptSequence returns the old "receipt_sequence" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldReceiptSequence(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReceiptSequence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReceiptSequence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReceiptSequence: %w", err)
+	}
+	return oldValue.ReceiptSequence, nil
+}
+
+// AddReceiptSequence adds i to the "receipt_sequence" field.
+func (m *AarmApprovalRequestMutation) AddReceiptSequence(i int64) {
+	if m.addreceipt_sequence != nil {
+		*m.addreceipt_sequence += i
+	} else {
+		m.addreceipt_sequence = &i
+	}
+}
+
+// AddedReceiptSequence returns the value that was added to the "receipt_sequence" field in this mutation.
+func (m *AarmApprovalRequestMutation) AddedReceiptSequence() (r int64, exists bool) {
+	v := m.addreceipt_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetReceiptSequence resets all changes to the "receipt_sequence" field.
+func (m *AarmApprovalRequestMutation) ResetReceiptSequence() {
+	m.receipt_sequence = nil
+	m.addreceipt_sequence = nil
+}
+
+// SetActionDigest sets the "action_digest" field.
+func (m *AarmApprovalRequestMutation) SetActionDigest(s string) {
+	m.action_digest = &s
+}
+
+// ActionDigest returns the value of the "action_digest" field in the mutation.
+func (m *AarmApprovalRequestMutation) ActionDigest() (r string, exists bool) {
+	v := m.action_digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActionDigest returns the old "action_digest" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldActionDigest(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActionDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActionDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActionDigest: %w", err)
+	}
+	return oldValue.ActionDigest, nil
+}
+
+// ResetActionDigest resets all changes to the "action_digest" field.
+func (m *AarmApprovalRequestMutation) ResetActionDigest() {
+	m.action_digest = nil
+}
+
+// SetRuleIds sets the "rule_ids" field.
+func (m *AarmApprovalRequestMutation) SetRuleIds(s []string) {
+	m.rule_ids = &s
+	m.appendrule_ids = nil
+}
+
+// RuleIds returns the value of the "rule_ids" field in the mutation.
+func (m *AarmApprovalRequestMutation) RuleIds() (r []string, exists bool) {
+	v := m.rule_ids
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRuleIds returns the old "rule_ids" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldRuleIds(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRuleIds is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRuleIds requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRuleIds: %w", err)
+	}
+	return oldValue.RuleIds, nil
+}
+
+// AppendRuleIds adds s to the "rule_ids" field.
+func (m *AarmApprovalRequestMutation) AppendRuleIds(s []string) {
+	m.appendrule_ids = append(m.appendrule_ids, s...)
+}
+
+// AppendedRuleIds returns the list of values that were appended to the "rule_ids" field in this mutation.
+func (m *AarmApprovalRequestMutation) AppendedRuleIds() ([]string, bool) {
+	if len(m.appendrule_ids) == 0 {
+		return nil, false
+	}
+	return m.appendrule_ids, true
+}
+
+// ClearRuleIds clears the value of the "rule_ids" field.
+func (m *AarmApprovalRequestMutation) ClearRuleIds() {
+	m.rule_ids = nil
+	m.appendrule_ids = nil
+	m.clearedFields[aarmapprovalrequest.FieldRuleIds] = struct{}{}
+}
+
+// RuleIdsCleared returns if the "rule_ids" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) RuleIdsCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldRuleIds]
+	return ok
+}
+
+// ResetRuleIds resets all changes to the "rule_ids" field.
+func (m *AarmApprovalRequestMutation) ResetRuleIds() {
+	m.rule_ids = nil
+	m.appendrule_ids = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldRuleIds)
+}
+
+// SetRequester sets the "requester" field.
+func (m *AarmApprovalRequestMutation) SetRequester(s string) {
+	m.requester = &s
+}
+
+// Requester returns the value of the "requester" field in the mutation.
+func (m *AarmApprovalRequestMutation) Requester() (r string, exists bool) {
+	v := m.requester
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequester returns the old "requester" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldRequester(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequester is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequester requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequester: %w", err)
+	}
+	return oldValue.Requester, nil
+}
+
+// ClearRequester clears the value of the "requester" field.
+func (m *AarmApprovalRequestMutation) ClearRequester() {
+	m.requester = nil
+	m.clearedFields[aarmapprovalrequest.FieldRequester] = struct{}{}
+}
+
+// RequesterCleared returns if the "requester" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) RequesterCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldRequester]
+	return ok
+}
+
+// ResetRequester resets all changes to the "requester" field.
+func (m *AarmApprovalRequestMutation) ResetRequester() {
+	m.requester = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldRequester)
+}
+
+// SetHost sets the "host" field.
+func (m *AarmApprovalRequestMutation) SetHost(s string) {
+	m.host = &s
+}
+
+// Host returns the value of the "host" field in the mutation.
+func (m *AarmApprovalRequestMutation) Host() (r string, exists bool) {
+	v := m.host
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHost returns the old "host" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldHost(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHost is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHost requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHost: %w", err)
+	}
+	return oldValue.Host, nil
+}
+
+// ClearHost clears the value of the "host" field.
+func (m *AarmApprovalRequestMutation) ClearHost() {
+	m.host = nil
+	m.clearedFields[aarmapprovalrequest.FieldHost] = struct{}{}
+}
+
+// HostCleared returns if the "host" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) HostCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldHost]
+	return ok
+}
+
+// ResetHost resets all changes to the "host" field.
+func (m *AarmApprovalRequestMutation) ResetHost() {
+	m.host = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldHost)
+}
+
+// SetAgent sets the "agent" field.
+func (m *AarmApprovalRequestMutation) SetAgent(s string) {
+	m.agent = &s
+}
+
+// Agent returns the value of the "agent" field in the mutation.
+func (m *AarmApprovalRequestMutation) Agent() (r string, exists bool) {
+	v := m.agent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAgent returns the old "agent" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldAgent(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAgent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAgent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAgent: %w", err)
+	}
+	return oldValue.Agent, nil
+}
+
+// ClearAgent clears the value of the "agent" field.
+func (m *AarmApprovalRequestMutation) ClearAgent() {
+	m.agent = nil
+	m.clearedFields[aarmapprovalrequest.FieldAgent] = struct{}{}
+}
+
+// AgentCleared returns if the "agent" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) AgentCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldAgent]
+	return ok
+}
+
+// ResetAgent resets all changes to the "agent" field.
+func (m *AarmApprovalRequestMutation) ResetAgent() {
+	m.agent = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldAgent)
+}
+
+// SetSummary sets the "summary" field.
+func (m *AarmApprovalRequestMutation) SetSummary(s string) {
+	m.summary = &s
+}
+
+// Summary returns the value of the "summary" field in the mutation.
+func (m *AarmApprovalRequestMutation) Summary() (r string, exists bool) {
+	v := m.summary
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSummary returns the old "summary" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldSummary(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSummary is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSummary requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSummary: %w", err)
+	}
+	return oldValue.Summary, nil
+}
+
+// ClearSummary clears the value of the "summary" field.
+func (m *AarmApprovalRequestMutation) ClearSummary() {
+	m.summary = nil
+	m.clearedFields[aarmapprovalrequest.FieldSummary] = struct{}{}
+}
+
+// SummaryCleared returns if the "summary" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) SummaryCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldSummary]
+	return ok
+}
+
+// ResetSummary resets all changes to the "summary" field.
+func (m *AarmApprovalRequestMutation) ResetSummary() {
+	m.summary = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldSummary)
+}
+
+// SetProject sets the "project" field.
+func (m *AarmApprovalRequestMutation) SetProject(s string) {
+	m.project = &s
+}
+
+// Project returns the value of the "project" field in the mutation.
+func (m *AarmApprovalRequestMutation) Project() (r string, exists bool) {
+	v := m.project
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProject returns the old "project" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldProject(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProject is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProject requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProject: %w", err)
+	}
+	return oldValue.Project, nil
+}
+
+// ClearProject clears the value of the "project" field.
+func (m *AarmApprovalRequestMutation) ClearProject() {
+	m.project = nil
+	m.clearedFields[aarmapprovalrequest.FieldProject] = struct{}{}
+}
+
+// ProjectCleared returns if the "project" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) ProjectCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldProject]
+	return ok
+}
+
+// ResetProject resets all changes to the "project" field.
+func (m *AarmApprovalRequestMutation) ResetProject() {
+	m.project = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldProject)
+}
+
+// SetMinAssurance sets the "min_assurance" field.
+func (m *AarmApprovalRequestMutation) SetMinAssurance(s string) {
+	m.min_assurance = &s
+}
+
+// MinAssurance returns the value of the "min_assurance" field in the mutation.
+func (m *AarmApprovalRequestMutation) MinAssurance() (r string, exists bool) {
+	v := m.min_assurance
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMinAssurance returns the old "min_assurance" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldMinAssurance(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMinAssurance is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMinAssurance requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMinAssurance: %w", err)
+	}
+	return oldValue.MinAssurance, nil
+}
+
+// ClearMinAssurance clears the value of the "min_assurance" field.
+func (m *AarmApprovalRequestMutation) ClearMinAssurance() {
+	m.min_assurance = nil
+	m.clearedFields[aarmapprovalrequest.FieldMinAssurance] = struct{}{}
+}
+
+// MinAssuranceCleared returns if the "min_assurance" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) MinAssuranceCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldMinAssurance]
+	return ok
+}
+
+// ResetMinAssurance resets all changes to the "min_assurance" field.
+func (m *AarmApprovalRequestMutation) ResetMinAssurance() {
+	m.min_assurance = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldMinAssurance)
+}
+
+// SetState sets the "state" field.
+func (m *AarmApprovalRequestMutation) SetState(a aarmapprovalrequest.State) {
+	m.state = &a
+}
+
+// State returns the value of the "state" field in the mutation.
+func (m *AarmApprovalRequestMutation) State() (r aarmapprovalrequest.State, exists bool) {
+	v := m.state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldState returns the old "state" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldState(ctx context.Context) (v aarmapprovalrequest.State, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldState: %w", err)
+	}
+	return oldValue.State, nil
+}
+
+// ResetState resets all changes to the "state" field.
+func (m *AarmApprovalRequestMutation) ResetState() {
+	m.state = nil
+}
+
+// SetRequestedAt sets the "requested_at" field.
+func (m *AarmApprovalRequestMutation) SetRequestedAt(t time.Time) {
+	m.requested_at = &t
+}
+
+// RequestedAt returns the value of the "requested_at" field in the mutation.
+func (m *AarmApprovalRequestMutation) RequestedAt() (r time.Time, exists bool) {
+	v := m.requested_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestedAt returns the old "requested_at" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldRequestedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestedAt: %w", err)
+	}
+	return oldValue.RequestedAt, nil
+}
+
+// ResetRequestedAt resets all changes to the "requested_at" field.
+func (m *AarmApprovalRequestMutation) ResetRequestedAt() {
+	m.requested_at = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *AarmApprovalRequestMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *AarmApprovalRequestMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *AarmApprovalRequestMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// SetInline sets the "inline" field.
+func (m *AarmApprovalRequestMutation) SetInline(b bool) {
+	m.inline = &b
+}
+
+// Inline returns the value of the "inline" field in the mutation.
+func (m *AarmApprovalRequestMutation) Inline() (r bool, exists bool) {
+	v := m.inline
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInline returns the old "inline" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldInline(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInline is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInline requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInline: %w", err)
+	}
+	return oldValue.Inline, nil
+}
+
+// ResetInline resets all changes to the "inline" field.
+func (m *AarmApprovalRequestMutation) ResetInline() {
+	m.inline = nil
+}
+
+// SetReview sets the "review" field.
+func (m *AarmApprovalRequestMutation) SetReview(b bool) {
+	m.review = &b
+}
+
+// Review returns the value of the "review" field in the mutation.
+func (m *AarmApprovalRequestMutation) Review() (r bool, exists bool) {
+	v := m.review
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReview returns the old "review" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldReview(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReview is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReview requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReview: %w", err)
+	}
+	return oldValue.Review, nil
+}
+
+// ResetReview resets all changes to the "review" field.
+func (m *AarmApprovalRequestMutation) ResetReview() {
+	m.review = nil
+}
+
+// SetRequesterAudit sets the "requester_audit" field.
+func (m *AarmApprovalRequestMutation) SetRequesterAudit(s string) {
+	m.requester_audit = &s
+}
+
+// RequesterAudit returns the value of the "requester_audit" field in the mutation.
+func (m *AarmApprovalRequestMutation) RequesterAudit() (r string, exists bool) {
+	v := m.requester_audit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequesterAudit returns the old "requester_audit" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldRequesterAudit(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequesterAudit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequesterAudit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequesterAudit: %w", err)
+	}
+	return oldValue.RequesterAudit, nil
+}
+
+// ClearRequesterAudit clears the value of the "requester_audit" field.
+func (m *AarmApprovalRequestMutation) ClearRequesterAudit() {
+	m.requester_audit = nil
+	m.clearedFields[aarmapprovalrequest.FieldRequesterAudit] = struct{}{}
+}
+
+// RequesterAuditCleared returns if the "requester_audit" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) RequesterAuditCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldRequesterAudit]
+	return ok
+}
+
+// ResetRequesterAudit resets all changes to the "requester_audit" field.
+func (m *AarmApprovalRequestMutation) ResetRequesterAudit() {
+	m.requester_audit = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldRequesterAudit)
+}
+
+// SetRequesterTrust sets the "requester_trust" field.
+func (m *AarmApprovalRequestMutation) SetRequesterTrust(s string) {
+	m.requester_trust = &s
+}
+
+// RequesterTrust returns the value of the "requester_trust" field in the mutation.
+func (m *AarmApprovalRequestMutation) RequesterTrust() (r string, exists bool) {
+	v := m.requester_trust
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequesterTrust returns the old "requester_trust" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldRequesterTrust(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequesterTrust is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequesterTrust requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequesterTrust: %w", err)
+	}
+	return oldValue.RequesterTrust, nil
+}
+
+// ClearRequesterTrust clears the value of the "requester_trust" field.
+func (m *AarmApprovalRequestMutation) ClearRequesterTrust() {
+	m.requester_trust = nil
+	m.clearedFields[aarmapprovalrequest.FieldRequesterTrust] = struct{}{}
+}
+
+// RequesterTrustCleared returns if the "requester_trust" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) RequesterTrustCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldRequesterTrust]
+	return ok
+}
+
+// ResetRequesterTrust resets all changes to the "requester_trust" field.
+func (m *AarmApprovalRequestMutation) ResetRequesterTrust() {
+	m.requester_trust = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldRequesterTrust)
+}
+
+// SetDecidedAt sets the "decided_at" field.
+func (m *AarmApprovalRequestMutation) SetDecidedAt(t time.Time) {
+	m.decided_at = &t
+}
+
+// DecidedAt returns the value of the "decided_at" field in the mutation.
+func (m *AarmApprovalRequestMutation) DecidedAt() (r time.Time, exists bool) {
+	v := m.decided_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDecidedAt returns the old "decided_at" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldDecidedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDecidedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDecidedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDecidedAt: %w", err)
+	}
+	return oldValue.DecidedAt, nil
+}
+
+// ClearDecidedAt clears the value of the "decided_at" field.
+func (m *AarmApprovalRequestMutation) ClearDecidedAt() {
+	m.decided_at = nil
+	m.clearedFields[aarmapprovalrequest.FieldDecidedAt] = struct{}{}
+}
+
+// DecidedAtCleared returns if the "decided_at" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) DecidedAtCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldDecidedAt]
+	return ok
+}
+
+// ResetDecidedAt resets all changes to the "decided_at" field.
+func (m *AarmApprovalRequestMutation) ResetDecidedAt() {
+	m.decided_at = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldDecidedAt)
+}
+
+// SetChannel sets the "channel" field.
+func (m *AarmApprovalRequestMutation) SetChannel(s string) {
+	m.channel = &s
+}
+
+// Channel returns the value of the "channel" field in the mutation.
+func (m *AarmApprovalRequestMutation) Channel() (r string, exists bool) {
+	v := m.channel
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChannel returns the old "channel" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldChannel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChannel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChannel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChannel: %w", err)
+	}
+	return oldValue.Channel, nil
+}
+
+// ClearChannel clears the value of the "channel" field.
+func (m *AarmApprovalRequestMutation) ClearChannel() {
+	m.channel = nil
+	m.clearedFields[aarmapprovalrequest.FieldChannel] = struct{}{}
+}
+
+// ChannelCleared returns if the "channel" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) ChannelCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldChannel]
+	return ok
+}
+
+// ResetChannel resets all changes to the "channel" field.
+func (m *AarmApprovalRequestMutation) ResetChannel() {
+	m.channel = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldChannel)
+}
+
+// SetAssurance sets the "assurance" field.
+func (m *AarmApprovalRequestMutation) SetAssurance(s string) {
+	m.assurance = &s
+}
+
+// Assurance returns the value of the "assurance" field in the mutation.
+func (m *AarmApprovalRequestMutation) Assurance() (r string, exists bool) {
+	v := m.assurance
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssurance returns the old "assurance" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldAssurance(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssurance is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssurance requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssurance: %w", err)
+	}
+	return oldValue.Assurance, nil
+}
+
+// ClearAssurance clears the value of the "assurance" field.
+func (m *AarmApprovalRequestMutation) ClearAssurance() {
+	m.assurance = nil
+	m.clearedFields[aarmapprovalrequest.FieldAssurance] = struct{}{}
+}
+
+// AssuranceCleared returns if the "assurance" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) AssuranceCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldAssurance]
+	return ok
+}
+
+// ResetAssurance resets all changes to the "assurance" field.
+func (m *AarmApprovalRequestMutation) ResetAssurance() {
+	m.assurance = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldAssurance)
+}
+
+// SetApprover sets the "approver" field.
+func (m *AarmApprovalRequestMutation) SetApprover(s string) {
+	m.approver = &s
+}
+
+// Approver returns the value of the "approver" field in the mutation.
+func (m *AarmApprovalRequestMutation) Approver() (r string, exists bool) {
+	v := m.approver
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldApprover returns the old "approver" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldApprover(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldApprover is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldApprover requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldApprover: %w", err)
+	}
+	return oldValue.Approver, nil
+}
+
+// ClearApprover clears the value of the "approver" field.
+func (m *AarmApprovalRequestMutation) ClearApprover() {
+	m.approver = nil
+	m.clearedFields[aarmapprovalrequest.FieldApprover] = struct{}{}
+}
+
+// ApproverCleared returns if the "approver" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) ApproverCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldApprover]
+	return ok
+}
+
+// ResetApprover resets all changes to the "approver" field.
+func (m *AarmApprovalRequestMutation) ResetApprover() {
+	m.approver = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldApprover)
+}
+
+// SetPeerTrust sets the "peer_trust" field.
+func (m *AarmApprovalRequestMutation) SetPeerTrust(s string) {
+	m.peer_trust = &s
+}
+
+// PeerTrust returns the value of the "peer_trust" field in the mutation.
+func (m *AarmApprovalRequestMutation) PeerTrust() (r string, exists bool) {
+	v := m.peer_trust
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeerTrust returns the old "peer_trust" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldPeerTrust(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeerTrust is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeerTrust requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeerTrust: %w", err)
+	}
+	return oldValue.PeerTrust, nil
+}
+
+// ClearPeerTrust clears the value of the "peer_trust" field.
+func (m *AarmApprovalRequestMutation) ClearPeerTrust() {
+	m.peer_trust = nil
+	m.clearedFields[aarmapprovalrequest.FieldPeerTrust] = struct{}{}
+}
+
+// PeerTrustCleared returns if the "peer_trust" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) PeerTrustCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldPeerTrust]
+	return ok
+}
+
+// ResetPeerTrust resets all changes to the "peer_trust" field.
+func (m *AarmApprovalRequestMutation) ResetPeerTrust() {
+	m.peer_trust = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldPeerTrust)
+}
+
+// SetNote sets the "note" field.
+func (m *AarmApprovalRequestMutation) SetNote(s string) {
+	m.note = &s
+}
+
+// Note returns the value of the "note" field in the mutation.
+func (m *AarmApprovalRequestMutation) Note() (r string, exists bool) {
+	v := m.note
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNote returns the old "note" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldNote(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNote is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNote requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNote: %w", err)
+	}
+	return oldValue.Note, nil
+}
+
+// ClearNote clears the value of the "note" field.
+func (m *AarmApprovalRequestMutation) ClearNote() {
+	m.note = nil
+	m.clearedFields[aarmapprovalrequest.FieldNote] = struct{}{}
+}
+
+// NoteCleared returns if the "note" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) NoteCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldNote]
+	return ok
+}
+
+// ResetNote resets all changes to the "note" field.
+func (m *AarmApprovalRequestMutation) ResetNote() {
+	m.note = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldNote)
+}
+
+// SetScope sets the "scope" field.
+func (m *AarmApprovalRequestMutation) SetScope(s string) {
+	m.scope = &s
+}
+
+// Scope returns the value of the "scope" field in the mutation.
+func (m *AarmApprovalRequestMutation) Scope() (r string, exists bool) {
+	v := m.scope
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScope returns the old "scope" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldScope(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScope is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScope requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScope: %w", err)
+	}
+	return oldValue.Scope, nil
+}
+
+// ClearScope clears the value of the "scope" field.
+func (m *AarmApprovalRequestMutation) ClearScope() {
+	m.scope = nil
+	m.clearedFields[aarmapprovalrequest.FieldScope] = struct{}{}
+}
+
+// ScopeCleared returns if the "scope" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) ScopeCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldScope]
+	return ok
+}
+
+// ResetScope resets all changes to the "scope" field.
+func (m *AarmApprovalRequestMutation) ResetScope() {
+	m.scope = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldScope)
+}
+
+// SetNotifiedAt sets the "notified_at" field.
+func (m *AarmApprovalRequestMutation) SetNotifiedAt(t time.Time) {
+	m.notified_at = &t
+}
+
+// NotifiedAt returns the value of the "notified_at" field in the mutation.
+func (m *AarmApprovalRequestMutation) NotifiedAt() (r time.Time, exists bool) {
+	v := m.notified_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNotifiedAt returns the old "notified_at" field's value of the AarmApprovalRequest entity.
+// If the AarmApprovalRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmApprovalRequestMutation) OldNotifiedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNotifiedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNotifiedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNotifiedAt: %w", err)
+	}
+	return oldValue.NotifiedAt, nil
+}
+
+// ClearNotifiedAt clears the value of the "notified_at" field.
+func (m *AarmApprovalRequestMutation) ClearNotifiedAt() {
+	m.notified_at = nil
+	m.clearedFields[aarmapprovalrequest.FieldNotifiedAt] = struct{}{}
+}
+
+// NotifiedAtCleared returns if the "notified_at" field was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) NotifiedAtCleared() bool {
+	_, ok := m.clearedFields[aarmapprovalrequest.FieldNotifiedAt]
+	return ok
+}
+
+// ResetNotifiedAt resets all changes to the "notified_at" field.
+func (m *AarmApprovalRequestMutation) ResetNotifiedAt() {
+	m.notified_at = nil
+	delete(m.clearedFields, aarmapprovalrequest.FieldNotifiedAt)
+}
+
+// Where appends a list predicates to the AarmApprovalRequestMutation builder.
+func (m *AarmApprovalRequestMutation) Where(ps ...predicate.AarmApprovalRequest) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AarmApprovalRequestMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AarmApprovalRequestMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.AarmApprovalRequest, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AarmApprovalRequestMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AarmApprovalRequestMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (AarmApprovalRequest).
+func (m *AarmApprovalRequestMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AarmApprovalRequestMutation) Fields() []string {
+	fields := make([]string, 0, 26)
+	if m.session_id != nil {
+		fields = append(fields, aarmapprovalrequest.FieldSessionID)
+	}
+	if m.action_id != nil {
+		fields = append(fields, aarmapprovalrequest.FieldActionID)
+	}
+	if m.receipt_sequence != nil {
+		fields = append(fields, aarmapprovalrequest.FieldReceiptSequence)
+	}
+	if m.action_digest != nil {
+		fields = append(fields, aarmapprovalrequest.FieldActionDigest)
+	}
+	if m.rule_ids != nil {
+		fields = append(fields, aarmapprovalrequest.FieldRuleIds)
+	}
+	if m.requester != nil {
+		fields = append(fields, aarmapprovalrequest.FieldRequester)
+	}
+	if m.host != nil {
+		fields = append(fields, aarmapprovalrequest.FieldHost)
+	}
+	if m.agent != nil {
+		fields = append(fields, aarmapprovalrequest.FieldAgent)
+	}
+	if m.summary != nil {
+		fields = append(fields, aarmapprovalrequest.FieldSummary)
+	}
+	if m.project != nil {
+		fields = append(fields, aarmapprovalrequest.FieldProject)
+	}
+	if m.min_assurance != nil {
+		fields = append(fields, aarmapprovalrequest.FieldMinAssurance)
+	}
+	if m.state != nil {
+		fields = append(fields, aarmapprovalrequest.FieldState)
+	}
+	if m.requested_at != nil {
+		fields = append(fields, aarmapprovalrequest.FieldRequestedAt)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, aarmapprovalrequest.FieldExpiresAt)
+	}
+	if m.inline != nil {
+		fields = append(fields, aarmapprovalrequest.FieldInline)
+	}
+	if m.review != nil {
+		fields = append(fields, aarmapprovalrequest.FieldReview)
+	}
+	if m.requester_audit != nil {
+		fields = append(fields, aarmapprovalrequest.FieldRequesterAudit)
+	}
+	if m.requester_trust != nil {
+		fields = append(fields, aarmapprovalrequest.FieldRequesterTrust)
+	}
+	if m.decided_at != nil {
+		fields = append(fields, aarmapprovalrequest.FieldDecidedAt)
+	}
+	if m.channel != nil {
+		fields = append(fields, aarmapprovalrequest.FieldChannel)
+	}
+	if m.assurance != nil {
+		fields = append(fields, aarmapprovalrequest.FieldAssurance)
+	}
+	if m.approver != nil {
+		fields = append(fields, aarmapprovalrequest.FieldApprover)
+	}
+	if m.peer_trust != nil {
+		fields = append(fields, aarmapprovalrequest.FieldPeerTrust)
+	}
+	if m.note != nil {
+		fields = append(fields, aarmapprovalrequest.FieldNote)
+	}
+	if m.scope != nil {
+		fields = append(fields, aarmapprovalrequest.FieldScope)
+	}
+	if m.notified_at != nil {
+		fields = append(fields, aarmapprovalrequest.FieldNotifiedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AarmApprovalRequestMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case aarmapprovalrequest.FieldSessionID:
+		return m.SessionID()
+	case aarmapprovalrequest.FieldActionID:
+		return m.ActionID()
+	case aarmapprovalrequest.FieldReceiptSequence:
+		return m.ReceiptSequence()
+	case aarmapprovalrequest.FieldActionDigest:
+		return m.ActionDigest()
+	case aarmapprovalrequest.FieldRuleIds:
+		return m.RuleIds()
+	case aarmapprovalrequest.FieldRequester:
+		return m.Requester()
+	case aarmapprovalrequest.FieldHost:
+		return m.Host()
+	case aarmapprovalrequest.FieldAgent:
+		return m.Agent()
+	case aarmapprovalrequest.FieldSummary:
+		return m.Summary()
+	case aarmapprovalrequest.FieldProject:
+		return m.Project()
+	case aarmapprovalrequest.FieldMinAssurance:
+		return m.MinAssurance()
+	case aarmapprovalrequest.FieldState:
+		return m.State()
+	case aarmapprovalrequest.FieldRequestedAt:
+		return m.RequestedAt()
+	case aarmapprovalrequest.FieldExpiresAt:
+		return m.ExpiresAt()
+	case aarmapprovalrequest.FieldInline:
+		return m.Inline()
+	case aarmapprovalrequest.FieldReview:
+		return m.Review()
+	case aarmapprovalrequest.FieldRequesterAudit:
+		return m.RequesterAudit()
+	case aarmapprovalrequest.FieldRequesterTrust:
+		return m.RequesterTrust()
+	case aarmapprovalrequest.FieldDecidedAt:
+		return m.DecidedAt()
+	case aarmapprovalrequest.FieldChannel:
+		return m.Channel()
+	case aarmapprovalrequest.FieldAssurance:
+		return m.Assurance()
+	case aarmapprovalrequest.FieldApprover:
+		return m.Approver()
+	case aarmapprovalrequest.FieldPeerTrust:
+		return m.PeerTrust()
+	case aarmapprovalrequest.FieldNote:
+		return m.Note()
+	case aarmapprovalrequest.FieldScope:
+		return m.Scope()
+	case aarmapprovalrequest.FieldNotifiedAt:
+		return m.NotifiedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AarmApprovalRequestMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case aarmapprovalrequest.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case aarmapprovalrequest.FieldActionID:
+		return m.OldActionID(ctx)
+	case aarmapprovalrequest.FieldReceiptSequence:
+		return m.OldReceiptSequence(ctx)
+	case aarmapprovalrequest.FieldActionDigest:
+		return m.OldActionDigest(ctx)
+	case aarmapprovalrequest.FieldRuleIds:
+		return m.OldRuleIds(ctx)
+	case aarmapprovalrequest.FieldRequester:
+		return m.OldRequester(ctx)
+	case aarmapprovalrequest.FieldHost:
+		return m.OldHost(ctx)
+	case aarmapprovalrequest.FieldAgent:
+		return m.OldAgent(ctx)
+	case aarmapprovalrequest.FieldSummary:
+		return m.OldSummary(ctx)
+	case aarmapprovalrequest.FieldProject:
+		return m.OldProject(ctx)
+	case aarmapprovalrequest.FieldMinAssurance:
+		return m.OldMinAssurance(ctx)
+	case aarmapprovalrequest.FieldState:
+		return m.OldState(ctx)
+	case aarmapprovalrequest.FieldRequestedAt:
+		return m.OldRequestedAt(ctx)
+	case aarmapprovalrequest.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case aarmapprovalrequest.FieldInline:
+		return m.OldInline(ctx)
+	case aarmapprovalrequest.FieldReview:
+		return m.OldReview(ctx)
+	case aarmapprovalrequest.FieldRequesterAudit:
+		return m.OldRequesterAudit(ctx)
+	case aarmapprovalrequest.FieldRequesterTrust:
+		return m.OldRequesterTrust(ctx)
+	case aarmapprovalrequest.FieldDecidedAt:
+		return m.OldDecidedAt(ctx)
+	case aarmapprovalrequest.FieldChannel:
+		return m.OldChannel(ctx)
+	case aarmapprovalrequest.FieldAssurance:
+		return m.OldAssurance(ctx)
+	case aarmapprovalrequest.FieldApprover:
+		return m.OldApprover(ctx)
+	case aarmapprovalrequest.FieldPeerTrust:
+		return m.OldPeerTrust(ctx)
+	case aarmapprovalrequest.FieldNote:
+		return m.OldNote(ctx)
+	case aarmapprovalrequest.FieldScope:
+		return m.OldScope(ctx)
+	case aarmapprovalrequest.FieldNotifiedAt:
+		return m.OldNotifiedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown AarmApprovalRequest field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AarmApprovalRequestMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case aarmapprovalrequest.FieldSessionID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case aarmapprovalrequest.FieldActionID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActionID(v)
+		return nil
+	case aarmapprovalrequest.FieldReceiptSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReceiptSequence(v)
+		return nil
+	case aarmapprovalrequest.FieldActionDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActionDigest(v)
+		return nil
+	case aarmapprovalrequest.FieldRuleIds:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRuleIds(v)
+		return nil
+	case aarmapprovalrequest.FieldRequester:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequester(v)
+		return nil
+	case aarmapprovalrequest.FieldHost:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHost(v)
+		return nil
+	case aarmapprovalrequest.FieldAgent:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAgent(v)
+		return nil
+	case aarmapprovalrequest.FieldSummary:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSummary(v)
+		return nil
+	case aarmapprovalrequest.FieldProject:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProject(v)
+		return nil
+	case aarmapprovalrequest.FieldMinAssurance:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMinAssurance(v)
+		return nil
+	case aarmapprovalrequest.FieldState:
+		v, ok := value.(aarmapprovalrequest.State)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetState(v)
+		return nil
+	case aarmapprovalrequest.FieldRequestedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestedAt(v)
+		return nil
+	case aarmapprovalrequest.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case aarmapprovalrequest.FieldInline:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInline(v)
+		return nil
+	case aarmapprovalrequest.FieldReview:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReview(v)
+		return nil
+	case aarmapprovalrequest.FieldRequesterAudit:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequesterAudit(v)
+		return nil
+	case aarmapprovalrequest.FieldRequesterTrust:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequesterTrust(v)
+		return nil
+	case aarmapprovalrequest.FieldDecidedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDecidedAt(v)
+		return nil
+	case aarmapprovalrequest.FieldChannel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChannel(v)
+		return nil
+	case aarmapprovalrequest.FieldAssurance:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssurance(v)
+		return nil
+	case aarmapprovalrequest.FieldApprover:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetApprover(v)
+		return nil
+	case aarmapprovalrequest.FieldPeerTrust:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeerTrust(v)
+		return nil
+	case aarmapprovalrequest.FieldNote:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNote(v)
+		return nil
+	case aarmapprovalrequest.FieldScope:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScope(v)
+		return nil
+	case aarmapprovalrequest.FieldNotifiedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNotifiedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AarmApprovalRequest field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AarmApprovalRequestMutation) AddedFields() []string {
+	var fields []string
+	if m.addreceipt_sequence != nil {
+		fields = append(fields, aarmapprovalrequest.FieldReceiptSequence)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AarmApprovalRequestMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case aarmapprovalrequest.FieldReceiptSequence:
+		return m.AddedReceiptSequence()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AarmApprovalRequestMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case aarmapprovalrequest.FieldReceiptSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddReceiptSequence(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AarmApprovalRequest numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AarmApprovalRequestMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(aarmapprovalrequest.FieldRuleIds) {
+		fields = append(fields, aarmapprovalrequest.FieldRuleIds)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldRequester) {
+		fields = append(fields, aarmapprovalrequest.FieldRequester)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldHost) {
+		fields = append(fields, aarmapprovalrequest.FieldHost)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldAgent) {
+		fields = append(fields, aarmapprovalrequest.FieldAgent)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldSummary) {
+		fields = append(fields, aarmapprovalrequest.FieldSummary)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldProject) {
+		fields = append(fields, aarmapprovalrequest.FieldProject)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldMinAssurance) {
+		fields = append(fields, aarmapprovalrequest.FieldMinAssurance)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldRequesterAudit) {
+		fields = append(fields, aarmapprovalrequest.FieldRequesterAudit)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldRequesterTrust) {
+		fields = append(fields, aarmapprovalrequest.FieldRequesterTrust)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldDecidedAt) {
+		fields = append(fields, aarmapprovalrequest.FieldDecidedAt)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldChannel) {
+		fields = append(fields, aarmapprovalrequest.FieldChannel)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldAssurance) {
+		fields = append(fields, aarmapprovalrequest.FieldAssurance)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldApprover) {
+		fields = append(fields, aarmapprovalrequest.FieldApprover)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldPeerTrust) {
+		fields = append(fields, aarmapprovalrequest.FieldPeerTrust)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldNote) {
+		fields = append(fields, aarmapprovalrequest.FieldNote)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldScope) {
+		fields = append(fields, aarmapprovalrequest.FieldScope)
+	}
+	if m.FieldCleared(aarmapprovalrequest.FieldNotifiedAt) {
+		fields = append(fields, aarmapprovalrequest.FieldNotifiedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AarmApprovalRequestMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AarmApprovalRequestMutation) ClearField(name string) error {
+	switch name {
+	case aarmapprovalrequest.FieldRuleIds:
+		m.ClearRuleIds()
+		return nil
+	case aarmapprovalrequest.FieldRequester:
+		m.ClearRequester()
+		return nil
+	case aarmapprovalrequest.FieldHost:
+		m.ClearHost()
+		return nil
+	case aarmapprovalrequest.FieldAgent:
+		m.ClearAgent()
+		return nil
+	case aarmapprovalrequest.FieldSummary:
+		m.ClearSummary()
+		return nil
+	case aarmapprovalrequest.FieldProject:
+		m.ClearProject()
+		return nil
+	case aarmapprovalrequest.FieldMinAssurance:
+		m.ClearMinAssurance()
+		return nil
+	case aarmapprovalrequest.FieldRequesterAudit:
+		m.ClearRequesterAudit()
+		return nil
+	case aarmapprovalrequest.FieldRequesterTrust:
+		m.ClearRequesterTrust()
+		return nil
+	case aarmapprovalrequest.FieldDecidedAt:
+		m.ClearDecidedAt()
+		return nil
+	case aarmapprovalrequest.FieldChannel:
+		m.ClearChannel()
+		return nil
+	case aarmapprovalrequest.FieldAssurance:
+		m.ClearAssurance()
+		return nil
+	case aarmapprovalrequest.FieldApprover:
+		m.ClearApprover()
+		return nil
+	case aarmapprovalrequest.FieldPeerTrust:
+		m.ClearPeerTrust()
+		return nil
+	case aarmapprovalrequest.FieldNote:
+		m.ClearNote()
+		return nil
+	case aarmapprovalrequest.FieldScope:
+		m.ClearScope()
+		return nil
+	case aarmapprovalrequest.FieldNotifiedAt:
+		m.ClearNotifiedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown AarmApprovalRequest nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AarmApprovalRequestMutation) ResetField(name string) error {
+	switch name {
+	case aarmapprovalrequest.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case aarmapprovalrequest.FieldActionID:
+		m.ResetActionID()
+		return nil
+	case aarmapprovalrequest.FieldReceiptSequence:
+		m.ResetReceiptSequence()
+		return nil
+	case aarmapprovalrequest.FieldActionDigest:
+		m.ResetActionDigest()
+		return nil
+	case aarmapprovalrequest.FieldRuleIds:
+		m.ResetRuleIds()
+		return nil
+	case aarmapprovalrequest.FieldRequester:
+		m.ResetRequester()
+		return nil
+	case aarmapprovalrequest.FieldHost:
+		m.ResetHost()
+		return nil
+	case aarmapprovalrequest.FieldAgent:
+		m.ResetAgent()
+		return nil
+	case aarmapprovalrequest.FieldSummary:
+		m.ResetSummary()
+		return nil
+	case aarmapprovalrequest.FieldProject:
+		m.ResetProject()
+		return nil
+	case aarmapprovalrequest.FieldMinAssurance:
+		m.ResetMinAssurance()
+		return nil
+	case aarmapprovalrequest.FieldState:
+		m.ResetState()
+		return nil
+	case aarmapprovalrequest.FieldRequestedAt:
+		m.ResetRequestedAt()
+		return nil
+	case aarmapprovalrequest.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case aarmapprovalrequest.FieldInline:
+		m.ResetInline()
+		return nil
+	case aarmapprovalrequest.FieldReview:
+		m.ResetReview()
+		return nil
+	case aarmapprovalrequest.FieldRequesterAudit:
+		m.ResetRequesterAudit()
+		return nil
+	case aarmapprovalrequest.FieldRequesterTrust:
+		m.ResetRequesterTrust()
+		return nil
+	case aarmapprovalrequest.FieldDecidedAt:
+		m.ResetDecidedAt()
+		return nil
+	case aarmapprovalrequest.FieldChannel:
+		m.ResetChannel()
+		return nil
+	case aarmapprovalrequest.FieldAssurance:
+		m.ResetAssurance()
+		return nil
+	case aarmapprovalrequest.FieldApprover:
+		m.ResetApprover()
+		return nil
+	case aarmapprovalrequest.FieldPeerTrust:
+		m.ResetPeerTrust()
+		return nil
+	case aarmapprovalrequest.FieldNote:
+		m.ResetNote()
+		return nil
+	case aarmapprovalrequest.FieldScope:
+		m.ResetScope()
+		return nil
+	case aarmapprovalrequest.FieldNotifiedAt:
+		m.ResetNotifiedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown AarmApprovalRequest field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AarmApprovalRequestMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AarmApprovalRequestMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AarmApprovalRequestMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AarmApprovalRequestMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AarmApprovalRequestMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AarmApprovalRequestMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AarmApprovalRequestMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown AarmApprovalRequest unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AarmApprovalRequestMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown AarmApprovalRequest edge %s", name)
+}
 
 // AarmDeferredActionMutation represents an operation that mutates the AarmDeferredAction nodes in the graph.
 type AarmDeferredActionMutation struct {
@@ -993,6 +4045,7 @@ type AarmReceiptMutation struct {
 	policy_hash             *[]byte
 	signature               *[]byte
 	signer_key_id           *string
+	signer_key_scope        *string
 	defer_reason            *string
 	deferral_of_sequence    *int64
 	adddeferral_of_sequence *int64
@@ -1003,7 +4056,10 @@ type AarmReceiptMutation struct {
 	url_digest              *string
 	hash_version            *int
 	addhash_version         *int
+	imported                *bool
 	content_salt            *[]byte
+	approval                *map[string]interface{}
+	peer_trust              *string
 	clearedFields           map[string]struct{}
 	done                    bool
 	oldValue                func(context.Context) (*AarmReceipt, error)
@@ -2305,6 +5361,55 @@ func (m *AarmReceiptMutation) ResetSignerKeyID() {
 	delete(m.clearedFields, aarmreceipt.FieldSignerKeyID)
 }
 
+// SetSignerKeyScope sets the "signer_key_scope" field.
+func (m *AarmReceiptMutation) SetSignerKeyScope(s string) {
+	m.signer_key_scope = &s
+}
+
+// SignerKeyScope returns the value of the "signer_key_scope" field in the mutation.
+func (m *AarmReceiptMutation) SignerKeyScope() (r string, exists bool) {
+	v := m.signer_key_scope
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSignerKeyScope returns the old "signer_key_scope" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldSignerKeyScope(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSignerKeyScope is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSignerKeyScope requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSignerKeyScope: %w", err)
+	}
+	return oldValue.SignerKeyScope, nil
+}
+
+// ClearSignerKeyScope clears the value of the "signer_key_scope" field.
+func (m *AarmReceiptMutation) ClearSignerKeyScope() {
+	m.signer_key_scope = nil
+	m.clearedFields[aarmreceipt.FieldSignerKeyScope] = struct{}{}
+}
+
+// SignerKeyScopeCleared returns if the "signer_key_scope" field was cleared in this mutation.
+func (m *AarmReceiptMutation) SignerKeyScopeCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldSignerKeyScope]
+	return ok
+}
+
+// ResetSignerKeyScope resets all changes to the "signer_key_scope" field.
+func (m *AarmReceiptMutation) ResetSignerKeyScope() {
+	m.signer_key_scope = nil
+	delete(m.clearedFields, aarmreceipt.FieldSignerKeyScope)
+}
+
 // SetDeferReason sets the "defer_reason" field.
 func (m *AarmReceiptMutation) SetDeferReason(s string) {
 	m.defer_reason = &s
@@ -2739,6 +5844,42 @@ func (m *AarmReceiptMutation) ResetHashVersion() {
 	delete(m.clearedFields, aarmreceipt.FieldHashVersion)
 }
 
+// SetImported sets the "imported" field.
+func (m *AarmReceiptMutation) SetImported(b bool) {
+	m.imported = &b
+}
+
+// Imported returns the value of the "imported" field in the mutation.
+func (m *AarmReceiptMutation) Imported() (r bool, exists bool) {
+	v := m.imported
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldImported returns the old "imported" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldImported(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldImported is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldImported requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldImported: %w", err)
+	}
+	return oldValue.Imported, nil
+}
+
+// ResetImported resets all changes to the "imported" field.
+func (m *AarmReceiptMutation) ResetImported() {
+	m.imported = nil
+}
+
 // SetContentSalt sets the "content_salt" field.
 func (m *AarmReceiptMutation) SetContentSalt(b []byte) {
 	m.content_salt = &b
@@ -2788,6 +5929,104 @@ func (m *AarmReceiptMutation) ResetContentSalt() {
 	delete(m.clearedFields, aarmreceipt.FieldContentSalt)
 }
 
+// SetApproval sets the "approval" field.
+func (m *AarmReceiptMutation) SetApproval(value map[string]interface{}) {
+	m.approval = &value
+}
+
+// Approval returns the value of the "approval" field in the mutation.
+func (m *AarmReceiptMutation) Approval() (r map[string]interface{}, exists bool) {
+	v := m.approval
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldApproval returns the old "approval" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldApproval(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldApproval is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldApproval requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldApproval: %w", err)
+	}
+	return oldValue.Approval, nil
+}
+
+// ClearApproval clears the value of the "approval" field.
+func (m *AarmReceiptMutation) ClearApproval() {
+	m.approval = nil
+	m.clearedFields[aarmreceipt.FieldApproval] = struct{}{}
+}
+
+// ApprovalCleared returns if the "approval" field was cleared in this mutation.
+func (m *AarmReceiptMutation) ApprovalCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldApproval]
+	return ok
+}
+
+// ResetApproval resets all changes to the "approval" field.
+func (m *AarmReceiptMutation) ResetApproval() {
+	m.approval = nil
+	delete(m.clearedFields, aarmreceipt.FieldApproval)
+}
+
+// SetPeerTrust sets the "peer_trust" field.
+func (m *AarmReceiptMutation) SetPeerTrust(s string) {
+	m.peer_trust = &s
+}
+
+// PeerTrust returns the value of the "peer_trust" field in the mutation.
+func (m *AarmReceiptMutation) PeerTrust() (r string, exists bool) {
+	v := m.peer_trust
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeerTrust returns the old "peer_trust" field's value of the AarmReceipt entity.
+// If the AarmReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AarmReceiptMutation) OldPeerTrust(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeerTrust is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeerTrust requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeerTrust: %w", err)
+	}
+	return oldValue.PeerTrust, nil
+}
+
+// ClearPeerTrust clears the value of the "peer_trust" field.
+func (m *AarmReceiptMutation) ClearPeerTrust() {
+	m.peer_trust = nil
+	m.clearedFields[aarmreceipt.FieldPeerTrust] = struct{}{}
+}
+
+// PeerTrustCleared returns if the "peer_trust" field was cleared in this mutation.
+func (m *AarmReceiptMutation) PeerTrustCleared() bool {
+	_, ok := m.clearedFields[aarmreceipt.FieldPeerTrust]
+	return ok
+}
+
+// ResetPeerTrust resets all changes to the "peer_trust" field.
+func (m *AarmReceiptMutation) ResetPeerTrust() {
+	m.peer_trust = nil
+	delete(m.clearedFields, aarmreceipt.FieldPeerTrust)
+}
+
 // Where appends a list predicates to the AarmReceiptMutation builder.
 func (m *AarmReceiptMutation) Where(ps ...predicate.AarmReceipt) {
 	m.predicates = append(m.predicates, ps...)
@@ -2822,7 +6061,7 @@ func (m *AarmReceiptMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AarmReceiptMutation) Fields() []string {
-	fields := make([]string, 0, 34)
+	fields := make([]string, 0, 38)
 	if m.session_id != nil {
 		fields = append(fields, aarmreceipt.FieldSessionID)
 	}
@@ -2898,6 +6137,9 @@ func (m *AarmReceiptMutation) Fields() []string {
 	if m.signer_key_id != nil {
 		fields = append(fields, aarmreceipt.FieldSignerKeyID)
 	}
+	if m.signer_key_scope != nil {
+		fields = append(fields, aarmreceipt.FieldSignerKeyScope)
+	}
 	if m.defer_reason != nil {
 		fields = append(fields, aarmreceipt.FieldDeferReason)
 	}
@@ -2922,8 +6164,17 @@ func (m *AarmReceiptMutation) Fields() []string {
 	if m.hash_version != nil {
 		fields = append(fields, aarmreceipt.FieldHashVersion)
 	}
+	if m.imported != nil {
+		fields = append(fields, aarmreceipt.FieldImported)
+	}
 	if m.content_salt != nil {
 		fields = append(fields, aarmreceipt.FieldContentSalt)
+	}
+	if m.approval != nil {
+		fields = append(fields, aarmreceipt.FieldApproval)
+	}
+	if m.peer_trust != nil {
+		fields = append(fields, aarmreceipt.FieldPeerTrust)
 	}
 	return fields
 }
@@ -2983,6 +6234,8 @@ func (m *AarmReceiptMutation) Field(name string) (ent.Value, bool) {
 		return m.Signature()
 	case aarmreceipt.FieldSignerKeyID:
 		return m.SignerKeyID()
+	case aarmreceipt.FieldSignerKeyScope:
+		return m.SignerKeyScope()
 	case aarmreceipt.FieldDeferReason:
 		return m.DeferReason()
 	case aarmreceipt.FieldDeferralOfSequence:
@@ -2999,8 +6252,14 @@ func (m *AarmReceiptMutation) Field(name string) (ent.Value, bool) {
 		return m.URLDigest()
 	case aarmreceipt.FieldHashVersion:
 		return m.HashVersion()
+	case aarmreceipt.FieldImported:
+		return m.Imported()
 	case aarmreceipt.FieldContentSalt:
 		return m.ContentSalt()
+	case aarmreceipt.FieldApproval:
+		return m.Approval()
+	case aarmreceipt.FieldPeerTrust:
+		return m.PeerTrust()
 	}
 	return nil, false
 }
@@ -3060,6 +6319,8 @@ func (m *AarmReceiptMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldSignature(ctx)
 	case aarmreceipt.FieldSignerKeyID:
 		return m.OldSignerKeyID(ctx)
+	case aarmreceipt.FieldSignerKeyScope:
+		return m.OldSignerKeyScope(ctx)
 	case aarmreceipt.FieldDeferReason:
 		return m.OldDeferReason(ctx)
 	case aarmreceipt.FieldDeferralOfSequence:
@@ -3076,8 +6337,14 @@ func (m *AarmReceiptMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldURLDigest(ctx)
 	case aarmreceipt.FieldHashVersion:
 		return m.OldHashVersion(ctx)
+	case aarmreceipt.FieldImported:
+		return m.OldImported(ctx)
 	case aarmreceipt.FieldContentSalt:
 		return m.OldContentSalt(ctx)
+	case aarmreceipt.FieldApproval:
+		return m.OldApproval(ctx)
+	case aarmreceipt.FieldPeerTrust:
+		return m.OldPeerTrust(ctx)
 	}
 	return nil, fmt.Errorf("unknown AarmReceipt field %s", name)
 }
@@ -3262,6 +6529,13 @@ func (m *AarmReceiptMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSignerKeyID(v)
 		return nil
+	case aarmreceipt.FieldSignerKeyScope:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSignerKeyScope(v)
+		return nil
 	case aarmreceipt.FieldDeferReason:
 		v, ok := value.(string)
 		if !ok {
@@ -3318,12 +6592,33 @@ func (m *AarmReceiptMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetHashVersion(v)
 		return nil
+	case aarmreceipt.FieldImported:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetImported(v)
+		return nil
 	case aarmreceipt.FieldContentSalt:
 		v, ok := value.([]byte)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetContentSalt(v)
+		return nil
+	case aarmreceipt.FieldApproval:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetApproval(v)
+		return nil
+	case aarmreceipt.FieldPeerTrust:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeerTrust(v)
 		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt field %s", name)
@@ -3460,6 +6755,9 @@ func (m *AarmReceiptMutation) ClearedFields() []string {
 	if m.FieldCleared(aarmreceipt.FieldSignerKeyID) {
 		fields = append(fields, aarmreceipt.FieldSignerKeyID)
 	}
+	if m.FieldCleared(aarmreceipt.FieldSignerKeyScope) {
+		fields = append(fields, aarmreceipt.FieldSignerKeyScope)
+	}
 	if m.FieldCleared(aarmreceipt.FieldDeferReason) {
 		fields = append(fields, aarmreceipt.FieldDeferReason)
 	}
@@ -3486,6 +6784,12 @@ func (m *AarmReceiptMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(aarmreceipt.FieldContentSalt) {
 		fields = append(fields, aarmreceipt.FieldContentSalt)
+	}
+	if m.FieldCleared(aarmreceipt.FieldApproval) {
+		fields = append(fields, aarmreceipt.FieldApproval)
+	}
+	if m.FieldCleared(aarmreceipt.FieldPeerTrust) {
+		fields = append(fields, aarmreceipt.FieldPeerTrust)
 	}
 	return fields
 }
@@ -3555,6 +6859,9 @@ func (m *AarmReceiptMutation) ClearField(name string) error {
 	case aarmreceipt.FieldSignerKeyID:
 		m.ClearSignerKeyID()
 		return nil
+	case aarmreceipt.FieldSignerKeyScope:
+		m.ClearSignerKeyScope()
+		return nil
 	case aarmreceipt.FieldDeferReason:
 		m.ClearDeferReason()
 		return nil
@@ -3581,6 +6888,12 @@ func (m *AarmReceiptMutation) ClearField(name string) error {
 		return nil
 	case aarmreceipt.FieldContentSalt:
 		m.ClearContentSalt()
+		return nil
+	case aarmreceipt.FieldApproval:
+		m.ClearApproval()
+		return nil
+	case aarmreceipt.FieldPeerTrust:
+		m.ClearPeerTrust()
 		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt nullable field %s", name)
@@ -3665,6 +6978,9 @@ func (m *AarmReceiptMutation) ResetField(name string) error {
 	case aarmreceipt.FieldSignerKeyID:
 		m.ResetSignerKeyID()
 		return nil
+	case aarmreceipt.FieldSignerKeyScope:
+		m.ResetSignerKeyScope()
+		return nil
 	case aarmreceipt.FieldDeferReason:
 		m.ResetDeferReason()
 		return nil
@@ -3689,8 +7005,17 @@ func (m *AarmReceiptMutation) ResetField(name string) error {
 	case aarmreceipt.FieldHashVersion:
 		m.ResetHashVersion()
 		return nil
+	case aarmreceipt.FieldImported:
+		m.ResetImported()
+		return nil
 	case aarmreceipt.FieldContentSalt:
 		m.ResetContentSalt()
+		return nil
+	case aarmreceipt.FieldApproval:
+		m.ResetApproval()
+		return nil
+	case aarmreceipt.FieldPeerTrust:
+		m.ResetPeerTrust()
 		return nil
 	}
 	return fmt.Errorf("unknown AarmReceipt field %s", name)
@@ -3772,6 +7097,8 @@ type AuditEventMutation struct {
 	phase             *string
 	kind              *string
 	tool_call_id      *string
+	imported          *bool
+	peer_trust        *string
 	linked_event_id   *uuid.UUID
 	clearedFields     map[string]struct{}
 	session           *uuid.UUID
@@ -4864,6 +8191,91 @@ func (m *AuditEventMutation) ResetToolCallID() {
 	delete(m.clearedFields, auditevent.FieldToolCallID)
 }
 
+// SetImported sets the "imported" field.
+func (m *AuditEventMutation) SetImported(b bool) {
+	m.imported = &b
+}
+
+// Imported returns the value of the "imported" field in the mutation.
+func (m *AuditEventMutation) Imported() (r bool, exists bool) {
+	v := m.imported
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldImported returns the old "imported" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldImported(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldImported is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldImported requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldImported: %w", err)
+	}
+	return oldValue.Imported, nil
+}
+
+// ResetImported resets all changes to the "imported" field.
+func (m *AuditEventMutation) ResetImported() {
+	m.imported = nil
+}
+
+// SetPeerTrust sets the "peer_trust" field.
+func (m *AuditEventMutation) SetPeerTrust(s string) {
+	m.peer_trust = &s
+}
+
+// PeerTrust returns the value of the "peer_trust" field in the mutation.
+func (m *AuditEventMutation) PeerTrust() (r string, exists bool) {
+	v := m.peer_trust
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeerTrust returns the old "peer_trust" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldPeerTrust(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeerTrust is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeerTrust requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeerTrust: %w", err)
+	}
+	return oldValue.PeerTrust, nil
+}
+
+// ClearPeerTrust clears the value of the "peer_trust" field.
+func (m *AuditEventMutation) ClearPeerTrust() {
+	m.peer_trust = nil
+	m.clearedFields[auditevent.FieldPeerTrust] = struct{}{}
+}
+
+// PeerTrustCleared returns if the "peer_trust" field was cleared in this mutation.
+func (m *AuditEventMutation) PeerTrustCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldPeerTrust]
+	return ok
+}
+
+// ResetPeerTrust resets all changes to the "peer_trust" field.
+func (m *AuditEventMutation) ResetPeerTrust() {
+	m.peer_trust = nil
+	delete(m.clearedFields, auditevent.FieldPeerTrust)
+}
+
 // SetLinkedEventID sets the "linked_event_id" field.
 func (m *AuditEventMutation) SetLinkedEventID(u uuid.UUID) {
 	m.linked_event_id = &u
@@ -4974,7 +8386,7 @@ func (m *AuditEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuditEventMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 24)
 	if m.session != nil {
 		fields = append(fields, auditevent.FieldSessionID)
 	}
@@ -5038,6 +8450,12 @@ func (m *AuditEventMutation) Fields() []string {
 	if m.tool_call_id != nil {
 		fields = append(fields, auditevent.FieldToolCallID)
 	}
+	if m.imported != nil {
+		fields = append(fields, auditevent.FieldImported)
+	}
+	if m.peer_trust != nil {
+		fields = append(fields, auditevent.FieldPeerTrust)
+	}
 	if m.linked_event_id != nil {
 		fields = append(fields, auditevent.FieldLinkedEventID)
 	}
@@ -5091,6 +8509,10 @@ func (m *AuditEventMutation) Field(name string) (ent.Value, bool) {
 		return m.Kind()
 	case auditevent.FieldToolCallID:
 		return m.ToolCallID()
+	case auditevent.FieldImported:
+		return m.Imported()
+	case auditevent.FieldPeerTrust:
+		return m.PeerTrust()
 	case auditevent.FieldLinkedEventID:
 		return m.LinkedEventID()
 	}
@@ -5144,6 +8566,10 @@ func (m *AuditEventMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldKind(ctx)
 	case auditevent.FieldToolCallID:
 		return m.OldToolCallID(ctx)
+	case auditevent.FieldImported:
+		return m.OldImported(ctx)
+	case auditevent.FieldPeerTrust:
+		return m.OldPeerTrust(ctx)
 	case auditevent.FieldLinkedEventID:
 		return m.OldLinkedEventID(ctx)
 	}
@@ -5302,6 +8728,20 @@ func (m *AuditEventMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetToolCallID(v)
 		return nil
+	case auditevent.FieldImported:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetImported(v)
+		return nil
+	case auditevent.FieldPeerTrust:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeerTrust(v)
+		return nil
 	case auditevent.FieldLinkedEventID:
 		v, ok := value.(uuid.UUID)
 		if !ok {
@@ -5408,6 +8848,9 @@ func (m *AuditEventMutation) ClearedFields() []string {
 	if m.FieldCleared(auditevent.FieldToolCallID) {
 		fields = append(fields, auditevent.FieldToolCallID)
 	}
+	if m.FieldCleared(auditevent.FieldPeerTrust) {
+		fields = append(fields, auditevent.FieldPeerTrust)
+	}
 	if m.FieldCleared(auditevent.FieldLinkedEventID) {
 		fields = append(fields, auditevent.FieldLinkedEventID)
 	}
@@ -5466,6 +8909,9 @@ func (m *AuditEventMutation) ClearField(name string) error {
 		return nil
 	case auditevent.FieldToolCallID:
 		m.ClearToolCallID()
+		return nil
+	case auditevent.FieldPeerTrust:
+		m.ClearPeerTrust()
 		return nil
 	case auditevent.FieldLinkedEventID:
 		m.ClearLinkedEventID()
@@ -5540,6 +8986,12 @@ func (m *AuditEventMutation) ResetField(name string) error {
 		return nil
 	case auditevent.FieldToolCallID:
 		m.ResetToolCallID()
+		return nil
+	case auditevent.FieldImported:
+		m.ResetImported()
+		return nil
+	case auditevent.FieldPeerTrust:
+		m.ResetPeerTrust()
 		return nil
 	case auditevent.FieldLinkedEventID:
 		m.ResetLinkedEventID()
@@ -10503,6 +13955,8 @@ type SessionMutation struct {
 	model_usage           *[]map[string]interface{}
 	appendmodel_usage     []map[string]interface{}
 	cost_source           *string
+	imported              *bool
+	agent_process         *string
 	cost_computed_at      *time.Time
 	clearedFields         map[string]struct{}
 	events                map[uuid.UUID]struct{}
@@ -11881,6 +15335,91 @@ func (m *SessionMutation) ResetCostSource() {
 	delete(m.clearedFields, session.FieldCostSource)
 }
 
+// SetImported sets the "imported" field.
+func (m *SessionMutation) SetImported(b bool) {
+	m.imported = &b
+}
+
+// Imported returns the value of the "imported" field in the mutation.
+func (m *SessionMutation) Imported() (r bool, exists bool) {
+	v := m.imported
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldImported returns the old "imported" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldImported(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldImported is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldImported requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldImported: %w", err)
+	}
+	return oldValue.Imported, nil
+}
+
+// ResetImported resets all changes to the "imported" field.
+func (m *SessionMutation) ResetImported() {
+	m.imported = nil
+}
+
+// SetAgentProcess sets the "agent_process" field.
+func (m *SessionMutation) SetAgentProcess(s string) {
+	m.agent_process = &s
+}
+
+// AgentProcess returns the value of the "agent_process" field in the mutation.
+func (m *SessionMutation) AgentProcess() (r string, exists bool) {
+	v := m.agent_process
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAgentProcess returns the old "agent_process" field's value of the Session entity.
+// If the Session object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionMutation) OldAgentProcess(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAgentProcess is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAgentProcess requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAgentProcess: %w", err)
+	}
+	return oldValue.AgentProcess, nil
+}
+
+// ClearAgentProcess clears the value of the "agent_process" field.
+func (m *SessionMutation) ClearAgentProcess() {
+	m.agent_process = nil
+	m.clearedFields[session.FieldAgentProcess] = struct{}{}
+}
+
+// AgentProcessCleared returns if the "agent_process" field was cleared in this mutation.
+func (m *SessionMutation) AgentProcessCleared() bool {
+	_, ok := m.clearedFields[session.FieldAgentProcess]
+	return ok
+}
+
+// ResetAgentProcess resets all changes to the "agent_process" field.
+func (m *SessionMutation) ResetAgentProcess() {
+	m.agent_process = nil
+	delete(m.clearedFields, session.FieldAgentProcess)
+}
+
 // SetCostComputedAt sets the "cost_computed_at" field.
 func (m *SessionMutation) SetCostComputedAt(t time.Time) {
 	m.cost_computed_at = &t
@@ -12018,7 +15557,7 @@ func (m *SessionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SessionMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 27)
 	if m.agent_session_id != nil {
 		fields = append(fields, session.FieldAgentSessionID)
 	}
@@ -12091,6 +15630,12 @@ func (m *SessionMutation) Fields() []string {
 	if m.cost_source != nil {
 		fields = append(fields, session.FieldCostSource)
 	}
+	if m.imported != nil {
+		fields = append(fields, session.FieldImported)
+	}
+	if m.agent_process != nil {
+		fields = append(fields, session.FieldAgentProcess)
+	}
 	if m.cost_computed_at != nil {
 		fields = append(fields, session.FieldCostComputedAt)
 	}
@@ -12150,6 +15695,10 @@ func (m *SessionMutation) Field(name string) (ent.Value, bool) {
 		return m.ModelUsage()
 	case session.FieldCostSource:
 		return m.CostSource()
+	case session.FieldImported:
+		return m.Imported()
+	case session.FieldAgentProcess:
+		return m.AgentProcess()
 	case session.FieldCostComputedAt:
 		return m.CostComputedAt()
 	}
@@ -12209,6 +15758,10 @@ func (m *SessionMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldModelUsage(ctx)
 	case session.FieldCostSource:
 		return m.OldCostSource(ctx)
+	case session.FieldImported:
+		return m.OldImported(ctx)
+	case session.FieldAgentProcess:
+		return m.OldAgentProcess(ctx)
 	case session.FieldCostComputedAt:
 		return m.OldCostComputedAt(ctx)
 	}
@@ -12387,6 +15940,20 @@ func (m *SessionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCostSource(v)
+		return nil
+	case session.FieldImported:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetImported(v)
+		return nil
+	case session.FieldAgentProcess:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAgentProcess(v)
 		return nil
 	case session.FieldCostComputedAt:
 		v, ok := value.(time.Time)
@@ -12620,6 +16187,9 @@ func (m *SessionMutation) ClearedFields() []string {
 	if m.FieldCleared(session.FieldCostSource) {
 		fields = append(fields, session.FieldCostSource)
 	}
+	if m.FieldCleared(session.FieldAgentProcess) {
+		fields = append(fields, session.FieldAgentProcess)
+	}
 	if m.FieldCleared(session.FieldCostComputedAt) {
 		fields = append(fields, session.FieldCostComputedAt)
 	}
@@ -12660,6 +16230,9 @@ func (m *SessionMutation) ClearField(name string) error {
 		return nil
 	case session.FieldCostSource:
 		m.ClearCostSource()
+		return nil
+	case session.FieldAgentProcess:
+		m.ClearAgentProcess()
 		return nil
 	case session.FieldCostComputedAt:
 		m.ClearCostComputedAt()
@@ -12743,6 +16316,12 @@ func (m *SessionMutation) ResetField(name string) error {
 		return nil
 	case session.FieldCostSource:
 		m.ResetCostSource()
+		return nil
+	case session.FieldImported:
+		m.ResetImported()
+		return nil
+	case session.FieldAgentProcess:
+		m.ResetAgentProcess()
 		return nil
 	case session.FieldCostComputedAt:
 		m.ResetCostComputedAt()

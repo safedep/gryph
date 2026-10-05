@@ -44,7 +44,7 @@ chronological order with full metadata.`,
 			})
 
 			// Initialize store
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to initialize database", err)
 			}
 
@@ -58,7 +58,7 @@ chronological order with full metadata.`,
 			sessionID, err := uuid.Parse(sessionIDArg)
 			if err != nil {
 				// Try prefix match
-				s, err := app.Store.GetSessionByPrefix(ctx, sessionIDArg)
+				s, err := app.Reads.GetSessionByPrefix(ctx, sessionIDArg)
 				if err != nil {
 					return fmt.Errorf("session not found: %s", sessionIDArg)
 				}
@@ -71,7 +71,7 @@ chronological order with full metadata.`,
 			}
 
 			// Get session
-			session, err := app.Store.GetSession(ctx, sessionID)
+			session, err := app.Reads.GetSession(ctx, sessionID)
 			if err != nil {
 				return fmt.Errorf("failed to get session: %w", err)
 			}
@@ -80,7 +80,7 @@ chronological order with full metadata.`,
 			}
 
 			// Get events for session
-			evts, err := app.Store.GetEventsBySession(ctx, sessionID)
+			evts, err := app.Reads.GetEventsBySession(ctx, sessionID)
 			if err != nil {
 				return fmt.Errorf("failed to get events: %w", err)
 			}

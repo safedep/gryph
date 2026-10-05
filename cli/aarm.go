@@ -425,16 +425,16 @@ type reportMetadata struct {
 // Report is the in-memory representation of the conformance report. Field
 // names use json tags that match report.schema.json exactly.
 type Report struct {
-	SchemaVersion   string                `json:"schema_version"`
-	AARMSpecVersion string                `json:"aarm_spec_version"`
-	SuiteVersion    string                `json:"suite_version"`
-	GryphCommit     string                `json:"gryph_commit"`
-	RanAt           string                `json:"ran_at"`
-	DurationMS      int64                 `json:"duration_ms,omitempty"`
-	Summary         Summary               `json:"summary"`
-	Requirements    []Requirement         `json:"requirements"`
-	Gaps            []Gap                 `json:"gaps,omitempty"`
-	Unattributed    []UnattributedResult  `json:"unattributed,omitempty"`
+	SchemaVersion   string               `json:"schema_version"`
+	AARMSpecVersion string               `json:"aarm_spec_version"`
+	SuiteVersion    string               `json:"suite_version"`
+	GryphCommit     string               `json:"gryph_commit"`
+	RanAt           string               `json:"ran_at"`
+	DurationMS      int64                `json:"duration_ms,omitempty"`
+	Summary         Summary              `json:"summary"`
+	Requirements    []Requirement        `json:"requirements"`
+	Gaps            []Gap                `json:"gaps,omitempty"`
+	Unattributed    []UnattributedResult `json:"unattributed,omitempty"`
 }
 
 type Summary struct {

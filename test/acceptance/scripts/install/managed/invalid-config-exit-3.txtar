@@ -1,0 +1,41 @@
+# An invalid input exits 3 and changes nothing: a file that does not parse,
+# an unknown agent, a lock on an agent outside the allowlist, a file another
+# user can write, and a missing --config. Runs only in the privileged job on
+# a Linux host with no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+! exists /etc/claude-code
+expandenv unknown-agent.yml lock-outside.yml good.yml
+
+execexit 3 gryph install --managed --config $WORK/broken.yml
+stderr 'nothing changed'
+execexit 3 gryph install --managed --config $WORK/unknown-agent.yml
+stderr 'no managed hook entry'
+execexit 3 gryph install --managed --config $WORK/lock-outside.yml
+stderr 'lock_hooks'
+execexit 3 gryph install --managed
+stderr 'needs --config'
+
+exec chmod 666 $WORK/good.yml
+execexit 3 gryph install --managed --config $WORK/good.yml
+stderr 'writable by group or other'
+
+! exists /etc/safedep/gryph
+! exists /etc/claude-code
+
+-- broken.yml --
+managed: [not: a: map
+-- unknown-agent.yml --
+managed:
+  agents: [no-such-agent]
+  binary: ${ACCEPTANCE_GRYPH_BIN}
+-- lock-outside.yml --
+managed:
+  agents: [codex]
+  lock_hooks: [claude-code]
+  binary: ${ACCEPTANCE_GRYPH_BIN}
+-- good.yml --
+managed:
+  agents: [claude-code]
+  binary: ${ACCEPTANCE_GRYPH_BIN}

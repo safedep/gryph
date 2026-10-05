@@ -1,0 +1,38 @@
+# gryph install --managed writes the Codex managed hook entries into
+# requirements.toml, pins the hooks feature on, keeps the administrator's
+# other keys, and sets allow_managed_hooks_only only with the lock. Runs
+# only in the privileged job on a Linux host with no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+! exists /etc/claude-code
+! exists /etc/codex
+expandenv managed.yml
+exec mkdir -p /etc/codex
+exec cp requirements.toml /etc/codex/requirements.toml
+
+exec gryph install --managed --config $WORK/managed.yml
+stdout 'Managed install: ok'
+stdout 'codex\s+locked\s+install\s+changed\s+/etc/codex/requirements.toml'
+! stdout '\(locked\)'
+grep 'model = ''gpt-5''' /etc/codex/requirements.toml
+grep 'web_search = false' /etc/codex/requirements.toml
+grep 'hooks = true' /etc/codex/requirements.toml
+grep '_hook codex PreToolUse' /etc/codex/requirements.toml
+grep 'timeout = 30' /etc/codex/requirements.toml
+! grep 'allow_managed_hooks_only' /etc/codex/requirements.toml
+! exists /etc/claude-code
+
+exec rm -rf /etc/safedep/gryph /etc/codex
+exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- requirements.toml --
+model = 'gpt-5'
+
+[features]
+web_search = false
+-- managed.yml --
+managed:
+  agents: [codex]
+  binary: ${ACCEPTANCE_GRYPH_BIN}

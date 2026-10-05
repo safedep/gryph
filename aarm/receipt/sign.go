@@ -27,10 +27,39 @@ const (
 	privateKeyPEMType = "GRYPH-RECEIPT-PRIVATE-KEY"
 )
 
+// The scope of a signing key. The receipt carries it next to the key id, so
+// a later audit can tell a signature of the user's own key from one of the
+// decision service, which the user cannot read.
+const (
+	// KeyScopeUser is a key in the user's config directory. The user can
+	// read it, so the signature proves nothing against that user.
+	KeyScopeUser = "user"
+	// KeyScopeSupervisor is the key of the decision service that runs
+	// outside the user. Not in use before the service ships.
+	KeyScopeSupervisor = "supervisor"
+	// KeyScopeUnmarked labels a signed row from before the marker. A user
+	// key signed every such row.
+	KeyScopeUnmarked = "unmarked"
+)
+
 // Signer produces an Ed25519 signature over a receipt hash and returns the
 // signature alongside the keyID that identifies the signing public key.
 type Signer interface {
 	Sign(hash []byte) (signature []byte, keyID string, err error)
+}
+
+// KeyScoper is a Signer that names the scope of its key. A Signer without
+// it signs in the user scope.
+type KeyScoper interface {
+	KeyScope() string
+}
+
+// ScopeOf returns the scope that s signs in.
+func ScopeOf(s Signer) string {
+	if k, ok := s.(KeyScoper); ok && k.KeyScope() != "" {
+		return k.KeyScope()
+	}
+	return KeyScopeUser
 }
 
 // Verifier checks a receipt signature against a trusted public key identified
@@ -44,6 +73,16 @@ type Verifier interface {
 type Ed25519Signer struct {
 	priv  ed25519.PrivateKey
 	keyID string
+	scope string
+}
+
+// KeyScope implements KeyScoper. A signer made from a key file in the
+// user's config directory signs in the user scope.
+func (s *Ed25519Signer) KeyScope() string {
+	if s == nil || s.scope == "" {
+		return KeyScopeUser
+	}
+	return s.scope
 }
 
 // Ed25519Verifier verifies receipt signatures against a keyID-indexed pubkey
@@ -104,6 +143,17 @@ func (s *Ed25519Signer) Sign(hash []byte) ([]byte, string, error) {
 	}
 	sig := ed25519.Sign(s.priv, hash)
 	return sig, s.keyID, nil
+}
+
+// WithScope returns the signer with the scope that its receipts carry.
+// The decision service sets KeyScopeSupervisor on the machine key.
+func (s *Ed25519Signer) WithScope(scope string) *Ed25519Signer {
+	if s == nil {
+		return nil
+	}
+	out := *s
+	out.scope = scope
+	return &out
 }
 
 // KeyID returns the keyID this signer signs under.
@@ -420,6 +470,27 @@ func writeAtomicFile(path string, data []byte, mode os.FileMode) error {
 	return securefile.Replace(f, path, data)
 }
 
+// LoadTrustStores reads every trust store at paths and merges them into
+// one. A later path replaces an entry with the same key id, so the managed
+// store, which comes last, wins on a collision. A missing file adds
+// nothing.
+func LoadTrustStores(paths ...string) (*TrustStore, error) {
+	merged := &TrustStore{}
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		ts, err := LoadTrustStore(path)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		for _, entry := range ts.Keys {
+			AddOrReplaceTrustStoreEntry(merged, entry)
+		}
+	}
+	return merged, nil
+}
+
 // LoadTrustStore reads a trust store JSON file. Returns an empty TrustStore
 // when the file does not exist so callers can create it lazily.
 func LoadTrustStore(path string) (*TrustStore, error) {
@@ -448,9 +519,9 @@ func ParseTrustStore(data []byte) (*TrustStore, error) {
 	return &ts, nil
 }
 
-// SaveTrustStore serializes ts to JSON and writes it to path with 0644
-// permissions. The parent directory is created with 0700 if missing.
-func SaveTrustStore(path string, ts *TrustStore) error {
+// MarshalTrustStore serializes ts as the trust store file: indented JSON
+// with lowercase key ids and a final newline.
+func MarshalTrustStore(ts *TrustStore) ([]byte, error) {
 	if ts == nil {
 		ts = &TrustStore{}
 	}
@@ -459,14 +530,24 @@ func SaveTrustStore(path string, ts *TrustStore) error {
 	}
 	data, err := json.MarshalIndent(ts, "", "  ")
 	if err != nil {
-		return fmt.Errorf("receipt: marshal trust store: %w", err)
+		return nil, fmt.Errorf("receipt: marshal trust store: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
+// SaveTrustStore serializes ts to JSON and writes it to path with 0644
+// permissions. The parent directory is created with 0700 if missing.
+func SaveTrustStore(path string, ts *TrustStore) error {
+	data, err := MarshalTrustStore(ts)
+	if err != nil {
+		return err
 	}
 	if dir := filepath.Dir(path); dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return fmt.Errorf("receipt: create trust store dir: %w", err)
 		}
 	}
-	if err := writeAtomicFile(path, append(data, '\n'), 0o644); err != nil {
+	if err := writeAtomicFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("receipt: write trust store: %w", err)
 	}
 	return nil

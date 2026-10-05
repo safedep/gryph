@@ -51,6 +51,14 @@ type InstallOptions struct {
 	Backup bool
 	// BackupDir is the directory to store backups.
 	BackupDir string
+	// Command is the program that the hook entries name. Empty names the
+	// running binary by its absolute path.
+	Command string
+	// Repair marks an unattended rewrite of the Gryph entries. The adapter
+	// then refuses a symbolic link in the path of the file, keeps a file
+	// that does not parse, and makes no backup. Read and write the file with
+	// ReadHookFile and WriteHookFile, which apply these rules.
+	Repair bool
 }
 
 // InstallResult contains the result of hook installation.
@@ -75,6 +83,10 @@ type UninstallOptions struct {
 	RestoreBackup bool
 	// BackupDir is the directory containing backups.
 	BackupDir string
+	// Repair applies the repair rules to the removal: no link in the path
+	// below the home directory, a temporary file and a rename, Gryph
+	// entries only. A process that runs for another user sets it.
+	Repair bool
 }
 
 // UninstallResult contains the result of hook removal.
@@ -180,6 +192,83 @@ type Adapter interface {
 	Hooks() []events.HookSpec
 }
 
+// ManagedInstaller is an optional interface of an adapter whose agent reads
+// a machine-wide hook configuration that an administrator owns. gryph
+// install --managed writes it once for every user of the host, so a hook
+// entry exists before the agent is installed and the user cannot remove it.
+type ManagedInstaller interface {
+	// ManagedHookPath returns the file that holds the Gryph entries on this
+	// platform.
+	ManagedHookPath() string
+	// ManagedClass says how far the managed file resists the user.
+	ManagedClass() ManagedClass
+	// InstallManaged writes the Gryph entries, and the agent's own lock
+	// when opts.Lock is set. It changes nothing when the file already holds
+	// them, so a repeated run is safe.
+	InstallManaged(ctx context.Context, opts ManagedInstallOptions) (*ManagedInstallResult, error)
+	// UninstallManaged removes the Gryph entries and the lock.
+	UninstallManaged(ctx context.Context, opts ManagedInstallOptions) (*ManagedInstallResult, error)
+}
+
+// ManagedClass says how far an agent's managed hook file resists the user
+// of the host. The vendor documentation decides the class, and each class
+// must be checked again for every agent release.
+type ManagedClass string
+
+const (
+	// ManagedClassLocked: the vendor documents that a user cannot turn the
+	// managed hooks off. The agent may also offer a lock switch that lets
+	// only managed hooks run; ManagedLockSwitcher names the ones that do.
+	ManagedClassLocked ManagedClass = "locked"
+	// ManagedClassSystemPath: the agent reads a system file that root owns,
+	// but the vendor does not document that the user cannot override or
+	// disable its hooks. The reconcile pass keeps checking the user scope.
+	ManagedClassSystemPath ManagedClass = "system_path"
+)
+
+// ManagedLockSwitcher is a ManagedInstaller whose agent has a lock switch
+// that lets only managed hooks run. ManagedInstallOptions.Lock applies to
+// such an agent alone. A locked agent without the switch needs none: its
+// managed hooks run whatever the user scope holds.
+type ManagedLockSwitcher interface {
+	ManagedLockSwitch() bool
+}
+
+// ManagedInstallOptions configures a managed install.
+type ManagedInstallOptions struct {
+	// Command is the absolute path of the root-owned gryph binary.
+	Command string
+	// Lock turns on the agent's own switch that lets only managed hooks run.
+	Lock bool
+	// DryRun reports the change without making it.
+	DryRun bool
+}
+
+// ManagedInstallResult is the outcome of a managed install or uninstall.
+type ManagedInstallResult struct {
+	// Path is the managed file.
+	Path string
+	// Changed is true when the call wrote or removed the file, or would
+	// have in a dry run.
+	Changed bool
+	// Locked is true when the file turns on the agent's lock.
+	Locked bool
+}
+
+// ProcessNamer is an optional interface of an adapter. It names the
+// programs of the agent as the kernel reports them, so a census can match
+// a live agent process to the adapter.
+type ProcessNamer interface {
+	ProcessNames() []string
+}
+
+// FailModeReporter is an optional interface of an adapter whose agent can
+// block the action when the hook fails. FailClosed reports whether every
+// Gryph entry asks for that.
+type FailModeReporter interface {
+	FailClosed(ctx context.Context) (bool, error)
+}
+
 // HookTypeNames returns the hook type names of specs, in order.
 func HookTypeNames(specs []events.HookSpec) []string {
 	names := make([]string, 0, len(specs))
@@ -200,6 +289,19 @@ func RequiredHookTypeNames(specs []events.HookSpec) []string {
 		}
 	}
 	return names
+}
+
+// MissingPromptHooks returns the prompt hooks in specs that installed does
+// not hold. An install from before prompt capture lacks them, and the
+// session context then has no intent.
+func MissingPromptHooks(specs []events.HookSpec, installed []string) []string {
+	var missing []string
+	for _, s := range specs {
+		if s.Prompt && !slices.Contains(installed, string(s.Type)) {
+			missing = append(missing, string(s.Type))
+		}
+	}
+	return missing
 }
 
 // SetPluginStatus fills status for a plugin file that Gryph generates.

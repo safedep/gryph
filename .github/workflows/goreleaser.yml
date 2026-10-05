@@ -19,6 +19,7 @@ jobs:
     permissions:
       contents: write # for goreleaser/goreleaser-action to create a GitHub release
       packages: write # for goreleaser/goreleaser-action to publish docker images
+      id-token: write # for cosign to sign the packages with the workflow identity
     runs-on: ubuntu-latest
     env:
       # Required for buildx on docker 19.x
@@ -33,6 +34,9 @@ jobs:
         uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
         with:
           go-version-file: go.mod
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Run GoReleaser
         id: run-goreleaser

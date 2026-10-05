@@ -53,6 +53,30 @@ jobs:
       - name: Fuzz Path Matcher
         run: go test -run '^$' -fuzz=FuzzGlobsOverlap -fuzztime=30s ./aarm/pdp/
 
+  bench-hook:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Benchmark Hook Latency
+        shell: bash
+        run: make bench-hook BENCHTIME=30x | tee "${RUNNER_TEMP}/bench-hook.txt"
+
+      - name: Upload Results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: bench-hook
+          path: |
+            ${{ runner.temp }}/bench-hook.txt
+            perf-reports/hook-latency.md
+
   windows-keys:
     runs-on: windows-latest
     timeout-minutes: 15
@@ -129,6 +153,88 @@ jobs:
           path: |
             ${{ runner.temp }}/acceptance-report.md
             ${{ runner.temp }}/acceptance.xml
+
+  acceptance-privileged:
+    # The privileged scripts write the system paths of a managed host, make
+    # accounts, and run the decision service as root. They run in a
+    # throwaway container, one at a time, with a system bus and polkit for
+    # the local-auth scripts. The client-mode latency guard runs here too,
+    # because the managed configuration that turns the client on lives in
+    # /etc.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: ubuntu:24.04
+      options: --user root
+    steps:
+      - name: Install Tools
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates git make gcc libc6-dev procps python3 dbus polkitd pkexec
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Checkout Source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Start the System Bus and polkit
+        run: |
+          mkdir -p /run/dbus
+          dbus-daemon --system --fork
+          /usr/lib/polkit-1/polkitd --no-debug &
+          for i in $(seq 1 50); do pkcheck --version >/dev/null 2>&1 && break; sleep 0.1; done
+          pkcheck --version
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@v1.13.0
+
+      # The managed scripts name this binary in hook entries, and the
+      # install refuses a binary whose path chain is not root-owned. The
+      # work directory of the runner is such a chain, so the binary goes
+      # under /opt, which root owns in the container.
+      - name: Build
+        run: |
+          mkdir -p /opt/gryph-ci
+          go build -o /opt/gryph-ci/gryph ./cmd/gryph
+
+      - name: Run Privileged Acceptance Scripts
+        env:
+          ACCEPTANCE_PRIVILEGED: "1"
+          GRYPH_BIN: /opt/gryph-ci/gryph
+        run: |
+          "$(go env GOPATH)/bin/gotestsum" --junitfile "${RUNNER_TEMP}/acceptance.xml" --format testname \
+            -- -tags acceptance -parallel 1 -timeout 20m ./test/acceptance
+
+      - name: Render Report
+        if: always()
+        run: |
+          go run ./test/acceptance/report \
+            -junit "${RUNNER_TEMP}/acceptance.xml" \
+            -catalog test/acceptance/catalog.yaml \
+            -scripts test/acceptance/scripts \
+            | tee "${RUNNER_TEMP}/acceptance-report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guard the Client Latency
+        env:
+          GRYPH_PERF_CLIENT: "1"
+          GRYPH_BIN: /opt/gryph-ci/gryph
+        run: make bench-hook BENCHTIME=50x | tee "${RUNNER_TEMP}/bench-hook-client.txt"
+
+      - name: Upload Report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: acceptance-report-privileged
+          path: |
+            ${{ runner.temp }}/acceptance-report.md
+            ${{ runner.temp }}/acceptance.xml
+            ${{ runner.temp }}/bench-hook-client.txt
+            perf-reports/hook-latency.md
 
   goreleaser-test:
     runs-on: ubuntu-latest

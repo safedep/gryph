@@ -189,7 +189,7 @@ func TestExportProfile_Validate(t *testing.T) {
 	}{
 		{"bad default", ExportProfile{Name: "x", Default: "keep"}, "unknown default treatment"},
 		{"bad then", ExportProfile{Name: "x", Default: TreatInclude, Rules: []ExportRule{{Classes: []Class{ClassPII}, Then: "hide"}}}, "unknown treatment"},
-		{"empty rule", ExportProfile{Name: "x", Default: TreatInclude, Rules: []ExportRule{{Then: TreatDrop}}}, "needs classes or origins"},
+		{"empty rule", ExportProfile{Name: "x", Default: TreatInclude, Rules: []ExportRule{{Then: TreatDrop}}}, "needs classes, origins or fields"},
 		{"bad class", ExportProfile{Name: "x", Default: TreatInclude, Rules: []ExportRule{{Classes: []Class{"password"}, Then: TreatDrop}}}, "unknown class"},
 		{"bad origin", ExportProfile{Name: "x", Default: TreatInclude, Rules: []ExportRule{{Origins: []Origin{"internet"}, Then: TreatDrop}}}, "unknown origin"},
 	}
@@ -226,4 +226,46 @@ func TestExportProfile_ApplyKeepsUnclassified(t *testing.T) {
 			assert.True(t, got.Label.Unclassified)
 		})
 	}
+}
+
+func TestExportProfile_FieldRules(t *testing.T) {
+	p := ExportProfile{Name: "x", Default: TreatInclude, Rules: []ExportRule{{Fields: []string{FieldCommand}, Then: TreatDigest}}}
+	require.NoError(t, p.Validate())
+	l := Label{Origin: OriginAgent}
+	assert.Equal(t, TreatDigest, p.TreatmentFor("command", l))
+	assert.Equal(t, TreatDigest, p.TreatmentFor("nested.command", l))
+	assert.Equal(t, TreatInclude, p.TreatmentFor("output", l))
+	assert.Equal(t, TreatInclude, p.Treatment(l))
+
+	bad := ExportProfile{Name: "x", Default: TreatInclude, Rules: []ExportRule{{Fields: []string{"url"}, Then: TreatDrop}}}
+	assert.ErrorContains(t, bad.Validate(), `unknown field "url"`)
+}
+
+func TestExportProfile_Policy(t *testing.T) {
+	p := BuiltinProfiles()[ProfilePolicy].WithDigestKey([]byte("k")).WithRedactor(func(s string) string {
+		return strings.ReplaceAll(s, "hunter2", "[REDACTED]")
+	})
+	assert.False(t, p.IncludesAll())
+
+	command := Text{Value: "curl -H 'token=hunter2' https://api.example.com/v1?key=abc", Label: Label{Origin: OriginAgent, Digest: "sha256:aa"}}
+	out, treatment := p.ApplyField(FieldCommand, command)
+	assert.Equal(t, TreatInclude, treatment)
+	assert.Equal(t, "curl -H 'token=[REDACTED]' https://api.example.com/v1", out.Value)
+	assert.Empty(t, out.Label.Digest)
+
+	content := Text{Value: "package main", Label: Label{Origin: OriginFileProject, Digest: "sha256:bb"}}
+	out, treatment = p.ApplyField(FieldContentPreview, content)
+	assert.Equal(t, TreatDigest, treatment)
+	assert.Empty(t, out.Value)
+	assert.True(t, strings.HasPrefix(out.Label.Digest, KeyedDigestPrefix))
+
+	prompt := Text{Value: "deploy it", Label: Label{Origin: OriginUser, Digest: "sha256:cc"}}
+	_, treatment = p.ApplyField(FieldPrompt, prompt)
+	assert.Equal(t, TreatDigest, treatment)
+
+	secret := Text{Value: "AKIA...", Label: Label{Origin: OriginAgent, Classes: []Class{ClassSecret}, Digest: "sha256:dd", Size: 7}}
+	out, treatment = p.ApplyField(FieldCommand, secret)
+	assert.Equal(t, TreatDrop, treatment)
+	assert.Empty(t, out.Value)
+	assert.Empty(t, out.Label.Digest)
 }

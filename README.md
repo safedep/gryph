@@ -160,6 +160,10 @@ gryph config set policy.enabled true
 
 See [security policy](./docs/security-policy.md) for more details.
 
+Gryph also protects its own hooks, policy and audit trail. `gryph doctor` shows the level of each asset and the profile they earn. In the `guard` profile, Gryph guards against agent mistakes and simple attempts to change it, detects a change to a hook configuration, and repairs it when you turn repair on. It does not stop a determined same-user adversary or root. See [self-protection](./docs/self-protection.md) for the limits and the claims you can make. An administrator installs Gryph for every user of a host with `gryph install --managed`. See the [managed install guide](./docs/mdm.md).
+
+On a managed host, a [decision service](./docs/supervisor.md) outside the user evaluates the policy, keeps the audit trail of every account, signs with a machine key and answers approvals, so a process of the agent's user cannot read the key, edit the trail or forge a decision. The `locked` profile then holds for the agents whose managed hook entry resists the user, Claude Code, Codex and Cursor today; for Gemini and Windsurf the entry is a root-owned file without a lock, and Gryph detects a missing hook instead of preventing it. See the [threat model](./docs/security-policy-threat-model.md) for what you can claim.
+
 ## Commands
 
 > For a complete reference of all commands and flags, see [CLI Reference](docs/cli-reference.md).
@@ -244,9 +248,13 @@ gryph self-log                 # View gryph's own audit trail
 ### Health Check
 
 ```bash
-gryph status  # Check installation status
-gryph doctor  # Diagnose issues
+gryph status                       # Check installation status
+gryph doctor                       # Diagnose issues, show the self-protection table and the host posture
+gryph doctor --repair              # Also repair a changed hook configuration
+gryph supervisor reconcile --once  # The self-protection pass alone, for a timer
 ```
+
+See [self-protection](./docs/self-protection.md).
 
 ## Configuration
 
@@ -269,13 +277,13 @@ Sensitive files (`.env`, `*.pem`, `*secret*`, etc.) are detected automatically. 
 
 ## Privacy
 
-All data stays on the local machine. There is no cloud component, no telemetry, no tracking.
+Gryph sends nothing by default. SafeDep Cloud is opt-in. The data stays on the local machine until you set up an export, a stream target or SafeDep Cloud, and each of them applies an export profile to what leaves the host.
 
 - **Sensitive file detection** : Files matching `.env`, `*.pem`, `*.key`, `*secret*`, `.ssh/**`, `.aws/**` and more are automatically flagged. Actions are logged but content is never stored.
 - **Content redaction** : Passwords, API keys, tokens, and credentials are automatically redacted from logged output.
 - **Content labels** : Each stored content value carries a label: its data classes, its size, a SHA-256 digest of the value before redaction, and flags that say whether Gryph redacted, truncated, or removed it.
 - **Content hashing** : File contents are stored as SHA-256 hashes by default, allowing identity verification without storing actual content.
-- **Local-only storage** : SQLite database with configurable retention (default 90 days).
+- **Local storage by default** : SQLite database with configurable retention (default 90 days). Nothing leaves the host unless you turn on an export, a stream target or SafeDep Cloud.
 
 <details>
   <summary>Files Modified During Installation</summary>

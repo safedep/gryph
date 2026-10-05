@@ -1,0 +1,40 @@
+# On session end the hook process reads the transcript as the user and sends
+# the totals with the request. The session stores them with a source that
+# marks them as client reported. A missing transcript leaves no cost data.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+expandenv session_end.json missing_transcript.json
+
+stdin session_end.json
+exec gryph _hook claude-code SessionEnd
+stdin missing_transcript.json
+exec gryph _hook claude-code SessionEnd
+
+exec gryph sessions --format json --no-color
+stdout '"InputTokens": 1500'
+stdout '"OutputTokens": 700'
+stdout '"CacheReadTokens": 400'
+stdout '"CacheWriteTokens": 200'
+stdout -count=1 '"CostSource": "client_reported:transcript"'
+stdout -count=1 '"CostSource": ""'
+
+-- home/transcript.jsonl --
+{"type":"assistant","message":{"model":"claude-sonnet-4-20250514","usage":{"input_tokens":1500,"output_tokens":700,"cache_read_input_tokens":400,"cache_creation_input_tokens":200}}}
+-- session_end.json --
+{
+  "session_id": "session-with-transcript",
+  "transcript_path": "${WORK}/home/transcript.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "SessionEnd",
+  "reason": "user_exit"
+}
+-- missing_transcript.json --
+{
+  "session_id": "session-without-transcript",
+  "transcript_path": "${WORK}/home/no-such-transcript.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "SessionEnd",
+  "reason": "user_exit"
+}

@@ -1,0 +1,20 @@
+# Doctor reports whether a BPF LSM program could attach on this host: the
+# kernel configuration, the active LSM list and the BTF. The row is
+# information, because no provider uses the BPF LSM yet. Linux only.
+[!linux] skip 'the BPF LSM is a Linux feature'
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph doctor --no-color
+stdout 'Host posture'
+stdout 'bpf lsm = (available|not built|not active|not available|unknown)'
+stdout 'a kernel-assisted provider could (not )?attach here: '
+stdout 'CONFIG_BPF_LSM=|kernel configuration not readable'
+stdout 'active LSM list|bpf (not )?in the active LSM list'
+stdout 'BTF at /sys/kernel/btf/vmlinux'
+stdout 'No provider uses it yet'
+
+exec gryph doctor --format json --no-color
+stdout '"Name": "bpf lsm"'
+stdout '"Status": "info"'

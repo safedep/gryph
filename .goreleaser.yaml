@@ -37,6 +37,48 @@ checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
+# The Linux packages (deb, rpm, apk and Arch Linux) are the managed install
+# for a Linux fleet. The binary sits at the root-owned path that the
+# managed hook entries name, with a link on PATH. The post-install script
+# makes the service account of the decision service. The package writes no
+# managed configuration: an MDM script runs gryph install --managed after
+# the package.
+nfpms:
+  - id: linux-packages
+    package_name: gryph
+    vendor: SafeDep
+    homepage: https://github.com/safedep/gryph
+    maintainer: SafeDep <hello@safedep.io>
+    description: Security layer for AI coding agents
+    license: Apache-2.0
+    formats: [deb, rpm, apk, archlinux]
+    bindir: /opt/safedep/gryph/bin
+    contents:
+      - src: /opt/safedep/gryph/bin/gryph
+        dst: /usr/bin/gryph
+        type: symlink
+    scripts:
+      postinstall: scripts/postinstall.sh
+    rpm:
+      group: Applications/System
+    archlinux:
+      packager: SafeDep <hello@safedep.io>
+
+# Keyless signatures from the release workflow identity, with Sigstore. A
+# verifier checks the certificate identity against this repository and the
+# release workflow, so no long-lived key is stored anywhere.
+signs:
+  - id: checksum
+    cmd: cosign
+    artifacts: checksum
+    certificate: "${artifact}.pem"
+    args: ["sign-blob", "--yes", "--output-signature=${signature}", "--output-certificate=${certificate}", "${artifact}"]
+  - id: packages
+    cmd: cosign
+    artifacts: package
+    certificate: "${artifact}.pem"
+    args: ["sign-blob", "--yes", "--output-signature=${signature}", "--output-certificate=${certificate}", "${artifact}"]
+
 universal_binaries:
   - replace: true
 

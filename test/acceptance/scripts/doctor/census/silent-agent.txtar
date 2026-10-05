@@ -1,0 +1,51 @@
+# A live agent process that sends no hook call through the census window is
+# a silent agent: the hooks do not reach Gryph. Doctor reports it as drift
+# on the hook_traffic row and records a silent_agent tamper event. A hook
+# call clears it. The agent here is a copy of sleep named like the Claude
+# Code program.
+[!unix] skip 'the census script needs a Unix sleep binary'
+env GRYPH_POLICY_SELF_PROTECTION_CENSUS=true
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+
+exec cp /bin/sleep $WORK/bin/claude
+exec $WORK/bin/claude 300 &
+exec sleep 4
+
+exec gryph doctor --no-color
+stdout 'hook_traffic\s+claude-code\s+detect\s+[0-9]+ process\(es\), pid [0-9]+'
+stdout 'drift: silent agent: no hook event for 3s while [0-9]+ process\(es\) run'
+stdout 'Tamper events recorded: 1'
+
+exec gryph doctor --no-color
+! stdout 'Tamper events recorded'
+
+stdin pre_tool_use.json
+exec gryph _hook claude-code PreToolUse
+exec gryph doctor --no-color
+stdout 'hook_traffic\s+claude-code\s+detect\s+[0-9]+ process\(es\), pid [0-9 ]+(, [0-9a-z ]*gryph run)?, last hook event'
+! stdout 'silent agent'
+stdout 'Tamper events recorded: 1'
+
+exec gryph policy receipts --format json --no-color
+stdout 'hook_traffic claude-code silent_agent: level detect to detect, silent agent'
+stdout 'hook_traffic claude-code resolved: level detect to detect'
+
+-- bin/.keep --
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  self_protection:
+    census_window: 3s
+-- pre_tool_use.json --
+{
+  "session_id": "census-session",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_use_id": "toolu_census",
+  "tool_input": {"file_path": "/home/user/project/README.md"}
+}

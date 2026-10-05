@@ -11,6 +11,7 @@ import (
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/engine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -21,7 +22,7 @@ import (
 // paths, so a hook file outside them would be open to the governed agent.
 func TestAdapters_InstallWritesOnlyDeclaredHookConfig(t *testing.T) {
 	registry := agent.NewRegistry()
-	registerAdapters(registry, nil, config.Default())
+	engine.RegisterAdapters(registry, nil, config.Default())
 
 	for _, adapter := range registry.All() {
 		t.Run(adapter.Name(), func(t *testing.T) {

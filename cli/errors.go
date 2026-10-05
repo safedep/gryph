@@ -10,6 +10,13 @@ const (
 	ExitDatabase      = 3 // Database init fails, corrupt/locked
 	ExitAgentNotFound = 4 // Agent not found or not detected
 	ExitHookFailed    = 5 // Hook installation/removal fails
+
+	// The exit codes of gryph install --managed, the command an MDM script
+	// runs. They share the number 3 with ExitDatabase, because the managed
+	// install never opens a database and the MDM contract fixes 3 for an
+	// invalid input.
+	ExitManagedInvalidConfig = 3  // Invalid input, nothing changed
+	ExitManagedPartial       = 10 // Some agents degraded, the JSON lists them
 )
 
 // ExitCoder is an interface for errors that carry a custom exit code and message.

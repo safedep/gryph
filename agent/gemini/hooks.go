@@ -21,14 +21,17 @@ const minVersion = "0.26.0"
 // Hooks declares the Gemini CLI hooks Gryph installs and parses. Phase and
 // Blocking drive the enforcement coverage table in
 // docs/agent-enforcement-coverage.md.
-var Hooks = []events.HookSpec{
+//
+// Gemini CLI waits 60 s for a hook by default (hooks reference, 2026-10-03).
+// Exit code 2 blocks. The reference documents no timeout behavior.
+var Hooks = events.WithTimeout(60*time.Second, []events.HookSpec{
 	{Type: "BeforeAgent", Phase: events.PhasePre, Blocking: true, Prompt: true, MinVersion: minVersion},
 	{Type: "BeforeTool", Phase: events.PhasePre, Blocking: true, MinVersion: minVersion},
 	{Type: "AfterTool", Phase: events.PhasePost, MinVersion: minVersion},
 	{Type: "SessionStart", Phase: events.PhaseUnknown, MinVersion: minVersion},
 	{Type: "SessionEnd", Phase: events.PhaseUnknown, MinVersion: minVersion},
 	{Type: "Notification", Phase: events.PhaseUnknown, MinVersion: minVersion},
-}
+})
 
 // HookTypes are the hook type names in Hooks, in install order.
 var HookTypes = agent.HookTypeNames(Hooks)
@@ -45,7 +48,7 @@ type HookCommand struct {
 	Command string `json:"command"`
 }
 
-func GenerateHooksConfig() SettingsHooks {
+func GenerateHooksConfig(program string) SettingsHooks {
 	hooks := make(SettingsHooks)
 
 	for _, hookType := range HookTypes {
@@ -53,7 +56,7 @@ func GenerateHooksConfig() SettingsHooks {
 			Hooks: []HookCommand{
 				{
 					Type:    "command",
-					Command: fmt.Sprintf("%s _hook gemini %s", utils.GryphCommand(), hookType),
+					Command: utils.HookCommand(program, "gemini", hookType),
 				},
 			},
 		}
@@ -68,9 +71,9 @@ func GenerateHooksConfig() SettingsHooks {
 	return hooks
 }
 
-func readSettings(path string) (map[string]interface{}, error) {
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
+func readSettings(path string, opts agent.InstallOptions) (map[string]interface{}, error) {
+	data, err := agent.ReadHookFile(path, opts)
+	if agent.IsNotExist(err) {
 		return make(map[string]interface{}), nil
 	}
 	if err != nil {
@@ -85,13 +88,13 @@ func readSettings(path string) (map[string]interface{}, error) {
 	return settings, nil
 }
 
-func writeSettings(path string, settings map[string]interface{}) error {
+func writeSettings(path string, settings map[string]interface{}, opts agent.InstallOptions) error {
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0600)
+	return agent.WriteHookFile(path, data, 0600, opts)
 }
 
 func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.InstallResult, error) {
@@ -112,7 +115,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 
 	settingsPath := filepath.Join(detection.ConfigPath, "settings.json")
 
-	settings, err := readSettings(settingsPath)
+	settings, err := readSettings(settingsPath, opts)
 	if err != nil {
 		result.Error = fmt.Errorf("failed to read settings.json: %w", err)
 		return result, result.Error
@@ -159,7 +162,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		return result, nil
 	}
 
-	gryphHooks := GenerateHooksConfig()
+	gryphHooks := GenerateHooksConfig(opts.Command)
 
 	if settings["hooks"] == nil {
 		settings["hooks"] = make(map[string]interface{})
@@ -191,7 +194,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		result.HooksInstalled = append(result.HooksInstalled, hookType)
 	}
 
-	if err := writeSettings(settingsPath, settings); err != nil {
+	if err := writeSettings(settingsPath, settings, opts); err != nil {
 		result.Error = fmt.Errorf("failed to write settings.json: %w", err)
 		return result, result.Error
 	}
@@ -217,7 +220,7 @@ func hasGryphHooks(hooks map[string]interface{}) bool {
 						for _, h := range hooksList {
 							if hook, ok := h.(map[string]interface{}); ok {
 								if cmd, ok := hook["command"].(string); ok {
-									if len(cmd) >= 5 && cmd[:5] == "gryph" {
+									if utils.IsGryphCommand(cmd) {
 										return true
 									}
 								}
@@ -269,7 +272,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		}
 	}
 
-	settings, err := readSettings(settingsPath)
+	settings, err := readSettings(settingsPath, agent.InstallOptions{Repair: opts.Repair})
 	if err != nil {
 		result.Error = fmt.Errorf("failed to read settings.json: %w", err)
 		return result, result.Error
@@ -319,7 +322,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 					continue
 				}
 				cmd, _ := hook["command"].(string)
-				if len(cmd) < 5 || cmd[:5] != "gryph" {
+				if !utils.IsGryphCommand(cmd) {
 					filteredHooks = append(filteredHooks, h)
 				}
 			}
@@ -338,7 +341,7 @@ func UninstallHooks(ctx context.Context, opts agent.UninstallOptions) (*agent.Un
 		}
 	}
 
-	if err := writeSettings(settingsPath, settings); err != nil {
+	if err := writeSettings(settingsPath, settings, agent.InstallOptions{Repair: opts.Repair}); err != nil {
 		result.Error = fmt.Errorf("failed to write settings.json: %w", err)
 		return result, result.Error
 	}
@@ -360,7 +363,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 	}
 
 	settingsPath := filepath.Join(detection.ConfigPath, "settings.json")
-	settings, err := readSettings(settingsPath)
+	settings, err := readSettings(settingsPath, agent.InstallOptions{})
 	if err != nil {
 		status.Issues = append(status.Issues, fmt.Sprintf("cannot read settings.json: %v", err))
 		return status, nil
@@ -396,8 +399,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 					continue
 				}
 				cmd, _ := hook["command"].(string)
-				expectedCmd := fmt.Sprintf("%s _hook gemini %s", utils.GryphCommand(), hookType)
-				if cmd == expectedCmd {
+				if utils.IsHookCommand(cmd, "gemini", hookType) {
 					status.Installed = true
 					status.Hooks = append(status.Hooks, hookType)
 					break

@@ -15,6 +15,16 @@ func setDefaults(v *viper.Viper) {
 
 	// Storage defaults
 	v.SetDefault("storage.path", "") // Empty means use platform default
+	v.SetDefault("supervisor.enabled", false)
+	v.SetDefault("supervisor.socket", "")
+	v.SetDefault("supervisor.profile", "")
+	v.SetDefault("supervisor.pilot_until", "")
+	v.SetDefault("supervisor.state_dir", "")
+	v.SetDefault("supervisor.spool_dir", "")
+	v.SetDefault("supervisor.unavailable.blocking", "")
+	v.SetDefault("supervisor.unavailable.prompt", "")
+	v.SetDefault("supervisor.unavailable.other", "")
+	v.SetDefault("supervisor.server_identity", "")
 	v.SetDefault("storage.retention_days", 90)
 
 	// Privacy defaults
@@ -54,6 +64,7 @@ func setDefaults(v *viper.Viper) {
 
 func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".enabled", false)
+	v.SetDefault(prefix+".allow_user_policy", true)
 	v.SetDefault(prefix+".fail_mode", "closed")
 	v.SetDefault(prefix+".context_retention_days", 90)
 	v.SetDefault(prefix+".context.cel_entries", 100)
@@ -65,6 +76,15 @@ func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".approval.mode", string(ApprovalModeNop))
 	v.SetDefault(prefix+".approval.timeout_seconds", 60)
 	v.SetDefault(prefix+".approval.require_note", false)
+	v.SetDefault(prefix+".approval.channels", []string{ApprovalChannelSameUserTTY, ApprovalChannelLocalAdmin})
+	v.SetDefault(prefix+".approval.min_assurance", ApprovalChannelLocalAdmin)
+	v.SetDefault(prefix+".approval.inline_wait", DefaultApprovalInlineWait.String())
+	v.SetDefault(prefix+".approval.request_ttl", DefaultApprovalRequestTTL.String())
+	v.SetDefault(prefix+".approval.grant_ttl", DefaultApprovalGrantTTL.String())
+	v.SetDefault(prefix+".approval.max_grant_scope", ApprovalScopeOnce)
+	v.SetDefault(prefix+".approval.local_admin.group", "")
+	v.SetDefault(prefix+".approval.local_admin.allow_self_elevated", false)
+	v.SetDefault(prefix+".approval.local_admin.allow_without_auth", false)
 	v.SetDefault(prefix+".classify.enabled", true)
 	v.SetDefault(prefix+".classify.fail_open", false)
 	v.SetDefault(prefix+".classify.extra_patterns", map[string][]string{})
@@ -80,6 +100,9 @@ func setPolicyDefaults(v *viper.Viper, prefix string) {
 	v.SetDefault(prefix+".identity.enabled", true)
 	v.SetDefault(prefix+".identity.require_human_principal", false)
 	v.SetDefault(prefix+".self_protection.enabled", true)
+	v.SetDefault(prefix+".self_protection.repair", false)
+	v.SetDefault(prefix+".self_protection.census", true)
+	v.SetDefault(prefix+".self_protection.census_window", DefaultCensusWindow.String())
 }
 
 // defaultSensitivePaths returns the default list of sensitive path patterns.

@@ -1,0 +1,28 @@
+# A reconcile pass detects a removed hook entry, records one tamper event,
+# and changes nothing when repair is off. A second pass records nothing.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code
+
+execexit 2 gryph supervisor reconcile
+stderr 'Pass --once'
+
+exec gryph supervisor reconcile --once --no-color
+stdout 'hook_config\s+claude-code\s+detect'
+! stdout 'drift:'
+! stdout 'Tamper events recorded'
+
+replace $HOME/.claude/settings.json '"hooks"' '"nohooks"'
+exec gryph supervisor reconcile --once --no-color
+stdout 'drift: hooks not installed'
+stdout 'Tamper events recorded: 1'
+! stdout 'Repaired'
+grep '"nohooks"' $HOME/.claude/settings.json
+
+exec gryph supervisor reconcile --once --no-color
+stdout 'drift: hooks not installed'
+! stdout 'Tamper events recorded'
+grep '"nohooks"' $HOME/.claude/settings.json

@@ -6,6 +6,12 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// AarmApprovalGrant is the predicate function for aarmapprovalgrant builders.
+type AarmApprovalGrant func(*sql.Selector)
+
+// AarmApprovalRequest is the predicate function for aarmapprovalrequest builders.
+type AarmApprovalRequest func(*sql.Selector)
+
 // AarmDeferredAction is the predicate function for aarmdeferredaction builders.
 type AarmDeferredAction func(*sql.Selector)
 

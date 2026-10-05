@@ -1,0 +1,21 @@
+# gryph install --repair-timer writes the systemd user units that run the
+# reconcile pass, and gryph uninstall --repair-timer removes them. The
+# scheduler itself may be out of reach, for example in a container. The
+# install then names the command to finish by hand and still exits zero.
+[!linux] skip 'the systemd user units exist on Linux only'
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+mkdir $HOME/.claude
+exec gryph install --agent claude-code --repair-timer --no-color
+stdout 'Repair timer'
+exists $XDG_CONFIG_HOME/systemd/user/gryph-reconcile.service
+exists $XDG_CONFIG_HOME/systemd/user/gryph-reconcile.timer
+grep 'supervisor reconcile --once' $XDG_CONFIG_HOME/systemd/user/gryph-reconcile.service
+grep 'OnUnitActiveSec=15min' $XDG_CONFIG_HOME/systemd/user/gryph-reconcile.timer
+
+exec gryph uninstall --agent claude-code --repair-timer --no-color
+stdout 'Repair timer'
+! exists $XDG_CONFIG_HOME/systemd/user/gryph-reconcile.service
+! exists $XDG_CONFIG_HOME/systemd/user/gryph-reconcile.timer

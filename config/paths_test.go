@@ -2,11 +2,13 @@ package config
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // clearPathEnv neutralizes the environment that steers path resolution, so a
@@ -129,4 +131,67 @@ func TestResolveDir_NoSudoGuardWithoutSudoUser(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", xdgBase)
 
 	assert.Equal(t, filepath.Join(xdgBase, "safedep", "gryph"), getConfigDir())
+}
+
+// withManagedPaths activates a managed config and fixes the account
+// directories, so a test can show that the environment has no effect.
+func withManagedPaths(t *testing.T, dirs baseDirs, resolveErr error) {
+	t.Helper()
+	managedDir := t.TempDir()
+	withManagedConfigDir(t, managedDir)
+	require.NoError(t, os.WriteFile(filepath.Join(managedDir, configFileName), []byte("logging:\n  level: full\n"), 0o644))
+
+	restore := accountBaseDirsResolver
+	accountBaseDirsResolver = func() (baseDirs, error) {
+		if resolveErr != nil {
+			return baseDirs{}, resolveErr
+		}
+		return dirs, nil
+	}
+	t.Cleanup(func() { accountBaseDirsResolver = restore })
+}
+
+func TestResolveDir_ManagedIgnoresEnvironment(t *testing.T) {
+	clearPathEnv(t)
+	account := baseDirs{config: t.TempDir(), data: t.TempDir(), cache: t.TempDir()}
+	withManagedPaths(t, account, nil)
+
+	stray := t.TempDir()
+	setHome(t, stray)
+	t.Setenv(configDirEnvKey, stray)
+	t.Setenv(dataDirEnvKey, stray)
+	t.Setenv(cacheDirEnvKey, stray)
+	t.Setenv("XDG_CONFIG_HOME", stray)
+	t.Setenv("XDG_DATA_HOME", stray)
+	t.Setenv("XDG_CACHE_HOME", stray)
+
+	assert.Equal(t, filepath.Join(account.config, "safedep", "gryph"), getConfigDir())
+	assert.Equal(t, filepath.Join(account.data, "safedep", "gryph"), getDataDir())
+	assert.Equal(t, filepath.Join(account.cache, "safedep", "gryph"), getCacheDir())
+}
+
+func TestResolveDir_ManagedFallsBackWithoutAccountDatabase(t *testing.T) {
+	clearPathEnv(t)
+	withManagedPaths(t, baseDirs{}, errors.New("no account database"))
+	stray := t.TempDir()
+	t.Setenv(configDirEnvKey, stray)
+	t.Setenv("XDG_CONFIG_HOME", stray)
+
+	got := getConfigDir()
+	assert.NotEqual(t, stray, got, "the override has no effect")
+	assert.True(t, strings.HasSuffix(got, filepath.Join("safedep", "gryph")))
+}
+
+func TestAccountBaseDirs_IgnoresHomeEnvironment(t *testing.T) {
+	setHome(t, t.TempDir())
+
+	dirs, err := accountBaseDirsResolver()
+	if err != nil {
+		t.Skipf("no account database: %v", err)
+	}
+	stray := os.Getenv("HOME")
+	for _, dir := range []string{dirs.config, dirs.data, dirs.cache} {
+		assert.True(t, filepath.IsAbs(dir))
+		assert.False(t, strings.HasPrefix(dir, stray), "%s must not come from HOME", dir)
+	}
 }

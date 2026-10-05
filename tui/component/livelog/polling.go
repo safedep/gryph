@@ -11,7 +11,7 @@ import (
 	"github.com/safedep/gryph/storage"
 )
 
-func pollEvents(store storage.Store, after time.Time, agentFilter string, limit int) tea.Cmd {
+func pollEvents(store storage.ReadStore, after time.Time, agentFilter string, limit int) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 		evts, err := store.QueryEventsAfter(ctx, after, uuid.Nil, limit)
@@ -27,7 +27,7 @@ func pollEvents(store storage.Store, after time.Time, agentFilter string, limit 
 	}
 }
 
-func loadInitialEvents(store storage.Store, since time.Time, agentFilter string, limit int) tea.Cmd {
+func loadInitialEvents(store storage.ReadStore, since time.Time, agentFilter string, limit int) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 		// Fetch DESC to get the N most recent events, then reverse

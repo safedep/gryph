@@ -1,0 +1,87 @@
+# The managed configuration sets the collection level of the host. The
+# decision service tells the developer once, on the first hook after the
+# level is set and after each change, and records the change on the
+# self-audit log of the account. gryph doctor shows the level, the export
+# profile it names and the target. A user configuration cannot set the
+# level. Runs only in the privileged job on a Linux host.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+mkdir $WORK/spool
+expandenv managed.yml
+exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
+exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir $WORK/state --spool-dir $WORK/spool --allow-root &
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
+
+# The first hook carries the notice. The second does not.
+stdin read.json
+exec gryph _hook claude-code PreToolUse
+stderr 'Collection level full is in force on this host\. Your log stays readable with gryph logs\.'
+stdin read.json
+exec gryph _hook claude-code PreToolUse
+! stderr 'Collection level'
+
+exec gryph doctor --no-color
+stdout 'Collection'
+stdout 'level full, export profile full, target none'
+
+# A change of the level reaches the service at its next start, and the
+# next hook carries one notice.
+exec gryph supervisor stop --pid-file $WORK/state/supervisor.pid
+expandenv policy.yml
+exec install -m 644 $WORK/policy.yml /etc/safedep/gryph/config.yml
+exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir $WORK/state --spool-dir $WORK/spool --allow-root &
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
+stdin read.json
+exec gryph _hook claude-code PreToolUse
+stderr 'Collection level policy is in force on this host\.'
+stdin read.json
+exec gryph _hook claude-code PreToolUse
+! stderr 'Collection level'
+
+execexit 1 gryph doctor --managed --json
+stdout '"level": "policy"'
+stdout '"target": "none"'
+exec sh -c 'cat $WORK/state/users/0/collection.level'
+stdout '^policy$'
+
+# A level the managed file does not know is a configuration error: the
+# managed install refuses it and changes nothing.
+exec gryph supervisor stop --pid-file $WORK/state/supervisor.pid
+expandenv bad.yml
+execexit 3 gryph install --managed --config $WORK/bad.yml
+stderr 'collection.level "everything" is not evidence, policy or full'
+exec sh -c 'cat /etc/safedep/gryph/config.yml'
+stdout 'level: policy'
+
+exec rm -rf /etc/safedep/gryph /root/.local/share/safedep /root/.config/safedep /root/.cache/safedep
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+-- managed.yml --
+policy:
+  enabled: true
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  spool_dir: ${WORK}/spool
+collection:
+  level: full
+-- policy.yml --
+policy:
+  enabled: true
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  spool_dir: ${WORK}/spool
+collection:
+  level: policy
+-- bad.yml --
+policy:
+  enabled: true
+collection:
+  level: everything
+-- read.json --
+{"session_id": "s-level-notice", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Read",
+ "tool_input": {"file_path": "/home/user/project/main.go"}, "tool_use_id": "tu-read"}

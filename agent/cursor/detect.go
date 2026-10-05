@@ -6,10 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
-	"time"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/agent/utils"
 )
 
 // Detect checks if Cursor is installed on the system.
@@ -85,21 +84,8 @@ func Detect(ctx context.Context) (*agent.DetectionResult, error) {
 
 // getVersion attempts to get the Cursor version.
 func getVersion(ctx context.Context) string {
-	cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(cmdCtx, "cursor", "--version")
-	output, err := cmd.Output()
-	if err == nil {
-		version := strings.TrimSpace(string(output))
-		// Extract version number if it's in a longer string
-		if parts := strings.Fields(version); len(parts) > 0 {
-			for _, part := range parts {
-				if len(part) > 0 && (part[0] >= '0' && part[0] <= '9') {
-					return part
-				}
-			}
-		}
-		return version
+	if v := utils.ProgramVersion(ctx, "cursor", "--version"); v != "" {
+		return v
 	}
 	return "unknown"
 }

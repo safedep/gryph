@@ -682,6 +682,43 @@ func TestAnalyze_GryphHook(t *testing.T) {
 	}
 }
 
+func TestAnalyze_GryphResolve(t *testing.T) {
+	cases := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		{"approve resolve", `gryph policy approve resolve --id 1a2b3c4d --decision allow`, true},
+		{"deferrals resolve", `gryph policy deferrals resolve --id 1a2b3c4d --decision allow --yes`, true},
+		{"flags between the words", `gryph --no-color policy --format json approve resolve --id x`, true},
+		{"full path", `/usr/local/bin/gryph policy approve resolve --id x --decision deny`, true},
+		{"windows binary", `gryph.exe policy approve resolve --id x`, true},
+		{"wrapper chain", `env -i sudo -u admin nice -n 5 gryph policy approve resolve --id x`, true},
+		{"bash -c", `bash -c 'gryph policy approve resolve --id x --decision allow --yes'`, true},
+		{"bash -euo group value", `bash -euo pipefail -c 'gryph policy deferrals resolve --id x'`, true},
+		{"eval", `eval gryph policy approve resolve --id x`, true},
+		{"variable program", `$G policy approve resolve --id x`, true},
+		{"here-string", `bash <<< 'gryph policy approve resolve --id x'`, true},
+		{"approve list", `gryph policy approve list --state all`, false},
+		{"approve show", `gryph policy approve show 1a2b3c4d`, false},
+		{"deferrals list", `gryph policy deferrals --format json`, false},
+		{"resolve without policy", `gryph approve resolve --id x`, false},
+		{"words out of order", `gryph policy resolve approve --id x`, false},
+		{"variable word", `gryph policy approve "$ACTION" --id x`, false},
+		{"other program", `git log --grep 'policy approve resolve'`, false},
+		{"commit message", `git commit -m "gryph policy approve resolve"`, false},
+		{"grep for the words", `grep -rn 'approve resolve' cli/`, false},
+		{"hook call", `gryph _hook claude-code PreToolUse`, false},
+		{"variable splits into the command", `G="gryph policy approve resolve --id x"; $G`, false},
+		{"eval of a variable", `eval "$S"`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, Analyze(tc.command, Env{WorkingDir: "/work", Home: "/home/u"}).GryphResolve)
+		})
+	}
+}
+
 func TestAnalyze_GryphHookWrapperChainIsFast(t *testing.T) {
 	env := Env{WorkingDir: "/work", Home: "/home/u"}
 	for _, wrapper := range []string{"nice", "sudo -u root", "env", "timeout 1", "command", "xargs"} {

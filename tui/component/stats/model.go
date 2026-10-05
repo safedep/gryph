@@ -294,7 +294,7 @@ func (m Model) singleColumnLayout(height int) string {
 	)
 }
 
-func loadStats(store storage.Store, since, until *time.Time, agentFilter string) tea.Cmd {
+func loadStats(store storage.ReadStore, since, until *time.Time, agentFilter string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 		data, err := computeStats(ctx, store, since, until, agentFilter)

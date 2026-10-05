@@ -1,0 +1,30 @@
+# A managed hook entry must name a binary that only root can replace. A
+# binary in a directory another user can write fails the chain check: exit
+# 3, nothing changed. A missing binary fails the same way. Runs only in the
+# privileged job on a Linux host with no managed state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+! exists /etc/claude-code
+expandenv writable-dir.yml missing.yml
+exec cp $ACCEPTANCE_GRYPH_BIN $WORK/bin/gryph
+exec chmod 777 $WORK/bin
+
+execexit 3 gryph install --managed --config $WORK/writable-dir.yml
+stderr 'writable by group or other'
+stderr 'only root can replace'
+execexit 3 gryph install --managed --config $WORK/missing.yml
+stderr 'does not exist'
+
+! exists /etc/safedep/gryph
+! exists /etc/claude-code
+
+-- bin/.keep --
+-- writable-dir.yml --
+managed:
+  agents: [claude-code]
+  binary: ${WORK}/bin/gryph
+-- missing.yml --
+managed:
+  agents: [claude-code]
+  binary: /opt/safedep/gryph/bin/no-such-gryph

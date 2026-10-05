@@ -1,0 +1,65 @@
+# The builtin hook-command rule also blocks an agent shell command that
+# resolves an approval request, gryph policy approve resolve or gryph policy
+# deferrals resolve. Such a command answers the approval the agent waits on.
+# The check is best effort and catches only the literal words policy,
+# approve or deferrals, and resolve, in that order, also with flags between
+# them and in a nested shell. The list and show commands pass, and so does
+# a resolve word that a variable supplies.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin approve.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'gryph-builtin-hook-command|self-protection'
+stderr 'resolves an approval'
+
+stdin deferrals.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin nested.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin flags.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr 'self-protection'
+
+stdin list.json
+exec gryph _hook claude-code PreToolUse
+! stderr 'self-protection'
+
+stdin show.json
+exec gryph _hook claude-code PreToolUse
+! stderr 'self-protection'
+
+stdin variable.json
+exec gryph _hook claude-code PreToolUse
+! stderr 'self-protection'
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  fail_mode: closed
+-- approve.json --
+{"session_id": "s-resolve", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "gryph policy approve resolve --id 1a2b3c4d --decision allow --yes"}, "tool_use_id": "r1"}
+-- deferrals.json --
+{"session_id": "s-resolve", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "gryph policy deferrals resolve --id 1a2b3c4d --decision allow --yes"}, "tool_use_id": "r2"}
+-- nested.json --
+{"session_id": "s-resolve", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "bash -euo pipefail -c 'gryph policy approve resolve --id 1a2b3c4d --decision allow --yes'"}, "tool_use_id": "r3"}
+-- flags.json --
+{"session_id": "s-resolve", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "gryph --no-color policy --format json approve resolve --id 1a2b3c4d"}, "tool_use_id": "r4"}
+-- list.json --
+{"session_id": "s-resolve", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "gryph policy approve list --state all"}, "tool_use_id": "r5"}
+-- show.json --
+{"session_id": "s-resolve", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "gryph policy approve show 1a2b3c4d"}, "tool_use_id": "r6"}
+-- variable.json --
+{"session_id": "s-resolve", "cwd": "/home/user/project", "hook_event_name": "PreToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "gryph policy approve \"$ACTION\" --id 1a2b3c4d"}, "tool_use_id": "r7"}

@@ -65,6 +65,8 @@ const (
 	FieldSignature = "signature"
 	// FieldSignerKeyID holds the string denoting the signer_key_id field in the database.
 	FieldSignerKeyID = "signer_key_id"
+	// FieldSignerKeyScope holds the string denoting the signer_key_scope field in the database.
+	FieldSignerKeyScope = "signer_key_scope"
 	// FieldDeferReason holds the string denoting the defer_reason field in the database.
 	FieldDeferReason = "defer_reason"
 	// FieldDeferralOfSequence holds the string denoting the deferral_of_sequence field in the database.
@@ -81,8 +83,14 @@ const (
 	FieldURLDigest = "url_digest"
 	// FieldHashVersion holds the string denoting the hash_version field in the database.
 	FieldHashVersion = "hash_version"
+	// FieldImported holds the string denoting the imported field in the database.
+	FieldImported = "imported"
 	// FieldContentSalt holds the string denoting the content_salt field in the database.
 	FieldContentSalt = "content_salt"
+	// FieldApproval holds the string denoting the approval field in the database.
+	FieldApproval = "approval"
+	// FieldPeerTrust holds the string denoting the peer_trust field in the database.
+	FieldPeerTrust = "peer_trust"
 	// Table holds the table name of the aarmreceipt in the database.
 	Table = "aarm_receipts"
 )
@@ -115,6 +123,7 @@ var Columns = []string{
 	FieldPolicyHash,
 	FieldSignature,
 	FieldSignerKeyID,
+	FieldSignerKeyScope,
 	FieldDeferReason,
 	FieldDeferralOfSequence,
 	FieldHumanPrincipal,
@@ -123,7 +132,10 @@ var Columns = []string{
 	FieldCommandDigest,
 	FieldURLDigest,
 	FieldHashVersion,
+	FieldImported,
 	FieldContentSalt,
+	FieldApproval,
+	FieldPeerTrust,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -147,6 +159,8 @@ var (
 	HashValidator func([]byte) error
 	// PolicyHashValidator is a validator for the "policy_hash" field. It is called by the builders before save.
 	PolicyHashValidator func([]byte) error
+	// DefaultImported holds the default value on creation for the "imported" field.
+	DefaultImported bool
 	// ContentSaltValidator is a validator for the "content_salt" field. It is called by the builders before save.
 	ContentSaltValidator func([]byte) error
 	// DefaultID holds the default value on creation for the "id" field.
@@ -281,6 +295,11 @@ func BySignerKeyID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSignerKeyID, opts...).ToFunc()
 }
 
+// BySignerKeyScope orders the results by the signer_key_scope field.
+func BySignerKeyScope(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSignerKeyScope, opts...).ToFunc()
+}
+
 // ByDeferReason orders the results by the defer_reason field.
 func ByDeferReason(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeferReason, opts...).ToFunc()
@@ -319,4 +338,14 @@ func ByURLDigest(opts ...sql.OrderTermOption) OrderOption {
 // ByHashVersion orders the results by the hash_version field.
 func ByHashVersion(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldHashVersion, opts...).ToFunc()
+}
+
+// ByImported orders the results by the imported field.
+func ByImported(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldImported, opts...).ToFunc()
+}
+
+// ByPeerTrust orders the results by the peer_trust field.
+func ByPeerTrust(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPeerTrust, opts...).ToFunc()
 }

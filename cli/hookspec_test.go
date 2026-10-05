@@ -7,11 +7,13 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/openclaw"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/core/events"
+	"github.com/safedep/gryph/engine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +28,7 @@ const (
 // then the inactive OpenClaw adapter, which the doc lists as planned.
 func coverageAdapters() []agent.Adapter {
 	registry := agent.NewRegistry()
-	registerAdapters(registry, nil, config.Default())
+	engine.RegisterAdapters(registry, nil, config.Default())
 	adapters := registry.All()
 	sort.Slice(adapters, func(i, j int) bool { return adapters[i].DisplayName() < adapters[j].DisplayName() })
 	return append(adapters, openclaw.New(nil, config.LoggingStandard, false))
@@ -55,7 +57,7 @@ func TestAdapterHooks_Valid(t *testing.T) {
 // in TestEnforcementCoverageDoc pins every hook.
 func TestAdapterHooks_Phases(t *testing.T) {
 	registry := agent.NewRegistry()
-	registerAdapters(registry, nil, config.Default())
+	engine.RegisterAdapters(registry, nil, config.Default())
 	registry.Register(openclaw.New(nil, config.LoggingStandard, false))
 
 	cases := []struct {
@@ -95,8 +97,8 @@ func TestAdapterHooks_Phases(t *testing.T) {
 
 func renderCoverageTable() string {
 	var b strings.Builder
-	b.WriteString("| Agent | Blocking pre-execution hooks | Post-execution hooks (detection) | Other hooks |\n")
-	b.WriteString("|---|---|---|---|\n")
+	b.WriteString("| Agent | Blocking pre-execution hooks | Post-execution hooks (detection) | Other hooks | Hook timeout |\n")
+	b.WriteString("|---|---|---|---|---|\n")
 	for _, a := range coverageAdapters() {
 		var pre, post, other []string
 		for _, h := range a.Hooks() {
@@ -117,9 +119,38 @@ func renderCoverageTable() string {
 		if a.Name() == agent.AgentOpenClaw {
 			display += " (inactive)"
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", display, joinOrNone(pre), joinOrNone(post), joinOrNone(other))
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", display, joinOrNone(pre), joinOrNone(post), joinOrNone(other), renderTimeouts(a.Hooks()))
 	}
 	return b.String()
+}
+
+// renderTimeouts names the hook timeout of an agent: one value when every
+// hook shares it, else the common value and each exception.
+func renderTimeouts(specs []events.HookSpec) string {
+	counts := map[time.Duration]int{}
+	for _, h := range specs {
+		counts[h.Timeout]++
+	}
+	var common time.Duration
+	for d, n := range counts {
+		if n > counts[common] || (n == counts[common] && d > common) {
+			common = d
+		}
+	}
+	out := timeoutText(common)
+	for _, h := range specs {
+		if h.Timeout != common {
+			out += fmt.Sprintf(", `%s` %s", h.Type, timeoutText(h.Timeout))
+		}
+	}
+	return out
+}
+
+func timeoutText(d time.Duration) string {
+	if d == 0 {
+		return "not documented"
+	}
+	return fmt.Sprintf("%d s", int(d/time.Second))
 }
 
 func joinOrNone(names []string) string {
@@ -153,7 +184,7 @@ func TestEnforcementCoverageDoc(t *testing.T) {
 
 func TestAdapters_ParseToolCallID(t *testing.T) {
 	registry := agent.NewRegistry()
-	registerAdapters(registry, nil, config.Default())
+	engine.RegisterAdapters(registry, nil, config.Default())
 
 	cases := []struct {
 		agent   string

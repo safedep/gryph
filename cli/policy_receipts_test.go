@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/receipt"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/storage/storagetest"
 	"github.com/safedep/gryph/tui"
@@ -85,7 +86,7 @@ func TestVerifyReceiptChains_DetectsHashMutation(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, breaks, "tampered row must break verification")
 
-	audits, err := store.QuerySelfAudits(ctx, &storage.SelfAuditFilter{Action: SelfAuditActionReceiptChainBroken})
+	audits, err := store.QuerySelfAudits(ctx, &storage.SelfAuditFilter{Action: engine.SelfAuditActionReceiptChainBroken})
 	require.NoError(t, err)
 	assert.NotEmpty(t, audits, "chain break must produce a self-audit row")
 }

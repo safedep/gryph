@@ -1,0 +1,57 @@
+# gryph uninstall --managed removes the Gryph entries from the agent hook
+# files in every account's home through a helper that runs as that
+# account. The helper keeps the account's other hooks and the file owner,
+# and refuses a link in the home, so a link to a root-owned file changes
+# nothing and the run reports partial with exit 10. Runs only in the
+# privileged job on a Linux host with no managed state and the useradd
+# tools.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the account tools of this script are the Linux ones'
+[!exec:useradd] skip 'needs useradd'
+! exists /etc/safedep/gryph
+! exists /home/gryphacc1
+! exists /home/gryphacc2
+! exists /etc/gryph-acceptance-trap.json
+! exists /usr/local/bin/gryph-acceptance
+
+# The helper runs as the account, so the binary must sit where the account
+# can run it. The test binary lives in a private temporary directory.
+exec cp $ACCEPTANCE_GRYPH_BIN /usr/local/bin/gryph-acceptance
+exec useradd -m -s /bin/bash gryphacc1
+exec useradd -m -s /bin/bash gryphacc2
+exec mkdir -p /home/gryphacc1/.claude /home/gryphacc2/.claude
+exec cp settings.json /home/gryphacc1/.claude/settings.json
+exec cp settings.json /etc/gryph-acceptance-trap.json
+exec ln -s /etc/gryph-acceptance-trap.json /home/gryphacc2/.claude/settings.json
+exec chown -R gryphacc1:gryphacc1 /home/gryphacc1/.claude
+exec chown -R -h gryphacc2:gryphacc2 /home/gryphacc2/.claude
+
+execexit 10 /usr/local/bin/gryph-acceptance uninstall --managed --json
+stdout '"status": "partial"'
+stderr '1 item\(s\) degraded'
+stdout '"name": "gryphacc1"'
+stdout '"home": "/home/gryphacc1"'
+stdout '"hooks_removed": \['
+stdout '"name": "gryphacc2"'
+stdout 'symbolic link'
+! grep '_hook claude-code' /home/gryphacc1/.claude/settings.json
+grep '/enterprise/notify.sh' /home/gryphacc1/.claude/settings.json
+grep '_hook claude-code' /etc/gryph-acceptance-trap.json
+exec stat -c %U /home/gryphacc1/.claude/settings.json
+stdout 'gryphacc1'
+
+exec userdel -r gryphacc1
+exec userdel -r gryphacc2
+exec rm -f /etc/gryph-acceptance-trap.json /usr/local/bin/gryph-acceptance
+
+-- settings.json --
+{
+  "hooks": {
+    "PreToolUse": [
+      {"matcher": "*", "hooks": [{"type": "command", "command": "/opt/safedep/gryph/bin/gryph _hook claude-code PreToolUse"}]}
+    ],
+    "SessionEnd": [
+      {"hooks": [{"type": "command", "command": "/enterprise/notify.sh"}]}
+    ]
+  }
+}

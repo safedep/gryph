@@ -1,0 +1,46 @@
+# An export rule can name the fields it applies to. A rule with fields
+# matches a value by where it sits, whatever its label, so a profile can
+# digest the command and keep the rest. An unknown field name is a config
+# error, and the export never falls back to a weaker profile.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+stdin command.json
+exec gryph _hook claude-code PostToolUse
+stdin write.json
+exec gryph _hook claude-code PostToolUse
+
+exec gryph export --since 1h --export-profile commands
+stderr 'Exported 2 events'
+! stdout 'COMMAND_MARKER_3F'
+stdout '"command":\{"value":"","label":\{[^}]*"digest":"hmac-sha256:'
+stdout 'WRITE_MARKER_7Q'
+
+! exec gryph export --since 1h --export-profile broken
+stderr 'unknown field "url"'
+! stdout 'COMMAND_MARKER_3F'
+
+-- home/.config/safedep/gryph/config.yml --
+logging:
+  level: full
+export:
+  profiles:
+    commands:
+      default: include
+      rules:
+        - fields: [command]
+          then: digest
+    broken:
+      default: include
+      rules:
+        - fields: [url]
+          then: drop
+-- command.json --
+{"session_id": "s-field-match", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "Bash",
+ "tool_input": {"command": "echo COMMAND_MARKER_3F", "description": "say it"},
+ "tool_response": {"stdout": "COMMAND_MARKER_3F", "stderr": "", "interrupted": false}, "tool_use_id": "tu-cmd"}
+-- write.json --
+{"session_id": "s-field-match", "cwd": "/home/user/project", "hook_event_name": "PostToolUse", "tool_name": "Write",
+ "tool_input": {"file_path": "/home/user/project/main.go", "content": "package main // WRITE_MARKER_7Q"},
+ "tool_response": {"success": true}, "tool_use_id": "tu-write"}

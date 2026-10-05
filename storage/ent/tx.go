@@ -12,6 +12,10 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// AarmApprovalGrant is the client for interacting with the AarmApprovalGrant builders.
+	AarmApprovalGrant *AarmApprovalGrantClient
+	// AarmApprovalRequest is the client for interacting with the AarmApprovalRequest builders.
+	AarmApprovalRequest *AarmApprovalRequestClient
 	// AarmDeferredAction is the client for interacting with the AarmDeferredAction builders.
 	AarmDeferredAction *AarmDeferredActionClient
 	// AarmReceipt is the client for interacting with the AarmReceipt builders.
@@ -161,6 +165,8 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.AarmApprovalGrant = NewAarmApprovalGrantClient(tx.config)
+	tx.AarmApprovalRequest = NewAarmApprovalRequestClient(tx.config)
 	tx.AarmDeferredAction = NewAarmDeferredActionClient(tx.config)
 	tx.AarmReceipt = NewAarmReceiptClient(tx.config)
 	tx.AuditEvent = NewAuditEventClient(tx.config)
@@ -179,7 +185,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: AarmDeferredAction.QueryXXX(), the query will be executed
+// applies a query, for example: AarmApprovalGrant.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

@@ -1,0 +1,52 @@
+# A managed configuration with allow_user_policy: false drops the user's own
+# policy sources. The managed policy and the built-in rules are the whole
+# policy, and policy.self_protection.enabled in the file has no effect. The
+# per-user state then lives in the home of the real user, so the script
+# writes and removes the user policy of root.
+#
+# The script writes to the real managed directory, so it runs only in the
+# privileged job, as root, on Linux, with -parallel 1, on a host that has no
+# managed Gryph state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed directory of this script is the Linux one'
+! exists /etc/safedep/gryph
+! exists /root/.config/safedep/gryph/policy.yaml
+
+exec mkdir -p /etc/safedep/gryph /root/.config/safedep/gryph
+exec cp managed-config.yml /etc/safedep/gryph/config.yml
+exec cp managed-policy.yaml /etc/safedep/gryph/policy.yaml
+exec cp user-policy.yaml /root/.config/safedep/gryph/policy.yaml
+exec chmod 755 /etc/safedep/gryph
+exec chmod 644 /etc/safedep/gryph/config.yml /etc/safedep/gryph/policy.yaml
+
+exec gryph policy list --no-color
+stdout 'managed\s+policy.yaml\s+1'
+stdout 'user\s+.*! not loaded: allow_user_policy is false'
+! stdout 'global'
+stdout 'builtin'
+
+exec gryph policy validate --no-color
+stdout 'managed-file'
+! stdout '  file  '
+stdout 'builtin'
+
+exec rm -f /root/.config/safedep/gryph/policy.yaml
+exec rm -rf /etc/safedep/gryph
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- managed-config.yml --
+policy:
+  enabled: true
+  allow_user_policy: false
+  self_protection:
+    enabled: false
+-- managed-policy.yaml --
+version: "1"
+rules:
+  - id: managed-only
+    action: allow
+-- user-policy.yaml --
+version: "1"
+rules:
+  - id: user-rule-dropped
+    action: allow

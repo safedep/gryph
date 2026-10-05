@@ -85,6 +85,12 @@ func (a *Adapter) Hooks() []events.HookSpec { return Hooks }
   a prompt hook, and `gryph doctor` warns when it is missing.
 - `MinVersion` is the first agent version that fires the hook. `gryph doctor`
   warns when the detected version is older.
+- `Timeout` is how long the agent waits for the hook before it gives up and
+  lets the action through. Set it to the agent's documented default, or to the
+  timeout that Gryph writes into the hook entry or plugin. Use
+  `events.WithTimeout` to fill one value into a table. Record the source and
+  the date of the check in a comment, and add a row to the error behavior
+  table in `docs/agent-enforcement-coverage.md`.
 - Set `event.HookType` in `ParseEvent` to the declared name. A hook that the
   table does not declare gets phase `unknown`.
 - Set `event.ToolCallID` when the agent sends a tool call identifier. The
@@ -124,11 +130,15 @@ interpreter. Kernel-based self-protection is on the roadmap. See
 
 Check whether the agent is installed (config directory exists, binary in PATH) and return a `DetectionResult` with version, config path, and hooks path.
 
+Read the version with `utils.ProgramVersion(ctx, "<binary>", "--version")`. It runs the binary with a time budget and returns the first field that starts with a digit, or "" when the binary is missing. It runs nothing when the process is root or elevated, or when the caller passed `utils.WithoutProgramExecution(ctx)`, because a binary found through `PATH` can belong to any user. Fall back to a file, such as a settings file, or to `"unknown"`.
+
 Key fields: `Installed`, `Version`, `ConfigPath`, `HooksPath`.
 
 See `agent/gemini/detect.go` or `agent/claudecode/detect.go`.
 
 ### 4. Implement hook management (`hooks.go`)
+
+Build every hook command with `utils.HookCommand(opts.Command, "<agent>", hookType)`. It names the running binary by its absolute path, or the program that `InstallOptions.Command` gives. Match an existing entry with `utils.IsHookCommand(cmd, "<agent>", hookType)` or `utils.IsGryphCommand(cmd)`, never by string equality: an entry from an earlier install names the bare program or another path, and both must read as installed. A plugin template holds `__GRYPH_COMMAND__` inside a string literal, and `utils.RenderPlugin` fills it in.
 
 Three operations:
 
@@ -184,7 +194,7 @@ Required edits outside the adapter package:
 | File | Change |
 |---|---|
 | `agent/adapter.go` | Add the `AgentYourAgent` name constant |
-| `cli/root.go` | Import the package and call `Register()` in `registerAdapters` |
+| `engine/engine.go` | Import the package and call `Register()` in `RegisterAdapters` |
 | `config/defaults.go` | Add `v.SetDefault("agents.youragent.enabled", true)` |
 
 Optional:
@@ -199,8 +209,8 @@ livelog filter cycle comes from `Registry.List()`. The self-protection globs
 come from `Registry.HookConfigGlobs()`.
 
 An adapter can exist in code but stay out of the registry. To deactivate an
-adapter, comment out its `Register()` call in `registerAdapters` in
-`cli/root.go`. See the
+adapter, comment out its `Register()` call in `RegisterAdapters` in
+`engine/engine.go`. See the
 `openclaw` adapter for this pattern.
 
 ### 7. Write tests

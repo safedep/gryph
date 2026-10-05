@@ -69,6 +69,8 @@ type AarmReceipt struct {
 	Signature []byte `json:"signature,omitempty"`
 	// SignerKeyID holds the value of the "signer_key_id" field.
 	SignerKeyID string `json:"signer_key_id,omitempty"`
+	// SignerKeyScope holds the value of the "signer_key_scope" field.
+	SignerKeyScope string `json:"signer_key_scope,omitempty"`
 	// DeferReason holds the value of the "defer_reason" field.
 	DeferReason string `json:"defer_reason,omitempty"`
 	// DeferralOfSequence holds the value of the "deferral_of_sequence" field.
@@ -85,8 +87,14 @@ type AarmReceipt struct {
 	URLDigest string `json:"url_digest,omitempty"`
 	// HashVersion holds the value of the "hash_version" field.
 	HashVersion int `json:"hash_version,omitempty"`
+	// Imported holds the value of the "imported" field.
+	Imported bool `json:"imported,omitempty"`
 	// ContentSalt holds the value of the "content_salt" field.
-	ContentSalt  []byte `json:"content_salt,omitempty"`
+	ContentSalt []byte `json:"content_salt,omitempty"`
+	// Approval holds the value of the "approval" field.
+	Approval map[string]interface{} `json:"approval,omitempty"`
+	// PeerTrust holds the value of the "peer_trust" field.
+	PeerTrust    string `json:"peer_trust,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -95,11 +103,13 @@ func (*AarmReceipt) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case aarmreceipt.FieldMatchedRuleIds, aarmreceipt.FieldSnapshot, aarmreceipt.FieldActionPayload, aarmreceipt.FieldPrevHash, aarmreceipt.FieldHash, aarmreceipt.FieldPolicyHash, aarmreceipt.FieldSignature, aarmreceipt.FieldContentSalt:
+		case aarmreceipt.FieldMatchedRuleIds, aarmreceipt.FieldSnapshot, aarmreceipt.FieldActionPayload, aarmreceipt.FieldPrevHash, aarmreceipt.FieldHash, aarmreceipt.FieldPolicyHash, aarmreceipt.FieldSignature, aarmreceipt.FieldContentSalt, aarmreceipt.FieldApproval:
 			values[i] = new([]byte)
+		case aarmreceipt.FieldImported:
+			values[i] = new(sql.NullBool)
 		case aarmreceipt.FieldSequence, aarmreceipt.FieldDurationMs, aarmreceipt.FieldDeferralOfSequence, aarmreceipt.FieldHashVersion:
 			values[i] = new(sql.NullInt64)
-		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSubagentID, aarmreceipt.FieldSubagentType, aarmreceipt.FieldSignerKeyID, aarmreceipt.FieldDeferReason, aarmreceipt.FieldHumanPrincipal, aarmreceipt.FieldServiceIdentity, aarmreceipt.FieldRoleScope, aarmreceipt.FieldCommandDigest, aarmreceipt.FieldURLDigest:
+		case aarmreceipt.FieldAgent, aarmreceipt.FieldTool, aarmreceipt.FieldActionType, aarmreceipt.FieldProject, aarmreceipt.FieldDecision, aarmreceipt.FieldSeverity, aarmreceipt.FieldMessage, aarmreceipt.FieldResultStatus, aarmreceipt.FieldErrorMessage, aarmreceipt.FieldSubagentID, aarmreceipt.FieldSubagentType, aarmreceipt.FieldSignerKeyID, aarmreceipt.FieldSignerKeyScope, aarmreceipt.FieldDeferReason, aarmreceipt.FieldHumanPrincipal, aarmreceipt.FieldServiceIdentity, aarmreceipt.FieldRoleScope, aarmreceipt.FieldCommandDigest, aarmreceipt.FieldURLDigest, aarmreceipt.FieldPeerTrust:
 			values[i] = new(sql.NullString)
 		case aarmreceipt.FieldRecordedAt:
 			values[i] = new(sql.NullTime)
@@ -283,6 +293,12 @@ func (_m *AarmReceipt) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SignerKeyID = value.String
 			}
+		case aarmreceipt.FieldSignerKeyScope:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field signer_key_scope", values[i])
+			} else if value.Valid {
+				_m.SignerKeyScope = value.String
+			}
 		case aarmreceipt.FieldDeferReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field defer_reason", values[i])
@@ -332,11 +348,31 @@ func (_m *AarmReceipt) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.HashVersion = int(value.Int64)
 			}
+		case aarmreceipt.FieldImported:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field imported", values[i])
+			} else if value.Valid {
+				_m.Imported = value.Bool
+			}
 		case aarmreceipt.FieldContentSalt:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field content_salt", values[i])
 			} else if value != nil {
 				_m.ContentSalt = *value
+			}
+		case aarmreceipt.FieldApproval:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field approval", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Approval); err != nil {
+					return fmt.Errorf("unmarshal field approval: %w", err)
+				}
+			}
+		case aarmreceipt.FieldPeerTrust:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field peer_trust", values[i])
+			} else if value.Valid {
+				_m.PeerTrust = value.String
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -451,6 +487,9 @@ func (_m *AarmReceipt) String() string {
 	builder.WriteString("signer_key_id=")
 	builder.WriteString(_m.SignerKeyID)
 	builder.WriteString(", ")
+	builder.WriteString("signer_key_scope=")
+	builder.WriteString(_m.SignerKeyScope)
+	builder.WriteString(", ")
 	builder.WriteString("defer_reason=")
 	builder.WriteString(_m.DeferReason)
 	builder.WriteString(", ")
@@ -477,8 +516,17 @@ func (_m *AarmReceipt) String() string {
 	builder.WriteString("hash_version=")
 	builder.WriteString(fmt.Sprintf("%v", _m.HashVersion))
 	builder.WriteString(", ")
+	builder.WriteString("imported=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Imported))
+	builder.WriteString(", ")
 	builder.WriteString("content_salt=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ContentSalt))
+	builder.WriteString(", ")
+	builder.WriteString("approval=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Approval))
+	builder.WriteString(", ")
+	builder.WriteString("peer_trust=")
+	builder.WriteString(_m.PeerTrust)
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -1,0 +1,42 @@
+# A receipt that a key in the user's config directory signed carries the
+# key scope user. The receipt list, the export and both verifiers print
+# it, so a later audit does not read the signature as one of the decision
+# service.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph policy keys generate --no-color
+stdin read_allow.json
+exec gryph _hook claude-code PreToolUse
+
+exec gryph policy receipts --format json --no-color
+stdout '"signer_key_scope":\s*"user"'
+
+exec gryph policy receipts --verify --all-sessions --no-color
+stdout 'signed_ok=1'
+stdout 'key_scope=user 1'
+
+exec gryph policy receipts export --format jsonl --include-signatures --output signed.jsonl
+grep '"signer_key_scope":"user"' signed.jsonl
+exec gryph policy receipts verify-log --input signed.jsonl --no-color
+stdout 'key_scope user\s+1'
+
+exec gryph policy receipts export --format csv --include-signatures --output signed.csv
+grep 'signer_key_scope' signed.csv
+
+-- home/.config/safedep/gryph/config.yml --
+policy:
+  enabled: true
+  log_all_evaluations: true
+-- read_allow.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/home/user/project/main.go"
+  },
+  "tool_use_id": "tool-use-r1"
+}

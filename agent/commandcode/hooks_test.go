@@ -6,12 +6,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/agent/utils"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGenerateHooksConfig_CommandFormat(t *testing.T) {
-	config := GenerateHooksConfig()
+	config := GenerateHooksConfig("")
 	expectedPrefix := utils.GryphCommand() + " _hook command-code "
 
 	for _, hookType := range HookTypes {
@@ -29,7 +30,7 @@ func TestGenerateHooksConfig_CommandFormat(t *testing.T) {
 func TestGenerateHooksConfig_NoMatchers(t *testing.T) {
 	// Command Code matches every tool when the matcher is omitted, and a
 	// matcher on Stop/SessionStart prevents those hooks from firing at all.
-	config := GenerateHooksConfig()
+	config := GenerateHooksConfig("")
 
 	for _, hookType := range HookTypes {
 		assert.Empty(t, config[hookType][0].Matcher,
@@ -67,12 +68,12 @@ func TestReadSettings_RejectsMalformedHooks(t *testing.T) {
 
 	bad := filepath.Join(dir, "bad.json")
 	assert.NoError(t, os.WriteFile(bad, []byte(`{"hooks": "not-an-object"}`), 0600))
-	_, err := readSettings(bad)
+	_, err := readSettings(bad, agent.InstallOptions{})
 	assert.ErrorContains(t, err, `invalid "hooks" section`)
 
 	good := filepath.Join(dir, "good.json")
 	assert.NoError(t, os.WriteFile(good, []byte(`{"hooks": {"Stop": []}, "other": 1}`), 0600))
-	settings, err := readSettings(good)
+	settings, err := readSettings(good, agent.InstallOptions{})
 	assert.NoError(t, err)
 	assert.Contains(t, settings, "other")
 }
@@ -82,7 +83,7 @@ func TestReadSettings_RejectsTopLevelNull(t *testing.T) {
 	path := filepath.Join(dir, "null.json")
 	assert.NoError(t, os.WriteFile(path, []byte(`null`), 0600))
 
-	_, err := readSettings(path)
+	_, err := readSettings(path, agent.InstallOptions{})
 	assert.ErrorContains(t, err, "expected an object",
 		"a top-level null must be rejected before InstallHooks can panic on a nil map")
 }

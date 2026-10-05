@@ -42,7 +42,7 @@ func TestInstallHooks_PreservesUnrelatedSettings(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.Success)
 
-	raw, err := readDevinConfig(configFile)
+	raw, err := readDevinConfig(configFile, agent.InstallOptions{})
 	require.NoError(t, err)
 	assert.Contains(t, raw, "agent")
 	assert.Contains(t, raw, "theme_mode")
@@ -59,7 +59,7 @@ func TestInstallHooks_RepairsPartialInstall(t *testing.T) {
 				map[string]any{
 					"matcher": ".*",
 					"hooks": []any{
-						map[string]any{"type": "command", "command": gryphHookCommand("PreToolUse"), "timeout": 30},
+						map[string]any{"type": "command", "command": gryphHookCommand("", "PreToolUse"), "timeout": 30},
 					},
 				},
 			},
@@ -91,7 +91,7 @@ func TestInstallThenUninstall_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, uninstall.Success)
 
-	raw, err := readDevinConfig(configFile)
+	raw, err := readDevinConfig(configFile, agent.InstallOptions{})
 	require.NoError(t, err)
 	assert.Contains(t, raw, "agent")
 

@@ -1,0 +1,28 @@
+# gryph policy test runs with no session context, through the same Nop
+# accumulator as the degraded evaluation, and still evaluates a rule that
+# reads the context against zeros: the degraded gate is the explicit flag,
+# never the accumulator. Without --degraded the counter rule does not
+# fire, and --context-total-actions feeds it.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph policy test --file policy.yaml --action file_write --path /work/a.txt --format json --no-color
+stdout '"decision": "allow"'
+! stdout 'cap-writes'
+
+exec gryph policy test --file policy.yaml --action file_write --path /work/a.txt --context-files-written 3 --format json --no-color
+stdout '"decision": "warn"'
+stdout 'cap-writes'
+! stdout 'not available while the decision service'
+
+-- policy.yaml --
+version: "1"
+rules:
+  - id: cap-writes
+    action: warn
+    severity: medium
+    match:
+      action_types: [file_write]
+    condition: "context.files_written > 2"
+    message: "too many writes this session"

@@ -1,0 +1,38 @@
+# The hook process names the project of the working directory: the name from
+# a project manifest, else the directory name. The session records it.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+expandenv manifest.json plain.json
+
+stdin manifest.json
+exec gryph _hook claude-code PreToolUse
+stdin plain.json
+exec gryph _hook claude-code PreToolUse
+
+exec gryph sessions --format json --no-color
+stdout '"ProjectName": "acme-web"'
+stdout '"ProjectName": "plain"'
+
+-- acme/package.json --
+{"name":"acme-web","version":"1.0.0"}
+-- plain/.keep --
+-- manifest.json --
+{
+  "session_id": "session-manifest",
+  "cwd": "${WORK}/acme",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_use_id": "toolu_01",
+  "tool_input": {"file_path": "${WORK}/acme/package.json"}
+}
+-- plain.json --
+{
+  "session_id": "session-plain",
+  "cwd": "${WORK}/plain",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_use_id": "toolu_02",
+  "tool_input": {"file_path": "${WORK}/plain/.keep"}
+}

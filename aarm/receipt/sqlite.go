@@ -91,6 +91,9 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 			next.HumanPrincipal = in.Action.HumanPrincipal
 			next.ServiceIdentity = in.Action.ServiceIdentity
 			next.RoleScope = in.Action.RoleScope
+			if next.PeerTrust == "" {
+				next.PeerTrust = in.Action.PeerTrust
+			}
 		}
 		if next.Agent == "" {
 			next.Agent = in.Agent
@@ -108,6 +111,9 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 		}
 
 		next.PolicyHash = in.PolicyHash
+		if in.PeerTrust != "" {
+			next.PeerTrust = in.PeerTrust
+		}
 		next.DeferReason = in.DeferReason
 		next.ErrorMessage = in.ErrorMessage
 		if in.DeferralOfSequence != nil {
@@ -144,6 +150,7 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 			}
 			next.Signature = sig
 			next.SignerKeyID = keyID
+			next.SignerKeyScope = ScopeOf(g.signer)
 		}
 		return next, nil
 	})
@@ -152,12 +159,13 @@ func (g *SQLiteGenerator) Record(ctx context.Context, in *RecordInput) (*Record,
 	}
 
 	return &Record{
-		ID:          row.ID,
-		Sequence:    row.Sequence,
-		RecordedAt:  row.RecordedAt,
-		Hash:        row.Hash,
-		PrevHash:    row.PrevHash,
-		SignerKeyID: row.SignerKeyID,
+		ID:             row.ID,
+		Sequence:       row.Sequence,
+		RecordedAt:     row.RecordedAt,
+		Hash:           row.Hash,
+		PrevHash:       row.PrevHash,
+		SignerKeyID:    row.SignerKeyID,
+		SignerKeyScope: row.SignerKeyScope,
 	}, nil
 }
 
@@ -179,6 +187,14 @@ func (g *SQLiteGenerator) UpdateDecision(ctx context.Context, sessionID uuid.UUI
 		return fmt.Errorf("receipt: store is not initialized")
 	}
 	return g.store.UpdateReceiptDecision(ctx, sessionID, sequence, decision, resultStatus, note)
+}
+
+// UpdateApproval implements Generator.
+func (g *SQLiteGenerator) UpdateApproval(ctx context.Context, sessionID uuid.UUID, sequence int64, approval map[string]any) error {
+	if g == nil || g.store == nil {
+		return fmt.Errorf("receipt: store is not initialized")
+	}
+	return g.store.UpdateReceiptApproval(ctx, sessionID, sequence, approval)
 }
 
 // snapshotMap copies snapshot fields into the JSON-friendly map persisted on

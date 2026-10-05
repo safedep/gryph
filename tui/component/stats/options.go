@@ -53,7 +53,7 @@ func (r TimeRange) Until() *time.Time {
 }
 
 type Options struct {
-	Store       storage.Store
+	Store       storage.ReadStore
 	TimeRange   TimeRange
 	AgentFilter string
 	Since       *time.Time

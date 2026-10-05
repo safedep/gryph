@@ -261,3 +261,50 @@ func TestReadPrivateKeyFileRejectsSymlink(t *testing.T) {
 	_, err = ReadPrivateKeyFile(link)
 	assert.Error(t, err, "symlinked private key must be rejected by O_NOFOLLOW")
 }
+
+func TestScopeOf(t *testing.T) {
+	pkFile, err := GenerateKey("")
+	require.NoError(t, err)
+	priv, err := pkFile.PrivateKey()
+	require.NoError(t, err)
+	signer, err := NewEd25519Signer(priv)
+	require.NoError(t, err)
+	assert.Equal(t, KeyScopeUser, ScopeOf(signer), "a key file in the user's directory signs in the user scope")
+	assert.Equal(t, KeyScopeUser, ScopeOf(stubSigner{}), "a signer without a scope signs in the user scope")
+	assert.Equal(t, KeyScopeSupervisor, ScopeOf(scopedSigner{scope: KeyScopeSupervisor}))
+}
+
+type stubSigner struct{}
+
+func (stubSigner) Sign([]byte) ([]byte, string, error) { return nil, "", nil }
+
+type scopedSigner struct {
+	stubSigner
+	scope string
+}
+
+func (s scopedSigner) KeyScope() string { return s.scope }
+
+func TestLoadTrustStores_Merge(t *testing.T) {
+	dir := t.TempDir()
+	user := filepath.Join(dir, "user.json")
+	managed := filepath.Join(dir, "managed.json")
+	pk1, err := GenerateKey("user")
+	require.NoError(t, err)
+	pk2, err := GenerateKey("admin")
+	require.NoError(t, err)
+	pub1, err := pk1.Public()
+	require.NoError(t, err)
+	pub2, err := pk2.Public()
+	require.NoError(t, err)
+	require.NoError(t, SaveTrustStore(user, &TrustStore{Keys: []TrustStoreEntry{{KeyID: pk1.KeyID, Pub: base64.StdEncoding.EncodeToString(pub1), Created: pk1.Created}}}))
+	require.NoError(t, SaveTrustStore(managed, &TrustStore{Keys: []TrustStoreEntry{{KeyID: pk2.KeyID, Pub: base64.StdEncoding.EncodeToString(pub2), Created: pk2.Created}}}))
+
+	ts, err := LoadTrustStores(user, managed, filepath.Join(dir, "missing.json"), "")
+	require.NoError(t, err)
+	assert.Len(t, ts.Keys, 2, "both stores count, a missing one adds nothing")
+	v, err := NewEd25519Verifier(ts)
+	require.NoError(t, err)
+	assert.True(t, v.HasKey(pk1.KeyID))
+	assert.True(t, v.HasKey(pk2.KeyID))
+}

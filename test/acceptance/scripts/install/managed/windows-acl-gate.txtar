@@ -1,0 +1,30 @@
+# On Windows, Gryph reads the managed directory from the shell, never from
+# PROGRAMDATA, and trusts a managed file only below the real ProgramData
+# with SYSTEM or Administrators as owner and a DACL that no other principal
+# can write. A config.yml that a user plants under a PROGRAMDATA of their
+# own is ignored, and install --managed refuses it with exit 3 and changes
+# nothing. The runner is elevated, so the privilege check passes and the
+# chain check is what refuses.
+[!windows] skip 'the ACL chain check runs only on Windows'
+env PROGRAMDATA=$WORK\pd
+env GRYPH_CONFIG_DIR=$WORK/config
+env GRYPH_DATA_DIR=$WORK/data
+env GRYPH_CACHE_DIR=$WORK/cache
+mkdir $WORK/pd/safedep/gryph
+cp planted.yml $WORK/pd/safedep/gryph/config.yml
+
+exec gryph doctor --no-color
+! stdout 'managed by the system'
+! stdout 'pd\\safedep\\gryph\\config.yml'
+
+execexit 3 gryph install --managed --config $WORK/pd/safedep/gryph/config.yml
+stderr 'nothing changed'
+stderr 'is not below|not by SYSTEM or Administrators|lets .* write'
+grep 'planted' $WORK/pd/safedep/gryph/config.yml
+
+-- planted.yml --
+# planted by a user
+policy:
+  enabled: true
+managed:
+  agents: [claude-code]

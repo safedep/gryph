@@ -4,9 +4,12 @@ Gryph tracks token usage and estimates costs for AI coding agent sessions. Cost 
 
 ## How It Works
 
-1. When an agent session ends, Gryph parses the session transcript to extract per-model token usage (input, output, cache read, cache write).
-2. Usage is matched against bundled pricing data (sourced from [models.dev](https://models.dev)) to estimate cost in USD.
-3. Cost data is stored on the session and queryable via `gryph cost`.
+1. When an agent session ends, the hook process reads the session transcript as the user who runs the agent. It extracts per-model token usage (input, output, cache read, cache write).
+2. The hook process matches the usage against bundled pricing data (sourced from [models.dev](https://models.dev)) to estimate the cost in USD.
+3. The hook process sends the totals to the decision service with the session end event. The service stores them on the session and does not open the transcript itself. It records the cost source as `client_reported:transcript`, because it did not verify the totals.
+4. `gryph cost` and `gryph sessions` report the stored cost data.
+
+`gryph cost --sync` reads the transcript again in the `cost` command and records the cost source as `transcript`.
 
 Sessions that use multiple models (e.g., Sonnet for edits, Opus for planning) get per-model breakdowns.
 
@@ -41,7 +44,7 @@ gryph cost --sync --force
 
 ## Automatic Collection
 
-Cost data is collected automatically at session end — no configuration required. The `--sync` flag is only needed to backfill older sessions or recompute after a pricing update.
+Cost data is collected automatically at session end. No configuration is required. The `--sync` flag is only needed to backfill older sessions or recompute after a pricing update.
 
 ## Pricing Data
 
@@ -51,7 +54,7 @@ Model pricing is bundled in `pricing/models.json`, sourced from the models.dev A
 make update-pricing
 ```
 
-The pricing provider resolves model IDs using layered matching: exact match, date suffix stripping (e.g., `claude-sonnet-4-20250514` → `claude-sonnet-4`), and provider prefix lookup.
+The pricing provider resolves model IDs using layered matching: exact match, date suffix stripping (e.g., `claude-sonnet-4-20250514` to `claude-sonnet-4`), and provider prefix lookup.
 
 ## Supported Agents
 

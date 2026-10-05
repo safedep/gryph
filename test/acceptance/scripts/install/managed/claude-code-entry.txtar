@@ -1,0 +1,47 @@
+# gryph install --managed writes the managed configuration and the Claude
+# Code managed hook entry for every user of the host, before any user has
+# the agent. The lock switch adds allowManagedHooksOnly. Under the managed
+# configuration, gryph doctor puts the hook_config row at prevent_same_user
+# whatever the user scope holds. Runs only in the privileged job: root,
+# ACCEPTANCE_PRIVILEGED=1, -parallel 1, on a Linux host with no managed
+# Gryph, Claude Code or Codex state.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /etc/safedep/gryph
+! exists /etc/claude-code
+! exists /etc/codex
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+expandenv managed.yml
+
+exec gryph install --managed --config $WORK/managed.yml --json
+stdout '"status": "ok"'
+stdout '"changed": true'
+stdout '"name": "claude-code"'
+stdout '"action": "install"'
+stdout '"locked": true'
+exists /etc/safedep/gryph/config.yml
+exists /etc/claude-code/managed-settings.d/50-gryph.json
+grep '"allowManagedHooksOnly": true' /etc/claude-code/managed-settings.d/50-gryph.json
+grep '_hook claude-code PreToolUse' /etc/claude-code/managed-settings.d/50-gryph.json
+grep $ACCEPTANCE_GRYPH_BIN /etc/claude-code/managed-settings.d/50-gryph.json
+! exists /etc/codex/requirements.toml
+grep 'lock_hooks' /etc/safedep/gryph/config.yml
+
+mkdir $HOME/.claude
+exec gryph doctor --no-color
+stdout 'hook_config\s+claude-code\s+prevent_same_user\s+managed entry at /etc/claude-code/managed-settings.d/50-gryph.json'
+! stdout 'drift: hooks not installed'
+
+exec rm -rf /etc/safedep/gryph /etc/claude-code
+exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+
+-- managed.yml --
+policy:
+  enabled: true
+managed:
+  agents: [claude-code]
+  lock_hooks: [claude-code]
+  binary: ${ACCEPTANCE_GRYPH_BIN}

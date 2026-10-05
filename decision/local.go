@@ -3,18 +3,18 @@ package decision
 import (
 	"context"
 	"fmt"
-	"path/filepath"
+	"github.com/safedep/gryph/aarm/approval"
 
 	"github.com/google/uuid"
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/security"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/storage"
-	"github.com/safedep/gryph/utils/projectdetection"
 )
 
 // ResultRecorder records the execution outcome of an allowed action. The
@@ -30,10 +30,18 @@ type Local struct {
 	redactor     *privacy.Redactor
 	loggingLevel func(agent string) config.LoggingLevel
 	recorder     func() ResultRecorder
-	onSessionEnd func(*session.Session)
 	hookSpec     HookSpecLookup
 	classifier   Classifier
+	hookError    HookErrorRecorder
 }
+
+// HookErrorRecorder writes the self-audit row of one hook error. The
+// details hold the hook type, the payload size and, at the full logging
+// level, the capped and redacted payload.
+type HookErrorRecorder func(ctx context.Context, agentName string, details map[string]any, errorMessage string) error
+
+// maxRawEventSize caps the payload that a hook error row keeps.
+const maxRawEventSize = 64 * 1024
 
 // Classifier returns the classes of the content an event holds. The
 // aarm/classify heuristic implements it.
@@ -58,19 +66,19 @@ func WithResultRecorder(fn func() ResultRecorder) LocalOption {
 	}
 }
 
-// WithSessionEndHook installs a callback that runs when a session ends,
-// before the ended session is saved.
-func WithSessionEndHook(fn func(*session.Session)) LocalOption {
-	return func(l *Local) {
-		l.onSessionEnd = fn
-	}
-}
-
 // WithHookSpecs installs the lookup the service uses to set an event's
 // phase from the adapter's declared hooks.
 func WithHookSpecs(lookup HookSpecLookup) LocalOption {
 	return func(l *Local) {
 		l.hookSpec = lookup
+	}
+}
+
+// WithHookErrorRecorder installs the writer of hook error self-audit rows.
+// Without it, ReportHookError records nothing.
+func WithHookErrorRecorder(fn HookErrorRecorder) LocalOption {
+	return func(l *Local) {
+		l.hookError = fn
 	}
 }
 
@@ -105,6 +113,7 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 
 	event := req.event()
 	event.ClaimOrigin()
+	event.PeerTrust = req.PeerTrust
 
 	var classes []privacy.Class
 	if l.classifier != nil {
@@ -112,7 +121,7 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 	}
 	labelEvent(event, l.redactor, classes)
 
-	sess, err := l.loadSession(ctx, event)
+	sess, err := l.loadSession(ctx, event, req.Project)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +135,7 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 		return &HookResponse{Decision: VerdictOf(security.DecisionBlock), Reason: result.BlockReason}, nil
 	}
 
-	if err := l.recordAllowed(ctx, sess, event); err != nil {
+	if err := l.recordAllowed(ctx, sess, event, req.Cost); err != nil {
 		return nil, err
 	}
 
@@ -136,6 +145,31 @@ func (l *Local) Handle(ctx context.Context, req *HookRequest) (*HookResponse, er
 		return &HookResponse{Decision: VerdictOf(security.DecisionGuidance), Guidance: result.AggregatedGuidance()}, nil
 	}
 	return &HookResponse{Decision: VerdictOf(security.DecisionAllow)}, nil
+}
+
+// ReportHookError implements Service. The payload goes into the row only at
+// the full logging level of the agent, capped and redacted, because it can
+// hold anything the agent sent.
+func (l *Local) ReportHookError(ctx context.Context, e *HookError) error {
+	if l.hookError == nil || e == nil {
+		return nil
+	}
+	details := map[string]any{
+		"hook_type":     e.HookType,
+		"raw_data_size": e.RawSize,
+	}
+	if len(e.RawEvent) > 0 && l.loggingLevel != nil && l.loggingLevel(e.Agent).IsAtLeast(config.LoggingFull) {
+		raw := e.RawEvent
+		if len(raw) > maxRawEventSize {
+			raw = raw[:maxRawEventSize]
+		}
+		text := string(raw)
+		if l.redactor != nil {
+			text = l.redactor.Redact(text)
+		}
+		details["raw_event"] = text
+	}
+	return l.hookError(ctx, e.Agent, details, e.Message)
 }
 
 // classify sets the event's phase from the adapter's hook spec, links a post
@@ -165,9 +199,18 @@ func (l *Local) classify(ctx context.Context, event *events.Event) {
 	}
 
 	event.Kind = events.KindOf(event, event.LinkedEventID != uuid.Nil)
+	// A prompt from a connection the service does not trust is a fact
+	// about the session, not the intent of the user: it never becomes the
+	// latest intent, so it cannot reset the counters a rule reads.
+	if event.Kind == events.KindIntent && event.PeerTrust == approval.PeerTrustLow {
+		event.Kind = events.KindObservation
+	}
 }
 
-func (l *Local) loadSession(ctx context.Context, event *events.Event) (*session.Session, error) {
+// loadSession returns the stored session of the event, or creates it. The
+// project name comes from the hook side's claim, because the service does
+// not read the working directory.
+func (l *Local) loadSession(ctx context.Context, event *events.Event, project ProjectClaim) (*session.Session, error) {
 	sess, err := l.store.GetSession(ctx, event.SessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session: %w", err)
@@ -178,14 +221,7 @@ func (l *Local) loadSession(ctx context.Context, event *events.Event) (*session.
 		sess.AgentSessionID = event.AgentSessionID
 		sess.WorkingDirectory = event.WorkingDirectory
 		sess.TranscriptPath = event.TranscriptPath
-
-		if event.WorkingDirectory != "" {
-			if info, err := projectdetection.DetectProject(event.WorkingDirectory); err == nil && info != nil && info.Name != "" {
-				sess.ProjectName = info.Name
-			} else {
-				sess.ProjectName = filepath.Base(event.WorkingDirectory)
-			}
-		}
+		sess.ProjectName = project.Name
 
 		if err := l.store.SaveSession(ctx, sess); err != nil {
 			existing, getErr := l.store.GetSession(ctx, event.SessionID)
@@ -233,15 +269,17 @@ func (l *Local) recordEvent(ctx context.Context, sess *session.Session, event *e
 	return nil
 }
 
-func (l *Local) recordAllowed(ctx context.Context, sess *session.Session, event *events.Event) error {
+// recordAllowed saves the event. On session end it closes the session and
+// stores the cost totals the hook side sent, marked as client reported.
+func (l *Local) recordAllowed(ctx context.Context, sess *session.Session, event *events.Event, reported *cost.SessionCost) error {
 	if err := l.recordEvent(ctx, sess, event); err != nil {
 		return fmt.Errorf("failed to save event: %w", err)
 	}
 
 	if event.ActionType == events.ActionSessionEnd {
 		sess.End()
-		if l.onSessionEnd != nil {
-			l.onSessionEnd(sess)
+		if reported != nil {
+			sess.SetCost(reported, cost.ClientReported(reported.Source))
 		}
 		if err := l.store.UpdateSession(ctx, sess); err != nil {
 			return fmt.Errorf("failed to end session: %w", err)

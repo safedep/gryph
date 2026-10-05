@@ -49,6 +49,10 @@ type PDP struct {
 	rules    []compiledRule
 	deferCfg DeferConfig
 	timeout  time.Duration
+	// degraded is set when the evaluation runs with no session context,
+	// in the hook client while the decision service is out of reach. A
+	// rule that reads context then blocks instead of reading zeros.
+	degraded bool
 }
 
 // Option configures optional PDP behavior.
@@ -60,6 +64,21 @@ func WithDeferConfig(cfg DeferConfig) Option {
 		p.deferCfg = cfg
 	}
 }
+
+// WithDegraded makes every rule that reads context.* resolve to block. The
+// hook client sets it in local-ephemeral mode, where no accumulator feeds
+// the context: a condition over zeros would let through what a counter
+// should stop. The gate is this flag, not the accumulator type, because
+// the Nop accumulator is the default and gryph policy test uses it.
+func WithDegraded() Option {
+	return func(p *PDP) {
+		p.degraded = true
+	}
+}
+
+// DegradedMessage is the message of a rule that blocks because it reads
+// the session context while no context is available.
+const DegradedMessage = "the rule reads the session context, which is not available while the decision service is out of reach"
 
 // New creates a PDP from a validated policy.
 func New(policy *Policy, opts ...Option) (*PDP, error) {
@@ -117,6 +136,7 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 	freshDeferRule := ""
 
 	var winnerRule *compiledRule
+	degradedBlock := false
 	paths := &actionPaths{action: action}
 	// condErr is the first condition error. The loop still runs the other
 	// rules, so that a block rule decides even when another rule fails.
@@ -134,6 +154,19 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 			continue
 		}
 		if rule.hasCondition {
+			if p.degraded && len(rule.contextRefs) > 0 {
+				result.MatchedRuleIDs = append(result.MatchedRuleIDs, rule.rule.ID)
+				result.MatchedTags = addTags(result.MatchedTags, rule.rule.Tags)
+				if precedence(model.DecisionBlock) > precedence(result.Decision) {
+					result.Decision = model.DecisionBlock
+					result.Severity = rule.rule.Severity
+					result.Tags = rule.rule.Tags
+					result.DeferReason = ""
+					winnerRule = &p.rules[i]
+					degradedBlock = true
+				}
+				continue
+			}
 			if !freshSessionDeferred && p.shouldDeferFreshSession(rule, snapshot) {
 				freshSessionDeferred = true
 				freshDeferRule = rule.rule.ID
@@ -211,10 +244,16 @@ func (p *PDP) EvaluateStored(ctx context.Context, action, stored *model.Action, 
 
 	if winnerRule != nil {
 		result.MatchedRuleIDs = deciderFirst(result.MatchedRuleIDs, winnerRule.rule.ID)
+		result.MinAssurance = winnerRule.rule.MinAssurance
 		result.FullMessage = winnerRule.messageOrFallback(action, snapshot)
 		result.Message = result.FullMessage
 		if stored != action {
 			result.Message = winnerRule.messageOrFallback(stored, snapshot)
+		}
+		if degradedBlock {
+			// The rule's own message describes a condition that never ran.
+			result.FullMessage = DegradedMessage
+			result.Message = DegradedMessage
 		}
 	}
 
@@ -954,6 +993,7 @@ func actionActivation(action *model.Action, paths *actionPaths) map[string]any {
 		"service_identity":     action.ServiceIdentity,
 		"role_scope":           action.RoleScope,
 		"gryph_hook":           paths.runsGryphHook(),
+		"gryph_resolve":        paths.runsGryphResolve(),
 		"kind":                 string(action.Kind),
 		"origin":               string(action.Origin),
 		"source":               action.Source,

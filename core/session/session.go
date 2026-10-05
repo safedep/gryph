@@ -21,6 +21,9 @@ type Session struct {
 	AgentName string `json:"agent_name"`
 	// AgentVersion is the agent version if detectable.
 	AgentVersion string `json:"agent_version,omitempty"`
+	// AgentProcess names the first agent process seen above a hook of the
+	// session, as name:pid:start, set by the decision service.
+	AgentProcess string `json:"agent_process,omitempty"`
 	// StartedAt is the session start time (UTC).
 	StartedAt time.Time `json:"started_at"`
 	// EndedAt is the session end time (UTC), zero if ongoing.
@@ -65,6 +68,10 @@ type Session struct {
 	CostSource string `json:"cost_source,omitempty"`
 	// CostComputedAt is when cost was last computed.
 	CostComputedAt *time.Time `json:"cost_computed_at,omitempty"`
+	// Imported marks a session that gryph supervisor import copied from
+	// the user's own database into the partition of the decision service.
+	// The user could have changed it before the import.
+	Imported bool `json:"imported,omitempty"`
 }
 
 // NewSession creates a new Session with a generated UUID and current timestamp.
@@ -176,6 +183,26 @@ func (s *Session) Add(c Counts) {
 func (s *Session) CountEvent(e *events.Event) {
 	s.EventCount = max(s.EventCount, e.Sequence)
 	s.Add(EventCounts(e))
+}
+
+// SetCost records the totals of one cost computation under the given
+// source.
+// SetClientReportedCost stores totals that a client collected and
+// reported, which the service did not verify, marked as such.
+func (s *Session) SetClientReportedCost(sc *cost.SessionCost) {
+	s.SetCost(sc, cost.ClientReported(sc.Source))
+}
+
+func (s *Session) SetCost(sc *cost.SessionCost, source cost.CostSource) {
+	s.InputTokens = sc.Usage.InputTokens
+	s.OutputTokens = sc.Usage.OutputTokens
+	s.CacheReadTokens = sc.Usage.CacheReadTokens
+	s.CacheWriteTokens = sc.Usage.CacheWriteTokens
+	s.EstimatedCostUSD = sc.TotalCost
+	s.ModelUsage = sc.Usage.Models
+	s.CostSource = string(source)
+	at := sc.ComputedAt
+	s.CostComputedAt = &at
 }
 
 // HasCostData returns true if cost data has been computed for this session.

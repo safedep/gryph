@@ -384,6 +384,9 @@ func (p *TablePresenter) RenderInstall(result *InstallView) error {
 	tw.println()
 	tw.printf("  %-11s %s\n", "Database", p.color.Path(result.Database))
 	tw.printf("  %-11s %s\n", "Config", p.color.Path(result.Config))
+	if result.RepairTimer != nil {
+		p.renderRepairTimer(tw, result.RepairTimer, "installed")
+	}
 	tw.println()
 	tw.println("Run 'gryph status' to verify.")
 	tw.println("Run 'gryph logs -f' to watch activity.")
@@ -417,8 +420,26 @@ func (p *TablePresenter) RenderUninstall(result *UninstallView) error {
 	if result.Purged {
 		tw.println("Database and config files have been removed.")
 	}
+	if result.RepairTimer != nil {
+		p.renderRepairTimer(tw, result.RepairTimer, "removed")
+	}
 
 	return tw.Err()
+}
+
+// renderRepairTimer prints the outcome of a change to the repair timer.
+func (p *TablePresenter) renderRepairTimer(tw *tableWriter, timer *RepairTimerView, verb string) {
+	switch {
+	case timer.Error != "":
+		tw.printf("  %-11s %s\n", "Repair timer", p.color.Warning("not "+verb+": "+timer.Error))
+	case timer.Enabled:
+		tw.printf("  %-11s %s\n", "Repair timer", verb)
+	default:
+		tw.printf("  %-11s %s\n", "Repair timer", verb+", scheduler not reached. Run: "+timer.Next)
+	}
+	for _, path := range timer.Paths {
+		tw.printf("  %-11s %s\n", "", p.color.Path(path))
+	}
 }
 
 // RenderDoctor renders the doctor check results.
@@ -450,6 +471,13 @@ func (p *TablePresenter) RenderDoctor(result *DoctorView) error {
 	}
 	tw.println()
 
+	if result.Profile != "" {
+		p.renderProtection(tw, &result.ProtectionView)
+	}
+	if len(result.Posture) > 0 {
+		p.renderPosture(tw, result.Posture)
+	}
+
 	if result.AllOK {
 		tw.println(p.color.Success("All checks passed."))
 	} else {
@@ -457,6 +485,63 @@ func (p *TablePresenter) RenderDoctor(result *DoctorView) error {
 	}
 
 	return tw.Err()
+}
+
+// renderPosture prints the host posture: one line per fact, with its
+// note below.
+func (p *TablePresenter) renderPosture(tw *tableWriter, rows []PostureRow) {
+	tw.printf("%s\n", p.color.Header("Host posture"))
+	for _, row := range rows {
+		var status string
+		switch row.Status {
+		case "ok":
+			status = p.color.StatusOK()
+		case "warn":
+			status = p.color.Warning("[!!]")
+		default:
+			status = p.color.Dim("[..]")
+		}
+		tw.printf("  %s  %s = %s\n", status, row.Name, row.Value)
+		if row.Note != "" {
+			tw.printf("        %s\n", p.color.Dim(row.Note))
+		}
+	}
+	tw.println()
+}
+
+// RenderProtection renders the outcome of a self-protection pass.
+func (p *TablePresenter) RenderProtection(view *ProtectionView) error {
+	tw := &tableWriter{w: p.w}
+	p.renderProtection(tw, view)
+	return tw.Err()
+}
+
+// renderProtection prints the self-protection table, the profile, and what
+// the pass recorded and repaired.
+func (p *TablePresenter) renderProtection(tw *tableWriter, view *ProtectionView) {
+	tw.printf("%s\n", p.color.Header("Self-protection"))
+	tw.printf("  Profile: %s\n", view.Profile)
+	tw.println()
+	tw.printf("  %-12s %-13s %-25s %s\n", "ASSET", "AGENT", "LEVEL", "DETAIL")
+	for _, row := range view.Protection {
+		tw.printf("  %-12s %-13s %-25s %s\n", row.Asset, row.Agent, row.Level, row.Detail)
+		if row.Drift != "" {
+			tw.printf("  %-12s %-13s %s\n", "", "", p.color.Warning("drift: "+row.Drift))
+		}
+	}
+	if view.TamperRecorded > 0 {
+		tw.printf("  Tamper events recorded: %d\n", view.TamperRecorded)
+	}
+	for _, name := range view.Repaired {
+		tw.printf("  %s\n", p.color.Success("Repaired: "+name))
+	}
+	for _, name := range view.RepairFailed {
+		tw.printf("  %s\n", p.color.Warning("Repair failed: "+name))
+	}
+	for _, name := range view.RateLimited {
+		tw.printf("  %s\n", p.color.Warning("Repair rate limit reached: "+name))
+	}
+	tw.println()
 }
 
 // RenderConfig renders the configuration.

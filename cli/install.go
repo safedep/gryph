@@ -2,10 +2,12 @@ package cli
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -13,10 +15,15 @@ import (
 // NewInstallCmd creates the install command.
 func NewInstallCmd() *cobra.Command {
 	var (
-		agents   []string
-		dryRun   bool
-		force    bool
-		noBackup bool
+		agents      []string
+		dryRun      bool
+		force       bool
+		noBackup    bool
+		repairTimer bool
+		managed     bool
+		policyPath  string
+		trustStore  string
+		asJSON      bool
 	)
 
 	cmd := &cobra.Command{
@@ -29,8 +36,16 @@ to enable audit logging. Existing hooks are backed up by default.`,
 		Example: `  gryph install
   gryph install --agent claude-code
   gryph install --dry-run
-  gryph install --force`,
+  gryph install --force
+  gryph install --repair-timer
+  sudo gryph install --managed --config /path/to/managed.yml --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if managed {
+				return runManagedInstall(cmd, managedInstallArgs{configPath: globalFlags.ConfigPath, policyPath: policyPath, trustStorePath: trustStore, dryRun: dryRun, asJSON: asJSON})
+			}
+			if policyPath != "" || trustStore != "" || asJSON {
+				return ErrConfig("invalid flags", fmt.Errorf("--policy, --trust-store and --json need --managed"))
+			}
 			ctx := context.Background()
 
 			app, err := loadApp()
@@ -109,9 +124,9 @@ to enable audit logging. Existing hooks are backed up by default.`,
 						if err != nil {
 							agentView.Error = err.Error()
 							if !dryRun {
-								if err := logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
+								if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionInstall, adapter.Name(),
 									map[string]interface{}{"error": err.Error()},
-									SelfAuditResultError, err.Error()); err != nil {
+									engine.SelfAuditResultError, err.Error()); err != nil {
 									log.Errorf("failed to log self-audit: %w", err)
 								}
 							}
@@ -119,12 +134,12 @@ to enable audit logging. Existing hooks are backed up by default.`,
 							agentView.HooksInstalled = result.HooksInstalled
 							agentView.Warnings = result.Warnings
 							if !dryRun && len(result.HooksInstalled) > 0 {
-								if err := logSelfAudit(ctx, app.Store, SelfAuditActionInstall, adapter.Name(),
+								if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionInstall, adapter.Name(),
 									map[string]interface{}{
 										"hooks_installed": result.HooksInstalled,
 										"warnings":        result.Warnings,
 									},
-									SelfAuditResultSuccess, ""); err != nil {
+									engine.SelfAuditResultSuccess, ""); err != nil {
 									log.Errorf("failed to log self-audit: %w", err)
 								}
 							}
@@ -132,6 +147,10 @@ to enable audit logging. Existing hooks are backed up by default.`,
 					}
 
 					v.Agents = append(v.Agents, agentView)
+				}
+
+				if repairTimer && !dryRun {
+					v.RepairTimer = installRepairTimer(ctx)
 				}
 
 				return v, nil
@@ -148,6 +167,11 @@ to enable audit logging. Existing hooks are backed up by default.`,
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be installed")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing hooks without prompting")
 	cmd.Flags().BoolVar(&noBackup, "no-backup", false, "skip backup of existing hooks")
+	cmd.Flags().BoolVar(&repairTimer, "repair-timer", false, "also install the timer that runs gryph supervisor reconcile --once every 15 minutes")
+	cmd.Flags().BoolVar(&managed, "managed", false, "as root: write the managed configuration from --config and the managed hook entries for every host user")
+	cmd.Flags().StringVar(&policyPath, "policy", "", "with --managed: the managed policy file to install")
+	cmd.Flags().StringVar(&trustStore, "trust-store", "", "with --managed: the receipt trust store to install, whose public keys every user's verifier trusts")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "with --managed: print the report as JSON")
 
 	return cmd
 }

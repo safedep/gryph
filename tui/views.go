@@ -47,6 +47,7 @@ type ConfigStatusView struct {
 type SessionView struct {
 	ID               string
 	ShortID          string
+	Imported         bool `json:",omitempty"`
 	AgentName        string
 	AgentDisplayName string
 	AgentVersion     string
@@ -70,6 +71,9 @@ type SessionView struct {
 	ModelUsage       []ModelUsageView
 	CostSource       string
 	CostComputedAt   *time.Time
+	// AgentProcess is the agent process the decision service bound the
+	// session to, as name:pid:start. Empty for a session with none.
+	AgentProcess string `json:"agent_process,omitempty"`
 }
 
 // ModelUsageView represents per-model token usage for display.
@@ -125,6 +129,7 @@ type CostGroupView struct {
 type EventView struct {
 	ID               string
 	ShortID          string
+	Imported         bool `json:",omitempty"`
 	SessionID        string
 	ShortSessionID   string
 	Sequence         int
@@ -144,6 +149,11 @@ type EventView struct {
 	DurationMs       int64
 	IsSensitive      bool
 	HasDiff          bool
+	// Kind and PeerTrust come from the decision service: the kind of the
+	// event in the session context, and the trust of the connection that
+	// carried it.
+	Kind      string `json:"kind,omitempty"`
+	PeerTrust string `json:"peer_trust,omitempty"`
 }
 
 // EventDetailView represents the full details of a single event.
@@ -175,6 +185,21 @@ type InstallView struct {
 	Agents   []AgentInstallView
 	Database string
 	Config   string
+	// RepairTimer is set when the install also changed the repair timer.
+	RepairTimer *RepairTimerView
+}
+
+// RepairTimerView is the outcome of a change to the repair timer.
+type RepairTimerView struct {
+	// Paths lists the files of the job.
+	Paths []string
+	// Changed is true when the change wrote or removed a file.
+	Changed bool
+	// Enabled is true when the scheduler took the change. When it is
+	// false, Next names the command to finish by hand.
+	Enabled bool
+	Next    string
+	Error   string
 }
 
 // AgentInstallView represents an agent's installation result.
@@ -193,6 +218,8 @@ type AgentInstallView struct {
 type UninstallView struct {
 	Agents []AgentUninstallView
 	Purged bool
+	// RepairTimer is set when the uninstall also removed the repair timer.
+	RepairTimer *RepairTimerView
 }
 
 // AgentUninstallView represents an agent's uninstallation result.
@@ -208,6 +235,46 @@ type AgentUninstallView struct {
 type DoctorView struct {
 	Checks []DoctorCheck
 	AllOK  bool
+	ProtectionView
+	// Posture holds the host settings and the agent behavior on a hook
+	// failure.
+	Posture []PostureRow
+}
+
+// PostureRow is one fact about the host that decides how far Gryph
+// resists a same-user adversary.
+type PostureRow struct {
+	Name   string
+	Value  string
+	Status string
+	Note   string
+}
+
+// ProtectionView is the outcome of one self-protection pass: the state of
+// every asset, the profile, and what the pass recorded and repaired.
+type ProtectionView struct {
+	// Protection holds one row per Gryph asset, and Profile the label that
+	// the levels earn.
+	Protection []ProtectionRow
+	Profile    string
+	// TamperRecorded is the count of tamper events this run recorded.
+	TamperRecorded int
+	// Repaired names the assets the pass restored, RepairFailed the ones it
+	// could not restore with the reason, and RateLimited the ones it left
+	// alone because their repairs reached the limit.
+	Repaired     []string
+	RepairFailed []string
+	RateLimited  []string
+}
+
+// ProtectionRow is the self-protection level of one asset.
+type ProtectionRow struct {
+	Asset    string
+	Agent    string
+	Level    string
+	Provider string
+	Drift    string
+	Detail   string
 }
 
 // DoctorCheck represents a single doctor check.

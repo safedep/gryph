@@ -2,11 +2,13 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -79,6 +81,291 @@ type Config struct {
 	Streams StreamsConfig `mapstructure:"streams"`
 	Policy  PolicyConfig  `mapstructure:"policy"`
 	Export  ExportConfig  `mapstructure:"export"`
+	Managed ManagedConfig `mapstructure:"managed"`
+	// Supervisor is the decision service that runs outside the user. Only
+	// the managed file sets it: a user cannot point the hook at a service
+	// of their own.
+	Supervisor SupervisorConfig `mapstructure:"supervisor"`
+	// Collection is what leaves the host for the team. Only the managed
+	// file sets it: a user cannot raise or lower what the team collects.
+	Collection CollectionConfig `mapstructure:"collection"`
+	// ExportKey is the export key file in force when it is not the one
+	// next to the database. No file sets it: the decision service sets it
+	// to the machine key.
+	ExportKey string `mapstructure:"-"`
+}
+
+// SupervisorConfig configures the decision service and the hook's use of it.
+type SupervisorConfig struct {
+	// Enabled turns the hook into a client of the service. A socket alone
+	// never does.
+	Enabled bool `mapstructure:"enabled"`
+	// Socket is the path of the service socket. Empty takes the default of
+	// the platform.
+	Socket string `mapstructure:"socket"`
+	// Profile is enforce or pilot. It decides what a hook does when the
+	// service is out of reach.
+	Profile string `mapstructure:"profile"`
+	// PilotUntil ends the pilot profile: after this date the host runs
+	// enforce. A pilot with no end is a standing way to turn signing off,
+	// so a managed file that sets pilot sets this too.
+	PilotUntil string `mapstructure:"pilot_until"`
+	// StateDir holds the partitions of the accounts. Empty takes the
+	// default of the platform.
+	StateDir string `mapstructure:"state_dir"`
+	// SpoolDir is where a hook client leaves what it could not send. Empty
+	// takes the default of the platform.
+	SpoolDir string `mapstructure:"spool_dir"`
+	// Unavailable says what a hook does when the service is out of reach,
+	// per fail-mode column. Empty takes the default of the profile.
+	Unavailable UnavailableConfig `mapstructure:"unavailable"`
+	// ServerIdentity is the account that runs the service. The hook client
+	// accepts the socket only when its peer is root or this account. Empty
+	// takes the service account of the platform.
+	ServerIdentity string `mapstructure:"server_identity"`
+	// Fanotify is the kernel watcher that stops a write to the managed
+	// files by a process of a non-privileged account. Linux only, off by
+	// default.
+	Fanotify FanotifyConfig `mapstructure:"fanotify"`
+}
+
+// FanotifyConfig configures the fanotify watcher, a separate process in
+// its own unit with the capabilities the kernel API needs.
+type FanotifyConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+	// StateFile is where the watcher reports what it protects. Empty puts
+	// it next to the socket.
+	StateFile string `mapstructure:"state_file"`
+}
+
+// FanotifyStatePath returns the state file of the fanotify watcher, which
+// gryph doctor reads: the configured path, or fanotify.json next to the
+// socket, in the runtime directory every account can read.
+func (s SupervisorConfig) FanotifyStatePath() string {
+	if s.Fanotify.StateFile != "" {
+		return s.Fanotify.StateFile
+	}
+	return filepath.Join(filepath.Dir(s.SocketPath()), "fanotify.json")
+}
+
+// CollectionConfig sets the collection level of a managed host: how much
+// of each event leaves the host for the team, through the export profile
+// the level names.
+type CollectionConfig struct {
+	// Level is evidence, policy or full. Empty takes the default of a
+	// managed host, policy.
+	Level string `mapstructure:"level"`
+}
+
+// The collection levels, from the one that sends the least to the one
+// that sends the most.
+const (
+	// CollectionNone is the level of a host with no managed
+	// configuration: nothing is collected.
+	CollectionNone = "none"
+	// CollectionEvidence sends the receipts and the facts of each action
+	// with every content value digested. It is always on in a managed
+	// host.
+	CollectionEvidence = "evidence"
+	// CollectionPolicy sends the fields that rules match on, with prompts
+	// and content digested and every secret dropped. It is the default.
+	CollectionPolicy = "policy"
+	// CollectionFull sends every value. A team opts in.
+	CollectionFull = "full"
+)
+
+// CollectionLevels lists the levels a managed file can set.
+var CollectionLevels = []string{CollectionEvidence, CollectionPolicy, CollectionFull}
+
+// EffectiveLevel returns the collection level in force: none without a
+// managed configuration, else the configured level or policy.
+func (c CollectionConfig) EffectiveLevel() string {
+	if !ManagedConfigActive() {
+		return CollectionNone
+	}
+	if c.Level == "" {
+		return CollectionPolicy
+	}
+	return c.Level
+}
+
+// Profile returns the export profile that the level in force names:
+// metadata for evidence, policy for policy, full for full, and the
+// default profile when nothing is collected.
+func (c CollectionConfig) Profile() string {
+	switch c.EffectiveLevel() {
+	case CollectionEvidence:
+		return privacy.ProfileMetadata
+	case CollectionPolicy:
+		return privacy.ProfilePolicy
+	case CollectionFull:
+		return privacy.ProfileFull
+	}
+	return privacy.ProfileDefault
+}
+
+// SupervisorAccount is the service account of the decision service.
+const SupervisorAccount = "_gryph"
+
+// ServerAccount returns the account the hook client expects behind the
+// socket.
+func (s SupervisorConfig) ServerAccount() string {
+	if s.ServerIdentity != "" {
+		return s.ServerIdentity
+	}
+	return SupervisorAccount
+}
+
+// UnavailableConfig holds one verdict per fail-mode column: block or
+// allow. The enforce profile blocks a blocking hook and allows the rest.
+type UnavailableConfig struct {
+	Blocking string `mapstructure:"blocking"`
+	Prompt   string `mapstructure:"prompt"`
+	Other    string `mapstructure:"other"`
+}
+
+// The verdicts a hook gives when the service is out of reach.
+const (
+	UnavailableBlock = "block"
+	UnavailableAllow = "allow"
+)
+
+// The supervisor profiles.
+const (
+	SupervisorProfileEnforce = "enforce"
+	SupervisorProfilePilot   = "pilot"
+)
+
+// EffectiveProfile returns the profile: enforce when unset, and enforce
+// when the pilot has passed its end date.
+func (s SupervisorConfig) EffectiveProfile() string {
+	if s.Profile == SupervisorProfilePilot {
+		if until, ok := s.pilotEnd(); ok && !time.Now().Before(until) {
+			return SupervisorProfileEnforce
+		}
+		return SupervisorProfilePilot
+	}
+	return SupervisorProfileEnforce
+}
+
+// PilotRemaining returns the time left in the pilot and true while the
+// pilot profile is in force with an end date.
+func (s SupervisorConfig) PilotRemaining() (time.Duration, bool) {
+	if s.Profile != SupervisorProfilePilot {
+		return 0, false
+	}
+	until, ok := s.pilotEnd()
+	if !ok {
+		return 0, false
+	}
+	left := time.Until(until)
+	if left <= 0 {
+		return 0, false
+	}
+	return left, true
+}
+
+// pilotEnd parses pilot_until: a date (2006-01-02, the end of that day in
+// local time) or an RFC 3339 time.
+func (s SupervisorConfig) pilotEnd() (time.Time, bool) {
+	t, err := ParsePilotUntil(s.PilotUntil)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+// ParsePilotUntil parses the value of supervisor.pilot_until. An empty
+// value is an error: a pilot needs an end.
+func ParsePilotUntil(value string) (time.Time, error) {
+	if value == "" {
+		return time.Time{}, errors.New("no date")
+	}
+	if t, err := time.Parse(time.RFC3339, value); err == nil {
+		return t, nil
+	}
+	day, err := time.ParseInLocation("2006-01-02", value, time.Local)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%q is not a date (2006-01-02) or an RFC 3339 time", value)
+	}
+	return day.AddDate(0, 0, 1), nil
+}
+
+// SocketPath returns the socket path, or the default of the platform.
+func (s SupervisorConfig) SocketPath() string {
+	if s.Socket != "" {
+		return s.Socket
+	}
+	return supervisorSocketDefault()
+}
+
+// SpoolPath returns the spool directory, or the default of the platform.
+func (s SupervisorConfig) SpoolPath() string {
+	if s.SpoolDir != "" {
+		return s.SpoolDir
+	}
+	return supervisorSpoolDefault()
+}
+
+// EffectiveUnavailable returns the verdict of the column when the service
+// is out of reach. The enforce default blocks a blocking hook, because a
+// same-user process can take the service down for its own account, and
+// allows a prompt or a lifecycle hook, because a block there stops the
+// user and not the agent.
+func (s SupervisorConfig) EffectiveUnavailable(column string) string {
+	var set string
+	switch column {
+	case "blocking":
+		set = s.Unavailable.Blocking
+	case "prompt":
+		set = s.Unavailable.Prompt
+	default:
+		set = s.Unavailable.Other
+	}
+	if set != "" {
+		return set
+	}
+	if column == "blocking" {
+		return UnavailableBlock
+	}
+	return UnavailableAllow
+}
+
+// StatePath returns the state directory, or the default of the platform.
+func (s SupervisorConfig) StatePath() string {
+	if s.StateDir != "" {
+		return s.StateDir
+	}
+	return supervisorStateDefault()
+}
+
+// KeyDir returns the directory of the machine keys: the keys that the
+// decision service signs and digests with, owned by the service account.
+func (s SupervisorConfig) KeyDir() string {
+	return filepath.Join(s.StatePath(), "keys")
+}
+
+// ReceiptKeyPath returns the private receipt signing key of the machine.
+func (s SupervisorConfig) ReceiptKeyPath() string {
+	return filepath.Join(s.KeyDir(), "receipt.key")
+}
+
+// PublicKeyPath returns the file that carries the public half of the
+// current receipt key, readable by every account, so a root command can
+// put it in the managed trust store without reading the private key.
+func (s SupervisorConfig) PublicKeyPath() string {
+	return filepath.Join(s.KeyDir(), "receipt-pub.json")
+}
+
+// ExportKeyPath returns the export key of the machine.
+func (s SupervisorConfig) ExportKeyPath() string {
+	return filepath.Join(s.KeyDir(), "export.key")
+}
+
+// PIDFile returns the file that holds the pid of the running service, so
+// a root command can ask it to reload its keys.
+func (s SupervisorConfig) PIDFile() string {
+	return filepath.Join(s.StatePath(), "supervisor.pid")
 }
 
 // ExportConfig holds the user export profiles, by name.
@@ -88,8 +375,10 @@ type ExportConfig struct {
 
 // ExportProfileConfig is one user export profile. See privacy.ExportProfile.
 type ExportProfileConfig struct {
-	Default string               `mapstructure:"default"`
-	Rules   []privacy.ExportRule `mapstructure:"rules"`
+	Default     string               `mapstructure:"default"`
+	Rules       []privacy.ExportRule `mapstructure:"rules"`
+	StripURLs   bool                 `mapstructure:"strip_urls"`
+	RedactAgain bool                 `mapstructure:"redact_again"`
 }
 
 // ExportProfile returns the export profile with the name. An empty name
@@ -114,7 +403,7 @@ func (c *Config) ExportProfile(name string) (privacy.ExportProfile, error) {
 	case !isUser:
 		return privacy.ExportProfile{}, fmt.Errorf("unknown export profile %q", name)
 	}
-	p := privacy.ExportProfile{Name: name, Default: privacy.Treatment(pc.Default), Rules: pc.Rules}
+	p := privacy.ExportProfile{Name: name, Default: privacy.Treatment(pc.Default), Rules: pc.Rules, StripURLs: pc.StripURLs, RedactAgain: pc.RedactAgain}
 	if err := p.Validate(); err != nil {
 		return privacy.ExportProfile{}, err
 	}
@@ -125,6 +414,12 @@ func (c *Config) ExportProfile(name string) (privacy.ExportProfile, error) {
 type PolicyConfig struct {
 	Enabled  bool   `mapstructure:"enabled"`
 	FailMode string `mapstructure:"fail_mode"`
+	// AllowUserPolicy, in a system managed configuration, keeps the user's
+	// own policy sources in the merge. It is true by default, because a new
+	// file can only add rules. An administrator sets it to false to make
+	// the managed policy the whole policy. It has no effect outside a
+	// managed configuration.
+	AllowUserPolicy bool `mapstructure:"allow_user_policy"`
 
 	ContextRetentionDays int  `mapstructure:"context_retention_days"`
 	ReceiptRetentionDays int  `mapstructure:"receipt_retention_days"`
@@ -168,6 +463,29 @@ const DefaultWindowMaxBytes = 65536
 // only from the operator-owned config file, never a repo-local policy.
 type SelfProtectionConfig struct {
 	Enabled bool `mapstructure:"enabled"`
+	// Repair lets a reconcile pass rewrite a hook configuration that
+	// differs from a current install. It is off by default in the user
+	// scope, and on by default under a system managed configuration.
+	Repair bool `mapstructure:"repair"`
+	// Census turns the process census on. It is on by default. Turn it off
+	// on a host where an agent runs for another reason than the user's own
+	// work, for example a build host.
+	Census bool `mapstructure:"census"`
+	// CensusWindow is how long a live agent process may run without a hook
+	// call before the census reports it as silent.
+	CensusWindow time.Duration `mapstructure:"census_window"`
+}
+
+// DefaultCensusWindow is the census window when the config sets none.
+const DefaultCensusWindow = 10 * time.Minute
+
+// EffectiveCensusWindow returns the census window, or the default when the
+// config holds none or a value that is not positive.
+func (c SelfProtectionConfig) EffectiveCensusWindow() time.Duration {
+	if c.CensusWindow <= 0 {
+		return DefaultCensusWindow
+	}
+	return c.CensusWindow
 }
 
 // IdentityConfig controls the AARM identity-capture layer. Enabled gates the
@@ -201,8 +519,11 @@ const DeferAutoResolveDeny = "deny"
 // key, or "never" to disable signing entirely. The legacy bool `sign` is a
 // deprecated alias mapped to `always` (true) or `never` (false).
 type ReceiptsConfig struct {
-	Sign       bool   `mapstructure:"sign"`
-	SignMode   string `mapstructure:"sign_mode"`
+	Sign     bool   `mapstructure:"sign"`
+	SignMode string `mapstructure:"sign_mode"`
+	// KeyScope is the scope the receipts of this process carry. No file
+	// sets it: the decision service sets it on the machine key.
+	KeyScope   string `mapstructure:"-"`
 	KeyPath    string `mapstructure:"key_path"`
 	TrustStore string `mapstructure:"trust_store"`
 }
@@ -239,10 +560,83 @@ const (
 )
 
 // ApprovalConfig configures the approval workflow for escalated decisions.
+// Mode, TimeoutSeconds and RequireNote drive the prompt of a hook that
+// decides in process. The other keys drive the decision service, which
+// keeps a request store and answers through channels.
 type ApprovalConfig struct {
 	Mode           ApprovalMode `mapstructure:"mode"`
 	TimeoutSeconds int          `mapstructure:"timeout_seconds"`
 	RequireNote    bool         `mapstructure:"require_note"`
+
+	// Channels names the approval channels the decision service uses, by
+	// the assurance each one gives.
+	Channels []string `mapstructure:"channels"`
+	// MinAssurance is the floor for an escalate rule that sets none.
+	MinAssurance string `mapstructure:"min_assurance"`
+	// InlineWait bounds how long a hook waits for an inline answer. The
+	// client bounds it again by the hook timeout of the agent.
+	InlineWait time.Duration `mapstructure:"inline_wait"`
+	// RequestTTL is how long an unanswered request stays open. It then
+	// expires as a deny.
+	RequestTTL time.Duration `mapstructure:"request_ttl"`
+	// GrantTTL is how long a stored approval stays usable.
+	GrantTTL time.Duration `mapstructure:"grant_ttl"`
+	// MaxGrantScope is the widest scope an approver can give: once,
+	// session or window.
+	MaxGrantScope string `mapstructure:"max_grant_scope"`
+	// LocalAdmin configures the local-admin channel.
+	LocalAdmin LocalAdminConfig `mapstructure:"local_admin"`
+}
+
+// LocalAdminConfig names who answers on the local-admin channel.
+type LocalAdminConfig struct {
+	// Group is the group whose members answer. Empty leaves the channel
+	// with nobody.
+	Group string `mapstructure:"group"`
+	// AllowSelfElevated accepts an answer from the person who asked, through
+	// another account of theirs, at the self-elevated assurance.
+	AllowSelfElevated bool `mapstructure:"allow_self_elevated"`
+	// AllowWithoutAuth accepts an answer without the password of the
+	// approver on a host whose authority could ask for it. Off, an
+	// answer needs the password when the host has polkit.
+	AllowWithoutAuth bool `mapstructure:"allow_without_auth"`
+}
+
+// The approval channels, named by the assurance each one gives.
+const (
+	ApprovalChannelSameUserTTY  = "same-user-tty"
+	ApprovalChannelSelfElevated = "self-elevated"
+	ApprovalChannelLocalAdmin   = "local-admin"
+	ApprovalChannelLocalAuth    = "local-auth"
+	ApprovalChannelOutOfBand    = "out-of-band"
+)
+
+// ApprovalChannels lists every channel the configuration accepts.
+var ApprovalChannels = []string{ApprovalChannelSameUserTTY, ApprovalChannelSelfElevated, ApprovalChannelLocalAdmin, ApprovalChannelLocalAuth, ApprovalChannelOutOfBand}
+
+// The approval grant scopes, narrowest first.
+const (
+	ApprovalScopeOnce    = "once"
+	ApprovalScopeSession = "session"
+	ApprovalScopeWindow  = "window"
+)
+
+// ApprovalScopes lists every scope the configuration accepts.
+var ApprovalScopes = []string{ApprovalScopeOnce, ApprovalScopeSession, ApprovalScopeWindow}
+
+// The defaults of the decision service's approval keys.
+const (
+	DefaultApprovalInlineWait = 15 * time.Second
+	DefaultApprovalRequestTTL = 30 * time.Minute
+	DefaultApprovalGrantTTL   = 15 * time.Minute
+	// MinApprovalInlineWait is the shortest wait a client makes. A shorter
+	// budget skips the wait and blocks with the request pending.
+	MinApprovalInlineWait = 2 * time.Second
+)
+
+// HasChannel reports whether the configuration names channel.
+func (a ApprovalConfig) HasChannel(channel string) bool {
+	return slices.Contains(a.Channels, channel)
 }
 
 // ClassifyConfig configures the data-classification heuristic.
@@ -359,6 +753,9 @@ func Load(configPath string) (*Config, error) {
 	managed := ""
 	if managed = ManagedConfigFile(); managed != "" {
 		v.SetConfigFile(managed)
+		// An administrator who manages the host wants the hooks to stay in
+		// place. A user who installed Gryph for themself opts in.
+		v.SetDefault("policy.self_protection.repair", true)
 	} else if configPath != "" {
 		v.SetConfigFile(configPath)
 	} else {
@@ -388,7 +785,11 @@ func Load(configPath string) (*Config, error) {
 		}
 	}
 
-	// Unmarshal into struct
+	return unmarshalConfig(v)
+}
+
+// unmarshalConfig turns the read sources of v into a validated Config.
+func unmarshalConfig(v *viper.Viper) (*Config, error) {
 	normalizeShellBudget(v)
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
@@ -726,6 +1127,36 @@ func (c *Config) ResolveReceiptTrustStorePath(paths *Paths) string {
 		return c.Policy.Receipts.TrustStore
 	}
 	return DefaultReceiptTrustStorePath(paths)
+}
+
+// ReceiptTrustStorePaths returns the trust stores a verifier loads: the
+// configured or default store, and the managed store when it exists and is
+// another file. The managed store passes the path chain check, so a key in
+// it is one the administrator trusts.
+func (c *Config) ReceiptTrustStorePaths(paths *Paths) []string {
+	out := []string{c.ResolveReceiptTrustStorePath(paths)}
+	managed := ManagedTrustStorePath()
+	if managed == "" || managed == out[0] {
+		return out
+	}
+	if _, err := os.Stat(managed); err != nil {
+		return out
+	}
+	if err := managedPathTrusted(managed); err != nil {
+		return out
+	}
+	return append(out, managed)
+}
+
+// WritableTrustStorePath returns the trust store that a key command of the
+// user writes. The managed store is root's, so when the configuration
+// points at it the user's own store takes the write.
+func (c *Config) WritableTrustStorePath(paths *Paths) string {
+	path := c.ResolveReceiptTrustStorePath(paths)
+	if managed := ManagedTrustStorePath(); managed != "" && path == managed {
+		return DefaultReceiptTrustStorePath(paths)
+	}
+	return path
 }
 
 // ShouldUseColors returns true if colors should be used based on config and terminal.

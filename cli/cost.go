@@ -9,11 +9,10 @@ import (
 	"strings"
 
 	"github.com/safedep/dry/log"
-	"github.com/safedep/gryph/agent"
-	"github.com/safedep/gryph/agent/claudecode"
 	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/session"
+	"github.com/safedep/gryph/hookside"
 	"github.com/safedep/gryph/pricing"
 	"github.com/safedep/gryph/storage"
 	"github.com/safedep/gryph/tui"
@@ -62,7 +61,7 @@ Use --sync to collect cost data from agent transcripts before displaying.`,
 				UseColors: app.Config.ShouldUseColors(),
 			})
 
-			if err := app.InitStore(ctx); err != nil {
+			if err := app.InitReadStore(ctx); err != nil {
 				return ErrDatabase("failed to open database", err)
 			}
 
@@ -101,7 +100,7 @@ Use --sync to collect cost data from agent transcripts before displaying.`,
 				filter = filter.WithAgent(agent)
 			}
 
-			sessions, err := app.Store.QuerySessions(ctx, filter)
+			sessions, err := app.Reads.QuerySessions(ctx, filter)
 			if err != nil {
 				return err
 			}
@@ -182,12 +181,15 @@ func syncSessionCosts(ctx context.Context, app *App, sessions []*session.Session
 
 		pw.Update("Syncing cost data (%d/%d) ...", i+1, len(sessions))
 
-		recoverTranscriptPath(ctx, app.Store, sess)
-		collectSessionCost(sess)
+		recoverTranscriptPath(ctx, app.Reads, sess)
+		sc := hookside.CollectCost(ctx, sess.AgentName, sess.TranscriptPath, sess.ID)
+		if sc != nil {
+			sess.SetCost(sc, sc.Source)
+		}
 
 		if sess.HasCostData() {
 			synced++
-			if err := app.Store.UpdateSession(ctx, sess); err != nil {
+			if err := app.SetSessionCost(ctx, sess, sc); err != nil {
 				log.Debugf("failed to update session %s: %v", sess.ID, err)
 			}
 		}
@@ -402,7 +404,7 @@ func sortedGroupsByCost(groups map[string]*tui.CostGroupView) []tui.CostGroupVie
 	return result
 }
 
-func recoverTranscriptPath(ctx context.Context, store storage.Store, sess *session.Session) {
+func recoverTranscriptPath(ctx context.Context, store storage.ReadStore, sess *session.Session) {
 	if sess.TranscriptPath != "" {
 		return
 	}
@@ -428,59 +430,14 @@ func recoverTranscriptPath(ctx context.Context, store storage.Store, sess *sessi
 		}
 		if raw.TranscriptPath != "" {
 			sess.TranscriptPath = raw.TranscriptPath
-			if err := store.UpdateSession(ctx, sess); err != nil {
-				log.Errorf("failed to update session transcript path: %v", err)
+			// Over the socket the session row is the service's. The path
+			// serves this run, and the totals reach the service as a claim.
+			if w, ok := store.(storage.Store); ok {
+				if err := w.UpdateSession(ctx, sess); err != nil {
+					log.Errorf("failed to update session transcript path: %v", err)
+				}
 			}
 			return
 		}
 	}
-}
-
-func collectSessionCost(sess *session.Session) {
-	if sess.TranscriptPath == "" {
-		return
-	}
-
-	var collector cost.TokenCollector
-	switch sess.AgentName {
-	case agent.AgentClaudeCode:
-		collector = claudecode.NewTranscriptCollector()
-	default:
-		return
-	}
-
-	usage, err := collector.Collect(context.Background(), sess.TranscriptPath)
-	if err != nil {
-		log.Debugf("failed to collect cost data: %v", err)
-		return
-	}
-	if usage == nil {
-		return
-	}
-
-	provider, err := pricing.NewBundledProvider()
-	if err != nil {
-		log.Debugf("failed to create pricing provider: %v", err)
-		return
-	}
-
-	calc := cost.NewDefaultCalculator(provider, sess.ID, collector.Source())
-	sc, err := calc.Calculate(usage)
-	if err != nil {
-		log.Debugf("failed to calculate cost: %v", err)
-		return
-	}
-	if sc == nil {
-		return
-	}
-
-	sess.InputTokens = sc.Usage.InputTokens
-	sess.OutputTokens = sc.Usage.OutputTokens
-	sess.CacheReadTokens = sc.Usage.CacheReadTokens
-	sess.CacheWriteTokens = sc.Usage.CacheWriteTokens
-	sess.EstimatedCostUSD = sc.TotalCost
-	sess.ModelUsage = sc.Usage.Models
-	sess.CostSource = string(sc.Source)
-	now := sc.ComputedAt
-	sess.CostComputedAt = &now
 }

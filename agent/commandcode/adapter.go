@@ -100,3 +100,6 @@ func Register(registry *agent.Registry, privacyChecker *privacy.Redactor, loggin
 
 // Ensure Adapter implements agent.Adapter
 var _ agent.Adapter = (*Adapter)(nil)
+
+// ProcessNames implements agent.ProcessNamer.
+func (a *Adapter) ProcessNames() []string { return []string{"command-code", "cmdc", "commandcode"} }

@@ -46,6 +46,9 @@ type Presenter interface {
 	// RenderDoctor renders the doctor check results.
 	RenderDoctor(result *DoctorView) error
 
+	// RenderProtection renders the outcome of a self-protection pass.
+	RenderProtection(view *ProtectionView) error
+
 	// RenderConfig renders the configuration.
 	RenderConfig(config *ConfigView) error
 

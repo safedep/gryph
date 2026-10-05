@@ -1,0 +1,166 @@
+# An approval on the terminal of the developer applies to the request
+# that asked and stores no grant: the same account could have forged the
+# answer. The same action asks again, and without an answer it blocks
+# with the request pending. The pending block names the request and the
+# command that shows it. Runs only in the privileged job on a Linux host.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!linux] skip 'the managed paths of this script are the Linux ones'
+[!exec:python3] skip 'needs python3 for a pseudo terminal'
+! exists /etc/safedep/gryph
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+mkdir $WORK/spool
+expandenv managed.yml
+exec install -D -m 644 $WORK/managed.yml /etc/safedep/gryph/config.yml
+exec install -m 644 policy.yaml /etc/safedep/gryph/policy.yaml
+exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir $WORK/state --spool-dir $WORK/spool --allow-root &
+exec gryph supervisor ready --socket /tmp/gryph-acceptance-hook.sock
+
+exec python3 terminal.py y npm.json gryph _hook claude-code PreToolUse
+stdout 'Approve\? \[y/N\]'
+
+execexit 2 python3 terminal.py - npm.json gryph _hook claude-code PreToolUse
+stdout 'Approve\? \[y/N\]'
+stdout 'This action needs approval\. Request [0-9a-f]{8} is pending\. Tell the user\. Do not retry until the user confirms that it is approved\. Check status: gryph policy approve show [0-9a-f]{8}'
+
+exec gryph policy approve list --format json --no-color
+stdout -count=1 '"state": "pending"'
+cp stdout list.json
+capture REQUEST '"id": "([0-9a-f]{8})' list.json
+exec gryph policy approve show $REQUEST --no-color
+stdout 'state +pending'
+stdout 'action +command_exec: npm install'
+stdout 'rules +acceptance-escalate-npm'
+stdout 'inline +true'
+exec gryph policy approve list --state all --format json --no-color
+stdout -count=1 '"state": "approved"'
+stdout -count=1 '"state": "pending"'
+
+# The receipt of the open request keeps escalate until an answer closes it.
+exec gryph policy approve history --format json --no-color
+stdout -count=1 '"decision": "approved"'
+stdout -count=1 '"decision": "escalate"'
+
+exec rm -rf /etc/safedep/gryph /root/.local/share/safedep /root/.config/safedep /root/.cache/safedep
+exec rmdir --ignore-fail-on-non-empty /etc/safedep
+-- managed.yml --
+policy:
+  enabled: true
+  log_all_evaluations: true
+  approval:
+    channels: [same-user-tty, local-admin]
+    min_assurance: local-admin
+    inline_wait: 3s
+supervisor:
+  enabled: true
+  socket: /tmp/gryph-acceptance-hook.sock
+  spool_dir: ${WORK}/spool
+-- policy.yaml --
+version: "1"
+rules:
+  - id: acceptance-escalate-npm
+    action: escalate
+    severity: high
+    min_assurance: same-user-tty
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "(?i)\\bnpm\\s+install\\b"
+    message: "npm install needs approval"
+  - id: acceptance-escalate-deploy
+    action: escalate
+    severity: high
+    match:
+      action_types: [command_exec]
+      command_patterns:
+        - "make deploy"
+    message: "a deploy needs an admin"
+-- npm.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {"command": "npm install", "description": "Install dependencies"},
+  "tool_use_id": "tool-use-001"
+}
+-- read.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {"file_path": "/home/user/project/main.go"},
+  "tool_use_id": "tool-use-002"
+}
+-- deploy.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {"command": "make deploy", "description": "Deploy"},
+  "tool_use_id": "tool-use-003"
+}
+-- terminal.py --
+# Run a hook with a pseudo terminal as its controlling terminal and answer
+# the approval prompt there.
+# usage: python3 terminal.py <answer|-> <payload|-> <command...>
+# The payload file is the stdin of the hook, or a dash keeps the stdin of
+# the helper. Stdout and stderr of the hook
+# are pipes, as under an agent. The terminal gets the answer when a
+# question that ends in [y/N] shows, and TERMINAL_PASSWORD when a line
+# that ends in "Password:" shows. A dash gives no answer. A command that
+# stays silent for a minute is killed. Everything the hook writes goes to
+# stdout, and the exit code is the hook's.
+import os
+import pty
+import select
+import sys
+
+answer, payload, command = sys.argv[1], sys.argv[2], sys.argv[3:]
+out_r, out_w = os.pipe()
+err_r, err_w = os.pipe()
+pid, fd = pty.fork()
+if pid == 0:
+    # One descriptor keeps the terminal open after the standard ones
+    # change, else the master reads end of file before the prompt.
+    os.set_inheritable(os.dup(0), True)
+    if payload != "-":
+        os.dup2(os.open(payload, os.O_RDONLY), 0)
+    os.dup2(out_w, 1)
+    os.dup2(err_w, 2)
+    os.execvp(command[0], command)
+os.close(out_w)
+os.close(err_w)
+seen = b""
+sent = False
+password = os.environ.get("TERMINAL_PASSWORD")
+password_sent = False
+open_fds = {fd, out_r, err_r}
+while open_fds:
+    ready, _, _ = select.select(list(open_fds), [], [], 60)
+    if not ready:
+        os.kill(pid, 9)
+        break
+    for r in ready:
+        try:
+            data = os.read(r, 4096)
+        except OSError:
+            data = b""
+        if not data:
+            open_fds.discard(r)
+            continue
+        sys.stdout.write(data.decode("utf-8", "replace"))
+        sys.stdout.flush()
+        if r == fd:
+            seen += data
+            if not sent and answer != "-" and b"[y/N]" in seen:
+                os.write(fd, (answer + "\n").encode())
+                sent = True
+            if password and not password_sent and b"Password:" in seen:
+                os.write(fd, (password + "\n").encode())
+                password_sent = True
+_, status = os.waitpid(pid, 0)
+sys.exit(os.waitstatus_to_exitcode(status))

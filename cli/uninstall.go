@@ -8,6 +8,7 @@ import (
 	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
@@ -19,6 +20,9 @@ func NewUninstallCmd() *cobra.Command {
 		purge         bool
 		dryRun        bool
 		restoreBackup bool
+		repairTimer   bool
+		managed       bool
+		asJSON        bool
 	)
 
 	cmd := &cobra.Command{
@@ -31,8 +35,15 @@ removes the database and configuration files as well.`,
 		Example: `  gryph uninstall
   gryph uninstall --agent claude-code
   gryph uninstall --purge
-  gryph uninstall --restore-backup`,
+  gryph uninstall --restore-backup
+  sudo gryph uninstall --managed --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if managed {
+				return runManagedUninstall(cmd, purge, dryRun, asJSON)
+			}
+			if asJSON {
+				return ErrConfig("invalid flags", fmt.Errorf("--json needs --managed"))
+			}
 			ctx := context.Background()
 
 			app, err := loadApp()
@@ -85,9 +96,9 @@ removes the database and configuration files as well.`,
 
 					// Log self-audit for failed uninstall
 					if !dryRun {
-						if err := logSelfAudit(ctx, app.Store, SelfAuditActionUninstall, adapter.Name(),
+						if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionUninstall, adapter.Name(),
 							map[string]interface{}{"error": err.Error()},
-							SelfAuditResultError, err.Error()); err != nil {
+							engine.SelfAuditResultError, err.Error()); err != nil {
 							return fmt.Errorf("failed to log self-audit: %w", err)
 						}
 					}
@@ -104,13 +115,13 @@ removes the database and configuration files as well.`,
 
 				// Log self-audit for successful uninstall
 				if !dryRun && len(result.HooksRemoved) > 0 {
-					if err := logSelfAudit(ctx, app.Store, SelfAuditActionUninstall, adapter.Name(),
+					if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionUninstall, adapter.Name(),
 						map[string]interface{}{
 							"hooks_removed":    result.HooksRemoved,
 							"backups_restored": result.BackupsRestored,
 							"restore_backup":   restoreBackup,
 						},
-						SelfAuditResultSuccess, ""); err != nil {
+						engine.SelfAuditResultSuccess, ""); err != nil {
 						return fmt.Errorf("failed to log self-audit: %w", err)
 					}
 				}
@@ -119,12 +130,12 @@ removes the database and configuration files as well.`,
 			// Purge database and config if requested
 			if purge && !dryRun {
 				// Log purge before removing files
-				if err := logSelfAudit(ctx, app.Store, SelfAuditActionPurge, "",
+				if err := engine.LogSelfAudit(ctx, app.Store, engine.SelfAuditActionPurge, "",
 					map[string]interface{}{
 						"database_removed": app.Config.GetDatabasePath(),
 						"config_removed":   app.Paths.ConfigFile,
 					},
-					SelfAuditResultSuccess, ""); err != nil {
+					engine.SelfAuditResultSuccess, ""); err != nil {
 					return fmt.Errorf("failed to log self-audit: %w", err)
 				}
 
@@ -137,6 +148,10 @@ removes the database and configuration files as well.`,
 				}
 			}
 
+			if repairTimer && !dryRun {
+				view.RepairTimer = removeRepairTimer(ctx)
+			}
+
 			return app.Presenter.RenderUninstall(view)
 		},
 	}
@@ -145,6 +160,9 @@ removes the database and configuration files as well.`,
 	cmd.Flags().BoolVar(&purge, "purge", false, "also remove database and configuration")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be removed")
 	cmd.Flags().BoolVar(&restoreBackup, "restore-backup", false, "restore backed-up hooks if available")
+	cmd.Flags().BoolVar(&repairTimer, "repair-timer", false, "also remove the timer that runs gryph supervisor reconcile")
+	cmd.Flags().BoolVar(&managed, "managed", false, "as root: remove the managed hook entries, the Gryph entries in every home, and the managed policy and configuration")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "with --managed: print the report as JSON")
 
 	return cmd
 }

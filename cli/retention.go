@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/safedep/dry/log"
+	"github.com/safedep/gryph/engine"
 	"github.com/safedep/gryph/storage"
 	"github.com/spf13/cobra"
 )
@@ -41,7 +42,7 @@ func retentionBuckets(store storage.Store, eventDays, contextDays, receiptDays i
 		{
 			nounPlural:  "events",
 			days:        eventDays,
-			auditAction: SelfAuditActionRetentionCleanup,
+			auditAction: engine.SelfAuditActionRetentionCleanup,
 			auditKey:    "events_deleted",
 			cutoffKey:   "cutoff_time",
 			daysKey:     "retention_days",
@@ -52,7 +53,7 @@ func retentionBuckets(store storage.Store, eventDays, contextDays, receiptDays i
 		{
 			nounPlural:  "context actions",
 			days:        contextDays,
-			auditAction: SelfAuditActionContextCleanup,
+			auditAction: engine.SelfAuditActionContextCleanup,
 			auditKey:    "aarm_context_actions_deleted",
 			cutoffKey:   "cutoff",
 			daysKey:     "context_retention_days",
@@ -62,7 +63,7 @@ func retentionBuckets(store storage.Store, eventDays, contextDays, receiptDays i
 		{
 			nounPlural:  "receipts",
 			days:        receiptDays,
-			auditAction: SelfAuditActionReceiptCleanup,
+			auditAction: engine.SelfAuditActionReceiptCleanup,
 			auditKey:    "aarm_receipts_deleted",
 			cutoffKey:   "cutoff",
 			daysKey:     "receipt_retention_days",
@@ -72,7 +73,7 @@ func retentionBuckets(store storage.Store, eventDays, contextDays, receiptDays i
 		{
 			nounPlural:  "deferred actions",
 			days:        receiptDays,
-			auditAction: SelfAuditActionDeferralCleanup,
+			auditAction: engine.SelfAuditActionDeferralCleanup,
 			auditKey:    "aarm_deferred_actions_deleted",
 			cutoffKey:   "cutoff",
 			daysKey:     "receipt_retention_days",
@@ -111,8 +112,8 @@ func runRetentionDelete(ctx context.Context, w io.Writer, store storage.Store, b
 			b.cutoffKey: cutoff.Format(time.RFC3339),
 			b.daysKey:   b.days,
 		}
-		if err := logSelfAudit(ctx, store, b.auditAction, "",
-			details, SelfAuditResultSuccess, ""); err != nil {
+		if err := engine.LogSelfAudit(ctx, store, b.auditAction, "",
+			details, engine.SelfAuditResultSuccess, ""); err != nil {
 			log.Errorf("failed to log self-audit: %v", err)
 		}
 	}

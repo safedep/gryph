@@ -117,6 +117,7 @@ type Mediator struct {
 	identityCfg  IdentityConfig
 	cfg          MediatorConfig
 	policyHash   []byte
+	degraded     bool
 
 	stripsContent func(event *events.Event) bool
 }
@@ -136,6 +137,15 @@ func WithCELEntries(n int) MediatorOption {
 		if n > 0 {
 			m.celEntries = n
 		}
+	}
+}
+
+// WithDegraded marks the Mediator as one that runs with no session
+// context: every rule that reads context.* blocks. Only the hook client
+// sets it, in local-ephemeral mode.
+func WithDegraded() MediatorOption {
+	return func(m *Mediator) {
+		m.degraded = true
 	}
 }
 
@@ -267,6 +277,9 @@ func NewMediator(policy *pdp.Policy, opts ...MediatorOption) (*Mediator, error) 
 			FreshSessionSeconds:   m.deferralCfg.FreshSessionSeconds,
 			ConflictTriggersDefer: m.deferralCfg.ConflictTriggersDefer,
 		}),
+	}
+	if m.degraded {
+		pdpOpts = append(pdpOpts, pdp.WithDegraded())
 	}
 	engine, err := pdp.New(policy, pdpOpts...)
 	if err != nil {
@@ -524,13 +537,19 @@ func (m *Mediator) handleEscalate(ctx context.Context, action, stored *model.Act
 	}
 
 	req := &approval.Request{
-		SessionID: action.SessionID,
-		EventID:   action.EventID,
-		ActionID:  action.ID,
-		Action:    action,
-		Snapshot:  snapshot,
-		Rule:      decision,
-		Timeout:   m.cfg.ApprovalTimeout,
+		SessionID:    action.SessionID,
+		EventID:      action.EventID,
+		ActionID:     action.ID,
+		Action:       action,
+		Snapshot:     snapshot,
+		Rule:         decision,
+		Timeout:      m.cfg.ApprovalTimeout,
+		MinAssurance: approval.Assurance(decision.MinAssurance),
+		Digest:       approval.ActionDigest(action),
+		PeerTrust:    action.PeerTrust,
+	}
+	if rec != nil {
+		req.ReceiptSequence = rec.Sequence
 	}
 	m.emitAudit(ctx, ApprovalAudit{
 		Action:   approval.AuditActionRequested,
@@ -539,6 +558,19 @@ func (m *Mediator) handleEscalate(ctx context.Context, action, stored *model.Act
 	})
 
 	outcome, aerr := m.approval.Request(ctx, req)
+	if ch, ok := m.approval.(approval.Channel); ok && req.MinAssurance != "" && !ch.Assurance().Meets(req.MinAssurance) {
+		// The rule asks for more than this channel gives. A weaker answer
+		// never counts, so the request denies before anyone answers.
+		outcome = &approval.Outcome{
+			Decision:  approval.DecisionDeny,
+			Approver:  "system",
+			Note:      fmt.Sprintf("no approval channel meets min_assurance %s", req.MinAssurance),
+			DecidedAt: time.Now().UTC(),
+			Channel:   string(ch.Assurance()),
+			Assurance: ch.Assurance(),
+		}
+		aerr = nil
+	}
 	if outcome == nil {
 		// Fail closed: a nil outcome (with or without an error) must never
 		// fall through to the switch below, which would panic on a nil
@@ -568,6 +600,8 @@ func (m *Mediator) handleEscalate(ctx context.Context, action, stored *model.Act
 		m.emitAudit(ctx, ApprovalAudit{Action: approval.AuditActionGranted, Request: req, Decision: decision, Outcome: outcome})
 	case approval.DecisionTimeout:
 		m.emitAudit(ctx, ApprovalAudit{Action: approval.AuditActionTimeout, Request: req, Decision: decision, Outcome: outcome})
+	case approval.DecisionPending:
+		m.emitAudit(ctx, ApprovalAudit{Action: approval.AuditActionPending, Request: req, Decision: decision, Outcome: outcome})
 	default:
 		m.emitAudit(ctx, ApprovalAudit{Action: approval.AuditActionDenied, Request: req, Decision: decision, Outcome: outcome})
 	}
@@ -601,6 +635,21 @@ func (m *Mediator) applyApprovalOutcome(ctx context.Context, action *model.Actio
 		if outcome.Note != "" {
 			message = outcome.Note
 		}
+	case approval.DecisionPending:
+		// The request is open. The receipt keeps the escalate decision
+		// until an answer or the expiry closes it. The note is the text the
+		// agent and the user read. A hook after the action cannot stop
+		// it, so the note goes as guidance.
+		resultStatus = string(model.ResultBlocked)
+		coreDecision = coresecurity.DecisionBlock
+		if action.Phase != model.PhasePre {
+			resultStatus = string(model.ResultSuccess)
+			coreDecision = coresecurity.DecisionGuidance
+		}
+		message = "Approval pending"
+		if outcome.Note != "" {
+			message = outcome.Note
+		}
 	default:
 		decisionValue = receipt.DecisionDenied
 		resultStatus = string(model.ResultRejected)
@@ -612,8 +661,15 @@ func (m *Mediator) applyApprovalOutcome(ctx context.Context, action *model.Actio
 	}
 
 	if rec != nil && rec.Sequence > 0 {
-		if err := m.receipt.UpdateDecision(ctx, action.SessionID, rec.Sequence, decisionValue, resultStatus, outcome.Note); err != nil {
-			log.Warnf("aarm: receipt update decision: %v", err)
+		if decisionValue != "" {
+			if err := m.receipt.UpdateDecision(ctx, action.SessionID, rec.Sequence, decisionValue, resultStatus, outcome.Note); err != nil {
+				log.Warnf("aarm: receipt update decision: %v", err)
+			}
+		}
+		if outcome.Channel != "" || outcome.RequestID != uuid.Nil {
+			if err := m.receipt.UpdateApproval(ctx, action.SessionID, rec.Sequence, outcome.Meta()); err != nil {
+				log.Warnf("aarm: receipt update approval: %v", err)
+			}
 		}
 	}
 

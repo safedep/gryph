@@ -51,6 +51,11 @@ func (a *actionPaths) runsGryphHook() bool {
 	return s != nil && s.GryphHook
 }
 
+func (a *actionPaths) runsGryphResolve() bool {
+	s := a.shellAnalysis()
+	return s != nil && s.GryphResolve
+}
+
 // actionPath returns the action path and its resolved form. An agent can
 // report a relative path, "~", "..", or a trailing slash, so a rule matches
 // either form.

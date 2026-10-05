@@ -39,7 +39,7 @@ func (AuditEvent) Fields() []ent.Field {
 		field.String("working_directory").
 			Optional(),
 		field.Enum("action_type").
-			Values("file_read", "file_write", "file_delete", "command_exec", "network_request", "tool_use", "session_start", "session_end", "notification", "subagent_start", "subagent_stop", "user_prompt", "unknown"),
+			Values("file_read", "file_write", "file_delete", "command_exec", "network_request", "tool_use", "session_start", "session_end", "notification", "subagent_start", "subagent_stop", "user_prompt", "tamper", "unknown"),
 		field.String("tool_name").
 			Optional(),
 		field.Enum("result_status").
@@ -76,6 +76,14 @@ func (AuditEvent) Fields() []ent.Field {
 		field.String("tool_call_id").
 			Optional().
 			Comment("Agent identifier of the tool call, shared by its pre and post events"),
+		// imported marks a row that gryph supervisor import copied from a
+		// user's own database into the partition of the decision service.
+		// The user could have changed it before the import, so a reader
+		// keeps it apart from a row the service recorded itself.
+		field.Bool("imported").Default(false),
+		// peer_trust is the trust of the connection that carried the event
+		// to the decision service.
+		field.String("peer_trust").Optional(),
 		field.UUID("linked_event_id", uuid.UUID{}).
 			Optional().
 			Nillable().

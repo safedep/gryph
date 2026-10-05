@@ -185,8 +185,34 @@ func (p *CSVPresenter) RenderDoctor(result *DoctorView) error {
 		})
 	}
 
+	if len(result.Protection) > 0 {
+		_ = p.writer.Write([]string{})
+		p.writeProtection(&result.ProtectionView)
+	}
+	if len(result.Posture) > 0 {
+		_ = p.writer.Write([]string{})
+		_ = p.writer.Write([]string{"posture", "value", "status", "note"})
+		for _, row := range result.Posture {
+			_ = p.writer.Write([]string{row.Name, row.Value, row.Status, row.Note})
+		}
+	}
+
 	p.writer.Flush()
 	return p.writer.Error()
+}
+
+// RenderProtection renders a self-protection pass as CSV: one row per asset.
+func (p *CSVPresenter) RenderProtection(view *ProtectionView) error {
+	p.writeProtection(view)
+	p.writer.Flush()
+	return p.writer.Error()
+}
+
+func (p *CSVPresenter) writeProtection(view *ProtectionView) {
+	_ = p.writer.Write([]string{"asset", "agent", "level", "provider", "drift", "detail", "profile"})
+	for _, row := range view.Protection {
+		_ = p.writer.Write([]string{row.Asset, row.Agent, row.Level, row.Provider, row.Drift, row.Detail, view.Profile})
+	}
 }
 
 // RenderConfig renders the configuration as CSV.

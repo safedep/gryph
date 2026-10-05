@@ -3,228 +3,113 @@ package cli
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net"
 	"os"
 
 	"github.com/safedep/dry/log"
-	aarmsec "github.com/safedep/gryph/aarm"
-	"github.com/safedep/gryph/agent"
-	"github.com/safedep/gryph/agent/claudecode"
-	"github.com/safedep/gryph/agent/codex"
-	"github.com/safedep/gryph/agent/commandcode"
-	"github.com/safedep/gryph/agent/cursor"
-	"github.com/safedep/gryph/agent/devin"
-	"github.com/safedep/gryph/agent/gemini"
-	"github.com/safedep/gryph/agent/opencode"
-	"github.com/safedep/gryph/agent/piagent"
-	"github.com/safedep/gryph/agent/windsurf"
 	"github.com/safedep/gryph/config"
-	"github.com/safedep/gryph/core/privacy"
+	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/security"
-	"github.com/safedep/gryph/decision"
+	"github.com/safedep/gryph/core/session"
+	"github.com/safedep/gryph/decision/ipc"
+	"github.com/safedep/gryph/engine"
+	"github.com/safedep/gryph/hookside"
 	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/storage"
+	"github.com/safedep/gryph/storage/remote"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
 )
 
-// App holds the application dependencies.
+// App holds the runtime and the presenter of one command run.
 type App struct {
-	Config    *config.Config
-	Store     storage.Store
-	Registry  *agent.Registry
+	*engine.Runtime
 	Presenter tui.Presenter
-	Paths     *config.Paths
-	Security  *security.Evaluator
-	Redactor  *privacy.Redactor
-
-	exportKey []byte
-
-	// policyCheck holds the lazily-loaded AARM policy check, when the policy
-	// layer is enabled. Used by cli/hook.go to reach the underlying Mediator
-	// for post-hook RecordResult calls.
-	policyCheck *lazyPolicyCheck
+	// Reads is the store of the read commands: the local store, or the
+	// partition of this account at the decision service on a managed
+	// host. InitReadStore sets it.
+	Reads  storage.ReadStore
+	remote *ipc.Client
 }
 
-// AarmMediator returns the loaded AARM Mediator, or nil if policy is
-// disabled, has not been used yet, or failed to load.
-func (a *App) AarmMediator() *aarmsec.Mediator {
-	if a == nil || a.policyCheck == nil {
+// InitReadStore opens the store of the read commands. Under a managed
+// configuration with the decision service on, the hooks record nothing in
+// the user's database, so the reads go to the service over the socket and
+// come back from the partition of this account. The socket passes the same
+// identity check as in the hook. Elsewhere it opens the local database.
+func (a *App) InitReadStore(ctx context.Context) error {
+	if !clientMode(a.Config) {
+		if err := a.InitStore(ctx); err != nil {
+			return err
+		}
+		a.Reads = a.Store
 		return nil
 	}
-	return a.policyCheck.Mediator()
+	socket := a.Config.Supervisor.SocketPath()
+	client, err := ipc.Dial(ctx, socket, ipc.DialOptions{Version: version.Version, VerifyServer: func(conn net.Conn) error {
+		return hookside.VerifyServer(conn, socket, a.Config.Supervisor.ServerAccount())
+	}})
+	if err != nil {
+		return fmt.Errorf("the decision service at %s: %w", socket, err)
+	}
+	a.remote = client
+	a.Reads = remote.New(client)
+	return nil
+}
+
+// SetSessionCost stores the cost totals sc that this process read from
+// the transcript of sess: on the local store, or at the service as a
+// claim of this account. Without new totals there is nothing to send.
+func (a *App) SetSessionCost(ctx context.Context, sess *session.Session, sc *cost.SessionCost) error {
+	if a.remote != nil {
+		if sc == nil {
+			return nil
+		}
+		return a.remote.SessionCost(ctx, ipc.SessionCost{SessionID: sess.ID, Cost: sc})
+	}
+	return a.Store.UpdateSession(ctx, sess)
+}
+
+// Approve sends an answer to an approval request to the decision service.
+// Only the service keeps the queue, so there is no local path.
+func (a *App) Approve(ctx context.Context, req ipc.Approve) (*ipc.ApproveResult, error) {
+	if a.remote == nil {
+		return nil, errApprovalNeedsService
+	}
+	return a.remote.Approve(ctx, req)
+}
+
+// Close releases the store and the connection to the service.
+func (a *App) Close() error {
+	var errs []error
+	if a.remote != nil {
+		errs = append(errs, a.remote.Close())
+		a.remote = nil
+	}
+	errs = append(errs, a.Runtime.Close())
+	return errors.Join(errs...)
 }
 
 // NewApp creates a new App with the given configuration.
 func NewApp(cfg *config.Config) (*App, error) {
-	paths := config.ResolvePaths()
-
-	// Merge default patterns with config patterns
-	// There may be duplicates, but that's okay for now.
-	sensitivePathPatterns := append(privacy.DefaultSensitivePatterns(), cfg.Privacy.SensitivePaths...)
-	redactPatterns := append(privacy.DefaultRedactPatterns(), cfg.Privacy.RedactPatterns...)
-
-	// Create shared privacy checker
-	privacyChecker, err := privacy.NewRedactor(sensitivePathPatterns, redactPatterns)
+	rt, err := engine.New(cfg)
 	if err != nil {
 		return nil, err
 	}
-
-	registry := agent.NewRegistry()
-	registerAdapters(registry, privacyChecker, cfg)
-
-	// Create presenter based on config
 	presenter := tui.NewPresenter(tui.FormatTable, tui.PresenterOptions{
 		Writer:    os.Stdout,
 		UseColors: cfg.ShouldUseColors(),
 	})
-
-	var app *App
-
-	policyCfg := cfg.EffectivePolicy()
-	failOpen := policyCfg.FailMode == string(aarmsec.FailOpen)
-	sec := security.New(&security.Config{FailOpen: failOpen})
-	var policyCheck *lazyPolicyCheck
-	if policyCfg.Enabled {
-		policyCheck = newLazyPolicyCheck(cfg, paths, func() storage.Store {
-			if app == nil {
-				return nil
-			}
-			return app.Store
-		})
-		sec.RegisterCheck(policyCheck)
-	}
-
-	// Invoke any check factories that external binaries registered during
-	// init() via RegisterCheckFactory. Factories that return nil are
-	// skipped so callers can conditionally opt out based on config.
-	for _, f := range checkFactories {
-		if c := f(cfg); c != nil {
-			sec.RegisterCheck(c)
-		}
-	}
-
-	app = &App{
-		Config:      cfg,
-		Registry:    registry,
-		Presenter:   presenter,
-		Paths:       paths,
-		Security:    sec,
-		Redactor:    privacyChecker,
-		policyCheck: policyCheck,
-	}
-	return app, nil
+	return &App{Runtime: rt, Presenter: presenter}, nil
 }
-
-// ExportProfile returns the named export profile, keyed with the export key
-// of the install. It creates the key on first use.
-func (a *App) ExportProfile(name string) (privacy.ExportProfile, error) {
-	p, err := a.Config.ExportProfile(name)
-	if err != nil {
-		return privacy.ExportProfile{}, err
-	}
-	if a.exportKey == nil {
-		key, err := config.LoadOrCreateExportKey(a.Config.ExportKeyFile())
-		if err != nil {
-			return privacy.ExportProfile{}, err
-		}
-		a.exportKey = key
-	}
-	return p.WithDigestKey(a.exportKey), nil
-}
-
-// DecisionService returns the in-process decision service for hook events.
-// Call it after InitStore.
-func (a *App) DecisionService() decision.Service {
-	return decision.NewLocal(a.Store, a.Security, a.Redactor, a.Config.GetAgentLoggingLevel,
-		decision.WithResultRecorder(func() decision.ResultRecorder {
-			if m := a.AarmMediator(); m != nil {
-				return m
-			}
-			return nil
-		}),
-		decision.WithSessionEndHook(collectSessionCost),
-		decision.WithHookSpecs(a.Registry.HookSpec),
-		decision.WithClassifier(a.classifier()),
-	)
-}
-
-// classifier returns the content classifier, or nil when classification is
-// off. A nil *classify.Heuristic in the interface would not be nil, so this
-// returns the interface.
-func (a *App) classifier() decision.Classifier {
-	if h := newClassifier(a.Config); h != nil {
-		return h
-	}
-	return nil
-}
-
-// InitStore initializes the database store.
-func (a *App) InitStore(ctx context.Context) error {
-	dbPath := a.Config.GetDatabasePath()
-	store, err := storage.NewSQLiteStore(dbPath)
-	if err != nil {
-		return err
-	}
-	if err := store.Init(ctx); err != nil {
-		return err
-	}
-	a.Store = store
-	a.recordPathMigration(ctx)
-	return nil
-}
-
-// recordPathMigration writes the self-audit entry for a completed layout
-// migration. The migration runs in the config package before any store
-// exists, so the record arrives through a marker file that the first
-// store-opening command consumes.
-func (a *App) recordPathMigration(ctx context.Context) {
-	record := config.ConsumeMigrationMarker()
-	if record == nil {
-		return
-	}
-
-	details := map[string]interface{}{"moves": record.Moves}
-	if len(record.Warnings) > 0 {
-		details["warnings"] = record.Warnings
-	}
-
-	if err := logSelfAudit(ctx, a.Store, SelfAuditActionPathMigration, "", details,
-		SelfAuditResultSuccess, ""); err != nil {
-		log.Warnf("failed to log path migration self-audit: %v", err)
-	}
-}
-
-// Close closes the application resources.
-func (a *App) Close() error {
-	if a.Store != nil {
-		return a.Store.Close()
-	}
-	return nil
-}
-
-// checkFactories is the registry of external security-check factories.
-// External binaries composing gryph as a library call RegisterCheckFactory
-// during init() to add Checks that NewApp will register on the security
-// evaluator alongside the built-in placeholder check.
-var checkFactories []func(cfg *config.Config) security.Check
 
 // RegisterCheckFactory registers a factory that produces a security.Check.
-// Intended for external binaries that import gryph as a library and want to
-// contribute additional security checks without modifying this package.
-//
-// Call order: typically from init() in a package blank-imported by the
-// external binary's main. Each registered factory is invoked once per
-// NewApp() call, and the returned Check (if non-nil) is added to the
-// evaluator. Factories that return nil are ignored — this lets callers
-// conditionally enable/disable checks based on the provided *config.Config.
-//
-// This function is not safe for concurrent use. Register factories before
-// any goroutine calls NewApp.
+// External binaries that import gryph as a library call it from init() to
+// add checks. See engine.RegisterCheckFactory.
 func RegisterCheckFactory(f func(cfg *config.Config) security.Check) {
-	if f == nil {
-		return
-	}
-	checkFactories = append(checkFactories, f)
+	engine.RegisterCheckFactory(f)
 }
 
 // GlobalFlags holds the global command flags.
@@ -276,6 +161,7 @@ native hook systems to create a comprehensive audit trail of all agent actions.`
 	rootCmd.AddCommand(
 		NewInstallCmd(),
 		NewUninstallCmd(),
+		newUninstallUserCmd(),
 		NewStatusCmd(),
 		NewDoctorCmd(),
 		NewLogsCmd(),
@@ -295,6 +181,8 @@ native hook systems to create a comprehensive audit trail of all agent actions.`
 		NewCostCmd(),
 		NewVersionCmd(),
 		NewAarmCmd(),
+		NewSupervisorCmd(),
+		NewRunCmd(),
 	)
 
 	return rootCmd
@@ -341,30 +229,4 @@ func getFormat(format string) tui.Format {
 	default:
 		return tui.FormatTable
 	}
-}
-
-// registerAdapters registers every supported agent adapter. It is the single
-// list of adapters, so the self-protection globs come from the same source.
-func registerAdapters(registry *agent.Registry, privacyChecker *privacy.Redactor, cfg *config.Config) {
-	claudecode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentClaudeCode), cfg.Logging.ContentHash)
-	cursor.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCursor), cfg.Logging.ContentHash)
-	gemini.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentGemini), cfg.Logging.ContentHash)
-	opencode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentOpenCode), cfg.Logging.ContentHash)
-	windsurf.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentWindsurf), cfg.Logging.ContentHash)
-	piagent.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentPiAgent), cfg.Logging.ContentHash)
-	codex.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCodex), cfg.Logging.ContentHash)
-	devin.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentDevin), cfg.Logging.ContentHash)
-	commandcode.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentCommandCode), cfg.Logging.ContentHash)
-
-	// For now, let us keep openclaw agent disabled because it is non-functional
-	// openclaw.Register(registry, privacyChecker, cfg.GetAgentLoggingLevel(agent.AgentOpenClaw), cfg.Logging.ContentHash)
-}
-
-// hookConfigGlobs returns the hook config globs of every supported adapter.
-// It does not need a loaded App, so `gryph policy list` works when the app
-// fails to load.
-func hookConfigGlobs() []string {
-	registry := agent.NewRegistry()
-	registerAdapters(registry, nil, config.Default())
-	return registry.HookConfigGlobs()
 }

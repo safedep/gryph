@@ -1,6 +1,6 @@
 # AARM / Policy Layer Developer Guide
 
-This guide covers the `aarm/` packages and their CLI wiring in `cli/policy.go`.
+This guide covers the `aarm/` packages and their wiring in `engine/policy.go`.
 It targets contributors and AI agents that change policy evaluation, receipts,
 context, approvals, or deferrals.
 
@@ -12,8 +12,8 @@ guidance decision, and records a tamper-evident receipt. The requirement set
 
 ## Entry point
 
-The layer implements the `core/security.Check` interface. `cli/root.go`
-registers `lazyPolicyCheck` (in `cli/policy.go`) with the security `Evaluator`.
+The layer implements the `core/security.Check` interface. `engine.New`
+registers `lazyPolicyCheck` (in `engine/policy.go`) with the security `Evaluator`.
 The hook side in `cli/hook.go` parses the agent payload and calls
 `decision.Service.Handle`. The in-process `decision.Local` labels each
 content value, redacts, applies the logging level (see
@@ -24,7 +24,7 @@ which calls the check. The session is an explicit argument to `Evaluate` and
 - `lazyPolicyCheck` defers policy load until the first hook event. A broken
   policy file must not lock the user out of `gryph policy validate` and `test`.
 - `lazyPolicyCheck.load` builds the `aarm.Mediator` through
-  `loadPolicyMediator`. That function is the single wiring site: it reads
+  `engine.LoadPolicyMediator`. That function is the single wiring site: it reads
   `config.PolicyConfig`, opens sources, and installs every optional component
   through `MediatorOption` values.
 - The `Mediator` is the AARM implementation of `security.Check`.
@@ -69,7 +69,7 @@ write the execution outcome to the accumulator row and the receipt row.
 | `aarm/accumulator` | Context Accumulator interface. Per-session action memory feeding `context.*` CEL variables. `Nop` and SQLite implementations. |
 | `aarm/accumulator/contextchain` | Per-session hash chain over context-action rows. |
 | `aarm/receipt` | Append-only, hash-chained receipt log. Hashing, Ed25519 signing, chain verify, JSONL export, log verify. |
-| `aarm/approval` | Approval Service for `escalate`. `Nop` (deny) and `CLIPrompt`. |
+| `aarm/approval` | Approval Service for `escalate`. `Nop` (deny) and `CLIPrompt`. The assurance ladder, the grant scopes and the action digest. The decision service brings its own service. |
 | `aarm/identity` | Captures human principal, service identity, role scope at the mediation boundary. |
 | `aarm/classify` | Heuristic data classifier. It returns `privacy.Class` values (secret, pii, source_code, ...). Fail-safe wrapper defaults to `unknown_sensitive`. The decision service uses the heuristic without the wrapper for content labels. |
 | `aarm/injectscore` | Heuristic prompt-injection score for tool calls, post events and intents. |
@@ -241,7 +241,7 @@ does not become a block. `message` is a Go
 
 ## Loader and self-protection
 
-`buildPolicyLoader` in `cli/policy.go` resolves three sources in order: the
+`engine.BuildPolicyLoader` resolves three sources in order: the
 global file `${ConfigDir}/policy.yaml` (`FileSource`), the directory
 `${ConfigDir}/policies/*.yaml` (`DirSource`, one document per file, sorted by
 name), and the built-in source. `policyLoaderSources` is the single definition
@@ -272,9 +272,11 @@ config, database, signing keys, agent hook configs). The rule
 `command_exec`. The rule `gryph-builtin-protected-reads` covers `file_read`
 and `command_exec` with `file_access: [read]`. The rule
 `gryph-builtin-hook-command` blocks a `command_exec` that runs
-`gryph _hook`, through `action.gryph_hook` (`shellcmd.Analysis.GryphHook`).
-The check is best effort. The walker calls `runsGryphHook` on each call that
-it visits, in the same single pass that finds the paths. So the linear
+`gryph _hook`, through `action.gryph_hook` (`shellcmd.Analysis.GryphHook`),
+or `gryph policy approve resolve` and `gryph policy deferrals resolve`,
+through `action.gryph_resolve` (`shellcmd.Analysis.GryphResolve`). The
+check is best effort. The walker calls `runsGryphHook` and
+`runsGryphResolve` on each call that it visits, in the same single pass that finds the paths. So the linear
 wrapper parsing and the call budget cover it, and the check reaches wrappers,
 `command`, `find -exec`, `bash -c`, and `eval` through the normal walk. The
 walker decodes ANSI-C quoting (`$'...'`) and expands braces first. A call
@@ -519,11 +521,11 @@ order, so `tar xfC a.tar dir` reads `a.tar` into `dir`.
 The operator toggles self-protection only through
 `policy.self_protection.enabled`. Inspect it with `gryph policy builtin`.
 
-`selfProtectionGlobs` in `cli/policy.go` builds the write globs, and
-`selfProtectionReadGlobs` builds the read globs. The Gryph paths come
+`engine.SelfProtectionGlobs` builds the write globs, and
+`engine.SelfProtectionReadGlobs` builds the read globs. The Gryph paths come
 from the config. The hook config paths come from each adapter's
 `HookConfigPaths()`, collected by `Registry.HookConfigGlobs()` over the adapters
-that `registerAdapters` in `cli/root.go` registers. To protect a new agent,
+that `engine.RegisterAdapters` registers. To protect a new agent,
 implement `HookConfigPaths()` in its adapter. Do not edit the loader.
 
 Self-protection is best effort. The shell parse cannot resolve unknown
@@ -576,6 +578,12 @@ verifier, or every existing chain fails verification.
   stores its `Reason`.
 - Export with `gryph policy receipts export`. Verify a chain with
   `gryph policy receipts verify-log`.
+- A tamper event (`engine/tamper.go`) is a receipt in the system session of
+  the account (`session.NewSystemSession`, `platform/account`). It goes
+  through the same generator with the decision `receipt.DecisionTamper`, so
+  the chain code does not know about it. The event payload is
+  `events.TamperPayload`. The receipt message is `TamperPayload.Summary()`,
+  so the hash covers the asset, the agent, the levels and the drift.
 
 ### Hash versions
 
@@ -683,9 +691,14 @@ so its classes must reach `context_states`.
   and `Action.HumanPrincipal` is empty, `Mediator.enforceIdentity` blocks before
   the PDP. A denied action is an attempt. It gets a context entry with the
   block decision, and it counts toward `context.total_actions`.
-- Escalate: `handleEscalate` calls the Approval Service. A nil outcome fails
-  closed (treated as deny). The four `approval_*` audit actions fire through
-  the `ApprovalAuditHook`.
+- Escalate: `handleEscalate` calls the Approval Service with the receipt
+  sequence, the rule's `min_assurance` and the action digest. A service that
+  implements `approval.Channel` and sits below the floor never answers: the
+  request denies first. A nil outcome fails closed (treated as deny). A
+  `pending` outcome blocks with the note of the service and keeps `escalate`
+  on the receipt. The five `approval_*` audit actions fire through the
+  `ApprovalAuditHook`, and `UpdateApproval` records the channel, the
+  assurance, the approver and the connection trust on the receipt.
 - Defer: `handleDefer` writes a defer receipt, then the `DeferralHook` persists
   the pending row and returns an operator hint spliced into the block message.
   Auto-defer triggers (fresh session, conflicting policies) live in the PDP.
@@ -696,13 +709,13 @@ so its classes must reach `context_states`.
 ## Extension points
 
 - Add a Mediator dependency: define a `MediatorOption` in `aarm/check.go` and
-  wire it in `loadPolicyMediator`.
+  wire it in `engine.LoadPolicyMediator`.
 - Add an agent adapter: implement `mediation.Adapter`. See
   `docs/agent-adapter.md`. Reuse `Common` for classify / injectscore / identity
   enrichment and `populateWellKnownParams` for argument promotion.
 - Cross-cutting audit or storage: the Mediator stays decoupled from `storage`
-  and `cli`. Hooks (`DeferralHook`, `ApprovalAuditHook`, `IdentityAuditHook`)
-  carry the CLI-shaped side effects out of `aarm`. Keep it that way.
+  and `engine`. Hooks (`DeferralHook`, `ApprovalAuditHook`, `IdentityAuditHook`)
+  carry the storage side effects out of `aarm`. Keep it that way.
 
 ## CLI surface
 

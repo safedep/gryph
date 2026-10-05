@@ -2,14 +2,12 @@
 // agent user, and the decision service, which audits and decides. Requests
 // and responses hold data only, so a later privileged supervisor can serve
 // the same Service over IPC.
-//
-// Known gap: the hook command still opens the store to write the hook-error
-// self-audit row. The supervisor work moves that write behind the service.
 package decision
 
 import (
 	"context"
 
+	"github.com/safedep/gryph/core/cost"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/security"
@@ -18,6 +16,20 @@ import (
 // Service handles one hook invocation end to end.
 type Service interface {
 	Handle(ctx context.Context, req *HookRequest) (*HookResponse, error)
+	// ReportHookError records a hook invocation that produced no decision,
+	// so the audit trail shows that the agent acted without one.
+	ReportHookError(ctx context.Context, e *HookError) error
+}
+
+// HookError describes a hook invocation that produced no decision: an
+// unknown agent, a payload that did not parse, or a failed Handle. The
+// service caps and redacts RawEvent before it stores anything.
+type HookError struct {
+	Agent    string `json:"agent"`
+	HookType string `json:"hook_type"`
+	RawSize  int    `json:"raw_size"`
+	RawEvent []byte `json:"raw_event,omitempty"`
+	Message  string `json:"message"`
 }
 
 // HookRequest is what the hook side sends to the decision service. A service
@@ -36,6 +48,22 @@ type HookRequest struct {
 	OutputTruncated bool           `json:"output_truncated,omitempty"`
 	Origin          privacy.Origin `json:"origin,omitempty"`
 	OriginSource    string         `json:"origin_source,omitempty"`
+	// Project is what the hook side found in the working directory. The
+	// service does not read the directory itself.
+	Project ProjectClaim `json:"project"`
+	// Cost holds the totals the hook side collected from the transcript on
+	// session end. The service stores them as client reported and does not
+	// open TranscriptPath.
+	Cost *cost.SessionCost `json:"cost,omitempty"`
+	// PeerTrust is what the decision service found out about the process
+	// behind the connection: agent, unknown or low. The service sets it
+	// and never reads it from the hook side.
+	PeerTrust string `json:"-"`
+}
+
+// ProjectClaim names the project of the session's working directory.
+type ProjectClaim struct {
+	Name string `json:"name,omitempty"`
 }
 
 // HookResponse is the decision the hook side renders for the agent.

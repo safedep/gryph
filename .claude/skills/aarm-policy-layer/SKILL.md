@@ -1,19 +1,19 @@
 ---
 name: aarm-policy-layer
-description: Use when working on Gryph's AARM security layer or policy engine. Trigger this whenever the user changes code under aarm/ or cli/policy.go, or works on policy evaluation, the PDP, policy rules, CEL conditions, receipts and the receipt hash chain, receipt signing, the context accumulator, approvals, deferrals, identity capture, data classification, injection scoring, or the self-protection rules. Also trigger on phrases like "policy engine", "policy decision point", "AARM", "receipt chain", "gryph policy", "policy rule", or "context accumulator", even when the user does not name a file.
+description: Use when working on Gryph's AARM security layer or policy engine. Trigger this whenever the user changes code under aarm/, engine/policy.go or cli/policy.go, or works on policy evaluation, the PDP, policy rules, CEL conditions, receipts and the receipt hash chain, receipt signing, the context accumulator, approvals, deferrals, identity capture, data classification, injection scoring, or the self-protection rules. Also trigger on phrases like "policy engine", "policy decision point", "AARM", "receipt chain", "gryph policy", "policy rule", or "context accumulator", even when the user does not name a file.
 ---
 
 # AARM / Policy Layer
 
 The full, current guide is `docs/aarm-dev.md`. It is the single source of truth for this task. Read it and follow it step by step.
 
-Do not change the AARM layer from memory. The layer spans about 15 packages under `aarm/`, plus the wiring in `cli/policy.go`. The request flow chains a normalize step, an identity gate, the context accumulator, the PDP, a decision branch, and a receipt write. A change in one step can break another. The doc maps the flow, the packages, and the extension points.
+Do not change the AARM layer from memory. The layer spans about 15 packages under `aarm/`, plus the wiring in `engine/policy.go` and the commands in `cli/policy.go`. The request flow chains a normalize step, an identity gate, the context accumulator, the PDP, a decision branch, and a receipt write. A change in one step can break another. The doc maps the flow, the packages, and the extension points.
 
 ## How to use this skill
 
 1. Read `docs/aarm-dev.md` in full.
 2. Use the package map to find the right package for your change.
-3. Add a Mediator dependency through a `MediatorOption` in `aarm/check.go`, then wire it in `loadPolicyMediator` in `cli/policy.go`.
+3. Add a Mediator dependency through a `MediatorOption` in `aarm/check.go`, then wire it in `LoadPolicyMediator` in `engine/policy.go`.
 4. Run `make test` and `make lint` before you finish. Run `make generate-schema` after any change to the policy schema or a payload type.
 
 ## Invariants

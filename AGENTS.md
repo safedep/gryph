@@ -21,15 +21,23 @@ core/           Domain models (events, sessions, audit, security) - most stable
 config/         Viper-based configuration
 storage/        SQLite + ent ORM
 agent/          Adapter pattern (claudecode/, cursor/ and more)
+hookside/       Work the hook process does as the agent user: project claim, transcript cost
 decision/       Decision service: label, redact, evaluate, and record one hook event
-cli/            Cobra commands as an App pattern
+decision/ipc/   Wire format between the hook client and the decision service: frames, bounds, the connection loop
+engine/         Runtime assembly: config, store, registry, policy check, decision service
+selfprotect/    Self-protection vocabulary: assets, levels, profiles, and the user-scope provider
+platform/       Operating-system specific code behind small interfaces (account identity, no-follow file access, scheduler, processes, kernel settings, peer credentials, socket listening)
+supervisor/     The decision service outside the agent user: one socket, a partition per peer uid, per-account limits. Imports engine, never cli. Opens files only through platform/nofollow (architecture test and forbidigo rule)
+cli/            Cobra commands as an App pattern over the engine runtime
 tui/            Output formatters (table, json, csv)
 ```
 
 ## Key Entry Points
 
 - `cmd/gryph/main.go` - Entry point
-- `cli/root.go` - App struct, dependency injection
+- `engine/engine.go` - Runtime struct, dependency injection
+- `cli/root.go` - Root command, global flags, App wrapper over the runtime
+- `hookside/hookside.go` - Builds the decision request with the hook side's claims
 - `decision/service.go` - Boundary between the hook side and the decision service
 - `agent/adapter.go` - Agent adapter interface
 - `storage/storage.go` - Store interface
@@ -80,6 +88,7 @@ tui/            Output formatters (table, json, csv)
 - `docs/agent-adapter.md` - Adding a new agent adapter
 - `docs/aarm-dev.md` - AARM / policy layer (`aarm/`, `cli/policy.go`)
 - `docs/content-labels.md` - Content labels, redaction, and logging levels (`core/privacy`, `decision/label.go`)
+- `docs/supervisor-dev.md` - The wire format between the hook client and the decision service (`decision/ipc`)
 
 ## IMPORTANT
 

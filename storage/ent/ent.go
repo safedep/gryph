@@ -12,6 +12,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/safedep/gryph/storage/ent/aarmapprovalgrant"
+	"github.com/safedep/gryph/storage/ent/aarmapprovalrequest"
 	"github.com/safedep/gryph/storage/ent/aarmdeferredaction"
 	"github.com/safedep/gryph/storage/ent/aarmreceipt"
 	"github.com/safedep/gryph/storage/ent/auditevent"
@@ -81,15 +83,17 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			aarmdeferredaction.Table: aarmdeferredaction.ValidColumn,
-			aarmreceipt.Table:        aarmreceipt.ValidColumn,
-			auditevent.Table:         auditevent.ValidColumn,
-			auditstreamcursor.Table:  auditstreamcursor.ValidColumn,
-			contextentry.Table:       contextentry.ValidColumn,
-			contextstate.Table:       contextstate.ValidColumn,
-			eventstreamcursor.Table:  eventstreamcursor.ValidColumn,
-			selfaudit.Table:          selfaudit.ValidColumn,
-			session.Table:            session.ValidColumn,
+			aarmapprovalgrant.Table:   aarmapprovalgrant.ValidColumn,
+			aarmapprovalrequest.Table: aarmapprovalrequest.ValidColumn,
+			aarmdeferredaction.Table:  aarmdeferredaction.ValidColumn,
+			aarmreceipt.Table:         aarmreceipt.ValidColumn,
+			auditevent.Table:          auditevent.ValidColumn,
+			auditstreamcursor.Table:   auditstreamcursor.ValidColumn,
+			contextentry.Table:        contextentry.ValidColumn,
+			contextstate.Table:        contextstate.ValidColumn,
+			eventstreamcursor.Table:   eventstreamcursor.ValidColumn,
+			selfaudit.Table:           selfaudit.ValidColumn,
+			session.Table:             session.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

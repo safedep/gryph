@@ -148,3 +148,9 @@ func Register(registry *agent.Registry, privacyChecker *privacy.Redactor, loggin
 
 // Ensure Adapter implements agent.Adapter
 var _ agent.Adapter = (*Adapter)(nil)
+
+// ProcessNames implements agent.ProcessNamer.
+func (a *Adapter) ProcessNames() []string { return []string{"cursor", "Cursor"} }
+
+// FailClosed implements agent.FailModeReporter.
+func (a *Adapter) FailClosed(ctx context.Context) (bool, error) { return FailClosed(ctx) }

@@ -16,6 +16,8 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/safedep/gryph/storage/ent/aarmapprovalgrant"
+	"github.com/safedep/gryph/storage/ent/aarmapprovalrequest"
 	"github.com/safedep/gryph/storage/ent/aarmdeferredaction"
 	"github.com/safedep/gryph/storage/ent/aarmreceipt"
 	"github.com/safedep/gryph/storage/ent/auditevent"
@@ -32,6 +34,10 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// AarmApprovalGrant is the client for interacting with the AarmApprovalGrant builders.
+	AarmApprovalGrant *AarmApprovalGrantClient
+	// AarmApprovalRequest is the client for interacting with the AarmApprovalRequest builders.
+	AarmApprovalRequest *AarmApprovalRequestClient
 	// AarmDeferredAction is the client for interacting with the AarmDeferredAction builders.
 	AarmDeferredAction *AarmDeferredActionClient
 	// AarmReceipt is the client for interacting with the AarmReceipt builders.
@@ -61,6 +67,8 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.AarmApprovalGrant = NewAarmApprovalGrantClient(c.config)
+	c.AarmApprovalRequest = NewAarmApprovalRequestClient(c.config)
 	c.AarmDeferredAction = NewAarmDeferredActionClient(c.config)
 	c.AarmReceipt = NewAarmReceiptClient(c.config)
 	c.AuditEvent = NewAuditEventClient(c.config)
@@ -160,17 +168,19 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                ctx,
-		config:             cfg,
-		AarmDeferredAction: NewAarmDeferredActionClient(cfg),
-		AarmReceipt:        NewAarmReceiptClient(cfg),
-		AuditEvent:         NewAuditEventClient(cfg),
-		AuditStreamCursor:  NewAuditStreamCursorClient(cfg),
-		ContextEntry:       NewContextEntryClient(cfg),
-		ContextState:       NewContextStateClient(cfg),
-		EventStreamCursor:  NewEventStreamCursorClient(cfg),
-		SelfAudit:          NewSelfAuditClient(cfg),
-		Session:            NewSessionClient(cfg),
+		ctx:                 ctx,
+		config:              cfg,
+		AarmApprovalGrant:   NewAarmApprovalGrantClient(cfg),
+		AarmApprovalRequest: NewAarmApprovalRequestClient(cfg),
+		AarmDeferredAction:  NewAarmDeferredActionClient(cfg),
+		AarmReceipt:         NewAarmReceiptClient(cfg),
+		AuditEvent:          NewAuditEventClient(cfg),
+		AuditStreamCursor:   NewAuditStreamCursorClient(cfg),
+		ContextEntry:        NewContextEntryClient(cfg),
+		ContextState:        NewContextStateClient(cfg),
+		EventStreamCursor:   NewEventStreamCursorClient(cfg),
+		SelfAudit:           NewSelfAuditClient(cfg),
+		Session:             NewSessionClient(cfg),
 	}, nil
 }
 
@@ -188,24 +198,26 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                ctx,
-		config:             cfg,
-		AarmDeferredAction: NewAarmDeferredActionClient(cfg),
-		AarmReceipt:        NewAarmReceiptClient(cfg),
-		AuditEvent:         NewAuditEventClient(cfg),
-		AuditStreamCursor:  NewAuditStreamCursorClient(cfg),
-		ContextEntry:       NewContextEntryClient(cfg),
-		ContextState:       NewContextStateClient(cfg),
-		EventStreamCursor:  NewEventStreamCursorClient(cfg),
-		SelfAudit:          NewSelfAuditClient(cfg),
-		Session:            NewSessionClient(cfg),
+		ctx:                 ctx,
+		config:              cfg,
+		AarmApprovalGrant:   NewAarmApprovalGrantClient(cfg),
+		AarmApprovalRequest: NewAarmApprovalRequestClient(cfg),
+		AarmDeferredAction:  NewAarmDeferredActionClient(cfg),
+		AarmReceipt:         NewAarmReceiptClient(cfg),
+		AuditEvent:          NewAuditEventClient(cfg),
+		AuditStreamCursor:   NewAuditStreamCursorClient(cfg),
+		ContextEntry:        NewContextEntryClient(cfg),
+		ContextState:        NewContextStateClient(cfg),
+		EventStreamCursor:   NewEventStreamCursorClient(cfg),
+		SelfAudit:           NewSelfAuditClient(cfg),
+		Session:             NewSessionClient(cfg),
 	}, nil
 }
 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		AarmDeferredAction.
+//		AarmApprovalGrant.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -228,8 +240,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AarmDeferredAction, c.AarmReceipt, c.AuditEvent, c.AuditStreamCursor,
-		c.ContextEntry, c.ContextState, c.EventStreamCursor, c.SelfAudit, c.Session,
+		c.AarmApprovalGrant, c.AarmApprovalRequest, c.AarmDeferredAction, c.AarmReceipt,
+		c.AuditEvent, c.AuditStreamCursor, c.ContextEntry, c.ContextState,
+		c.EventStreamCursor, c.SelfAudit, c.Session,
 	} {
 		n.Use(hooks...)
 	}
@@ -239,8 +252,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AarmDeferredAction, c.AarmReceipt, c.AuditEvent, c.AuditStreamCursor,
-		c.ContextEntry, c.ContextState, c.EventStreamCursor, c.SelfAudit, c.Session,
+		c.AarmApprovalGrant, c.AarmApprovalRequest, c.AarmDeferredAction, c.AarmReceipt,
+		c.AuditEvent, c.AuditStreamCursor, c.ContextEntry, c.ContextState,
+		c.EventStreamCursor, c.SelfAudit, c.Session,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -249,6 +263,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *AarmApprovalGrantMutation:
+		return c.AarmApprovalGrant.mutate(ctx, m)
+	case *AarmApprovalRequestMutation:
+		return c.AarmApprovalRequest.mutate(ctx, m)
 	case *AarmDeferredActionMutation:
 		return c.AarmDeferredAction.mutate(ctx, m)
 	case *AarmReceiptMutation:
@@ -269,6 +287,272 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Session.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// AarmApprovalGrantClient is a client for the AarmApprovalGrant schema.
+type AarmApprovalGrantClient struct {
+	config
+}
+
+// NewAarmApprovalGrantClient returns a client for the AarmApprovalGrant from the given config.
+func NewAarmApprovalGrantClient(c config) *AarmApprovalGrantClient {
+	return &AarmApprovalGrantClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `aarmapprovalgrant.Hooks(f(g(h())))`.
+func (c *AarmApprovalGrantClient) Use(hooks ...Hook) {
+	c.hooks.AarmApprovalGrant = append(c.hooks.AarmApprovalGrant, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `aarmapprovalgrant.Intercept(f(g(h())))`.
+func (c *AarmApprovalGrantClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AarmApprovalGrant = append(c.inters.AarmApprovalGrant, interceptors...)
+}
+
+// Create returns a builder for creating a AarmApprovalGrant entity.
+func (c *AarmApprovalGrantClient) Create() *AarmApprovalGrantCreate {
+	mutation := newAarmApprovalGrantMutation(c.config, OpCreate)
+	return &AarmApprovalGrantCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AarmApprovalGrant entities.
+func (c *AarmApprovalGrantClient) CreateBulk(builders ...*AarmApprovalGrantCreate) *AarmApprovalGrantCreateBulk {
+	return &AarmApprovalGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AarmApprovalGrantClient) MapCreateBulk(slice any, setFunc func(*AarmApprovalGrantCreate, int)) *AarmApprovalGrantCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AarmApprovalGrantCreateBulk{err: fmt.Errorf("calling to AarmApprovalGrantClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AarmApprovalGrantCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AarmApprovalGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AarmApprovalGrant.
+func (c *AarmApprovalGrantClient) Update() *AarmApprovalGrantUpdate {
+	mutation := newAarmApprovalGrantMutation(c.config, OpUpdate)
+	return &AarmApprovalGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AarmApprovalGrantClient) UpdateOne(_m *AarmApprovalGrant) *AarmApprovalGrantUpdateOne {
+	mutation := newAarmApprovalGrantMutation(c.config, OpUpdateOne, withAarmApprovalGrant(_m))
+	return &AarmApprovalGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AarmApprovalGrantClient) UpdateOneID(id uuid.UUID) *AarmApprovalGrantUpdateOne {
+	mutation := newAarmApprovalGrantMutation(c.config, OpUpdateOne, withAarmApprovalGrantID(id))
+	return &AarmApprovalGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AarmApprovalGrant.
+func (c *AarmApprovalGrantClient) Delete() *AarmApprovalGrantDelete {
+	mutation := newAarmApprovalGrantMutation(c.config, OpDelete)
+	return &AarmApprovalGrantDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AarmApprovalGrantClient) DeleteOne(_m *AarmApprovalGrant) *AarmApprovalGrantDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AarmApprovalGrantClient) DeleteOneID(id uuid.UUID) *AarmApprovalGrantDeleteOne {
+	builder := c.Delete().Where(aarmapprovalgrant.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AarmApprovalGrantDeleteOne{builder}
+}
+
+// Query returns a query builder for AarmApprovalGrant.
+func (c *AarmApprovalGrantClient) Query() *AarmApprovalGrantQuery {
+	return &AarmApprovalGrantQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAarmApprovalGrant},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AarmApprovalGrant entity by its id.
+func (c *AarmApprovalGrantClient) Get(ctx context.Context, id uuid.UUID) (*AarmApprovalGrant, error) {
+	return c.Query().Where(aarmapprovalgrant.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AarmApprovalGrantClient) GetX(ctx context.Context, id uuid.UUID) *AarmApprovalGrant {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AarmApprovalGrantClient) Hooks() []Hook {
+	return c.hooks.AarmApprovalGrant
+}
+
+// Interceptors returns the client interceptors.
+func (c *AarmApprovalGrantClient) Interceptors() []Interceptor {
+	return c.inters.AarmApprovalGrant
+}
+
+func (c *AarmApprovalGrantClient) mutate(ctx context.Context, m *AarmApprovalGrantMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AarmApprovalGrantCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AarmApprovalGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AarmApprovalGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AarmApprovalGrantDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AarmApprovalGrant mutation op: %q", m.Op())
+	}
+}
+
+// AarmApprovalRequestClient is a client for the AarmApprovalRequest schema.
+type AarmApprovalRequestClient struct {
+	config
+}
+
+// NewAarmApprovalRequestClient returns a client for the AarmApprovalRequest from the given config.
+func NewAarmApprovalRequestClient(c config) *AarmApprovalRequestClient {
+	return &AarmApprovalRequestClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `aarmapprovalrequest.Hooks(f(g(h())))`.
+func (c *AarmApprovalRequestClient) Use(hooks ...Hook) {
+	c.hooks.AarmApprovalRequest = append(c.hooks.AarmApprovalRequest, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `aarmapprovalrequest.Intercept(f(g(h())))`.
+func (c *AarmApprovalRequestClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AarmApprovalRequest = append(c.inters.AarmApprovalRequest, interceptors...)
+}
+
+// Create returns a builder for creating a AarmApprovalRequest entity.
+func (c *AarmApprovalRequestClient) Create() *AarmApprovalRequestCreate {
+	mutation := newAarmApprovalRequestMutation(c.config, OpCreate)
+	return &AarmApprovalRequestCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AarmApprovalRequest entities.
+func (c *AarmApprovalRequestClient) CreateBulk(builders ...*AarmApprovalRequestCreate) *AarmApprovalRequestCreateBulk {
+	return &AarmApprovalRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AarmApprovalRequestClient) MapCreateBulk(slice any, setFunc func(*AarmApprovalRequestCreate, int)) *AarmApprovalRequestCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AarmApprovalRequestCreateBulk{err: fmt.Errorf("calling to AarmApprovalRequestClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AarmApprovalRequestCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AarmApprovalRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AarmApprovalRequest.
+func (c *AarmApprovalRequestClient) Update() *AarmApprovalRequestUpdate {
+	mutation := newAarmApprovalRequestMutation(c.config, OpUpdate)
+	return &AarmApprovalRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AarmApprovalRequestClient) UpdateOne(_m *AarmApprovalRequest) *AarmApprovalRequestUpdateOne {
+	mutation := newAarmApprovalRequestMutation(c.config, OpUpdateOne, withAarmApprovalRequest(_m))
+	return &AarmApprovalRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AarmApprovalRequestClient) UpdateOneID(id uuid.UUID) *AarmApprovalRequestUpdateOne {
+	mutation := newAarmApprovalRequestMutation(c.config, OpUpdateOne, withAarmApprovalRequestID(id))
+	return &AarmApprovalRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AarmApprovalRequest.
+func (c *AarmApprovalRequestClient) Delete() *AarmApprovalRequestDelete {
+	mutation := newAarmApprovalRequestMutation(c.config, OpDelete)
+	return &AarmApprovalRequestDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AarmApprovalRequestClient) DeleteOne(_m *AarmApprovalRequest) *AarmApprovalRequestDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AarmApprovalRequestClient) DeleteOneID(id uuid.UUID) *AarmApprovalRequestDeleteOne {
+	builder := c.Delete().Where(aarmapprovalrequest.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AarmApprovalRequestDeleteOne{builder}
+}
+
+// Query returns a query builder for AarmApprovalRequest.
+func (c *AarmApprovalRequestClient) Query() *AarmApprovalRequestQuery {
+	return &AarmApprovalRequestQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAarmApprovalRequest},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AarmApprovalRequest entity by its id.
+func (c *AarmApprovalRequestClient) Get(ctx context.Context, id uuid.UUID) (*AarmApprovalRequest, error) {
+	return c.Query().Where(aarmapprovalrequest.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AarmApprovalRequestClient) GetX(ctx context.Context, id uuid.UUID) *AarmApprovalRequest {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AarmApprovalRequestClient) Hooks() []Hook {
+	return c.hooks.AarmApprovalRequest
+}
+
+// Interceptors returns the client interceptors.
+func (c *AarmApprovalRequestClient) Interceptors() []Interceptor {
+	return c.inters.AarmApprovalRequest
+}
+
+func (c *AarmApprovalRequestClient) mutate(ctx context.Context, m *AarmApprovalRequestMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AarmApprovalRequestCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AarmApprovalRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AarmApprovalRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AarmApprovalRequestDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AarmApprovalRequest mutation op: %q", m.Op())
 	}
 }
 
@@ -1504,11 +1788,13 @@ func (c *SessionClient) mutate(ctx context.Context, m *SessionMutation) (Value, 
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AarmDeferredAction, AarmReceipt, AuditEvent, AuditStreamCursor, ContextEntry,
-		ContextState, EventStreamCursor, SelfAudit, Session []ent.Hook
+		AarmApprovalGrant, AarmApprovalRequest, AarmDeferredAction, AarmReceipt,
+		AuditEvent, AuditStreamCursor, ContextEntry, ContextState, EventStreamCursor,
+		SelfAudit, Session []ent.Hook
 	}
 	inters struct {
-		AarmDeferredAction, AarmReceipt, AuditEvent, AuditStreamCursor, ContextEntry,
-		ContextState, EventStreamCursor, SelfAudit, Session []ent.Interceptor
+		AarmApprovalGrant, AarmApprovalRequest, AarmDeferredAction, AarmReceipt,
+		AuditEvent, AuditStreamCursor, ContextEntry, ContextState, EventStreamCursor,
+		SelfAudit, Session []ent.Interceptor
 	}
 )
