@@ -111,8 +111,9 @@ gryph doctor --managed --json | jq -r .profile
 
 Each recipe does the same three things: place the binary, place the input
 files, run the commands. Replace the download step with your artifact store.
-On Linux the release ships a deb and an rpm package that put the binary at
-`/opt/safedep/gryph/bin/gryph` with a `/usr/bin/gryph` link. The signed
+On Linux the release ships a deb, an rpm, an apk and an Arch Linux package
+that put the binary at `/opt/safedep/gryph/bin/gryph` with a
+`/usr/bin/gryph` link. The signed
 installers for macOS and Windows are planned. Until they ship, the scripts
 place the binary.
 
@@ -137,7 +138,10 @@ the two kernel settings that close the known same-user bypasses. `gryph
 doctor` reports both under "Host posture".
 
 ```bash
-apt install ./gryph_1.2.3_linux_amd64.deb     # or: rpm -i gryph-1.2.3.x86_64.rpm
+apt install ./gryph_1.2.3_linux_amd64.deb
+# or: rpm -i gryph-1.2.3.x86_64.rpm
+# or: apk add --allow-untrusted ./gryph_1.2.3_linux_amd64.apk
+# or: pacman -U ./gryph-1.2.3-1-x86_64.pkg.tar.zst
 install -d -m 0755 -o root -g root /etc/safedep/gryph-input
 install -m 0644 -o root -g root ./managed.yml ./policy.yaml /etc/safedep/gryph-input/
 
