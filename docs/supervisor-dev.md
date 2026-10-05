@@ -487,9 +487,9 @@ scripts under `hook/client/`.
 absolute member, a symbolic link, a second agent binary, a user namespace
 bind mount, a stopped hook) against the protected paths, under the
 built-in rules, under `gryph run` and, as root, under the fanotify
-watcher. It writes `perf-reports/redteam.md` with one row per bypass and
-the hook latency under each provider. The nightly kernel job runs it on
-the runner and uploads the report.
+watcher. It writes `perf-reports/redteam.md`, outside the repository, with
+one row per bypass and the hook latency under each provider. The nightly
+kernel job runs it on the runner and uploads the report as an artifact.
 
 `gryph supervisor protocol [--text]` is a hidden command that runs the
 connection loop over stdin and stdout with no decision service behind it:

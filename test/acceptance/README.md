@@ -106,7 +106,7 @@ no managed Gryph state. Each script removes what it wrote. CI runs the job
 request and every push to main. The scripts make the accounts they need
 with `useradd` and remove them. A script that starts with `[!polkit] skip`
 also needs a system bus with polkit and `pkttyagent`. The job starts both.
-The job then runs the client-mode latency guard (see `perf-reports/`).
+The job then runs the client-mode latency guard (see `docs/e2e.md`).
 
 ```bash
 sudo ACCEPTANCE_PRIVILEGED=1 go test -tags acceptance -parallel 1 -run 'TestAcceptance/policy/managed' ./test/acceptance/

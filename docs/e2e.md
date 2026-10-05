@@ -149,8 +149,37 @@ make bench-hook              # 50 runs per benchmark
 make bench-hook BENCHTIME=200x
 ```
 
-The report lands in `perf-reports/hook-latency.md`. CI runs the benchmark on
-every push and keeps the report as an artifact. The numbers depend on the
-machine, so compare two runs from one machine only.
-`perf-reports/hook-latency-baseline.md` holds one reference run and the
-budget rule for later changes to the hook path.
+The report lands in `perf-reports/hook-latency.md`, a directory that is not
+in the repository. CI runs the benchmark on every push and keeps the report
+as an artifact. The numbers depend on the machine, so compare two runs from
+one machine only, from one `make bench-hook` invocation where that is
+possible.
+
+Each benchmark has its own home, configuration and database. One warm run
+creates the database and the session before the measured runs. The
+percentiles use the nearest rank over the measured runs. `policy-off`
+records the event only. `policy-on` also runs the built-in rules and one
+user rule, the context accumulator and the receipt chain.
+
+### Budget
+
+A change to the hook path keeps the p99 of every benchmark within the p99
+of the same benchmark on the same machine before the change, plus 10
+percent.
+
+### Client mode and the guard
+
+`GRYPH_PERF_CLIENT=1 make bench-hook` adds a `client` row per phase, which
+sends every hook to the decision service. The benchmark needs root on
+Linux: it writes the managed configuration to `/etc/safedep/gryph` for its
+own duration, starts the service on a socket of its own, then stops it and
+removes the directory. It refuses a host that already has a managed
+directory. The managed policy carries the same user rule as `policy-on`,
+so both modes evaluate the same rules.
+
+After the run, the guard compares each `client` row with the `policy-on`
+row of the same phase from the same run. The client p99 must stay within
+the local p99 times `GRYPH_PERF_BUDGET` (default `1.10`). A phase over the
+budget fails the run, and the guard prints the p95 and the p99 of every
+phase. CI runs the guard in the privileged job, after the privileged
+acceptance scripts, with `BENCHTIME=50x`.

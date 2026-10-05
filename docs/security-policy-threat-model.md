@@ -181,12 +181,12 @@ with the decision service: P for prevented, D for detected, O for open.
 The last column names the control that changes the status. A control
 marked planned does not exist yet. The red-team suite (`make redteam`)
 tries the bypasses of row 6 against the protected paths under each
-provider and measures what each provider costs on the hook path. Its
-last run is in [perf-reports/redteam.md](../perf-reports/redteam.md).
+provider and measures what each provider costs on the hook path. The
+nightly kernel job runs it and keeps the report as an artifact.
 
 | # | Tier | Bypass | In `guard` | In `locked` with the service | Control |
 |---|---|---|---|---|---|
-| 1 | B | Edit the agent's hook configuration and remove the Gryph entry | D, when a reconcile pass runs. Repaired when `policy.self_protection.repair` is on, up to three times an hour. | P for Claude Code and Codex: the entry sits in the agent's managed settings, owned by root. D for Cursor, Gemini and Windsurf: the entry is a root-owned system file the agent reads, with no lock of its own. | `gryph install --managed`, with `managed.lock_hooks` for the agents that have a lock. |
+| 1 | B | Edit the agent's hook configuration and remove the Gryph entry | D, when a reconcile pass runs. Repaired when `policy.self_protection.repair` is on, up to three times an hour. | P for Claude Code, Codex and Cursor: the entry sits in the agent's managed settings, owned by root, and the agent runs it whatever the user scope holds. D for Gemini and Windsurf: the entry is a root-owned system file the agent reads, with no lock of its own. | `gryph install --managed`, with `managed.lock_hooks` for the agents that have a lock. |
 | 2 | B | Stop or trace the hook process until the agent times out and lets the action through | D, when the agent process runs through the census window with no hook call | D, the same. A hook that cannot reach the service blocks. | The `hook_traffic` row and the `silent_agent` tamper event. Set `kernel.yama.ptrace_scope` to 1 or more. Set the agent to fail closed where the vendor offers it. See [agent-enforcement-coverage.md](./agent-enforcement-coverage.md). |
 | 3 | B | Run a second agent binary, or an agent with a private config directory | D for a binary with a known program name, O otherwise | D, the same. A hook from outside the agent of its session is a low-trust connection, and its prompts and escalations count less. | The census matches the processes of the account by program name. An agent under another name stays out of scope. |
 | 4 | B | Run `gryph _hook` from a shell and record a forged event or prompt | P through a mediated shell command, O otherwise | D: the service knows the caller from the kernel and records the trust of every connection. A forged prompt from a low-trust connection does not become the intent and does not reset the counters. | The built-in `gryph-builtin-hook-command` rule, and [the trust of a connection](./security-policy.md#the-trust-of-a-connection). |
