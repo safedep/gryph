@@ -35,7 +35,7 @@ const readPayload = `{"session_id":"test-session-123","cwd":"/home/user/project"
 
 func startServer(t *testing.T, limits Limits) (string, string) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := socketDir(t)
 	sock := filepath.Join(dir, "hook.sock")
 	ln, err := net.Listen("unix", sock)
 	require.NoError(t, err)
@@ -81,7 +81,7 @@ func startServerWithLimits(t *testing.T, cfg *config.Config, limits Limits) (*Se
 // hand. The paths and the version come from the test.
 func startServerWithOptions(t *testing.T, cfg *config.Config, opts Options) (*Server, string, string) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := socketDir(t)
 	sock := filepath.Join(dir, "hook.sock")
 	ln, err := net.Listen("unix", sock)
 	require.NoError(t, err)
@@ -116,6 +116,17 @@ func startServerWithOptions(t *testing.T, cfg *config.Config, opts Options) (*Se
 		return srv.rootDir != nil
 	}, 5*time.Second, 10*time.Millisecond)
 	return srv, state, spoolDir
+}
+
+// socketDir is a short temporary directory for a test socket. A Unix
+// socket path holds at most 104 bytes on macOS, and t.TempDir adds the
+// name of the test to a long TMPDIR.
+func socketDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "gs")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
 }
 
 // testDialOptions gives the tests deadlines far above the ones of a hook.
@@ -244,7 +255,7 @@ func TestBucket(t *testing.T) {
 }
 
 func TestServer_StateDirectoryMustExist(t *testing.T) {
-	dir := t.TempDir()
+	dir := socketDir(t)
 	ln, err := net.Listen("unix", filepath.Join(dir, "hook.sock"))
 	require.NoError(t, err)
 	defer func() { _ = ln.Close() }()

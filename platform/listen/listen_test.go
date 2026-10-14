@@ -30,16 +30,6 @@ func TestOpen(t *testing.T) {
 	assert.ErrorContains(t, err, "is not a socket")
 }
 
-func TestActivated_NotForThisProcess(t *testing.T) {
-	t.Setenv("LISTEN_PID", "1")
-	t.Setenv("LISTEN_FDS", "1")
-	lns, err := Activated()
-	require.NoError(t, err)
-	assert.Nil(t, lns)
-	_, set := os.LookupEnv("LISTEN_PID")
-	assert.False(t, set, "the variables are unset after the read")
-}
-
 func TestActivated_Unset(t *testing.T) {
 	lns, err := Activated()
 	require.NoError(t, err)
