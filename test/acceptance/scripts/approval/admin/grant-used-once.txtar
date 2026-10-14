@@ -124,13 +124,17 @@ rules:
 # the helper. Stdout and stderr of the hook
 # are pipes, as under an agent. The terminal gets the answer when a
 # question that ends in [y/N] shows, and TERMINAL_PASSWORD when a line
-# that ends in "Password:" shows. A dash gives no answer. A command that
+# that ends in "Password:" shows and the terminal stops the echo. A
+# polkit agent prints the prompt before it stops the echo, and it
+# discards the input that came before. A dash gives no answer. A command that
 # stays silent for a minute is killed. Everything the hook writes goes to
 # stdout, and the exit code is the hook's.
 import os
 import pty
 import select
 import sys
+import termios
+import time
 
 answer, payload, command = sys.argv[1], sys.argv[2], sys.argv[3:]
 out_r, out_w = os.pipe()
@@ -173,6 +177,10 @@ while open_fds:
                 os.write(fd, (answer + "\n").encode())
                 sent = True
             if password and not password_sent and b"Password:" in seen:
+                for _ in range(100):
+                    if not termios.tcgetattr(fd)[3] & termios.ECHO:
+                        break
+                    time.sleep(0.05)
                 os.write(fd, (password + "\n").encode())
                 password_sent = True
 _, status = os.waitpid(pid, 0)
