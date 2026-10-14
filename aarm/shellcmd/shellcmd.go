@@ -1882,6 +1882,17 @@ func resolve(p, cwd, home string) string {
 	if !IsAbs(p) && cwd != "" {
 		p = path.Join(cwd, p)
 	}
+	return cleanPath(p)
+}
+
+// cleanPath is path.Clean that keeps a Windows drive. path.Clean takes C:
+// for a plain segment, so C:/../data/audit.db became data/audit.db and
+// missed a rule that names C:/data/audit.db. Windows stops .. at the root
+// of the drive.
+func cleanPath(p string) string {
+	if !path.IsAbs(p) && IsAbs(p) {
+		return p[:2] + path.Clean(p[2:])
+	}
 	return path.Clean(p)
 }
 

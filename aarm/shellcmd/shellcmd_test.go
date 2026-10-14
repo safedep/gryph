@@ -284,4 +284,6 @@ func TestIsAbs(t *testing.T) {
 func TestResolvePath_DrivePath(t *testing.T) {
 	assert.Equal(t, "C:/data/audit.db", ResolvePath("C:/data/./audit.db", "/work"))
 	assert.Equal(t, "C:/data/audit.db", ResolvePath("C:/data/x/../audit.db", "/work"))
+	assert.Equal(t, "C:/data/audit.db", ResolvePath("C:/../data/audit.db", "/work"), "the drive root stops ..")
+	assert.Equal(t, "C:/", ResolvePath("C:/..", "/work"))
 }

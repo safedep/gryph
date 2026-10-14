@@ -5,6 +5,7 @@
 # privileged job on a Linux host with no managed state.
 [!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
 [!linux] skip 'the managed paths of this script are the Linux ones'
+! exists /root/.local/share/safedep/gryph
 ! exists /etc/safedep/gryph
 ! exists /etc/gemini-cli
 env HOME=$WORK/home
