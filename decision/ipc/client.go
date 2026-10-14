@@ -47,6 +47,8 @@ func (e *ServerError) Error() string {
 type DialOptions struct {
 	// Handshake bounds connect plus welcome. Zero takes HandshakeTimeout.
 	Handshake time.Duration
+	// Decision bounds each frame of a decision. Zero takes DecisionTimeout.
+	Decision time.Duration
 	// Version is what Hello reports as the client version.
 	Version string
 	// VerifyServer runs on the open connection before hello. An error
@@ -60,8 +62,9 @@ var ErrServerIdentity = errors.New("ipc: the socket is not the decision service"
 
 // Client is one connection to the decision service after the handshake.
 type Client struct {
-	conn    net.Conn
-	welcome Welcome
+	conn     net.Conn
+	welcome  Welcome
+	decision time.Duration
 }
 
 // Dial connects to the service at socket and completes the handshake.
@@ -114,7 +117,11 @@ func Dial(ctx context.Context, socket string, opts DialOptions) (*Client, error)
 		return nil, fmt.Errorf("%w: first frame %q", ErrProtocol, reply.Type)
 	}
 	_ = conn.SetDeadline(time.Time{})
-	return &Client{conn: conn, welcome: *welcome}, nil
+	wait := opts.Decision
+	if wait <= 0 {
+		wait = DecisionTimeout
+	}
+	return &Client{conn: conn, welcome: *welcome, decision: wait}, nil
 }
 
 // Welcome returns the frame the service answered the handshake with.
@@ -128,14 +135,15 @@ func (c *Client) Close() error { return c.conn.Close() }
 // hook timeout. A nil PromptFunc answers every prompt with PromptNone.
 type PromptFunc func(ctx context.Context, p *Prompt) PromptReply
 
-// Handle asks for a decision. Each frame of the service has DecisionTimeout
-// to arrive, and the whole exchange ends at the deadline of ctx. A Prompt
+// Handle asks for a decision. Each frame of the service has the decision
+// deadline of DialOptions to arrive, and the whole exchange ends at the
+// deadline of ctx. A Prompt
 // in place of the decision goes to prompt, and the reply goes back on the
 // same connection before the next frame. Handle returns ErrDeadline when
 // the service does not answer in time, a ServerError when it refuses, and
 // ErrProtocol when it answers with another frame.
 func (c *Client) Handle(ctx context.Context, h Handle, prompt PromptFunc) (*Decision, error) {
-	reply, err := c.exchange(ctx, MustFrame(TypeHandle, h), DecisionTimeout)
+	reply, err := c.exchange(ctx, MustFrame(TypeHandle, h), c.decision)
 	for {
 		if err != nil {
 			return nil, err
@@ -155,7 +163,7 @@ func (c *Client) Handle(ctx context.Context, h Handle, prompt PromptFunc) (*Deci
 				cancel()
 				answer.Nonce = b.Nonce
 			}
-			reply, err = c.exchange(ctx, MustFrame(TypePromptReply, answer), DecisionTimeout)
+			reply, err = c.exchange(ctx, MustFrame(TypePromptReply, answer), c.decision)
 		default:
 			return nil, fmt.Errorf("%w: %T", ErrProtocol, reply)
 		}

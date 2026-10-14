@@ -63,7 +63,7 @@ func TestTrust_BindsTheSessionAndFlagsAMismatch(t *testing.T) {
 	claude := procs.Process{PID: 4242, Name: "claude", Started: time.Unix(1700000000, 0), UID: os.Getuid()}
 	tree := &processTree{chain: []procs.Process{{PID: 99, Name: "sh", UID: os.Getuid()}, claude, {PID: 1, Name: "init"}}, alive: map[int]procs.Process{4242: claude}}
 	sock, store := startTrustServer(t, tree)
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()
@@ -147,7 +147,7 @@ func TestTrust_BindsTheSessionAndFlagsAMismatch(t *testing.T) {
 func TestTrust_NoAgentIsUnknown(t *testing.T) {
 	tree := &processTree{chain: []procs.Process{{PID: 99, Name: "sh"}, {PID: 1, Name: "init"}}, alive: map[int]procs.Process{}}
 	sock, store := startTrustServer(t, tree)
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()
@@ -170,7 +170,7 @@ func TestTrust_AnswerFromUnderAnAgentIsRefused(t *testing.T) {
 	cfg.Policy.Approval.LocalAdmin.AllowSelfElevated = true
 	srv, state, _ := startServerWithOptions(t, cfg, Options{Authorizer: &fakeAuthority{}, Ancestors: tree.ancestors, Processes: tree.processes})
 	_, row := seedOtherPartition(t, srv.root, 60021, false)
-	client, err := ipc.Dial(context.Background(), state[:len(state)-len("/state")]+"/hook.sock", ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), state[:len(state)-len("/state")]+"/hook.sock", testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	_, err = client.Approve(context.Background(), ipc.Approve{RequestID: row.ID, Decision: ipc.ApproveAllow})

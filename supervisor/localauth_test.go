@@ -52,7 +52,7 @@ func TestLocalAuth_PasswordRequiredWhenTheHostHasAnAuthority(t *testing.T) {
 	auth := &fakeAuthority{available: true, result: localauth.Result{Challenge: true}}
 	srv, sock := startAuthServer(t, auth, false)
 	other, row := seedOtherPartition(t, srv.root, 60011, false)
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()
@@ -89,7 +89,7 @@ func TestLocalAuth_AllowWithoutAuthTakesTheAnswer(t *testing.T) {
 	auth := &fakeAuthority{available: true, result: localauth.Result{Challenge: true}}
 	srv, sock := startAuthServer(t, auth, true)
 	other, row := seedOtherPartition(t, srv.root, 60012, false)
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()
@@ -106,7 +106,7 @@ func TestLocalAuth_NoAuthorityTakesTheAnswer(t *testing.T) {
 	auth := &fakeAuthority{available: false}
 	srv, sock := startAuthServer(t, auth, false)
 	_, row := seedOtherPartition(t, srv.root, 60013, false)
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	res, err := client.Approve(context.Background(), ipc.Approve{RequestID: row.ID, Decision: ipc.ApproveAllow})
@@ -130,7 +130,7 @@ func TestLocalAuth_AuthorizedLocalAdminBecomesLocalAuth(t *testing.T) {
 	rowWithAudit.ReceiptSequence = 2
 	rowWithAudit.RequesterAudit = "1000"
 	require.NoError(t, other.InsertApprovalRequest(ctx, &rowWithAudit))
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	res, err := client.Approve(ctx, ipc.Approve{RequestID: rowWithAudit.ID, Decision: ipc.ApproveAllow})

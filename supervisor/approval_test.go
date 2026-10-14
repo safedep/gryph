@@ -77,7 +77,7 @@ func answer(decision, note string) ipc.PromptFunc {
 
 func TestApproval_InlineApproveAppliesOnceAndStoresNoGrant(t *testing.T) {
 	_, sock, store := startApprovalServer(t, approvalConfig())
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()
@@ -132,7 +132,7 @@ func TestApproval_InlineApproveAppliesOnceAndStoresNoGrant(t *testing.T) {
 
 func TestApproval_NoAnswerLeavesTheRequestPending(t *testing.T) {
 	_, sock, store := startApprovalServer(t, approvalConfig())
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()
@@ -166,7 +166,7 @@ func TestApproval_NoAnswerLeavesTheRequestPending(t *testing.T) {
 
 func TestApproval_NoWaitAndHighFloorSkipThePrompt(t *testing.T) {
 	_, sock, store := startApprovalServer(t, approvalConfig())
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()
@@ -199,7 +199,7 @@ func TestApproval_NoWaitAndHighFloorSkipThePrompt(t *testing.T) {
 	cfg := approvalConfig()
 	cfg.Policy.Approval.Channels = []string{config.ApprovalChannelSameUserTTY}
 	_, sock2, _ := startApprovalServer(t, cfg)
-	client2, err := ipc.Dial(context.Background(), sock2, ipc.DialOptions{Version: "test"})
+	client2, err := ipc.Dial(context.Background(), sock2, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client2.Close() }()
 	d, err = client2.Handle(ctx, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(commandPayload("make deploy", "tu-3")), InlineWait: 3 * time.Second}, count)
@@ -213,7 +213,7 @@ func TestApproval_ExpiryDeniesAndTheNextHookReportsIt(t *testing.T) {
 	cfg := approvalConfig()
 	cfg.Policy.Approval.RequestTTL = 300 * time.Millisecond
 	_, sock, store := startApprovalServer(t, cfg)
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()
@@ -248,7 +248,7 @@ func TestApproval_ExpiryDeniesAndTheNextHookReportsIt(t *testing.T) {
 
 func TestApproval_GrantApprovesTheRetry(t *testing.T) {
 	_, sock, store := startApprovalServer(t, approvalConfig())
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()

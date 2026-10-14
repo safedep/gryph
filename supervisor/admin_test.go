@@ -39,7 +39,7 @@ func TestApproval_RequesterCannotAnswer(t *testing.T) {
 	cfg.Policy.Approval.LocalAdmin.Group = ownGroup(t)
 	cfg.Policy.Approval.LocalAdmin.AllowSelfElevated = true
 	_, sock, store := startApprovalServer(t, cfg)
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()
@@ -65,7 +65,7 @@ func TestApproval_NotAMemberIsRefused(t *testing.T) {
 	cfg := approvalConfig()
 	cfg.Policy.Approval.LocalAdmin.Group = "gryph-acceptance-no-such-group"
 	_, sock, store := startApprovalServer(t, cfg)
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()
@@ -116,7 +116,7 @@ func TestApproval_MemberAnswersAnotherAccount(t *testing.T) {
 	state := srv.root
 	other, row := seedOtherPartition(t, state, 60001, false)
 	_, reviewRow := seedOtherPartition(t, state, 60002, true)
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()
@@ -180,7 +180,7 @@ func TestApproval_SelfElevatedRefusedByDefault(t *testing.T) {
 	cfg.Policy.Approval.LocalAdmin.Group = ownGroup(t)
 	srv, sock, _ := startApprovalServer(t, cfg)
 	_, row := seedOtherPartition(t, srv.root, 60003, false)
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	_, err = client.Approve(context.Background(), ipc.Approve{RequestID: row.ID, Decision: ipc.ApproveAllow})
@@ -192,7 +192,7 @@ func TestApproval_SelfElevatedRefusedByDefault(t *testing.T) {
 
 func TestApproval_PostHookIsAReviewItem(t *testing.T) {
 	_, sock, store := startApprovalServer(t, approvalConfig())
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()

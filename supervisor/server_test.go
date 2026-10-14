@@ -118,6 +118,11 @@ func startServerWithOptions(t *testing.T, cfg *config.Config, opts Options) (*Se
 	return srv, state, spoolDir
 }
 
+// testDialOptions gives the tests deadlines far above the ones of a hook.
+// A hook keeps its short deadlines for latency. A test only checks what the
+// service answers, and a loaded runner can take seconds to open a partition.
+var testDialOptions = ipc.DialOptions{Version: "test", Handshake: 30 * time.Second, Decision: 30 * time.Second}
+
 func dial(t *testing.T, sock string) net.Conn {
 	t.Helper()
 	conn, err := net.Dial("unix", sock)
@@ -393,7 +398,7 @@ func TestServer_ReadsComeFromTheOwnPartition(t *testing.T) {
 	_, state, _ := startServerWithLimits(t, cfg, Limits{MaxConns: 16, Rate: 1000, Burst: 1000, IdleTimeout: 30 * time.Second})
 	sock := filepath.Join(filepath.Dir(state), "hook.sock")
 
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	reads := remote.New(client)
@@ -477,7 +482,7 @@ func TestServer_ImportsTheUsersRowsMarked(t *testing.T) {
 	cfg := config.Default()
 	_, state, _ := startServerWithLimits(t, cfg, Limits{MaxConns: 16, Rate: 1000, Burst: 1000, IdleTimeout: 30 * time.Second})
 	sock := filepath.Join(filepath.Dir(state), "hook.sock")
-	client, err := ipc.Dial(context.Background(), sock, ipc.DialOptions{Version: "test"})
+	client, err := ipc.Dial(context.Background(), sock, testDialOptions)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 	ctx := context.Background()
