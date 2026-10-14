@@ -828,7 +828,7 @@ func pythonModule(name string, args []string) string {
 }
 
 func isNetworkToolPath(word string) bool {
-	return path.IsAbs(word) && networkTools[path.Base(word)]
+	return IsAbs(word) && networkTools[path.Base(word)]
 }
 
 // gryphHookCommand is the hidden Gryph subcommand that agent hooks run.
@@ -1636,7 +1636,7 @@ func (w *walker) execdir(root string, cmd []string, cwds dirs) {
 		w.exhaust()
 	}
 	for _, t := range sub.targets {
-		if path.IsAbs(t.Path) {
+		if IsAbs(t.Path) {
 			w.addTarget(t)
 		} else if t.Access == AccessRead {
 			w.add(root, AccessRead, cwds)
@@ -1865,9 +1865,21 @@ func (w *walker) addTarget(t Target) {
 	}
 }
 
+// IsAbs reports whether a slash path is absolute: rooted, or led by a
+// Windows drive such as C:/. path.IsAbs knows only the rooted form, so a
+// drive path was joined under the working directory and never cleaned, and
+// a read through a dot segment missed the protected read rule on Windows.
+func IsAbs(p string) bool {
+	if path.IsAbs(p) {
+		return true
+	}
+	return len(p) >= 3 && p[1] == ':' && p[2] == '/' &&
+		(p[0] >= 'a' && p[0] <= 'z' || p[0] >= 'A' && p[0] <= 'Z')
+}
+
 func resolve(p, cwd, home string) string {
 	p = expandHome(p, home)
-	if !path.IsAbs(p) && cwd != "" {
+	if !IsAbs(p) && cwd != "" {
 		p = path.Join(cwd, p)
 	}
 	return path.Clean(p)

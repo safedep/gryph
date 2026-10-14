@@ -348,7 +348,7 @@ func containerPatterns(patterns []string) []string {
 func namedTreePatterns(patterns []string) []string {
 	out := parentPatterns(patterns)
 	for _, pattern := range patterns {
-		if !path.IsAbs(pattern) {
+		if !shellcmd.IsAbs(pattern) {
 			out = append(out, containerPatterns([]string{pattern})...)
 		}
 	}

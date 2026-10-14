@@ -260,3 +260,28 @@ func BenchmarkAnalyze_WrapperChain(b *testing.B) {
 		})
 	}
 }
+
+func TestIsAbs(t *testing.T) {
+	cases := map[string]bool{
+		"/etc/hosts":    true,
+		"C:/Users/a":    true,
+		"c:/":           true,
+		"C:":            false,
+		"C:relative":    false,
+		"1:/x":          false,
+		"main.go":       false,
+		"./x":           false,
+		"~/.ssh/id_rsa": false,
+	}
+	for p, want := range cases {
+		assert.Equal(t, want, IsAbs(p), p)
+	}
+}
+
+// A drive path is absolute, so the resolver cleans its dot segments and
+// does not join it under the working directory. Without this, a read of
+// C:/data/./audit.db missed a rule that names C:/data/audit.db.
+func TestResolvePath_DrivePath(t *testing.T) {
+	assert.Equal(t, "C:/data/audit.db", ResolvePath("C:/data/./audit.db", "/work"))
+	assert.Equal(t, "C:/data/audit.db", ResolvePath("C:/data/x/../audit.db", "/work"))
+}
