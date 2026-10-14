@@ -7,13 +7,14 @@ import (
 	"testing"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestManagedInstall_Windsurf(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "devin", "hooks.json")
-	opts := agent.ManagedInstallOptions{Command: "/opt/safedep/gryph/bin/gryph"}
+	opts := agent.ManagedInstallOptions{Command: testpath.Abs("/opt/safedep/gryph/bin/gryph")}
 
 	res, err := installManagedAt(path, opts)
 	require.NoError(t, err)

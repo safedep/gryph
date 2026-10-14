@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -64,7 +65,7 @@ func TestGetHookStatus_PluginContent(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
-			t.Setenv("HOME", home)
+			testpath.SetHome(t, home)
 			dir := filepath.Join(home, ".pi", "agent", "extensions")
 			require.NoError(t, os.MkdirAll(dir, 0o755))
 			require.NoError(t, os.WriteFile(filepath.Join(dir, hookFileName), tc.content, 0o644))

@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/privacy"
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +16,7 @@ func TestClaimOrigin(t *testing.T) {
 	event := func(at ActionType, tool string, payload any) *Event {
 		e := NewEvent(uuid.New(), "test", at)
 		e.ToolName = tool
-		e.WorkingDirectory = "/work/project"
+		e.WorkingDirectory = testpath.Abs("/work/project")
 		if payload != nil {
 			require.NoError(t, e.SetPayload(payload))
 		}
@@ -34,10 +35,10 @@ func TestClaimOrigin(t *testing.T) {
 		{"browser tool", event(ActionToolUse, "browser_navigate", nil), privacy.OriginWeb, ""},
 		{"network request", event(ActionNetworkRequest, "curl", nil), privacy.OriginWeb, ""},
 		{"shell command", event(ActionCommandExec, "Bash", nil), privacy.OriginCommand, ""},
-		{"read in the project", event(ActionFileRead, "Read", FileReadPayload{Path: "/work/project/main.go"}), privacy.OriginFileProject, ""},
+		{"read in the project", event(ActionFileRead, "Read", FileReadPayload{Path: testpath.Abs("/work/project/main.go")}), privacy.OriginFileProject, ""},
 		{"relative read", event(ActionFileRead, "Read", FileReadPayload{Path: "main.go"}), privacy.OriginFileProject, ""},
-		{"read outside the project", event(ActionFileRead, "Read", FileReadPayload{Path: "/etc/hosts"}), privacy.OriginFileExternal, ""},
-		{"read of a sibling directory", event(ActionFileRead, "Read", FileReadPayload{Path: "/work/project-other/a"}), privacy.OriginFileExternal, ""},
+		{"read outside the project", event(ActionFileRead, "Read", FileReadPayload{Path: testpath.Abs("/etc/hosts")}), privacy.OriginFileExternal, ""},
+		{"read of a sibling directory", event(ActionFileRead, "Read", FileReadPayload{Path: testpath.Abs("/work/project-other/a")}), privacy.OriginFileExternal, ""},
 		{"relative read that leaves the project", event(ActionFileRead, "Read", FileReadPayload{Path: "../../etc/passwd"}), privacy.OriginFileExternal, ""},
 		{"home read", event(ActionFileRead, "Read", FileReadPayload{Path: "~/.aws/credentials"}), privacy.OriginFileExternal, ""},
 		{"read with no path", event(ActionFileRead, "Glob", FileReadPayload{Pattern: "**/*.go"}), privacy.OriginUnknown, ""},

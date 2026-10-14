@@ -166,7 +166,8 @@ func joinOrNone(names []string) string {
 func TestEnforcementCoverageDoc(t *testing.T) {
 	data, err := os.ReadFile(coverageDocPath)
 	require.NoError(t, err)
-	doc := string(data)
+	// A Windows checkout can turn the line ends of the doc into CRLF.
+	doc := strings.ReplaceAll(string(data), "\r\n", "\n")
 
 	begin := strings.Index(doc, coverageDocBegin)
 	end := strings.Index(doc, coverageDocEnd)

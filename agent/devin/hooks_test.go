@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +16,7 @@ import (
 func setupDevinHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testpath.SetHome(t, home)
 	devinDir := filepath.Join(home, ".config", "devin")
 	require.NoError(t, os.MkdirAll(devinDir, 0700))
 	return filepath.Join(devinDir, "config.json")

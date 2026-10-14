@@ -42,6 +42,7 @@ func TestResolveHumanPrincipal_EnvOverrideWins(t *testing.T) {
 }
 
 func TestResolveHumanPrincipal_OSLookupFallback(t *testing.T) {
+	skipWithoutNumericUID(t)
 	clearEnv(t)
 	t.Setenv("USER", "")
 	t.Setenv("LOGNAME", "")
@@ -60,6 +61,7 @@ func TestResolveHumanPrincipal_OSLookupFallback(t *testing.T) {
 }
 
 func TestResolveHumanPrincipal_UserEnvFallback(t *testing.T) {
+	skipWithoutNumericUID(t)
 	clearEnv(t)
 	uid := os.Getuid()
 	u, lookupErr := user.LookupId(fmt.Sprintf("%d", uid))
@@ -203,6 +205,7 @@ func TestResolveRoleScope_EnvOverrideWins(t *testing.T) {
 }
 
 func TestResolveRoleScope_OSDerived(t *testing.T) {
+	skipWithoutNumericUID(t)
 	clearEnv(t)
 	got := resolve()
 	require.NotEmpty(t, got.RoleScope, "OS uid/gid is always available on the test host")
@@ -233,4 +236,14 @@ func TestStaticCapturer(t *testing.T) {
 	c := NewStaticCapturer(want)
 	got := c.Capture(context.Background())
 	assert.Equal(t, want, got)
+}
+
+// skipWithoutNumericUID skips a test of the numeric uid form on a host
+// without one. On Windows os.Getuid returns -1, and
+// TestResolveHumanPrincipal_NegativeUIDDropsUIDPortion covers that form.
+func skipWithoutNumericUID(t *testing.T) {
+	t.Helper()
+	if os.Getuid() < 0 {
+		t.Skip("the host has no numeric uid")
+	}
 }

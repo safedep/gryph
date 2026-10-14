@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +16,7 @@ func TestManagedInstall_Cursor(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cursor", "hooks.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(`{"version":1,"hooks":{"beforeShellExecution":[{"command":"/enterprise/audit.sh","timeout":5}]}}`), 0o644))
-	opts := agent.ManagedInstallOptions{Command: "/opt/safedep/gryph/bin/gryph", Lock: true}
+	opts := agent.ManagedInstallOptions{Command: testpath.Abs("/opt/safedep/gryph/bin/gryph"), Lock: true}
 
 	res, err := installManagedAt(path, opts)
 	require.NoError(t, err)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +28,7 @@ type = "command"
 command = "/enterprise/hooks/check.py"
 timeout = 10
 `), 0o644))
-	opts := agent.ManagedInstallOptions{Command: "/opt/safedep/gryph/bin/gryph"}
+	opts := agent.ManagedInstallOptions{Command: testpath.Abs("/opt/safedep/gryph/bin/gryph")}
 
 	res, err := installManagedAt(path, opts)
 	require.NoError(t, err)
@@ -90,13 +91,13 @@ timeout = 10
 
 func TestManagedInstall_Codex_NewFileAndBadFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "codex", "requirements.toml")
-	res, err := installManagedAt(path, agent.ManagedInstallOptions{Command: "/opt/safedep/gryph/bin/gryph", DryRun: true})
+	res, err := installManagedAt(path, agent.ManagedInstallOptions{Command: testpath.Abs("/opt/safedep/gryph/bin/gryph"), DryRun: true})
 	require.NoError(t, err)
 	assert.True(t, res.Changed)
 	_, err = os.Stat(path)
 	assert.ErrorIs(t, err, os.ErrNotExist)
 
-	res, err = installManagedAt(path, agent.ManagedInstallOptions{Command: "/opt/safedep/gryph/bin/gryph"})
+	res, err = installManagedAt(path, agent.ManagedInstallOptions{Command: testpath.Abs("/opt/safedep/gryph/bin/gryph")})
 	require.NoError(t, err)
 	assert.True(t, res.Changed)
 	data, err := os.ReadFile(path)
@@ -109,7 +110,7 @@ func TestManagedInstall_Codex_NewFileAndBadFile(t *testing.T) {
 	assert.False(t, res.Changed)
 
 	require.NoError(t, os.WriteFile(path, []byte("= not toml"), 0o644))
-	_, err = installManagedAt(path, agent.ManagedInstallOptions{Command: "/opt/safedep/gryph/bin/gryph"})
+	_, err = installManagedAt(path, agent.ManagedInstallOptions{Command: testpath.Abs("/opt/safedep/gryph/bin/gryph")})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not parse")
 }

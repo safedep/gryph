@@ -7,18 +7,13 @@ import (
 	"testing"
 
 	"github.com/safedep/gryph/agent/utils"
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func setHome(t *testing.T, dir string) {
-	t.Helper()
-	t.Setenv("HOME", dir)
-	t.Setenv("USERPROFILE", dir)
-}
-
 func TestDetect_NotInstalled(t *testing.T) {
-	setHome(t, t.TempDir())
+	testpath.SetHome(t, t.TempDir())
 
 	result, err := Detect(context.Background())
 	require.NoError(t, err)
@@ -29,7 +24,7 @@ func TestDetect_NotInstalled(t *testing.T) {
 // from settings.json when it may not run the claude binary.
 func TestDetect_WithoutProgramExecution(t *testing.T) {
 	home := t.TempDir()
-	setHome(t, home)
+	testpath.SetHome(t, home)
 	claudeDir := filepath.Join(home, ".claude")
 	require.NoError(t, os.MkdirAll(claudeDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(`{"version":"9.9.9"}`), 0o644))

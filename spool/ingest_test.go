@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -62,6 +63,7 @@ func names(t *testing.T, dir string) []string {
 }
 
 func TestIngest_TakesEntriesOfTheOwner(t *testing.T) {
+	skipWithoutOwners(t)
 	root := t.TempDir()
 	me := strconv.Itoa(os.Getuid())
 	first, err := Write(root, me, Entry{Verdict: "allow", Reason: "unreachable", Frame: handleFrame()})
@@ -81,6 +83,7 @@ func TestIngest_TakesEntriesOfTheOwner(t *testing.T) {
 }
 
 func TestIngest_RefusesWhatIsNotAnEntry(t *testing.T) {
+	skipWithoutOwners(t)
 	root := t.TempDir()
 	me := strconv.Itoa(os.Getuid())
 	dir := filepath.Join(root, me)
@@ -126,6 +129,7 @@ func TestIngest_RefusesWhatIsNotAnEntry(t *testing.T) {
 }
 
 func TestIngest_DropsOverTheQuota(t *testing.T) {
+	skipWithoutOwners(t)
 	root := t.TempDir()
 	me := strconv.Itoa(os.Getuid())
 	for i := range 5 {
@@ -143,6 +147,7 @@ func TestIngest_DropsOverTheQuota(t *testing.T) {
 }
 
 func TestIngest_KeepsTheFileWhenTheSinkFails(t *testing.T) {
+	skipWithoutOwners(t)
 	root := t.TempDir()
 	me := strconv.Itoa(os.Getuid())
 	path, err := Write(root, me, Entry{Verdict: "allow", Reason: "r"})
@@ -168,6 +173,14 @@ func TestIngest_SkipsFilesAtTheRoot(t *testing.T) {
 func TestEnsureRoot(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "spool")
 	require.NoError(t, EnsureRoot(root))
+	require.NoError(t, EnsureRoot(root), "an existing root stays")
+	assert.Error(t, EnsureRoot(""))
+}
+
+func TestEnsureRoot_Modes(t *testing.T) {
+	skipWithoutModes(t)
+	root := filepath.Join(t.TempDir(), "spool")
+	require.NoError(t, EnsureRoot(root))
 	info, err := os.Stat(root)
 	require.NoError(t, err)
 	assert.Equal(t, RootMode, info.Mode()&(os.ModePerm|os.ModeSetgid|os.ModeSticky))
@@ -176,5 +189,23 @@ func TestEnsureRoot(t *testing.T) {
 	info, err = os.Stat(root)
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
-	assert.Error(t, EnsureRoot(""))
+}
+
+// skipWithoutOwners skips a test that needs the owner uid of a file. The
+// spool assigns an entry to the account that owns its directory, and
+// Windows reports no owner uid.
+func skipWithoutOwners(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports no owner uid")
+	}
+}
+
+// skipWithoutModes skips a test of Unix mode bits. Windows protects a file
+// with an access list, not with the mode bits.
+func skipWithoutModes(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no Unix mode bits")
+	}
 }

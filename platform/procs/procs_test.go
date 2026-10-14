@@ -3,6 +3,7 @@ package procs
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ func TestList_FindsThisProcess(t *testing.T) {
 		}
 	}
 	require.NotNil(t, me, "the list holds the current process")
-	assert.True(t, me.Matches(filepath.Base(exe)) || len(me.Name) >= 15,
+	assert.True(t, me.Matches(strings.TrimSuffix(filepath.Base(exe), ".exe")) || len(me.Name) >= 15,
 		"the name is the program, or a kernel-truncated prefix of it: %q", me.Name)
 	assert.False(t, me.Started.IsZero())
 	assert.True(t, me.Started.Before(time.Now().Add(time.Second)))

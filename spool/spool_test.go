@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/safedep/gryph/decision/ipc"
@@ -16,12 +17,14 @@ func TestWrite(t *testing.T) {
 	path, err := Write(root, "1000", Entry{Verdict: "allow", Reason: "unreachable", Frame: ipc.MustFrame(ipc.TypeHandle, ipc.Handle{Agent: "a", HookType: "x", RawPayload: []byte("{}")})})
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(root, "1000"), filepath.Dir(path))
-	info, err := os.Stat(path)
-	require.NoError(t, err)
-	assert.Equal(t, FileMode, info.Mode().Perm())
-	dirInfo, err := os.Stat(filepath.Dir(path))
-	require.NoError(t, err)
-	assert.Equal(t, DirMode, dirInfo.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(path)
+		require.NoError(t, err)
+		assert.Equal(t, FileMode, info.Mode().Perm())
+		dirInfo, err := os.Stat(filepath.Dir(path))
+		require.NoError(t, err)
+		assert.Equal(t, DirMode, dirInfo.Mode().Perm())
+	}
 
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)

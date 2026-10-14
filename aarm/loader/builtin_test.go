@@ -3,12 +3,14 @@ package loader
 import (
 	"context"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/safedep/gryph/aarm/model"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/shellcmd"
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -166,7 +168,7 @@ func TestLoader_BuiltinAppendedLast(t *testing.T) {
 
 func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testpath.SetHome(t, home)
 	cfgDir := home + "/.config/safedep/gryph"
 	exportKey := home + "/.local/share/safedep/gryph/export.key"
 
@@ -371,6 +373,7 @@ func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			skipShellOnWindows(t, tc.action)
 			action := &model.Action{
 				Type:       tc.action,
 				WorkingDir: "/work",
@@ -390,7 +393,7 @@ func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 
 func TestBuiltinSource_BlocksReadsOfProtectedPaths(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testpath.SetHome(t, home)
 	data := home + "/.local/share/safedep/gryph"
 	db := data + "/audit.db"
 	key := home + "/.config/safedep/gryph/keys/receipt.key"
@@ -528,6 +531,7 @@ func TestBuiltinSource_BlocksReadsOfProtectedPaths(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			skipShellOnWindows(t, tc.action)
 			action := &model.Action{
 				Type:       tc.action,
 				WorkingDir: "/work",
@@ -584,7 +588,7 @@ func TestBuiltinSource_ReadsWhenConfigAndDataShareADirectory(t *testing.T) {
 
 func TestBuiltinSource_BlocksCommandsPaddedPastTheCallLimit(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testpath.SetHome(t, home)
 	data := home + "/.local/share/safedep/gryph"
 	docs, err := NewBuiltinSource(home + "/.config/safedep/gryph/**").
 		WithReadGlobs(data + "/audit.db").
@@ -614,7 +618,7 @@ func TestBuiltinSource_BlocksCommandsPaddedPastTheCallLimit(t *testing.T) {
 
 func TestBuiltinSource_UnboundedAnalysisMatchesEveryRule(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testpath.SetHome(t, home)
 	docs, err := NewBuiltinSource("**/.cc/settings.json").
 		WithReadGlobs(home + "/.local/share/safedep/gryph/audit.db").
 		Load(context.Background())
@@ -633,4 +637,15 @@ func TestBuiltinSource_UnboundedAnalysisMatchesEveryRule(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, model.DecisionBlock, res.Decision)
 	assert.ElementsMatch(t, []string{builtinHookCommandRuleID, builtinProtectedFilesRuleID, builtinProtectedReadsRuleID}, res.MatchedRuleIDs)
+}
+
+// skipShellOnWindows skips a shell command case on Windows. The shell
+// analysis reads POSIX shell syntax and Unix paths, and the shells of a
+// Windows agent expand ~ and paths in other ways. The file action cases
+// still run on Windows.
+func skipShellOnWindows(t *testing.T, action model.ActionType) {
+	t.Helper()
+	if runtime.GOOS == "windows" && action == model.ActionCommandExec {
+		t.Skip("the shell analysis covers POSIX shells")
+	}
 }

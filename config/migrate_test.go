@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +18,7 @@ func setupMigrationEnv(t *testing.T) (string, string) {
 
 	configBase := t.TempDir()
 	dataBase := t.TempDir()
-	setHome(t, t.TempDir())
+	testpath.SetHome(t, t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", configBase)
 	t.Setenv("XDG_DATA_HOME", dataBase)
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
@@ -74,7 +75,7 @@ func TestMigrateLegacyLayout_MovesLegacyTree(t *testing.T) {
 func TestMigrateLegacyLayout_SamePairMovesOnce(t *testing.T) {
 	clearPathEnv(t)
 	base := t.TempDir()
-	setHome(t, t.TempDir())
+	testpath.SetHome(t, t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", base)
 	t.Setenv("XDG_DATA_HOME", base)
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
@@ -155,7 +156,7 @@ func TestNormalizeConfigFileName_KeepsBothFiles(t *testing.T) {
 func TestLegacyResolvers_PreferPreexistingXDGDirs(t *testing.T) {
 	clearPathEnv(t)
 	home := t.TempDir()
-	setHome(t, home)
+	testpath.SetHome(t, home)
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("XDG_DATA_HOME", "")
 

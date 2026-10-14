@@ -9,6 +9,7 @@ import (
 
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,10 +42,10 @@ func TestResolvePolicyTarget(t *testing.T) {
 		wantPath string
 		wantKind policyTargetKind
 	}{
-		{"no arg targets global", nil, "/cfg/policy.yaml", policyTargetGlobal},
-		{"bare name normalizes extension", []string{"guard"}, "/cfg/policies/guard.yaml", policyTargetNamed},
-		{"bare name keeps yaml", []string{"guard.yaml"}, "/cfg/policies/guard.yaml", policyTargetNamed},
-		{"bare name keeps yml", []string{"guard.yml"}, "/cfg/policies/guard.yml", policyTargetNamed},
+		{"no arg targets global", nil, filepath.FromSlash("/cfg/policy.yaml"), policyTargetGlobal},
+		{"bare name normalizes extension", []string{"guard"}, filepath.FromSlash("/cfg/policies/guard.yaml"), policyTargetNamed},
+		{"bare name keeps yaml", []string{"guard.yaml"}, filepath.FromSlash("/cfg/policies/guard.yaml"), policyTargetNamed},
+		{"bare name keeps yml", []string{"guard.yml"}, filepath.FromSlash("/cfg/policies/guard.yml"), policyTargetNamed},
 		{"dot path is literal", []string{"./x.yml"}, "./x.yml", policyTargetPath},
 		{"separator path is literal", []string{"sub/x.yaml"}, "sub/x.yaml", policyTargetPath},
 		{"absolute path is literal", []string{"/tmp/x.yaml"}, "/tmp/x.yaml", policyTargetPath},
@@ -61,7 +62,7 @@ func TestResolvePolicyTarget(t *testing.T) {
 
 func TestResolvePolicyTarget_TildeExpands(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testpath.SetHome(t, home)
 	got, err := resolvePolicyTarget(&config.Paths{ConfigDir: "/cfg"}, []string{"~/x.yml"})
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(home, "x.yml"), got.path)

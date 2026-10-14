@@ -8,13 +8,14 @@ import (
 
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestManagedInstall_ClaudeCode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "claude-code", "managed-settings.d", "50-gryph.json")
-	opts := agent.ManagedInstallOptions{Command: "/opt/safedep/gryph/bin/gryph"}
+	opts := agent.ManagedInstallOptions{Command: testpath.Abs("/opt/safedep/gryph/bin/gryph")}
 
 	res, err := installManagedAt(path, agent.ManagedInstallOptions{Command: opts.Command, DryRun: true})
 	require.NoError(t, err)

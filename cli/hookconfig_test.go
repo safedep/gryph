@@ -12,6 +12,7 @@ import (
 	"github.com/safedep/gryph/agent"
 	"github.com/safedep/gryph/config"
 	"github.com/safedep/gryph/engine"
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,7 +31,7 @@ func TestAdapters_InstallWritesOnlyDeclaredHookConfig(t *testing.T) {
 			require.NotEmpty(t, globs)
 
 			home := t.TempDir()
-			t.Setenv("HOME", home)
+			testpath.SetHome(t, home)
 			t.Setenv("PATH", fakeAgentBinDir(t))
 			require.NoError(t, os.MkdirAll(filepath.Join(home, "Applications", "Cursor.app"), 0o700))
 			for _, g := range globs {

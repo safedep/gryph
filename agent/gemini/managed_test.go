@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/safedep/gryph/agent"
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +16,7 @@ func TestManagedInstall_Gemini(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "gemini-cli", "settings.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(`{"general":{"vimMode":false},"hooksConfig":{"notifications":true},"hooks":{"BeforeTool":[{"matcher":"shell","hooks":[{"type":"command","command":"/enterprise/check"}]}]}}`), 0o644))
-	opts := agent.ManagedInstallOptions{Command: "/opt/safedep/gryph/bin/gryph"}
+	opts := agent.ManagedInstallOptions{Command: testpath.Abs("/opt/safedep/gryph/bin/gryph")}
 
 	res, err := installManagedAt(path, opts)
 	require.NoError(t, err)

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +35,7 @@ func stubRunner(t *testing.T, fail ...string) *[]call {
 }
 
 func TestJob_Validate(t *testing.T) {
-	good := Job{Name: "gryph-reconcile", Description: "d", Command: []string{"/opt/gryph", "supervisor", "reconcile", "--once"}, Interval: 15 * time.Minute}
+	good := Job{Name: "gryph-reconcile", Description: "d", Command: []string{testpath.Abs("/opt/gryph"), "supervisor", "reconcile", "--once"}, Interval: 15 * time.Minute}
 	assert.NoError(t, good.validate())
 	assert.Equal(t, 15, good.minutes())
 

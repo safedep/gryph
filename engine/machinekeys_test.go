@@ -3,6 +3,7 @@ package engine
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/safedep/gryph/aarm/receipt"
@@ -25,15 +26,19 @@ func TestEnsureMachineKeys_MakesAndKeeps(t *testing.T) {
 	assert.True(t, first.Created)
 	assert.Len(t, first.KeyID, receipt.KeyIDLen)
 
-	info, err := os.Stat(first.ReceiptKey)
-	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
-	info, err = os.Stat(cfg.Supervisor.KeyDir())
-	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
-	info, err = os.Stat(first.PublicKey)
-	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
+	// Windows protects the files with an access list, not with the mode
+	// bits, so only Unix checks the modes.
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(first.ReceiptKey)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+		info, err = os.Stat(cfg.Supervisor.KeyDir())
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
+		info, err = os.Stat(first.PublicKey)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
+	}
 	published, err := receipt.LoadTrustStore(first.PublicKey)
 	require.NoError(t, err)
 	require.Len(t, published.Keys, 1)

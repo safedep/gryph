@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,7 +50,8 @@ func TestCensus(t *testing.T) {
 	ctx := context.Background()
 	exe, err := os.Executable()
 	require.NoError(t, err)
-	me := filepath.Base(exe)
+	// An adapter names a program without the .exe of Windows.
+	me := strings.TrimSuffix(filepath.Base(exe), ".exe")
 	live := censusAdapter{Adapter: claudecode.New(nil, config.LoggingStandard, false), name: "test-agent", names: []string{me}}
 	absent := censusAdapter{Adapter: claudecode.New(nil, config.LoggingStandard, false), name: "absent-agent", names: []string{"no-such-program-for-gryph"}}
 

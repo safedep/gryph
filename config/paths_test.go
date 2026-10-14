@@ -7,20 +7,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/safedep/gryph/internal/testpath"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // clearPathEnv neutralizes the environment that steers path resolution, so a
 // test controls only the variables it sets.
-// setHome points the home directory at dir. os.UserHomeDir reads HOME on
-// Unix and USERPROFILE on Windows.
-func setHome(t *testing.T, dir string) {
-	t.Helper()
-	t.Setenv("HOME", dir)
-	t.Setenv("USERPROFILE", dir)
-}
-
 func clearPathEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv(configDirEnvKey, "")
@@ -75,7 +68,7 @@ func TestResolveDir_XDGHonoredOnAllPlatforms(t *testing.T) {
 
 func TestResolveDir_RelativeXDGIgnored(t *testing.T) {
 	clearPathEnv(t)
-	setHome(t, t.TempDir())
+	testpath.SetHome(t, t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "relative/path")
 
 	got := getConfigDir()
@@ -157,7 +150,7 @@ func TestResolveDir_ManagedIgnoresEnvironment(t *testing.T) {
 	withManagedPaths(t, account, nil)
 
 	stray := t.TempDir()
-	setHome(t, stray)
+	testpath.SetHome(t, stray)
 	t.Setenv(configDirEnvKey, stray)
 	t.Setenv(dataDirEnvKey, stray)
 	t.Setenv(cacheDirEnvKey, stray)
@@ -183,7 +176,7 @@ func TestResolveDir_ManagedFallsBackWithoutAccountDatabase(t *testing.T) {
 }
 
 func TestAccountBaseDirs_IgnoresHomeEnvironment(t *testing.T) {
-	setHome(t, t.TempDir())
+	testpath.SetHome(t, t.TempDir())
 
 	dirs, err := accountBaseDirsResolver()
 	if err != nil {
