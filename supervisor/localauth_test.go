@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/safedep/gryph/aarm/approval"
@@ -49,6 +50,7 @@ func startAuthServer(t *testing.T, auth localauth.Authorizer, allowWithout bool)
 }
 
 func TestLocalAuth_PasswordRequiredWhenTheHostHasAnAuthority(t *testing.T) {
+	skipWithoutSubject(t)
 	auth := &fakeAuthority{available: true, result: localauth.Result{Challenge: true}}
 	srv, sock := startAuthServer(t, auth, false)
 	other, row := seedOtherPartition(t, srv.root, 60011, false)
@@ -118,6 +120,7 @@ func TestLocalAuth_NoAuthorityTakesTheAnswer(t *testing.T) {
 // With the password given, the answer is local-auth, and a request from
 // another login session is no different.
 func TestLocalAuth_AuthorizedLocalAdminBecomesLocalAuth(t *testing.T) {
+	skipWithoutSubject(t)
 	auth := &fakeAuthority{available: true, result: localauth.Result{Authorized: true}}
 	srv, sock := startAuthServer(t, auth, false)
 	other, row := seedOtherPartition(t, srv.root, 60014, false)
@@ -138,4 +141,14 @@ func TestLocalAuth_AuthorizedLocalAdminBecomesLocalAuth(t *testing.T) {
 	assert.Equal(t, storage.ApprovalRequestApproved, res.State)
 	assert.Equal(t, string(approval.AssuranceLocalAuth), res.Assurance)
 	_ = config.ApprovalChannelLocalAuth
+}
+
+// skipWithoutSubject skips a test that asks the authority about the
+// approver process. Only Linux names that process to polkit, by its start
+// time, so on other systems the service finds no authority first.
+func skipWithoutSubject(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skip("only Linux names the approver process to polkit")
+	}
 }
