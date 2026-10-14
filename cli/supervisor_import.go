@@ -119,7 +119,11 @@ func importUserDatabase(ctx context.Context, app *App, force bool) (*importRepor
 	}
 
 	socket := app.Config.Supervisor.SocketPath()
-	client, err := ipc.Dial(ctx, socket, ipc.DialOptions{Version: version.Version, VerifyServer: func(conn net.Conn) error {
+	// A command is not on the latency path of an agent, so it waits for the
+	// welcome as long as for a read. The service opens the partition of the
+	// account before the welcome, and the first open on a busy host takes
+	// longer than the handshake budget of a hook.
+	client, err := ipc.Dial(ctx, socket, ipc.DialOptions{Version: version.Version, Handshake: ipc.ReadTimeout, VerifyServer: func(conn net.Conn) error {
 		return hookside.VerifyServer(conn, socket, app.Config.Supervisor.ServerAccount())
 	}})
 	if err != nil {
