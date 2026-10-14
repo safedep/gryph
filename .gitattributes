@@ -1,0 +1,6 @@
+# Tests compare these files by digest or byte for byte. A Windows checkout
+# with core.autocrlf would turn their line ends into CRLF and change the
+# bytes, so Git keeps them as they are in the repository.
+agent/*/testdata/legacy/* -text
+agent/opencode/plugin.js text eol=lf
+agent/piagent/plugin.ts text eol=lf

@@ -35,7 +35,7 @@ func TestManagedInstall_Gemini(t *testing.T) {
 	require.Len(t, before, 2)
 	assert.Equal(t, "shell", before[0]["matcher"], "the enterprise entry stays first")
 	assert.Equal(t, "*", before[1]["matcher"])
-	assert.Equal(t, "/opt/safedep/gryph/bin/gryph _hook gemini BeforeTool", agent.EntryList(before[1]["hooks"])[0]["command"])
+	assert.Equal(t, testpath.Abs("/opt/safedep/gryph/bin/gryph")+" _hook gemini BeforeTool", agent.EntryList(before[1]["hooks"])[0]["command"])
 	assert.Len(t, doc["hooks"].(map[string]any), len(HookTypes))
 
 	res, err = installManagedAt(path, opts)

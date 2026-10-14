@@ -50,7 +50,7 @@ timeout = 10
 	assert.Equal(t, "^Bash$", pre[0]["matcher"])
 	assert.Equal(t, "*", pre[1]["matcher"])
 	gryph := agent.EntryList(pre[1]["hooks"])[0]
-	assert.Equal(t, "/opt/safedep/gryph/bin/gryph _hook codex PreToolUse", gryph["command"])
+	assert.Equal(t, testpath.Abs("/opt/safedep/gryph/bin/gryph")+" _hook codex PreToolUse", gryph["command"])
 	assert.Equal(t, int64(30), gryph["timeout"])
 	assert.Len(t, agent.EntryList(doc["hooks"].(map[string]any)["Stop"]), 1)
 
@@ -66,7 +66,7 @@ timeout = 10
 	require.NoError(t, err)
 	assert.Contains(t, string(data), "allow_managed_hooks_only = true")
 
-	res, err = installManagedAt(path, agent.ManagedInstallOptions{Command: "/opt/other/gryph"})
+	res, err = installManagedAt(path, agent.ManagedInstallOptions{Command: testpath.Abs("/opt/other/gryph")})
 	require.NoError(t, err)
 	assert.True(t, res.Changed, "a new binary path replaces the Gryph entries")
 	data, err = os.ReadFile(path)

@@ -34,7 +34,7 @@ func TestManagedInstall_Cursor(t *testing.T) {
 	shell := doc.Hooks["beforeShellExecution"]
 	require.Len(t, shell, 2)
 	assert.Equal(t, "/enterprise/audit.sh", shell[0]["command"], "the enterprise entry stays first")
-	assert.Equal(t, "/opt/safedep/gryph/bin/gryph _hook cursor beforeShellExecution", shell[1]["command"])
+	assert.Equal(t, testpath.Abs("/opt/safedep/gryph/bin/gryph")+" _hook cursor beforeShellExecution", shell[1]["command"])
 	assert.Equal(t, true, shell[1]["failClosed"], "every Gryph entry fails closed")
 	assert.Len(t, doc.Hooks, len(HookTypes))
 	for _, hookType := range HookTypes {
