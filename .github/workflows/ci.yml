@@ -35,6 +35,28 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  # run-test covers Linux and uploads coverage. The platform code of
+  # macOS and Windows (peer credentials, the scheduler, key files, the
+  # listener) has its own tests, and only a runner of that OS runs them.
+  run-test-platforms:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test -timeout 15m ./...
+
   fuzz:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -88,9 +110,6 @@ jobs:
         uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
         with:
           go-version-file: go.mod
-
-      - name: Test Key File Access
-        run: go test ./internal/securefile/ ./config/ ./aarm/receipt/
 
       - name: Run Windows Acceptance Scripts
         env:
