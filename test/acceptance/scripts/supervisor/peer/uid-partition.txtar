@@ -25,7 +25,7 @@ exec id -u gryphacc2
 cp stdout uid2.txt
 capture UID2 '([0-9]+)' uid2.txt
 
-exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir $WORK/state --allow-root &
+exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir $WORK/state --spool-dir $WORK/spool --allow-root &
 
 ipcframe frames.bin hello.json handle.json
 exec cp frames.bin /tmp/gryph-acceptance-frames.bin

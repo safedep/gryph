@@ -18,7 +18,7 @@ exec id -u gryphacc1
 cp stdout uid1.txt
 capture UID1 '([0-9]+)' uid1.txt
 
-exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir $WORK/state --allow-root --max-conns 3 --rate 2 &
+exec gryph supervisor run --socket /tmp/gryph-acceptance-hook.sock --state-dir $WORK/state --spool-dir $WORK/spool --allow-root --max-conns 3 --rate 2 &
 
 # Root holds three connections. The fourth is refused at once.
 ipcframe hello.bin hello.json

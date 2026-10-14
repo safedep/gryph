@@ -31,6 +31,7 @@ stdout 'managed-file'
 stdout 'builtin'
 
 exec rm -f /root/.config/safedep/gryph/policy.yaml
+exec rmdir --ignore-fail-on-non-empty /root/.config/safedep/gryph /root/.config/safedep
 exec rm -rf /etc/safedep/gryph
 exec rmdir --ignore-fail-on-non-empty /etc/safedep
 

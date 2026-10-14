@@ -46,6 +46,7 @@ stdout '"trust_store": \{'
 stdout '"keys": 1'
 
 exec rm -rf /etc/safedep/gryph /etc/claude-code /root/.config/safedep/gryph/keys
+exec rmdir --ignore-fail-on-non-empty /root/.config/safedep/gryph /root/.config/safedep
 exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
 exec rmdir --ignore-fail-on-non-empty /etc/safedep
 

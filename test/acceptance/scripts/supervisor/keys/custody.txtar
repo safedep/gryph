@@ -81,7 +81,7 @@ stdout 'Key: supervisor-owned \(protected\) /tmp/gryph-acceptance-state/keys/rec
 
 exec gryph supervisor stop --user _gryph
 exec userdel _gryph
-exec rm -rf /etc/safedep/gryph /etc/claude-code /tmp/gryph-acceptance-state /tmp/gryph-acceptance-spool /tmp/gryph-acceptance-hook.sock /usr/local/bin/gryph-acceptance /etc/systemd/system/gryph-supervisor.socket /etc/systemd/system/gryph-supervisor.service
+exec rm -rf /etc/safedep/gryph /etc/claude-code /tmp/gryph-acceptance-state /tmp/gryph-acceptance-spool /tmp/gryph-acceptance-hook.sock /usr/local/bin/gryph-acceptance /etc/systemd/system/gryph-supervisor.socket /etc/systemd/system/gryph-supervisor.service /usr/share/polkit-1/actions/io.safedep.gryph.policy
 exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
 exec rmdir --ignore-fail-on-non-empty /etc/safedep
 

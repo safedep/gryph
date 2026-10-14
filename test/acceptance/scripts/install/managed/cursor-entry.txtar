@@ -39,6 +39,8 @@ exec gryph doctor --no-color
 stdout 'hook_config\s+cursor\s+prevent_same_user\s+managed entry at /etc/cursor/hooks.json'
 
 exec rm -rf /etc/safedep/gryph /etc/cursor
+exec rm -rf /root/.local/share/safedep/gryph
+exec rmdir --ignore-fail-on-non-empty /root/.local/share/safedep
 exec rm -rf /etc/systemd/user/gryph-reconcile.service /etc/systemd/user/gryph-reconcile.timer /etc/systemd/user/timers.target.wants/gryph-reconcile.timer
 exec rmdir --ignore-fail-on-non-empty /etc/safedep
 
