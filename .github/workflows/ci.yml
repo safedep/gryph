@@ -150,6 +150,18 @@ jobs:
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@v1.13.0
 
+      # The unit coverage misses the code that only the real binary runs:
+      # the commands, the engine and the hook path. On Linux the suite runs
+      # a binary built with -cover, and the result goes to Codecov next to
+      # the unit coverage.
+      - name: Build With Coverage
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          mkdir -p "${RUNNER_TEMP}/gryph-cover" "${RUNNER_TEMP}/gocover"
+          go build -cover -coverpkg=./... -o "${RUNNER_TEMP}/gryph-cover/gryph" ./cmd/gryph
+          echo "GRYPH_BIN=${RUNNER_TEMP}/gryph-cover/gryph" >> "$GITHUB_ENV"
+          echo "GOCOVERDIR=${RUNNER_TEMP}/gocover" >> "$GITHUB_ENV"
+
       - name: Run Acceptance Suite
         run: |
           gotestsum --junitfile "${RUNNER_TEMP}/acceptance.xml" --format testname \
@@ -163,6 +175,20 @@ jobs:
             -catalog test/acceptance/catalog.yaml \
             -scripts test/acceptance/scripts \
             | tee "${RUNNER_TEMP}/acceptance-report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Convert Acceptance Coverage
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          go tool covdata textfmt -i="${GOCOVERDIR}" -o acceptance-coverage.txt
+          go tool cover -func=acceptance-coverage.txt | tail -1 >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Acceptance Coverage
+        if: matrix.os == 'ubuntu-latest' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'push')
+        uses: codecov/codecov-action@0565863a31f2c772f9f0395002a31e3f06189574 # v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: acceptance-coverage.txt
+          flags: acceptance
 
       - name: Upload Report
         if: always()

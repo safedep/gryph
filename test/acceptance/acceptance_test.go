@@ -124,6 +124,9 @@ func TestAcceptance(t *testing.T) {
 						"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
 						"http_proxy", "https_proxy", "no_proxy",
 						"SSL_CERT_FILE", "SSL_CERT_DIR")
+					// A binary built with -cover writes its coverage to
+					// GOCOVERDIR, and warns on stderr when it is not set.
+					forwardHostEnv(env, "GOCOVERDIR")
 					return nil
 				},
 				// privileged is true in the privileged job: root, and
