@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -117,6 +118,13 @@ func (a Analysis) Changes() []Target {
 type Env struct {
 	WorkingDir string
 	Home       string
+	// Windows reads the command as a command of a Windows shell: a path
+	// can use backslashes or the Git Bash drive form /c/, and the analysis
+	// also scans the line for the paths of a PowerShell or cmd command.
+	Windows bool
+	// Vars are the path variables that the analysis expands besides HOME
+	// and PWD, keyed in upper case, with forward slashes.
+	Vars map[string]string
 }
 
 // Analyze returns the paths that command uses and the hosts it contacts.
@@ -143,6 +151,11 @@ func (w *walker) analyze(command string) Analysis {
 	if w.exhausted {
 		return Unbounded()
 	}
+	if w.env.Windows {
+		for _, t := range windowsTargets(command, w.env) {
+			w.addTarget(t)
+		}
+	}
 	return Analysis{Parsed: !w.failed, Targets: w.targets, Hosts: w.hosts, GryphHook: w.gryphHook, GryphResolve: w.gryphResolve}
 }
 
@@ -159,7 +172,17 @@ func AnalyzeCommand(command string, args []string, workingDir string) Analysis {
 	if line == "" {
 		return Analysis{Parsed: true}
 	}
-	return Analyze(line, Env{WorkingDir: filepath.ToSlash(workingDir), Home: HomeDir()})
+	return Analyze(line, hostEnv(workingDir))
+}
+
+// hostEnv is the environment of the analysis on this host.
+func hostEnv(workingDir string) Env {
+	env := Env{WorkingDir: filepath.ToSlash(workingDir), Home: HomeDir()}
+	if runtime.GOOS == "windows" {
+		env.Windows = true
+		env.Vars = windowsEnv()
+	}
+	return env
 }
 
 // Unbounded is the analysis of a command that the walker could not finish.
@@ -207,7 +230,8 @@ func ResolvePath(p, workingDir string) string {
 	if p == "" {
 		return ""
 	}
-	return resolve(filepath.ToSlash(p), filepath.ToSlash(workingDir), HomeDir())
+	env := hostEnv(workingDir)
+	return resolve(env.native(filepath.ToSlash(p)), env.WorkingDir, env.Home)
 }
 
 // HomeDir returns the user's home directory with forward slashes, or an
@@ -881,7 +905,7 @@ func (w *walker) cd(args []string, cwds dirs) dirs {
 	}
 	out := make(dirs, 0, len(cwds))
 	for _, cwd := range cwds {
-		out = union(out, dirs{resolve(ops[0], cwd, w.env.Home)})
+		out = union(out, dirs{w.resolve(ops[0], cwd)})
 	}
 	return out
 }
@@ -1727,7 +1751,7 @@ func (w *walker) addDest(dest string, sources []string, p parsedArgs, flags copy
 	relative := p.has(flags.relative...)
 	recursive := !relative && p.has(flags.recursive...)
 	for _, cwd := range cwds {
-		tree := recursive && w.isCwdOrHome(resolve(dest, cwd, w.env.Home))
+		tree := recursive && w.isCwdOrHome(w.resolve(dest, cwd))
 		for _, src := range sources {
 			if _, remotePath, remote := splitRemote(src); remote {
 				src = remotePath
@@ -1746,7 +1770,7 @@ func (w *walker) addDest(dest string, sources []string, p parsedArgs, flags copy
 				if tree {
 					access = AccessWriteTree
 				}
-				w.addTarget(Target{Path: resolve(target, cwd, w.env.Home), Access: access, Named: true})
+				w.addTarget(Target{Path: w.resolve(target, cwd), Access: access, Named: true})
 				continue
 			}
 			w.add(target, AccessWrite, dirs{cwd})
@@ -1850,9 +1874,9 @@ func (w *walker) targetsOf(value string, access Access, cwds dirs) []Target {
 	}
 	out := make([]Target, 0, len(cwds))
 	for _, cwd := range cwds {
-		t := Target{Path: resolve(value, cwd, w.env.Home), Access: access}
+		t := Target{Path: w.resolve(value, cwd), Access: access}
 		if glob != "" && access == AccessRead {
-			t.Glob = resolve(glob, cwd, w.env.Home)
+			t.Glob = w.resolve(glob, cwd)
 			t.MatchDot = w.matchDot
 		}
 		out = append(out, t)
@@ -1876,6 +1900,12 @@ func IsAbs(p string) bool {
 	}
 	return len(p) >= 3 && p[1] == ':' && p[2] == '/' &&
 		(p[0] >= 'a' && p[0] <= 'z' || p[0] >= 'A' && p[0] <= 'Z')
+}
+
+// resolve resolves a path word of the command in the environment of the
+// walker.
+func (w *walker) resolve(p, cwd string) string {
+	return resolve(w.env.native(p), cwd, w.env.Home)
 }
 
 func resolve(p, cwd, home string) string {
@@ -1956,7 +1986,11 @@ func (w *walker) wordPart(b *strings.Builder, part syntax.WordPart, quoted bool,
 		case p.Param.Value == "PWD" && len(cwds) == 1 && cwds[0] != "":
 			b.WriteString(cwds[0])
 		default:
-			return false
+			v, ok := w.env.Vars[p.Param.Value]
+			if !ok {
+				return false
+			}
+			b.WriteString(v)
 		}
 	case *syntax.ProcSubst:
 		// The shell passes the path of a pipe that holds the output of

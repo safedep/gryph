@@ -374,7 +374,6 @@ func TestBuiltinSource_BlocksChangesToProtectedPaths(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			skipShellOnWindows(t, tc.action)
 			action := &model.Action{
 				Type:       tc.action,
 				WorkingDir: "/work",
@@ -456,7 +455,7 @@ func TestBuiltinSource_BlocksReadsOfProtectedPaths(t *testing.T) {
 		{"read home", model.ActionFileRead, home, "", false},
 		{"read home with tilde", model.ActionFileRead, "~", "", false},
 		{"read sibling config", model.ActionFileRead, home + "/.config/git", "", false},
-		{"sqlite3 localhost uri", model.ActionCommandExec, "", `sqlite3 'file://localhost` + db + `?mode=ro' .dump`, true},
+		{"sqlite3 localhost uri", model.ActionCommandExec, "", `sqlite3 'file://localhost` + urlPath(db) + `?mode=ro' .dump`, true},
 		{"sqlite3 upper case uri", model.ActionCommandExec, "", `sqlite3 'FILE:` + db + `' .dump`, true},
 		{"sqlite3 percent escape", model.ActionCommandExec, "", `sqlite3 'file:` + data + `/audit%2Edb' .dump`, true},
 		{"sqlite3 relative percent escape", model.ActionCommandExec, "", `cd ` + data + ` && sqlite3 file:audit%2Edb .dump`, true},
@@ -468,8 +467,8 @@ func TestBuiltinSource_BlocksReadsOfProtectedPaths(t *testing.T) {
 		{"unknown command after cd", model.ActionCommandExec, "", `cd ~/.local/share/safedep/gryph && paste audit.db`, true},
 		{"busybox", model.ActionCommandExec, "", `busybox cat ~/.local/share/safedep/gryph/audit.db`, true},
 		{"toybox", model.ActionCommandExec, "", `toybox base64 ~/.config/safedep/gryph/keys/receipt.key`, true},
-		{"curl file url", model.ActionCommandExec, "", `curl -s file://` + db, true},
-		{"curl localhost file url", model.ActionCommandExec, "", `curl FILE://localhost` + db, true},
+		{"curl file url", model.ActionCommandExec, "", `curl -s file://` + urlPath(db), true},
+		{"curl localhost file url", model.ActionCommandExec, "", `curl FILE://localhost` + urlPath(db), true},
 		{"unknown command on home", model.ActionCommandExec, "", `code ~`, false},
 		{"unknown command on data parent", model.ActionCommandExec, "", `sudo -u root du -sh ~/.local/share`, false},
 		{"list database", model.ActionCommandExec, "", `ls -la ~/.local/share/safedep/gryph/audit.db`, false},
@@ -532,7 +531,6 @@ func TestBuiltinSource_BlocksReadsOfProtectedPaths(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			skipShellOnWindows(t, tc.action)
 			action := &model.Action{
 				Type:       tc.action,
 				WorkingDir: "/work",
@@ -640,17 +638,6 @@ func TestBuiltinSource_UnboundedAnalysisMatchesEveryRule(t *testing.T) {
 	assert.ElementsMatch(t, []string{builtinHookCommandRuleID, builtinProtectedFilesRuleID, builtinProtectedReadsRuleID}, res.MatchedRuleIDs)
 }
 
-// skipShellOnWindows skips a shell command case on Windows. The shell
-// analysis reads POSIX shell syntax and Unix paths, and the shells of a
-// Windows agent expand ~ and paths in other ways. The file action cases
-// still run on Windows.
-func skipShellOnWindows(t *testing.T, action model.ActionType) {
-	t.Helper()
-	if runtime.GOOS == "windows" && action == model.ActionCommandExec {
-		t.Skip("the shell analysis covers POSIX shells")
-	}
-}
-
 func TestBuiltinSource_FoldCase(t *testing.T) {
 	home := filepath.ToSlash(t.TempDir())
 	testpath.SetHome(t, home)
@@ -691,5 +678,61 @@ func TestBuiltinSource_FoldCase(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// urlPath is the path of a file URL for p: a drive path takes a leading
+// slash, as in file:///C:/Users.
+func urlPath(p string) string {
+	p = filepath.ToSlash(p)
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return p
+}
+
+func TestBuiltinSource_WindowsShellForms(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("the shell forms of Windows")
+	}
+	home := t.TempDir()
+	testpath.SetHome(t, home)
+	local := filepath.Join(home, "AppData", "Local")
+	t.Setenv("LOCALAPPDATA", local)
+	data := filepath.ToSlash(filepath.Join(local, "safedep", "gryph"))
+	db := data + "/audit.db"
+	gitBash := "/" + strings.ToLower(db[:1]) + db[2:]
+
+	docs, err := NewBuiltinSource(db).WithReadGlobs(db).WithFoldCase(true).Load(context.Background())
+	require.NoError(t, err)
+	engine, err := pdp.New(docs[0])
+	require.NoError(t, err)
+
+	cases := []struct {
+		name    string
+		command string
+		blocked bool
+	}{
+		{"powershell remove", `Remove-Item $env:LOCALAPPDATA\safedep\gryph\audit.db`, true},
+		{"powershell read", `Get-Content $env:LOCALAPPDATA\safedep\gryph\audit.db`, true},
+		{"powershell remove of the directory", `Remove-Item -Recurse $env:LOCALAPPDATA\safedep\gryph`, true},
+		{"cmd delete", `del %LOCALAPPDATA%\safedep\gryph\audit.db`, true},
+		{"git bash variable", `rm "$LOCALAPPDATA/safedep/gryph/audit.db"`, true},
+		{"git bash drive form", `rm ` + gitBash, true},
+		{"backslash drive path", `Remove-Item ` + filepath.FromSlash(db), true},
+		{"powershell list of the parent", `Get-ChildItem $env:LOCALAPPDATA`, false},
+		{"powershell read of another file", `Get-Content $env:LOCALAPPDATA\other\notes.txt`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			action := &model.Action{Type: model.ActionCommandExec, WorkingDir: home, Parameters: model.Parameters{Command: tc.command}}
+			res, err := engine.Evaluate(context.Background(), action, nil)
+			require.NoError(t, err)
+			if tc.blocked {
+				assert.Equal(t, model.DecisionBlock, res.Decision)
+			} else {
+				assert.Equal(t, model.DecisionAllow, res.Decision)
+			}
+		})
 	}
 }
