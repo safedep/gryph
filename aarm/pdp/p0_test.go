@@ -442,6 +442,42 @@ rules:
 
 	withDefault := mustPDPPolicy(t, `{file_patterns: ["a"], file_access: [write, remove]}`)
 	assert.NotEqual(t, mustPDPPolicy(t, `{file_patterns: ["a"]}`).Hash(), withDefault.Hash())
+
+	folded := mustPDPPolicy(t, `{file_patterns: ["a"]}`)
+	folded.Rules[0].Match.FoldCase = true
+	assert.NotEqual(t, mustPDPPolicy(t, `{file_patterns: ["a"]}`).Hash(), folded.Hash())
+}
+
+func TestEvaluate_FoldCase(t *testing.T) {
+	fromFile := mustPDPPolicy(t, `{action_types: [file_read], file_patterns: ["/data/Gryph/audit.db"], fold_case: true}`)
+	require.False(t, fromFile.Rules[0].Match.FoldCase, "a policy file cannot fold case")
+
+	cases := []struct {
+		name    string
+		fold    bool
+		path    string
+		blocked bool
+	}{
+		{"same case", false, "/data/Gryph/audit.db", true},
+		{"other case without fold", false, "/DATA/gryph/AUDIT.db", false},
+		{"other case with fold", true, "/DATA/gryph/AUDIT.db", true},
+		{"other file with fold", true, "/data/gryph/notes.txt", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := mustPDPPolicy(t, `{action_types: [file_read], file_patterns: ["/data/Gryph/audit.db"]}`)
+			p.Rules[0].Match.FoldCase = tc.fold
+			engine, err := New(p)
+			require.NoError(t, err)
+			res, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionFileRead, Parameters: model.Parameters{Path: tc.path}}, nil)
+			require.NoError(t, err)
+			if tc.blocked {
+				assert.Equal(t, model.DecisionBlock, res.Decision)
+			} else {
+				assert.Equal(t, model.DecisionAllow, res.Decision)
+			}
+		})
+	}
 }
 
 func TestGlobsOverlap(t *testing.T) {

@@ -865,9 +865,10 @@ func runsGryphResolve(args []string) bool {
 }
 
 // isGryphProgram reports whether a program word is gryph, or a word that
-// the walker cannot resolve, such as "$G".
+// the walker cannot resolve, such as "$G". The match ignores case, because
+// Windows and macOS find "Gryph" or "GRYPH.EXE" as the gryph program.
 func isGryphProgram(program string) bool {
-	return program == "" || strings.TrimSuffix(path.Base(program), ".exe") == "gryph"
+	return program == "" || strings.TrimSuffix(strings.ToLower(path.Base(program)), ".exe") == "gryph"
 }
 
 func (w *walker) cd(args []string, cwds dirs) dirs {

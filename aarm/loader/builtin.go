@@ -35,6 +35,10 @@ type BuiltinSource struct {
 	// ReadGlobs are the paths that an agent read or shell command must not
 	// read. Empty omits the read rule.
 	ReadGlobs []string
+
+	// FoldCase matches the globs without regard to case, for a file system
+	// that treats two names that differ only in case as one name.
+	FoldCase bool
 }
 
 // NewBuiltinSource builds a BuiltinSource from the given protected paths. Each
@@ -47,6 +51,13 @@ func NewBuiltinSource(globs ...string) *BuiltinSource {
 // WithReadGlobs sets the paths that the read rule protects.
 func (s *BuiltinSource) WithReadGlobs(globs ...string) *BuiltinSource {
 	s.ReadGlobs = normalizeGlobs(globs)
+	return s
+}
+
+// WithFoldCase sets whether the rules match the globs without regard to
+// case.
+func (s *BuiltinSource) WithFoldCase(fold bool) *BuiltinSource {
+	s.FoldCase = fold
 	return s
 }
 
@@ -98,6 +109,7 @@ func (s *BuiltinSource) protectedFilesRule() pdp.Rule {
 		Match: pdp.Match{
 			ActionTypes:  []string{string(model.ActionFileWrite), string(model.ActionFileDelete), string(model.ActionCommandExec)},
 			FilePatterns: append([]string(nil), s.FileGlobs...),
+			FoldCase:     s.FoldCase,
 		},
 	}
 }
@@ -114,6 +126,7 @@ func (s *BuiltinSource) protectedReadsRule() pdp.Rule {
 			ActionTypes:  []string{string(model.ActionFileRead), string(model.ActionCommandExec)},
 			FilePatterns: append([]string(nil), s.ReadGlobs...),
 			FileAccess:   []string{string(shellcmd.AccessRead)},
+			FoldCase:     s.FoldCase,
 		},
 	}
 }

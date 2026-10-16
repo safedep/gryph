@@ -62,6 +62,10 @@ type Match struct {
 	// FilePatterns match: read, write, or remove. The default is write and
 	// remove. FilePatterns always match the action path.
 	FileAccess []string `yaml:"file_access,omitempty"`
+	// FoldCase matches FilePatterns without regard to case. Only the
+	// builtin rules set it, on a platform whose file system folds case. A
+	// policy file cannot set it, so a user rule stays case sensitive.
+	FoldCase bool `yaml:"-"`
 }
 
 // Scope narrows rules to selected agents, projects, or tools.
@@ -309,6 +313,9 @@ func matchCanonical(m Match) map[string]interface{} {
 	addSortedStrings(out, "content_patterns", m.ContentPatterns)
 	addSortedStrings(out, "working_directory_patterns", m.WorkingDirectoryPatterns)
 	addSortedStrings(out, "file_access", m.FileAccess)
+	if m.FoldCase {
+		out["fold_case"] = true
+	}
 	return out
 }
 

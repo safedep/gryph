@@ -2,6 +2,7 @@ package loader
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -647,5 +648,48 @@ func skipShellOnWindows(t *testing.T, action model.ActionType) {
 	t.Helper()
 	if runtime.GOOS == "windows" && action == model.ActionCommandExec {
 		t.Skip("the shell analysis covers POSIX shells")
+	}
+}
+
+func TestBuiltinSource_FoldCase(t *testing.T) {
+	home := filepath.ToSlash(t.TempDir())
+	testpath.SetHome(t, home)
+	data := home + "/Gryph"
+	db := data + "/audit.db"
+	config := home + "/.config/safedep/gryph/config.yml"
+	upper := strings.ToUpper
+
+	cases := []struct {
+		name    string
+		action  model.ActionType
+		path    string
+		command string
+		blocked bool
+	}{
+		{"read database in other case", model.ActionFileRead, upper(db), "", true},
+		{"write config in other case", model.ActionFileWrite, upper(config), "", true},
+		{"cat database in other case", model.ActionCommandExec, "", `cat ` + upper(db), true},
+		{"rm config in other case", model.ActionCommandExec, "", `rm ` + upper(config), true},
+		{"read data directory in other case", model.ActionFileRead, upper(data), "", true},
+		{"read home in other case", model.ActionFileRead, upper(home), "", false},
+		{"read other file", model.ActionFileRead, home + "/notes.txt", "", false},
+	}
+	for _, fold := range []bool{true, false} {
+		docs, err := NewBuiltinSource(config).WithReadGlobs(db).WithFoldCase(fold).Load(context.Background())
+		require.NoError(t, err)
+		engine, err := pdp.New(docs[0])
+		require.NoError(t, err)
+		for _, tc := range cases {
+			t.Run(fmt.Sprintf("%s fold=%v", tc.name, fold), func(t *testing.T) {
+				action := &model.Action{Type: tc.action, WorkingDir: home, Parameters: model.Parameters{Path: tc.path, Command: tc.command}}
+				res, err := engine.Evaluate(context.Background(), action, nil)
+				require.NoError(t, err)
+				if tc.blocked && fold {
+					assert.Equal(t, model.DecisionBlock, res.Decision)
+				} else {
+					assert.Equal(t, model.DecisionAllow, res.Decision, "a rule that does not fold case matches only the case of its globs")
+				}
+			})
+		}
 	}
 }

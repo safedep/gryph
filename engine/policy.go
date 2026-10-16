@@ -27,6 +27,7 @@ import (
 	"github.com/safedep/gryph/core/privacy"
 	"github.com/safedep/gryph/core/session"
 	"github.com/safedep/gryph/decision"
+	"github.com/safedep/gryph/platform/fscase"
 	"github.com/safedep/gryph/storage"
 )
 
@@ -545,7 +546,8 @@ func NewClassifier(cfg *config.Config) *classify.Heuristic {
 
 func SelfProtectionSource(cfg *config.Config, paths *config.Paths) *loader.BuiltinSource {
 	return loader.NewBuiltinSource(SelfProtectionGlobs(cfg, paths)...).
-		WithReadGlobs(SelfProtectionReadGlobs(cfg, paths)...)
+		WithReadGlobs(SelfProtectionReadGlobs(cfg, paths)...).
+		WithFoldCase(fscase.FoldsCase())
 }
 
 // SelfProtectionReadGlobs returns the paths an agent must not read: the

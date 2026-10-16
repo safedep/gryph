@@ -473,6 +473,7 @@ type compiledRule struct {
 	namedTreePatterns  []string
 	fileAccess         []shellcmd.Access
 	workingDirPatterns []string
+	foldCase           bool
 	hasCondition       bool
 	hasMessageTemplate bool
 	contextRefs        []string
@@ -504,6 +505,12 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 		rule:               rule,
 		filePatterns:       normalizePatterns(rule.Match.FilePatterns),
 		workingDirPatterns: normalizePatterns(rule.Match.WorkingDirectoryPatterns),
+		foldCase:           rule.Match.FoldCase,
+	}
+	if cr.foldCase {
+		for i, p := range cr.filePatterns {
+			cr.filePatterns[i] = strings.ToLower(p)
+		}
 	}
 
 	var err error
