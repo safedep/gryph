@@ -55,17 +55,19 @@ func supervisorSocketDefault() string {
 // supervisorSpoolDefault is the drop directory of the hook clients: root
 // owned with the sticky bit, so a user writes only under its own account.
 func supervisorSpoolDefault() string {
-	if runtime.GOOS == "darwin" {
-		return "/var/spool/safedep/gryph"
-	}
 	return "/var/spool/safedep/gryph"
 }
 
 // supervisorStateDefault holds the partitions of the accounts. The service
-// account owns it, and no user can read another user's partition.
+// account owns it, and no user can read another user's partition. On macOS
+// it is a sibling of the managed directory, not the managed directory: the
+// install gives the state directory to the service account, and the
+// managed files need a root-owned chain. XDG names no directory for the
+// state of a system service, so Linux follows the FHS and macOS keeps
+// vendor data under /Library/Application Support.
 func supervisorStateDefault() string {
 	if runtime.GOOS == "darwin" {
-		return "/Library/Application Support/safedep/gryph"
+		return "/Library/Application Support/safedep/gryph-supervisor"
 	}
 	return "/var/lib/safedep/gryph"
 }
