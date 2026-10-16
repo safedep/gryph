@@ -57,6 +57,23 @@ func fromKinfo(kp *unix.KinfoProc) Process {
 	}
 }
 
-func listUID(int) ([]Process, error) {
-	return nil, ErrUnsupported
+// sZomb is SZOMB, the state of a process that exited and that its parent
+// has not waited for.
+const sZomb = 5
+
+// listUID lists the processes whose real uid is owner. A zombie runs
+// nothing and takes no signal, so it is not listed.
+func listUID(owner int) ([]Process, error) {
+	procs, err := unix.SysctlKinfoProcSlice("kern.proc.ruid", owner)
+	if err != nil {
+		return nil, fmt.Errorf("list processes: %w", err)
+	}
+	var out []Process
+	for i := range procs {
+		if procs[i].Proc.P_stat == sZomb {
+			continue
+		}
+		out = append(out, fromKinfo(&procs[i]))
+	}
+	return out, nil
 }

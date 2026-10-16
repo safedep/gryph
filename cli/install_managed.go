@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/safedep/gryph/platform/localauth"
-	"github.com/safedep/gryph/selfprotect"
 	"io"
 	"net"
 	"os"
@@ -15,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/safedep/dry/log"
 	"github.com/safedep/gryph/aarm/pdp"
 	"github.com/safedep/gryph/aarm/receipt"
 	"github.com/safedep/gryph/agent"
@@ -25,7 +24,9 @@ import (
 	"github.com/safedep/gryph/hookside"
 	"github.com/safedep/gryph/internal/version"
 	"github.com/safedep/gryph/platform/account"
+	"github.com/safedep/gryph/platform/localauth"
 	"github.com/safedep/gryph/platform/service"
+	"github.com/safedep/gryph/selfprotect"
 	"github.com/safedep/gryph/spool"
 	"github.com/safedep/gryph/tui"
 	"github.com/spf13/cobra"
@@ -282,11 +283,12 @@ func runManagedInstall(cmd *cobra.Command, args managedInstallArgs) error {
 			}
 			report.Changed = report.Changed || report.Service.Changed
 			if in.cfg.Supervisor.Fanotify.Enabled {
-				report.Fanotify = installFanotifyService(ctx, in)
-				if report.Fanotify.Error != "" {
-					degraded++
+				if report.Fanotify = installFanotifyService(ctx, in); report.Fanotify != nil {
+					if report.Fanotify.Error != "" {
+						degraded++
+					}
+					report.Changed = report.Changed || report.Fanotify.Changed
 				}
-				report.Changed = report.Changed || report.Fanotify.Changed
 			}
 		}
 	}
@@ -443,7 +445,7 @@ func installSupervisorService(ctx context.Context, in *managedInstallInput, repo
 }
 
 // installFanotifyService writes the unit of the kernel watcher and starts
-// it. The watcher runs as the service account with the two capabilities
+// it, or returns nil on a host without the watcher. The watcher runs as the service account with the two capabilities
 // the fanotify API needs, and reports in the runtime directory next to
 // the socket. A watcher that does not report within the wait degrades the
 // install and names the next step.
@@ -460,6 +462,13 @@ func installFanotifyService(ctx context.Context, in *managedInstallInput) *manag
 		RuntimeDir:   strings.TrimPrefix(filepath.Dir(sup.FanotifyStatePath()), "/run/"),
 		SyscallAllow: []string{"fanotify_init", "fanotify_mark", "name_to_handle_at"},
 	})
+	if errors.Is(err, service.ErrUnsupported) {
+		// One managed configuration can serve a fleet of Linux and macOS
+		// hosts. The watcher is a Linux feature, and another host goes
+		// on without it.
+		log.Warnf("supervisor.fanotify.enabled: the kernel watcher runs on Linux only, this host goes on without it")
+		return nil
+	}
 	if err != nil {
 		svc.Error = err.Error()
 		return svc

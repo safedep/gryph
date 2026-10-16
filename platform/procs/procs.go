@@ -27,7 +27,7 @@ func List() ([]Process, error) {
 	return list()
 }
 
-// ListUID returns the processes of another account. Only Linux has it.
+// ListUID returns the processes of another account, on Linux and macOS.
 func ListUID(uid int) ([]Process, error) {
 	return listUID(uid)
 }
