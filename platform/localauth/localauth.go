@@ -1,9 +1,10 @@
 // Package localauth asks the operating system to authenticate a person
-// behind a process: polkit on Linux. The decision service uses it for the
-// local-auth approval channel, so an answer to an approval request needs
-// the password of the approver, which an agent under the approver's
-// account does not know. The package is a small interface over the
-// platform, so another authority can replace polkit.
+// behind a process: polkit on Linux, Authorization Services on macOS. The
+// decision service uses it for the local-auth approval channel, so an
+// answer to an approval request needs the password of the approver, which
+// an agent under the approver's account does not know. The package is a
+// small interface over the platform, so another authority can replace
+// either one.
 //
 // An authority works in one of two ways. Polkit asks the person on behalf
 // of the service: the service names the process and polkit finds its
