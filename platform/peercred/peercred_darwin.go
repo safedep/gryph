@@ -54,12 +54,17 @@ func open(conn net.Conn) (*Peer, error) {
 	if err != nil {
 		return nil, err
 	}
-	if token[tokenPID] != uint32(peer.PID) {
-		return nil, fmt.Errorf("peercred: the audit token names pid %d, not %d", token[tokenPID], peer.PID)
-	}
-	if auid := token[tokenAUID]; auid != auditUIDUnset {
+	// The token and LOCAL_PEERPID can name different processes, for
+	// example on a socket that launchd holds for a daemon. The login
+	// identity then stays empty: an answer with no identity is checked on
+	// the strict side, and the connection itself goes on.
+	if auid := token[tokenAUID]; token[tokenPID] == uint32(peer.PID) && auid != auditUIDUnset {
 		peer.audit = strconv.FormatUint(uint64(auid), 10)
 	}
+	// macOS has no pidfd. The start stamp is read after accept, so a pid
+	// that a new process took in that short window gives the stamp of the
+	// new process. The token holds the pid version of the kernel, but no
+	// interface of x/sys reads the version of a live pid to compare.
 	if started, err := procs.StartedAt(int(peer.PID)); err == nil {
 		peer.StartTime = uint64(started.UnixMicro())
 	}
