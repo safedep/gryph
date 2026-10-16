@@ -3,6 +3,8 @@ package localauth
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -76,4 +78,24 @@ func TestAuthorize_DarwinNeedsAProof(t *testing.T) {
 
 func TestHint_Darwin(t *testing.T) {
 	assert.Contains(t, Hint(), "desktop session")
+}
+
+// A proof of a right with no password reaches the identity check, and the
+// check refuses it: nobody authenticated. Only root writes the database.
+func TestAuthorize_DarwinChecksWhoAuthenticated(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("writing the authorization database needs root")
+	}
+	const right = "io.safedep.gryph.test-allow"
+	out, err := exec.Command("security", "authorizationdb", "write", right, "allow").CombinedOutput()
+	require.NoError(t, err, "%s", out)
+	t.Cleanup(func() { _ = exec.Command("security", "authorizationdb", "remove", right).Run() })
+
+	proof, stop, err := Prepare(context.Background(), right)
+	require.NoError(t, err)
+	defer stop()
+	require.Equal(t, proofKind, proof.Kind)
+
+	_, err = Default().Authorize(context.Background(), Request{UID: uint32(os.Getuid()), Action: right, Interactive: true, Proof: proof})
+	assert.ErrorContains(t, err, "names no user")
 }

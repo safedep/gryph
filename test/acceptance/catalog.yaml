@@ -1119,3 +1119,11 @@
   tier: P2
   guarantee: "On Linux, gryph doctor prints a bpf lsm row under the host posture with the value available, not built, not active, not available or unknown, and a note with the kernel configuration, the active LSM list and the BTF the probe found. The row is information: no provider uses the BPF LSM yet."
   labels: [kernel, bpf-lsm, posture, linux]
+
+- id: supervisor/launchd/round-trip
+  title: "the managed install runs the decision service as a LaunchDaemon on macOS"
+  category: supervisor
+  tier: P0
+  guarantee: "On macOS, gryph install --managed with supervisor.enabled makes the hidden _gryph account, writes the LaunchDaemon, declares the approval right, and turns the switch on only after the service answers on the socket that launchd holds as root with mode 0666. A hook goes through the service. A killed job starts again on the same socket. With the job out of launchd, a blocking hook takes the fallback. gryph uninstall --managed removes the job, the right and the switch. Privileged job only."
+  labels: [supervisor, install, privileged, macos]
+

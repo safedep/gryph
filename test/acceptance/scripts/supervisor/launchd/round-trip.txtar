@@ -1,0 +1,89 @@
+# On macOS, gryph install --managed with the decision service on makes the
+# service account in the directory service, writes the LaunchDaemon,
+# declares the approval right, and turns the switch on only after the
+# service answers on the socket that launchd holds. A hook goes through
+# the service. When the job dies, launchd starts it again on the same
+# socket. With the job out of launchd, a blocking hook takes the fallback.
+# gryph uninstall --managed removes the job, the right and the switch.
+# Runs only in the privileged job on a macOS host with no managed state,
+# with the binary of the package at /opt/safedep/gryph/bin.
+[!privileged] skip 'needs ACCEPTANCE_PRIVILEGED=1 and root'
+[!darwin] skip 'the service manager of this script is launchd'
+! exists '/Library/Application Support/safedep/gryph'
+! exists /Library/LaunchDaemons/io.safedep.gryph-supervisor.plist
+! exec dscl . -read /Users/_gryph
+env HOME=$WORK/home
+expandenv managed.yml
+
+exec gryph install --managed --config $WORK/managed.yml --json
+stdout '"account": "_gryph"'
+stdout '/Library/LaunchDaemons/io.safedep.gryph-supervisor.plist'
+stdout '"auth_policy": "authorizationdb:io.safedep.gryph.approve"'
+stdout '"running": true'
+stdout '"switch": "on"'
+grep 'enabled: true' '/Library/Application Support/safedep/gryph/config.yml'
+
+# The account cannot log in. launchd owns the socket and lets every
+# account connect. The service account owns its state and the key.
+exec dscl . -read /Users/_gryph UserShell IsHidden
+stdout '/usr/bin/false'
+stdout 'IsHidden: 1'
+exec stat -f '%Su %Lp' /var/db/safedep/gryph/hook.sock
+stdout '^root 666$'
+exec stat -f %Su '/Library/Application Support/safedep/gryph-supervisor' '/Library/Application Support/safedep/gryph-supervisor/keys/receipt.key'
+stdout -count=2 '^_gryph$'
+exec security authorizationdb read io.safedep.gryph.approve
+stdout 'gryph approval rule v1'
+
+# A hook goes through the service.
+stdin bash.json
+exec gryph _hook claude-code PreToolUse
+! stderr .
+
+# launchd starts a dead job again on the socket it held.
+exec launchctl kill SIGKILL system/io.safedep.gryph-supervisor
+exec gryph supervisor ready --socket /var/db/safedep/gryph/hook.sock
+stdin bash.json
+exec gryph _hook claude-code PreToolUse
+! stderr .
+
+# With the job out of launchd, a blocking hook takes the fallback.
+exec launchctl bootout system/io.safedep.gryph-supervisor
+stdin bash.json
+execexit 2 gryph _hook claude-code PreToolUse
+stderr '^Gryph supervisor is not running\. Run `gryph doctor`\.$'
+exec launchctl bootstrap system /Library/LaunchDaemons/io.safedep.gryph-supervisor.plist
+exec gryph supervisor ready --socket /var/db/safedep/gryph/hook.sock
+
+# A second run changes no file and keeps the job.
+exec gryph install --managed --config $WORK/managed.yml --json
+stdout '"running": true'
+
+exec gryph uninstall --managed --json
+stdout '"switch": "off"'
+! exists /Library/LaunchDaemons/io.safedep.gryph-supervisor.plist
+! exists '/Library/Application Support/safedep/gryph/config.yml'
+! exec launchctl print system/io.safedep.gryph-supervisor
+! exec security authorizationdb read io.safedep.gryph.approve
+
+exec dscl . -delete /Users/_gryph
+exec dscl . -delete /Groups/_gryph
+exec rm -rf '/Library/Application Support/safedep' '/Library/Application Support/ClaudeCode' /var/db/safedep /var/spool/safedep /Library/Logs/safedep /Library/LaunchAgents/io.safedep.gryph-reconcile.plist
+
+-- managed.yml --
+policy:
+  enabled: true
+managed:
+  agents: [claude-code]
+  binary: ${ACCEPTANCE_GRYPH_BIN}
+supervisor:
+  enabled: true
+-- bash.json --
+{
+  "session_id": "test-session-123",
+  "cwd": "/tmp",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {"command": "ls -la", "description": "list"},
+  "tool_use_id": "tool-use-b1"
+}
