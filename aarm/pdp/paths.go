@@ -4,6 +4,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/safedep/gryph/aarm/model"
@@ -152,13 +153,24 @@ func (r compiledRule) matchesTarget(t shellcmd.Target) bool {
 	return false
 }
 
-// fold returns p in the case of the rule's patterns: lower case when the
-// rule folds case, else p as it is.
+// fold returns p in the case of the rule's patterns: with each letter
+// folded when the rule folds case, else p as it is.
 func (r compiledRule) fold(p string) string {
-	if r.foldCase {
-		return strings.ToLower(p)
+	if !r.foldCase {
+		return p
 	}
-	return p
+	return strings.Map(foldRune, p)
+}
+
+// foldRune returns the smallest rune that Unicode folds r with. All the
+// forms of a letter, such as s, S and the long s, give one rune, as the
+// case folding of a file system does. strings.ToLower keeps the long s.
+func foldRune(r rune) rune {
+	least := r
+	for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+		least = min(least, f)
+	}
+	return least
 }
 
 // isHomeOrParent reports whether p is the home directory or one of its

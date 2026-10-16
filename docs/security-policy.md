@@ -55,6 +55,7 @@ Self-protection is best effort. It blocks file writes and deletes to protected p
 - A human who edits the file or turns off `policy.self_protection.enabled`.
 - A symbolic link to a protected directory, or a `~user/` path.
 - On Windows, a path in a form that Gryph does not read. See **Windows shells** below.
+- On macOS, a name in another Unicode normalization form, such as a decomposed accent in a home directory name.
 - The Gryph commands that print the audit data, such as `gryph query`, `gryph export`, and `gryph cat`.
 
 The rule `gryph-builtin-hook-command` is best effort. It catches only a literal `gryph _hook` call, or a literal `gryph policy approve resolve` or `gryph policy deferrals resolve` call. It checks each call in the command, also inside wrappers (`env`, `sudo`, `exec`, `command`, `setsid`, `strace`, `parallel`, and others), `find -exec`, `bash -c` (also after a flag group such as `-euo pipefail`), a here-document or a here-string with literal text that a shell reads, `eval`, `watch`, `flock`, `su -c`, `runuser`, and `script`. Gryph decodes ANSI-C quoting (`$'\x5fhook'`) and expands braces before the check. A call blocks when its program is gryph, or a variable or a command substitution, and one argument is the literal word `_hook`. So `gryph _hook claude-code UserPromptSubmit`, `bash -c 'gryph _hook x y'`, and `$G _hook x y` block. A word that can only become `_hook` when the shell runs the command does not block. So `gryph query --session "$SID"`, `gryph _hoo? x y`, `echo _hook | xargs gryph`, and `eval "$S"` pass. A word such as `_hook` in the arguments of another program, as in `grep -rn _hook cli/`, does not block. A resolve call blocks when the literal words `policy`, `approve` or `deferrals`, and `resolve` come in that order, with or without flags between them. So `gryph policy approve resolve --id x` and `gryph --no-color policy approve resolve --id x` block, and `gryph policy approve list` and `gryph policy approve "$ACTION"` pass.
@@ -65,21 +66,29 @@ On Windows and macOS the file system ignores letter case by default, so the buil
 
 **Windows shells.** An agent on Windows runs commands in Git Bash, PowerShell, or cmd. The shell parser reads Git Bash. On Windows, Gryph also reads these path forms:
 
-- A backslash path in quotes, such as `rm 'C:\Users\a\...\audit.db'`.
+- A backslash path, such as `C:\Users\a\...\audit.db`.
 - The Git Bash drive form, such as `/c/Users/a/...`, and the drive path of a file URL, such as `file:///C:/Users/a/...`.
 - The `\\?\` and `\\.\` prefixes.
-- The variables `USERPROFILE`, `HOME`, `APPDATA`, `LOCALAPPDATA`, and `PROGRAMDATA`, in the forms `$NAME`, `${NAME}`, `$env:NAME`, `${env:NAME}`, and `%NAME%`. The name is not case sensitive.
+- A name with a trailing dot or space, and a name with a stream, such as `audit.db.` and `audit.db::$DATA`. Windows reads both as `audit.db`.
+- The variables `USERPROFILE`, `HOME`, `APPDATA`, `LOCALAPPDATA`, and `PROGRAMDATA`, in the forms `$NAME`, `${NAME}`, `$env:NAME`, `${env:NAME}`, `%NAME%`, and `%NAME:~0%`. PowerShell and cmd read a variable name and the `env:` prefix in any case, and so does Gryph. `HOME` is the home directory, as `$HOME` is in PowerShell.
 
-A PowerShell or cmd command does not follow the syntax that the parser reads. So Gryph also scans each word of the command that has a Windows form: a backslash, a drive such as `C:`, `%NAME%`, or `$env:NAME`. A path can start inside a word, as in `--file=C:\x` or `-Path:$env:APPDATA\x`. Gryph does not know what the command does with the path. So the command blocks when a word names a protected file, or the directory that holds one. For example, `Remove-Item $env:LOCALAPPDATA\safedep\gryph\audit.db`, `del %LOCALAPPDATA%\safedep\gryph\audit.db`, and `Get-ChildItem $env:LOCALAPPDATA\safedep\gryph` block. A list of a protected directory in PowerShell or cmd blocks, although it changes nothing. A word in POSIX form, such as `~/x` or `$HOME/x`, stays with the parser.
+The path of a file tool, such as Read or Write, gets the same forms, except the variables.
+
+A PowerShell or cmd command does not follow the syntax that the parser reads. So Gryph also scans the words of the command, as most Windows shells split them: a quote groups a word and goes, and the escapes `^` and `` ` `` go. A path starts at a drive (`C:\` or `C:/`), at `\\`, at `%NAME%`, at `$env:NAME`, or at a variable that a backslash follows, such as `$HOME\x`. It can start inside a word, as in `--file=C:\x` or `-Path:$env:APPDATA\x`. A variable that Gryph does not know can be empty or hold any name. So the word gives two paths: one without the variable, and a glob with `*` in its place. A folder and the next word that is a relative path also give their join, as in `Join-Path $env:LOCALAPPDATA 'safedep\gryph'` and `$env:LOCALAPPDATA + '\safedep\gryph'`.
+
+Gryph does not know what the command does with a path that it scans. So the command blocks when a word names a protected file, or the directory that holds one. When the command line has a delete or a move command, such as `Remove-Item`, `del`, `rd`, `Move-Item`, or `ren`, it also blocks when a word names a parent of a protected path. For example, `Remove-Item $env:LOCALAPPDATA\safedep\gryph\audit.db`, `del %LOCALAPPDATA%\safedep\gryph\audit.db`, `Remove-Item -Recurse $env:APPDATA\safedep`, and `Get-ChildItem $env:LOCALAPPDATA\safedep\gryph` block. A list of a protected directory in PowerShell or cmd blocks, although it changes nothing. A path that a tool of the parser uses, as in `cat C:/x`, keeps the access of that tool. A word in POSIX form, such as `~/x` or `$HOME/x`, stays with the parser.
+
+The rule `gryph-builtin-hook-command` also reads the command of a Windows shell wrapper: `cmd /c`, `cmd /k`, and `powershell` or `pwsh` with `-Command`, also after other flags. So `cmd /d /s /c "gryph _hook x y"` and `powershell -NoProfile -Command "gryph _hook x y"` block. In the command of a wrapper, a gryph word and a later `_hook` word block, also when they are in an argument of another program.
 
 The scan is best effort. These forms pass:
 
 - A relative path in PowerShell or cmd, such as `cd $env:LOCALAPPDATA; del safedep\gryph\audit.db`.
+- A path from the root of the current drive, such as `\Users\a\...`.
 - A short 8.3 name, such as `C:\Users\ABCDEF~1\...`.
 - A UNC path to the local disk, such as `\\localhost\C$\Users\...`.
 - A junction or a symbolic link to a protected directory.
-- Any other variable, such as `$env:TEMP` set to a protected directory, or a PowerShell variable that the command sets.
-- A PowerShell escape inside a word, such as the backtick in ``s`afedep``.
+- A variable that holds a protected path, such as `$env:TEMP`, or a PowerShell variable that the command sets.
+- A path that the command builds in another way, such as a `Join-Path` with more than one child, or a format string.
 
 Kernel-based self-protection is on the roadmap. Until then, treat self-protection as a guard against mistakes and simple attempts, not as a security boundary. `gryph doctor` prints the level of each protected asset and the profile they earn, detects a change to a hook configuration, and repairs it when you turn repair on. The [self-protection guide](./self-protection.md) explains the levels, the reconcile pass and the repair. The [threat model](./security-policy-threat-model.md) lists the claims and the lower-level controls for a hardened deployment.
 

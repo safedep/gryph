@@ -448,6 +448,13 @@ rules:
 	assert.NotEqual(t, mustPDPPolicy(t, `{file_patterns: ["a"]}`).Hash(), folded.Hash())
 }
 
+func TestFoldRune(t *testing.T) {
+	r := compiledRule{foldCase: true}
+	assert.Equal(t, r.fold("/Users/a/safedep"), r.fold("/USERS/A/\u017fafedep"), "the long s folds with s")
+	assert.Equal(t, r.fold("K"), r.fold("\u212a"), "the Kelvin sign folds with K")
+	assert.Equal(t, "/Users/a", compiledRule{}.fold("/Users/a"), "a rule that does not fold keeps the case")
+}
+
 func TestEvaluate_FoldCase(t *testing.T) {
 	fromFile := mustPDPPolicy(t, `{action_types: [file_read], file_patterns: ["/data/Gryph/audit.db"], fold_case: true}`)
 	require.False(t, fromFile.Rules[0].Match.FoldCase, "a policy file cannot fold case")

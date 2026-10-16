@@ -54,9 +54,9 @@ type Server struct {
 	ancestors    func(pid int) ([]procs.Process, error)
 	lookup       func(pid int) []procs.Process
 	reloadConfig func() (*config.Config, error)
-	// beforeOpen runs before a partition opens, and its error fails the
+	// openHook runs before a partition opens, and its error fails the
 	// open. It exists for a test, which sets it under mu.
-	beforeOpen func(uid uint32) error
+	openHook func(uid uint32) error
 }
 
 // Options configure a Server.
@@ -204,10 +204,13 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 	// the background: a hook has a short handshake budget, and the first
 	// open of an account creates and migrates its store. The first frame
 	// waits for the open under the decision deadline.
-	part := s.slot(ctx, peer.UID)
+	part := s.partitionOf(ctx, peer.UID)
 	if !part.acquireConn(s.limits.MaxConns) {
 		_ = ipc.WriteFrame(conn, ipc.ErrorFrame(ipc.CodeRateLimited, "too many connections from this account"))
-		if part.wait(ctx) == nil {
+		// A refused connection closes at once, so a flood holds no
+		// goroutine while the partition opens. The refusal is recorded
+		// only in an open partition.
+		if part.opened() {
 			part.recordRateLimit(ctx, "connection")
 		}
 		return
@@ -218,6 +221,10 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 	rw := &idleConn{Conn: conn, timeout: s.limits.IdleTimeout}
 	err = ipc.ServeConn(ctx, rw, welcome, ipc.HandlerFunc(func(ctx context.Context, f *ipc.Frame, body ipc.Body) (*ipc.Frame, error) {
 		if err := part.wait(ctx); err != nil {
+			// The connection ends after this answer. It counts in a
+			// partition that the next contact replaces, so it must not
+			// stay open past the limit of the new one.
+			rw.ended = true
 			return ipc.ErrorFrame(ipc.CodeInternal, "partition not available"), nil
 		}
 		return s.dispatch(ctx, part, peer, rw, f, body)
@@ -282,28 +289,26 @@ func (s *Server) dispatch(ctx context.Context, part *partition, peer *peercred.P
 
 // partition returns the partition of uid, and opens it on first contact.
 func (s *Server) partition(ctx context.Context, uid uint32) (*partition, error) {
-	p := s.slot(ctx, uid)
+	p := s.partitionOf(ctx, uid)
 	if err := p.wait(ctx); err != nil {
 		return nil, err
 	}
 	return p, nil
 }
 
-// slot returns the partition of uid, open or still opening. The first
-// contact of an account starts the open in the background, outside the
-// server lock, so a slow open holds no other account. A partition whose
+// partitionOf returns the partition of uid, open or still opening. The
+// first contact of an account starts the open in the background, outside
+// the server lock, so a slow open holds no other account. A partition whose
 // open failed gives way to a new one, so the next contact tries again.
-func (s *Server) slot(ctx context.Context, uid uint32) *partition {
+func (s *Server) partitionOf(ctx context.Context, uid uint32) *partition {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if p, ok := s.partitions[uid]; ok {
-		if _, failed := p.state(); !failed {
-			return p
-		}
+	if p, ok := s.partitions[uid]; ok && !p.failed() {
+		return p
 	}
 	p := newPartition(uid, s.lookup)
 	s.partitions[uid] = p
-	cfg, root, limits, before := s.cfg, s.rootDir, s.limits, s.beforeOpen
+	cfg, root, limits, hook := s.cfg, s.rootDir, s.limits, s.openHook
 	// The open outlives the request that started it, because other
 	// connections of the account wait on the same open.
 	ctx = context.WithoutCancel(ctx)
@@ -311,8 +316,8 @@ func (s *Server) slot(ctx context.Context, uid uint32) *partition {
 	go func() {
 		defer s.wg.Done()
 		p.open(func() error {
-			if before != nil {
-				if err := before(uid); err != nil {
+			if hook != nil {
+				if err := hook(uid); err != nil {
 					return err
 				}
 			}
@@ -372,15 +377,19 @@ func (s *Server) closePartitions() error {
 
 // idleConn sets a read deadline before every read, so a peer that holds a
 // connection and sends nothing lets it go after the idle timeout. An open
-// prompt sets until, and the read then waits for the reply until then.
+// prompt sets until, and the read then waits for the reply until then. A
+// handler sets ended to end the connection after its answer.
 type idleConn struct {
 	net.Conn
 	timeout time.Duration
 	until   time.Time
+	ended   bool
 }
 
 func (c *idleConn) Read(p []byte) (int, error) {
 	switch {
+	case c.ended:
+		return 0, io.EOF
 	case !c.until.IsZero():
 		if err := c.SetReadDeadline(c.until); err != nil {
 			return 0, err

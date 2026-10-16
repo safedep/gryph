@@ -29,7 +29,11 @@ down. A first frame of another type ends the connection with `error`.
 The server sends `welcome` before the partition of the account is open.
 The first open of an account creates and migrates its store, and a hook
 has only 300 ms for the handshake. The first request after `welcome`
-waits for the open, under the decision deadline of the client.
+waits for the open, under the decision deadline of the client. An open
+that takes longer than that deadline gives the hook the verdict of a
+deadline after the welcome, not the verdict of an absent service. The
+service runs one store migration at a time, so the first open of an
+account can wait for the first opens of other accounts.
 
 | Frame | Direction | Body |
 |---|---|---|

@@ -419,7 +419,7 @@ func (s *Server) expireRequests(ctx context.Context) {
 	s.mu.Lock()
 	parts := make([]*partition, 0, len(s.partitions))
 	for _, p := range s.partitions {
-		if done, failed := p.state(); done && !failed {
+		if p.opened() {
 			parts = append(parts, p)
 		}
 	}

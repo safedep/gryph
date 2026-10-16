@@ -123,13 +123,23 @@ func (p *partition) wait(ctx context.Context) error {
 	}
 }
 
-// state reports whether the open ended, and whether it failed.
-func (p *partition) state() (done, failed bool) {
+// opened reports whether the partition is open and ready to serve.
+func (p *partition) opened() bool {
 	select {
 	case <-p.ready:
-		return true, p.openErr != nil
+		return p.openErr == nil
 	default:
-		return false, false
+		return false
+	}
+}
+
+// failed reports whether the open ended with an error.
+func (p *partition) failed() bool {
+	select {
+	case <-p.ready:
+		return p.openErr != nil
+	default:
+		return false
 	}
 }
 

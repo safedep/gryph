@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -1487,5 +1489,32 @@ func TestSQLiteStore_FindPreEventByToolCall(t *testing.T) {
 			require.NotNil(t, got)
 			assert.Equal(t, tc.want, got.ID)
 		})
+	}
+}
+
+// TestSQLiteStore_InitInParallel opens separate stores at the same time, as
+// the decision service does for many accounts. Under -race it fails when two
+// ent migrations run at once.
+func TestSQLiteStore_InitInParallel(t *testing.T) {
+	ctx := context.Background()
+	const stores = 4
+	var wg sync.WaitGroup
+	errs := make(chan error, stores)
+	for i := range stores {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			store, err := NewSQLiteStore(filepath.Join(t.TempDir(), fmt.Sprintf("audit-%d.db", i)))
+			if err != nil {
+				errs <- err
+				return
+			}
+			errs <- errors.Join(store.Init(ctx), store.Close())
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		assert.NoError(t, err)
 	}
 }

@@ -5,6 +5,7 @@ package supervisor
 import (
 	"context"
 	"errors"
+	"net"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -17,26 +18,41 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setBeforeOpen(srv *Server, fn func(uid uint32) error) {
+func setOpenHook(srv *Server, fn func(uid uint32) error) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
-	srv.beforeOpen = fn
+	srv.openHook = fn
+}
+
+// holdOpens makes every partition open wait until the test closes the
+// returned channel.
+func holdOpens(t *testing.T, srv *Server) chan struct{} {
+	t.Helper()
+	release := make(chan struct{})
+	setOpenHook(srv, func(uint32) error {
+		<-release
+		return nil
+	})
+	t.Cleanup(func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	})
+	return release
 }
 
 func TestServer_WelcomeDoesNotWaitForTheOpen(t *testing.T) {
 	srv, state, _ := startServerWith(t, config.Default())
-	const delay = 3 * time.Second
-	setBeforeOpen(srv, func(uint32) error {
-		time.Sleep(delay)
-		return nil
-	})
-	ctx := context.Background()
-	start := time.Now()
-	client, err := ipc.Dial(ctx, filepath.Join(filepath.Dir(state), "hook.sock"), ipc.DialOptions{Version: "test", Handshake: delay / 3, Decision: 30 * time.Second})
-	require.NoError(t, err, "the welcome comes before the partition opens")
-	defer func() { _ = client.Close() }()
-	assert.Less(t, time.Since(start), delay)
+	release := holdOpens(t, srv)
 
+	ctx := context.Background()
+	client, err := ipc.Dial(ctx, filepath.Join(filepath.Dir(state), "hook.sock"), ipc.DialOptions{Version: "test", Decision: 30 * time.Second})
+	require.NoError(t, err, "the welcome comes within the hook budget while the partition opens")
+	defer func() { _ = client.Close() }()
+
+	close(release)
 	d, err := client.Handle(ctx, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(readPayload)}, nil)
 	require.NoError(t, err, "the first request waits for the open")
 	assert.Equal(t, decision.Verdict("allow"), d.Decision)
@@ -45,7 +61,7 @@ func TestServer_WelcomeDoesNotWaitForTheOpen(t *testing.T) {
 func TestServer_SlowOpenHoldsNoOtherAccount(t *testing.T) {
 	srv, _, _ := startServerWith(t, config.Default())
 	release := make(chan struct{})
-	setBeforeOpen(srv, func(uid uint32) error {
+	setOpenHook(srv, func(uid uint32) error {
 		if uid == 4242 {
 			<-release
 		}
@@ -61,8 +77,8 @@ func TestServer_SlowOpenHoldsNoOtherAccount(t *testing.T) {
 	_, err := srv.partition(ctx, 4243)
 	require.NoError(t, err, "another account opens while the first one waits")
 	select {
-	case <-slow:
-		t.Fatal("the slow open ended before its release")
+	case err := <-slow:
+		require.Failf(t, "the slow open ended before its release", "error: %v", err)
 	default:
 	}
 	close(release)
@@ -72,7 +88,7 @@ func TestServer_SlowOpenHoldsNoOtherAccount(t *testing.T) {
 func TestServer_FailedOpenIsTriedAgain(t *testing.T) {
 	srv, _, _ := startServerWith(t, config.Default())
 	var calls atomic.Int32
-	setBeforeOpen(srv, func(uint32) error {
+	setOpenHook(srv, func(uint32) error {
 		if calls.Add(1) == 1 {
 			return errors.New("disk full")
 		}
@@ -85,4 +101,38 @@ func TestServer_FailedOpenIsTriedAgain(t *testing.T) {
 	p, err := srv.partition(ctx, 4244)
 	require.NoError(t, err, "the next contact opens the partition again")
 	assert.NotNil(t, p.rt)
+}
+
+func TestServer_FailedOpenEndsTheConnection(t *testing.T) {
+	srv, state, _ := startServerWith(t, config.Default())
+	setOpenHook(srv, func(uint32) error { return errors.New("disk full") })
+
+	conn := dial(t, filepath.Join(filepath.Dir(state), "hook.sock"))
+	hello(t, conn)
+	reply := exchange(t, conn, ipc.MustFrame(ipc.TypeHandle, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(readPayload)}))
+	assert.Equal(t, ipc.TypeError, reply.Type)
+	assert.Contains(t, string(reply.Body), ipc.CodeInternal)
+
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(5*time.Second)))
+	_, err := ipc.ReadFrame(conn)
+	var ne net.Error
+	assert.False(t, errors.As(err, &ne) && ne.Timeout(), "the server ends the connection: %v", err)
+}
+
+func TestServer_RefusalDoesNotWaitForTheOpen(t *testing.T) {
+	limits := DefaultLimits()
+	limits.MaxConns = 1
+	srv, state, _ := startServerWithLimits(t, config.Default(), limits)
+	holdOpens(t, srv)
+	sock := filepath.Join(filepath.Dir(state), "hook.sock")
+	hello(t, dial(t, sock))
+
+	refused := dial(t, sock)
+	reply, err := ipc.ReadFrame(refused)
+	require.NoError(t, err)
+	assert.Contains(t, string(reply.Body), ipc.CodeRateLimited)
+	require.NoError(t, refused.SetReadDeadline(time.Now().Add(5*time.Second)))
+	_, err = ipc.ReadFrame(refused)
+	var ne net.Error
+	assert.False(t, errors.As(err, &ne) && ne.Timeout(), "the refused connection closes while the partition opens: %v", err)
 }

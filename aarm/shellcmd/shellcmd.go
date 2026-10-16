@@ -15,7 +15,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -152,11 +151,33 @@ func (w *walker) analyze(command string) Analysis {
 		return Unbounded()
 	}
 	if w.env.Windows {
-		for _, t := range windowsTargets(command, w.env) {
-			w.addTarget(t)
-		}
+		w.addWindowsScan(scanWindows(command, w.env))
 	}
 	return Analysis{Parsed: !w.failed, Targets: w.targets, Hosts: w.hosts, GryphHook: w.gryphHook, GryphResolve: w.gryphResolve}
+}
+
+// addWindowsScan adds what the scan of a Windows command line found. A
+// path that a known tool of the parser already uses keeps the parser's
+// access, so cat C:/x reads C:/x and does not change it. A map removes the
+// duplicates, because a long line can name thousands of paths.
+func (w *walker) addWindowsScan(scan windowsScan) {
+	known := make(map[string]bool, len(w.targets))
+	have := make(map[Target]bool, len(w.targets))
+	for _, t := range w.targets {
+		have[t] = true
+		if !t.Guess {
+			known[t.Path] = true
+		}
+	}
+	for _, t := range scan.targets {
+		if (t.Glob == "" && known[t.Path]) || have[t] {
+			continue
+		}
+		have[t] = true
+		w.targets = append(w.targets, t)
+	}
+	w.gryphHook = w.gryphHook || scan.gryphHook
+	w.gryphResolve = w.gryphResolve || scan.gryphResolve
 }
 
 func (w *walker) exhaust() {
@@ -172,17 +193,26 @@ func AnalyzeCommand(command string, args []string, workingDir string) Analysis {
 	if line == "" {
 		return Analysis{Parsed: true}
 	}
-	return Analyze(line, hostEnv(workingDir))
+	env := hostEnv(workingDir)
+	env.Vars = folderVars()
+	return Analyze(line, env)
 }
 
-// hostEnv is the environment of the analysis on this host.
+// hostEnv is the environment of a path on this host.
 func hostEnv(workingDir string) Env {
-	env := Env{WorkingDir: filepath.ToSlash(workingDir), Home: HomeDir()}
-	if runtime.GOOS == "windows" {
-		env.Windows = true
-		env.Vars = windowsEnv()
+	return Env{WorkingDir: filepath.ToSlash(workingDir), Home: HomeDir(), Windows: hostWindows}
+}
+
+// folderVars returns the folder variables of the host that the process
+// has, with forward slashes.
+func folderVars() map[string]string {
+	vars := map[string]string{}
+	for _, name := range hostFolderVars {
+		if v := os.Getenv(name); v != "" {
+			vars[name] = filepath.ToSlash(v)
+		}
 	}
-	return env
+	return vars
 }
 
 // Unbounded is the analysis of a command that the walker could not finish.
@@ -889,10 +919,12 @@ func runsGryphResolve(args []string) bool {
 }
 
 // isGryphProgram reports whether a program word is gryph, or a word that
-// the walker cannot resolve, such as "$G". The match ignores case, because
-// Windows and macOS find "Gryph" or "GRYPH.EXE" as the gryph program.
+// the walker cannot resolve, such as "$G". The match ignores case and reads
+// a backslash as a separator, because Windows runs C:\Gryph\GRYPH.EXE as
+// the gryph program.
 func isGryphProgram(program string) bool {
-	return program == "" || strings.TrimSuffix(strings.ToLower(path.Base(program)), ".exe") == "gryph"
+	base := path.Base(strings.ReplaceAll(program, `\`, "/"))
+	return program == "" || strings.TrimSuffix(strings.ToLower(base), ".exe") == "gryph"
 }
 
 func (w *walker) cd(args []string, cwds dirs) dirs {
@@ -1864,13 +1896,9 @@ func (w *walker) targetsOf(value string, access Access, cwds dirs) []Target {
 	if value == "" || (value == "-" && access == AccessRead) {
 		return nil
 	}
-	glob := ""
-	if i := strings.IndexAny(value, "*?["); i >= 0 {
-		glob = value
-		value = path.Dir(value[:i] + "x")
-		if access == AccessWrite {
-			access = AccessWriteTree
-		}
+	value, glob := splitGlob(value)
+	if glob != "" && access == AccessWrite {
+		access = AccessWriteTree
 	}
 	out := make([]Target, 0, len(cwds))
 	for _, cwd := range cwds {
@@ -1882,6 +1910,16 @@ func (w *walker) targetsOf(value string, access Access, cwds dirs) []Target {
 		out = append(out, t)
 	}
 	return out
+}
+
+// splitGlob returns the directory before the first glob character of p,
+// with p as the glob, or p and no glob.
+func splitGlob(p string) (dir, glob string) {
+	i := strings.IndexAny(p, "*?[")
+	if i < 0 {
+		return p, ""
+	}
+	return path.Dir(p[:i] + "x"), p
 }
 
 func (w *walker) addTarget(t Target) {
@@ -1898,8 +1936,7 @@ func IsAbs(p string) bool {
 	if path.IsAbs(p) {
 		return true
 	}
-	return len(p) >= 3 && p[1] == ':' && p[2] == '/' &&
-		(p[0] >= 'a' && p[0] <= 'z' || p[0] >= 'A' && p[0] <= 'Z')
+	return len(p) >= 3 && isDriveLetter(p[0]) && p[1] == ':' && p[2] == '/'
 }
 
 // resolve resolves a path word of the command in the environment of the

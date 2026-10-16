@@ -662,22 +662,27 @@ func TestBuiltinSource_FoldCase(t *testing.T) {
 		{"read other file", model.ActionFileRead, home + "/notes.txt", "", false},
 	}
 	for _, fold := range []bool{true, false} {
-		docs, err := NewBuiltinSource(config).WithReadGlobs(db).WithFoldCase(fold).Load(context.Background())
-		require.NoError(t, err)
-		engine, err := pdp.New(docs[0])
-		require.NoError(t, err)
-		for _, tc := range cases {
-			t.Run(fmt.Sprintf("%s fold=%v", tc.name, fold), func(t *testing.T) {
-				action := &model.Action{Type: tc.action, WorkingDir: home, Parameters: model.Parameters{Path: tc.path, Command: tc.command}}
-				res, err := engine.Evaluate(context.Background(), action, nil)
-				require.NoError(t, err)
-				if tc.blocked && fold {
-					assert.Equal(t, model.DecisionBlock, res.Decision)
-				} else {
-					assert.Equal(t, model.DecisionAllow, res.Decision, "a rule that does not fold case matches only the case of its globs")
-				}
-			})
-		}
+		t.Run(fmt.Sprintf("fold=%v", fold), func(t *testing.T) {
+			docs, err := NewBuiltinSource(config).WithReadGlobs(db).WithFoldCase(fold).Load(context.Background())
+			require.NoError(t, err)
+			engine, err := pdp.New(docs[0])
+			require.NoError(t, err)
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					action := &model.Action{Type: tc.action, WorkingDir: home, Parameters: model.Parameters{Path: tc.path, Command: tc.command}}
+					res, err := engine.Evaluate(context.Background(), action, nil)
+					require.NoError(t, err)
+					switch {
+					case tc.blocked && fold:
+						assert.Equal(t, model.DecisionBlock, res.Decision)
+					case tc.blocked:
+						assert.Equal(t, model.DecisionAllow, res.Decision, "a rule that does not fold case matches only the case of its globs")
+					default:
+						assert.Equal(t, model.DecisionAllow, res.Decision)
+					}
+				})
+			}
+		})
 	}
 }
 
@@ -693,7 +698,7 @@ func urlPath(p string) string {
 
 func TestBuiltinSource_WindowsShellForms(t *testing.T) {
 	if runtime.GOOS != "windows" {
-		t.Skip("the shell forms of Windows")
+		t.Skip("needs the environment of a Windows host")
 	}
 	home := t.TempDir()
 	testpath.SetHome(t, home)
@@ -703,7 +708,10 @@ func TestBuiltinSource_WindowsShellForms(t *testing.T) {
 	db := data + "/audit.db"
 	gitBash := "/" + strings.ToLower(db[:1]) + db[2:]
 
-	docs, err := NewBuiltinSource(db).WithReadGlobs(db).WithFoldCase(true).Load(context.Background())
+	hookConfig := "**/.claude/settings.json"
+	settings := filepath.ToSlash(filepath.Join(home, "proj", ".claude", "settings.json"))
+
+	docs, err := NewBuiltinSource(db, hookConfig).WithReadGlobs(db).WithFoldCase(true).Load(context.Background())
 	require.NoError(t, err)
 	engine, err := pdp.New(docs[0])
 	require.NoError(t, err)
@@ -720,8 +728,16 @@ func TestBuiltinSource_WindowsShellForms(t *testing.T) {
 		{"git bash variable", `rm "$LOCALAPPDATA/safedep/gryph/audit.db"`, true},
 		{"git bash drive form", `rm ` + gitBash, true},
 		{"backslash drive path", `Remove-Item ` + filepath.FromSlash(db), true},
+		{"powershell remove of a parent", `Remove-Item -Recurse $env:LOCALAPPDATA\safedep`, true},
+		{"powershell docs casing", `Remove-Item $Env:LOCALAPPDATA\safedep\gryph\audit.db`, true},
+		{"powershell join-path", `Get-Content (Join-Path $env:LOCALAPPDATA 'safedep\gryph\audit.db')`, true},
+		{"empty variable", `Remove-Item "${null}` + filepath.FromSlash(db) + `"`, true},
+		{"trailing dot", `Remove-Item $env:LOCALAPPDATA\safedep\gryph.\audit.db.`, true},
+		{"stream", `cmd /c "echo x> %LOCALAPPDATA%\safedep\gryph\audit.db::$DATA"`, true},
+		{"powershell write of a hook config", `Set-Content ` + filepath.FromSlash(settings) + ` x`, true},
 		{"powershell list of the parent", `Get-ChildItem $env:LOCALAPPDATA`, false},
 		{"powershell read of another file", `Get-Content $env:LOCALAPPDATA\other\notes.txt`, false},
+		{"git bash read of a hook config", `cat ` + settings, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

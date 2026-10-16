@@ -507,10 +507,8 @@ func compileRule(env *cel.Env, rule Rule) (compiledRule, error) {
 		workingDirPatterns: normalizePatterns(rule.Match.WorkingDirectoryPatterns),
 		foldCase:           rule.Match.FoldCase,
 	}
-	if cr.foldCase {
-		for i, p := range cr.filePatterns {
-			cr.filePatterns[i] = strings.ToLower(p)
-		}
+	for i, p := range cr.filePatterns {
+		cr.filePatterns[i] = cr.fold(p)
 	}
 
 	var err error
