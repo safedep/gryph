@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 //go:cgo_import_dynamic gryph_AuthorizationCreate AuthorizationCreate "/System/Library/Frameworks/Security.framework/Versions/A/Security"
@@ -212,7 +214,7 @@ func (a *Authorization) Username() (string, error) {
 		return "", errors.New("the authorization names no user")
 	}
 	for _, item := range unsafe.Slice(info.items, info.count) {
-		if item.value == nil || item.valueLength == 0 {
+		if unix.BytePtrToString(item.name) != infoUsername || item.value == nil || item.valueLength == 0 {
 			continue
 		}
 		value := unsafe.Slice((*byte)(item.value), item.valueLength)

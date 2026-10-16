@@ -61,3 +61,32 @@ func TestHandStateToServiceAccount_RefusesAnotherOwner(t *testing.T) {
 	_, err := handStateToServiceAccount(cfg)
 	assert.ErrorContains(t, err, "belongs to uid 4242")
 }
+
+func TestCheckStateDir_RefusesASymlink(t *testing.T) {
+	state := filepath.Join(t.TempDir(), "state")
+	require.NoError(t, os.Symlink(t.TempDir(), state))
+	cfg := config.Default()
+	cfg.Supervisor.StateDir = state
+	_, err := checkStateDir(cfg)
+	assert.ErrorContains(t, err, "is not a directory")
+}
+
+func TestInstallMachineKeys_WritesNoKeyForAnotherOwner(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("giving a directory to another account needs root")
+	}
+	base, err := os.MkdirTemp("/tmp", "gryph-keys-test-")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	require.NoError(t, os.Chmod(base, 0o755))
+	state := filepath.Join(base, "state")
+	require.NoError(t, os.Mkdir(state, 0o750))
+	require.NoError(t, os.Chown(state, 4242, 4242))
+	cfg := config.Default()
+	cfg.Supervisor.StateDir = state
+	cfg.Supervisor.ServerIdentity = "gryph-no-such-account"
+
+	report := installMachineKeys(cfg)
+	assert.Contains(t, report.Error, "belongs to uid 4242")
+	assert.NoDirExists(t, cfg.Supervisor.KeyDir())
+}
