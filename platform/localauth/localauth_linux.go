@@ -186,7 +186,7 @@ func (polkit) Authorize(ctx context.Context, req Request) (Result, error) {
 // makes no proof. The agent reports its registration on a notify
 // descriptor. Without pkttyagent or a system bus there is nothing to
 // start.
-func prepare(ctx context.Context, _ string) (Proof, func(), error) {
+func prepare(ctx context.Context, _, _ string) (Proof, func(), error) {
 	noop := func() {}
 	path, err := exec.LookPath("pkttyagent")
 	if err != nil {

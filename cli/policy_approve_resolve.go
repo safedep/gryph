@@ -113,7 +113,8 @@ refused on a managed host, so an agent with a shell cannot answer.`,
 			// an agent on this terminal while the service waits, or now,
 			// with a proof that goes with the answer.
 			answer := ipc.Approve{RequestID: row.ID, Decision: decision, Scope: scope, Note: note}
-			proof, stopAuth, err := localauth.Prepare(ctx, localauth.ActionID)
+			prompt := fmt.Sprintf("Gryph: answer approval request %s with %s.", tui.FormatShortID(row.ID.String()), strings.ToUpper(decision))
+			proof, stopAuth, err := localauth.Prepare(ctx, localauth.ActionID, prompt)
 			if err != nil {
 				log.Warnf("policy approve: the authority of the host cannot ask for the password: %v", err)
 			}

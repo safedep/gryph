@@ -105,7 +105,7 @@ func TestAuthorize_DarwinChecksWhoAuthenticated(t *testing.T) {
 	require.NoError(t, err, "%s", out)
 	t.Cleanup(func() { _ = exec.Command("security", "authorizationdb", "remove", right).Run() })
 
-	proof, stop, err := Prepare(context.Background(), right)
+	proof, stop, err := Prepare(context.Background(), right, "Gryph test")
 	require.NoError(t, err)
 	defer stop()
 	require.Equal(t, proofKind, proof.Kind)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"strconv"
 	"strings"
 
 	"github.com/safedep/dry/log"
@@ -59,10 +58,11 @@ const ruleContent = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `
 
-// security runs the security command line with stdin and returns its
-// output. Tests replace it.
+// security runs the security command line by its absolute path, because
+// the install runs as root with the PATH of whoever started it. It returns
+// the output. Tests replace it.
 var security = func(ctx context.Context, stdin string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "security", args...)
+	cmd := exec.CommandContext(ctx, "/usr/bin/security", args...)
 	cmd.Stdin = strings.NewReader(stdin)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -71,10 +71,12 @@ var security = func(ctx context.Context, stdin string, args ...string) (string, 
 	return string(out), nil
 }
 
-// lookupName returns the account name of uid. Tests replace it.
-var lookupName = func(uid uint32) (string, error) {
-	acct, err := account.LookupID(strconv.FormatUint(uint64(uid), 10))
-	return acct.Name, err
+// lookupUID returns the uid of the account name. A record name of macOS
+// matches in any case, so the uid is what the check compares. Tests
+// replace it.
+var lookupUID = func(name string) (uint32, error) {
+	acct, err := account.Lookup(name)
+	return acct.UID, err
 }
 
 // authorizationServices is the authority of macOS. It cannot ask on
@@ -112,7 +114,7 @@ func (authorizationServices) Authorize(_ context.Context, req Request) (Result, 
 		return Result{Challenge: true}, nil
 	}
 	defer auth.Free()
-	if err := auth.Obtain(req.Action, false); err != nil {
+	if err := auth.Obtain(req.Action, false, nil); err != nil {
 		if macos.IsStatus(err, macos.StatusDenied) || macos.IsStatus(err, macos.StatusInteractionNotAllowed) {
 			return Result{Challenge: true}, nil
 		}
@@ -122,12 +124,12 @@ func (authorizationServices) Authorize(_ context.Context, req Request) (Result, 
 	if err != nil {
 		return Result{}, fmt.Errorf("localauth: %w", err)
 	}
-	want, err := lookupName(req.UID)
+	uid, err := lookupUID(user)
 	if err != nil {
-		return Result{}, fmt.Errorf("localauth: account of uid %d: %w", req.UID, err)
+		return Result{}, fmt.Errorf("localauth: account %s: %w", user, err)
 	}
-	if user != want {
-		log.Warnf("localauth: %s authenticated for an answer of %s", user, want)
+	if uid != req.UID {
+		log.Warnf("localauth: %s (uid %d) authenticated for an answer of uid %d", user, uid, req.UID)
 		return Result{}, nil
 	}
 	return Result{Authorized: true}, nil
@@ -164,13 +166,14 @@ func unregister(ctx context.Context) (Registration, error) {
 }
 
 // prepare obtains the action now: macOS shows the password prompt in the
-// login session of this process, and the call lasts until the person
-// answers. The prompt does not end with ctx. The proof is the external form, and stop frees the
-// authorization after the service checked it. A host without the right,
-// a session that cannot show the prompt, or a dismissed prompt gives no
-// proof, and the service then refuses or waives as its configuration
-// says.
-func prepare(_ context.Context, action string) (Proof, func(), error) {
+// login session of this process, with prompt as its text, and the call
+// lasts until the person answers. The prompt does not end with ctx. The
+// proof is the external form. Stop destroys the authorization after the
+// service checked it, so the credential ends with the answer. A host
+// without the right, a session that cannot show the prompt, or a
+// dismissed prompt gives no proof, and the service then refuses or
+// waives as its configuration says.
+func prepare(_ context.Context, action, prompt string) (Proof, func(), error) {
 	noop := func() {}
 	if !macos.RightExists(action) {
 		return Proof{}, noop, nil
@@ -179,7 +182,7 @@ func prepare(_ context.Context, action string) (Proof, func(), error) {
 	if err != nil {
 		return Proof{}, noop, err
 	}
-	if err := auth.Obtain(action, true); err != nil {
+	if err := auth.Obtain(action, true, macos.Environment{macos.EnvPrompt: prompt}); err != nil {
 		auth.Free()
 		switch {
 		case macos.IsStatus(err, macos.StatusCanceled):
@@ -195,8 +198,8 @@ func prepare(_ context.Context, action string) (Proof, func(), error) {
 	}
 	form, err := auth.External()
 	if err != nil {
-		auth.Free()
+		auth.Destroy()
 		return Proof{}, noop, err
 	}
-	return Proof{Kind: proofKind, Data: form[:]}, auth.Free, nil
+	return Proof{Kind: proofKind, Data: form[:]}, auth.Destroy, nil
 }

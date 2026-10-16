@@ -104,9 +104,10 @@ func Unregister(ctx context.Context) (Registration, error) {
 
 // Prepare readies the calling process for an answer that needs the
 // password. It runs the agent of the authority for this terminal, or it
-// asks the person now and returns the proof. Stop ends what Prepare
-// started. On a platform or a host without an authority it returns no
-// proof and a no-op stop.
-func Prepare(ctx context.Context, action string) (proof Proof, stop func(), err error) {
-	return prepare(ctx, action)
+// asks the person now and returns the proof. prompt names what the
+// password answers, for an authority that shows it. Stop ends what
+// Prepare started, and the proof with it. On a platform or a host without
+// an authority it returns no proof and a no-op stop.
+func Prepare(ctx context.Context, action, prompt string) (proof Proof, stop func(), err error) {
+	return prepare(ctx, action, prompt)
 }

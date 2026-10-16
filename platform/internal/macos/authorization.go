@@ -36,7 +36,20 @@ const (
 	flagDefaults           = 0
 	flagInteractionAllowed = 1 << 0
 	flagExtendRights       = 1 << 1
+	flagDestroyRights      = 1 << 3
 )
+
+// The keys of an Environment.
+const (
+	// EnvPrompt is the text the password prompt shows.
+	EnvPrompt = "prompt"
+	// EnvUsername and EnvPassword give the credential without a prompt.
+	EnvUsername = "username"
+	EnvPassword = "password"
+)
+
+// Environment holds the items of an AuthorizationEnvironment.
+type Environment map[string]string
 
 // The status codes of Authorization Services that a caller tells apart.
 const (
@@ -121,22 +134,53 @@ func AuthorizationFromExternal(form [ExternalFormSize]byte) (*Authorization, err
 // Obtain gets right for the authorization, by the rule of the right in
 // the policy database. With interactive the system may ask the person in
 // the login session of this process, and the call lasts until the person
-// answers. The authorization keeps the credential for the next check.
-func (a *Authorization) Obtain(right string, interactive bool) error {
-	name, err := syscall.BytePtrFromString(right)
+// answers. env gives the prompt text or a credential. The authorization
+// keeps the credential for the next check.
+func (a *Authorization) Obtain(right string, interactive bool, env Environment) error {
+	rights, keep, err := itemSet(map[string]string{right: ""})
 	if err != nil {
 		return err
 	}
-	item := authItem{name: name}
-	rights := authItemSet{count: 1, items: &item}
+	environment, keepEnv, err := itemSet(env)
+	if err != nil {
+		return err
+	}
 	flags := uintptr(flagExtendRights)
 	if interactive {
 		flags |= flagInteractionAllowed
 	}
-	r, _, _ := syscall_syscall6(authorizationCopyRightsAddr, a.ref, uintptr(unsafe.Pointer(&rights)), 0, flags, 0, 0)
-	runtime.KeepAlive(name)
-	runtime.KeepAlive(&item)
+	r, _, _ := syscall_syscall6(authorizationCopyRightsAddr, a.ref, uintptr(unsafe.Pointer(rights)), uintptr(unsafe.Pointer(environment)), flags, 0, 0)
+	runtime.KeepAlive(keep)
+	runtime.KeepAlive(keepEnv)
 	return check("AuthorizationCopyRights", r)
+}
+
+// itemSet builds an item set of names and values. An empty value is an
+// item with no value, as a right is. The second result holds the Go
+// memory that the set points to, for the caller to keep alive.
+func itemSet(items map[string]string) (*authItemSet, []any, error) {
+	if len(items) == 0 {
+		return nil, nil, nil
+	}
+	list := make([]authItem, 0, len(items))
+	keep := []any{}
+	for name, value := range items {
+		cname, err := syscall.BytePtrFromString(name)
+		if err != nil {
+			return nil, nil, err
+		}
+		item := authItem{name: cname}
+		keep = append(keep, cname)
+		if value != "" {
+			data := []byte(value)
+			item.value = unsafe.Pointer(&data[0])
+			item.valueLength = uintptr(len(data))
+			keep = append(keep, data)
+		}
+		list = append(list, item)
+	}
+	keep = append(keep, list)
+	return &authItemSet{count: uint32(len(list)), items: &list[0]}, keep, nil
 }
 
 // External returns the external form of the authorization, which another
@@ -177,12 +221,23 @@ func (a *Authorization) Username() (string, error) {
 	return "", errors.New("the authorization names no user")
 }
 
-// Free releases the authorization. The credential it holds goes with it.
+// Free releases this reference to the authorization. A process that took
+// the authorization from its external form keeps it.
 func (a *Authorization) Free() {
+	a.free(flagDefaults)
+}
+
+// Destroy releases the authorization and ends the credential it holds,
+// also for every process that took it from its external form.
+func (a *Authorization) Destroy() {
+	a.free(flagDestroyRights)
+}
+
+func (a *Authorization) free(flags uintptr) {
 	if a == nil || a.ref == 0 {
 		return
 	}
-	_, _, _ = syscall_syscall(authorizationFreeAddr, a.ref, flagDefaults, 0)
+	_, _, _ = syscall_syscall(authorizationFreeAddr, a.ref, flags, 0)
 	a.ref = 0
 }
 

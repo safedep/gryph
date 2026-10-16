@@ -253,11 +253,12 @@ On macOS the authority is Authorization Services, which asks only in the
 session of the person. `localauth.Register` writes the right with `security
 authorizationdb write`: class `user`, `authenticate-user`, `session-owner`,
 `shared` false, `timeout` 30, `allow-root` false. `Prepare` obtains the
-right with interaction and returns the 32-byte external form as a proof of
-kind `macos-authorization`, and frees the authorization when the call
-stops. `Authorize` takes the authorization from the form, obtains the right
-without interaction, and compares the `username` information with the
-account of the peer uid. A missing proof, a form that names no live
+right with interaction, with the request and the decision as the text of
+the prompt, and returns the 32-byte external form as a proof of kind
+`macos-authorization`. It destroys the authorization when the call stops,
+so the credential ends with the answer. `Authorize` takes the authorization
+from the form, obtains the right without interaction, and compares the uid
+of the user in the `username` information with the peer uid. A missing proof, a form that names no live
 authorization, or a denied right is a challenge. `Available` reports
 whether the right exists, because a missing right falls back to the
 default rule of the database, which asks an administrator. The privileged

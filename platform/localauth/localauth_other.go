@@ -20,4 +20,6 @@ func register(context.Context) (Registration, error) { return Registration{}, ni
 
 func unregister(context.Context) (Registration, error) { return Registration{}, nil }
 
-func prepare(context.Context, string) (Proof, func(), error) { return Proof{}, func() {}, nil }
+func prepare(context.Context, string, string) (Proof, func(), error) {
+	return Proof{}, func() {}, nil
+}
