@@ -33,6 +33,7 @@ func open(conn net.Conn) (*Peer, error) {
 	if start, err := startTimeOf(peer.PID); err == nil {
 		peer.StartTime = start
 	}
+	peer.audit = loginUID(peer.PID)
 	return &peer, nil
 }
 

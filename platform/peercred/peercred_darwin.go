@@ -3,12 +3,33 @@ package peercred
 import (
 	"fmt"
 	"net"
+	"strconv"
 
+	"github.com/safedep/gryph/platform/procs"
 	"golang.org/x/sys/unix"
 )
 
+// auditToken is the audit_token_t of a process: eight words that the
+// kernel fills at connect.
+type auditToken [8]uint32
+
+// The words of an audit token that the service reads.
+const (
+	tokenAUID = 0
+	tokenPID  = 5
+)
+
+// auditUIDUnset is AU_DEFAUDITID: no login session set the audit uid.
+const auditUIDUnset = ^uint32(0)
+
+// x/sys has no getter for LOCAL_PEERTOKEN. ICMPv6Filter is eight uint32
+// words, the size and the layout of an audit token, so its getter reads
+// the token. The compiler checks the size here.
+var _ [unix.SizeofICMPv6Filter]byte = [len(auditToken{}) * 4]byte{}
+
 func open(conn net.Conn) (*Peer, error) {
 	var peer Peer
+	var token auditToken
 	err := rawFD(conn, func(fd uintptr) error {
 		cred, err := unix.GetsockoptXucred(int(fd), unix.SOL_LOCAL, unix.LOCAL_PEERCRED)
 		if err != nil {
@@ -23,14 +44,31 @@ func open(conn net.Conn) (*Peer, error) {
 			return fmt.Errorf("peercred: LOCAL_PEERPID: %w", err)
 		}
 		peer.PID = int32(pid)
+		filter, err := unix.GetsockoptICMPv6Filter(int(fd), unix.SOL_LOCAL, unix.LOCAL_PEERTOKEN)
+		if err != nil {
+			return fmt.Errorf("peercred: LOCAL_PEERTOKEN: %w", err)
+		}
+		token = filter.Filt
 		return nil
 	})
 	if err != nil {
 		return nil, err
+	}
+	if token[tokenPID] != uint32(peer.PID) {
+		return nil, fmt.Errorf("peercred: the audit token names pid %d, not %d", token[tokenPID], peer.PID)
+	}
+	if auid := token[tokenAUID]; auid != auditUIDUnset {
+		peer.audit = strconv.FormatUint(uint64(auid), 10)
+	}
+	if started, err := procs.StartedAt(int(peer.PID)); err == nil {
+		peer.StartTime = uint64(started.UnixMicro())
 	}
 	return &peer, nil
 }
 
 func (p *Peer) close() error { return nil }
 
-func sameProcess(*Peer) bool { return true }
+func sameProcess(p *Peer) bool {
+	started, err := procs.StartedAt(int(p.PID))
+	return err == nil && uint64(started.UnixMicro()) == p.StartTime
+}

@@ -18,14 +18,29 @@ type Peer struct {
 	UID uint32
 	GID uint32
 	PID int32
-	// StartTime is the start time of the peer process in clock ticks
-	// since boot, read at accept on Linux. A later read of the process
+	// StartTime is the start stamp of the peer process, read at accept,
+	// in the unit of the platform: clock ticks since boot on Linux,
+	// microseconds since the epoch on macOS. A later read of the process
 	// compares against it, so a process that took the same pid is not
-	// mistaken for the peer. Zero elsewhere.
+	// mistaken for the peer. Zero where the platform gives none.
 	StartTime uint64
 	// pidfd is a handle on the peer process on Linux, so a later check of
 	// the process does not race with pid reuse. Zero elsewhere.
 	pidfd int
+	// audit is the audit login uid of the peer, read at accept: from
+	// /proc on Linux, from the audit token of the connection on macOS.
+	// Empty when no login session set it, or on another platform.
+	audit string
+}
+
+// LoginIdentity returns the audit login identity of the peer process: the
+// uid of the login session it came from, which sudo does not change. It
+// reports false when the platform has none for the process.
+func (p *Peer) LoginIdentity() (string, bool) {
+	if p == nil || p.audit == "" {
+		return "", false
+	}
+	return p.audit, true
 }
 
 // SameProcess reports whether pid still names the process seen at

@@ -10,21 +10,16 @@ import (
 // session started, for example one in a container or under a service.
 const loginUIDUnset = "4294967295"
 
-// LoginIdentity returns the audit login identity of the peer process: the
-// uid of the login session it came from, which sudo does not change. It
-// reports false when the kernel has none for the process, or when the
-// process is gone.
-func (p *Peer) LoginIdentity() (string, bool) {
-	if p == nil || p.PID <= 0 {
-		return "", false
-	}
-	data, err := os.ReadFile("/proc/" + strconv.Itoa(int(p.PID)) + "/loginuid")
+// loginUID reads the audit login uid of pid, or empty when the kernel has
+// none for the process.
+func loginUID(pid int32) string {
+	data, err := os.ReadFile("/proc/" + strconv.Itoa(int(pid)) + "/loginuid")
 	if err != nil {
-		return "", false
+		return ""
 	}
 	id := strings.TrimSpace(string(data))
-	if id == "" || id == loginUIDUnset {
-		return "", false
+	if id == loginUIDUnset {
+		return ""
 	}
-	return id, true
+	return id
 }
