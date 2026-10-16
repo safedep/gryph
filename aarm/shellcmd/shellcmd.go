@@ -161,16 +161,17 @@ func (w *walker) analyze(command string) Analysis {
 // access, so cat C:/x reads C:/x and does not change it. A map removes the
 // duplicates, because a long line can name thousands of paths.
 func (w *walker) addWindowsScan(scan windowsScan) {
-	known := make(map[string]bool, len(w.targets))
+	type operand struct{ path, glob string }
+	known := make(map[operand]bool, len(w.targets))
 	have := make(map[Target]bool, len(w.targets))
 	for _, t := range w.targets {
 		have[t] = true
 		if !t.Guess {
-			known[t.Path] = true
+			known[operand{t.Path, t.Glob}] = true
 		}
 	}
 	for _, t := range scan.targets {
-		if (t.Glob == "" && known[t.Path]) || have[t] {
+		if known[operand{t.Path, t.Glob}] || have[t] {
 			continue
 		}
 		have[t] = true

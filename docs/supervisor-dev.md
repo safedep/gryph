@@ -29,9 +29,12 @@ down. A first frame of another type ends the connection with `error`.
 The server sends `welcome` before the partition of the account is open.
 The first open of an account creates and migrates its store, and a hook
 has only 300 ms for the handshake. The first request after `welcome`
-waits for the open, under the decision deadline of the client. An open
-that takes longer than that deadline gives the hook the verdict of a
-deadline after the welcome, not the verdict of an absent service. The
+waits for the open, under the decision deadline of the client, and at
+most 10 s. A request past the 10 s gets `error deadline`, and its
+connection closes, so a stuck open does not hold the connections of the
+account. An open that takes longer than the deadline of the client gives
+the hook the verdict of a deadline after the welcome, not the verdict of
+an absent service. The
 service runs one store migration at a time, so the first open of an
 account can wait for the first opens of other accounts.
 

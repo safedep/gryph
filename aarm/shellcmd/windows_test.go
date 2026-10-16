@@ -156,9 +156,12 @@ func TestScanWindows_Skips(t *testing.T) {
 }
 
 func TestAnalyze_WindowsScanKeepsTheParsersAccess(t *testing.T) {
-	const settings = "C:/work/proj/.claude/settings.json"
-	for _, target := range Analyze("cat "+settings, windowsTestEnv).Targets {
-		assert.NotEqual(t, AccessWriteTree, target.Access, "a read of a known tool is not a change: %+v", target)
+	for _, command := range []string{"cat C:/work/proj/.claude/settings.json", "cat C:/work/proj/.claude/*.json"} {
+		t.Run(command, func(t *testing.T) {
+			for _, target := range Analyze(command, windowsTestEnv).Targets {
+				assert.NotEqual(t, AccessWriteTree, target.Access, "a read of a known tool is not a change: %+v", target)
+			}
+		})
 	}
 }
 

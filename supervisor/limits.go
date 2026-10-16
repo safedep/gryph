@@ -3,6 +3,8 @@ package supervisor
 import (
 	"sync"
 	"time"
+
+	"github.com/safedep/gryph/decision/ipc"
 )
 
 // Limits bound what one account can ask of the service. A same-user
@@ -18,11 +20,16 @@ type Limits struct {
 	Burst int
 	// IdleTimeout ends a connection that sends nothing for this long.
 	IdleTimeout time.Duration
+	// OpenWait is how long a request waits for the partition of its
+	// account to open. A request past it gets Error deadline and its
+	// connection closes, so a stuck open cannot hold the connections of
+	// the account. Zero takes the longest read deadline of a client.
+	OpenWait time.Duration
 }
 
 // DefaultLimits are the limits of a service without configuration.
 func DefaultLimits() Limits {
-	return Limits{MaxConns: 16, Rate: 20, Burst: 40, IdleTimeout: 30 * time.Second}
+	return Limits{MaxConns: 16, Rate: 20, Burst: 40, IdleTimeout: 30 * time.Second, OpenWait: ipc.ReadTimeout}
 }
 
 // bucket is a token bucket for one account.

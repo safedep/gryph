@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setOpenHook(srv *Server, fn func(uid uint32) error) {
+func setOpenHook(srv *Server, fn func(ctx context.Context, uid uint32) error) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	srv.openHook = fn
@@ -29,7 +29,7 @@ func setOpenHook(srv *Server, fn func(uid uint32) error) {
 func holdOpens(t *testing.T, srv *Server) chan struct{} {
 	t.Helper()
 	release := make(chan struct{})
-	setOpenHook(srv, func(uint32) error {
+	setOpenHook(srv, func(context.Context, uint32) error {
 		<-release
 		return nil
 	})
@@ -61,7 +61,7 @@ func TestServer_WelcomeDoesNotWaitForTheOpen(t *testing.T) {
 func TestServer_SlowOpenHoldsNoOtherAccount(t *testing.T) {
 	srv, _, _ := startServerWith(t, config.Default())
 	release := make(chan struct{})
-	setOpenHook(srv, func(uid uint32) error {
+	setOpenHook(srv, func(_ context.Context, uid uint32) error {
 		if uid == 4242 {
 			<-release
 		}
@@ -88,7 +88,7 @@ func TestServer_SlowOpenHoldsNoOtherAccount(t *testing.T) {
 func TestServer_FailedOpenIsTriedAgain(t *testing.T) {
 	srv, _, _ := startServerWith(t, config.Default())
 	var calls atomic.Int32
-	setOpenHook(srv, func(uint32) error {
+	setOpenHook(srv, func(context.Context, uint32) error {
 		if calls.Add(1) == 1 {
 			return errors.New("disk full")
 		}
@@ -105,7 +105,7 @@ func TestServer_FailedOpenIsTriedAgain(t *testing.T) {
 
 func TestServer_FailedOpenEndsTheConnection(t *testing.T) {
 	srv, state, _ := startServerWith(t, config.Default())
-	setOpenHook(srv, func(uint32) error { return errors.New("disk full") })
+	setOpenHook(srv, func(context.Context, uint32) error { return errors.New("disk full") })
 
 	conn := dial(t, filepath.Join(filepath.Dir(state), "hook.sock"))
 	hello(t, conn)
@@ -135,4 +135,49 @@ func TestServer_RefusalDoesNotWaitForTheOpen(t *testing.T) {
 	_, err = ipc.ReadFrame(refused)
 	var ne net.Error
 	assert.False(t, errors.As(err, &ne) && ne.Timeout(), "the refused connection closes while the partition opens: %v", err)
+}
+
+func TestServer_StuckOpenEndsTheRequest(t *testing.T) {
+	limits := DefaultLimits()
+	limits.MaxConns = 1
+	limits.OpenWait = 200 * time.Millisecond
+	srv, state, _ := startServerWithLimits(t, config.Default(), limits)
+	setOpenHook(srv, func(ctx context.Context, _ uint32) error {
+		<-ctx.Done()
+		return ctx.Err()
+	})
+	sock := filepath.Join(filepath.Dir(state), "hook.sock")
+
+	conn := dial(t, sock)
+	hello(t, conn)
+	reply := exchange(t, conn, ipc.MustFrame(ipc.TypeHandle, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(readPayload)}))
+	assert.Contains(t, string(reply.Body), ipc.CodeDeadline, "the request does not wait past OpenWait")
+
+	require.Eventually(t, func() bool {
+		next, err := net.Dial("unix", sock)
+		if err != nil {
+			return false
+		}
+		defer func() { _ = next.Close() }()
+		if err := ipc.WriteFrame(next, ipc.MustFrame(ipc.TypeHello, ipc.Hello{Proto: ipc.Proto})); err != nil {
+			return false
+		}
+		reply, err := ipc.ReadFrame(next)
+		return err == nil && reply.Type == ipc.TypeWelcome
+	}, 5*time.Second, 20*time.Millisecond, "the ended request frees its slot while the open is stuck")
+}
+
+// TestServer_StopsWhileAPartitionOpens starts an open that ends only with
+// the server. The cleanup of startServerWith fails the test when Serve does
+// not return.
+func TestServer_StopsWhileAPartitionOpens(t *testing.T) {
+	srv, _, _ := startServerWith(t, config.Default())
+	started := make(chan struct{})
+	setOpenHook(srv, func(ctx context.Context, _ uint32) error {
+		close(started)
+		<-ctx.Done()
+		return ctx.Err()
+	})
+	srv.partitionOf(4245)
+	<-started
 }

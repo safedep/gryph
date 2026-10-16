@@ -54,9 +54,12 @@ type Server struct {
 	ancestors    func(pid int) ([]procs.Process, error)
 	lookup       func(pid int) []procs.Process
 	reloadConfig func() (*config.Config, error)
+	// base is the context of Serve. A partition opens under it, so the
+	// open outlives the request that starts it and ends with the server.
+	base context.Context
 	// openHook runs before a partition opens, and its error fails the
 	// open. It exists for a test, which sets it under mu.
-	openHook func(uid uint32) error
+	openHook func(ctx context.Context, uid uint32) error
 }
 
 // Options configure a Server.
@@ -152,6 +155,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	}
 	s.mu.Lock()
 	s.rootDir = root
+	s.base = ctx
 	s.started = time.Now()
 	s.mu.Unlock()
 	defer func() { _ = root.Close() }()
@@ -204,7 +208,7 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 	// the background: a hook has a short handshake budget, and the first
 	// open of an account creates and migrates its store. The first frame
 	// waits for the open under the decision deadline.
-	part := s.partitionOf(ctx, peer.UID)
+	part := s.partitionOf(peer.UID)
 	if !part.acquireConn(s.limits.MaxConns) {
 		_ = ipc.WriteFrame(conn, ipc.ErrorFrame(ipc.CodeRateLimited, "too many connections from this account"))
 		// A refused connection closes at once, so a flood holds no
@@ -220,11 +224,14 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 	welcome := ipc.Welcome{Proto: ipc.Proto, ServerVersion: s.version, Mode: s.cfg.Supervisor.EffectiveProfile()}
 	rw := &idleConn{Conn: conn, timeout: s.limits.IdleTimeout}
 	err = ipc.ServeConn(ctx, rw, welcome, ipc.HandlerFunc(func(ctx context.Context, f *ipc.Frame, body ipc.Body) (*ipc.Frame, error) {
-		if err := part.wait(ctx); err != nil {
-			// The connection ends after this answer. It counts in a
-			// partition that the next contact replaces, so it must not
-			// stay open past the limit of the new one.
+		if err := s.waitOpen(ctx, part); err != nil {
+			// The connection ends after this answer, so it does not hold
+			// a slot of the account while the open is stuck, or past the
+			// limit of the partition that replaces a failed one.
 			rw.ended = true
+			if errors.Is(err, context.DeadlineExceeded) {
+				return ipc.ErrorFrame(ipc.CodeDeadline, "the partition did not open in time"), nil
+			}
 			return ipc.ErrorFrame(ipc.CodeInternal, "partition not available"), nil
 		}
 		return s.dispatch(ctx, part, peer, rw, f, body)
@@ -287,9 +294,20 @@ func (s *Server) dispatch(ctx context.Context, part *partition, peer *peercred.P
 	}
 }
 
+// waitOpen waits for the partition to open, at most OpenWait.
+func (s *Server) waitOpen(ctx context.Context, p *partition) error {
+	wait := s.limits.OpenWait
+	if wait <= 0 {
+		wait = ipc.ReadTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	return p.wait(ctx)
+}
+
 // partition returns the partition of uid, and opens it on first contact.
 func (s *Server) partition(ctx context.Context, uid uint32) (*partition, error) {
-	p := s.partitionOf(ctx, uid)
+	p := s.partitionOf(uid)
 	if err := p.wait(ctx); err != nil {
 		return nil, err
 	}
@@ -300,7 +318,7 @@ func (s *Server) partition(ctx context.Context, uid uint32) (*partition, error) 
 // first contact of an account starts the open in the background, outside
 // the server lock, so a slow open holds no other account. A partition whose
 // open failed gives way to a new one, so the next contact tries again.
-func (s *Server) partitionOf(ctx context.Context, uid uint32) *partition {
+func (s *Server) partitionOf(uid uint32) *partition {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if p, ok := s.partitions[uid]; ok && !p.failed() {
@@ -308,16 +326,13 @@ func (s *Server) partitionOf(ctx context.Context, uid uint32) *partition {
 	}
 	p := newPartition(uid, s.lookup)
 	s.partitions[uid] = p
-	cfg, root, limits, hook := s.cfg, s.rootDir, s.limits, s.openHook
-	// The open outlives the request that started it, because other
-	// connections of the account wait on the same open.
-	ctx = context.WithoutCancel(ctx)
+	ctx, cfg, root, limits, hook := s.base, s.cfg, s.rootDir, s.limits, s.openHook
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		p.open(func() error {
 			if hook != nil {
-				if err := hook(uid); err != nil {
+				if err := hook(ctx, uid); err != nil {
 					return err
 				}
 			}
