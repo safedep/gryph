@@ -1,15 +1,18 @@
 // Package service installs the decision service as a system service with
 // a socket that the service manager holds: a systemd socket and service
-// unit on Linux. The socket stays open across a restart or an upgrade of
-// the service, so a hook that connects in that window waits for the
-// welcome instead of taking the absent-service fallback. The service runs
-// as the service account under the hardening set of the platform.
+// unit on Linux, a LaunchDaemon with a Sockets entry on macOS. The socket
+// stays open across a restart or an upgrade of the service, so a hook that
+// connects in that window waits for the welcome instead of taking the
+// absent-service fallback. The service runs as the service account under
+// the hardening set of the platform.
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -146,4 +149,22 @@ func runCommand(ctx context.Context, name string, args ...string) error {
 		return fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
 	}
 	return nil
+}
+
+// writeIfChanged writes a service manager file, root-owned and readable by
+// every account, and reports whether the content changed. The mode is set
+// again, because a service manager refuses a job file that others can
+// write.
+func writeIfChanged(path string, data []byte) (bool, error) {
+	existing, err := os.ReadFile(path)
+	if err == nil && bytes.Equal(existing, data) {
+		return false, nil
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return false, err
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
 }

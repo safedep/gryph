@@ -1,10 +1,10 @@
-//go:build !linux
+//go:build !linux && !darwin
 
 package service
 
 import "context"
 
-// The service manager of macOS (launchd) and Windows are later work. The
+// The service manager of Windows is later work. The
 // hook client and the server do not depend on this package.
 func install(context.Context, Spec) (*Result, error) { return nil, ErrUnsupported }
 

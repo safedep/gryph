@@ -1,0 +1,160 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/safedep/gryph/platform/launchd"
+)
+
+// daemonsDir is where launchd reads the system daemons, and logDir where
+// they write their output. Tests replace both.
+var (
+	daemonsDir = func() string { return "/Library/LaunchDaemons" }
+	logDir     = func() string { return "/Library/Logs/safedep" }
+)
+
+var launchctl = launchd.Launchctl{Run: func(ctx context.Context, args ...string) error {
+	return runCommand(ctx, "launchctl", args...)
+}}
+
+// bootstrapAttempts bounds the bootstrap after a bootout. launchd ends a
+// job in the background, and a bootstrap of the same label before it has
+// ended fails.
+const bootstrapAttempts = 5
+
+func install(ctx context.Context, spec Spec) (*Result, error) {
+	if len(spec.Capabilities) > 0 || len(spec.SyscallAllow) > 0 || spec.RuntimeDir != "" {
+		return nil, fmt.Errorf("%w: %s needs Linux kernel settings", ErrUnsupported, spec.Name)
+	}
+	label := launchd.Label(spec.Name)
+	path := filepath.Join(daemonsDir(), label+".plist")
+	data, err := renderDaemon(spec)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(daemonsDir(), 0o755); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(logDir(), 0o755); err != nil {
+		return nil, err
+	}
+	if spec.Socket != "" {
+		// launchd binds the socket and makes no directory for it.
+		if err := os.MkdirAll(filepath.Dir(spec.Socket), 0o755); err != nil {
+			return nil, err
+		}
+	}
+	changed, err := writeIfChanged(path, data)
+	if err != nil {
+		return nil, err
+	}
+	target := launchd.SystemDomain + " " + path
+	res := &Result{Paths: []string{path}, Changed: changed, Next: "launchctl bootstrap " + target}
+	loaded := launchctl.Loaded(ctx, launchd.SystemDomain, label)
+	if loaded && !changed {
+		res.Enabled = true
+		return res, nil
+	}
+	if loaded {
+		// launchd reads a job file at bootstrap only, so a changed file
+		// loads again. The socket closes until the job is back, and a
+		// hook in that window takes the fallback of the configuration.
+		if err := launchctl.Bootout(ctx, launchd.SystemDomain, label); err != nil {
+			res.Next = "launchctl bootout " + launchd.SystemDomain + "/" + label + " && launchctl bootstrap " + target + " (" + err.Error() + ")"
+			return res, nil
+		}
+	}
+	if err := bootstrap(ctx, path); err != nil {
+		res.Next += " (" + err.Error() + ")"
+		return res, nil
+	}
+	res.Enabled = true
+	return res, nil
+}
+
+func bootstrap(ctx context.Context, path string) error {
+	var err error
+	for attempt := 0; attempt < bootstrapAttempts; attempt++ {
+		if err = launchctl.Bootstrap(ctx, launchd.SystemDomain, path); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(attempt+1) * 200 * time.Millisecond):
+		}
+	}
+	return err
+}
+
+func remove(ctx context.Context, name string) (*Result, error) {
+	label := launchd.Label(name)
+	path := filepath.Join(daemonsDir(), label+".plist")
+	res := &Result{Enabled: true}
+	if launchctl.Loaded(ctx, launchd.SystemDomain, label) {
+		if err := launchctl.Bootout(ctx, launchd.SystemDomain, label); err != nil {
+			res.Enabled = false
+			res.Next = "launchctl bootout " + launchd.SystemDomain + "/" + label
+		}
+	}
+	switch err := os.Remove(path); {
+	case err == nil:
+		res.Paths = append(res.Paths, path)
+		res.Changed = true
+	case !errors.Is(err, fs.ErrNotExist):
+		return res, err
+	}
+	return res, nil
+}
+
+func active(ctx context.Context, name string) bool {
+	return launchctl.Loaded(ctx, launchd.SystemDomain, launchd.Label(name))
+}
+
+func reloadHint(name string) string {
+	return "launchctl kill SIGHUP " + launchd.SystemDomain + "/" + launchd.Label(name)
+}
+
+func logHint(name string) string { return logPath(name) }
+
+func logPath(name string) string { return filepath.Join(logDir(), name+".log") }
+
+// renderDaemon is the job file. launchd opens the socket as root before
+// the job starts and holds it while the job restarts, so a hook waits for
+// the welcome. The job runs as the service account and restarts one
+// second after it ends. ProcessType Interactive keeps launchd from
+// slowing the job down, because a hook waits on it. macOS has no
+// equivalent of the systemd hardening set: the service account is what
+// keeps the job from the files of a user.
+func renderDaemon(spec Spec) ([]byte, error) {
+	dict := launchd.Dict{
+		{Key: "Label", Value: launchd.Label(spec.Name)},
+		{Key: "ProgramArguments", Value: spec.Command},
+		{Key: "UserName", Value: spec.User},
+		{Key: "GroupName", Value: spec.User},
+		{Key: "RunAtLoad", Value: true},
+		{Key: "KeepAlive", Value: true},
+		{Key: "ThrottleInterval", Value: 1},
+		{Key: "ProcessType", Value: "Interactive"},
+		{Key: "Umask", Value: 0o077},
+		{Key: "StandardOutPath", Value: logPath(spec.Name)},
+		{Key: "StandardErrorPath", Value: logPath(spec.Name)},
+	}
+	if spec.Socket != "" {
+		dict = append(dict, launchd.Entry{Key: "Sockets", Value: launchd.Dict{
+			{Key: launchd.SocketName, Value: launchd.Dict{
+				{Key: "SockPathName", Value: spec.Socket},
+				{Key: "SockPathMode", Value: 0o666},
+				{Key: "SockType", Value: "stream"},
+				{Key: "SockFamily", Value: "Unix"},
+			}},
+		}})
+	}
+	return dict.Encode()
+}

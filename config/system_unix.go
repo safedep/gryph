@@ -44,10 +44,13 @@ func managedBinaryDefault() string {
 
 // supervisorSocketDefault is where the service manager opens the socket of
 // the decision service. The directory is root-owned, so a user cannot put
-// a socket of their own there.
+// a socket of their own there. On macOS /var/run is writable by the daemon
+// group and empty after a boot, and launchd binds the socket at boot
+// before any install step runs. /var/db keeps its directories and only
+// root writes it.
 func supervisorSocketDefault() string {
 	if runtime.GOOS == "darwin" {
-		return "/var/run/safedep/gryph/hook.sock"
+		return "/var/db/safedep/gryph/hook.sock"
 	}
 	return "/run/safedep/gryph/hook.sock"
 }

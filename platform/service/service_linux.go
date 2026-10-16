@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -211,15 +210,4 @@ func systemdQuote(s string) string {
 		return s
 	}
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
-}
-
-func writeIfChanged(path string, data []byte) (bool, error) {
-	existing, err := os.ReadFile(path)
-	if err == nil && bytes.Equal(existing, data) {
-		return false, nil
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return false, err
-	}
-	return true, nil
 }

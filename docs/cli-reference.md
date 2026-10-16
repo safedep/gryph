@@ -593,7 +593,7 @@ names another state directory, for a test. The JSON report has `key_id`,
 
 The managed configuration sets the service: `supervisor.enabled` (the hook
 becomes a client of the service), `supervisor.socket` (default
-`/run/safedep/gryph/hook.sock` on Linux, `/var/run/safedep/gryph/hook.sock`
+`/run/safedep/gryph/hook.sock` on Linux, `/var/db/safedep/gryph/hook.sock`
 on macOS), `supervisor.profile` (`enforce` or `pilot`) with
 `supervisor.pilot_until` (the date the pilot ends, `2006-01-02` or RFC 3339;
 a pilot needs one, and after it the host runs `enforce`), `supervisor.state_dir`

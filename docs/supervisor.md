@@ -58,7 +58,7 @@ the hook at a service of its own.
 | Key | Default | Meaning |
 |---|---|---|
 | `supervisor.enabled` | `false` | The hook becomes a client of the service. A socket alone never does. |
-| `supervisor.socket` | `/run/safedep/gryph/hook.sock` on Linux, `/var/run/safedep/gryph/hook.sock` on macOS | The socket. Root owns it and every directory above it. |
+| `supervisor.socket` | `/run/safedep/gryph/hook.sock` on Linux, `/var/db/safedep/gryph/hook.sock` on macOS | The socket. Root owns it and every directory above it. |
 | `supervisor.profile` | `enforce` | `enforce` or `pilot`. The profile decides what a blocking hook does when the service is out of reach. |
 | `supervisor.pilot_until` | none | The date the pilot ends, `2006-01-02` or RFC 3339. A pilot needs one. After it the host runs `enforce`. |
 | `supervisor.state_dir` | `/var/lib/safedep/gryph` on Linux, `/Library/Application Support/safedep/gryph-supervisor` on macOS | The partitions, the keys and the pid file of the service. It is not the managed directory, because the service account owns it. |
