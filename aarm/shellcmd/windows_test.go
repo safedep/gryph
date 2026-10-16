@@ -130,6 +130,7 @@ func TestAnalyze_WindowsForms(t *testing.T) {
 		{"dot segment", `del C:\Users\a\AppData\Local\safedep\x\..\gryph\audit.db`, Target{Path: db, Access: AccessRemove}},
 		{"option value", `tool --file=C:\Users\a\AppData\Local\safedep\gryph\audit.db`, Target{Path: db, Access: AccessWriteTree}},
 		{"glob", `Remove-Item C:\Users\a\AppData\Local\safedep\gryph\*`, Target{Path: data, Glob: data + "/*", Access: AccessRemove}},
+		{"read and delete of one path", "cat " + db + "; del " + db, Target{Path: db, Access: AccessRemove}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

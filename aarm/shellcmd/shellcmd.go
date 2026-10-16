@@ -158,8 +158,10 @@ func (w *walker) analyze(command string) Analysis {
 
 // addWindowsScan adds what the scan of a Windows command line found. A
 // path that a known tool of the parser already uses keeps the parser's
-// access, so cat C:/x reads C:/x and does not change it. A map removes the
-// duplicates, because a long line can name thousands of paths.
+// access, so cat C:/x reads C:/x and does not change it. A removal stays,
+// because a delete command on the same line, as in cat C:/x; del C:/x, can
+// use the same path. A map removes the duplicates, because a long line can
+// name thousands of paths.
 func (w *walker) addWindowsScan(scan windowsScan) {
 	type operand struct{ path, glob string }
 	known := make(map[operand]bool, len(w.targets))
@@ -171,7 +173,7 @@ func (w *walker) addWindowsScan(scan windowsScan) {
 		}
 	}
 	for _, t := range scan.targets {
-		if known[operand{t.Path, t.Glob}] || have[t] {
+		if (known[operand{t.Path, t.Glob}] && t.Access != AccessRemove) || have[t] {
 			continue
 		}
 		have[t] = true

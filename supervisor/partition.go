@@ -162,15 +162,12 @@ func (p *partition) close() error {
 	return p.rt.Close()
 }
 
-// acquireConn counts a connection in. It reports false above the limit.
-func (p *partition) acquireConn(limit int) bool {
+// holdConn counts a connection in, so a retired partition stays open
+// until its last connection ends. The server enforces the limit.
+func (p *partition) holdConn() {
 	p.connMu.Lock()
 	defer p.connMu.Unlock()
-	if p.conns >= limit {
-		return false
-	}
 	p.conns++
-	return true
 }
 
 // releaseConn counts a connection out. A retired partition closes with

@@ -44,10 +44,14 @@ type Server struct {
 	mu         sync.Mutex
 	rootDir    *nofollow.Dir
 	partitions map[uint32]*partition
-	wg         sync.WaitGroup
-	approvers  approverCache
-	auth       localauth.Authorizer
-	authCache  authCache
+	// conns counts the open connections of each account. It lives here,
+	// not in a partition, so the limit holds across the replacement of a
+	// partition whose open failed.
+	conns     map[uint32]int
+	wg        sync.WaitGroup
+	approvers approverCache
+	auth      localauth.Authorizer
+	authCache authCache
 	// agentNames are the programs of the known agents. ancestors walks
 	// the parents of a peer.
 	agentNames   []string
@@ -131,7 +135,7 @@ func New(cfg *config.Config, opts Options) *Server {
 	return &Server{
 		cfg: cfg, root: root, limits: limits, version: opts.Version, reloadConfig: opts.ReloadConfig,
 		spoolDir: spoolDir, spoolLimits: spoolLimits, ingestInterval: interval,
-		partitions: map[uint32]*partition{}, auth: auth,
+		partitions: map[uint32]*partition{}, conns: map[uint32]int{}, auth: auth,
 		agentNames: agentProcessNames(cfg), ancestors: ancestors, lookup: opts.Processes,
 	}
 }
@@ -208,8 +212,8 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 	// the background: a hook has a short handshake budget, and the first
 	// open of an account creates and migrates its store. The first frame
 	// waits for the open under the decision deadline.
-	part := s.partitionOf(peer.UID)
-	if !part.acquireConn(s.limits.MaxConns) {
+	part, admitted := s.admit(peer.UID)
+	if !admitted {
 		_ = ipc.WriteFrame(conn, ipc.ErrorFrame(ipc.CodeRateLimited, "too many connections from this account"))
 		// A refused connection closes at once, so a flood holds no
 		// goroutine while the partition opens. The refusal is recorded
@@ -219,12 +223,12 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 		}
 		return
 	}
-	defer part.releaseConn()
+	defer s.leave(peer.UID, part)
 
 	welcome := ipc.Welcome{Proto: ipc.Proto, ServerVersion: s.version, Mode: s.cfg.Supervisor.EffectiveProfile()}
 	rw := &idleConn{Conn: conn, timeout: s.limits.IdleTimeout}
 	err = ipc.ServeConn(ctx, rw, welcome, ipc.HandlerFunc(func(ctx context.Context, f *ipc.Frame, body ipc.Body) (*ipc.Frame, error) {
-		if err := s.waitOpen(ctx, part); err != nil {
+		if err := s.waitOpen(ctx, part, f.Type); err != nil {
 			// The connection ends after this answer, so it does not hold
 			// a slot of the account while the open is stuck, or past the
 			// limit of the partition that replaces a failed one.
@@ -294,15 +298,45 @@ func (s *Server) dispatch(ctx context.Context, part *partition, peer *peercred.P
 	}
 }
 
-// waitOpen waits for the partition to open, at most OpenWait.
-func (s *Server) waitOpen(ctx context.Context, p *partition) error {
+// waitOpen waits for the partition to open, at most OpenWait. A hook
+// stops waiting for a decision after ipc.DecisionTimeout, so a Handle
+// waits no longer, and its connection does not hold a slot of the account
+// after the hook has gone.
+func (s *Server) waitOpen(ctx context.Context, p *partition, frame string) error {
 	wait := s.limits.OpenWait
 	if wait <= 0 {
 		wait = ipc.ReadTimeout
 	}
+	if frame == ipc.TypeHandle {
+		wait = min(wait, ipc.DecisionTimeout)
+	}
 	ctx, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
 	return p.wait(ctx)
+}
+
+// admit counts a connection of uid in, and returns the partition that it
+// uses. It reports false when the account has MaxConns connections.
+func (s *Server) admit(uid uint32) (*partition, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.partitionLocked(uid)
+	if s.conns[uid] >= s.limits.MaxConns {
+		return p, false
+	}
+	s.conns[uid]++
+	p.holdConn()
+	return p, true
+}
+
+// leave counts a connection of uid out.
+func (s *Server) leave(uid uint32, p *partition) {
+	s.mu.Lock()
+	if s.conns[uid]--; s.conns[uid] <= 0 {
+		delete(s.conns, uid)
+	}
+	s.mu.Unlock()
+	p.releaseConn()
 }
 
 // partition returns the partition of uid, and opens it on first contact.
@@ -321,6 +355,11 @@ func (s *Server) partition(ctx context.Context, uid uint32) (*partition, error) 
 func (s *Server) partitionOf(uid uint32) *partition {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.partitionLocked(uid)
+}
+
+// partitionLocked is partitionOf for a caller that holds mu.
+func (s *Server) partitionLocked(uid uint32) *partition {
 	if p, ok := s.partitions[uid]; ok && !p.failed() {
 		return p
 	}

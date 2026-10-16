@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -180,4 +181,36 @@ func TestServer_StopsWhileAPartitionOpens(t *testing.T) {
 	})
 	srv.partitionOf(4245)
 	<-started
+}
+
+func TestServer_LimitHoldsAcrossAFailedOpen(t *testing.T) {
+	limits := DefaultLimits()
+	limits.MaxConns = 2
+	srv, state, _ := startServerWithLimits(t, config.Default(), limits)
+	setOpenHook(srv, func(context.Context, uint32) error { return errors.New("disk full") })
+	sock := filepath.Join(filepath.Dir(state), "hook.sock")
+	hello(t, dial(t, sock))
+	hello(t, dial(t, sock))
+	require.Eventually(t, func() bool {
+		srv.mu.Lock()
+		defer srv.mu.Unlock()
+		p, ok := srv.partitions[uint32(os.Getuid())]
+		return ok && p.failed()
+	}, 5*time.Second, 10*time.Millisecond)
+
+	reply, err := ipc.ReadFrame(dial(t, sock))
+	require.NoError(t, err)
+	assert.Contains(t, string(reply.Body), ipc.CodeRateLimited, "the replacement partition does not reset the count of the account")
+}
+
+func TestServer_HandleWaitsForTheOpenAsLongAsAHook(t *testing.T) {
+	srv, state, _ := startServerWith(t, config.Default())
+	holdOpens(t, srv)
+	conn := dial(t, filepath.Join(filepath.Dir(state), "hook.sock"))
+	hello(t, conn)
+
+	start := time.Now()
+	reply := exchange(t, conn, ipc.MustFrame(ipc.TypeHandle, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(readPayload)}))
+	assert.Contains(t, string(reply.Body), ipc.CodeDeadline)
+	assert.Less(t, time.Since(start), srv.limits.OpenWait, "a Handle waits the decision deadline of a hook, not OpenWait")
 }

@@ -29,10 +29,10 @@ down. A first frame of another type ends the connection with `error`.
 The server sends `welcome` before the partition of the account is open.
 The first open of an account creates and migrates its store, and a hook
 has only 300 ms for the handshake. The first request after `welcome`
-waits for the open, under the decision deadline of the client, and at
-most 10 s. A request past the 10 s gets `error deadline`, and its
-connection closes, so a stuck open does not hold the connections of the
-account. An open that takes longer than the deadline of the client gives
+waits for the open. A `handle` waits at most the 2 s decision deadline of
+a hook, and another request at most 10 s. A request past its wait gets
+`error deadline`, and its connection closes, so a slow or stuck open does
+not hold the connections of the account after the client has gone. An open that takes longer than the deadline of the client gives
 the hook the verdict of a deadline after the welcome, not the verdict of
 an absent service. The
 service runs one store migration at a time, so the first open of an
@@ -131,7 +131,9 @@ account does not hold the connections of another.
 
 Limits per account, with the defaults: 16 open connections, 20 requests a
 second with a burst of 40, and a 30 s idle timeout per connection. The
-newest connection above the limit gets `error rate_limited` and closes. A
+newest connection above the limit gets `error rate_limited` and closes.
+The server counts the connections of an account, not of a partition, so a
+new partition after a failed open does not reset the count. A
 request over the rate gets `error rate_limited`. The first refusal in a
 minute becomes a tamper event `rate_limited` in the system session of the
 account, so a review sees the flood without the flood filling the store.
