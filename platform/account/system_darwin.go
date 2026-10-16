@@ -8,18 +8,19 @@ import (
 	"strings"
 )
 
-// The range of the ids of a system account. macOS keeps ids below 500
-// for accounts that do not log in, and its own daemons use the low part
-// of that range.
+// The range of the ids of a system account. macOS keeps ids below 500 for
+// accounts that do not log in, and its own daemons use the low part of
+// that range, so the search starts at the top.
 const (
 	systemIDFirst = 300
 	systemIDLast  = 499
 )
 
-// dscl runs the directory service command line and returns its output.
-// Tests replace it.
+// dscl runs the directory service command line by its absolute path,
+// because the install runs as root with the PATH of whoever started it.
+// It returns the output. Tests replace it.
 var dscl = func(ctx context.Context, args ...string) (string, error) {
-	out, err := exec.CommandContext(ctx, "dscl", append([]string{"."}, args...)...).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "/usr/bin/dscl", append([]string{"."}, args...)...).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("dscl %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
@@ -28,9 +29,17 @@ var dscl = func(ctx context.Context, args ...string) (string, error) {
 
 // createSystem makes a group and a user of the same name and id in the
 // local directory service. macOS has no useradd. The user is hidden from
-// the login window and cannot log in. A failure after the first record
-// removes what the call made, so a later run starts again from nothing.
+// the login window and cannot log in. A record of the name that exists
+// already is refused, so the user and the group never get different ids.
+// A failure after the first record removes what the call made, so a
+// later run starts again from nothing.
 func createSystem(ctx context.Context, name, home string) error {
+	group, user := "/Groups/"+name, "/Users/"+name
+	for _, record := range []string{user, group} {
+		if _, err := dscl(ctx, "-read", record); err == nil {
+			return fmt.Errorf("account %s: the record %s exists already, remove it with dscl . -delete %s", name, record, record)
+		}
+	}
 	users, err := dscl(ctx, "-list", "/Users", "UniqueID")
 	if err != nil {
 		return err
@@ -44,7 +53,6 @@ func createSystem(ctx context.Context, name, home string) error {
 		return err
 	}
 	ids := strconv.Itoa(id)
-	group, user := "/Groups/"+name, "/Users/"+name
 	steps := [][]string{
 		{"-create", group},
 		{"-create", group, "PrimaryGroupID", ids},
@@ -59,20 +67,32 @@ func createSystem(ctx context.Context, name, home string) error {
 		{"-create", user, "Password", "*"},
 		{"-create", user, "IsHidden", "1"},
 	}
+	fail := func(err error) error {
+		for _, record := range []string{user, group} {
+			_, _ = dscl(ctx, "-delete", record)
+		}
+		return fmt.Errorf("account %s: %w", name, err)
+	}
 	for _, step := range steps {
 		if _, err := dscl(ctx, step...); err != nil {
-			for _, record := range []string{user, group} {
-				_, _ = dscl(ctx, "-delete", record)
-			}
-			return fmt.Errorf("account %s: %w", name, err)
+			return fail(err)
 		}
+	}
+	// Another tool can take the same id between the listing and the
+	// create. The read back finds that.
+	out, err := dscl(ctx, "-read", user, "UniqueID", "PrimaryGroupID")
+	if err != nil {
+		return fail(err)
+	}
+	if got := strings.Fields(out); len(got) != 4 || got[1] != ids || got[3] != ids {
+		return fail(fmt.Errorf("the record reads %q, not id %s", strings.TrimSpace(out), ids))
 	}
 	return nil
 }
 
-// freeSystemID returns the lowest id in the system range that no user and
-// no group has. The input is the output of dscl -list: a name and an id
-// on each line.
+// freeSystemID returns the highest id in the system range that no user
+// and no group has. The input is the output of dscl -list: a name and an
+// id on each line.
 func freeSystemID(users, groups string) (int, error) {
 	taken := map[int]bool{}
 	for _, listing := range []string{users, groups} {
@@ -86,7 +106,7 @@ func freeSystemID(users, groups string) (int, error) {
 			}
 		}
 	}
-	for id := systemIDFirst; id <= systemIDLast; id++ {
+	for id := systemIDLast; id >= systemIDFirst; id-- {
 		if !taken[id] {
 			return id, nil
 		}
