@@ -113,6 +113,10 @@ func remove(ctx context.Context, name string) (*Result, error) {
 	return res, nil
 }
 
+func reloadHint(name string) string { return "systemctl reload " + name + ".service" }
+
+func logHint(name string) string { return "journalctl -u " + name }
+
 func active(ctx context.Context, name string) bool {
 	return runCommand(ctx, "systemctl", "is-active", "--quiet", name+".socket") == nil
 }

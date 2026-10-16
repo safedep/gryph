@@ -35,6 +35,10 @@ type Spec struct {
 	// rest of the file system is read-only to it. SpoolDir may be empty.
 	StateDir string
 	SpoolDir string
+	// Capabilities, RuntimeDir and SyscallAllow are Linux settings. A
+	// platform without them refuses a spec that sets one, so a service
+	// that needs a kernel feature does not start without it.
+	//
 	// Capabilities are the capabilities the service keeps, by name, for a
 	// service that needs one. Empty keeps none.
 	Capabilities []string
@@ -85,6 +89,18 @@ func Active(ctx context.Context, name string) bool {
 		return false
 	}
 	return active(ctx, name)
+}
+
+// ReloadHint returns the command that asks the running service to read
+// its configuration again, for a report that names the next step.
+func ReloadHint(name string) string {
+	return reloadHint(name)
+}
+
+// LogHint returns where the output of the service goes, for a report that
+// tells an administrator where to look.
+func LogHint(name string) string {
+	return logHint(name)
 }
 
 func (s Spec) validate() error {

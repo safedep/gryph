@@ -439,7 +439,7 @@ func installSupervisorService(ctx context.Context, in *managedInstallInput, repo
 	// reload makes a running service read both again.
 	if report.Changed {
 		if _, reloaded, note := reloadService(sup.PIDFile()); !reloaded {
-			svc.Next = "systemctl reload " + supervisorServiceName + ".service (" + note + ")"
+			svc.Next = service.ReloadHint(supervisorServiceName) + " (" + note + ")"
 		}
 	}
 }
@@ -481,7 +481,7 @@ func installFanotifyService(ctx context.Context, in *managedInstallInput) *manag
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	svc.Error = "the watcher did not report within " + serviceHealthTimeout.String() + ": see journalctl -u " + fanotifyServiceName
+	svc.Error = "the watcher did not report within " + serviceHealthTimeout.String() + ": see " + service.LogHint(fanotifyServiceName)
 	return svc
 }
 

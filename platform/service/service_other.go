@@ -11,3 +11,7 @@ func install(context.Context, Spec) (*Result, error) { return nil, ErrUnsupporte
 func remove(context.Context, string) (*Result, error) { return nil, ErrUnsupported }
 
 func active(context.Context, string) bool { return false }
+
+func reloadHint(string) string { return "" }
+
+func logHint(string) string { return "" }

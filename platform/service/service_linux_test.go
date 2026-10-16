@@ -63,3 +63,8 @@ func TestInstallRemove_WritesUnits(t *testing.T) {
 	_, err = Install(context.Background(), Spec{Name: "bad name"})
 	assert.Error(t, err)
 }
+
+func TestHints(t *testing.T) {
+	assert.Equal(t, "systemctl reload gryph-supervisor.service", ReloadHint("gryph-supervisor"))
+	assert.Equal(t, "journalctl -u gryph-fanotify", LogHint("gryph-fanotify"))
+}
