@@ -213,7 +213,7 @@ sudo launchctl kill SIGHUP system/io.safedep.gryph-supervisor
 ## When something does not work
 
 ```sh
-sudo tail -f /Library/Logs/safedep/gryph-supervisor.log
+sudo tail -f /var/log/safedep/gryph-supervisor.log
 sudo launchctl print system/io.safedep.gryph-supervisor
 sudo /opt/safedep/gryph/bin/gryph doctor --managed --json
 ```

@@ -26,9 +26,10 @@ type fakeLaunchd struct {
 func withFakeLaunchd(t *testing.T) *fakeLaunchd {
 	t.Helper()
 	dir := t.TempDir()
-	restoreDaemons, restoreLogs, restoreRun := daemonsDir, logDir, launchctl
+	restoreDaemons, restoreLogs, restoreRun, restoreCheck := daemonsDir, logDir, launchctl, checkLogDir
 	daemonsDir = func() string { return filepath.Join(dir, "LaunchDaemons") }
 	logDir = func() string { return filepath.Join(dir, "Logs") }
+	checkLogDir = func(string) error { return nil }
 	f := &fakeLaunchd{}
 	launchctl = launchd.Launchctl{Run: func(_ context.Context, args ...string) error {
 		f.calls = append(f.calls, args[0])
@@ -44,7 +45,7 @@ func withFakeLaunchd(t *testing.T) *fakeLaunchd {
 		}
 		return nil
 	}}
-	t.Cleanup(func() { daemonsDir, logDir, launchctl = restoreDaemons, restoreLogs, restoreRun })
+	t.Cleanup(func() { daemonsDir, logDir, launchctl, checkLogDir = restoreDaemons, restoreLogs, restoreRun, restoreCheck })
 	return f
 }
 
@@ -110,6 +111,33 @@ func TestInstallRemove_Darwin(t *testing.T) {
 	assert.True(t, removed.Enabled)
 	assert.NoFileExists(t, path)
 	assert.False(t, Active(ctx, spec.Name))
+}
+
+func TestEnsureLog_RefusesALink(t *testing.T) {
+	withFakeLaunchd(t)
+	me, err := user.Current()
+	require.NoError(t, err)
+	target := filepath.Join(t.TempDir(), "keys")
+	require.NoError(t, os.WriteFile(target, []byte("secret"), 0o600))
+	path := logPath("gryph-supervisor")
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.Symlink(target, path))
+
+	assert.Error(t, ensureLog(path, me.Username), "root does not follow a link in the log directory")
+	data, err := os.ReadFile(target)
+	require.NoError(t, err)
+	assert.Equal(t, "secret", string(data))
+}
+
+func TestCheckRootDir(t *testing.T) {
+	dir := t.TempDir()
+	if os.Geteuid() != 0 {
+		assert.ErrorContains(t, checkRootDir(dir), "not owned by root")
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	require.NoError(t, os.Symlink(dir, link))
+	assert.ErrorContains(t, checkRootDir(link), "not a directory")
+	assert.NoError(t, checkRootDir("/var/log"), "a stock root directory")
 }
 
 func TestInstall_DarwinRefusesLinuxSettings(t *testing.T) {

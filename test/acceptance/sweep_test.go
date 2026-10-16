@@ -53,7 +53,7 @@ var sweepPaths = map[string][]string{
 		"/Library/Application Support/ClaudeCode",
 		"/Library/LaunchDaemons/" + sweepDaemonLabel + ".plist",
 		"/Library/LaunchAgents/io.safedep.gryph-reconcile.plist",
-		"/Library/Logs/safedep",
+		"/var/log/safedep",
 		"/var/db/safedep/gryph",
 		"/var/spool/safedep/gryph",
 		"/var/root/Library/Application Support/safedep",

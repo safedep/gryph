@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/safedep/gryph/platform/account"
@@ -15,14 +16,18 @@ import (
 )
 
 // daemonsDir is where launchd reads the system daemons, and logDir where
-// they write their output. Tests replace both.
+// they write their output. logDir is under /var/log, which only root
+// writes: /Library/Logs is writable by the admin group, and an admin user
+// could plant a link where root makes the log. Tests replace both.
 var (
 	daemonsDir = func() string { return "/Library/LaunchDaemons" }
-	logDir     = func() string { return "/Library/Logs/safedep" }
+	logDir     = func() string { return "/var/log/safedep" }
 )
 
+// launchctl runs by its absolute path, because the install runs as root
+// with the PATH of whoever started it.
 var launchctl = launchd.Launchctl{Run: func(ctx context.Context, args ...string) error {
-	return runCommand(ctx, "launchctl", args...)
+	return runCommand(ctx, "/bin/launchctl", args...)
 }}
 
 // bootstrapAttempts bounds the bootstrap after a bootout. launchd ends a
@@ -129,23 +134,57 @@ func logPath(name string) string { return filepath.Join(logDir(), name+".log") }
 
 // ensureLog makes the log file of the job and gives it to the account of
 // the job. launchd can open the file as that account, which cannot make
-// a file in the root-owned log directory.
+// a file in the root-owned log directory. Root opens the file without
+// following a link and changes the owner through the open file, so a
+// link in the directory cannot point root at another file.
 func ensureLog(path, user string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640)
-	if err != nil {
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
 	acct, err := account.Lookup(user)
 	if err != nil {
 		return fmt.Errorf("the account of the job: %w", err)
 	}
-	return acct.Chown(path)
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if err := checkLogDir(dir); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND|syscall.O_NOFOLLOW, 0o640)
+	if err != nil {
+		return fmt.Errorf("log %s: %w", path, err)
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("log %s is not a regular file", path)
+	}
+	return f.Chown(int(acct.UID), int(acct.GID))
+}
+
+// checkLogDir checks the log directory. Tests, which run without root,
+// replace it.
+var checkLogDir = checkRootDir
+
+// checkRootDir accepts a directory, not a link, that root owns and that no
+// group or other can write.
+func checkRootDir(dir string) error {
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	switch {
+	case !info.IsDir():
+		return fmt.Errorf("%s is not a directory", dir)
+	case !ok || st.Uid != 0:
+		return fmt.Errorf("%s is not owned by root", dir)
+	case info.Mode().Perm()&0o022 != 0:
+		return fmt.Errorf("%s is writable by group or other", dir)
+	}
+	return nil
 }
 
 // renderDaemon is the job file. launchd opens the socket as root before

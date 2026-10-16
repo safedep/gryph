@@ -68,7 +68,7 @@ stdout '"switch": "off"'
 
 exec dscl . -delete /Users/_gryph
 exec dscl . -delete /Groups/_gryph
-exec rm -rf '/Library/Application Support/safedep' '/Library/Application Support/ClaudeCode' /var/db/safedep /var/spool/safedep /Library/Logs/safedep /Library/LaunchAgents/io.safedep.gryph-reconcile.plist
+exec rm -rf '/Library/Application Support/safedep' '/Library/Application Support/ClaudeCode' /var/db/safedep /var/spool/safedep /var/log/safedep /Library/LaunchAgents/io.safedep.gryph-reconcile.plist
 
 -- managed.yml --
 policy:

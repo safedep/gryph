@@ -328,7 +328,7 @@ jobs:
 
       - name: Show the Service Log
         if: failure()
-        run: sudo cat /Library/Logs/safedep/gryph-supervisor.log || true
+        run: sudo cat /var/log/safedep/gryph-supervisor.log || true
 
       - name: Render Report
         if: always()

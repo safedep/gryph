@@ -234,7 +234,7 @@ On macOS the install writes one LaunchDaemon,
 - The job runs `gryph supervisor run` as `_gryph`, which the install makes
   in the directory service: hidden, no password, `/usr/bin/false` as its
   shell. launchd starts the job again one second after it ends. Its
-  output goes to `/Library/Logs/safedep/gryph-supervisor.log`.
+  output goes to `/var/log/safedep/gryph-supervisor.log`.
 - macOS has no counterpart of the systemd hardening set. The service
   account is what keeps the service from the files of a user.
 - launchd reads the job file only when it loads it. A changed file loads
