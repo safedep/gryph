@@ -212,14 +212,13 @@ func stopSupervisorService(ctx context.Context) *managedServiceReport {
 			svc.Next = strings.TrimPrefix(svc.Next+"; "+fan.Next, "; ")
 		}
 	}
-	if path, _ := localauth.PolicyFile(); path != "" {
-		removed, err := removeManagedPath(path, false)
-		if err != nil {
-			svc.Error = "remove the authentication policy: " + err.Error()
-		} else if removed {
-			svc.AuthPolicy = path
-			svc.Changed = true
-		}
+	reg, err := localauth.Unregister(ctx)
+	switch {
+	case err != nil:
+		svc.Error = "remove the approval action from the authority: " + err.Error()
+	case reg.Changed:
+		svc.AuthPolicy = reg.Path
+		svc.Changed = true
 	}
 	if !svc.Changed && len(res.Paths) == 0 {
 		return nil

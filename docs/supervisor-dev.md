@@ -59,7 +59,7 @@ account can wait for the first opens of other accounts.
 | `import_receipts` | client to server | `session_id`, `receipts` (up to 64 receipts, with their hashes and signatures) | `import_result` or `error` |
 | `import_session` | client to server | `session` (the session row, sent first) | `import_result` or `error` |
 | `import_result` | server to client | `taken` (the count of rows the server stored) | |
-| `approve` | client to server | `request_id`, `decision` (`allow` or `deny`), `scope` (64), `note` (4096). The answer of an approver to a request of another account. | `approve_result` or `error` |
+| `approve` | client to server | `request_id`, `decision` (`allow` or `deny`), `scope` (64), `note` (4096), optional `proof` (`kind` (64), `data` (1024 bytes)). The answer of an approver to a request of another account. The proof is for an authority that asks in the session of the client. | `approve_result` or `error` |
 | `approve_result` | server to client | `request_id`, `state` (`approved`, `denied` or `superseded`), `assurance`, `grant_id`, `note` | |
 | `ack` | server to client | empty | |
 | `error` | server to client | `code` (64), `message` (4096) | |
@@ -212,19 +212,30 @@ a review item: `review` on the row, no prompt, no wait, the note as
 guidance, and no grant on an allow.
 
 `platform/localauth` is the authority of the platform behind an
-`Authorizer` interface: `Available` and `Authorize(subject, action,
-interactive)`. On Linux it is polkit over the system bus
+`Authorizer` interface: `Available` and `Authorize(Request)`. A request
+names the peer (pid, uid, and the start stamp that peercred read at
+accept), the action `io.safedep.gryph.approve`, and an optional `Proof`.
+An authority works in one of two ways. Polkit asks on behalf of the
+service: the service names the process and polkit finds its session. An
+authority that can ask only in the session of the person needs the client
+to ask first: `localauth.Prepare` returns a proof, the client sends it in
+the `proof` of `approve`, and the server checks it with the authority of
+its `kind`. A proof is never the identity of the peer. The `kind` keeps one
+authority from reading the proof of another, and leaves room for an
+approval that a remote service signs.
+
+On Linux the authority is polkit over the system bus
 (`github.com/godbus/dbus/v5`): `CheckAuthorization` with a `unix-process`
-subject (pid and start time from `/proc/<pid>/stat`), the action
-`io.safedep.gryph.approve`, `AllowUserInteraction`, and a cancellation id
-that a timed-out call (90 s) cancels. The install writes the action file
-(`localauth.PolicyFile`, `auth_self`) and the uninstall removes it. The
-server asks when `Available` (cached 30 s) and the peer passed the group
-and uid checks: an authorized answer at `local-admin` becomes
-`local-auth`; anything else refuses unless `allow_without_auth`. The
-client's `resolve` runs `localauth.Agent` (`pkttyagent --process <pid>
---notify-fd`) across the `approve` call, with a 2 min client deadline.
-Tests give the server a fake `Authorizer` through `Options.Authorizer`.
+subject (the pid and the start time of the peer, in clock ticks since
+boot), `AllowUserInteraction`, and a cancellation id that a timed-out call
+(90 s) cancels. `localauth.Register` writes the action file (`auth_self`)
+and `Unregister` removes it. The server asks when `Available` (cached
+30 s) and the peer passed the group and uid checks, while the peer is the
+process seen at accept: an authorized answer at `local-admin` becomes
+`local-auth`; anything else refuses unless `allow_without_auth`. On Linux
+`Prepare` runs `pkttyagent --process <pid> --notify-fd` across the
+`approve` call and returns no proof, with a 2 min client deadline. Tests
+give the server a fake `Authorizer` through `Options.Authorizer`.
 The acceptance condition `[polkit]` needs the system bus socket,
 `pkcheck` and `pkttyagent`.
 

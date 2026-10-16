@@ -28,6 +28,7 @@ const (
 	MaxQueryParam = 1024    // one query parameter
 	MaxQueryItems = 64      // query parameters, or rows in one result
 	MaxRawEvent   = 64 << 10
+	MaxAuthProof  = 1024 // the data of an authentication proof
 )
 
 // Hello opens a connection. The client names its protocol version, its
@@ -169,10 +170,21 @@ type ImportResult struct {
 // gryph policy approve resolve. The server checks who sends it against
 // the peer credentials, never against a field of the frame.
 type Approve struct {
-	RequestID uuid.UUID `json:"request_id"`
-	Decision  string    `json:"decision"`
-	Scope     string    `json:"scope,omitempty"`
-	Note      string    `json:"note,omitempty"`
+	RequestID uuid.UUID  `json:"request_id"`
+	Decision  string     `json:"decision"`
+	Scope     string     `json:"scope,omitempty"`
+	Note      string     `json:"note,omitempty"`
+	Proof     *AuthProof `json:"proof,omitempty"`
+}
+
+// AuthProof is the proof that the approver authenticated in the session
+// of the client, for an authority that cannot ask on behalf of the
+// server. Kind names the authority that made it. The server checks the
+// proof with that authority and never takes it as the identity of the
+// peer.
+type AuthProof struct {
+	Kind string `json:"kind"`
+	Data []byte `json:"data"`
 }
 
 // The decisions of an Approve frame.
@@ -444,6 +456,17 @@ func (a *Approve) Validate() error {
 	}
 	if err := boundString("scope", a.Scope, MaxName); err != nil {
 		return err
+	}
+	if a.Proof != nil {
+		if a.Proof.Kind == "" {
+			return fmt.Errorf("%w: proof without a kind", ErrInvalid)
+		}
+		if err := boundString("proof kind", a.Proof.Kind, MaxName); err != nil {
+			return err
+		}
+		if len(a.Proof.Data) > MaxAuthProof {
+			return fmt.Errorf("%w: proof data above %d bytes", ErrInvalid, MaxAuthProof)
+		}
 	}
 	return boundString("note", a.Note, MaxText)
 }

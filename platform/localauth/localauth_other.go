@@ -10,12 +10,14 @@ func platformAuthorizer() Authorizer { return none{} }
 
 func (none) Available(context.Context) bool { return false }
 
-func (none) Authorize(context.Context, Subject, string, bool) (Result, error) {
+func (none) Authorize(context.Context, Request) (Result, error) {
 	return Result{}, ErrUnavailable
 }
 
-func policyFile() (string, []byte) { return "", nil }
+func hint() string { return "this platform has no authority that asks for the password" }
 
-func startTime(int32) (uint64, error) { return 0, ErrUnavailable }
+func register(context.Context) (Registration, error) { return Registration{}, nil }
 
-func startAgent(context.Context) (func(), error) { return func() {}, nil }
+func unregister(context.Context) (Registration, error) { return Registration{}, nil }
+
+func prepare(context.Context, string) (Proof, func(), error) { return Proof{}, func() {}, nil }

@@ -4,6 +4,11 @@
 // the password of the approver, which an agent under the approver's
 // account does not know. The package is a small interface over the
 // platform, so another authority can replace polkit.
+//
+// An authority works in one of two ways. Polkit asks the person on behalf
+// of the service: the service names the process and polkit finds its
+// session. Another authority can ask only in the session of the person,
+// so the client asks first and brings a Proof that the service checks.
 package localauth
 
 import (
@@ -11,19 +16,40 @@ import (
 	"errors"
 )
 
-// ActionID names the polkit action of an answer to an approval request.
+// ActionID names the action of an answer to an approval request.
 const ActionID = "io.safedep.gryph.approve"
 
 // ErrUnavailable says the platform has no authority to ask, or the
 // authority is not running.
 var ErrUnavailable = errors.New("localauth: no authentication authority on this host")
 
-// Subject is the process whose owner authenticates. StartTime is the
-// start time of the process in clock ticks since boot, so a later process
-// with the same pid is not the subject.
-type Subject struct {
-	PID       int32
+// Proof is what a client brings to show that a person authenticated in
+// its session. Kind names the authority that made the proof, so a service
+// never reads the proof of one authority as another. A zero Proof is no
+// proof: the service asks the authority itself, or refuses.
+type Proof struct {
+	Kind string
+	Data []byte
+}
+
+// MaxProof bounds the data of a proof on the wire.
+const MaxProof = 1024
+
+// Request is one question to the authority.
+type Request struct {
+	// PID and UID name the process that answers and its account, as the
+	// kernel reported them at accept.
+	PID int32
+	UID uint32
+	// StartTime is the start stamp of the process that peercred read at
+	// accept, in the unit of the platform. Zero lets the authority find
+	// it.
 	StartTime uint64
+	Action    string
+	// Interactive lets the authority ask the person through its agent.
+	// The call then lasts until the person answers, cancels, or ctx ends.
+	Interactive bool
+	Proof       Proof
 }
 
 // Result is the answer of the authority.
@@ -41,10 +67,9 @@ type Result struct {
 type Authorizer interface {
 	// Available reports whether the authority runs on this host.
 	Available(ctx context.Context) bool
-	// Authorize asks whether the owner of subject may do action. With
-	// interactive the authority asks the person through its agent, and
-	// the call lasts until the person answers, cancels, or ctx ends.
-	Authorize(ctx context.Context, subject Subject, action string, interactive bool) (Result, error)
+	// Authorize asks whether the person behind the request may do its
+	// action.
+	Authorize(ctx context.Context, req Request) (Result, error)
 }
 
 // Default returns the authority of the platform.
@@ -52,25 +77,37 @@ func Default() Authorizer {
 	return platformAuthorizer()
 }
 
-// SubjectOf returns the subject for a process by its pid.
-func SubjectOf(pid int32) (Subject, error) {
-	start, err := startTime(pid)
-	if err != nil {
-		return Subject{}, err
-	}
-	return Subject{PID: pid, StartTime: start}, nil
+// Hint says what a person needs so that the authority can ask for the
+// password, for a refusal of an answer that came without one.
+func Hint() string {
+	return hint()
 }
 
-// PolicyFile returns the path and the content of the file that declares
-// the action to the authority, or an empty path on a platform without
-// one. The install writes it as root.
-func PolicyFile() (string, []byte) {
-	return policyFile()
+// Registration names what Register or Unregister changed.
+type Registration struct {
+	// Path names the declaration of the action: a file, or an entry of
+	// the database of the authority. It is empty on a platform without
+	// one.
+	Path    string
+	Changed bool
 }
 
-// Agent runs an authentication agent for the calling process, so the
-// authority can ask on the terminal of this command. Stop ends it. On a
-// platform or a host without one, Agent returns a no-op.
-func Agent(ctx context.Context) (stop func(), err error) {
-	return startAgent(ctx)
+// Register declares the action to the authority. The install calls it
+// as root.
+func Register(ctx context.Context) (Registration, error) {
+	return register(ctx)
+}
+
+// Unregister removes the declaration of the action.
+func Unregister(ctx context.Context) (Registration, error) {
+	return unregister(ctx)
+}
+
+// Prepare readies the calling process for an answer that needs the
+// password. It runs the agent of the authority for this terminal, or it
+// asks the person now and returns the proof. Stop ends what Prepare
+// started. On a platform or a host without an authority it returns no
+// proof and a no-op stop.
+func Prepare(ctx context.Context, action string) (proof Proof, stop func(), err error) {
+	return prepare(ctx, action)
 }

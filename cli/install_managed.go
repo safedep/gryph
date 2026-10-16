@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -77,8 +76,9 @@ type managedServiceReport struct {
 	// fallback before the service answers.
 	Running bool   `json:"running"`
 	Switch  string `json:"switch"`
-	// AuthPolicy is the file that declares the approval action to the
-	// authority of the platform, when the platform has one.
+	// AuthPolicy names the declaration of the approval action to the
+	// authority of the platform, a file or a database entry, when the
+	// platform has one.
 	AuthPolicy string `json:"auth_policy,omitempty"`
 	Error      string `json:"error,omitempty"`
 }
@@ -396,15 +396,13 @@ func installSupervisorService(ctx context.Context, in *managedInstallInput, repo
 			return
 		}
 	}
-	if path, content := localauth.PolicyFile(); path != "" {
-		changed, err := writeRootFile(path, content)
-		if err != nil {
-			svc.Error = "write the authentication policy: " + err.Error()
-			return
-		}
-		svc.AuthPolicy = path
-		svc.Changed = svc.Changed || changed
+	reg, err := localauth.Register(ctx)
+	if err != nil {
+		svc.Error = "declare the approval action to the authority: " + err.Error()
+		return
 	}
+	svc.AuthPolicy = reg.Path
+	svc.Changed = svc.Changed || reg.Changed
 	res, err := service.Install(ctx, service.Spec{
 		Name:        supervisorServiceName,
 		Description: "Gryph decision service",
@@ -483,19 +481,6 @@ func installFanotifyService(ctx context.Context, in *managedInstallInput) *manag
 	}
 	svc.Error = "the watcher did not report within " + serviceHealthTimeout.String() + ": see " + service.LogHint(fanotifyServiceName)
 	return svc
-}
-
-// writeRootFile writes a root-owned file readable by every account, and
-// reports whether the content changed. The parent directory must exist:
-// the platform package of the authority owns it.
-func writeRootFile(path string, content []byte) (bool, error) {
-	if current, err := os.ReadFile(path); err == nil && bytes.Equal(current, content) {
-		return false, nil
-	}
-	if err := os.WriteFile(path, content, 0o644); err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 // waitForService connects to the socket of the service and waits for its

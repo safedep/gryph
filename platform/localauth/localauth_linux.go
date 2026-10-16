@@ -1,9 +1,11 @@
 package localauth
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"strconv"
@@ -21,8 +23,6 @@ const (
 	// polkitAllowUserInteraction is the CheckAuthorization flag that lets
 	// polkit ask the person through an agent.
 	polkitAllowUserInteraction uint32 = 1
-	// policyPath is where polkit reads action declarations.
-	policyPath = "/usr/share/polkit-1/actions/io.safedep.gryph.policy"
 	// agentStartTimeout bounds the registration of pkttyagent.
 	agentStartTimeout = 5 * time.Second
 )
@@ -47,11 +47,41 @@ const policyContent = `<?xml version="1.0" encoding="UTF-8"?>
 </policyconfig>
 `
 
+// policyPath is where polkit reads action declarations. Tests replace it.
+var policyPath = "/usr/share/polkit-1/actions/io.safedep.gryph.policy"
+
 type polkit struct{}
 
 func platformAuthorizer() Authorizer { return polkit{} }
 
-func policyFile() (string, []byte) { return policyPath, []byte(policyContent) }
+func hint() string {
+	return "run the command from a session with a polkit agent, or on a terminal where pkttyagent can ask"
+}
+
+// register writes the action file, readable by every account. The
+// directory belongs to the polkit package.
+func register(context.Context) (Registration, error) {
+	reg := Registration{Path: policyPath}
+	if current, err := os.ReadFile(policyPath); err == nil && bytes.Equal(current, []byte(policyContent)) {
+		return reg, nil
+	}
+	if err := os.WriteFile(policyPath, []byte(policyContent), 0o644); err != nil {
+		return reg, err
+	}
+	reg.Changed = true
+	return reg, nil
+}
+
+func unregister(context.Context) (Registration, error) {
+	reg := Registration{Path: policyPath}
+	switch err := os.Remove(policyPath); {
+	case err == nil:
+		reg.Changed = true
+	case !errors.Is(err, fs.ErrNotExist):
+		return reg, err
+	}
+	return reg, nil
+}
 
 // Available reports whether the system bus answers and polkit owns, or
 // can take, its name on it.
@@ -79,22 +109,25 @@ func (polkit) Available(ctx context.Context) bool {
 	return false
 }
 
-// Authorize calls CheckAuthorization on the subject. The call lasts until
-// the person answers. When ctx ends first, the call is cancelled through
-// its cancellation id.
-func (polkit) Authorize(ctx context.Context, subject Subject, action string, interactive bool) (Result, error) {
+// Authorize calls CheckAuthorization on the process of the request. Polkit
+// needs no proof: it finds the session of the process and asks there. The
+// start time is the one peercred read at accept, in clock ticks since
+// boot, so a later process with the same pid is not the subject. Zero
+// lets polkit read it. The call lasts until the person answers. When ctx
+// ends first, the call is cancelled through its cancellation id.
+func (polkit) Authorize(ctx context.Context, req Request) (Result, error) {
 	conn, err := dbus.SystemBus()
 	if err != nil {
 		return Result{}, fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
 	obj := conn.Object(polkitName, polkitPath)
 	details := map[string]dbus.Variant{
-		"pid":        dbus.MakeVariant(uint32(subject.PID)),
-		"start-time": dbus.MakeVariant(subject.StartTime),
+		"pid":        dbus.MakeVariant(uint32(req.PID)),
+		"start-time": dbus.MakeVariant(req.StartTime),
 	}
 	var flags uint32
 	cancellation := ""
-	if interactive {
+	if req.Interactive {
 		flags = polkitAllowUserInteraction
 		cancellation = fmt.Sprintf("gryph-%d-%d", os.Getpid(), time.Now().UnixNano())
 	}
@@ -114,7 +147,7 @@ func (polkit) Authorize(ctx context.Context, subject Subject, action string, int
 		call := obj.Call(polkitInterface+".CheckAuthorization", 0, struct {
 			Kind    string
 			Details map[string]dbus.Variant
-		}{"unix-process", details}, action, map[string]string{}, flags, cancellation)
+		}{"unix-process", details}, req.Action, map[string]string{}, flags, cancellation)
 		if call.Err != nil {
 			callErr = call.Err
 			return
@@ -148,50 +181,25 @@ func (polkit) Authorize(ctx context.Context, subject Subject, action string, int
 	return res, nil
 }
 
-// startTime reads the start time of pid from /proc, in clock ticks since
-// boot, as polkit expects it.
-func startTime(pid int32) (uint64, error) {
-	data, err := os.ReadFile("/proc/" + strconv.Itoa(int(pid)) + "/stat")
-	if err != nil {
-		return 0, err
-	}
-	return parseStartTime(string(data))
-}
-
-// parseStartTime takes field 22 of a /proc/<pid>/stat line. The command
-// name in parentheses can hold spaces, so the fields start after the last
-// closing parenthesis.
-func parseStartTime(stat string) (uint64, error) {
-	end := strings.LastIndex(stat, ")")
-	if end < 0 {
-		return 0, errors.New("localauth: stat without a command name")
-	}
-	fields := strings.Fields(stat[end+1:])
-	// fields[0] is the state, field 3 of the line. Field 22 is index 19.
-	if len(fields) < 20 {
-		return 0, errors.New("localauth: stat with too few fields")
-	}
-	return strconv.ParseUint(fields[19], 10, 64)
-}
-
-// startAgent runs pkttyagent for this process, so polkit asks on the
-// terminal of the command. The agent reports its registration on a
-// notify descriptor. Without pkttyagent or a system bus there is nothing
-// to start.
-func startAgent(ctx context.Context) (func(), error) {
+// prepare runs pkttyagent for this process, so polkit asks on the
+// terminal of the command while the service waits for the answer. Polkit
+// makes no proof. The agent reports its registration on a notify
+// descriptor. Without pkttyagent or a system bus there is nothing to
+// start.
+func prepare(ctx context.Context, _ string) (Proof, func(), error) {
 	noop := func() {}
 	path, err := exec.LookPath("pkttyagent")
 	if err != nil {
 		log.Warnf("localauth: no pkttyagent on PATH, the authority cannot ask on this terminal")
-		return noop, nil
+		return Proof{}, noop, nil
 	}
 	if !(polkit{}).Available(ctx) {
 		log.Debugf("localauth: no authority on the system bus, nothing asks on this terminal")
-		return noop, nil
+		return Proof{}, noop, nil
 	}
 	r, w, err := os.Pipe()
 	if err != nil {
-		return noop, err
+		return Proof{}, noop, err
 	}
 	// No --fallback: polkit asks a fallback agent only when no other agent
 	// serves the session, and a process with no session has none.
@@ -201,7 +209,7 @@ func startAgent(ctx context.Context) (func(), error) {
 	if err := cmd.Start(); err != nil {
 		_ = r.Close()
 		_ = w.Close()
-		return noop, fmt.Errorf("start pkttyagent: %w", err)
+		return Proof{}, noop, fmt.Errorf("start pkttyagent: %w", err)
 	}
 	_ = w.Close()
 	// The agent closes the notify descriptor once it is registered.
@@ -218,7 +226,7 @@ func startAgent(ctx context.Context) (func(), error) {
 	case <-time.After(agentStartTimeout):
 		log.Warnf("localauth: pkttyagent did not register in time")
 	}
-	return func() {
+	return Proof{}, func() {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 	}, nil

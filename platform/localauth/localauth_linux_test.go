@@ -1,36 +1,41 @@
 package localauth
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseStartTime(t *testing.T) {
-	line := "1234 (a b) c) S 1 1234 1234 0 -1 4194560 100 0 0 0 1 2 0 0 20 0 1 0 98765 1000 100 18446744073709551615 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
-	start, err := parseStartTime(line)
+func TestRegister(t *testing.T) {
+	restore := policyPath
+	policyPath = filepath.Join(t.TempDir(), "io.safedep.gryph.policy")
+	t.Cleanup(func() { policyPath = restore })
+	ctx := context.Background()
+
+	reg, err := Register(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(98765), start)
-	_, err = parseStartTime("1234 (x) S 1")
-	assert.Error(t, err)
-	_, err = parseStartTime("no parenthesis")
-	assert.Error(t, err)
+	assert.Equal(t, Registration{Path: policyPath, Changed: true}, reg)
+	data, err := os.ReadFile(policyPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `action id="`+ActionID+`"`)
+	assert.Contains(t, string(data), "auth_self")
+
+	reg, err = Register(ctx)
+	require.NoError(t, err)
+	assert.False(t, reg.Changed, "the same content is not written again")
+
+	reg, err = Unregister(ctx)
+	require.NoError(t, err)
+	assert.True(t, reg.Changed)
+	reg, err = Unregister(ctx)
+	require.NoError(t, err)
+	assert.False(t, reg.Changed, "a missing file is not an error")
 }
 
-func TestSubjectOf_Self(t *testing.T) {
-	s, err := SubjectOf(int32(os.Getpid()))
-	require.NoError(t, err)
-	assert.NotZero(t, s.StartTime)
-	assert.Equal(t, int32(os.Getpid()), s.PID)
-	_, err = SubjectOf(2147483000)
-	assert.Error(t, err)
-}
-
-func TestPolicyFile(t *testing.T) {
-	path, content := PolicyFile()
-	assert.Equal(t, "/usr/share/polkit-1/actions/io.safedep.gryph.policy", path)
-	assert.Contains(t, string(content), `action id="`+ActionID+`"`)
-	assert.Contains(t, string(content), "auth_self")
+func TestHint(t *testing.T) {
+	assert.Contains(t, Hint(), "pkttyagent")
 }

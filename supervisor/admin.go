@@ -60,15 +60,20 @@ func (s *Server) authAvailable(ctx context.Context) bool {
 }
 
 // authenticate asks the authority for the password of the approver. It
-// returns the reason the answer cannot count, or empty when it can.
-func (s *Server) authenticate(ctx context.Context, peer *peercred.Peer) string {
-	subject, err := localauth.SubjectOf(peer.PID)
-	if err != nil {
-		return "the approver process is not there to authenticate: " + err.Error()
+// returns the reason the answer cannot count, or empty when it can. The
+// peer is the process seen at accept: a later process with the same pid
+// does not answer for it.
+func (s *Server) authenticate(ctx context.Context, peer *peercred.Peer, proof *ipc.AuthProof) string {
+	if !peer.SameProcess() {
+		return "the approver process is not there to authenticate"
+	}
+	req := localauth.Request{PID: peer.PID, UID: peer.UID, StartTime: peer.StartTime, Action: localauth.ActionID, Interactive: true}
+	if proof != nil {
+		req.Proof = localauth.Proof{Kind: proof.Kind, Data: proof.Data}
 	}
 	actx, cancel := context.WithTimeout(ctx, authWait)
 	defer cancel()
-	res, err := s.auth.Authorize(actx, subject, localauth.ActionID, true)
+	res, err := s.auth.Authorize(actx, req)
 	switch {
 	case errors.Is(err, localauth.ErrUnavailable):
 		return "the authority of the host stopped answering: " + err.Error()
@@ -79,7 +84,7 @@ func (s *Server) authenticate(ctx context.Context, peer *peercred.Peer) string {
 	case res.Dismissed:
 		return "the approver dismissed the password prompt"
 	case res.Challenge:
-		return "no password was given: run the command from a session with a polkit agent, or on a terminal where pkttyagent can ask"
+		return "no password was given: " + localauth.Hint()
 	}
 	return "the authority of the host refused the approver"
 }
@@ -278,7 +283,7 @@ func (s *Server) approve(ctx context.Context, own *partition, peer *peercred.Pee
 	// the keyboard, so the answer is local-auth: whether the person who
 	// asked may answer was decided above.
 	if s.authAvailable(ctx) {
-		if reason := s.authenticate(ctx, peer); reason != "" {
+		if reason := s.authenticate(ctx, peer, a.Proof); reason != "" {
 			if !cfg.LocalAdmin.AllowWithoutAuth {
 				return refuse("the answer needs the password of the approver: " + reason)
 			}

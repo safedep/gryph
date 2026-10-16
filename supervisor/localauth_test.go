@@ -5,8 +5,8 @@ package supervisor
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/safedep/gryph/aarm/approval"
@@ -19,19 +19,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeAuthority stands in for polkit.
+// fakeAuthority stands in for the authority of the platform.
 type fakeAuthority struct {
 	available bool
 	result    localauth.Result
 	err       error
-	subjects  []localauth.Subject
+	requests  []localauth.Request
 }
 
 func (f *fakeAuthority) Available(context.Context) bool { return f.available }
 
-func (f *fakeAuthority) Authorize(_ context.Context, s localauth.Subject, action string, interactive bool) (localauth.Result, error) {
-	f.subjects = append(f.subjects, s)
-	if action != localauth.ActionID || !interactive {
+func (f *fakeAuthority) Authorize(_ context.Context, req localauth.Request) (localauth.Result, error) {
+	f.requests = append(f.requests, req)
+	if req.Action != localauth.ActionID || !req.Interactive {
 		return localauth.Result{}, errors.New("unexpected call")
 	}
 	return f.result, f.err
@@ -50,7 +50,6 @@ func startAuthServer(t *testing.T, auth localauth.Authorizer, allowWithout bool)
 }
 
 func TestLocalAuth_PasswordRequiredWhenTheHostHasAnAuthority(t *testing.T) {
-	skipWithoutSubject(t)
 	auth := &fakeAuthority{available: true, result: localauth.Result{Challenge: true}}
 	srv, sock := startAuthServer(t, auth, false)
 	other, row := seedOtherPartition(t, srv.root, 60011, false)
@@ -65,9 +64,10 @@ func TestLocalAuth_PasswordRequiredWhenTheHostHasAnAuthority(t *testing.T) {
 	assert.Equal(t, ipc.CodeUnauthorized, se.Code)
 	assert.Contains(t, se.Message, "needs the password of the approver")
 	assert.Contains(t, se.Message, "no password was given")
-	require.Len(t, auth.subjects, 1)
-	assert.NotZero(t, auth.subjects[0].PID)
-	assert.NotZero(t, auth.subjects[0].StartTime)
+	require.Len(t, auth.requests, 1)
+	assert.Equal(t, int32(os.Getpid()), auth.requests[0].PID, "the authority asks about the approver process")
+	assert.Equal(t, uint32(os.Getuid()), auth.requests[0].UID)
+	assert.Empty(t, auth.requests[0].Proof.Kind, "the client sent no proof")
 	after, err := other.GetApprovalRequest(ctx, row.ID)
 	require.NoError(t, err)
 	assert.Equal(t, storage.ApprovalRequestPending, after.State)
@@ -114,13 +114,12 @@ func TestLocalAuth_NoAuthorityTakesTheAnswer(t *testing.T) {
 	res, err := client.Approve(context.Background(), ipc.Approve{RequestID: row.ID, Decision: ipc.ApproveAllow})
 	require.NoError(t, err)
 	assert.Equal(t, storage.ApprovalRequestApproved, res.State)
-	assert.Empty(t, auth.subjects, "a host without an authority asks nobody")
+	assert.Empty(t, auth.requests, "a host without an authority asks nobody")
 }
 
 // With the password given, the answer is local-auth, and a request from
 // another login session is no different.
 func TestLocalAuth_AuthorizedLocalAdminBecomesLocalAuth(t *testing.T) {
-	skipWithoutSubject(t)
 	auth := &fakeAuthority{available: true, result: localauth.Result{Authorized: true}}
 	srv, sock := startAuthServer(t, auth, false)
 	other, row := seedOtherPartition(t, srv.root, 60014, false)
@@ -141,14 +140,4 @@ func TestLocalAuth_AuthorizedLocalAdminBecomesLocalAuth(t *testing.T) {
 	assert.Equal(t, storage.ApprovalRequestApproved, res.State)
 	assert.Equal(t, string(approval.AssuranceLocalAuth), res.Assurance)
 	_ = config.ApprovalChannelLocalAuth
-}
-
-// skipWithoutSubject skips a test that asks the authority about the
-// approver process. Only Linux names that process to polkit, by its start
-// time, so on other systems the service finds no authority first.
-func skipWithoutSubject(t *testing.T) {
-	t.Helper()
-	if runtime.GOOS != "linux" {
-		t.Skip("only Linux names the approver process to polkit")
-	}
 }

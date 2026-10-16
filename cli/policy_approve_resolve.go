@@ -109,14 +109,19 @@ refused on a managed host, so an agent with a shell cannot answer.`,
 				_, _ = fmt.Fprintf(out, "Aborted: request %s not answered\n", tui.FormatShortID(row.ID.String()))
 				return nil
 			}
-			// The authority of the host may ask for the password. The agent
-			// puts that question on this terminal.
-			stopAgent, err := localauth.Agent(ctx)
+			// The authority of the host may ask for the password: through
+			// an agent on this terminal while the service waits, or now,
+			// with a proof that goes with the answer.
+			answer := ipc.Approve{RequestID: row.ID, Decision: decision, Scope: scope, Note: note}
+			proof, stopAuth, err := localauth.Prepare(ctx, localauth.ActionID)
 			if err != nil {
-				log.Warnf("policy approve: no authentication agent on this terminal: %v", err)
+				log.Warnf("policy approve: the authority of the host cannot ask for the password: %v", err)
 			}
-			res, err := app.Approve(ctx, ipc.Approve{RequestID: row.ID, Decision: decision, Scope: scope, Note: note})
-			stopAgent()
+			if proof.Kind != "" {
+				answer.Proof = &ipc.AuthProof{Kind: proof.Kind, Data: proof.Data}
+			}
+			res, err := app.Approve(ctx, answer)
+			stopAuth()
 			if err != nil {
 				var se *ipc.ServerError
 				if errors.As(err, &se) && se.Code == ipc.CodeUnauthorized {

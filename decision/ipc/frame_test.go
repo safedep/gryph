@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/safedep/gryph/decision"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -74,6 +75,9 @@ func TestDecode(t *testing.T) {
 		{name: "prompt reply no nonce", frame: MustFrame(TypePromptReply, PromptReply{Decision: PromptApprove}), err: ErrInvalid},
 		{name: "report hook error", frame: MustFrame(TypeReportHookError, decision.HookError{Agent: "a", HookType: "x", RawSize: 3, Message: "m"})},
 		{name: "report hook error big raw", frame: MustFrame(TypeReportHookError, decision.HookError{Agent: "a", RawEvent: bytes.Repeat([]byte("a"), MaxRawEvent+1)}), err: ErrInvalid},
+		{name: "approve with proof", frame: MustFrame(TypeApprove, Approve{RequestID: uuid.New(), Decision: ApproveAllow, Proof: &AuthProof{Kind: "macos-authorization", Data: make([]byte, 32)}})},
+		{name: "approve proof without kind", frame: MustFrame(TypeApprove, Approve{RequestID: uuid.New(), Decision: ApproveAllow, Proof: &AuthProof{Data: []byte{1}}}), err: ErrInvalid},
+		{name: "approve proof too large", frame: MustFrame(TypeApprove, Approve{RequestID: uuid.New(), Decision: ApproveAllow, Proof: &AuthProof{Kind: "k", Data: make([]byte, MaxAuthProof+1)}}), err: ErrInvalid},
 		{name: "ack", frame: MustFrame(TypeAck, Ack{})},
 		{name: "query", frame: MustFrame(TypeQuery, Query{Kind: "sessions", Params: map[string]string{"agent": "a"}, Limit: 10})},
 		{name: "query no kind", frame: MustFrame(TypeQuery, Query{}), err: ErrInvalid},
