@@ -8,21 +8,19 @@ import "time"
 // gives it answers only for the account of the process or root.
 func ancestors(pid int) ([]Process, error) {
 	var out []Process
-	for i := 0; i < maxAncestors && pid > 1; i++ {
-		kp, err := kinfo(pid)
-		if err != nil {
-			return out, err
-		}
+	kp, err := kinfo(pid)
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < maxAncestors && kp.Proc.P_pid > 1; i++ {
 		ppid := int(kp.Eproc.Ppid)
 		if ppid <= 0 {
 			return out, nil
 		}
-		parent, err := kinfo(ppid)
-		if err != nil {
+		if kp, err = kinfo(ppid); err != nil {
 			return out, err
 		}
-		out = append(out, fromKinfo(parent))
-		pid = ppid
+		out = append(out, fromKinfo(kp))
 	}
 	return out, nil
 }

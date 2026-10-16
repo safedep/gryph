@@ -5,11 +5,9 @@
 package schedule
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -104,19 +102,6 @@ func checkName(name string) error {
 		return fmt.Errorf("schedule: %q is not a job name", name)
 	}
 	return nil
-}
-
-// writeIfChanged writes data to path unless the file already holds it,
-// so a repeated install changes nothing.
-func writeIfChanged(path string, data []byte) (bool, error) {
-	existing, err := os.ReadFile(path)
-	if err == nil && bytes.Equal(existing, data) {
-		return false, nil
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 // minutes returns the interval in whole minutes, at least one.

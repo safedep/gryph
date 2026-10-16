@@ -56,11 +56,15 @@ func TestListeners_TakeADescriptor(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, lns, 1)
 	defer func() { _ = lns[0].Close() }()
+	dialed := make(chan error, 1)
 	go func() {
-		if c, err := net.Dial("unix", path); err == nil {
+		c, err := net.Dial("unix", path)
+		if err == nil {
 			_ = c.Close()
 		}
+		dialed <- err
 	}()
+	require.NoError(t, <-dialed)
 	conn, err := lns[0].Accept()
 	require.NoError(t, err, "the listener serves the socket of the descriptor")
 	_ = conn.Close()

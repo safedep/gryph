@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/safedep/gryph/platform/account"
+	"github.com/safedep/gryph/platform/internal/fileutil"
 	"github.com/safedep/gryph/platform/launchd"
 )
 
@@ -51,7 +52,7 @@ func install(ctx context.Context, spec Spec) (*Result, error) {
 			return nil, err
 		}
 	}
-	changed, err := writeIfChanged(path, data)
+	changed, err := fileutil.WriteIfChanged(path, data)
 	if err != nil {
 		return nil, err
 	}

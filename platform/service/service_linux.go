@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/safedep/gryph/platform/internal/fileutil"
 )
 
 // unitsDir is the systemd system unit directory. Tests replace it.
@@ -23,11 +25,11 @@ func install(ctx context.Context, spec Spec) (*Result, error) {
 	}
 	socket := filepath.Join(dir, spec.Name+".socket")
 	service := filepath.Join(dir, spec.Name+".service")
-	wroteSocket, err := writeIfChanged(socket, []byte(renderSocket(spec)))
+	wroteSocket, err := fileutil.WriteIfChanged(socket, []byte(renderSocket(spec)))
 	if err != nil {
 		return nil, err
 	}
-	wroteService, err := writeIfChanged(service, []byte(renderService(spec)))
+	wroteService, err := fileutil.WriteIfChanged(service, []byte(renderService(spec)))
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +60,7 @@ func install(ctx context.Context, spec Spec) (*Result, error) {
 // the caller picks a service that can restart at any time.
 func installService(ctx context.Context, dir string, spec Spec) (*Result, error) {
 	service := filepath.Join(dir, spec.Name+".service")
-	wrote, err := writeIfChanged(service, []byte(renderService(spec)))
+	wrote, err := fileutil.WriteIfChanged(service, []byte(renderService(spec)))
 	if err != nil {
 		return nil, err
 	}

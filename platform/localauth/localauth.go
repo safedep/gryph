@@ -33,9 +33,6 @@ type Proof struct {
 	Data []byte
 }
 
-// MaxProof bounds the data of a proof on the wire.
-const MaxProof = 1024
-
 // Request is one question to the authority.
 type Request struct {
 	// PID and UID name the process that answers and its account, as the
@@ -48,7 +45,8 @@ type Request struct {
 	StartTime uint64
 	Action    string
 	// Interactive lets the authority ask the person through its agent.
-	// The call then lasts until the person answers, cancels, or ctx ends.
+	// The call then lasts until the person answers or cancels. An
+	// authority that asks on behalf of the service also ends with ctx.
 	Interactive bool
 	Proof       Proof
 }

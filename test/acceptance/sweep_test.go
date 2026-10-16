@@ -136,7 +136,11 @@ func (s *sweep) run(t testscript.T) {
 			failed = append(failed, err.Error())
 		}
 	}
-	removed = append(removed, s.unloadDarwin()...)
+	if runtime.GOOS == "darwin" {
+		unloaded, errs := s.unloadDarwin()
+		removed = append(removed, unloaded...)
+		failed = append(failed, errs...)
+	}
 	for _, a := range sweepAccounts {
 		if s.kept["account:"+a] {
 			continue
@@ -205,23 +209,23 @@ func (s *sweep) run(t testscript.T) {
 // unloadDarwin takes the daemon of a script out of launchd, so launchd
 // does not start it again from a removed file, and removes the right of
 // the script from the authorization database.
-func (s *sweep) unloadDarwin() []string {
-	if runtime.GOOS != "darwin" {
-		return nil
-	}
-	var removed []string
+func (s *sweep) unloadDarwin() (removed, failed []string) {
 	plist := "/Library/LaunchDaemons/" + sweepDaemonLabel + ".plist"
 	if !s.kept[plist] && exec.Command("launchctl", "print", "system/"+sweepDaemonLabel).Run() == nil {
-		if exec.Command("launchctl", "bootout", "system/"+sweepDaemonLabel).Run() == nil {
+		if err := s.exec("launchctl", "bootout", "system/"+sweepDaemonLabel); err != nil {
+			failed = append(failed, err.Error())
+		} else {
 			removed = append(removed, "daemon "+sweepDaemonLabel)
 		}
 	}
 	if !s.kept["right:"+sweepRight] && exec.Command("security", "authorizationdb", "read", sweepRight).Run() == nil {
-		if exec.Command("security", "authorizationdb", "remove", sweepRight).Run() == nil {
+		if err := s.exec("security", "authorizationdb", "remove", sweepRight); err != nil {
+			failed = append(failed, err.Error())
+		} else {
 			removed = append(removed, "right "+sweepRight)
 		}
 	}
-	return removed
+	return removed, failed
 }
 
 // deleteAccount removes an account and its group: userdel on Linux, the

@@ -59,12 +59,10 @@ func TestLaunchctl(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, l.Bootstrap(ctx, SystemDomain, "/Library/LaunchDaemons/x.plist"))
 	require.NoError(t, l.Bootout(ctx, GUIDomain(501), "io.safedep.x"))
-	require.NoError(t, l.Restart(ctx, SystemDomain, "io.safedep.x"))
 	assert.True(t, l.Loaded(ctx, SystemDomain, "io.safedep.x"))
 	assert.Equal(t, [][]string{
 		{"bootstrap", "system", "/Library/LaunchDaemons/x.plist"},
 		{"bootout", "gui/501/io.safedep.x"},
-		{"kickstart", "-k", "system/io.safedep.x"},
 		{"print", "system/io.safedep.x"},
 	}, got)
 }

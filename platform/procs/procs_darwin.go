@@ -21,9 +21,7 @@ func list() ([]Process, error) {
 		if procs[i].Eproc.Ucred.Uid != uid {
 			continue
 		}
-		p := fromKinfo(&procs[i])
-		p.UID = os.Getuid()
-		out = append(out, p)
+		out = append(out, fromKinfo(&procs[i]))
 	}
 	return out, nil
 }

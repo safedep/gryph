@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/safedep/gryph/platform/internal/fileutil"
 	"github.com/safedep/gryph/platform/launchd"
 )
 
@@ -43,7 +44,7 @@ func installSystemWide(_ context.Context, job Job) (*Result, error) {
 		return nil, err
 	}
 	path := filepath.Join(dir, launchd.Label(job.Name)+".plist")
-	changed, err := writeIfChanged(path, data)
+	changed, err := fileutil.WriteIfChanged(path, data)
 	if err != nil {
 		return nil, err
 	}

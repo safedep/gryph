@@ -59,17 +59,31 @@ func TestRegister_Darwin(t *testing.T) {
 	assert.False(t, reg.Changed, "a missing right is not an error")
 }
 
+func TestUnregister_DarwinReportsAFailedRead(t *testing.T) {
+	restore := security
+	security = func(context.Context, string, ...string) (string, error) {
+		return "", errors.New("security: permission denied")
+	}
+	t.Cleanup(func() { security = restore })
+	_, err := Unregister(context.Background())
+	assert.Error(t, err, "only a missing right counts as removed")
+}
+
 func TestAuthorize_DarwinNeedsAProof(t *testing.T) {
 	auth := Default()
 	ctx := context.Background()
-	for name, proof := range map[string]Proof{
-		"no proof":       {},
-		"another kind":   {Kind: "polkit", Data: make([]byte, 32)},
-		"short data":     {Kind: proofKind, Data: make([]byte, 8)},
-		"no live object": {Kind: proofKind, Data: []byte(strings.Repeat("x", 32))},
-	} {
-		t.Run(name, func(t *testing.T) {
-			res, err := auth.Authorize(ctx, Request{Action: ActionID, Interactive: true, Proof: proof})
+	cases := []struct {
+		name  string
+		proof Proof
+	}{
+		{"no proof", Proof{}},
+		{"another kind", Proof{Kind: "polkit", Data: make([]byte, 32)}},
+		{"short data", Proof{Kind: proofKind, Data: make([]byte, 8)}},
+		{"no live object", Proof{Kind: proofKind, Data: []byte(strings.Repeat("x", 32))}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := auth.Authorize(ctx, Request{Action: ActionID, Interactive: true, Proof: tc.proof})
 			require.NoError(t, err)
 			assert.Equal(t, Result{Challenge: true}, res)
 		})

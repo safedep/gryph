@@ -5,6 +5,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -209,7 +210,7 @@ func TestSupervisorStateOutsideManagedDir(t *testing.T) {
 	for _, dir := range []string{supervisorStateDefault(), supervisorSpoolDefault(), filepath.Dir(supervisorSocketDefault())} {
 		rel, err := filepath.Rel(managed, dir)
 		require.NoError(t, err)
-		assert.True(t, rel == ".." || len(rel) > 2 && rel[:3] == "../", "%s is inside the managed directory %s", dir, managed)
+		assert.True(t, rel == ".." || strings.HasPrefix(rel, "../"), "%s is inside the managed directory %s", dir, managed)
 	}
 	assert.NotEqual(t, filepath.Dir(ManagedTrustStorePath()), SupervisorConfig{}.KeyDir())
 }

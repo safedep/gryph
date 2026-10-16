@@ -16,6 +16,13 @@ import (
 // an authorization that the client obtained the action for.
 const proofKind = "macos-authorization"
 
+// registration names the right in a report of the install.
+const registration = "authorizationdb:" + ActionID
+
+// rightAbsent is the status that security prints when it reads a right
+// that the database does not have (errAuthorizationDenied).
+const rightAbsent = "(-60005)"
+
 // ruleMarker is in the comment of the right, so a later install finds the
 // right of this version and does not write it again.
 const ruleMarker = "gryph approval rule v1"
@@ -129,7 +136,7 @@ func (authorizationServices) Authorize(_ context.Context, req Request) (Result, 
 // register writes the right with security authorizationdb. A right of
 // this version stays as it is.
 func register(ctx context.Context) (Registration, error) {
-	reg := Registration{Path: "authorizationdb:" + ActionID}
+	reg := Registration{Path: registration}
 	if current, err := security(ctx, "", "authorizationdb", "read", ActionID); err == nil && strings.Contains(current, ruleMarker) {
 		return reg, nil
 	}
@@ -141,9 +148,13 @@ func register(ctx context.Context) (Registration, error) {
 }
 
 func unregister(ctx context.Context) (Registration, error) {
-	reg := Registration{Path: "authorizationdb:" + ActionID}
-	if _, err := security(ctx, "", "authorizationdb", "read", ActionID); err != nil {
+	reg := Registration{Path: registration}
+	_, err := security(ctx, "", "authorizationdb", "read", ActionID)
+	switch {
+	case err != nil && strings.Contains(err.Error(), rightAbsent):
 		return reg, nil
+	case err != nil:
+		return reg, err
 	}
 	if _, err := security(ctx, "", "authorizationdb", "remove", ActionID); err != nil {
 		return reg, err
@@ -154,7 +165,7 @@ func unregister(ctx context.Context) (Registration, error) {
 
 // prepare obtains the action now: macOS shows the password prompt in the
 // login session of this process, and the call lasts until the person
-// answers. The proof is the external form, and stop frees the
+// answers. The prompt does not end with ctx. The proof is the external form, and stop frees the
 // authorization after the service checked it. A host without the right,
 // a session that cannot show the prompt, or a dismissed prompt gives no
 // proof, and the service then refuses or waives as its configuration

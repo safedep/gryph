@@ -283,12 +283,13 @@ func runManagedInstall(cmd *cobra.Command, args managedInstallArgs) error {
 			}
 			report.Changed = report.Changed || report.Service.Changed
 			if in.cfg.Supervisor.Fanotify.Enabled {
-				if report.Fanotify = installFanotifyService(ctx, in); report.Fanotify != nil {
-					if report.Fanotify.Error != "" {
-						degraded++
-					}
-					report.Changed = report.Changed || report.Fanotify.Changed
+				report.Fanotify = installFanotifyService(ctx, in)
+			}
+			if report.Fanotify != nil {
+				if report.Fanotify.Error != "" {
+					degraded++
 				}
+				report.Changed = report.Changed || report.Fanotify.Changed
 			}
 		}
 	}
@@ -445,10 +446,11 @@ func installSupervisorService(ctx context.Context, in *managedInstallInput, repo
 }
 
 // installFanotifyService writes the unit of the kernel watcher and starts
-// it, or returns nil on a host without the watcher. The watcher runs as the service account with the two capabilities
-// the fanotify API needs, and reports in the runtime directory next to
-// the socket. A watcher that does not report within the wait degrades the
-// install and names the next step.
+// it, or returns nil on a host without the watcher. The watcher runs as
+// the service account with the two capabilities the fanotify API needs,
+// and reports in the runtime directory next to the socket. A watcher that
+// does not report within the wait degrades the install and names the next
+// step.
 func installFanotifyService(ctx context.Context, in *managedInstallInput) *managedServiceReport {
 	sup := in.cfg.Supervisor
 	svc := &managedServiceReport{Account: sup.ServerAccount(), Units: []string{}, Switch: managedSwitchOn}

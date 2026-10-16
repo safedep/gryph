@@ -244,7 +244,7 @@ boot), `AllowUserInteraction`, and a cancellation id that a timed-out call
 and `Unregister` removes it. The server asks when `Available` (cached
 30 s) and the peer passed the group and uid checks, while the peer is the
 process seen at accept: an authorized answer at `local-admin` becomes
-`local-auth`; anything else refuses unless `allow_without_auth`. On Linux
+`local-auth`. Anything else refuses unless `allow_without_auth`. On Linux
 `Prepare` runs `pkttyagent --process <pid> --notify-fd` across the
 `approve` call and returns no proof, with a 2 min client deadline. Tests
 give the server a fake `Authorizer` through `Options.Authorizer`.

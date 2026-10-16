@@ -160,8 +160,11 @@ func (a *Authorization) Username() (string, error) {
 	if err := check("AuthorizationCopyInfo", r); err != nil {
 		return "", err
 	}
+	if info == nil {
+		return "", errors.New("the authorization names no user")
+	}
 	defer func() { _, _, _ = syscall_syscall(authorizationFreeItemSetAddr, uintptr(unsafe.Pointer(info)), 0, 0) }()
-	if info == nil || info.count == 0 || info.items == nil {
+	if info.count == 0 || info.items == nil {
 		return "", errors.New("the authorization names no user")
 	}
 	for _, item := range unsafe.Slice(info.items, info.count) {

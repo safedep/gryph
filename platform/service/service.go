@@ -8,11 +8,9 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 )
@@ -21,7 +19,9 @@ import (
 // package drives.
 var ErrUnsupported = errors.New("service: not supported on this platform")
 
-// Spec describes the service.
+// Spec describes the service. Capabilities, RuntimeDir and SyscallAllow
+// are Linux settings. A platform without them refuses a spec that sets
+// one, so a service that needs a kernel feature does not start without it.
 type Spec struct {
 	// Name is the unit name, for example gryph-supervisor.
 	Name        string
@@ -38,10 +38,6 @@ type Spec struct {
 	// rest of the file system is read-only to it. SpoolDir may be empty.
 	StateDir string
 	SpoolDir string
-	// Capabilities, RuntimeDir and SyscallAllow are Linux settings. A
-	// platform without them refuses a spec that sets one, so a service
-	// that needs a kernel feature does not start without it.
-	//
 	// Capabilities are the capabilities the service keeps, by name, for a
 	// service that needs one. Empty keeps none.
 	Capabilities []string
@@ -149,22 +145,4 @@ func runCommand(ctx context.Context, name string, args ...string) error {
 		return fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
 	}
 	return nil
-}
-
-// writeIfChanged writes a service manager file, root-owned and readable by
-// every account, and reports whether the content changed. The mode is set
-// again, because a service manager refuses a job file that others can
-// write.
-func writeIfChanged(path string, data []byte) (bool, error) {
-	existing, err := os.ReadFile(path)
-	if err == nil && bytes.Equal(existing, data) {
-		return false, nil
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return false, err
-	}
-	if err := os.Chmod(path, 0o644); err != nil {
-		return false, err
-	}
-	return true, nil
 }

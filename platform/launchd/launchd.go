@@ -112,11 +112,6 @@ func (l Launchctl) Bootout(ctx context.Context, domain, label string) error {
 	return l.Run(ctx, "bootout", domain+"/"+label)
 }
 
-// Restart stops a running job and starts it again.
-func (l Launchctl) Restart(ctx context.Context, domain, label string) error {
-	return l.Run(ctx, "kickstart", "-k", domain+"/"+label)
-}
-
 // Loaded reports whether domain holds the job.
 func (l Launchctl) Loaded(ctx context.Context, domain, label string) bool {
 	return l.Run(ctx, "print", domain+"/"+label) == nil

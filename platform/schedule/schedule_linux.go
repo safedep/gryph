@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/safedep/gryph/platform/internal/fileutil"
 )
 
 // unitsDir is the systemd user unit directory. Tests replace it.
@@ -37,11 +39,11 @@ func installSystemWide(ctx context.Context, job Job) (*Result, error) {
 	}
 	service := filepath.Join(dir, job.Name+".service")
 	timer := filepath.Join(dir, job.Name+".timer")
-	wroteService, err := writeIfChanged(service, []byte(renderService(job)))
+	wroteService, err := fileutil.WriteIfChanged(service, []byte(renderService(job)))
 	if err != nil {
 		return nil, err
 	}
-	wroteTimer, err := writeIfChanged(timer, []byte(renderTimer(job)))
+	wroteTimer, err := fileutil.WriteIfChanged(timer, []byte(renderTimer(job)))
 	if err != nil {
 		return nil, err
 	}
