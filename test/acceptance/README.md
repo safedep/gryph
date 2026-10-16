@@ -108,6 +108,14 @@ with `useradd` and remove them. A script that starts with `[!polkit] skip`
 also needs a system bus with polkit and `pkttyagent`. The job starts both.
 The job then runs the client-mode latency guard (see `docs/e2e.md`).
 
+The job `acceptance-privileged-macos` runs the scripts with the `macos`
+label on a macOS runner, with `ACCEPTANCE_LABELS=macos`. It builds the
+binary without cgo, installs it with the release package at
+`/opt/safedep/gryph/bin/gryph`, and runs the suite under `sudo`. These
+scripts start with `[!darwin] skip`. The sweep takes the daemon out of
+launchd, removes the right from the authorization database and deletes
+an account with `dscl`.
+
 ```bash
 sudo ACCEPTANCE_PRIVILEGED=1 go test -tags acceptance -parallel 1 -run 'TestAcceptance/policy/managed' ./test/acceptance/
 ```

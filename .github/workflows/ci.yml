@@ -300,8 +300,9 @@ jobs:
 
       - name: Show the System Paths
         run: |
-          ls -ld / /private /private/var /private/var/db /private/var/run /private/var/spool \
-            /Library "/Library/Application Support" /Library/LaunchDaemons /Library/Logs || true
+          ls -ld / /opt /private /private/var /private/var/db /private/var/log /private/var/run \
+            /private/var/spool /Library "/Library/Application Support" /Library/LaunchDaemons \
+            /Library/Logs || true
 
       - name: Build and Install the Package
         run: |
@@ -366,6 +367,9 @@ jobs:
           distribution: goreleaser
           version: "~> v2"
           args: build --clean --snapshot
+
+      - name: Check the macOS Package Input
+        run: test -f dist/gryph_darwin_all/gryph
 
       - name: Run Acceptance Suite Against Release Binary
         run: |

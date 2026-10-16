@@ -598,7 +598,8 @@ type LocalAdminConfig struct {
 	AllowSelfElevated bool `mapstructure:"allow_self_elevated"`
 	// AllowWithoutAuth accepts an answer without the password of the
 	// approver on a host whose authority could ask for it. Off, an
-	// answer needs the password when the host has polkit.
+	// answer needs the password when the host has an authority: polkit
+	// on Linux, Authorization Services on macOS.
 	AllowWithoutAuth bool `mapstructure:"allow_without_auth"`
 }
 

@@ -23,16 +23,19 @@ func Activated() ([]net.Listener, error) {
 
 // listeners takes the socket descriptors that the service manager gave
 // this process. A listener holds a copy of each descriptor, so the
-// original closes. On an error no listener stays open.
+// original closes. On an error no listener and no descriptor stays open.
 func listeners(fds []int) ([]net.Listener, error) {
 	var out []net.Listener
-	for _, fd := range fds {
+	for i, fd := range fds {
 		f := os.NewFile(uintptr(fd), "listen-fd-"+strconv.Itoa(fd))
 		ln, err := net.FileListener(f)
 		_ = f.Close()
 		if err != nil {
 			for _, l := range out {
 				_ = l.Close()
+			}
+			for _, rest := range fds[i+1:] {
+				_ = os.NewFile(uintptr(rest), "listen-fd-"+strconv.Itoa(rest)).Close()
 			}
 			return nil, fmt.Errorf("listen: descriptor %d: %w", fd, err)
 		}
