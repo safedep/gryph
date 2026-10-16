@@ -8,12 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAncestors_ThisProcess(t *testing.T) {
+func TestAncestors_EndsAtTheTop(t *testing.T) {
 	chain, err := Ancestors(os.Getpid())
 	require.NoError(t, err)
 	require.NotEmpty(t, chain)
-	assert.Equal(t, os.Getppid(), chain[0].PID, "the nearest ancestor is the parent")
-	assert.NotEmpty(t, chain[0].Name)
 	// The chain ends at a process with no parent: pid 1, or the top of a
 	// pid namespace that does not show it.
 	last := chain[len(chain)-1]

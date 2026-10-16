@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+// maxAncestors bounds the walk. A chain longer than this is a loop in
+// what the kernel reports, which does not happen, or a container with a
+// very deep tree.
+const maxAncestors = 128
+
 // ErrUnsupported says the platform gives no parent chain.
 var ErrUnsupported = errors.New("procs: the parent chain is not supported on this platform")
 

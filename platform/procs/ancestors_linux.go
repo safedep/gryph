@@ -9,11 +9,6 @@ import (
 	"time"
 )
 
-// maxAncestors bounds the walk. A chain longer than this is a loop in
-// what the kernel reports, which does not happen, or a container with a
-// very deep tree.
-const maxAncestors = 128
-
 func ancestors(pid int) ([]Process, error) {
 	var out []Process
 	boot := bootTime()
