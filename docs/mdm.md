@@ -27,7 +27,7 @@ Root can always uninstall. Nothing in Gryph resists the administrator.
 
 | Step | Command | What it does |
 |---|---|---|
-| Configure and install | `gryph install --managed --config <file> [--policy <file>] [--trust-store <file>] --json` | Validates the whole input, then writes the managed configuration, the managed policy, the managed trust store, the managed hook entry of every agent in `managed.agents`, and the system-wide reconcile job. With `supervisor.enabled: true` it also installs the decision service: the service account, the keys, the hardened units, the polkit action file of the approval channel, and the switch, which turns on only after the service answers. |
+| Configure and install | `gryph install --managed --config <file> [--policy <file>] [--trust-store <file>] --json` | Validates the whole input, then writes the managed configuration, the managed policy, the managed trust store, the managed hook entry of every agent in `managed.agents`, and the system-wide reconcile job. With `supervisor.enabled: true` it also installs the decision service: the service account, the keys, the service units (systemd on Linux, a LaunchDaemon on macOS), the approval action of the authority of the OS (a polkit action file on Linux, a right in the authorization database on macOS), and the switch, which turns on only after the service answers. |
 | Start the kernel watcher | `supervisor.fanotify.enabled: true` in the managed configuration | Linux only. The install adds `gryph-fanotify.service`, which refuses a write to the managed files and the binary by a non-privileged account through the kernel. See [the kernel watcher](./supervisor.md#the-kernel-watcher). |
 | Rotate the machine key | `gryph supervisor keys rotate --json` | Writes a new receipt signing key for the decision service, keeps the old public key in the trust store, and reloads the running service. Run it on a schedule or after an incident. |
 | Report compliance | `gryph doctor --managed --json` | Prints the profile, the reasons that keep it from `locked`, the chain state of each managed file and of the binary, and one row per agent. Exit 0 for `locked`, 1 otherwise. |
@@ -56,7 +56,7 @@ Rules that hold for every command:
 | Platform | Binary | Managed directory |
 |---|---|---|
 | Linux | `/opt/safedep/gryph/bin/gryph`, with `/usr/bin/gryph` as a link for `PATH` | `/etc/safedep/gryph/` |
-| macOS | `/opt/safedep/gryph/bin/gryph`, with `/usr/local/bin/gryph` as a link for `PATH` | `/Library/Application Support/safedep/gryph/` |
+| macOS | `/opt/safedep/gryph/bin/gryph`. The package puts no link on `PATH`, because the Homebrew formula owns `gryph` there. | `/Library/Application Support/safedep/gryph/` |
 | Windows | `%ProgramFiles%\SafeDep\gryph\gryph.exe` | `%ProgramData%\safedep\gryph\` |
 
 The managed directory holds `config.yml`, `policy.yaml`, `policies/` and
@@ -113,9 +113,12 @@ Each recipe does the same three things: place the binary, place the input
 files, run the commands. Replace the download step with your artifact store.
 On Linux the release ships a deb, an rpm, an apk and an Arch Linux package
 that put the binary at `/opt/safedep/gryph/bin/gryph` with a
-`/usr/bin/gryph` link. The signed
-installers for macOS and Windows are planned. Until they ship, the scripts
-place the binary.
+`/usr/bin/gryph` link. On macOS the release ships `gryph_<version>_darwin_all.pkg`,
+which puts the universal binary at `/opt/safedep/gryph/bin/gryph`, owned by
+`root:wheel`. The package has no Apple signature. A Jamf policy installs it as
+root and Gatekeeper does not check it, but Jamf PreStage enrollment and a
+download in a browser need a signed package. The installer for Windows is
+planned. Until it ships, a script places the binary.
 
 Every package and the checksum file carry a Sigstore signature from the
 release workflow, with no long-lived key. Verify one before you ship it to a
@@ -165,10 +168,12 @@ nothing when the host is already right.
 
 ### Jamf Pro (macOS)
 
-1. Ship the binary and the input files as a package that installs to
-   `/opt/safedep/gryph/bin/gryph` (mode 0755, `root:wheel`) and
-   `/opt/safedep/gryph/input/` (mode 0644, `root:wheel`). A package keeps
-   the ownership right. A script that copies from a user's download does not.
+1. Upload `gryph_<version>_darwin_all.pkg` and install it with a policy. Ship
+   the input files as a second package that installs to
+   `/opt/safedep/gryph/input/` (mode 0644, `root:wheel`). A package keeps the
+   ownership right. A script that copies from a user's download does not. Do
+   not point `managed.binary` at a Homebrew binary: the admin user owns the
+   Homebrew prefix, and the install refuses it.
 2. Add a policy with a script that runs after the package:
 
    ```bash
@@ -195,6 +200,39 @@ nothing when the host is already right.
 The reconcile job is a launchd agent at
 `/Library/LaunchAgents/io.safedep.gryph-reconcile.plist`. An account that is
 logged in picks it up at its next login.
+
+With `supervisor.enabled`, the decision service is the LaunchDaemon
+`io.safedep.gryph-supervisor`. On macOS 13 and later, macOS shows a
+"Background Items Added" notice, and an administrator can turn the job off
+in System Settings, Login Items. Deploy a configuration profile with a
+Managed Login Items payload (`com.apple.servicemanagement`), so that the
+setting stays on and the user cannot change it. The rules match by label,
+so they need no Team ID:
+
+```xml
+<key>Rules</key>
+<array>
+  <dict>
+    <key>RuleType</key>
+    <string>Label</string>
+    <key>RuleValue</key>
+    <string>io.safedep.gryph-supervisor</string>
+    <key>Comment</key>
+    <string>Gryph decision service</string>
+  </dict>
+  <dict>
+    <key>RuleType</key>
+    <string>Label</string>
+    <key>RuleValue</key>
+    <string>io.safedep.gryph-reconcile</string>
+    <key>Comment</key>
+    <string>Gryph reconcile job</string>
+  </dict>
+</array>
+```
+
+In Jamf Pro this is a configuration profile with the Managed Login Items
+payload and one rule of type Label for each job.
 
 ### Kandji (macOS)
 

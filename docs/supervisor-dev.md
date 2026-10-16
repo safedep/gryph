@@ -105,16 +105,28 @@ verdict the fail mode of the hook names.
 ## The server
 
 `gryph supervisor run` is the service. It takes its socket from the
-service manager when it was started with socket activation (`LISTEN_FDS`),
-else it opens `--socket` in the foreground. It runs as the service account,
+service manager when it was started with socket activation (`LISTEN_FDS`
+from systemd, `launch_activate_socket` from launchd), else it opens
+`--socket` in the foreground. It runs as the service account,
 never as root. `--allow-root` exists for a test.
 
 The accept loop only accepts, reads the peer credentials from the kernel
 (`SO_PEERCRED` on Linux, `LOCAL_PEERCRED` and `LOCAL_PEERPID` on macOS) and
 counts the connection. Every connection runs on its own goroutine, so a slow
-request never holds the next connection. On Linux the service also takes a
-`pidfd` on the peer, so a later check of the process cannot land on another
-process that took the same pid.
+request never holds the next connection. At accept the service also reads a
+start stamp of the peer (field 22 of `/proc/<pid>/stat` on Linux, the
+`kern.proc.pid` sysctl on macOS) and its login identity (`/proc/<pid>/loginuid`
+on Linux, the audit uid of the `LOCAL_PEERTOKEN` audit token on macOS, whose
+pid must match `LOCAL_PEERPID`). `Peer.SameProcess` compares the stamp, so a
+later check of the process cannot land on another process that took the same
+pid. On Linux the service also takes a `pidfd` on the peer.
+
+On macOS the C interfaces that x/sys does not cover (`launch_activate_socket`
+and Authorization Services) go through `platform/internal/macos`. It calls
+them as x/sys calls libSystem: a `cgo_import_dynamic` directive, an assembly
+trampoline, and the `syscall.syscall` path that the runtime gives to x/sys.
+The release builds without cgo and keeps its cross-build. Only `platform/`
+imports the package.
 
 The uid the kernel reports is the tenant key. The partition of an account
 lives at `<state dir>/users/<uid>/`, mode 0700, with its own store (`audit.db`), receipt
@@ -236,13 +248,27 @@ process seen at accept: an authorized answer at `local-admin` becomes
 `Prepare` runs `pkttyagent --process <pid> --notify-fd` across the
 `approve` call and returns no proof, with a 2 min client deadline. Tests
 give the server a fake `Authorizer` through `Options.Authorizer`.
+
+On macOS the authority is Authorization Services, which asks only in the
+session of the person. `localauth.Register` writes the right with `security
+authorizationdb write`: class `user`, `authenticate-user`, `session-owner`,
+`shared` false, `timeout` 30, `allow-root` false. `Prepare` obtains the
+right with interaction and returns the 32-byte external form as a proof of
+kind `macos-authorization`, and frees the authorization when the call
+stops. `Authorize` takes the authorization from the form, obtains the right
+without interaction, and compares the `username` information with the
+account of the peer uid. A missing proof, a form that names no live
+authorization, or a denied right is a challenge. `Available` reports
+whether the right exists, because a missing right falls back to the
+default rule of the database, which asks an administrator. The privileged
+macOS job tests the path with a right whose rule is `allow`.
 The acceptance condition `[polkit]` needs the system bus socket,
 `pkcheck` and `pkttyagent`.
 
 ## Trust
 
 `Server.agentAncestor` walks the parents of the peer (`procs.Ancestors`,
-`/proc/<pid>/stat` field 4 on Linux) while the peer is still the process
+`/proc/<pid>/stat` field 4 on Linux, the `kern.proc.pid` sysctl on macOS) while the peer is still the process
 seen at accept (`peercred.Peer.SameProcess`, by the start time read at
 accept), and returns the nearest process of the peer's uid whose name an adapter
 declares through `ProcessNamer`. A process of another uid in the chain
@@ -290,8 +316,23 @@ hook, and only then writes the configuration as the administrator gave
 it, with the switch on. A service that does not answer leaves the switch
 off and the run partial, so a rollout cannot block the agents of a host.
 `gryph uninstall --managed` turns the switch off first, then stops and
-removes the units. macOS (launchd) and Windows have no service installer
-yet.
+removes the units.
+
+On macOS `platform/service` writes a LaunchDaemon into
+`/Library/LaunchDaemons` through `platform/launchd`, which the scheduler
+shares: the property list encoder, the `io.safedep.` label and the
+`launchctl` calls. The job has `UserName` and `GroupName` set to the
+service account, `KeepAlive`, `ThrottleInterval` 1, `ProcessType`
+`Interactive`, `Umask` 077, a log file that the install gives to the
+service account, and a `Sockets` entry named `Listeners` with mode 0666.
+The install makes the directory of the socket, because launchd does not.
+An unchanged loaded job stays. A changed job loads again with `bootout`
+and `bootstrap`, and the bootstrap tries again while launchd ends the old
+job. A spec with Linux kernel settings (`Capabilities`, `SyscallAllow`,
+`RuntimeDir`) gets `service.ErrUnsupported`, so the kernel watcher is
+skipped on macOS. The account comes from `dscl`: a group and a user of the
+same name and the lowest free id from 300 to 499. Windows has no service
+installer yet.
 
 ## Keys
 

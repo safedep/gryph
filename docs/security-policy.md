@@ -743,7 +743,7 @@ Each channel gives one assurance. The order, lowest first:
 | `same-user-tty` | The developer, on the terminal of the hook. The same account can forge this answer, so it applies to one request and stores no grant. |
 | `self-elevated` | A local admin who is the same person as the developer, through `sudo`. Off by default. |
 | `local-admin` | A member of the admin group of the host. |
-| `local-auth` | A member of the admin group who gave their password to the authority of the operating system, polkit on Linux. |
+| `local-auth` | A member of the admin group who gave their password to the authority of the operating system: polkit on Linux, Authorization Services on macOS. |
 | `out-of-band` | An approver outside the host. |
 
 A rule sets its own floor with `min_assurance`. A channel below the floor never answers the rule, and the request never falls back to a weaker channel. The default floor is `local-admin`, so the developer cannot approve their own escalation unless a rule says `min_assurance: same-user-tty`:
@@ -798,7 +798,9 @@ The decision service checks every answer against the peer credentials of the con
 
 On a Linux host with polkit, the decision service asks polkit to authenticate the approver before it takes the answer (`CheckAuthorization` on the process of `resolve`, action `io.safedep.gryph.approve`, with user interaction). `gryph install --managed` writes the action file `/usr/share/polkit-1/actions/io.safedep.gryph.policy`, which asks the approver for their own password every time. `resolve` starts `pkttyagent` for its own process, so the password prompt shows on the terminal of the command. A desktop session answers through its own polkit agent. An agent that types `y` does not know the password.
 
-An answer with the password records `local-auth` as the assurance: the password proves a person at the keyboard. Whether the person who asked may answer at all is the `allow_self_elevated` decision, which comes first. Without the password, on a host that could have asked (no agent, a wrong password, a dismissed prompt), the service refuses the answer unless the managed configuration sets `allow_without_auth: true`. That host then takes the answer at `local-admin` or `self-elevated`. A host without polkit takes the answer at those assurances too.
+On macOS the authority is Authorization Services, and it shows the password prompt only in the desktop session of the person. So `resolve` asks first: macOS shows the prompt for the right `io.safedep.gryph.approve`, and `resolve` sends the proof with the answer. The decision service checks the proof without a prompt and checks that the person who authenticated is the account that answers. `gryph install --managed` writes the right into the authorization database: the password of the account that owns the desktop session, every time, and no pass for root. Over SSH there is no desktop session and no prompt, so the answer has no password.
+
+An answer with the password records `local-auth` as the assurance: the password proves a person at the keyboard. Whether the person who asked may answer at all is the `allow_self_elevated` decision, which comes first. Without the password, on a host that could have asked (no agent, a wrong password, a dismissed prompt), the service refuses the answer unless the managed configuration sets `allow_without_auth: true`. That host then takes the answer at `local-admin` or `self-elevated`. A host without an authority takes the answer at those assurances too.
 
 A refused answer is on the self-audit log of the account that asked as `approval_refused`, a superseded one as `approval_superseded`.
 
@@ -806,7 +808,7 @@ A rule with `action: escalate` on a hook that runs after the action, for example
 
 ### The trust of a connection
 
-The decision service knows the process behind every connection from the kernel. On Linux it also walks the parents of that process and looks for a known agent program, for example `claude`, that runs as the same account. An agent of another account above the hook, such as one that runs the hook through `sudo -u`, is not the agent of this account. A session binds to the first agent process seen above one of its hooks, and the service records on every event and every receipt how much it trusts the connection that carried it (`peer_trust`):
+The decision service knows the process behind every connection from the kernel. On Linux and macOS it also walks the parents of that process and looks for a known agent program, for example `claude`, that runs as the same account. An agent of another account above the hook, such as one that runs the hook through `sudo -u`, is not the agent of this account. A session binds to the first agent process seen above one of its hooks, and the service records on every event and every receipt how much it trusts the connection that carried it (`peer_trust`):
 
 | Trust | Meaning |
 |---|---|

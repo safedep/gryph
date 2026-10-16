@@ -49,8 +49,9 @@ starts the socket, waits for the service to answer, and only then writes
 the switch on. A service that does not answer leaves the switch off, so a
 rollout cannot block the agents of a host.
 
-To try the service and an approval on one Linux host, follow
-[Try the decision service on a Linux host](./supervisor-linux.md).
+To try the service and an approval on one host, follow
+[Try the decision service on a Linux host](./supervisor-linux.md) or
+[Try the decision service on a Mac](./supervisor-macos.md).
 
 Only the managed file sets these keys. A user configuration cannot point
 the hook at a service of its own.
@@ -168,7 +169,9 @@ The service answers every `escalate` decision. It stores the request in
 the partition of the account, asks on the terminal of the hook when the
 rule accepts the developer's own answer, and otherwise waits for a member
 of the admin group, who answers with `gryph policy approve resolve`. On a
-host with polkit the service asks for the password of the approver. Every
+host with an authority (polkit on Linux, Authorization Services on macOS)
+the service asks for the password of the approver. On macOS the password
+prompt shows only in the desktop session of the approver. Every
 answer and every use of a grant is on the receipt chain, with the
 channel, the assurance, the approver and the trust of the connection. The
 [approval workflow](./security-policy.md#approval-workflow) has the
@@ -218,9 +221,34 @@ On Linux the install writes two systemd units:
 
 The socket stays open across a restart or an upgrade of the service, so a
 hook that connects in that window waits for the welcome instead of taking
-the absent-service verdict. `gryph uninstall --managed` turns the switch
-off first, then stops and removes the units. macOS and Windows have no
-service installer yet.
+the absent-service verdict.
+
+On macOS the install writes one LaunchDaemon,
+`/Library/LaunchDaemons/io.safedep.gryph-supervisor.plist`:
+
+- launchd opens the socket at `supervisor.socket` as root, mode 0666,
+  before the job starts, and holds it while the job restarts. The
+  default is `/var/db/safedep/gryph/hook.sock`: root owns every directory
+  above it, and the directory stays after a boot, when launchd opens the
+  socket before any install step runs.
+- The job runs `gryph supervisor run` as `_gryph`, which the install makes
+  in the directory service: hidden, no password, `/usr/bin/false` as its
+  shell. launchd starts the job again one second after it ends. Its
+  output goes to `/Library/Logs/safedep/gryph-supervisor.log`.
+- macOS has no counterpart of the systemd hardening set. The service
+  account is what keeps the service from the files of a user.
+- launchd reads the job file only when it loads it. A changed file loads
+  again, and the socket closes for that moment, so a hook in that window
+  takes the absent-service verdict.
+- `launchctl kill SIGHUP system/io.safedep.gryph-supervisor` reloads the
+  configuration and the keys.
+
+A fleet deploys a Managed Login Items profile, so that a user cannot turn
+the job off in System Settings. The [managed install guide](./mdm.md#jamf-pro-macos)
+has the payload.
+
+`gryph uninstall --managed` turns the switch off first, then stops and
+removes the units or the job. Windows has no service installer yet.
 
 ## The kernel watcher
 
@@ -292,6 +320,10 @@ with an [export profile](./content-labels.md#export).
 - A hook that cannot reach the service takes the `unavailable` verdict of
   its column. A same-user process can take the service out of reach for
   its own account, which is why a blocking hook blocks by default.
+- On macOS the service runs without a sandbox, because macOS has no
+  counterpart of the systemd hardening set. The service account and the
+  modes of its files are what keep it apart. The password of the
+  approver works only in a desktop session.
 - The trust of a connection is a signal from the process tree, not proof.
   The [threat model](./security-policy-threat-model.md#bypass-catalog)
   lists the known bypasses with their status.

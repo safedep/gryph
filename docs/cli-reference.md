@@ -518,9 +518,11 @@ list` shows the open requests and `gryph policy approve show ID` one of
 them. A member of `policy.approval.local_admin.group` sees the requests of
 every account and answers with `gryph policy approve resolve --id ID
 --decision allow|deny [--scope once|session|window] [--note TEXT]`, which
-confirms on the terminal and refuses `--yes`. On a host with polkit the
-service also asks for the password of the approver, through `pkttyagent`
-on the terminal of the command. `gryph policy approve watch` prints each
+confirms on the terminal and refuses `--yes`. On a host with an authority the
+service also asks for the password of the approver: polkit on Linux, through
+`pkttyagent` on the terminal of the command, and Authorization Services on
+macOS, through the password prompt of the desktop session before the answer
+goes. `gryph policy approve watch` prints each
 new request. The keys under `policy.approval` set the
 channels, the floor, the waits, the grant scope and the admin group. See
 [the approval workflow](./security-policy.md#approval-workflow).
