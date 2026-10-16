@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -71,6 +72,9 @@ func TestInstallRemove_Darwin(t *testing.T) {
 	f := withFakeLaunchd(t)
 	spec := testSpec
 	spec.Socket = filepath.Join(t.TempDir(), "run", "hook.sock")
+	me, err := user.Current()
+	require.NoError(t, err)
+	spec.User = me.Username
 	ctx := context.Background()
 
 	res, err := Install(ctx, spec)
@@ -83,6 +87,7 @@ func TestInstallRemove_Darwin(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
 	assert.DirExists(t, filepath.Dir(spec.Socket), "launchd makes no directory for the socket")
+	assert.FileExists(t, logPath(spec.Name), "the log file is there before launchd opens it")
 	assert.Equal(t, []string{"print", "bootstrap"}, f.calls)
 
 	f.calls = nil

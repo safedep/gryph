@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/safedep/gryph/platform/account"
 	"github.com/safedep/gryph/platform/launchd"
 )
 
@@ -41,7 +42,7 @@ func install(ctx context.Context, spec Spec) (*Result, error) {
 	if err := os.MkdirAll(daemonsDir(), 0o755); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(logDir(), 0o755); err != nil {
+	if err := ensureLog(logPath(spec.Name), spec.User); err != nil {
 		return nil, err
 	}
 	if spec.Socket != "" {
@@ -124,6 +125,27 @@ func reloadHint(name string) string {
 func logHint(name string) string { return logPath(name) }
 
 func logPath(name string) string { return filepath.Join(logDir(), name+".log") }
+
+// ensureLog makes the log file of the job and gives it to the account of
+// the job. launchd can open the file as that account, which cannot make
+// a file in the root-owned log directory.
+func ensureLog(path, user string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640)
+	if err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	acct, err := account.Lookup(user)
+	if err != nil {
+		return fmt.Errorf("the account of the job: %w", err)
+	}
+	return acct.Chown(path)
+}
 
 // renderDaemon is the job file. launchd opens the socket as root before
 // the job starts and holds it while the job restarts, so a hook waits for
