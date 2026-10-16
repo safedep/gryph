@@ -54,6 +54,49 @@ jobs:
           name: dist-artifacts
           path: dist/
 
+  # The managed install of a macOS fleet: an unsigned flat package with
+  # the universal binary under /opt/safedep/gryph/bin, which a Jamf
+  # policy installs as root. pkgbuild runs only on macOS.
+  macos-pkg:
+    needs: [goreleaser]
+    runs-on: macos-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # to upload the package to the release
+      id-token: write # for cosign and the provenance of the package
+      attestations: write # to write the provenance of the package
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Download dist folder
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: dist-artifacts
+          path: dist/
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Build the Package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          pkg="gryph_${version}_darwin_all.pkg"
+          ./scripts/macos-pkg.sh dist/gryph_darwin_all/gryph "$version" "$pkg"
+          shasum -a 256 "$pkg" > "$pkg.sha256"
+          cosign sign-blob --yes --output-signature "$pkg.sig" --output-certificate "$pkg.pem" "$pkg"
+          echo "PKG=$pkg" >> "$GITHUB_ENV"
+
+      - name: Attest the Package
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        with:
+          subject-path: ${{ env.PKG }}
+
+      - name: Upload the Package to the Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" "$PKG" "$PKG.sha256" "$PKG.sig" "$PKG.pem" --clobber
+
   provenance:
     needs: [goreleaser]
     permissions:
