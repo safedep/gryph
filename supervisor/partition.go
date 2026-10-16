@@ -29,7 +29,14 @@ const rateLimitEventInterval = time.Minute
 // so the receipt chain and the context state of the account stay in
 // order without a lock on the database.
 type partition struct {
-	uid      uint32
+	uid uint32
+
+	// ready closes when the open ends, and openErr says how it ended. The
+	// fields from dir to bucket are set before ready closes and never
+	// after, so a reader that waited on ready reads them without a lock.
+	ready   chan struct{}
+	openErr error
+
 	dir      string
 	rt       *engine.Runtime
 	service  decision.Service
@@ -52,44 +59,78 @@ type partition struct {
 	lookup func(pid int) []procs.Process
 }
 
-// openPartition opens or creates the partition of uid under root. The
-// directory is the service account's and mode 0700, so no agent user reads
-// another account's state. Every step runs relative to the open root and
-// refuses a link, so a link planted under the state directory cannot send
-// the partition elsewhere.
-func openPartition(ctx context.Context, cfg *config.Config, root *nofollow.Dir, uid uint32, limits Limits) (*partition, error) {
+// newPartition returns the partition of uid before it opens. The server
+// counts connections in it at once and opens it in the background, so a
+// slow open never holds the handshake of a hook.
+func newPartition(uid uint32, lookup func(pid int) []procs.Process) *partition {
+	return &partition{uid: uid, ready: make(chan struct{}), lookup: lookup}
+}
+
+// open runs load and then closes ready, so every connection of the
+// account that waits on the open sees the same result.
+func (p *partition) open(load func() error) {
+	defer close(p.ready)
+	if p.openErr = load(); p.openErr != nil {
+		log.Warnf("supervisor: partition of uid %d: %v", p.uid, p.openErr)
+	}
+}
+
+// load opens or creates the store of the partition under root. The
+// directory is the service account's and mode 0700, so no agent user
+// reads another account's state. Every step runs relative to the open
+// root and refuses a link, so a link planted under the state directory
+// cannot send the partition elsewhere.
+func (p *partition) load(ctx context.Context, cfg *config.Config, root *nofollow.Dir, limits Limits) error {
 	users, err := childDir(root, "users")
 	if err != nil {
-		return nil, fmt.Errorf("partition %d: %w", uid, err)
+		return fmt.Errorf("partition %d: %w", p.uid, err)
 	}
 	defer func() { _ = users.Close() }()
-	home, err := childDir(users, strconv.FormatUint(uint64(uid), 10))
+	home, err := childDir(users, strconv.FormatUint(uint64(p.uid), 10))
 	if err != nil {
-		return nil, fmt.Errorf("partition %d: %w", uid, err)
+		return fmt.Errorf("partition %d: %w", p.uid, err)
 	}
 	dir := home.Path()
 	_ = home.Close()
 	rt, err := engine.NewPartition(ctx, cfg, dir)
 	if err != nil {
-		return nil, fmt.Errorf("partition %d: %w", uid, err)
+		return fmt.Errorf("partition %d: %w", p.uid, err)
 	}
 	spoolRec, err := rt.SpoolRecorder()
 	if err != nil {
 		_ = rt.Close()
-		return nil, fmt.Errorf("partition %d: %w", uid, err)
+		return fmt.Errorf("partition %d: %w", p.uid, err)
 	}
-	p := &partition{
-		uid:      uid,
-		dir:      dir,
-		rt:       rt,
-		service:  rt.DecisionService(),
-		spoolRec: spoolRec,
-		bucket:   newBucket(limits.Rate, limits.Burst, time.Now()),
-	}
+	p.dir = dir
+	p.rt = rt
+	p.service = rt.DecisionService()
+	p.spoolRec = spoolRec
+	p.bucket = newBucket(limits.Rate, limits.Burst, time.Now())
 	// The service answers escalations itself, with the request store of
 	// the partition, in place of the prompt or the nop of a user install.
 	rt.AddMediatorOptions(aarmsec.WithApprovalService(newApprover(p, cfg.EffectivePolicy().Approval)))
-	return p, nil
+	return nil
+}
+
+// wait returns when the partition is open, with the error of the open,
+// or when ctx ends.
+func (p *partition) wait(ctx context.Context) error {
+	select {
+	case <-p.ready:
+		return p.openErr
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// state reports whether the open ended, and whether it failed.
+func (p *partition) state() (done, failed bool) {
+	select {
+	case <-p.ready:
+		return true, p.openErr != nil
+	default:
+		return false, false
+	}
 }
 
 // childDir creates name inside parent when it is missing and opens it on
@@ -101,7 +142,13 @@ func childDir(parent *nofollow.Dir, name string) (*nofollow.Dir, error) {
 	return parent.OpenDir(name)
 }
 
+// close waits for the open to end and closes the store. A partition that
+// did not open has nothing to close.
 func (p *partition) close() error {
+	<-p.ready
+	if p.openErr != nil {
+		return nil
+	}
 	return p.rt.Close()
 }
 

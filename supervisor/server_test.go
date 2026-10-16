@@ -273,9 +273,9 @@ func TestServer_PartitionLinkRefused(t *testing.T) {
 	require.NoError(t, os.Symlink(elsewhere, filepath.Join(state, "users", strconv.Itoa(os.Getuid()))))
 
 	conn := dial(t, sock)
-	reply, err := ipc.ReadFrame(conn)
-	require.NoError(t, err)
-	assert.Equal(t, ipc.TypeError, reply.Type)
+	hello(t, conn)
+	reply := exchange(t, conn, ipc.MustFrame(ipc.TypeHandle, ipc.Handle{Agent: "claude-code", HookType: "PreToolUse", RawPayload: []byte(readPayload)}))
+	assert.Equal(t, ipc.TypeError, reply.Type, "the first request learns that the partition did not open")
 	assert.Contains(t, string(reply.Body), ipc.CodeInternal)
 	entries, err := os.ReadDir(elsewhere)
 	require.NoError(t, err)

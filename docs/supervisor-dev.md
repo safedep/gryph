@@ -26,6 +26,11 @@ The first frame of a connection is `hello`. The server answers `welcome`.
 A client that gets no `welcome` within its budget treats the service as
 down. A first frame of another type ends the connection with `error`.
 
+The server sends `welcome` before the partition of the account is open.
+The first open of an account creates and migrates its store, and a hook
+has only 300 ms for the handshake. The first request after `welcome`
+waits for the open, under the decision deadline of the client.
+
 | Frame | Direction | Body |
 |---|---|---|
 | `hello` | client to server | `proto` (int, the protocol version, 1), `client_version` (string, 64), `caps` (up to 32 strings of 64) |
@@ -112,8 +117,10 @@ lock on the database. The state directory must exist before the server
 starts: `gryph supervisor run` creates it when it is missing, and the
 service unit owns it on a managed host. The server opens it once and
 creates `users/` and `users/<uid>/` relative to that handle. A link in
-place of either refuses the partition, and the connection gets `error
-internal`.
+place of either refuses the partition, and each request of the connection
+gets `error internal`. The next connection of the account tries the open
+again. Each account opens in the background, so a slow open of one
+account does not hold the connections of another.
 
 Limits per account, with the defaults: 16 open connections, 20 requests a
 second with a burst of 40, and a 30 s idle timeout per connection. The

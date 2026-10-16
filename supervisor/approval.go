@@ -413,12 +413,15 @@ func (p *partition) expireNow(ctx context.Context) {
 	p.expireRequests(ctx, time.Now().UTC())
 }
 
-// expireRequests closes the overdue requests of every open partition.
+// expireRequests closes the overdue requests of every open partition. A
+// later pass takes a partition that is still opening.
 func (s *Server) expireRequests(ctx context.Context) {
 	s.mu.Lock()
 	parts := make([]*partition, 0, len(s.partitions))
 	for _, p := range s.partitions {
-		parts = append(parts, p)
+		if done, failed := p.state(); done && !failed {
+			parts = append(parts, p)
+		}
 	}
 	s.mu.Unlock()
 	for _, p := range parts {

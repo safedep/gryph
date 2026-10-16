@@ -98,11 +98,15 @@ func (s *SQLiteStore) Init(ctx context.Context) error {
 // The migration never drops a column or an index. A table rebuild holds the
 // write lock for seconds on a large database, and an older binary would drop
 // the columns of a newer one. A retired column stays in place, unused.
+//
+// The ent migration writes package-level table definitions, so two stores
+// in one process must not migrate at the same time. The decision service
+// opens the partitions of many accounts in parallel.
 func (s *SQLiteStore) createSchema(ctx context.Context) error {
 	const attempts = 5
 	var err error
 	for i := 0; i < attempts; i++ {
-		if err = s.client.Schema.Create(ctx); err == nil {
+		if err = s.migrate(ctx); err == nil {
 			if err = s.dropRetiredTables(ctx); err == nil {
 				return nil
 			}
@@ -117,6 +121,14 @@ func (s *SQLiteStore) createSchema(ctx context.Context) error {
 		}
 	}
 	return err
+}
+
+var migrateMu sync.Mutex
+
+func (s *SQLiteStore) migrate(ctx context.Context) error {
+	migrateMu.Lock()
+	defer migrateMu.Unlock()
+	return s.client.Schema.Create(ctx)
 }
 
 func retryableSchemaError(err error) bool {

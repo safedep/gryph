@@ -54,6 +54,9 @@ type Server struct {
 	ancestors    func(pid int) ([]procs.Process, error)
 	lookup       func(pid int) []procs.Process
 	reloadConfig func() (*config.Config, error)
+	// beforeOpen runs before a partition opens, and its error fails the
+	// open. It exists for a test, which sets it under mu.
+	beforeOpen func(uid uint32) error
 }
 
 // Options configure a Server.
@@ -196,15 +199,17 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 	}
 	defer func() { _ = peer.Close() }()
 
-	part, err := s.partition(ctx, peer.UID)
-	if err != nil {
-		log.Warnf("supervisor: partition of uid %d: %v", peer.UID, err)
-		_ = ipc.WriteFrame(conn, ipc.ErrorFrame(ipc.CodeInternal, "partition not available"))
-		return
-	}
+	// The connection counts in before the handshake, so the limit holds
+	// for a connection that never sends a frame. The partition opens in
+	// the background: a hook has a short handshake budget, and the first
+	// open of an account creates and migrates its store. The first frame
+	// waits for the open under the decision deadline.
+	part := s.slot(ctx, peer.UID)
 	if !part.acquireConn(s.limits.MaxConns) {
-		part.recordRateLimit(ctx, "connection")
 		_ = ipc.WriteFrame(conn, ipc.ErrorFrame(ipc.CodeRateLimited, "too many connections from this account"))
+		if part.wait(ctx) == nil {
+			part.recordRateLimit(ctx, "connection")
+		}
 		return
 	}
 	defer part.releaseConn()
@@ -212,6 +217,9 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn) {
 	welcome := ipc.Welcome{Proto: ipc.Proto, ServerVersion: s.version, Mode: s.cfg.Supervisor.EffectiveProfile()}
 	rw := &idleConn{Conn: conn, timeout: s.limits.IdleTimeout}
 	err = ipc.ServeConn(ctx, rw, welcome, ipc.HandlerFunc(func(ctx context.Context, f *ipc.Frame, body ipc.Body) (*ipc.Frame, error) {
+		if err := part.wait(ctx); err != nil {
+			return ipc.ErrorFrame(ipc.CodeInternal, "partition not available"), nil
+		}
 		return s.dispatch(ctx, part, peer, rw, f, body)
 	}))
 	if err != nil && !errors.Is(err, io.EOF) && !isTimeout(err) {
@@ -274,18 +282,44 @@ func (s *Server) dispatch(ctx context.Context, part *partition, peer *peercred.P
 
 // partition returns the partition of uid, and opens it on first contact.
 func (s *Server) partition(ctx context.Context, uid uint32) (*partition, error) {
+	p := s.slot(ctx, uid)
+	if err := p.wait(ctx); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// slot returns the partition of uid, open or still opening. The first
+// contact of an account starts the open in the background, outside the
+// server lock, so a slow open holds no other account. A partition whose
+// open failed gives way to a new one, so the next contact tries again.
+func (s *Server) slot(ctx context.Context, uid uint32) *partition {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if p, ok := s.partitions[uid]; ok {
-		return p, nil
+		if _, failed := p.state(); !failed {
+			return p
+		}
 	}
-	p, err := openPartition(ctx, s.cfg, s.rootDir, uid, s.limits)
-	if err != nil {
-		return nil, err
-	}
-	p.lookup = s.lookup
+	p := newPartition(uid, s.lookup)
 	s.partitions[uid] = p
-	return p, nil
+	cfg, root, limits, before := s.cfg, s.rootDir, s.limits, s.beforeOpen
+	// The open outlives the request that started it, because other
+	// connections of the account wait on the same open.
+	ctx = context.WithoutCancel(ctx)
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		p.open(func() error {
+			if before != nil {
+				if err := before(uid); err != nil {
+					return err
+				}
+			}
+			return p.load(ctx, cfg, root, limits)
+		})
+	}()
+	return p
 }
 
 // Reload reads the configuration again and retires every open partition,
@@ -295,7 +329,6 @@ func (s *Server) partition(ctx context.Context, uid uint32) (*partition, error) 
 // install call it through a signal.
 func (s *Server) Reload() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.reloadConfig != nil {
 		cfg, err := s.reloadConfig()
 		if err != nil {
@@ -306,13 +339,20 @@ func (s *Server) Reload() {
 			s.cfg = &own
 		}
 	}
+	var idle []*partition
 	for uid, p := range s.partitions {
 		if p.retire() {
-			if err := p.close(); err != nil {
-				log.Warnf("supervisor: close the partition of uid %d: %v", uid, err)
-			}
+			idle = append(idle, p)
 		}
 		delete(s.partitions, uid)
+	}
+	s.mu.Unlock()
+	// A partition can still be opening, and close waits for the open, so
+	// the closes run outside the server lock.
+	for _, p := range idle {
+		if err := p.close(); err != nil {
+			log.Warnf("supervisor: close the partition of uid %d: %v", p.uid, err)
+		}
 	}
 	log.Infof("supervisor: reloaded, partitions reopen on the next contact")
 }
