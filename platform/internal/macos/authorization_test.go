@@ -128,10 +128,19 @@ func TestAuthorization_PasswordCredentialCarriesThroughTheExternalForm(t *testin
 	require.NoError(t, err, "%s", out)
 	t.Cleanup(func() { _ = exec.Command("/usr/bin/security", "authorizationdb", "remove", right).Run() })
 
+	out, err = exec.Command("/usr/bin/dscl", ".", "-authonly", name, password).CombinedOutput()
+	require.NoError(t, err, "the directory takes the password of the test account: %s", out)
+
 	auth, err := NewAuthorization()
 	require.NoError(t, err)
 	defer auth.Destroy()
-	require.NoError(t, auth.Obtain(right, false, Environment{EnvUsername: name, EnvPassword: password}))
+	credential := Environment{EnvUsername: name, EnvPassword: password}
+	err = auth.Obtain(right, false, credential)
+	if err != nil {
+		t.Logf("without interaction: %v", err)
+		err = auth.Obtain(right, true, credential)
+	}
+	require.NoError(t, err, "a password in the environment gives the credential")
 	form, err := auth.External()
 	require.NoError(t, err)
 
