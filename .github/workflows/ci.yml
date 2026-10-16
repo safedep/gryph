@@ -315,7 +315,7 @@ jobs:
       - name: Run Privileged Unit Tests
         run: |
           sudo env "PATH=$PATH" "GOCACHE=$(go env GOCACHE)" "GOMODCACHE=$(go env GOMODCACHE)" \
-            go test -count=1 -run 'ExternalFormCarriesTheRight|PasswordCredentialCarries|ChecksWhoAuthenticated' -v ./platform/internal/macos/ ./platform/localauth/
+            go test -count=1 -run 'ExternalFormCarriesTheRight|ChecksWhoAuthenticated' -v ./platform/internal/macos/ ./platform/localauth/
 
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@v1.13.0

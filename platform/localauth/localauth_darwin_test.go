@@ -100,7 +100,7 @@ func TestAuthorize_DarwinChecksWhoAuthenticated(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip("writing the authorization database needs root")
 	}
-	const right = "io.safedep.gryph.test-allow"
+	const right = "io.safedep.gryph.test-allow-localauth"
 	out, err := exec.Command("security", "authorizationdb", "write", right, "allow").CombinedOutput()
 	require.NoError(t, err, "%s", out)
 	t.Cleanup(func() { _ = exec.Command("security", "authorizationdb", "remove", right).Run() })
