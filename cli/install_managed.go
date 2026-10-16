@@ -319,7 +319,7 @@ func runManagedInstall(cmd *cobra.Command, args managedInstallArgs) error {
 func installMachineKeys(cfg *config.Config) *managedKeysReport {
 	sup := cfg.Supervisor
 	report := &managedKeysReport{ReceiptKey: sup.ReceiptKeyPath(), ExportKey: sup.ExportKeyPath(), TrustStore: config.ManagedTrustStorePath()}
-	if err := os.MkdirAll(sup.StatePath(), 0o750); err != nil {
+	if err := ensureStateDir(sup.StatePath()); err != nil {
 		report.Error = err.Error()
 		return report
 	}
@@ -345,20 +345,42 @@ func installMachineKeys(cfg *config.Config) *managedKeysReport {
 	return report
 }
 
+// ensureStateDir makes the state directory below a root-owned chain. The
+// keys go into it, so a directory above it that a user made or can write
+// would let that user take the keys. The parent is made as root first, so
+// only a directory that existed before can fail the check.
+func ensureStateDir(state string) error {
+	parent := filepath.Dir(state)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return err
+	}
+	if err := config.VerifyManagedPath(parent); err != nil {
+		return fmt.Errorf("state directory %s: %w", state, err)
+	}
+	return os.MkdirAll(state, 0o750)
+}
+
 // handStateToServiceAccount gives the state directory and the keys to the
-// service account. The owner of an existing state directory stays, so a
-// host that runs the service under another account keeps it.
+// service account. An existing state directory of the service account
+// stays as it is. A state directory of any other account is refused: the
+// keys would go to that account.
 func handStateToServiceAccount(cfg *config.Config) (string, error) {
-	info, err := os.Stat(cfg.Supervisor.StatePath())
+	info, err := os.Lstat(cfg.Supervisor.StatePath())
 	if err != nil {
 		return "", err
 	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("state directory %s is not a directory", cfg.Supervisor.StatePath())
+	}
+	acct, lookupErr := account.Lookup(cfg.Supervisor.ServerAccount())
 	uid, _, ok := ownerOf(info)
 	if ok && uid != 0 {
+		if lookupErr != nil || uid != acct.UID {
+			return "", fmt.Errorf("state directory %s belongs to uid %d, not to root or the service account %s", cfg.Supervisor.StatePath(), uid, cfg.Supervisor.ServerAccount())
+		}
 		return handMachineKeysToServiceAccount(cfg)
 	}
-	acct, err := account.Lookup(cfg.Supervisor.ServerAccount())
-	if err != nil {
+	if lookupErr != nil {
 		return "root", nil
 	}
 	if err := acct.Chown(cfg.Supervisor.StatePath()); err != nil {

@@ -1,0 +1,46 @@
+//go:build !windows
+
+package cli
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/safedep/gryph/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// The keys go into the state directory, so the install refuses a state
+// directory whose chain a user controls, or that another account owns.
+// The checks need root, which owns the chain and can give a directory away.
+func TestEnsureStateDir_RefusesAUserChain(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("the chain check needs a root-owned chain")
+	}
+	base, err := os.MkdirTemp("/tmp", "gryph-state-test-")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	require.NoError(t, os.Chmod(base, 0o755))
+
+	require.NoError(t, ensureStateDir(filepath.Join(base, "root-owned", "state")))
+
+	planted := filepath.Join(base, "planted")
+	require.NoError(t, os.Mkdir(planted, 0o755))
+	require.NoError(t, os.Chown(planted, 4242, 4242))
+	assert.ErrorContains(t, ensureStateDir(filepath.Join(planted, "state")), "not owned by root")
+}
+
+func TestHandStateToServiceAccount_RefusesAnotherOwner(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("giving a directory to another account needs root")
+	}
+	state := t.TempDir()
+	require.NoError(t, os.Chown(state, 4242, 4242))
+	cfg := config.Default()
+	cfg.Supervisor.StateDir = state
+	cfg.Supervisor.ServerIdentity = "gryph-no-such-account"
+	_, err := handStateToServiceAccount(cfg)
+	assert.ErrorContains(t, err, "belongs to uid 4242")
+}
