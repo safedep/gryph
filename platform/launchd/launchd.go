@@ -18,6 +18,10 @@ const LabelPrefix = "io.safedep."
 // SystemDomain is the domain of the daemons that launchd starts at boot.
 const SystemDomain = "system"
 
+// SocketName is the key of the socket of a job in its Sockets dictionary.
+// The job asks launchd for the socket by this name.
+const SocketName = "Listeners"
+
 // Label returns the launchd label of the job name.
 func Label(name string) string {
 	return LabelPrefix + name

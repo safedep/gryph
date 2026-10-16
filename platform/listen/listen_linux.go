@@ -32,18 +32,9 @@ func activated() ([]net.Listener, error) {
 	if err != nil || n < 0 {
 		return nil, fmt.Errorf("listen: LISTEN_FDS=%q is not a count", count)
 	}
-	var out []net.Listener
-	for i := 0; i < n; i++ {
-		f := os.NewFile(uintptr(listenFDsStart+i), "listen-fd-"+strconv.Itoa(i))
-		ln, err := net.FileListener(f)
-		_ = f.Close()
-		if err != nil {
-			for _, l := range out {
-				_ = l.Close()
-			}
-			return nil, fmt.Errorf("listen: descriptor %d: %w", listenFDsStart+i, err)
-		}
-		out = append(out, ln)
+	fds := make([]int, n)
+	for i := range fds {
+		fds[i] = listenFDsStart + i
 	}
-	return out, nil
+	return listeners(fds)
 }

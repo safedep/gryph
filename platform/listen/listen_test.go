@@ -30,9 +30,35 @@ func TestOpen(t *testing.T) {
 	assert.ErrorContains(t, err, "is not a socket")
 }
 
+// On macOS this asks launchd, which has no socket for a test process.
 func TestActivated_Unset(t *testing.T) {
 	lns, err := Activated()
 	require.NoError(t, err)
 	assert.Nil(t, lns)
-	var _ net.Listener
+}
+
+func TestListeners_TakeADescriptor(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.sock")
+	ln, err := net.Listen("unix", path)
+	require.NoError(t, err)
+	ln.(*net.UnixListener).SetUnlinkOnClose(false)
+	f, err := ln.(*net.UnixListener).File()
+	require.NoError(t, err)
+	require.NoError(t, ln.Close())
+
+	lns, err := listeners([]int{int(f.Fd())})
+	require.NoError(t, err)
+	require.Len(t, lns, 1)
+	defer func() { _ = lns[0].Close() }()
+	go func() {
+		if c, err := net.Dial("unix", path); err == nil {
+			_ = c.Close()
+		}
+	}()
+	conn, err := lns[0].Accept()
+	require.NoError(t, err, "the listener serves the socket of the descriptor")
+	_ = conn.Close()
+
+	_, err = listeners([]int{int(f.Fd())})
+	assert.Error(t, err, "a closed descriptor is no listener")
 }

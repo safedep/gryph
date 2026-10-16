@@ -11,13 +11,34 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 // Activated returns the listeners the service manager passed to this
-// process, or nil when it started on its own. Only systemd passes sockets
-// this way today.
+// process, or nil when it started on its own: systemd on Linux, launchd
+// on macOS.
 func Activated() ([]net.Listener, error) {
 	return activated()
+}
+
+// listeners takes the socket descriptors that the service manager gave
+// this process. A listener holds a copy of each descriptor, so the
+// original closes. On an error no listener stays open.
+func listeners(fds []int) ([]net.Listener, error) {
+	var out []net.Listener
+	for _, fd := range fds {
+		f := os.NewFile(uintptr(fd), "listen-fd-"+strconv.Itoa(fd))
+		ln, err := net.FileListener(f)
+		_ = f.Close()
+		if err != nil {
+			for _, l := range out {
+				_ = l.Close()
+			}
+			return nil, fmt.Errorf("listen: descriptor %d: %w", fd, err)
+		}
+		out = append(out, ln)
+	}
+	return out, nil
 }
 
 // Open listens at path. It makes the directory, removes a stale socket
