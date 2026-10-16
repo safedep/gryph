@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,6 +38,8 @@ func TestActivated_Unset(t *testing.T) {
 	assert.Nil(t, lns)
 }
 
+// listeners owns the descriptors it gets, so the test passes copies and
+// closes its own files.
 func TestListeners_TakeADescriptor(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "s.sock")
 	ln, err := net.Listen("unix", path)
@@ -45,8 +48,11 @@ func TestListeners_TakeADescriptor(t *testing.T) {
 	f, err := ln.(*net.UnixListener).File()
 	require.NoError(t, err)
 	require.NoError(t, ln.Close())
+	fd, err := syscall.Dup(int(f.Fd()))
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
 
-	lns, err := listeners([]int{int(f.Fd())})
+	lns, err := listeners([]int{fd})
 	require.NoError(t, err)
 	require.Len(t, lns, 1)
 	defer func() { _ = lns[0].Close() }()
@@ -58,7 +64,16 @@ func TestListeners_TakeADescriptor(t *testing.T) {
 	conn, err := lns[0].Accept()
 	require.NoError(t, err, "the listener serves the socket of the descriptor")
 	_ = conn.Close()
+}
 
-	_, err = listeners([]int{int(f.Fd())})
-	assert.Error(t, err, "a closed descriptor is no listener")
+func TestListeners_RefuseAPipe(t *testing.T) {
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	defer func() { _ = w.Close() }()
+	fd, err := syscall.Dup(int(r.Fd()))
+	require.NoError(t, err)
+	require.NoError(t, r.Close())
+
+	_, err = listeners([]int{fd})
+	assert.Error(t, err, "a pipe is no listener")
 }
