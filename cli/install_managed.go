@@ -360,6 +360,21 @@ func ensureStateDir(state string) error {
 	return os.MkdirAll(state, 0o750)
 }
 
+// ensureSocketDir makes the directory of the socket as root and checks
+// its chain like a managed file. A user who can write the directory could
+// put a socket of their own at the path, and every hook would then refuse
+// the server.
+func ensureSocketDir(socket string) error {
+	dir := filepath.Dir(socket)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if err := config.VerifyManagedPath(dir); err != nil {
+		return fmt.Errorf("socket directory %s: %w", dir, err)
+	}
+	return nil
+}
+
 // handStateToServiceAccount gives the state directory and the keys to the
 // service account. An existing state directory of the service account
 // stays as it is. A state directory of any other account is refused: the
@@ -428,6 +443,10 @@ func installSupervisorService(ctx context.Context, in *managedInstallInput, repo
 	}
 	svc.AuthPolicy = reg.Path
 	svc.Changed = svc.Changed || reg.Changed
+	if err := ensureSocketDir(sup.SocketPath()); err != nil {
+		svc.Error = err.Error()
+		return
+	}
 	res, err := service.Install(ctx, service.Spec{
 		Name:        supervisorServiceName,
 		Description: "Gryph decision service",

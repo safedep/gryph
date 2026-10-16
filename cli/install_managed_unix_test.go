@@ -32,6 +32,23 @@ func TestEnsureStateDir_RefusesAUserChain(t *testing.T) {
 	assert.ErrorContains(t, ensureStateDir(filepath.Join(planted, "state")), "not owned by root")
 }
 
+func TestEnsureSocketDir_RefusesAUserChain(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("the chain check needs a root-owned chain")
+	}
+	base, err := os.MkdirTemp("/tmp", "gryph-socket-test-")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	require.NoError(t, os.Chmod(base, 0o755))
+
+	require.NoError(t, ensureSocketDir(filepath.Join(base, "run", "hook.sock")))
+
+	planted := filepath.Join(base, "planted")
+	require.NoError(t, os.Mkdir(planted, 0o777))
+	require.NoError(t, os.Chmod(planted, 0o777))
+	assert.ErrorContains(t, ensureSocketDir(filepath.Join(planted, "hook.sock")), "writable by group or other")
+}
+
 func TestHandStateToServiceAccount_RefusesAnotherOwner(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip("giving a directory to another account needs root")
