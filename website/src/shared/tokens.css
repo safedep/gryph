@@ -1,0 +1,57 @@
+/* Cartridge design tokens. Every colour, font and shadow on the site comes from here. */
+
+@font-face { font-family: "Press Start 2P"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/press-start-2p-latin-400.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("/fonts/jetbrains-mono-latin-var.woff2") format("woff2"); }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/geist-latin-var.woff2") format("woff2"); }
+
+:root {
+  --ink-900: #1A1320;
+  --ink-700: #3D2E4A;
+  --ink-500: #6B5878;
+  --ink-400: #8F8399;
+  --ink-300: #A899B5;
+  --ink-200: #D9CFE0;
+
+  --paper: #FFFDF5;
+  --cream: #FFF8E7;
+  --sand: #F4E9C7;
+  --white: #FFFFFF;
+  --term-text: #F4E9C7;
+
+  --coin: #FFC93C;
+  --coin-soft: #FFF1C7;
+  --coin-deep: #B07D00;
+  --cherry: #E8574F;
+  --cherry-soft: #FBDAD6;
+  --cherry-deep: #A3261F;
+  --mint: #4FBF86;
+  --mint-soft: #D4F1E1;
+  --mint-deep: #1F7A4B;
+  --sky: #5BB8DE;
+  --sky-soft: #D7EEF8;
+  --sky-deep: #1F6E8F;
+  --grape: #8E7BE0;
+  --grape-soft: #E5DFFB;
+  --grape-deep: #4E3BA3;
+
+  --font-pixel: "Press Start 2P", ui-monospace, monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --font-body: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --bw: 2px;
+  --bw-card: 3px;
+  --line: var(--bw) solid var(--ink-900);
+  --shadow-xs: 2px 2px 0 var(--ink-900);
+  --shadow-sm: 4px 4px 0 var(--ink-900);
+  --shadow-md: 6px 6px 0 var(--ink-900);
+  --shadow-lg: 10px 10px 0 var(--ink-900);
+
+  --max: 1200px;
+  --gutter: 24px;
+  --section-y: clamp(56px, 9vw, 84px);
+  --press: 80ms;
+}
+
+@media (max-width: 600px) {
+  :root { --gutter: 16px; }
+}

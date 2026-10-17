@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { Copyright, Crumbs, StarsLink } from '../shared/Brand'
-import { Arrow } from '../shared/Arrow'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import { Footer, StarsLink, Topbar } from '../shared/Brand'
+import { Blob } from '../shared/Blob'
+import { Arrow, Check, Cross } from '../shared/Icons'
 import { Cmd, InstallTabs } from '../shared/Cmd'
 import { DISCORD_URL, DOCS_URL, REPO_URL, cx } from '../shared/site'
-import { startField } from './field'
+import { Window } from '../shared/Window'
 import { MILESTONES, type Task } from './milestones'
 
 const TOTAL = MILESTONES.length
@@ -74,30 +75,36 @@ export function Protect() {
 
   return (
     <>
-      <header className="top">
-        <Crumbs brandHref="/" />
-        <nav aria-label="Project">
-          <a href="/">Overview</a>
-          <a href={DOCS_URL}>Docs</a>
-          <StarsLink />
-        </nav>
-      </header>
+      <Topbar
+        brandHref="/"
+        wide={inGuide}
+        nav={
+          <nav className="topnav" aria-label="Project">
+            <a href="/">Overview</a>
+            <a href={DOCS_URL}>Docs</a>
+          </nav>
+        }
+      >
+        {inGuide && <Xp done={done.size} />}
+        <StarsLink />
+      </Topbar>
 
-      <main>
-        {inGuide ? (
+      <main id="top">
+        {inGuide && step === 'done' ? (
+          <Finish done={done} firstOpen={firstOpen} onReset={reset} />
+        ) : inGuide ? (
           <section className="guide" id="guide">
             <Rail current={step} done={done} />
             <article className="page" id="page" aria-live="polite">
-              {step === 'done' ? (
-                <Finish done={done} firstOpen={firstOpen} onReset={reset} />
-              ) : index >= 0 ? (
+              {index >= 0 && (
                 <MilestonePage key={step} index={index} done={done} onComplete={complete} />
-              ) : null}
+              )}
             </article>
           </section>
         ) : (
           <Intro
             href={`#guide/${resume}`}
+            done={done}
             label={
               done.size && done.size < TOTAL ? 'Continue guided setup' : 'Start guided setup'
             }
@@ -105,29 +112,55 @@ export function Protect() {
         )}
       </main>
 
-      <footer className="foot">
-        <Copyright />
+      <Footer>
+        <a href="/">Overview</a>
+        <a href={DOCS_URL}>Docs</a>
+        <a href={REPO_URL}>GitHub</a>
         <a href={DISCORD_URL}>Ask a question on Discord</a>
-      </footer>
+      </Footer>
     </>
   )
 }
 
-function Intro({ href, label }: { href: string; label: string }) {
-  const canvas = useRef<HTMLCanvasElement>(null)
-  useEffect(() => startField(canvas.current!), [])
-
+function Xp({ done }: { done: number }) {
   return (
-    <section className="intro" id="intro" aria-label="Guided setup">
-      <h1 className="vh">Protect your agents</h1>
-      <div className="art">
-        <canvas id="field" ref={canvas} aria-hidden="true" />
-      </div>
-      <div className="under">
-        <a className="btn fill big" id="start" href={href}>
-          {label}
-        </a>
-        <p id="start-note">{TOTAL} steps. Self-paced. Everything stays local.</p>
+    <div className="xp" role="img" aria-label={`${done} of ${TOTAL} complete`}>
+      <span className="pixel xp-label">XP</span>
+      <span className="xp-bar">
+        {MILESTONES.map((m, i) => (
+          <i key={m.id} className={cx(i < done && 'on')} />
+        ))}
+      </span>
+      <span className="xp-count">
+        {done} / {TOTAL}
+      </span>
+    </div>
+  )
+}
+
+function Intro({ href, label, done }: { href: string; label: string; done: Set<string> }) {
+  return (
+    <section className="intro dots" id="intro" aria-labelledby="intro-title">
+      <div className="intro-card">
+        <Window title={'gryph \u00b7 guided setup'} dark>
+          <ol className="intro-list">
+            {MILESTONES.map((m, i) => (
+              <li key={m.id} className={cx(done.has(m.id) && 'done')}>
+                <span className="t-mute">{String(i + 1).padStart(2, '0')}</span> {m.title}
+                {done.has(m.id) && <Check />}
+              </li>
+            ))}
+          </ol>
+        </Window>
+        <div className="intro-under">
+          <p className="kicker">Guided setup</p>
+          <h1 id="intro-title">Protect your agents</h1>
+          <p id="start-note">{TOTAL} steps. Self-paced. Everything stays local.</p>
+          <a className="btn btn-coin" id="start" href={href}>
+            {label}
+            <Arrow />
+          </a>
+        </div>
       </div>
     </section>
   )
@@ -135,11 +168,8 @@ function Intro({ href, label }: { href: string; label: string }) {
 
 function Rail({ current, done }: { current: string; done: Set<string> }) {
   return (
-    <aside className="nav" aria-label="Milestones">
-      <small>GUIDED SETUP</small>
-      <div className="progress" id="bar">
-        <span style={{ width: `${(done.size / TOTAL) * 100}%` }} />
-      </div>
+    <aside className="rail" aria-label="Milestones">
+      <p className="kicker">Guided setup</p>
       <span className="count" id="count">
         {done.size} of {TOTAL} complete
       </span>
@@ -154,7 +184,7 @@ function Rail({ current, done }: { current: string; done: Set<string> }) {
                 className={cx(on && 'on', ok && 'done')}
                 aria-current={on ? 'step' : undefined}
               >
-                <span className="n">{ok ? '✓' : i + 1}</span>
+                <span className="n">{ok ? <Check /> : i + 1}</span>
                 {m.title}
               </a>
             </li>
@@ -165,19 +195,24 @@ function Rail({ current, done }: { current: string; done: Set<string> }) {
   )
 }
 
-function TaskItem({ task }: { task: Task }) {
+function TaskItem({ task, n }: { task: Task; n: number }) {
   return (
     <li>
-      <p className="do">{task.text}</p>
-      {task.install && <InstallTabs pre />}
-      {task.cmd && <Cmd text={task.cmd} pre />}
-      {task.ask && (
-        <p className="ask">
-          <small>ASK YOUR AGENT</small>
-          {task.ask}
-        </p>
-      )}
-      {task.see && <p className="see">{task.see}</p>}
+      <span className="step-n pixel" aria-hidden="true">
+        {n}
+      </span>
+      <div className="step-body">
+        <p className="do">{task.text}</p>
+        {task.install && <InstallTabs pre />}
+        {task.cmd && <Cmd text={task.cmd} pre />}
+        {task.ask && (
+          <div className="ask">
+            <span className="kicker">Ask your agent</span>
+            <p>{task.ask}</p>
+          </div>
+        )}
+        {task.see && <p className="see">{task.see}</p>}
+      </div>
     </li>
   )
 }
@@ -204,16 +239,24 @@ function MilestonePage({ index, done, onComplete }: MilestonePageProps) {
 
   return (
     <>
+      <p className="kicker">
+        Step {index + 1} of {TOTAL}
+      </p>
       <h1>{m.title}</h1>
-      <p className="lede">{m.lede}</p>
+      <div className="goal">
+        <span className="badge">GOAL</span>
+        <p className="lede">{m.lede}</p>
+      </div>
       <ol className="tasks">
-        {m.tasks.map((t) => (
-          <TaskItem key={t.text} task={t} />
+        {m.tasks.map((t, i) => (
+          <TaskItem key={t.text} task={t} n={i + 1} />
         ))}
       </ol>
-      <div className="check">
-        <small>Checkpoint</small>
-        <p className="q">{m.question}</p>
+      <div className="card checkpoint">
+        <div className="check-head">
+          <span className="badge pixel">CHECKPOINT</span>
+          <p className="q">{m.question}</p>
+        </div>
         <div className="opts">
           {order.map((j) => (
             <button
@@ -223,30 +266,32 @@ function MilestonePage({ index, done, onComplete }: MilestonePageProps) {
               disabled={ok}
               onClick={() => choose(j)}
             >
-              {m.answers[j]}
+              <span>{m.answers[j]}</span>
+              {ok && j === 0 && <Check />}
+              {!ok && miss?.pick === j && <Cross />}
             </button>
           ))}
         </div>
-        <p className={cx('why', (ok || !!miss) && 'on')}>
+        <div className={cx('why', ok ? 'tone-mint' : miss ? 'tone-cherry' : undefined, (ok || !!miss) && 'on')}>
           {ok ? (
             <>
-              <b className="ok">&#10003; Correct.</b> {m.why}
+              <b className="ok">Correct.</b> {m.why}
             </>
           ) : miss ? (
             <>
               <b className="bad">Incorrect.</b> Read the steps again, then try again.
             </>
           ) : null}
-        </p>
+        </div>
       </div>
       <nav className="pager" aria-label="Milestones">
         {prev && (
-          <a className="link" href={`#guide/${prev.id}`}>
+          <a className="btn" href={`#guide/${prev.id}`}>
             <Arrow back />
             Previous
           </a>
         )}
-        <a className={cx('btn', ok && 'fill')} id="next" href={`#guide/${next?.id ?? 'done'}`}>
+        <a className="btn btn-coin btn-wide" id="next" href={`#guide/${next?.id ?? 'done'}`}>
           {next ? `Next: ${next.title}` : 'Finish'}
           <Arrow />
         </a>
@@ -264,42 +309,69 @@ interface FinishProps {
 function Finish({ done, firstOpen, onReset }: FinishProps) {
   if (done.size < TOTAL) {
     return (
-      <div className="finish">
-        <p className="kicker">Not complete</p>
-        <h1>{TOTAL - done.size} steps are not complete.</h1>
-        <p className="lede">To complete a step, answer its checkpoint question.</p>
-        <nav className="pager">
-          <a className="btn fill" href={`#guide/${firstOpen}`}>
-            Continue
-            <Arrow />
-          </a>
-        </nav>
-      </div>
+      <section className="intro dots" aria-labelledby="finish-title">
+        <div className="intro-card">
+          <div className="finish-body">
+            <p className="kicker">Not complete</p>
+            <h1 id="finish-title">{TOTAL - done.size} steps are not complete.</h1>
+            <p className="sub">To complete a step, answer its checkpoint question.</p>
+            <a className="btn btn-coin btn-wide" href={`#guide/${firstOpen}`}>
+              Continue
+              <Arrow />
+            </a>
+          </div>
+        </div>
+      </section>
     )
   }
 
   return (
-    <div className="finish">
-      <p className="kicker">You completed all {TOTAL} steps</p>
-      <h1>Gryph now protects your agents.</h1>
-      <div className="receipt">
-        milestones ......... <b>{`${TOTAL}/${TOTAL} ✓`}</b>
-        {'\n'}agents hooked ...... <b>1</b>
-        {'\n'}policy ............. <b>enforcing</b>
-        {'\n'}blocks recorded .... <b>1</b>
-        {'\n'}chain .............. <b>verified &#10003;</b>
+    <section className="intro dots" aria-labelledby="finish-title">
+      <div className="intro-card">
+        <Window title={'gryph \u00b7 completion receipt'} dark>
+          <p>
+            milestones ......... <b className="t-read">{`${TOTAL}/${TOTAL}`} <Check /></b>
+          </p>
+          <p>
+            agents hooked ...... <b>1</b>
+          </p>
+          <p>
+            policy ............. <b className="t-exec">enforcing</b>
+          </p>
+          <p>
+            blocks recorded .... <b className="t-block">1</b>
+          </p>
+          <p>
+            chain .............. <b className="t-read">verified <Check /></b>
+          </p>
+        </Window>
+        <div className="finish-body">
+          <Blob seed="gryph" expression="happy" size={72} title="Gryph mascot" />
+          <p className="pixel finish-tag">You completed all {TOTAL} steps</p>
+          <h1 id="finish-title">Gryph now protects your agents.</h1>
+          <ol className="milestones">
+            {MILESTONES.map((m) => (
+              <li key={m.id}>
+                <span className="n">
+                  <Check />
+                </span>
+                {m.title}
+              </li>
+            ))}
+          </ol>
+          <a className="btn btn-coin btn-wide" href={REPO_URL}>
+            Star Gryph on GitHub
+          </a>
+          <div className="finish-more">
+            <a className="btn btn-md" href="/">
+              Go to the overview
+            </a>
+            <button type="button" className="btn btn-md btn-plain" id="reset" onClick={onReset}>
+              Start again
+            </button>
+          </div>
+        </div>
       </div>
-      <div className="actions">
-        <a className="btn fill" href={REPO_URL}>
-          Star Gryph on GitHub
-        </a>
-        <a className="btn" href="/">
-          Go to the overview
-        </a>
-        <button type="button" className="link" id="reset" onClick={onReset}>
-          Start again
-        </button>
-      </div>
-    </div>
+    </section>
   )
 }

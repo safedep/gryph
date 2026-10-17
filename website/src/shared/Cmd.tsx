@@ -15,7 +15,7 @@ function CopyButton({ text }: { text: string }) {
       type="button"
       onClick={() => navigator.clipboard.writeText(text).then(() => setCopied(true), () => {})}
     >
-      {copied ? 'Copied' : 'Copy'}
+      {copied ? 'copied' : 'copy'}
     </button>
   )
 }
@@ -39,7 +39,7 @@ export function InstallTabs({ pre }: { pre?: boolean }) {
   const [pick, setPick] = useState(0)
   return (
     <>
-      <div className="tabs" role="group" aria-label="Install method">
+      <div className="seg" role="group" aria-label="Install method">
         {INSTALL_METHODS.map(([label], i) => (
           <button key={label} type="button" aria-pressed={i === pick} onClick={() => setPick(i)}>
             {label}

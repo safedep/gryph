@@ -1,298 +1,299 @@
-import { useEffect, useRef } from 'react'
-import { Copyright, Crumbs, StarsLink } from '../shared/Brand'
+import { Footer, StarsLink, Topbar } from '../shared/Brand'
+import { Arrow, GitHubMark } from '../shared/Icons'
+import { Blob } from '../shared/Blob'
 import { Cmd, InstallTabs } from '../shared/Cmd'
 import { useVersion } from '../shared/github'
 import { DISCORD_URL, DOCS_URL, REPO_URL } from '../shared/site'
-import { startField } from './field'
+import { Cursor, Window } from '../shared/Window'
+import { Intent } from './Intent'
 
 const AGENTS = [
-  { name: 'Claude Code', img: 'claude.webp' },
-  { name: 'Codex', img: 'codex.png' },
-  { name: 'Cursor', img: 'cursor.png' },
-  { name: 'Windsurf', img: 'windsurf.svg' },
-  { name: 'Gemini CLI', img: 'gemini.png', dark: true },
-  { name: 'OpenCode', img: 'opencode.webp' },
-  { name: 'Pi Agent', img: 'pi.png', dark: true },
-  { name: 'Devin CLI', img: 'devin.jpg' },
-  { name: 'Command Code', img: 'commandcode.png', dark: true },
+  { name: 'Claude Code', seed: 'claude' },
+  { name: 'Codex', seed: 'codex' },
+  { name: 'Cursor', seed: 'cursor' },
+  { name: 'Gemini CLI', seed: 'gemini' },
+  { name: 'Windsurf', seed: 'windsurf' },
+  { name: 'OpenCode', seed: 'opencode' },
+  { name: 'Pi Agent', seed: 'pi' },
+  { name: 'Devin', seed: 'devin' },
+  { name: 'Command Code', seed: 'commandcode' },
+]
+
+const SEES = ['Files', 'Commands', 'Web requests', 'Sessions', 'Cost (Claude Code)']
+const DECISIONS = ['Block', 'Warn', 'Guide', 'Ask me first']
+
+const TRUST = [
+  {
+    tone: 'tone-mint',
+    kicker: 'Local',
+    title: 'Your data stays home',
+    text: 'Events live in a SQLite file on your machine.',
+  },
+  {
+    tone: 'tone-cherry',
+    kicker: 'Secrets',
+    title: 'Secrets stay secret',
+    text: 'Reads of .env, SSH and cloud keys are flagged. Contents are never saved.',
+  },
+  {
+    tone: 'tone-grape',
+    kicker: 'Self-protection',
+    title: 'Guards its own setup',
+    text: "With rules on, the agent cannot edit Gryph's files or hooks.",
+  },
 ]
 
 const PROTECT = '/protect'
 
 export function Home() {
-  const field = useRef<HTMLCanvasElement>(null)
   const version = useVersion()
-
-  useEffect(() => startField(field.current!), [])
 
   return (
     <>
-      <canvas id="field" ref={field} aria-hidden="true" />
-
-      <header className="top">
-        <Crumbs brandHref="/" />
-        <nav className="top-nav" aria-label="Project">
-          <a className="link docs-link" href={DOCS_URL}>
-            Docs
-          </a>
-          <StarsLink />
-          <a className="btn fill sm" href={PROTECT}>
-            Protect your agents
-          </a>
-        </nav>
-      </header>
+      <Topbar
+        brandHref="/"
+        nav={
+          <nav className="topnav" aria-label="Project">
+            <a href="#agents">Agents</a>
+            <a href="#rules">Rules</a>
+            <a href={DOCS_URL}>Docs</a>
+          </nav>
+        }
+      >
+        <StarsLink />
+        <a className="btn btn-sm btn-coin" href={PROTECT}>
+          Protect your agents
+        </a>
+      </Topbar>
 
       <main id="top">
-        <section className="scene hero" data-scene="1">
-          <div className="stage">
-            <div className="copy">
-              <p className="abstract">
-                <em>A security layer for AI coding agents.</em> It records every read, write and
-                command, and checks your policy before any of them runs.
-              </p>
-              <div className="actions">
-                <a className="btn fill" href={PROTECT}>
-                  Protect your agents
-                </a>
-                <a className="btn ghost" href={REPO_URL}>
-                  GitHub
-                </a>
-                <a className="btn ghost hero-docs" href={DOCS_URL}>
-                  Docs
-                </a>
-              </div>
-            </div>
-          </div>
-          <div className="hero-foot">
-            <h1 className="title">
-              <span>Gryph</span>
-              <sup>
-                OSS &middot; <b>{version}</b>
-              </sup>
-            </h1>
-            <div className="scroll-cue" aria-hidden="true">
+        <header className="hero dots section">
+          <div className="wrap hero-in">
+            <span className="pill">
               <i />
+              Gryph OSS &middot; <span className="ver">{version}</span>
+            </span>
+            <h1>
+              A security layer for <span className="hl-box">AI coding agents.</span>
+            </h1>
+            <p className="lead">
+              <span>See every file, command and web request your agent makes.</span>{' '}
+              <span>Block the risky ones before they run.</span>
+            </p>
+            <div className="actions">
+              <a className="btn btn-coin" href={PROTECT}>
+                Protect your agents
+                <Arrow />
+              </a>
+              <a className="btn" href={REPO_URL}>
+                <GitHubMark />
+                GitHub
+              </a>
+              <a className="btn" href={DOCS_URL}>
+                Docs
+              </a>
             </div>
+            <p className="hero-note">Local. Open source. No account.</p>
           </div>
-        </section>
+        </header>
 
-        <section className="scene" data-scene="2" id="overview">
-          <div className="stage">
-            <div className="copy">
-              <h2>Everyone runs YOLO mode. Gryph keeps the receipts.</h2>
-              <div className="agent-stack" aria-hidden="true">
-                <img className="tile t1" src="/agents/claude.webp" alt="" loading="lazy" />
-                <img className="tile t2" src="/agents/codex.png" alt="" loading="lazy" />
-                <img className="tile t3" src="/agents/cursor.png" alt="" loading="lazy" />
-              </div>
-              <div className="log-peek" aria-hidden="true">
-                <p className="sess">session a91f &middot; claude-code</p>
-                <p>
-                  <i>READ</i>readme.txt
-                </p>
-                <p>
-                  <i>WRITE</i>readme.txt
-                </p>
-                <p>
-                  <i>EXEC</i>ls -la
-                </p>
-                <p className="sess">session b23c &middot; cursor</p>
-                <p>
-                  <i>READ</i>src/auth/login.go
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="scene" data-scene="3" id="live">
-          <div className="stage">
-            <div className="copy wide">
-              <h2>Actions. Enforcement. Live.</h2>
-              <p>
-                <code>gryph logs --live</code> streams every action as your agent works, allowed or
-                blocked.
-              </p>
-              <div className="term" aria-label="Live gryph logs, monitoring a Claude Code session">
-                <div className="term-bar">
-                  <img className="term-icon" src="/agents/claude.webp" alt="" loading="lazy" />
-                  <span className="term-title">Claude Code &mdash; gryph logs --live</span>
-                  <span className="term-dots">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                </div>
-                <div className="term-body">
-                  <p className="term-line term-prompt">gryph logs --live</p>
-                  <p className="term-line">
-                    <b className="allow">ALLOW</b>
-                    <span className="term-verb">write</span>readme.txt
-                  </p>
-                  <p className="term-line">
-                    <b className="block">BLOCK</b>
-                    <span className="term-verb">exec</span>rm -rf /
-                  </p>
-                  <p className="term-line term-policy">policy: no-destructive &middot; claude-code</p>
-                  <p className="term-line">
-                    <b className="allow">ALLOW</b>
-                    <span className="term-verb">read</span>src/main.go
-                  </p>
-                  <p className="term-line term-cursor">
-                    <i />
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="scene" data-scene="4" id="problem">
-          <div className="stage">
-            <div className="copy">
-              <blockquote className="ask">
-                A developer asks Claude Code to refactor a module. It runs 47 tool calls in 90
-                seconds. Then the tests fail.
-              </blockquote>
-              <ul className="moments">
-                <li>
-                  <i />
-                  <p>Which files did it read before making changes?</p>
+        <section className="section section-sand" id="agents">
+          <div className="wrap">
+            <p className="kicker">Agents</p>
+            <h2 className="title-lg">
+              One install. <span className="hl-grape">Every agent.</span>
+            </h2>
+            <p className="lead">
+              <code>gryph install</code> finds the agents on your machine and hooks each one.
+            </p>
+            <ul className="agents">
+              {AGENTS.map((a) => (
+                <li key={a.name} className="agent">
+                  <Blob seed={a.seed} size={28} />
+                  {a.name}
                 </li>
-                <li>
-                  <i />
-                  <p>Did it run commands that were not expected?</p>
-                </li>
-                <li>
-                  <i />
-                  <p>Did it touch secrets, config or CI pipelines?</p>
-                </li>
-                <li>
-                  <i />
-                  <p>What did the file look like before and after?</p>
-                </li>
-              </ul>
-              <p className="aside">
-                Without Gryph, you're guessing. With Gryph, <code>gryph logs</code> shows
-                everything.
-              </p>
+              ))}
+            </ul>
+            <div className="dry-run">
+              <Cmd text="gryph install --dry-run" />
             </div>
+            <p className="aside">Preview first. Gryph backs up every config it changes.</p>
           </div>
         </section>
 
-        <section className="scene" data-scene="5" id="monitor">
-          <div className="stage">
-            <div className="copy">
-              <h2 className="word">Pipe it anywhere.</h2>
-              <p>JSON Lines exports flow into your dashboards and internal tools.</p>
-              <Cmd text="gryph export --since 1w" />
-              <div className="jsonl" aria-hidden="true">
-                <p>{'{"event":"file_read","agent":"claude-code"}'}</p>
-                <p>{'{"event":"command_exec","agent":"cursor"}'}</p>
-                <p>{'{"event":"file_write","agent":"pi-agent"}'}</p>
-              </div>
-              <p className="aside">
-                Lives in SQLite by default. Pipe it into your own tools, or OpenSearch for
-                centralized review.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className="scene" data-scene="6" id="policy">
-          <div className="stage">
-            <div className="copy">
-              <h2 className="word tight">
-                Block, Warn
-                <br />
-                Custom Policies
+        <section className="section section-cream" id="see">
+          <div className="wrap split">
+            <div>
+              <p className="kicker">See</p>
+              <h2 className="title-lg">
+                See what it did, <span className="hl-grape">not what it said.</span>
               </h2>
-              <p>A YAML rule, checked before the action runs.</p>
-              <div className="draft" aria-label="Example policy">
-                <div className="draft-head">
-                  <span>File</span>
-                  <b>policies/no-force-push.yaml</b>
-                  <span>Policy</span>
-                  <b>enforcing</b>
-                </div>
-                <div className="draft-body">
-                  <pre>
-                    {`version: "1"
+              <p className="lead">
+                Every read, write, command and web request, with sessions and line counts. Search
+                it later.
+              </p>
+              <Chips items={SEES} />
+            </div>
+            <Window title="gryph logs --live" dark status="live" label="Gryph live log of a Claude Code session">
+              <p>
+                <span className="t-prompt">$</span> <span className="t-cmd">gryph logs --live</span>
+              </p>
+              <p>
+                <b className="verdict verdict-allow">ALLOW</b> <span className="t-mute">read </span> src/cart.ts
+              </p>
+              <p>
+                <b className="verdict verdict-allow">ALLOW</b> <span className="t-mute">write</span> src/cart.ts{' '}
+                <span className="t-read">+12</span> <span className="t-block">-3</span>
+              </p>
+              <p>
+                <b className="verdict verdict-allow">ALLOW</b> <span className="t-mute">exec </span> npm test
+              </p>
+              <p>
+                <b className="verdict verdict-block">BLOCK</b> <span className="t-mute">read </span>{' '}
+                <span className="t-mute">[sensitive]</span>
+              </p>
+              <p>
+                <b className="verdict verdict-block">BLOCK</b> <span className="t-mute">exec </span> git push origin
+                main --force
+              </p>
+              <p>
+                <b className="verdict verdict-allow">ALLOW</b> <span className="t-mute">read </span> src/checkout.ts
+                <Cursor />
+              </p>
+            </Window>
+          </div>
+        </section>
+
+        <section className="section" id="rules">
+          <div className="wrap split">
+            <div>
+              <p className="kicker">Rules</p>
+              <h2 className="title-lg">
+                Stop the risky move <span className="hl-grape">before it runs.</span>
+              </h2>
+              <p className="lead">Write a short rule. Gryph blocks the action and tells your agent why.</p>
+              <Chips items={DECISIONS} />
+              <p className="aside">
+                Rules are off by default. Turn them on with{' '}
+                <code>gryph config set policy.enabled true</code>.
+              </p>
+            </div>
+            <div className="stack">
+              <Window title="policy.yaml" status="enforcing" label="Example policy">
+                <pre>
+                  {`version: "1"
 rules:
   - id: no-force-push
-    `}
-                    <mark>action: block</mark>
-                    {`
+    action: `}
+                  <span className="tag tag-block">block</span>
+                  {`
     match:
       action_types: [command_exec]
-      command_patterns: ['git push .*--force']
+      command_patterns: ['git push.* (-f|--force)']
     message: Force push needs a human.
 
-  - id: warn-session-write-volume
-    action: warn
-    condition: context.files_written >= 25`}
-                  </pre>
-                </div>
-              </div>
-              <p className="aside">
-                A blocked action never reaches the agent's tool. Guidance goes back to it as plain
-                text. Gryph records every decision.
-              </p>
+  - id: ask-before-publish
+    action: `}
+                  <span className="tag tag-guide">escalate</span>
+                  {`
+    match:
+      action_types: [command_exec]
+      command_patterns: ['npm publish.*']
+    message: Publishing needs my OK.`}
+                </pre>
+              </Window>
+              <Window title="Claude Code" dark label="The agent sees why Gryph blocked it">
+                <p>
+                  <span className="t-prompt">&gt;</span> <span className="t-cmd">git push origin main --force</span>
+                </p>
+                <p>
+                  <b className="verdict verdict-block">BLOCK</b> Force push needs a human.
+                </p>
+                <p>
+                  <span className="t-prompt">&gt;</span> <span className="t-cmd">git push origin fix-cart</span>
+                  <Cursor />
+                </p>
+              </Window>
             </div>
           </div>
         </section>
 
-        <section className="scene" data-scene="7" id="agents">
-          <div className="stage">
-            <div className="copy">
-              <h2>Works with the agent you already run.</h2>
-              <ul className="tiles">
-                {AGENTS.map((a) => (
-                  <li key={a.name} className={a.dark ? 'logo dark' : 'logo'}>
-                    <img src={`/agents/${a.img}`} alt="" loading="lazy" />
-                    <h3>{a.name}</h3>
-                  </li>
-                ))}
-              </ul>
-              <p className="aside">One command hooks every agent it finds. No per-agent setup.</p>
+        <Intent />
+
+        <section className="section section-cream" id="trust">
+          <div className="wrap">
+            <p className="kicker">Trust</p>
+            <h2 className="title-lg">
+              Runs on your machine. <span className="hl-grape">Stays there.</span>
+            </h2>
+            <p className="lead">No account, no cloud and no telemetry. You can remove it with one command.</p>
+            <ul className="trust">
+              {TRUST.map((t) => (
+                <li key={t.kicker} className={`card card-lift ${t.tone}`}>
+                  <span className="kicker">{t.kicker}</span>
+                  <h3>{t.title}</h3>
+                  <p>{t.text}</p>
+                </li>
+              ))}
+            </ul>
+            <div className="uninstall">
+              <Cmd text="gryph uninstall --purge --restore-backup" />
             </div>
           </div>
         </section>
 
-        <section className="scene closing" data-scene="8" id="install">
-          <div className="stage">
-            <div className="copy">
-              <h2>Protect your agents.</h2>
-              <p className="soft">Install Gryph, then hook every agent it finds.</p>
-              <InstallTabs />
-              <Cmd text="gryph install && gryph status" />
+        <section className="section section-ink" id="install">
+          <div className="wrap closing">
+            <div>
+              <h2 className="title-lg">
+                Keep YOLO mode. <span className="hl-coin">Keep control.</span>
+              </h2>
+              <p className="lead">Install Gryph, then run one command to hook every agent.</p>
               <div className="actions">
-                <a className="btn fill" href={PROTECT}>
+                <a className="btn btn-coin btn-on-ink" href={PROTECT}>
                   Protect your agents
+                  <Arrow />
                 </a>
-                <a className="btn" href={REPO_URL}>
+                <a className="btn btn-on-ink" href={REPO_URL}>
+                  <GitHubMark />
                   Star on GitHub
                 </a>
               </div>
+            </div>
+            <div className="install">
+              <InstallTabs />
+              <Cmd text="gryph install" />
+              <p className="install-note">Apache 2.0. Linux, macOS and Windows.</p>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="scene foot" data-scene="9">
-        <div className="stage">
-          <Crumbs brandHref="#top" brandLabel="Back to top" />
-          <nav aria-label="Footer">
-            <a href="#overview">Overview</a>
-            <a href="#live">How it works</a>
-            <a href={DOCS_URL}>Docs</a>
-            <a href={PROTECT}>Protect your agents</a>
-            <a href={REPO_URL}>GitHub</a>
-            <a href={DISCORD_URL}>Discord</a>
-          </nav>
-          <Copyright />
-        </div>
-      </footer>
+      <Footer
+        note={
+          <>
+            Running a team? Gryph supports <a href={DOCS_URL}>managed installs</a> and compliance
+            reports.
+          </>
+        }
+      >
+        <a href="#agents">Agents</a>
+        <a href="#rules">Rules</a>
+        <a href={DOCS_URL}>Docs</a>
+        <a href={REPO_URL}>GitHub</a>
+        <a href={DISCORD_URL}>Discord</a>
+        <a href={PROTECT}>Protect your agents</a>
+      </Footer>
     </>
+  )
+}
+
+function Chips({ items }: { items: string[] }) {
+  return (
+    <ul className="chips">
+      {items.map((c) => (
+        <li key={c}>{c}</li>
+      ))}
+    </ul>
   )
 }
