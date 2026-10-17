@@ -127,7 +127,7 @@ interface BlobProps {
 }
 
 export function Blob({ seed, size = 48, expression = 'idle', title }: BlobProps) {
-  const r = rng(hash(seed.trim().toLowerCase() + '·cart'))
+  const r = rng(hash(seed.trim().toLowerCase() + '\u00b7cart'))
   r()
   r()
   r()

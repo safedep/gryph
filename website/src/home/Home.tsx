@@ -39,7 +39,7 @@ const TRUST = [
     tone: 'tone-grape',
     kicker: 'Self-protection',
     title: 'Guards its own setup',
-    text: "With rules on, the agent cannot edit Gryph's files or hooks.",
+    text: 'With rules on, Gryph blocks agent tools from editing its files and hooks.',
   },
 ]
 
