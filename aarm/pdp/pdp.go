@@ -916,6 +916,8 @@ func conditionEnv() (*cel.Env, error) {
 				cel.BinaryBinding(celGlob))),
 		cel.Function("known_hosts",
 			cel.Overload("known_hosts_list", []*cel.Type{cel.ListType(cel.StringType)}, cel.ListType(cel.StringType),
+				cel.UnaryBinding(celKnownHosts)),
+			cel.Overload("known_hosts_string", []*cel.Type{cel.StringType}, cel.ListType(cel.StringType),
 				cel.UnaryBinding(celKnownHosts))),
 	)
 }
@@ -945,7 +947,12 @@ func celGlob(path, pattern ref.Val) ref.Val {
 // celKnownHosts implements known_hosts(hosts). It drops the unknown host,
 // so a rule that reads it matches only the hosts that Gryph could read. A
 // rule that reads the list itself keeps the unknown host and fails closed.
+// A single host, such as the host of an entry, gives a list of zero or one.
+// An entry with no host has the empty host, which is not a host.
 func celKnownHosts(hosts ref.Val) ref.Val {
+	if h, ok := hosts.(types.String); ok {
+		hosts = types.NewStringList(types.DefaultTypeAdapter, []string{string(h)})
+	}
 	list, ok := hosts.(traits.Lister)
 	if !ok {
 		return types.NewErr("known_hosts: want list(string)")
@@ -956,7 +963,7 @@ func celKnownHosts(hosts ref.Val) ref.Val {
 		if !ok {
 			return types.NewErr("known_hosts: want list(string)")
 		}
-		if string(h) != shellcmd.UnknownHost {
+		if h != "" && string(h) != shellcmd.UnknownHost {
 			known = append(known, string(h))
 		}
 	}

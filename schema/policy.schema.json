@@ -106,7 +106,7 @@
         },
         "condition": {
           "type": "string",
-          "description": "CEL expression returning bool. Evaluated after `match` succeeds. Variables: action.{type,tool,operation,agent,working_dir,project,kind,origin,source,hosts,read_paths,write_paths,params.{path,command,args,url,size_bytes,lines_added,lines_removed,content}}, context.{total_actions,files_read,files_written,commands_executed,network_requests,errors,tools_used,session_duration_ms,classifications_seen,tags_seen,tag_seq,origins_seen,entities_seen,egress_hosts,entries,intent_available,actions_since_intent}. Function glob(path, pattern) matches a doublestar pattern. Sandboxed; 100ms timeout."
+          "description": "CEL expression returning bool. Evaluated after `match` succeeds. Variables: action.{type,tool,operation,agent,working_dir,project,kind,origin,source,hosts,read_paths,write_paths,params.{path,command,args,url,size_bytes,lines_added,lines_removed,content}}, context.{total_actions,files_read,files_written,commands_executed,network_requests,errors,tools_used,session_duration_ms,classifications_seen,tags_seen,tag_seq,origins_seen,entities_seen,egress_hosts,entries,intent_available,actions_since_intent}. Function glob(path, pattern) matches a doublestar pattern. Function known_hosts(hosts) removes the unknown host \"?\" from a host list or a host. Sandboxed; 100ms timeout."
         },
         "description": {
           "type": "string",

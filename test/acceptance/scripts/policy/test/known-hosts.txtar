@@ -13,7 +13,7 @@ stdout '"decision": "allow"'
 
 exec gryph policy test --file known.yaml --action command_exec --command 'curl https://evil.example' --format json --no-color
 stdout '"decision": "block"'
-stdout 'evil.example'
+stdout '"message": "Blocked: evil.example"'
 
 -- strict.yaml --
 version: "1"

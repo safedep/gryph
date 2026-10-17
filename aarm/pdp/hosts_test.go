@@ -61,13 +61,40 @@ rules:
 	}
 }
 
-func TestKnownHosts_RejectsAString(t *testing.T) {
+func TestKnownHosts_EntryHost(t *testing.T) {
+	engine := mustPDP(t, `
+version: "1"
+rules:
+  - id: known-entry-host
+    action: block
+    condition: 'context.entries.exists(e, size(known_hosts(e.host)) > 0)'
+`)
+	cases := []struct {
+		name string
+		host string
+		want model.Decision
+	}{
+		{"known host", "a.example", model.DecisionBlock},
+		{"unknown host", shellcmd.UnknownHost, model.DecisionAllow},
+		{"no host", "", model.DecisionAllow},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot := &model.ContextSnapshot{Entries: []model.EntryFacts{{Seq: 1, Kind: "action", Host: tc.host}}}
+			res, err := engine.Evaluate(context.Background(), &model.Action{Type: model.ActionCommandExec}, snapshot)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, res.Decision)
+		})
+	}
+}
+
+func TestKnownHosts_RejectsANumber(t *testing.T) {
 	_, err := ParsePolicy([]byte(`
 version: "1"
 rules:
   - id: bad
     action: block
-    condition: 'size(known_hosts("a.example")) > 0'
+    condition: 'size(known_hosts(1)) > 0'
 `))
 	assert.ErrorContains(t, err, "known_hosts")
 }
