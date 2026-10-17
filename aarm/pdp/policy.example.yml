@@ -188,6 +188,10 @@ rules:
   #   context.actions_since_intent   int
   #   context.entries                list<map>     (the latest entries)
   #
+  # known_hosts(hosts) removes "?" from a list of hosts. A rule that reads
+  # known_hosts(action.hosts) sees only the hosts that Gryph can read. A
+  # rule that reads action.hosts takes "?" as a host and fails closed.
+  #
   # glob(path, pattern) matches one path against one doublestar pattern. It
   # does not match a directory that holds a matching path. file_patterns
   # with file_access: [read] do.

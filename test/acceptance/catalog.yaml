@@ -1071,6 +1071,13 @@
   guarantee: "gryph policy test --context-file evaluates a rule on tags_seen and entries from a YAML file, --kind and --origin set the action facts, and an unknown key in the file is an error."
   labels: [policy, test, context]
 
+- id: policy/test/known-hosts
+  title: "a rule chooses how it treats the unknown host"
+  category: policy
+  tier: P1
+  guarantee: "A rule on action.hosts takes the unknown host ? as a host and blocks eval \"$(brew shellenv)\". A rule on known_hosts(action.hosts) allows that command and still blocks a command with a host that Gryph can read."
+  labels: [policy, test, hosts]
+
 - id: policy/validate/semantic-drift-removed
   title: "a policy on semantic_drift fails validation"
   category: policy

@@ -1,0 +1,34 @@
+# A rule chooses how it treats the unknown host "?". A rule on action.hosts
+# takes "?" as a host and blocks. A rule on known_hosts(action.hosts) sees
+# only the hosts that Gryph can read.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+
+exec gryph policy test --file strict.yaml --action command_exec --command 'eval "$(brew shellenv)"' --format json --no-color
+stdout '"decision": "block"'
+
+exec gryph policy test --file known.yaml --action command_exec --command 'eval "$(brew shellenv)"' --format json --no-color
+stdout '"decision": "allow"'
+
+exec gryph policy test --file known.yaml --action command_exec --command 'curl https://evil.example' --format json --no-color
+stdout '"decision": "block"'
+stdout 'evil.example'
+
+-- strict.yaml --
+version: "1"
+rules:
+  - id: block-egress
+    action: block
+    match:
+      action_types: [command_exec]
+    condition: 'size(action.hosts) > 0'
+-- known.yaml --
+version: "1"
+rules:
+  - id: block-known-egress
+    action: block
+    match:
+      action_types: [command_exec]
+    condition: 'size(known_hosts(action.hosts)) > 0'
+    message: "Blocked: {{range $i, $h := .Action.Hosts}}{{if $i}}, {{end}}{{$h}}{{end}}"
