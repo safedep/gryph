@@ -3,22 +3,8 @@ import type { CSSProperties } from 'react'
 // Blobatars from the Cartridge design system. The seed alone picks the tone, the shape and the face,
 // so one name always gives the same blob.
 
-const HEX = {
-  coin: '#FFC93C',
-  'coin-soft': '#FFF1C7',
-  cherry: '#E8574F',
-  'cherry-soft': '#FBDAD6',
-  mint: '#4FBF86',
-  'mint-soft': '#D4F1E1',
-  sky: '#5BB8DE',
-  'sky-soft': '#D7EEF8',
-  grape: '#8E7BE0',
-  'grape-soft': '#E5DFFB',
-  peach: '#F59E62',
-  'peach-soft': '#FCE3CF',
-}
-
-const INK = '#1A1320'
+const INK = 'var(--ink-900)'
+const WHITE = 'var(--white)'
 const TONES = ['coin', 'cherry', 'mint', 'sky', 'grape', 'peach'] as const
 const SHAPES = ['round', 'boxy', 'wobble', 'cloud', 'sun', 'droplet'] as const
 
@@ -97,7 +83,7 @@ function Eye({ x, y, kind, w, h }: EyeProps) {
       ) : (
         <ellipse cx={x} cy={y} rx={w} ry={h} style={{ fill: INK }} />
       )}
-      <rect x={x - (r || w) * 0.5} y={y - (r || h) * 0.6} width={3} height={3} style={{ fill: '#FFFFFF' }} />
+      <rect x={x - (r || w) * 0.5} y={y - (r || h) * 0.6} width={3} height={3} style={{ fill: WHITE }} />
     </g>
   )
 }
@@ -156,14 +142,14 @@ export function Blob({ seed, size = 48, expression = 'idle', title }: BlobProps)
       aria-label={title}
       aria-hidden={title ? undefined : true}
     >
-      <path d={body} style={{ fill: HEX[tone], stroke: INK, strokeWidth: 3.5, strokeLinejoin: 'round' }} />
+      <path d={body} style={{ fill: `var(--${tone})`, stroke: INK, strokeWidth: 3.5, strokeLinejoin: 'round' }} />
       <path
         d={body}
         transform="translate(50 53) scale(0.78) translate(-50 -53) translate(-3 -5)"
-        style={{ fill: '#FFFFFF', opacity: 0.18 }}
+        style={{ fill: WHITE, opacity: 0.18 }}
       />
       {f.cheeks && (
-        <g style={{ fill: HEX.cherry, opacity: 0.35 }}>
+        <g style={{ fill: 'var(--cherry)', opacity: 0.35 }}>
           <ellipse cx={50 - gap - 5} cy={eyeY + 8} rx={4} ry={2.6} />
           <ellipse cx={50 + gap + 5} cy={eyeY + 8} rx={4} ry={2.6} />
         </g>

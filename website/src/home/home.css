@@ -9,7 +9,7 @@
 .hero .actions { justify-content: center; }
 .hl-box { color: var(--sky-deep); background: var(--sky-soft); padding: 0 8px; box-shadow: 4px 4px 0 var(--sky); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 
-/* two columns: copy on the left, a window on the right */
+/* The split puts the copy on the left and a window on the right. */
 .split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(28px, 5vw, 56px); align-items: center; }
 .split .cmd { margin-top: 24px; }
 @media (max-width: 860px) {
@@ -19,11 +19,11 @@
 .lead code { font-size: 0.9em; font-weight: 600; color: var(--ink-900); }
 .hero-note { font: 12px var(--font-mono); color: var(--ink-500); letter-spacing: 0.04em; }
 
-/* small labels under a section lead */
+/* Chips are small labels under a section lead. */
 .chips { list-style: none; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
 .chips li { padding: 4px 10px; background: var(--white); border: var(--line); box-shadow: var(--shadow-xs); font: 600 12px var(--font-mono); }
 
-/* rules: the policy and the agent view, one above the other */
+/* The rules section stacks the policy above the agent view. */
 .stack { display: grid; gap: 24px; min-width: 0; }
 .stack pre { white-space: pre; overflow-wrap: normal; }
 #rules .split { align-items: start; }
@@ -42,11 +42,11 @@
   .closing { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* agents: a lighter band */
+/* The agents section uses a shorter band. */
 #agents .wrap { padding-top: 56px; padding-bottom: 56px; }
 #agents .agents { margin-top: 28px; }
 
-/* next: a preview of intent checks, not shipped */
+/* This section shows planned intent checks. They are not in a release yet. */
 #next .split { align-items: start; }
 .kicker-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .soon { display: inline-block; padding: 5px 8px 4px; background: var(--coin); border: var(--line); box-shadow: var(--shadow-xs); font: 10px/1 var(--font-pixel); text-transform: uppercase; color: var(--ink-900); }

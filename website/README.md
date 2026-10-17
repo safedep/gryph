@@ -34,7 +34,7 @@ npx wrangler deploy
 
 The site uses the Cartridge design system. Find the styles in `src/shared/`:
 
-- `tokens.css` holds the colours, fonts, borders and shadows. Do not write a colour or a shadow outside this file.
+- `tokens.css` holds the colours, fonts, borders and shadows. Do not write a colour value outside this file. Build each shadow from these tokens.
 - `base.css` holds the reset and the global element styles.
 - `components.css` holds the shared parts: buttons, cards, windows, tabs, commands, agents and the footer.
 

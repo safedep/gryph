@@ -328,7 +328,7 @@ function Finish({ done, firstOpen, onReset }: FinishProps) {
   return (
     <section className="intro dots" aria-labelledby="finish-title">
       <div className="intro-card">
-        <Window title={'gryph \u00b7 completion receipt'} dark>
+        <Window title={'gryph \u00b7 your setup'} dark>
           <p>
             milestones ......... <b className="t-read">{`${TOTAL}/${TOTAL}`} <Check /></b>
           </p>
@@ -336,19 +336,19 @@ function Finish({ done, firstOpen, onReset }: FinishProps) {
             agents hooked ...... <b>1</b>
           </p>
           <p>
-            policy ............. <b className="t-exec">enforcing</b>
+            policy ............. <b className="t-exec">turned on</b>
           </p>
           <p>
-            blocks recorded .... <b className="t-block">1</b>
+            block .............. <b className="t-block">tested</b>
           </p>
           <p>
-            chain .............. <b className="t-read">verified <Check /></b>
+            chain .............. <b className="t-read">checked <Check /></b>
           </p>
         </Window>
         <div className="finish-body">
           <Blob seed="gryph" expression="happy" size={72} title="Gryph mascot" />
           <p className="pixel finish-tag">You completed all {TOTAL} steps</p>
-          <h1 id="finish-title">Gryph now protects your agents.</h1>
+          <h1 id="finish-title">You set up Gryph for your agents.</h1>
           <ol className="milestones">
             {MILESTONES.map((m) => (
               <li key={m.id}>
