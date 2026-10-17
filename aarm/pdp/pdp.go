@@ -946,7 +946,7 @@ func celGlob(path, pattern ref.Val) ref.Val {
 
 // celKnownHosts implements known_hosts(hosts). It drops the unknown host,
 // so a rule that reads it matches only the hosts that Gryph could read. A
-// rule that reads the list itself keeps the unknown host and fails closed.
+// rule that reads the list itself also sees the unknown host.
 // A single host, such as the host of an entry, gives a list of zero or one.
 // An entry with no host has the empty host, which is not a host.
 func celKnownHosts(hosts ref.Val) ref.Val {

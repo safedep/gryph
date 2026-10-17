@@ -191,7 +191,8 @@ rules:
   # known_hosts(hosts) removes "?" from a list of hosts, or from one host
   # such as e.host of an entry. A rule that reads
   # known_hosts(action.hosts) sees only the hosts that Gryph can read. A
-  # rule that reads action.hosts takes "?" as a host and fails closed.
+  # rule that reads action.hosts also sees "?". size(action.hosts) > 0
+  # matches "?". A condition that names a host does not.
   #
   # glob(path, pattern) matches one path against one doublestar pattern. It
   # does not match a directory that holds a matching path. file_patterns
