@@ -142,9 +142,18 @@ func trustedSIDs(user *windows.SID) ([]*windows.SID, error) {
 func restrictCommand(path string, user, other *windows.SID) string {
 	remove := ""
 	if other != nil {
-		remove = " /remove:g " + quote(accountName(other))
+		remove = " /remove:g " + quote(icaclsPrincipal(other))
 	}
-	return "icacls " + quote(path) + " /inheritance:r" + remove + " /grant:r " + quote(accountName(user)+":F")
+	return "icacls " + quote(path) + " /inheritance:r" + remove + " /grant:r " + quote(icaclsPrincipal(user)+":F")
+}
+
+// icaclsPrincipal names sid for icacls. icacls reads a bare SID string as
+// an account name, so a SID with no account name needs the * prefix.
+func icaclsPrincipal(sid *windows.SID) string {
+	if name, ok := lookupAccountName(sid); ok {
+		return name
+	}
+	return "*" + sid.String()
 }
 
 // quote wraps s in double quotes for cmd.exe and PowerShell. A Windows path
@@ -155,14 +164,21 @@ func quote(s string) string {
 }
 
 func accountName(sid *windows.SID) string {
+	if name, ok := lookupAccountName(sid); ok {
+		return name
+	}
+	return sid.String()
+}
+
+func lookupAccountName(sid *windows.SID) (string, bool) {
 	account, domain, _, err := sid.LookupAccount("")
 	if err != nil {
-		return sid.String()
+		return "", false
 	}
 	if domain == "" {
-		return account
+		return account, true
 	}
-	return domain + `\` + account
+	return domain + `\` + account, true
 }
 
 // syncDir does nothing. Windows cannot sync a directory handle, and NTFS

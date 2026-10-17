@@ -85,3 +85,13 @@ func setDACL(t *testing.T, path, sddl string) {
 	require.NoError(t, windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT,
 		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil))
 }
+
+func TestIcaclsPrincipal(t *testing.T) {
+	unknown, err := windows.StringToSid("S-1-5-21-1-2-3-4567")
+	require.NoError(t, err)
+	assert.Equal(t, "*S-1-5-21-1-2-3-4567", icaclsPrincipal(unknown))
+
+	everyone, err := windows.CreateWellKnownSid(windows.WinWorldSid)
+	require.NoError(t, err)
+	assert.NotContains(t, icaclsPrincipal(everyone), "*")
+}

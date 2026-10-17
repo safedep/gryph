@@ -13,7 +13,7 @@ exists $WORK/data/export.key
 exec gryph export
 
 exec icacls $WORK/data/export.key /grant Everyone:R
-! exec gryph export
+execexit 2 gryph export
 stderr 'grants access to Everyone'
 stderr 'icacls "[A-Za-z]:\\[^"]*\\export\.key" /inheritance:r /remove:g "Everyone" /grant:r "[^"]+:F"'
 ! stderr '\\\\'
