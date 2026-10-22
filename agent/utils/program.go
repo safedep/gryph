@@ -77,6 +77,10 @@ func VersionToken(s string) string {
 		if f[0] >= '0' && f[0] <= '9' {
 			return f
 		}
+		// OpenCode prints "opencode v2.1.2".
+		if (f[0] == 'v' || f[0] == 'V') && len(f) > 1 && f[1] >= '0' && f[1] <= '9' {
+			return f[1:]
+		}
 	}
 	return fields[0]
 }

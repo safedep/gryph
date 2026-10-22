@@ -158,6 +158,13 @@ per-user state. The exit code is 0 for the locked profile and 1 otherwise.`,
 						}
 						hookCheck.Suggestion = "Run 'gryph install --force --agent " + adapter.Name() + "'"
 						v.AllOK = false
+					} else if hookStatus.CompatibilityUnverified {
+						hookCheck.Status = tui.CheckWarn
+						hookCheck.Message = "Hooks are valid but runtime compatibility is unverified"
+						if len(hookStatus.Issues) > 0 {
+							hookCheck.Message += ": " + hookStatus.Issues[0]
+						}
+						hookCheck.Suggestion = "Make sure '" + adapter.Name() + " --version' works, then run 'gryph install --force --agent " + adapter.Name() + "'"
 					} else if missing := agent.MissingPromptHooks(adapter.Hooks(), hookStatus.Hooks); len(missing) > 0 {
 						hookCheck.Status = tui.CheckWarn
 						hookCheck.Message = "Prompt hook not installed: " + strings.Join(missing, ", ")

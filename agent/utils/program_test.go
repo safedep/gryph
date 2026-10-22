@@ -18,6 +18,7 @@ func TestVersionToken(t *testing.T) {
 	}{
 		{"2.1.15 (Claude Code)\n", "2.1.15"},
 		{"codex-cli 0.5.0", "0.5.0"},
+		{"opencode v2.1.2", "2.1.2"},
 		{"  0.26.0  ", "0.26.0"},
 		{"dev", "dev"},
 		{"", ""},

@@ -109,6 +109,10 @@ type HookStatus struct {
 	Hooks []string
 	// Valid indicates if all hooks are valid (not corrupted).
 	Valid bool
+	// CompatibilityUnverified indicates that the hook content is intact but
+	// the agent version could not be read, so runtime compatibility is
+	// unknown. This is separate from Valid, which only covers content.
+	CompatibilityUnverified bool
 	// Issues lists any problems with the hooks.
 	Issues []string
 }

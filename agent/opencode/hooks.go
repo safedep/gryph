@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/safedep/gryph/agent"
@@ -17,6 +19,9 @@ import (
 //go:embed plugin.js
 var pluginJS []byte
 
+//go:embed plugin-v2.js
+var pluginV2JS []byte
+
 // legacyPluginDigests are the SHA-256 digests of the plugin files that
 // Gryph v0.2.5 to v0.9.0 installed. These plugins block like the current
 // plugin, but have no prompt hook.
@@ -26,6 +31,58 @@ var legacyPluginDigests = []string{
 
 func processedPlugin(program string) []byte {
 	return utils.RenderPlugin(pluginJS, program)
+}
+
+func processedPluginV2(program string) []byte {
+	return utils.RenderPlugin(pluginV2JS, program)
+}
+
+// openCodeMajor returns the major version of the OpenCode CLI. The second
+// result is false when no numeric version can be read from the output.
+func openCodeMajor(version string) (int, bool) {
+	// OpenCode prints "opencode v2.1.2". VersionToken returns the first field
+	// when no field starts with a digit, so it would return "opencode" here.
+	// Scan every field instead.
+	for _, field := range strings.Fields(version) {
+		field = strings.TrimPrefix(field, "v")
+		major, err := strconv.Atoi(strings.SplitN(field, ".", 2)[0])
+		if err == nil {
+			return major, true
+		}
+	}
+	return 0, false
+}
+
+// pluginContent returns the plugin file for the installed OpenCode version.
+// It reports false when the version is unknown, because guessing would install
+// a plugin that OpenCode ignores.
+func pluginContent(program, version string) ([]byte, bool) {
+	major, ok := openCodeMajor(version)
+	if !ok {
+		return nil, false
+	}
+	if major >= 2 {
+		return processedPluginV2(program), true
+	}
+	// 0.x and 1.x share the V1 plugin shape.
+	return processedPlugin(program), true
+}
+
+func isV2Plugin(content []byte) bool {
+	return bytes.Contains(content, []byte("export default"))
+}
+
+// installedForVersion reports whether content is already the plugin for the
+// detected OpenCode major version. An unknown version accepts either form.
+func installedForVersion(content []byte, version string) bool {
+	if !bytes.Contains(content, []byte("invokeGryph")) {
+		return false
+	}
+	major, ok := openCodeMajor(version)
+	if !ok {
+		return true
+	}
+	return isV2Plugin(content) == (major >= 2)
 }
 
 // Hooks declares the OpenCode hooks Gryph installs and parses. Phase and
@@ -72,11 +129,17 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 
 	if _, err := os.Stat(pluginFile); err == nil && !opts.Force && !opts.DryRun {
 		existing, readErr := os.ReadFile(pluginFile)
-		if readErr == nil && bytes.Contains(existing, []byte("invokeGryph")) {
+		if readErr == nil && installedForVersion(existing, detection.Version) {
 			result.Warnings = append(result.Warnings, "gryph plugin already installed (use --force to overwrite)")
 			result.Success = true
 			return result, nil
 		}
+	}
+
+	content, ok := pluginContent(opts.Command, detection.Version)
+	if !ok {
+		result.Error = fmt.Errorf("could not determine the OpenCode version; make sure `opencode --version` prints a version, then rerun `gryph install`")
+		return result, result.Error
 	}
 
 	if opts.Backup && !opts.DryRun {
@@ -117,7 +180,7 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 		return result, result.Error
 	}
 
-	if err := agent.WriteHookFile(pluginFile, processedPlugin(opts.Command), 0644, opts); err != nil {
+	if err := agent.WriteHookFile(pluginFile, content, 0644, opts); err != nil {
 		result.Error = fmt.Errorf("failed to write plugin file: %w", err)
 		return result, result.Error
 	}
@@ -209,9 +272,28 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 		return status, nil
 	}
 
-	agent.SetPluginStatus(status, data, processedPlugin(""), legacyPluginDigests, Hooks,
+	major, versionKnown := openCodeMajor(detection.Version)
+	var expected []byte
+	switch {
+	case versionKnown && major >= 2:
+		expected = processedPluginV2("")
+	case versionKnown:
+		expected = processedPlugin("")
+	case isV2Plugin(data):
+		expected = processedPluginV2("")
+	default:
+		expected = processedPlugin("")
+	}
+	agent.SetPluginStatus(status, data, expected, legacyPluginDigests, Hooks,
 		func(hookType string) string { return `"` + hookType + `"` },
 		"plugin file differs from expected content (may need update)")
+
+	if !versionKnown {
+		status.CompatibilityUnverified = true
+		if status.Valid {
+			status.Issues = append(status.Issues, "OpenCode version could not be detected; cannot verify plugin compatibility")
+		}
+	}
 
 	return status, nil
 }
