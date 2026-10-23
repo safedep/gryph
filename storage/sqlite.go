@@ -330,7 +330,10 @@ func eventCreate(client *ent.Client, event *events.Event) (*ent.AuditEventCreate
 		SetID(event.ID).
 		SetSessionID(event.SessionID).
 		SetSequence(event.Sequence).
-		SetTimestamp(event.Timestamp).
+		// Timestamps are stored as text and compared lexicographically, so a
+		// retained offset (e.g. -05:00) would sort against a UTC cursor by wall
+		// clock, not instant. Normalize at the persistence boundary.
+		SetTimestamp(event.Timestamp.UTC()).
 		SetAgentName(event.AgentName).
 		SetActionType(auditevent.ActionType(event.ActionType)).
 		SetResultStatus(auditevent.ResultStatus(event.ResultStatus)).
@@ -470,9 +473,9 @@ func (s *SQLiteStore) QueryEvents(ctx context.Context, filter *events.EventFilte
 	}
 
 	if filter.IsAscending() {
-		query.Order(auditevent.ByTimestamp(entsql.OrderAsc()))
+		query.Order(auditevent.ByTimestamp(entsql.OrderAsc()), auditevent.ByID(entsql.OrderAsc()))
 	} else {
-		query.Order(auditevent.ByTimestamp(entsql.OrderDesc()))
+		query.Order(auditevent.ByTimestamp(entsql.OrderDesc()), auditevent.ByID(entsql.OrderDesc()))
 	}
 
 	// Apply limit and offset
@@ -845,6 +848,9 @@ func (s *SQLiteStore) QuerySelfAudits(ctx context.Context, filter *SelfAuditFilt
 
 // QueryEventsAfter retrieves events after the given time, ordered ascending.
 func (s *SQLiteStore) QueryEventsAfter(ctx context.Context, after time.Time, afterID uuid.UUID, limit int) ([]*events.Event, error) {
+	// Bounds reach the same text comparison as the stored timestamps, so a
+	// caller-supplied offset must not survive into the predicate.
+	after = after.UTC()
 	query := s.client.AuditEvent.Query()
 
 	if afterID != uuid.Nil {
@@ -1210,10 +1216,10 @@ func buildEventPredicates(filter *events.EventFilter) []predicate.AuditEvent {
 	var predicates []predicate.AuditEvent
 
 	if filter.Since != nil {
-		predicates = append(predicates, auditevent.TimestampGTE(*filter.Since))
+		predicates = append(predicates, auditevent.TimestampGTE((*filter.Since).UTC()))
 	}
 	if filter.Until != nil {
-		predicates = append(predicates, auditevent.TimestampLTE(*filter.Until))
+		predicates = append(predicates, auditevent.TimestampLTE((*filter.Until).UTC()))
 	}
 	if len(filter.AgentNames) > 0 {
 		predicates = append(predicates, auditevent.AgentNameIn(filter.AgentNames...))

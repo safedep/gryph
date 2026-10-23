@@ -6,24 +6,32 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/google/uuid"
 	"github.com/safedep/gryph/core/events"
 	"github.com/safedep/gryph/storage"
 )
 
-func pollEvents(store storage.ReadStore, after time.Time, agentFilter string, limit int) tea.Cmd {
+func pollEvents(store storage.ReadStore, cursor pollCursor, agentFilter string, limit int) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
-		evts, err := store.QueryEventsAfter(ctx, after, uuid.Nil, limit)
+		raw, err := store.QueryEventsAfter(ctx, cursor.at, cursor.id, limit)
 		if err != nil {
 			return pollErrorMsg{err: err}
 		}
 
-		if agentFilter != "" {
-			evts = filterByAgent(evts, agentFilter)
+		// Advance the cursor from the last raw event, not from the last
+		// displayed event. The agent filter can hide a whole batch.
+		next := cursor
+		if len(raw) > 0 {
+			last := raw[len(raw)-1]
+			next = pollCursor{at: last.Timestamp.UTC(), id: last.ID}
 		}
 
-		return newEventsMsg{events: evts}
+		shown := raw
+		if agentFilter != "" {
+			shown = filterByAgent(raw, agentFilter)
+		}
+
+		return newEventsMsg{events: shown, cursor: next}
 	}
 }
 
@@ -47,7 +55,14 @@ func loadInitialEvents(store storage.ReadStore, since time.Time, agentFilter str
 		}
 
 		slices.Reverse(evts)
-		return newEventsMsg{events: evts}
+
+		cursor := pollCursor{}
+		if len(evts) > 0 {
+			last := evts[len(evts)-1]
+			cursor = pollCursor{at: last.Timestamp.UTC(), id: last.ID}
+		}
+
+		return newEventsMsg{events: evts, cursor: cursor}
 	}
 }
 
