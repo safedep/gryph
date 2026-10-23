@@ -10,6 +10,8 @@ export interface Task {
 export interface Milestone {
   id: string
   title: string
+  // One word for the trail map on the intro.
+  short: string
   lede: string
   tasks: Task[]
   question: string
@@ -20,7 +22,7 @@ export interface Milestone {
 const SB = '/tmp/gryph-sandbox'
 
 export const MILESTONES: Milestone[] = [
-  { id: 'install', title: 'Install Gryph and add hooks',
+  { id: 'install', title: 'Install Gryph and add hooks', short: 'install',
     lede: 'Install Gryph. Add hooks to your agent. Then check the installation.',
     tasks: [
       { text: 'Install Gryph. Use one of these methods.', install: true, see: 'This puts the gryph command on your PATH.' },
@@ -32,7 +34,7 @@ export const MILESTONES: Milestone[] = [
     answers: ['No. It changes only the hook configuration.', 'Yes. It changes the program file.'],
     why: 'Gryph adds hooks to the agent configuration. It does not change the program file.' },
 
-  { id: 'session', title: 'Record your first session',
+  { id: 'session', title: 'Record your first session', short: 'record',
     lede: 'See the actions of an agent as they occur. Then examine the records.',
     tasks: [
       { text: 'Make an empty test directory.', cmd: `mkdir -p ${SB} && cd ${SB}`, see: 'Do not use a real project for this test.' },
@@ -45,7 +47,7 @@ export const MILESTONES: Milestone[] = [
     answers: ['Before the action runs and after it runs.', 'Only before the action runs.'],
     why: 'Gryph records each action before it runs and after it runs.' },
 
-  { id: 'query', title: 'Find and export events',
+  { id: 'query', title: 'Find and export events', short: 'find',
     lede: 'Use filters, diffs and exports to find what an agent did.',
     tasks: [
       { text: 'Show one type of action.', cmd: 'gryph query --action file_write --today', see: 'Types include file_read, file_write, command_exec and network_request.' },
@@ -57,7 +59,7 @@ export const MILESTONES: Milestone[] = [
     answers: ['gryph export', 'gryph diff'],
     why: 'gryph export does not include sensitive events. To include them, add --sensitive. For most audit reports, you need only gryph export and jq.' },
 
-  { id: 'privacy', title: 'Control privacy and detail',
+  { id: 'privacy', title: 'Control privacy and detail', short: 'privacy',
     lede: 'Learn how Gryph records sensitive files. Set the quantity of detail that Gryph records.',
     tasks: [
       { text: 'Tell your agent to read a secret file.', ask: 'Read the .env file in this directory.', see: 'Gryph records the action and marks it as sensitive. Gryph does not keep the content of the file.' },
@@ -69,7 +71,7 @@ export const MILESTONES: Milestone[] = [
     answers: ['No. Gryph never keeps the content.', 'Yes. Gryph encrypts the content.'],
     why: 'Gryph records that the agent used a sensitive file. It never keeps the content of that file.' },
 
-  { id: 'policy', title: 'Enforce a security policy',
+  { id: 'policy', title: 'Enforce a security policy', short: 'enforce',
     lede: 'Write a YAML policy. Test a CEL condition. Then enable the policy.',
     tasks: [
       { text: 'Write a sample policy file in your test directory.', cmd: `gryph policy init ${SB}/candidate.yml`, see: 'This file is not active yet.' },
@@ -83,7 +85,7 @@ export const MILESTONES: Milestone[] = [
     answers: ['The fields of the action and the counters of the session.', 'Only the fields of the action.'],
     why: 'A condition can read an action field, for example action.injection_score. It can also read a session counter, for example context.files_written. Use warn first. When you trust the rule, change it to block.' },
 
-  { id: 'authoring', title: 'Write a policy with your agent',
+  { id: 'authoring', title: 'Write a policy with your agent', short: 'write',
     lede: 'Install the skill for policy authoring. Tell your agent to write a rule. Examine the rule. Then install it yourself.',
     tasks: [
       { text: 'Install the skill for policy authoring.', cmd: 'npx skills add safedep/gryph --skill gryph-policy-authoring', see: 'It works with Claude Code, Cursor and other agents.' },
@@ -97,7 +99,7 @@ export const MILESTONES: Milestone[] = [
     answers: ['You install it. The agent writes the draft and tests it.', 'The agent installs it after the tests pass.'],
     why: 'The skill writes the draft and gives you the install command. Gryph does not let agents write to its configuration directory.' },
 
-  { id: 'receipts', title: 'Sign and verify receipts',
+  { id: 'receipts', title: 'Sign and verify receipts', short: 'sign',
     lede: 'Sign the receipts. Verify the chain. Export the receipts for an audit on a different computer.',
     tasks: [
       { text: 'Make an Ed25519 key pair to sign the receipts.', cmd: 'gryph policy keys generate', see: 'Receipts now include a signature.' },
@@ -108,7 +110,7 @@ export const MILESTONES: Milestone[] = [
     answers: ['It finds a change to the data in the database.', 'It encrypts the data.'],
     why: 'The chain finds a change to the data in the database. The signatures protect the export when you move it to a different computer.' },
 
-  { id: 'cost', title: 'Track cost and compare agents',
+  { id: 'cost', title: 'Track cost and compare agents', short: 'cost',
     lede: 'Track the token use. Compare the agents. Open the statistics dashboard.',
     tasks: [
       { text: 'Show the cost for today.', cmd: 'gryph cost --today', see: 'Gryph calculates it with prices from models.dev.' },
@@ -119,7 +121,7 @@ export const MILESTONES: Milestone[] = [
     answers: ['From models.dev', 'From a Gryph cloud service'],
     why: 'At the end of a session, Gryph calculates the cost with prices from models.dev. Gryph sends nothing by default. SafeDep Cloud is opt-in.' },
 
-  { id: 'housekeeping', title: 'Maintain and remove Gryph',
+  { id: 'housekeeping', title: 'Maintain and remove Gryph', short: 'maintain',
     lede: 'Keep the database small. Examine the actions that Gryph did on itself. Learn how to remove Gryph.',
     tasks: [
       { text: 'Preview the retention cleanup before you run it.', cmd: 'gryph retention cleanup --dry-run', see: 'Gryph lists the old rows it would remove.' },

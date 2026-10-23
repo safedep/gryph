@@ -2,20 +2,15 @@
 
 body { min-height: 100vh; min-height: 100svh; display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr); }
 
-/* ---------- XP meter in the top bar ---------- */
-.xp { display: flex; align-items: center; gap: 10px; }
-.xp-label { font-size: 8px; color: var(--fg-3); }
-.xp-bar { display: flex; gap: 3px; }
-.xp-bar i { display: block; width: 14px; height: 12px; border: var(--line); background: var(--surface); }
-.xp-bar i.on { background: var(--coin); }
-.xp-count { font: 700 12px var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-@media (max-width: 480px) {
-  .xp-label { display: none; }
-  .xp-bar i { width: 10px; }
-}
-
 /* ---------- screen 1: the intro ---------- */
 .intro { display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 48px var(--gutter); }
+.intro-hero { display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; max-width: 880px; }
+/* 82 monospace columns at about 0.6em each: scale the font so the map always fits the screen. */
+.trail { font-size: min(15px, calc((100vw - 40px) / 50)); line-height: 1.15; margin-bottom: 28px; max-width: 100%; }
+.intro-hero h1 { font-size: clamp(34px, 6vw, 52px); letter-spacing: -0.035em; }
+.intro-hero p { font-size: 17px; font-weight: 300; color: var(--fg-2); margin-bottom: 10px; }
+@media (max-width: 480px) {
+}
 .intro.dots { background-color: var(--bg-alt); }
 .intro-card { width: min(580px, 100%); background: var(--surface); border: var(--bw-card) solid var(--rule); box-shadow: var(--shadow-lg); }
 .intro-card .window { border: 0; box-shadow: none; border-bottom: var(--bw-card) solid var(--rule); }
@@ -28,42 +23,65 @@ body { min-height: 100vh; min-height: 100svh; display: grid; grid-template-rows:
 .intro-under p:not(.kicker) { font-size: 15px; color: var(--fg-3); margin-bottom: 8px; }
 
 /* ---------- screen 2: the guided setup ---------- */
-.guide { display: grid; grid-template-columns: 260px minmax(0, 1fr); align-items: stretch; }
+.guide { display: flex; flex-direction: column; }
+/* The guide sits in the same width as the other pages. */
+.guide-in { flex: 1; width: 100%; max-width: var(--max); margin: 0 auto; padding: 0 var(--gutter); display: grid; grid-template-columns: 240px minmax(0, 1fr); align-items: stretch; }
 
-.rail { padding: 24px 14px; background: var(--bg-alt); border-right: var(--line); }
-.rail .kicker { margin: 0 8px; }
-.rail .count { display: block; margin: 6px 8px 14px; font: 12px var(--font-mono); color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.rail { position: relative; overflow: clip; padding: 28px 16px 28px 0; border-right: var(--line); }
+/* Sidebar art: a faint column of texture behind the list, fading in toward the bottom. */
+.rail-art { position: absolute; inset: 0; font-size: 12px; opacity: 0.45; mask-image: linear-gradient(to bottom, transparent 8%, #000 70%); -webkit-mask-image: linear-gradient(to bottom, transparent 8%, #000 70%); }
+.rail .count { position: relative; z-index: 1; }
+.rail ol { z-index: 1; }
+.meter-line { flex: 1; max-width: 120px; height: 2px; border-radius: 2px; background: var(--fg-5); overflow: hidden; }
+.meter-line i { display: block; height: 100%; background: var(--mint); transition: width 300ms; }
+/* ASCII connectors between the step circles: solid green under finished steps, dashed grey ahead. */
+.rail li { position: relative; }
+.rail li + li::before {
+  content: "┆\A┆\A┆"; white-space: pre; position: absolute; left: 19px; top: -16px; height: 22px; overflow: hidden;
+  font: 10px/0.75 var(--font-mono); color: var(--fg-5); pointer-events: none;
+}
+.rail li:has(> a.done) + li::before { content: "│\A│\A│"; color: var(--mint); }
+.rail .count { display: flex; align-items: center; gap: 10px; margin: 0 0 16px; font: 12px var(--font-mono); color: var(--fg-3); font-variant-numeric: tabular-nums; }
 .rail ol { list-style: none; display: grid; gap: 4px; position: sticky; top: 76px; }
-.rail a { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: var(--bw) solid transparent; font: 500 13px/1.25 var(--font-mono); color: var(--fg-3); text-decoration: none; }
+.rail a { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: var(--bw) solid transparent; border-radius: 6px; font: 500 13px/1.25 var(--font-mono); color: var(--fg-3); text-decoration: none; }
 .rail a:hover { background: var(--bg-band); color: var(--fg); }
 .rail a.done { color: var(--fg-2); }
-.rail a.on { background: var(--coin-soft); border-color: var(--rule); color: var(--fg); font-weight: 700; }
-.rail .n { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border: var(--line); background: var(--surface); font: 700 11px var(--font-mono); color: var(--fg-3); }
+.rail a.on { background: var(--surface); border-color: var(--rule); color: var(--fg); font-weight: 600; }
+.rail .n { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border: var(--line); border-radius: 50%; background: var(--surface); font: 700 11px var(--font-mono); color: var(--fg-3); }
 .rail a.done .n { background: var(--mint); color: var(--on-accent); }
-.rail a.on .n { background: var(--coin); color: var(--on-accent); }
+.rail a.on .n { background: var(--fg); border-color: var(--fg); color: var(--bg); }
 
-.page { max-width: 976px; min-width: 0; padding: 40px 48px; display: flex; flex-direction: column; }
+.page { min-width: 0; padding: 48px max(32px, calc((100% - 760px) / 2)); display: flex; flex-direction: column; }
+
+/* Wide screens: the sidebar sticks under the top bar while the steps scroll with the page. The footer
+   sits after the steps, so it shows only when you reach the end. */
+@media (min-width: 901px) {
+  .guide-in { align-items: start; }
+  .guide .rail { position: sticky; top: 59px; height: calc(100vh - 59px); overflow-y: auto; scrollbar-width: none; }
+  .guide .rail ol { position: static; }
+  .guide .page { min-height: calc(100vh - 59px); }
+}
 .page h1 { font-size: clamp(26px, 4vw, 32px); line-height: 1.1; margin: 10px 0 16px; }
-.goal { display: flex; gap: 12px; align-items: baseline; max-width: 640px; margin-bottom: 32px; }
-.lede { font-size: 16px; line-height: 1.55; color: var(--fg-2); }
+.step-of { font: 500 12px var(--font-mono); color: var(--fg-3); }
+.lede { max-width: 640px; margin-bottom: 32px; font-size: 16px; line-height: 1.55; color: var(--fg-2); }
 
 .tasks { list-style: none; display: grid; gap: 24px; }
 .tasks > li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 16px; align-items: start; }
-.step-n { width: 28px; height: 28px; display: grid; place-items: center; border: var(--line); background: var(--surface); font-size: 8px; }
+.step-n { width: 28px; height: 28px; display: grid; place-items: center; border: var(--line); border-radius: 50%; background: var(--surface); font: 600 12px var(--font-mono); color: var(--fg-2); }
 .step-body { min-width: 0; }
 .do { font-size: 15px; font-weight: 500; line-height: 1.45; padding-top: 3px; }
 .step-body .seg { margin-top: 10px; }
-.ask { margin-top: 10px; padding: 12px 14px; background: var(--grape-soft); border: var(--line); }
-.ask .kicker { color: var(--grape-deep); }
-.ask .kicker::before { content: "> "; }
-.ask p { margin-top: 4px; font-size: 15px; line-height: 1.5; }
+/* A prompt to paste into the agent, drawn like the agent's own input line. */
+.ask { margin-top: 10px; padding: 12px 14px; background: var(--surface); border: var(--line); border-radius: 6px; }
+.ask .kicker { --kick: var(--fg-3); letter-spacing: 0.12em; }
+.ask .kicker::before { content: none; }
+.ask p { margin-top: 6px; font: 14px/1.55 var(--font-mono); color: var(--fg); }
+.ask p::before { content: "\276F\00a0\00a0"; color: var(--fg-3); }
 .see { margin-top: 8px; font-size: 14px; line-height: 1.5; color: var(--fg-3); }
 
 /* checkpoint */
 .checkpoint { margin-top: 36px; padding: 20px; }
-.check-head { display: flex; gap: 12px; align-items: baseline; margin-bottom: 14px; }
-.check-head .badge { font-weight: 400; font-size: 8px; padding: 5px 7px; background: var(--grape); }
-.q { font: 600 15px/1.4 var(--font-mono); }
+.q { margin-bottom: 14px; font: 600 15px/1.4 var(--font-mono); }
 .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 10px; }
 .opt { display: flex; align-items: center; gap: 10px; text-align: left; padding: 12px 14px; border: var(--line); background: var(--surface); font-size: 15px; font-weight: 500; color: var(--fg-2); transition: box-shadow var(--press); }
 .opt span { flex: 1; }
@@ -103,11 +121,13 @@ body { min-height: 100vh; min-height: 100svh; display: grid; grid-template-rows:
 
 /* ---------- phone ---------- */
 @media (max-width: 900px) {
-  .guide { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; align-content: start; }
-  .rail { border-right: 0; border-bottom: var(--line); padding: 14px var(--gutter); display: flex; align-items: baseline; gap: 12px; }
-  .rail .kicker, .rail .count { margin: 0; }
+  .guide-in { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; align-content: start; padding: 0; }
+  .rail { border-right: 0; border-bottom: var(--line); padding: 14px var(--gutter); display: flex; align-items: center; gap: 12px; }
+  .rail-art { display: none; }
+  .rail .count { margin: 0; }
   .rail ol { display: none; }
   .page { padding: 28px var(--gutter) 48px; }
+  .rail .count { flex: 1; }
 }
 
 main { display: flex; flex-direction: column; }

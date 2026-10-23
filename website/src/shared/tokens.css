@@ -1,101 +1,113 @@
-/* Cartridge design tokens. Every colour, font and shadow on the site comes from here.
-   The raw ink scale stays fixed. Terminal windows and the ink band use it in both themes.
-   Page styles use the role tokens. The dark theme sets new values for the roles only. */
+/* Design tokens. Every colour, font and border on the site comes from here.
+   Dark is the default theme. Light changes the role tokens and the soft and deep accents only.
+   The raw ink scale stays fixed. Terminal windows and the ink band use it in both themes. */
 
-@font-face { font-family: "Press Start 2P"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/press-start-2p-latin-400.woff2") format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("/fonts/jetbrains-mono-latin-var.woff2") format("woff2"); }
 @font-face { font-family: "Geist"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/fonts/geist-latin-var.woff2") format("woff2"); }
 
 :root {
-  --ink-900: #1A1320;
-  --ink-700: #3D2E4A;
-  --ink-500: #6B5878;
-  --ink-400: #8F8399;
-  --ink-300: #A899B5;
+  --ink-900: #0C0A10;
+  --ink-700: #221C2B;
+  --ink-500: #3E3549;
+  --ink-400: #7E7489;
+  --ink-300: #B9B0C4;
   --ink-200: #D9CFE0;
 
-  --paper: #FFFDF5;
-  --cream: #FFF8E7;
-  --sand: #F4E9C7;
+  --paper: #EEEEF0;
   --white: #FFFFFF;
-  --term-text: #F4E9C7;
+  --term-text: #E4E4E8;
 
-  --coin: #FFC93C;
-  --coin-soft: #FFF1C7;
-  --coin-deep: #B07D00;
-  --cherry: #E8574F;
-  --cherry-soft: #FBDAD6;
-  --cherry-deep: #A3261F;
-  --mint: #4FBF86;
-  --mint-soft: #D4F1E1;
-  --mint-deep: #1F7A4B;
-  --sky: #5BB8DE;
-  --sky-soft: #D7EEF8;
-  --sky-deep: #1F6E8F;
-  --grape: #8E7BE0;
-  --grape-soft: #E5DFFB;
-  --grape-deep: #4E3BA3;
-  --peach: #F59E62;
+  /* Three accents. Green passes, purple asks, red blocks. Coin is a small warm note for warnings and the cursor. */
+  --mint: #5EE09A;
+  --grape: #A48CFF;
+  --cherry: #FF6B61;
+  --coin: #F5C451;
+  --sky: var(--grape);
+  --peach: var(--coin);
 
-  --bg: var(--paper);
-  --bg-alt: var(--cream);
-  --bg-band: var(--sand);
-  --surface: var(--white);
-  --fg: var(--ink-900);
-  --fg-2: var(--ink-700);
-  --fg-3: var(--ink-500);
-  --fg-4: var(--ink-400);
-  --fg-5: var(--ink-300);
-  --rule: var(--ink-900);
-  --shadow-c: var(--ink-900);
-  --on-accent: var(--ink-900);
-  --term-bg: var(--ink-900);
-  color-scheme: light;
+  --bg: var(--ink-900);
+  --bg-alt: #120F17;
+  --bg-band: #16121D;
+  --bg-mint: #0D1712;
+  --bg-grape: #130F1E;
+  --bg-cherry: #170E10;
+  --surface: #15111B;
+  --fg: var(--paper);
+  --fg-2: var(--ink-300);
+  --fg-3: #8A8095;
+  --fg-4: #5E5569;
+  --fg-5: var(--ink-500);
+  --rule: var(--ink-700);
+  --on-accent: #06110B;
+  --term-bg: #09070C;
+  /* Command boxes: lifted off the page in dark mode, solid dark in light mode. */
+  --cmd-bg: #1A1622;
+  --cmd-line: #2E2739;
+  color-scheme: dark;
 
-  --font-pixel: "Press Start 2P", ui-monospace, monospace;
+  --mint-soft: #1C4A33;
+  --mint-deep: #86EDB7;
+  --grape-soft: #2E2550;
+  --grape-deep: #C3B3FF;
+  --cherry-soft: #4A1F1C;
+  --cherry-deep: #FF9790;
+  --coin-soft: #3E3012;
+  --coin-deep: #FFD77A;
+  --sky-soft: var(--grape-soft);
+  --sky-deep: var(--grape-deep);
+
   --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
   --font-body: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
-  --bw: 2px;
-  --bw-card: 3px;
+  --bw: 1px;
+  --bw-card: 1px;
   --line: var(--bw) solid var(--rule);
-  --shadow-xs: 2px 2px 0 var(--shadow-c);
-  --shadow-sm: 4px 4px 0 var(--shadow-c);
-  --shadow-md: 6px 6px 0 var(--shadow-c);
-  --shadow-lg: 10px 10px 0 var(--shadow-c);
+  --radius: 8px;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: 0 24px 60px -36px rgb(0 0 0 / 0.8);
+  --shadow-lg: 0 32px 80px -40px rgb(0 0 0 / 0.9);
 
-  --max: 1200px;
+  --max: 1120px;
   --gutter: 24px;
-  --section-y: clamp(56px, 9vw, 84px);
-  --press: 80ms;
+  --section-y: clamp(64px, 9vw, 104px);
+  --press: 120ms;
 }
 
 /* The script in the page head sets data-theme before the first paint. */
-:root[data-theme="dark"] {
-  --bg: #15111B;
-  --bg-alt: #1B1622;
-  --bg-band: #231C2C;
-  --surface: #261E31;
-  --fg: #F4EEE2;
-  --fg-2: #D3C9DB;
-  --fg-3: #A899B5;
-  --fg-4: #8F8399;
-  --fg-5: #4A3D57;
-  --rule: #D9CFE0;
-  --shadow-c: #6E5C86;
-  --term-bg: #0D0A11;
-  color-scheme: dark;
+:root[data-theme="light"] {
+  --bg: #FFFFFF;
+  --bg-alt: #FFFFFF;
+  --bg-band: #F6F6F8;
+  --bg-mint: #FFFFFF;
+  --bg-grape: #FFFFFF;
+  --bg-cherry: #FFFFFF;
+  --surface: #FFFFFF;
+  --fg: #111114;
+  --fg-2: #46464F;
+  --fg-3: #74747F;
+  --fg-4: #A2A2AD;
+  --fg-5: #DCDCE3;
+  --rule: #E8E8ED;
+  --cmd-bg: var(--term-bg);
+  --cmd-line: var(--ink-700);
+  --on-accent: #06110B;
+  color-scheme: light;
 
-  --coin-soft: #3A2F12;
-  --coin-deep: #FFD66B;
-  --cherry-soft: #40201F;
-  --cherry-deep: #F49A93;
-  --mint-soft: #15362A;
-  --mint-deep: #86DDB0;
-  --sky-soft: #13303D;
-  --sky-deep: #93D3EE;
-  --grape-soft: #2B2445;
-  --grape-deep: #B8AAF3;
+  --mint: #2EB873;
+  --grape: #7C66E6;
+  --cherry: #E5564C;
+  --coin: #D9A02E;
+  --mint-soft: #D7F2E3;
+  --mint-deep: #1A7A4A;
+  --grape-soft: #E6E0FB;
+  --grape-deep: #4F3BB0;
+  --cherry-soft: #FBDBD8;
+  --cherry-deep: #A82A22;
+  --coin-soft: #FBEFC9;
+  --coin-deep: #8A6200;
+  --shadow-md: 0 24px 60px -36px rgb(22 18 28 / 0.35);
+  --shadow-lg: 0 32px 80px -40px rgb(22 18 28 / 0.4);
 }
 
 @media (max-width: 600px) {

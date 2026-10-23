@@ -32,14 +32,19 @@ npx wrangler deploy
 
 ## Design System
 
-The site uses the Cartridge design system. Find the styles in `src/shared/`:
+The site is dark first, with a pure white light theme. Colour comes from three accents with fixed
+meanings (green allows, purple asks, red blocks) and from block-character art. Find the styles in
+`src/shared/`:
 
-- `tokens.css` holds the colours, fonts, borders and shadows. Do not write a colour value outside this file. Build each shadow from these tokens.
-- Page styles use the role tokens (`--bg`, `--surface`, `--fg`, `--rule`, `--shadow-c` and the others). The dark theme changes only the role tokens and the soft and deep accents.
-- The raw ink scale (`--ink-900` and the others) stays the same in both themes. Use it only on surfaces that are always dark, such as terminal windows and the ink band.
-- Text on a coin, mint, cherry, sky or grape fill uses `--on-accent`.
+- `tokens.css` holds the colours, fonts, borders and shadows. Do not write a colour value outside this file.
+- Page styles use the role tokens (`--bg`, `--surface`, `--fg`, `--rule` and the others). The light theme changes only the role tokens and the soft and deep accents.
+- The raw ink scale (`--ink-900` and the others) stays the same in both themes. Use it only on surfaces that are always dark, such as terminal windows and the closing band.
+- Primary buttons are neutral (`--fg` on `--bg`). Keep the accents for verdicts and art.
 - `base.css` holds the reset and the global element styles.
-- `components.css` holds the shared parts: buttons, cards, windows, tabs, commands, agents and the footer.
+- `components.css` holds the shared parts: buttons, cards, windows, tabs, commands and the footer.
+- `Glyph.tsx` draws the block-character art. Each piece comes from a seed, so the prerendered page and the browser draw the same picture. Runs of one colour render as one element to keep the HTML small.
+
+Avoid pill badges, small uppercase labels above titles, square bullet markers and coloured left-border cards.
 
 Each page imports `components.css` and adds only its own layout. The page styles are in `src/home/home.css` and `src/protect/protect.css`.
 

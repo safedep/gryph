@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react'
 export type ThemeChoice = 'system' | 'light' | 'dark'
 
 const KEY = 'gryph-theme'
-const BAR = { light: '#FFFDF5', dark: '#15111B' }
+const BAR = { light: '#FFFFFF', dark: '#0C0A10' }
 const listeners = new Set<() => void>()
 const darkQuery = () => matchMedia('(prefers-color-scheme: dark)')
 let choice: ThemeChoice | null = null

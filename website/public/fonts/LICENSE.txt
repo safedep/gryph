@@ -1,14 +1,9 @@
 Bundled fonts and their licenses
 ================================
 
-The Gryph website serves three font files from public/fonts/. They are not
-ours. The SIL Open Font License, Version 1.1 applies to all three. The full
+The Gryph website serves two font files from public/fonts/. They are not
+ours. The SIL Open Font License, Version 1.1 applies to both. The full
 text follows the attributions below. Keep this notice with every copy.
-
-  press-start-2p-latin-400.woff2
-    Press Start 2P (latin subset, weight 400)
-    Copyright (c) 2012, Cody "CodeMan38" Boisclair (cody@zone38.net)
-    https://fonts.google.com/specimen/Press+Start+2P
 
   jetbrains-mono-latin-var.woff2
     JetBrains Mono (latin subset, variable, weights 400 to 700)
