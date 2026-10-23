@@ -26,17 +26,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preload" href="/fonts/jetbrains-mono-latin-var.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/geist-latin-var.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/press-start-2p-latin-400.woff2" as="font" type="font/woff2" crossorigin />
-    <meta name="theme-color" content="#FFFDF5" />
+    <meta name="theme-color" content="#0C0A10" />
     <script>
       (function () {
         var t
         try { t = localStorage.getItem('gryph-theme') } catch (e) {}
-        var dark = t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+        var dark = t !== 'light' && !(t !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches)
         var root = document.documentElement
         root.dataset.theme = dark ? 'dark' : 'light'
         root.dataset.themeChoice = t === 'light' || t === 'dark' ? t : 'system'
-        if (dark) document.querySelector('meta[name="theme-color"]').setAttribute('content', '#15111B')
+        if (dark) document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0C0A10'); else document.querySelector('meta[name="theme-color"]').setAttribute('content', '#FFFFFF')
       })()
     </script>
   </head>

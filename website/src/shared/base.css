@@ -16,25 +16,25 @@ body {
 
 #root { display: contents; }
 
-a { color: var(--grape-deep); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
-a:hover { color: var(--cherry-deep); }
+a { color: var(--grape-deep); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+a:hover { color: var(--mint-deep); }
 p { text-wrap: pretty; }
-h1, h2, h3 { text-wrap: balance; font-family: var(--font-mono); font-weight: 600; letter-spacing: -0.03em; line-height: 1.08; }
+h1, h2, h3 { text-wrap: balance; font-family: var(--font-body); font-weight: 450; letter-spacing: -0.03em; line-height: 1.08; }
 h3 { line-height: 1.3; }
 img { max-width: 100%; display: block; }
 code, pre { font-family: var(--font-mono); }
 button { font: inherit; color: inherit; cursor: pointer; }
 
-::selection { background: var(--coin); color: var(--on-accent); }
-:focus-visible { outline: var(--bw) solid var(--fg); outline-offset: 2px; box-shadow: 0 0 0 5px var(--coin); }
+::selection { background: var(--mint); color: var(--on-accent); }
+:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
 
 [hidden] { display: none !important; }
 .vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-.dots { background-color: var(--bg); background-image: radial-gradient(var(--fg-5) 1px, transparent 1px); background-size: 22px 22px; }
+.dots { background-color: var(--bg-alt); }
 
 @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
-.cursor { display: inline-block; width: 8px; height: 15px; margin-left: 3px; vertical-align: -2px; background: var(--coin); animation: blink 1.05s steps(1) infinite; }
+.cursor { display: inline-block; width: 8px; height: 15px; margin-left: 3px; vertical-align: -2px; background: var(--mint); animation: blink 1.05s steps(1) infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
