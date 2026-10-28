@@ -62,6 +62,28 @@ func TestRenderCostSummaryBySessionAlignsColoredNames(t *testing.T) {
 	}
 }
 
+func TestRenderInstallShowsAgentErrors(t *testing.T) {
+	var buf bytes.Buffer
+	p := NewTablePresenter(PresenterOptions{Writer: &buf, UseColors: false, TerminalWidth: 200})
+	require.NoError(t, p.RenderInstall(&InstallView{
+		Agents: []AgentInstallView{{
+			Name:        "opencode",
+			DisplayName: "OpenCode",
+			Installed:   true,
+			Version:     "unknown",
+			Path:        "/home/user/.config/opencode",
+			Error:       "could not determine the OpenCode version",
+		}},
+		Database: "/home/user/audit.db",
+		Config:   "/home/user/config.yml",
+	}))
+
+	out := buf.String()
+	assert.Contains(t, out, "could not determine the OpenCode version")
+	assert.Contains(t, out, "Installation finished with errors.")
+	assert.NotContains(t, out, "Installation complete.")
+}
+
 func TestRenderEventDetailsMarksUnclassified(t *testing.T) {
 	type payload struct {
 		Command privacy.Text `json:"command"`

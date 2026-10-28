@@ -143,6 +143,11 @@ func (h hookConfigAssessor) AssessHookConfig(ctx context.Context) selfprotect.Ho
 		if len(status.Issues) > 0 {
 			state.Drift += ": " + status.Issues[0]
 		}
+	case status.CompatibilityUnverified:
+		state.Drift = "hook runtime compatibility is unverified"
+		if len(status.Issues) > 0 {
+			state.Drift += ": " + status.Issues[0]
+		}
 	default:
 		if missing := agent.MissingPromptHooks(h.adapter.Hooks(), status.Hooks); len(missing) > 0 {
 			state.Drift = "prompt hook not installed: " + strings.Join(missing, ", ")

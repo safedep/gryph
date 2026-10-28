@@ -154,6 +154,14 @@ Code has no prompt hook, so its sessions have no intent.
   Gryph plugin throws on a block fails the prompt before OpenCode saves the
   user message. The plugin sends only the text parts that the user typed. It
   skips the `synthetic` parts, such as file contents.
+- OpenCode 2.x uses a different plugin shape. Its prompt hook is `prompt`,
+  tool calls keep the model-facing text in `result.content`, shell calls are
+  named `shell`, and session lifecycle arrives as execution events. The V2
+  plugin maps `prompt` to `chat.message`, `session.execution.started` to
+  `session.created`, `session.execution.succeeded` to `session.idle`, and
+  `session.execution.failed` to `session.error`. A failed tool call arrives
+  with a non-`completed` status and sometimes an `error`; the plugin forwards
+  the status so the audit event stays a failure.
 - The model writes the prompt of an OpenCode subagent session, which has a
   parent session. Pi marks input from extension code with `source: extension`.
   Gryph gives both prompts the origin `agent`, and records them as
