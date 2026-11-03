@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -37,18 +38,28 @@ func processedPluginV2(program string) []byte {
 	return utils.RenderPlugin(pluginV2JS, program)
 }
 
+// openCodeVersionToken matches a dotted version token such as "2.1.2" or
+// "v2.1.2". A version probe can print log lines before the version, and their
+// timestamps start with a digit, so the first numeric token is not good
+// enough.
+var openCodeVersionToken = regexp.MustCompile(`^v?(\d+)\.\d+`)
+
 // openCodeMajor returns the major version of the OpenCode CLI. The second
-// result is false when no numeric version can be read from the output.
+// result is false when no dotted version token can be read from the output.
 func openCodeMajor(version string) (int, bool) {
 	// OpenCode prints "opencode v2.1.2". VersionToken returns the first field
 	// when no field starts with a digit, so it would return "opencode" here.
 	// Scan every field instead.
 	for _, field := range strings.Fields(version) {
-		field = strings.TrimPrefix(field, "v")
-		major, err := strconv.Atoi(strings.SplitN(field, ".", 2)[0])
-		if err == nil {
-			return major, true
+		match := openCodeVersionToken.FindStringSubmatch(field)
+		if match == nil {
+			continue
 		}
+		major, err := strconv.Atoi(match[1])
+		if err != nil {
+			continue
+		}
+		return major, true
 	}
 	return 0, false
 }

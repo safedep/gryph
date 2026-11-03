@@ -31,6 +31,34 @@ func TestProcessedPluginV2_ReplacesPlaceholder(t *testing.T) {
 	assert.Contains(t, string(processed), `"execute.before"`)
 }
 
+func TestOpenCodeMajor(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+		want    int
+		wantOK  bool
+	}{
+		{name: "plain", version: "2.1.2", want: 2, wantOK: true},
+		{name: "v prefix", version: "v1.19.3", want: 1, wantOK: true},
+		{name: "program prefix", version: "opencode v2.1.2", want: 2, wantOK: true},
+		{name: "log line before version", version: "INFO 2026-01-27T16:09:15 boot\n1.1.36", want: 1, wantOK: true},
+		{name: "timestamp only", version: "INFO 2026-01-27T16:09:15 boot", wantOK: false},
+		{name: "single number", version: "opencode 2", wantOK: false},
+		{name: "no version", version: "unknown", wantOK: false},
+		{name: "empty", version: "", wantOK: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			major, ok := openCodeMajor(tt.version)
+			assert.Equal(t, tt.wantOK, ok)
+			if ok {
+				assert.Equal(t, tt.want, major)
+			}
+		})
+	}
+}
+
 func TestPluginContent_SelectsByVersion(t *testing.T) {
 	cases := []struct {
 		version string
