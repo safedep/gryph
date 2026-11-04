@@ -80,8 +80,9 @@ For a fail-open claim, cite the line that returns the allow and the path that re
 
 CI and the hooks already enforce these. Do not report them, with one exception:
 
-- Never skip a `//nolint` directive that the pull request adds. Check that its reason holds. The
-  linter cannot report what the directive hides.
+- Never skip a suppression that the pull request adds for a check in this list: a `//nolint`
+  directive, a `trufflehog:ignore` comment or a `gitleaks:allow` comment. Check that its reason
+  holds. The check cannot report what the suppression hides.
 - golangci-lint findings, including the ten `os` calls that the forbidigo rule bans in
   `supervisor/`. Item 4 covers every other file call there. CI does
   not check gofmt, so unformatted Go code is a Nit.
