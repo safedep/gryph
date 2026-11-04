@@ -31,6 +31,45 @@ func TestProcessedPluginV2_ReplacesPlaceholder(t *testing.T) {
 	assert.Contains(t, string(processed), `"execute.before"`)
 }
 
+func TestProbeOpenCodeVersion(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   string
+		wantOK bool
+	}{
+		{name: "labeled", output: "opencode v2.1.2\n", want: "2.1.2", wantOK: true},
+		{name: "labeled without v", output: "opencode 1.1.36\n", want: "1.1.36", wantOK: true},
+		{
+			name:   "unrelated version before the label",
+			output: "INFO dependency 1.4.0\nopencode v2.1.2\n",
+			want:   "2.1.2",
+			wantOK: true,
+		},
+		{
+			name:   "timestamp before a single version",
+			output: "INFO 2026-01-27T16:09:15 boot\n2.1.2\n",
+			want:   "2.1.2",
+			wantOK: true,
+		},
+		{name: "only the version", output: "2.1.2", want: "2.1.2", wantOK: true},
+		{name: "timestamp only", output: "INFO 2026-01-27T16:09:15 boot\n", wantOK: false},
+		{name: "two distinct versions", output: "dependency 1.4.0\ncli 2.1.2\n", wantOK: false},
+		{name: "no version", output: "unknown\n", wantOK: false},
+		{name: "empty", output: "", wantOK: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			version, ok := probeOpenCodeVersion(tt.output)
+			assert.Equal(t, tt.wantOK, ok)
+			if ok {
+				assert.Equal(t, tt.want, version)
+			}
+		})
+	}
+}
+
 func TestOpenCodeMajor(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -111,6 +150,7 @@ func TestInstallHooks_WritesPluginForDetectedMajor(t *testing.T) {
 	}{
 		{name: "2.x writes the V2 plugin", version: "opencode v2.1.2", wantV2: true},
 		{name: "0.x keeps the V1 plugin", version: "opencode 0.15.2", wantV2: false},
+		{name: "noisy probe with the real version", version: "INFO dependency 1.4.0\nopencode v2.1.2", wantV2: true},
 	}
 
 	for _, tt := range tests {

@@ -44,6 +44,36 @@ func processedPluginV2(program string) []byte {
 // enough.
 var openCodeVersionToken = regexp.MustCompile(`^v?(\d+)\.\d+`)
 
+// probeOpenCodeVersion extracts the OpenCode version token from the full
+// output of `opencode --version`. A probe can print unrelated lines with
+// their own versions first, so prefer the token that follows the word
+// "opencode", then the only distinct dotted token in the output.
+func probeOpenCodeVersion(output string) (string, bool) {
+	fields := strings.Fields(output)
+	for i := 0; i < len(fields)-1; i++ {
+		if label := strings.TrimRight(fields[i], ":,="); strings.EqualFold(label, "opencode") {
+			next := strings.TrimPrefix(fields[i+1], "v")
+			if openCodeVersionToken.MatchString(next) {
+				return strings.TrimRight(next, ",:;)"), true
+			}
+		}
+	}
+	version := ""
+	for _, field := range fields {
+		if !openCodeVersionToken.MatchString(field) {
+			continue
+		}
+		candidate := strings.TrimPrefix(strings.TrimRight(field, ",:;)"), "v")
+		if version != "" && version != candidate {
+			// More than one distinct version: guessing would install a
+			// plugin for the wrong runtime.
+			return "", false
+		}
+		version = candidate
+	}
+	return version, version != ""
+}
+
 // openCodeMajor returns the major version of the OpenCode CLI. The second
 // result is false when no dotted version token can be read from the output.
 func openCodeMajor(version string) (int, bool) {
