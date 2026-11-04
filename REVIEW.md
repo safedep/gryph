@@ -34,9 +34,12 @@ Style, names, comments, and refactors are Nit at most. Report at most five Nits 
    supervisor signs only with the machine key, and root never reads a user's private key.
 4. Supervisor trust. The server trusts the kernel peer credentials, never a frame. No request field
    names a partition or a path that the server opens. A read or a write in one uid partition must
-   not reach another partition. The forbidigo rule catches a raw `os.Open` in `supervisor/`. It
-   does not catch a file access through a helper in another package, or `os.Remove`, `os.Rename`,
-   `os.Chmod`, or a directory walk. Report such an access outside `platform/nofollow` as Important.
+   not reach another partition. The forbidigo rule in `.golangci.yml` catches only `os.Open`,
+   `os.OpenFile`, `os.Create`, `os.ReadFile`, `os.WriteFile`, `os.Stat`, `os.Lstat`, `os.ReadDir`,
+   `os.Mkdir` and `os.MkdirAll` in `supervisor/`. Any other file access outside `platform/nofollow`
+   is Important: for example `os.CreateTemp`, `os.Remove`, `os.RemoveAll`, `os.Rename`, `os.Chmod`,
+   `os.Chown`, `os.Symlink`, `os.Truncate`, `io/ioutil`, `syscall` or `unix` calls, a directory
+   walk, or a helper in another package.
 5. Content labels. Agent content goes in a `privacy.Text` field with `json:",omitzero"`. An adapter
    does not redact, label, or strip content. `decision.Local` does it. A log line through
    `dry/log`, an error message, or an export that carries a raw prompt, command, tool input, or
@@ -79,7 +82,8 @@ CI and the hooks already enforce these. Do not report them, with one exception:
 
 - Never skip a `//nolint` directive that the pull request adds. Check that its reason holds. The
   linter cannot report what the directive hides.
-- golangci-lint findings and the forbidigo rule on raw `os` file calls in `supervisor/`. CI does
+- golangci-lint findings, including the ten `os` calls that the forbidigo rule bans in
+  `supervisor/`. Item 4 covers every other file call there. CI does
   not check gofmt, so unformatted Go code is a Nit.
 - A live credential that TruffleHog verifies in CI. TruffleHog does not fail CI on a secret that it
   cannot verify, and CI does not run gitleaks. So any other secret (a private key, an internal
