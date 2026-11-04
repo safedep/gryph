@@ -76,7 +76,8 @@ For a fail-open claim, cite the line that returns the allow and the path that re
 CI and the hooks already enforce these. Do not report them:
 
 - golangci-lint findings, gofmt, and the forbidigo rule on raw `os` file calls in `supervisor/`.
-- gitleaks findings.
+- Secrets that TruffleHog finds in CI. CI does not run gitleaks, so a secret that only gitleaks
+  would find stays in scope.
 - JSON Schema drift in `schema/*.json`. The `verify-schema` job runs `make generate-schema`.
 - A catalog row without a script, or a script without a row. `TestCatalogIntegrity` fails.
 - A stale `docs/agent-enforcement-coverage.md`. `TestEnforcementCoverageDoc` fails.
