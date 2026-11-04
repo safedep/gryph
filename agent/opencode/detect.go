@@ -34,10 +34,9 @@ func Detect(ctx context.Context) (*agent.DetectionResult, error) {
 		HooksPath:  filepath.Join(opencodeDir, "plugins"),
 	}
 
-	version := utils.ProgramVersionOutput(ctx, "opencode", "--version")
-	if token, known := probeOpenCodeVersion(version); known {
-		result.Version = token
-	} else {
+	result.Version = utils.ProgramVersion(ctx, "opencode", "--version")
+
+	if result.Version == "" {
 		result.Version = "unknown"
 	}
 

@@ -48,13 +48,6 @@ func programExecutionAllowed(ctx context.Context) bool {
 // process is privileged, when the program is missing or fails, or when the
 // output holds no version.
 func ProgramVersion(ctx context.Context, program string, args ...string) string {
-	return VersionToken(ProgramVersionOutput(ctx, program, args...))
-}
-
-// ProgramVersionOutput runs program with args and returns its full output.
-// It returns "" under the same conditions as ProgramVersion. Callers that
-// need their own version parsing read the whole output instead of one token.
-func ProgramVersionOutput(ctx context.Context, program string, args ...string) string {
 	if !programExecutionAllowed(ctx) {
 		return ""
 	}
@@ -68,7 +61,7 @@ func ProgramVersionOutput(ctx context.Context, program string, args ...string) s
 	if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
 		return ""
 	}
-	return string(output)
+	return VersionToken(string(output))
 }
 
 // VersionToken returns the first field of s that starts with a digit, for
