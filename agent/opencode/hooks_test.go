@@ -102,3 +102,17 @@ func TestInstallHooks_WritesTheCurrentPlugin(t *testing.T) {
 		})
 	}
 }
+
+func TestInstallHooks_BacksUpTheReplacedPlugin(t *testing.T) {
+	pluginFile := pluginTestHome(t)
+	legacy := legacyPlugin(t)
+	require.NoError(t, os.WriteFile(pluginFile, legacy, 0o644))
+
+	result, err := InstallHooks(context.Background(), agent.InstallOptions{Backup: true, BackupDir: t.TempDir()})
+	require.NoError(t, err)
+	require.Contains(t, result.BackupPaths, pluginFileName)
+
+	backup, err := os.ReadFile(result.BackupPaths[pluginFileName])
+	require.NoError(t, err)
+	assert.Equal(t, legacy, backup)
+}

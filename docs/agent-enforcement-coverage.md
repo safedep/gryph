@@ -156,8 +156,8 @@ Code has no prompt hook, so its sessions have no intent.
   skips the `synthetic` parts, such as file contents.
 - One Gryph plugin file serves OpenCode 1.x and 2.x. OpenCode 1.3.4 and
   later read its default export: 1.x calls `server` and 2.x calls `setup`.
-  OpenCode 1.3.3 and earlier run its named export, and log an error for the
-  default export.
+  OpenCode 1.3.3 and earlier run its named export, and log and show an
+  error for the default export.
 - OpenCode 2.x registers hooks on the domain that owns them. Its prompt hook
   is `prompt`, tool calls keep the model-facing text in `result.content`, and
   shell calls are named `shell`. The plugin maps `prompt` to `chat.message`,

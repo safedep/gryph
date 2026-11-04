@@ -65,9 +65,8 @@ func InstallHooks(ctx context.Context, opts agent.InstallOptions) (*agent.Instal
 
 	content := processedPlugin(opts.Command)
 
-	// Only the current plugin counts as installed. An older Gryph plugin is
-	// replaced: the plugins of Gryph v0.9.0 and earlier do not load on
-	// OpenCode 2.x.
+	// An older Gryph plugin is replaced without --force. The plugins of
+	// Gryph v0.9.0 and earlier do not load on OpenCode 2.x.
 	if !opts.Force && !opts.DryRun {
 		if existing, err := os.ReadFile(pluginFile); err == nil && bytes.Equal(existing, content) {
 			result.Warnings = append(result.Warnings, "gryph plugin already installed (use --force to overwrite)")

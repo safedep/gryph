@@ -4,18 +4,20 @@ import { appendFileSync } from "fs";
 // One file serves OpenCode 1.x and 2.x, so the install does not need the
 // OpenCode version. OpenCode 1.3.4 and later read the default export: 1.x
 // calls server() and 2.x calls setup(). OpenCode 1.3.3 and earlier call every
-// export as a function. They run GryphPlugin and log an error for the
-// default export.
+// export as a function. They run GryphPlugin, and log and show an error for
+// the default export.
 
 const debugFilePath = process.env.GRYPH_OPENCODE_DEBUG_FILE_PATH || "";
 
+function debugLog(entry) {
+  if (!debugFilePath) return;
+  try {
+    appendFileSync(debugFilePath, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + "\n");
+  } catch (_) {}
+}
+
 function invokeGryph(hookType, payload) {
-  if (debugFilePath) {
-    try {
-      const line = JSON.stringify({ ts: new Date().toISOString(), hookType, payload });
-      appendFileSync(debugFilePath, line + "\n");
-    } catch (_) {}
-  }
+  debugLog({ hookType, payload });
   try {
     execFileSync("__GRYPH_COMMAND__", ["_hook", "opencode", hookType], {
       input: JSON.stringify(payload),
@@ -153,7 +155,7 @@ async function setup(ctx) {
         invokeGryph(hookType, { hook_type: hookType, properties, cwd: directory });
       } catch (_) {}
     }
-  })().catch(() => {});
+  })().catch((e) => debugLog({ error: "session event subscription failed: " + String(e) }));
 
   await ctx.session.hook("prompt", async (event) => {
     const prompt = event.prompt?.text || "";

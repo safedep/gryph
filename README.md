@@ -306,6 +306,8 @@ The OpenCode plugin works with OpenCode 1.x and 2.x. An upgrade of OpenCode
 does not need a new `gryph install`. Run `gryph install` once after you
 upgrade Gryph from v0.9.0 or earlier: the plugins of those releases do not
 load on OpenCode 2.x.
+Until you do, `gryph doctor` reports the OpenCode hooks as invalid, and
+self-protection records the old plugin as a change.
 
 ### Backups
 
