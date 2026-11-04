@@ -18,6 +18,7 @@ func TestVersionToken(t *testing.T) {
 	}{
 		{"2.1.15 (Claude Code)\n", "2.1.15"},
 		{"codex-cli 0.5.0", "0.5.0"},
+		{"opencode v2.1.2", "2.1.2"},
 		{"  0.26.0  ", "0.26.0"},
 		{"dev", "dev"},
 		{"", ""},
@@ -48,6 +49,17 @@ func withPrivileged(t *testing.T, privileged bool) {
 	restore := privilegedProcess
 	privilegedProcess = func() bool { return privileged }
 	t.Cleanup(func() { privilegedProcess = restore })
+}
+
+func TestProgramVersionOutput_KeepsTheWholeOutput(t *testing.T) {
+	name, marker := fakeProgram(t)
+	withPrivileged(t, false)
+
+	// VersionToken would collapse this to "3.2.1"; the raw probe lets a
+	// caller parse its own shape.
+	assert.Equal(t, "fake-agent 3.2.1 (Fake)\n",
+		ProgramVersionOutput(context.Background(), name, "--version"))
+	assert.FileExists(t, marker)
 }
 
 func TestProgramVersion_RunsAsUser(t *testing.T) {

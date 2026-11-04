@@ -58,6 +58,29 @@ func TestParseHookEvent_ToolExecuteBefore_Write(t *testing.T) {
 	assert.Contains(t, payload.ContentPreview.Value, "package main")
 }
 
+func TestParseHookEvent_ToolExecuteBefore_WriteV2Path(t *testing.T) {
+	ctx := context.Background()
+	data := []byte(`{
+		"hook_type": "tool.execute.before",
+		"session_id": "opencode-session-abc123",
+		"tool": "write",
+		"args": {
+			"path": "/home/user/project/src/main.go",
+			"content": "package main"
+		},
+		"cwd": "/home/user/project"
+	}`)
+
+	event, err := testAdapter(t).ParseEvent(ctx, "tool.execute.before", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	payload, err := event.GetFileWritePayload()
+	require.NoError(t, err)
+	assert.Equal(t, "/home/user/project/src/main.go", payload.Path)
+	assert.Contains(t, payload.ContentPreview.Value, "package main")
+}
+
 func TestParseHookEvent_ToolExecuteBefore_Read(t *testing.T) {
 	ctx := context.Background()
 	data := loadFixture(t, "tool_execute_before_read.json")
@@ -148,6 +171,101 @@ func TestParseHookEvent_ToolExecuteAfter_Bash(t *testing.T) {
 	assert.Equal(t, events.ActionCommandExec, event.ActionType)
 	assert.Equal(t, "bash", event.ToolName)
 	assert.Equal(t, events.ResultSuccess, event.ResultStatus)
+}
+
+func TestParseHookEvent_ToolExecuteAfter_ShellError(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name           string
+		result         string
+		expectedOutput string
+	}{
+		{
+			name:           "error message",
+			result:         `{"error": "command not found", "status": "error"}`,
+			expectedOutput: "command not found",
+		},
+		{
+			name:           "status only",
+			result:         `{"status": "interrupted"}`,
+			expectedOutput: "interrupted",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := []byte(`{
+				"hook_type": "tool.execute.after",
+				"session_id": "opencode-session-abc123",
+				"tool": "shell",
+				"result": ` + tt.result + `,
+				"cwd": "/home/user/project"
+			}`)
+
+			event, err := testAdapter(t).ParseEvent(ctx, "tool.execute.after", data)
+			require.NoError(t, err)
+			require.NotNil(t, event)
+
+			assert.Equal(t, events.ActionCommandExec, event.ActionType)
+			assert.Equal(t, events.ResultError, event.ResultStatus)
+			assert.Equal(t, tt.expectedOutput, event.ErrorMessage)
+			payload, err := event.GetCommandExecPayload()
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedOutput, payload.Output.Value)
+		})
+	}
+}
+
+func TestParseHookEvent_ToolExecuteAfter_ShellNonZeroExit(t *testing.T) {
+	ctx := context.Background()
+	data := []byte(`{
+		"hook_type": "tool.execute.after",
+		"session_id": "opencode-session-abc123",
+		"tool": "shell",
+		"result": {
+			"output": "",
+			"exitCode": 1
+		},
+		"cwd": "/home/user/project"
+	}`)
+
+	event, err := testAdapter(t).ParseEvent(ctx, "tool.execute.after", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	// A completed call stays a success; the exit code lives in the payload.
+	// Commands such as grep or diff exit 1 without the tool call failing.
+	assert.Equal(t, events.ResultSuccess, event.ResultStatus)
+	assert.Empty(t, event.ErrorMessage)
+	payload, err := event.GetCommandExecPayload()
+	require.NoError(t, err)
+	assert.Equal(t, 1, payload.ExitCode)
+}
+
+func TestParseHookEvent_ToolExecuteAfter_Shell(t *testing.T) {
+	ctx := context.Background()
+	data := []byte(`{
+		"hook_type": "tool.execute.after",
+		"session_id": "opencode-session-abc123",
+		"tool": "shell",
+		"result": {
+			"output": "hello-gryph",
+			"exitCode": 0
+		},
+		"cwd": "/home/user/project"
+	}`)
+
+	event, err := testAdapter(t).ParseEvent(ctx, "tool.execute.after", data)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, events.ActionCommandExec, event.ActionType)
+	assert.Equal(t, "shell", event.ToolName)
+	payload, err := event.GetCommandExecPayload()
+	require.NoError(t, err)
+	assert.Equal(t, "hello-gryph", payload.Output.Value)
+	assert.Equal(t, 0, payload.ExitCode)
 }
 
 func TestParseHookEvent_ToolSessionIDCorrelation(t *testing.T) {

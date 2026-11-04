@@ -348,11 +348,16 @@ func (p *TablePresenter) RenderEvents(events []*EventView) error {
 // RenderInstall renders the installation result.
 func (p *TablePresenter) RenderInstall(result *InstallView) error {
 	tw := &tableWriter{w: p.w}
+	hasError := false
 
 	tw.println()
 
 	for _, agent := range result.Agents {
-		if agent.Installed {
+		if agent.Error != "" {
+			hasError = true
+			tw.printf("  %s  %s %s\n", p.color.StatusFail(), agent.DisplayName, agent.Version)
+			tw.printf("        %s\n", agent.Error)
+		} else if agent.Installed {
 			tw.printf("  %s  %s %s\n", p.color.StatusOK(), agent.DisplayName, agent.Version)
 			tw.printf("        %s\n", p.color.Path(agent.Path))
 		} else {
@@ -380,7 +385,11 @@ func (p *TablePresenter) RenderInstall(result *InstallView) error {
 		tw.println()
 	}
 
-	tw.println("Installation complete.")
+	if hasError {
+		tw.println("Installation finished with errors.")
+	} else {
+		tw.println("Installation complete.")
+	}
 	tw.println()
 	tw.printf("  %-11s %s\n", "Database", p.color.Path(result.Database))
 	tw.printf("  %-11s %s\n", "Config", p.color.Path(result.Config))

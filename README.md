@@ -299,8 +299,12 @@ For transparency, these are the files Gryph modifies during `gryph install`:
 | Cursor | `~/.cursor/hooks.json` | Creates or updates hooks configuration |
 | Devin CLI | `~/.config/devin/config.json` | Adds hook entries to the `hooks` section |
 | Gemini CLI | `~/.gemini/settings.json` | Adds hook entries to the `hooks` section |
-| OpenCode | `~/.config/opencode/plugins/gryph.mjs` | Installs JS plugin that bridges to gryph |
+| OpenCode | `~/.config/opencode/plugins/gryph.js` | Installs a V1 or V2 JS plugin that bridges to gryph |
 | Windsurf | `~/.codeium/windsurf/hooks.json` | Creates or updates hooks configuration |
+
+OpenCode 1.x and 2.x load different plugin shapes. `gryph install` reads
+`opencode --version` and writes the matching plugin. Rerun `gryph install`
+after upgrading OpenCode across a major version.
 
 ### Backups
 

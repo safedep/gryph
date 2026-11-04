@@ -48,6 +48,13 @@ func programExecutionAllowed(ctx context.Context) bool {
 // process is privileged, when the program is missing or fails, or when the
 // output holds no version.
 func ProgramVersion(ctx context.Context, program string, args ...string) string {
+	return VersionToken(ProgramVersionOutput(ctx, program, args...))
+}
+
+// ProgramVersionOutput runs program with args and returns its full output.
+// It returns "" under the same conditions as ProgramVersion. Callers that
+// need their own version parsing read the whole output instead of one token.
+func ProgramVersionOutput(ctx context.Context, program string, args ...string) string {
 	if !programExecutionAllowed(ctx) {
 		return ""
 	}
@@ -61,7 +68,7 @@ func ProgramVersion(ctx context.Context, program string, args ...string) string 
 	if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
 		return ""
 	}
-	return VersionToken(string(output))
+	return string(output)
 }
 
 // VersionToken returns the first field of s that starts with a digit, for
@@ -76,6 +83,10 @@ func VersionToken(s string) string {
 	for _, f := range fields {
 		if f[0] >= '0' && f[0] <= '9' {
 			return f
+		}
+		// OpenCode prints "opencode v2.1.2".
+		if (f[0] == 'v' || f[0] == 'V') && len(f) > 1 && f[1] >= '0' && f[1] <= '9' {
+			return f[1:]
 		}
 	}
 	return fields[0]

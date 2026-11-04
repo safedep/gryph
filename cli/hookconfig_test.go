@@ -57,8 +57,12 @@ func TestAdapters_InstallWritesOnlyDeclaredHookConfig(t *testing.T) {
 func fakeAgentBinDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	for _, name := range []string{"cursor"} {
-		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\necho 0.0.0\n"), 0o700))
+	scripts := map[string]string{
+		"cursor":   "#!/bin/sh\necho 0.0.0\n",
+		"opencode": "#!/bin/sh\necho 'opencode v2.1.2'\n",
+	}
+	for name, script := range scripts {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(script), 0o700))
 	}
 	return dir
 }
