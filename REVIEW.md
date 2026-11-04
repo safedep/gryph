@@ -41,7 +41,9 @@ Style, names, comments, and refactors are Nit at most. Report at most five Nits 
    does not redact, label, or strip content. `decision.Local` does it. A log line through
    `dry/log`, an error message, or an export that carries a raw prompt, command, tool input, or
    file content past the label step is Important. Read `docs/content-labels.md`.
-6. Layer rules. `aarm` imports neither `storage` nor `cli`. An adapter keeps agent paths, file
+6. Layer rules. The root `aarm` package (the Mediator) imports neither `storage` nor `engine`. Hooks
+   carry storage side effects out of it (`docs/aarm-dev.md`). The subpackages `aarm/receipt`,
+   `aarm/accumulator` and `aarm/conformance` may import `storage`. An adapter keeps agent paths, file
    names, and command rules in its own package, never in `aarm/loader` or `aarm/pdp`. Shell
    commands go through `aarm/shellcmd`, never a regex. Adapters register only in
    `RegisterAdapters` in `engine/engine.go`. A break of these rules is Important. A new adapter
@@ -73,14 +75,21 @@ For a fail-open claim, cite the line that returns the allow and the path that re
 
 ## Do not report
 
-CI and the hooks already enforce these. Do not report them:
+CI and the hooks already enforce these. Do not report them, with one exception:
 
-- golangci-lint findings, gofmt, and the forbidigo rule on raw `os` file calls in `supervisor/`.
-- Secrets that TruffleHog finds in CI. CI does not run gitleaks, so a secret that only gitleaks
-  would find stays in scope.
+- Never skip a `//nolint` directive that the pull request adds. Check that its reason holds. The
+  linter cannot report what the directive hides.
+- golangci-lint findings and the forbidigo rule on raw `os` file calls in `supervisor/`. CI does
+  not check gofmt, so unformatted Go code is a Nit.
+- A live credential that TruffleHog verifies in CI. TruffleHog does not fail CI on a secret that it
+  cannot verify, and CI does not run gitleaks. So any other secret (a private key, an internal
+  token, a credential for a service that TruffleHog cannot reach) stays in scope.
 - JSON Schema drift in `schema/*.json`. The `verify-schema` job runs `make generate-schema`.
-- A catalog row without a script, or a script without a row. `TestCatalogIntegrity` fails.
-- A stale `docs/agent-enforcement-coverage.md`. `TestEnforcementCoverageDoc` fails.
+- A script without a catalog row. `TestCatalogIntegrity` fails. The test only logs a catalog row
+  without a script, so that case is in scope and item 8 sets its severity.
+- A stale generated hook table in `docs/agent-enforcement-coverage.md`, between the BEGIN and END
+  markers. `TestEnforcementCoverageDoc` fails. The test does not check the hand-written sections,
+  so item 9 covers them.
 - A hook config file that an adapter writes but does not declare in `HookConfigPaths()`.
   `TestAdapters_InstallWritesOnlyDeclaredHookConfig` fails.
 - A forbidden import in `supervisor/`. `supervisor/architecture_test.go` fails.
