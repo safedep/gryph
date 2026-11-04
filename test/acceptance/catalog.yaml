@@ -244,6 +244,13 @@
   guarantee: "gryph policy validate --file checks a draft, policy install copies it into policies/, policy list shows the merged sources, and the installed rule enforces."
   labels: [policy, authoring]
 
+- id: install/opencode/replaces-old-plugin
+  title: "install replaces an older OpenCode plugin without --force"
+  category: install
+  tier: P1
+  guarantee: "gryph install, without --force and without an opencode binary, replaces an OpenCode plugin that differs from the current plugin, keeps the old file as a backup, and leaves the current plugin as it is."
+  labels: [install, opencode]
+
 - id: install/all-agents/files-written
   title: "one install covers every detected agent's documented file"
   category: install
@@ -977,7 +984,7 @@
   title: "doctor flags a changed plugin that keeps the hook names"
   category: health
   tier: P1
-  guarantee: "gryph doctor reports an OpenCode plugin as invalid unless it equals the current plugin or a known released plugin, and suggests install --force."
+  guarantee: "gryph doctor reports an OpenCode plugin as invalid unless it equals the current plugin, and suggests install --force."
   labels: [doctor]
 
 - id: health/doctor/prompt-hook-missing
