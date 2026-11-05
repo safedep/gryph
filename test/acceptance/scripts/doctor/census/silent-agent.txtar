@@ -2,8 +2,11 @@
 # a silent agent: the hooks do not reach Gryph. Doctor reports it as drift
 # on the hook_traffic row and records a silent_agent tamper event. A hook
 # call clears it. The agent here is a copy of sleep named like the Claude
-# Code program.
+# Code program. The census reads the process name, which the kernel takes
+# from the file name. A multicall coreutils, as on Ubuntu 26.04, selects the
+# program from argv[0], so bash starts the copy with argv[0] set to sleep.
 [!unix] skip 'the census script needs a Unix sleep binary'
+[!exec:bash] skip 'the census script needs bash to set argv[0]'
 env GRYPH_POLICY_SELF_PROTECTION_CENSUS=true
 env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
@@ -13,7 +16,7 @@ mkdir $HOME/.claude
 exec gryph install --agent claude-code
 
 exec cp /bin/sleep $WORK/bin/claude
-exec $WORK/bin/claude 300 &
+exec bash -c 'exec -a sleep "$0" "$@"' $WORK/bin/claude 300 &
 exec sleep 4
 
 exec gryph doctor --no-color
