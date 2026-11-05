@@ -1,12 +1,13 @@
 # A live agent process that sends no hook call through the census window is
 # a silent agent: the hooks do not reach Gryph. Doctor reports it as drift
 # on the hook_traffic row and records a silent_agent tamper event. A hook
-# call clears it. The agent here is a copy of sleep named like the Claude
-# Code program. The census reads the process name, which the kernel takes
-# from the file name. A multicall coreutils, as on Ubuntu 26.04, selects the
-# program from argv[0], so bash starts the copy with argv[0] set to sleep.
-[!unix] skip 'the census script needs a Unix sleep binary'
-[!exec:bash] skip 'the census script needs bash to set argv[0]'
+# call clears it. The agent here is a copy of the gryph binary named like
+# the Claude Code program. The census reads the process name, which the
+# kernel takes from the file name. A copy of sleep does not work, because
+# the multicall coreutils of Ubuntu 26.04 refuses to run under another
+# name. The copy waits for a file that never comes. The interrupt at the
+# end of the script stops it.
+[!unix] skip 'the census script needs a Unix process name'
 env GRYPH_POLICY_SELF_PROTECTION_CENSUS=true
 env HOME=$WORK/home
 env XDG_CONFIG_HOME=$WORK/home/.config
@@ -15,8 +16,8 @@ env XDG_DATA_HOME=$WORK/home/.local/share
 mkdir $HOME/.claude
 exec gryph install --agent claude-code
 
-exec cp /bin/sleep $WORK/bin/claude
-exec bash -c 'exec -a sleep "$0" "$@"' $WORK/bin/claude 300 &
+exec cp $ACCEPTANCE_GRYPH_BIN $WORK/bin/claude
+exec $WORK/bin/claude supervisor ready --until-exists $WORK/never --timeout 300s &
 exec sleep 4
 
 exec gryph doctor --no-color
