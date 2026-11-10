@@ -135,6 +135,44 @@ const sessionEvents = {
   "session.execution.failed": "session.error",
 };
 
+function sleep(ms, signal) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref?.();
+    signal.addEventListener("abort", () => {
+      clearTimeout(timer);
+      resolve();
+    }, { once: true });
+  });
+}
+
+// The event stream ends when its connection fails, and OpenCode does not run
+// setup again. Subscribe again until the plugin stops, or Gryph records no
+// session event after the first failure.
+async function recordSessionEvents(ctx, directory, signal) {
+  let delay = 1000;
+  while (!signal.aborted) {
+    try {
+      for await (const event of ctx.event.subscribe({ types: Object.keys(sessionEvents), signal })) {
+        delay = 1000;
+        const hookType = sessionEvents[event.type];
+        if (!hookType) continue;
+        const properties = { sessionId: event.data?.sessionID || "" };
+        if (hookType === "session.error") {
+          properties.message = event.data?.error?.message || String(event.data?.error ?? "session failed");
+        }
+        try {
+          invokeGryph(hookType, { hook_type: hookType, properties, cwd: directory });
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugLog({ error: "session event subscription failed: " + String(e) });
+    }
+    await sleep(delay, signal);
+    delay = Math.min(delay * 2, 30000);
+  }
+}
+
 // OpenCode 2.x registers each hook on the domain that owns it.
 async function setup(ctx) {
   const directory = ctx.location.directory;
@@ -143,70 +181,63 @@ async function setup(ctx) {
   // right after setup returns, so a later subscription misses
   // session.created.
   const events = new AbortController();
-  (async () => {
-    for await (const event of ctx.event.subscribe({ types: Object.keys(sessionEvents), signal: events.signal })) {
-      const hookType = sessionEvents[event.type];
-      if (!hookType) continue;
-      const properties = { sessionId: event.data?.sessionID || "" };
-      if (hookType === "session.error") {
-        properties.message = event.data?.error?.message || String(event.data?.error ?? "session failed");
-      }
-      try {
-        invokeGryph(hookType, { hook_type: hookType, properties, cwd: directory });
-      } catch (_) {}
-    }
-  })().catch((e) => debugLog({ error: "session event subscription failed: " + String(e) }));
+  recordSessionEvents(ctx, directory, events.signal);
 
-  await ctx.session.hook("prompt", async (event) => {
-    const prompt = event.prompt?.text || "";
-    if (!prompt) return;
-    const parent = await parentOf(() => ctx.session.get({ sessionID: event.sessionID }));
-    invokeGryph("chat.message", promptPayload(event.sessionID, parent, prompt, directory));
-  });
-
-  // Only execute.before can stop a call. OpenCode turns the thrown error
-  // into a tool error.
-  await ctx.tool.hook("execute.before", (event) => {
-    invokeGryph("tool.execute.before", {
-      hook_type: "tool.execute.before",
-      session_id: event.sessionID,
-      call_id: event.id,
-      tool: event.tool,
-      args: event.input,
-      cwd: directory,
+  try {
+    await ctx.session.hook("prompt", async (event) => {
+      const prompt = event.prompt?.text || "";
+      if (!prompt) return;
+      const parent = await parentOf(() => ctx.session.get({ sessionID: event.sessionID }));
+      invokeGryph("chat.message", promptPayload(event.sessionID, parent, prompt, directory));
     });
-  });
 
-  await ctx.tool.hook("execute.after", (event) => {
-    try {
-      const output = event.result?.output;
-      const content = event.result?.content;
-      const metadata = event.result?.metadata;
-      // A failed call has a status and an error instead of a result. Keep
-      // the status, so Gryph records the failure when the error is empty.
-      const result =
-        event.status === "completed"
-          ? {
-              output:
-                typeof output === "string"
-                  ? output
-                  : textContent(content) ?? (output === undefined ? undefined : JSON.stringify(output)),
-              content,
-              metadata,
-              exitCode: metadata?.exit ?? metadata?.exitCode,
-            }
-          : { error: event.error, status: event.status };
-      invokeGryph("tool.execute.after", {
-        hook_type: "tool.execute.after",
+    // Only execute.before can stop a call. OpenCode turns the thrown error
+    // into a tool error.
+    await ctx.tool.hook("execute.before", (event) => {
+      invokeGryph("tool.execute.before", {
+        hook_type: "tool.execute.before",
         session_id: event.sessionID,
         call_id: event.id,
         tool: event.tool,
         args: event.input,
-        result,
         cwd: directory,
       });
-    } catch (_) {}
-  });
+    });
+
+    await ctx.tool.hook("execute.after", (event) => {
+      try {
+        const output = event.result?.output;
+        const content = event.result?.content;
+        const metadata = event.result?.metadata;
+        // A failed call has a status and an error instead of a result. Keep
+        // the status, so Gryph records the failure when the error is empty.
+        const result =
+          event.status === "completed"
+            ? {
+                output:
+                  typeof output === "string"
+                    ? output
+                    : textContent(content) ?? (output === undefined ? undefined : JSON.stringify(output)),
+                content,
+                metadata,
+                exitCode: metadata?.exit ?? metadata?.exitCode,
+              }
+            : { error: event.error, status: event.status };
+        invokeGryph("tool.execute.after", {
+          hook_type: "tool.execute.after",
+          session_id: event.sessionID,
+          call_id: event.id,
+          tool: event.tool,
+          args: event.input,
+          result,
+          cwd: directory,
+        });
+      } catch (_) {}
+    });
+  } catch (e) {
+    events.abort();
+    throw e;
+  }
 
   return () => events.abort();
 }

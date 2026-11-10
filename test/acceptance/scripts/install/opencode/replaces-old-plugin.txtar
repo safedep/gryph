@@ -15,7 +15,7 @@ stdout '\[!!\]\s+OpenCode hooks'
 
 exec gryph install --agent opencode
 grep 'export default \{ id: "gryph", server, setup \};' $HOME/.config/opencode/plugins/gryph.js
-grep 'old-gryph-plugin-marker' $WORK/data/backups/opencode/gryph.js.backup
+cmp $WORK/data/backups/opencode/gryph.js.backup old-gryph.js
 
 exec gryph doctor --no-color
 stdout '\[ok\]\s+OpenCode hooks'
@@ -24,7 +24,7 @@ stdout '\[ok\]\s+OpenCode hooks'
 # the backup still holds the old plugin.
 exec gryph install --agent opencode
 grep 'export default \{ id: "gryph", server, setup \};' $HOME/.config/opencode/plugins/gryph.js
-grep 'old-gryph-plugin-marker' $WORK/data/backups/opencode/gryph.js.backup
+cmp $WORK/data/backups/opencode/gryph.js.backup old-gryph.js
 
 -- old-gryph.js --
 // old-gryph-plugin-marker
