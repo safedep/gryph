@@ -1,0 +1,33 @@
+# gryph install without --force replaces an older Gryph plugin with the
+# current plugin, and keeps the old file as a backup. OpenCode 2.x does not
+# load the plugins of Gryph v0.9.0 and earlier. No opencode binary is on
+# PATH: the install does not need the OpenCode version.
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+env GRYPH_DATA_DIR=$WORK/data
+
+mkdir $HOME/.config/opencode/plugins
+cp old-gryph.js $HOME/.config/opencode/plugins/gryph.js
+
+exec gryph doctor --no-color
+stdout '\[!!\]\s+OpenCode hooks'
+
+exec gryph install --agent opencode
+grep 'export default \{ id: "gryph", server, setup \};' $HOME/.config/opencode/plugins/gryph.js
+cmp $WORK/data/backups/opencode/gryph.js.backup old-gryph.js
+
+exec gryph doctor --no-color
+stdout '\[ok\]\s+OpenCode hooks'
+
+# A second install keeps the current plugin. It writes no new backup, so
+# the backup still holds the old plugin.
+exec gryph install --agent opencode
+grep 'export default \{ id: "gryph", server, setup \};' $HOME/.config/opencode/plugins/gryph.js
+cmp $WORK/data/backups/opencode/gryph.js.backup old-gryph.js
+
+-- old-gryph.js --
+// old-gryph-plugin-marker
+export const GryphPlugin = async () => ({
+  "tool.execute.before": async () => invokeGryph(),
+});

@@ -5,7 +5,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/safedep/gryph/agent"
@@ -22,283 +21,98 @@ func TestProcessedPlugin_ReplacesPlaceholder(t *testing.T) {
 	assert.Contains(t, string(processed), utils.GryphCommand())
 }
 
-func TestProcessedPluginV2_ReplacesPlaceholder(t *testing.T) {
-	processed := processedPluginV2("")
+// OpenCode 1.3.3 and earlier run the named export. OpenCode 1.3.4 and later
+// read the default export: 1.x calls server and 2.x calls setup.
+func TestProcessedPlugin_ServesEveryRuntime(t *testing.T) {
+	processed := string(processedPlugin(""))
 
-	assert.NotContains(t, string(processed), utils.GryphCommandPlaceholder)
-	assert.Contains(t, string(processed), utils.GryphCommand())
-	assert.Contains(t, string(processed), "export default {")
-	assert.Contains(t, string(processed), `"execute.before"`)
+	assert.Contains(t, processed, "export const GryphPlugin = server;")
+	assert.Contains(t, processed, `export default { id: "gryph", server, setup };`)
 }
 
-func TestProbeOpenCodeVersion(t *testing.T) {
-	tests := []struct {
-		name   string
-		output string
-		want   string
-		wantOK bool
-	}{
-		{name: "labeled", output: "opencode v2.1.2\n", want: "2.1.2", wantOK: true},
-		{name: "labeled without v", output: "opencode 1.1.36\n", want: "1.1.36", wantOK: true},
-		{
-			name:   "unrelated version before the label",
-			output: "INFO dependency 1.4.0\nopencode v2.1.2\n",
-			want:   "2.1.2",
-			wantOK: true,
-		},
-		{
-			name:   "timestamp before a single version",
-			output: "INFO 2026-01-27T16:09:15 boot\n2.1.2\n",
-			want:   "2.1.2",
-			wantOK: true,
-		},
-		{name: "only the version", output: "2.1.2", want: "2.1.2", wantOK: true},
-		{name: "timestamp only", output: "INFO 2026-01-27T16:09:15 boot\n", wantOK: false},
-		{name: "two distinct versions", output: "dependency 1.4.0\ncli 2.1.2\n", wantOK: false},
-		{name: "no version", output: "unknown\n", wantOK: false},
-		{name: "empty", output: "", wantOK: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			version, ok := probeOpenCodeVersion(tt.output)
-			assert.Equal(t, tt.wantOK, ok)
-			if ok {
-				assert.Equal(t, tt.want, version)
-			}
-		})
-	}
+func legacyPlugin(t *testing.T) []byte {
+	t.Helper()
+	legacy, err := os.ReadFile(filepath.Join("testdata", "legacy", "gryph-v0.9.0.js"))
+	require.NoError(t, err)
+	return legacy
 }
 
-func TestOpenCodeMajor(t *testing.T) {
-	tests := []struct {
-		name    string
-		version string
-		want    int
-		wantOK  bool
-	}{
-		{name: "plain", version: "2.1.2", want: 2, wantOK: true},
-		{name: "v prefix", version: "v1.19.3", want: 1, wantOK: true},
-		{name: "program prefix", version: "opencode v2.1.2", want: 2, wantOK: true},
-		{name: "log line before version", version: "INFO 2026-01-27T16:09:15 boot\n1.1.36", want: 1, wantOK: true},
-		{name: "timestamp only", version: "INFO 2026-01-27T16:09:15 boot", wantOK: false},
-		{name: "single number", version: "opencode 2", wantOK: false},
-		{name: "no version", version: "unknown", wantOK: false},
-		{name: "empty", version: "", wantOK: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			major, ok := openCodeMajor(tt.version)
-			assert.Equal(t, tt.wantOK, ok)
-			if ok {
-				assert.Equal(t, tt.want, major)
-			}
-		})
-	}
-}
-
-func TestPluginContent_SelectsByVersion(t *testing.T) {
-	cases := []struct {
-		version string
-		wantV2  bool
-		wantOK  bool
-	}{
-		{"2.1.2", true, true},
-		{"2.0.0", true, true},
-		{"v2.1.2", true, true},
-		{"opencode v2.1.2", true, true},
-		{"1.19.3", false, true},
-		{"opencode v1.19.3", false, true},
-		{"0.15.2", false, true},
-		{"unknown", false, false},
-		{"", false, false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.version, func(t *testing.T) {
-			content, ok := pluginContent("", tc.version)
-			assert.Equal(t, tc.wantOK, ok)
-			if ok {
-				assert.Equal(t, tc.wantV2, isV2Plugin(content))
-			}
-		})
-	}
-}
-
-func TestInstalledForVersion(t *testing.T) {
-	assert.True(t, installedForVersion(processedPluginV2(""), "2.1.2"))
-	assert.False(t, installedForVersion(processedPlugin(""), "2.1.2"))
-	assert.True(t, installedForVersion(processedPlugin(""), "1.19.3"))
-	assert.False(t, installedForVersion(processedPluginV2(""), "1.19.3"))
-	assert.True(t, installedForVersion(processedPlugin(""), "0.15.2"))
-	assert.False(t, installedForVersion(processedPluginV2(""), "0.15.2"))
-	assert.True(t, installedForVersion(processedPlugin(""), "unknown"))
-	assert.True(t, installedForVersion(processedPluginV2(""), "unknown"))
-	assert.False(t, installedForVersion([]byte(`export default { id: "other" }`), "2.1.2"))
-	assert.False(t, installedForVersion([]byte(`export default { id: "other" }`), "unknown"))
-}
-
-func TestInstallHooks_WritesPluginForDetectedMajor(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake opencode is a shell script")
-	}
-
-	tests := []struct {
-		name    string
-		version string
-		wantV2  bool
-	}{
-		{name: "2.x writes the V2 plugin", version: "opencode v2.1.2", wantV2: true},
-		{name: "0.x keeps the V1 plugin", version: "opencode 0.15.2", wantV2: false},
-		{name: "noisy probe with the real version", version: "INFO dependency 1.4.0\nopencode v2.1.2", wantV2: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			home := t.TempDir()
-			testpath.SetHome(t, home)
-			require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "opencode"), 0o755))
-
-			bin := t.TempDir()
-			script := filepath.Join(bin, "opencode")
-			require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\necho '"+tt.version+"'\n"), 0o755))
-			t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-
-			result, err := InstallHooks(context.Background(), agent.InstallOptions{})
-			require.NoError(t, err)
-			require.True(t, result.Success)
-
-			pluginFile := filepath.Join(home, ".config", "opencode", "plugins", pluginFileName)
-			content, err := os.ReadFile(pluginFile)
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantV2, isV2Plugin(content))
-			assert.Contains(t, string(content), "invokeGryph")
-			if tt.wantV2 {
-				assert.Contains(t, string(content), `"prompt"`)
-			} else {
-				assert.Contains(t, string(content), `"chat.message"`)
-			}
-
-			status, err := GetHookStatus(context.Background())
-			require.NoError(t, err)
-			assert.True(t, status.Installed)
-			assert.True(t, status.Valid)
-			assert.Contains(t, status.Hooks, "chat.message")
-			assert.Contains(t, status.Hooks, "tool.execute.before")
-			assert.Contains(t, status.Hooks, "session.error")
-		})
-	}
-}
-
-func TestInstallHooks_UnknownVersionErrors(t *testing.T) {
-	home := t.TempDir()
-	testpath.SetHome(t, home)
-	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "opencode"), 0o755))
-	t.Setenv("PATH", t.TempDir())
-
-	result, err := InstallHooks(context.Background(), agent.InstallOptions{})
-	require.Error(t, err)
-	assert.False(t, result.Success)
-	assert.Contains(t, err.Error(), "could not determine the OpenCode version")
-
-	pluginFile := filepath.Join(home, ".config", "opencode", "plugins", pluginFileName)
-	_, statErr := os.Stat(pluginFile)
-	assert.True(t, os.IsNotExist(statErr))
-}
-
-func TestInstallHooks_UpgradesV1ToV2(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake opencode is a shell script")
-	}
-
+func pluginTestHome(t *testing.T) string {
+	t.Helper()
 	home := t.TempDir()
 	testpath.SetHome(t, home)
 	dir := filepath.Join(home, ".config", "opencode", "plugins")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
-	pluginFile := filepath.Join(dir, pluginFileName)
-	require.NoError(t, os.WriteFile(pluginFile, processedPlugin(""), 0o644))
-
-	bin := t.TempDir()
-	script := filepath.Join(bin, "opencode")
-	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\necho 'opencode v2.1.2'\n"), 0o755))
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-
-	result, err := InstallHooks(context.Background(), agent.InstallOptions{})
-	require.NoError(t, err)
-	assert.True(t, result.Success)
-
-	content, err := os.ReadFile(pluginFile)
-	require.NoError(t, err)
-	assert.True(t, isV2Plugin(content))
-}
-
-func TestInstallHooks_UnknownVersionKeepsExistingPlugin(t *testing.T) {
-	home := t.TempDir()
-	testpath.SetHome(t, home)
-	dir := filepath.Join(home, ".config", "opencode", "plugins")
-	require.NoError(t, os.MkdirAll(dir, 0o755))
-	pluginFile := filepath.Join(dir, pluginFileName)
-	existing := processedPluginV2("")
-	require.NoError(t, os.WriteFile(pluginFile, existing, 0o644))
+	// No opencode binary on PATH: the plugin does not depend on its version.
 	t.Setenv("PATH", t.TempDir())
-
-	result, err := InstallHooks(context.Background(), agent.InstallOptions{})
-	require.NoError(t, err)
-	assert.True(t, result.Success)
-
-	content, err := os.ReadFile(pluginFile)
-	require.NoError(t, err)
-	assert.Equal(t, existing, content)
-}
-
-func TestGetHookStatus_UnknownVersionIsUnverified(t *testing.T) {
-	home := t.TempDir()
-	testpath.SetHome(t, home)
-	dir := filepath.Join(home, ".config", "opencode", "plugins")
-	require.NoError(t, os.MkdirAll(dir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, pluginFileName), processedPlugin(""), 0o644))
-	t.Setenv("PATH", t.TempDir())
-
-	status, err := GetHookStatus(context.Background())
-	require.NoError(t, err)
-	assert.True(t, status.Installed)
-	assert.True(t, status.Valid)
-	assert.True(t, status.CompatibilityUnverified)
-	assert.Contains(t, status.Issues, "OpenCode version could not be detected; cannot verify plugin compatibility")
+	return filepath.Join(dir, pluginFileName)
 }
 
 func TestGetHookStatus_PluginContent(t *testing.T) {
-	// Keep the OpenCode version unknown so the V1 fixtures stay current.
-	t.Setenv("PATH", t.TempDir())
-
-	legacy, err := os.ReadFile(filepath.Join("testdata", "legacy", "gryph-v0.9.0.js"))
-	require.NoError(t, err)
 	cases := []struct {
-		name        string
-		content     []byte
-		wantValid   bool
-		wantMissing string
+		name      string
+		content   []byte
+		wantValid bool
 	}{
-		{"current plugin", processedPlugin(""), true, ""},
-		{"v0.9.0 plugin without the chat.message hook", legacy, true, "chat.message"},
-		{"v0.9.0 plugin without the block throw", bytes.Replace(legacy, []byte("throw new Error"), []byte("void new Error"), 1), false, ""},
-		{"current plugin without the block throw", bytes.Replace(processedPlugin(""), []byte("throw new Error"), []byte("void new Error"), 1), false, ""},
+		{"current plugin", processedPlugin(""), true},
+		{"v0.9.0 plugin, which OpenCode 2.x does not load", legacyPlugin(t), false},
+		{"current plugin without the block throw", bytes.Replace(processedPlugin(""), []byte("throw new Error"), []byte("void new Error"), 1), false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			home := t.TempDir()
-			testpath.SetHome(t, home)
-			dir := filepath.Join(home, ".config", "opencode", "plugins")
-			require.NoError(t, os.MkdirAll(dir, 0o755))
-			require.NoError(t, os.WriteFile(filepath.Join(dir, pluginFileName), tc.content, 0o644))
+			require.NoError(t, os.WriteFile(pluginTestHome(t), tc.content, 0o644))
 
 			status, err := GetHookStatus(context.Background())
 			require.NoError(t, err)
 			assert.True(t, status.Installed)
 			assert.Equal(t, tc.wantValid, status.Valid)
-			if tc.wantMissing != "" {
-				assert.NotContains(t, status.Hooks, tc.wantMissing)
-			}
 		})
 	}
+}
+
+func TestInstallHooks_WritesTheCurrentPlugin(t *testing.T) {
+	cases := []struct {
+		name        string
+		existing    []byte
+		wantWarning bool
+	}{
+		{"no plugin", nil, false},
+		{"v0.9.0 plugin", legacyPlugin(t), false},
+		{"current plugin", processedPlugin(""), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pluginFile := pluginTestHome(t)
+			if tc.existing != nil {
+				require.NoError(t, os.WriteFile(pluginFile, tc.existing, 0o644))
+			}
+
+			result, err := InstallHooks(context.Background(), agent.InstallOptions{})
+			require.NoError(t, err)
+			assert.True(t, result.Success)
+			if tc.wantWarning {
+				assert.Contains(t, result.Warnings, "gryph plugin already installed (use --force to overwrite)")
+			} else {
+				assert.Empty(t, result.Warnings)
+			}
+
+			content, err := os.ReadFile(pluginFile)
+			require.NoError(t, err)
+			assert.Equal(t, processedPlugin(""), content)
+		})
+	}
+}
+
+func TestInstallHooks_BacksUpTheReplacedPlugin(t *testing.T) {
+	pluginFile := pluginTestHome(t)
+	legacy := legacyPlugin(t)
+	require.NoError(t, os.WriteFile(pluginFile, legacy, 0o644))
+
+	result, err := InstallHooks(context.Background(), agent.InstallOptions{Backup: true, BackupDir: t.TempDir()})
+	require.NoError(t, err)
+	require.Contains(t, result.BackupPaths, pluginFileName)
+
+	backup, err := os.ReadFile(result.BackupPaths[pluginFileName])
+	require.NoError(t, err)
+	assert.Equal(t, legacy, backup)
 }

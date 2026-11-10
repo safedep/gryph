@@ -51,17 +51,6 @@ func withPrivileged(t *testing.T, privileged bool) {
 	t.Cleanup(func() { privilegedProcess = restore })
 }
 
-func TestProgramVersionOutput_KeepsTheWholeOutput(t *testing.T) {
-	name, marker := fakeProgram(t)
-	withPrivileged(t, false)
-
-	// VersionToken would collapse this to "3.2.1"; the raw probe lets a
-	// caller parse its own shape.
-	assert.Equal(t, "fake-agent 3.2.1 (Fake)\n",
-		ProgramVersionOutput(context.Background(), name, "--version"))
-	assert.FileExists(t, marker)
-}
-
 func TestProgramVersion_RunsAsUser(t *testing.T) {
 	name, marker := fakeProgram(t)
 	withPrivileged(t, false)
