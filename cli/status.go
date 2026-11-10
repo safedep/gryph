@@ -57,7 +57,7 @@ Displays the current status of the tool including:
 
 					if hookStatus != nil {
 						agentView.HooksCount = len(hookStatus.Hooks)
-						agentView.HooksActive = hookStatus.Installed && hookStatus.Valid && !hookStatus.CompatibilityUnverified
+						agentView.HooksActive = hookStatus.Installed && hookStatus.Valid
 					}
 
 					v.Agents = append(v.Agents, agentView)
