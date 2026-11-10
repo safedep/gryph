@@ -4,8 +4,9 @@
 # call clears it. The agent here is a process named like the Claude Code
 # program. On Linux it is a shell script, which the kernel names after the
 # script file. A copy of sleep does not work there, because sleep can be a
-# multi-call binary that refuses to run under another name. On macOS it is a
-# copy of sleep.
+# multi-call binary that refuses to run under another name. Testscript sends
+# SIGINT to the script at the end. Without the trap, a bash /bin/sh keeps the
+# loop running. On macOS the agent is a copy of sleep.
 [!unix] skip 'the census script needs a Unix sleep binary'
 env GRYPH_POLICY_SELF_PROTECTION_CENSUS=true
 env HOME=$WORK/home
@@ -43,7 +44,9 @@ stdout 'hook_traffic claude-code resolved: level detect to detect'
 -- bin/.keep --
 -- claude.sh --
 #!/bin/sh
-while :; do sleep 1; done
+trap 'exit 0' INT TERM
+i=0
+while [ "$i" -lt "${1:-300}" ]; do sleep 1; i=$((i + 1)); done
 -- home/.config/safedep/gryph/config.yml --
 policy:
   self_protection:
