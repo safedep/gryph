@@ -1,8 +1,11 @@
 # A live agent process that sends no hook call through the census window is
 # a silent agent: the hooks do not reach Gryph. Doctor reports it as drift
 # on the hook_traffic row and records a silent_agent tamper event. A hook
-# call clears it. The agent here is a copy of sleep named like the Claude
-# Code program.
+# call clears it. The agent here is a process named like the Claude Code
+# program. On Linux it is a shell script, which the kernel names after the
+# script file. A copy of sleep does not work there, because sleep can be a
+# multi-call binary that refuses to run under another name. On macOS it is a
+# copy of sleep.
 [!unix] skip 'the census script needs a Unix sleep binary'
 env GRYPH_POLICY_SELF_PROTECTION_CENSUS=true
 env HOME=$WORK/home
@@ -12,7 +15,9 @@ env XDG_DATA_HOME=$WORK/home/.local/share
 mkdir $HOME/.claude
 exec gryph install --agent claude-code
 
-exec cp /bin/sleep $WORK/bin/claude
+[linux] cp claude.sh $WORK/bin/claude
+[linux] chmod 755 $WORK/bin/claude
+[!linux] exec cp /bin/sleep $WORK/bin/claude
 exec $WORK/bin/claude 300 &
 exec sleep 4
 
@@ -36,6 +41,9 @@ stdout 'hook_traffic claude-code silent_agent: level detect to detect, silent ag
 stdout 'hook_traffic claude-code resolved: level detect to detect'
 
 -- bin/.keep --
+-- claude.sh --
+#!/bin/sh
+while :; do sleep 1; done
 -- home/.config/safedep/gryph/config.yml --
 policy:
   self_protection:
