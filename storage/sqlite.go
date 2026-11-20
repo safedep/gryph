@@ -90,7 +90,8 @@ func (s *SQLiteStore) Init(ctx context.Context) error {
 
 // createSchema runs the ent migration with retries. Concurrent hook
 // processes race on a fresh database: both diff an empty schema and both
-// issue CREATE TABLE, and the loser fails with "already exists". A retry
+// issue CREATE TABLE, and the loser fails with "already exists". On an
+// upgrade the loser fails the same way with "duplicate column name". A retry
 // re-diffs against the schema the winner created and no-ops. A hook that
 // waits past busy_timeout for another writer also retries. Losing the race
 // must never lose an audit event.
@@ -110,6 +111,7 @@ func (s *SQLiteStore) createSchema(ctx context.Context) error {
 		if !retryableSchemaError(err) {
 			return err
 		}
+		s.dropIdleConnections()
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -128,15 +130,30 @@ var migrateMu sync.Mutex
 func (s *SQLiteStore) migrate(ctx context.Context) error {
 	migrateMu.Lock()
 	defer migrateMu.Unlock()
-	return s.client.Schema.Create(ctx)
+	return s.client.Schema.Create(ctx, migrateOptions...)
 }
 
 func retryableSchemaError(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "already exists") ||
+		strings.Contains(msg, "duplicate column name") ||
 		strings.Contains(msg, "database is locked") ||
-		strings.Contains(msg, "SQLITE_BUSY")
+		strings.Contains(msg, "SQLITE_BUSY") ||
+		strings.Contains(msg, "foreign_keys pragma is off")
 }
+
+// dropIdleConnections closes the idle connections, so a retry opens new
+// ones with the pragmas of the connection string. Ent turns foreign keys off
+// on a pooled connection before the migration transaction and on again when
+// the transaction ends. A BEGIN that times out behind another writer leaves
+// that connection with foreign keys off, and ent refuses to migrate on it.
+func (s *SQLiteStore) dropIdleConnections() {
+	s.db.SetMaxIdleConns(0)
+	s.db.SetMaxIdleConns(defaultMaxIdleConns)
+}
+
+// defaultMaxIdleConns is the default of database/sql.
+const defaultMaxIdleConns = 2
 
 // retiredTables are tables that no ent schema declares any more. The
 // migration drops them after Schema.Create. The entry log is not copied.
