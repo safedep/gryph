@@ -37,6 +37,10 @@ jobs:
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          # The signing flags in .goreleaser.yaml and below follow this
+          # release. A new default of the installer does not change it.
+          cosign-release: v3.0.6
 
       - name: Run GoReleaser
         id: run-goreleaser
@@ -79,6 +83,10 @@ jobs:
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          # The signing flags in .goreleaser.yaml and below follow this
+          # release. A new default of the installer does not change it.
+          cosign-release: v3.0.6
 
       - name: Build the Package
         run: |
@@ -86,7 +94,7 @@ jobs:
           pkg="gryph_${version}_darwin_all.pkg"
           ./scripts/macos-pkg.sh dist/gryph_darwin_all/gryph "$version" "$pkg"
           shasum -a 256 "$pkg" > "$pkg.sha256"
-          cosign sign-blob --yes --output-signature "$pkg.sig" --output-certificate "$pkg.pem" "$pkg"
+          cosign sign-blob --yes --bundle "$pkg.sigstore.json" "$pkg"
           echo "PKG=$pkg" >> "$GITHUB_ENV"
 
       - name: Attest the Package
@@ -97,7 +105,7 @@ jobs:
       - name: Upload the Package to the Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$GITHUB_REF_NAME" "$PKG" "$PKG.sha256" "$PKG.sig" "$PKG.pem" --clobber
+        run: gh release upload "$GITHUB_REF_NAME" "$PKG" "$PKG.sha256" "$PKG.sigstore.json" --clobber
 
   provenance:
     needs: [goreleaser]

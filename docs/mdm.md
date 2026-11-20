@@ -122,13 +122,13 @@ planned. Until it ships, a script places the binary.
 
 Every package and the checksum file carry a Sigstore signature from the
 release workflow, with no long-lived key. Verify one before you ship it to a
-fleet, with the certificate and the signature that sit next to it on the
-release page:
+fleet, with the Sigstore bundle (`.sigstore.json`) that sits next to it on the
+release page. The bundle holds the signature and the certificate. Use cosign
+3.0 or later:
 
 ```bash
 cosign verify-blob \
-  --certificate gryph_1.2.3_linux_amd64.deb.pem \
-  --signature gryph_1.2.3_linux_amd64.deb.sig \
+  --bundle gryph_1.2.3_linux_amd64.deb.sigstore.json \
   --certificate-identity-regexp '^https://github.com/safedep/gryph/\.github/workflows/goreleaser\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   gryph_1.2.3_linux_amd64.deb
