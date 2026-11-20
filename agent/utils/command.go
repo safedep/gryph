@@ -5,10 +5,11 @@ import (
 	"errors"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 // GryphCommandPlaceholder marks the program in the plugin templates that
@@ -20,12 +21,14 @@ const GryphCommandPlaceholder = "__GRYPH_COMMAND__"
 // running binary cannot be read.
 const programName = "gryph"
 
-// executablePath is overridable in tests.
+// executablePath returns the path of the running binary with symbolic
+// links resolved. Tests override it.
 var executablePath = resolveExecutable
 
 var (
-	commandOnce sync.Once
-	command     string
+	programOnce  sync.Once
+	command      string
+	programFiles []string
 )
 
 // GryphCommand returns the program that a hook command names: an absolute
@@ -35,13 +38,34 @@ var (
 // be read, or when the binary runs under another name, for example a test
 // binary.
 func GryphCommand() string {
-	commandOnce.Do(func() {
+	loadProgram()
+	return command
+}
+
+// ProgramFiles returns the absolute paths that decide which program the
+// hook entries run: the path that a hook entry names, the file that it
+// resolves to, and the Homebrew opt link on the way. Self-protection covers
+// each one. A write to the file replaces the program, and a change of the
+// link points every hook entry at another program.
+func ProgramFiles() []string {
+	loadProgram()
+	return programFiles
+}
+
+func loadProgram() {
+	programOnce.Do(func() {
 		command = programName
-		if path, err := executablePath(); err == nil && isGryphProgram(path) {
-			command = path
+		programFiles = nil
+		resolved, err := executablePath()
+		if err != nil || !isGryphProgram(resolved) {
+			return
+		}
+		command = stablePath(resolved)
+		programFiles = []string{command}
+		if command != resolved {
+			programFiles = append(programFiles, resolved, filepath.Dir(filepath.Dir(command)))
 		}
 	})
-	return command
 }
 
 func resolveExecutable() (string, error) {
@@ -49,64 +73,32 @@ func resolveExecutable() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	real, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return "", err
-	}
-	return stablePath(real, invokedPath()), nil
+	return filepath.EvalSymlinks(path)
 }
 
-// stablePath returns a path of the binary at real that a package upgrade
-// does not remove. A package manager keeps each version in its own
-// directory, points a fixed link at the current version, and deletes the old
-// directory on upgrade. A hook that names the versioned file then fails to
-// start, and the agent runs the action with no Gryph hook. So the result is
-// a link that resolves to the same file and has the same name: the Homebrew
-// opt link of the formula, then the path that started this process. With
-// neither, the result is real.
-func stablePath(real, invoked string) string {
-	for _, candidate := range []string{homebrewOptPath(real), invoked} {
-		if candidate == "" || candidate == real || filepath.Base(candidate) != filepath.Base(real) {
-			continue
-		}
-		if sameFile(candidate, real) {
-			return candidate
-		}
+// stablePath returns the Homebrew opt link of the formula when it resolves
+// to the binary at resolved, and resolved otherwise. Homebrew keeps each
+// version under Cellar and deletes the old version on upgrade. A hook entry
+// that names the versioned file then fails to start, and the agent runs the
+// action with no Gryph hook. The opt link stays across upgrades. Homebrew
+// owns it with the Cellar, so it is not easier to change than the file.
+func stablePath(resolved string) string {
+	if opt := homebrewOptPath(resolved); opt != "" && sameFile(opt, resolved) {
+		return opt
 	}
-	return real
+	return resolved
 }
 
 // homebrewOptPath returns <prefix>/opt/gryph/bin/<name> for a binary at
 // <prefix>/Cellar/gryph/<version>/bin/<name>, and "" for any other path.
-func homebrewOptPath(real string) string {
-	bin := filepath.Dir(real)
+func homebrewOptPath(resolved string) string {
+	bin := filepath.Dir(resolved)
 	formula := filepath.Dir(filepath.Dir(bin))
 	cellar := filepath.Dir(formula)
 	if filepath.Base(bin) != "bin" || filepath.Base(formula) != programName || filepath.Base(cellar) != "Cellar" {
 		return ""
 	}
-	return filepath.Join(filepath.Dir(cellar), "opt", programName, "bin", filepath.Base(real))
-}
-
-// invokedPath returns the absolute path that started this process, before
-// the resolution of symbolic links, or "" when it cannot be read.
-func invokedPath() string {
-	if len(os.Args) == 0 || os.Args[0] == "" {
-		return ""
-	}
-	path := os.Args[0]
-	if !strings.ContainsAny(path, `/\`) {
-		found, err := exec.LookPath(path)
-		if err != nil {
-			return ""
-		}
-		path = found
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return ""
-	}
-	return abs
+	return filepath.Join(filepath.Dir(cellar), "opt", programName, "bin", filepath.Base(resolved))
 }
 
 func sameFile(a, b string) bool {
@@ -122,20 +114,37 @@ func sameFile(a, b string) bool {
 }
 
 // MissingProgram returns the program of a hook command when the command
-// names it by an absolute path and no file is there. A package upgrade can
-// remove the file that an older install named. The agent then cannot start
-// the hook and runs the action with no Gryph hook. A bare program name
-// resolves through the PATH of the agent, which Gryph cannot read, so it
-// never counts as missing.
+// names it by an absolute path and no program file is there. A package
+// upgrade can remove the file that an older install named. The agent then
+// cannot start the hook and runs the action with no Gryph hook. A bare
+// program name resolves through the PATH of the agent, which Gryph cannot
+// read, so it never counts as missing.
 func MissingProgram(cmd string) (string, bool) {
 	program, _, ok := splitCommand(cmd)
-	if !ok || !filepath.IsAbs(program) {
-		return "", false
-	}
-	if _, err := os.Stat(program); !errors.Is(err, fs.ErrNotExist) {
+	if !ok || !filepath.IsAbs(program) || programFileExists(program) {
 		return "", false
 	}
 	return program, true
+}
+
+// programFileExists reports whether a file is at program. Windows also
+// runs program.exe for a name with no extension. An error other than a
+// missing path does not prove that the program is gone.
+func programFileExists(program string) bool {
+	candidates := []string{program}
+	if runtime.GOOS == "windows" && filepath.Ext(program) == "" {
+		candidates = append(candidates, program+".exe")
+	}
+	for _, path := range candidates {
+		info, err := os.Stat(path)
+		if err == nil && !info.IsDir() {
+			return true
+		}
+		if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
+			return true
+		}
+	}
+	return false
 }
 
 // HookCommand returns the hook command for agentName and hookType. program

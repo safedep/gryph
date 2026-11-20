@@ -52,7 +52,7 @@ func TestUpgradeFromV090AddsColumnsInPlace(t *testing.T) {
 	t.Cleanup(func() { _ = s.Close() })
 
 	plan := migrationPlan(t, s)
-	assert.NotContains(t, plan, "new_", "the migration copies a table")
+	assert.NotContains(t, plan, "CREATE TABLE `new_", "the migration copies a table")
 	assert.NotContains(t, plan, "DROP TABLE")
 	assert.Contains(t, plan, "ADD COLUMN")
 

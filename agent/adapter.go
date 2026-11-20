@@ -123,7 +123,7 @@ func (s *HookStatus) CheckProgram(cmd string) {
 		return
 	}
 	s.Valid = false
-	issue := "hook program " + program + " does not exist. Run gryph install --force to name the current program"
+	issue := "no hook program at " + program + ". Run gryph install --force to name the current program"
 	if !slices.Contains(s.Issues, issue) {
 		s.Issues = append(s.Issues, issue)
 	}

@@ -595,7 +595,7 @@ func SelfProtectionGlobs(cfg *config.Config, paths *config.Paths) []string {
 	if managed := config.ManagedConfigDir(); managed != "" {
 		globs = append(globs, filepath.ToSlash(managed)+"/**")
 	}
-	if binary := gryphBinaryPath(); binary != "" {
+	for _, binary := range gryphBinaryPaths() {
 		globs = append(globs, filepath.ToSlash(binary))
 	}
 	if cfg != nil {

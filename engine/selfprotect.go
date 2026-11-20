@@ -84,11 +84,15 @@ func rulesOff(cfg *config.Config) string {
 	return ""
 }
 
-// gryphBinaryPath returns the absolute path of the running binary, or ""
+// gryphBinaryPaths returns the absolute paths that decide which program
+// the hook entries run, the path that the entries name first. It is empty
 // when the program is not gryph. Tests override it.
-var gryphBinaryPath = func() string {
-	if cmd := utils.GryphCommand(); filepath.IsAbs(cmd) {
-		return cmd
+var gryphBinaryPaths = utils.ProgramFiles
+
+// gryphBinaryPath returns the path that the hook entries name, or "".
+func gryphBinaryPath() string {
+	if paths := gryphBinaryPaths(); len(paths) > 0 {
+		return paths[0]
 	}
 	return ""
 }

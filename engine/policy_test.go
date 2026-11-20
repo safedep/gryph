@@ -115,9 +115,9 @@ func TestSelfProtectionGlobs_StaticSetNoRepoLocal(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := config.Default()
 	paths := &config.Paths{ConfigDir: tmp}
-	restore := gryphBinaryPath
-	gryphBinaryPath = func() string { return filepath.Join(tmp, "bin", "gryph") }
-	t.Cleanup(func() { gryphBinaryPath = restore })
+	restore := gryphBinaryPaths
+	gryphBinaryPaths = func() []string { return []string{filepath.Join(tmp, "bin", "gryph")} }
+	t.Cleanup(func() { gryphBinaryPaths = restore })
 
 	globs := SelfProtectionGlobs(cfg, paths)
 
@@ -127,6 +127,26 @@ func TestSelfProtectionGlobs_StaticSetNoRepoLocal(t *testing.T) {
 	assert.Contains(t, globs, filepath.ToSlash(cfg.ExportKeyFile()))
 	assert.NotContains(t, globs, "**/.gryph-policy.yml")
 	assert.NotContains(t, globs, "**/.gryph-policy.yaml")
+}
+
+// A Homebrew hook entry names the opt link. An agent must neither replace
+// the versioned file under Cellar nor point the opt link at another
+// program.
+func TestSelfProtectionGlobs_HomebrewProgram(t *testing.T) {
+	prefix := t.TempDir()
+	opt := filepath.Join(prefix, "opt", "gryph", "bin", "gryph")
+	cellar := filepath.Join(prefix, "Cellar", "gryph", "0.10.0", "bin", "gryph")
+	optLink := filepath.Join(prefix, "opt", "gryph")
+	restore := gryphBinaryPaths
+	gryphBinaryPaths = func() []string { return []string{opt, cellar, optLink} }
+	t.Cleanup(func() { gryphBinaryPaths = restore })
+
+	globs := SelfProtectionGlobs(config.Default(), &config.Paths{ConfigDir: t.TempDir()})
+
+	for _, path := range []string{opt, cellar, optLink} {
+		assert.Contains(t, globs, filepath.ToSlash(path))
+	}
+	assert.Equal(t, opt, gryphBinaryPath())
 }
 
 func TestSelfProtectionReadGlobs(t *testing.T) {

@@ -29,7 +29,7 @@ func TestGetHookStatus_ProgramRemoved(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, status.Installed)
 	assert.False(t, status.Valid)
-	assert.Equal(t, []string{"hook program " + gone + " does not exist. Run gryph install --force to name the current program"}, status.Issues)
+	assert.Equal(t, []string{"no hook program at " + gone + ". Run gryph install --force to name the current program"}, status.Issues)
 
 	present := filepath.Join(home, "bin", "gryph")
 	require.NoError(t, os.MkdirAll(filepath.Dir(present), 0o755))

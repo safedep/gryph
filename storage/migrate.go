@@ -57,7 +57,10 @@ func addInPlace(modify *atlas.ModifyTable) {
 		if raw, ok := add.C.Default.(*atlas.RawExpr); ok && constantDefault.MatchString(raw.X) {
 			add.C.Default = &atlas.Literal{V: raw.X}
 		}
-		if allAdded(add.C.Indexes, added) {
+		// SQLite refuses ADD COLUMN for a NOT NULL column with no constant
+		// default. Such a column keeps its index, so Atlas copies the table.
+		_, literal := add.C.Default.(*atlas.Literal)
+		if (add.C.Type.Null || literal) && allAdded(add.C.Indexes, added) {
 			add.C.Indexes = nil
 		}
 	}
