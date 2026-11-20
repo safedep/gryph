@@ -1,0 +1,13 @@
+# PMG settings for the CI jobs of this repository. setup-pmg passes this file
+# to safedep/pmg as config-file. PMG reads the keys that it does not set from
+# its own template.
+dependency_cooldown:
+  enabled: true
+  # The PMG default window. The repository sets no other cooldown.
+  days: 2
+  # We release this module, and a change can need the version of the same
+  # day. The cooldown would block that version. PMG still runs malware
+  # analysis on it.
+  skip:
+    - purl: pkg:golang/github.com/safedep/dry
+      reason: "SafeDep shared library"
