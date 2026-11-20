@@ -44,7 +44,7 @@ rm $WORK/homebrew/Cellar/gryph/0.10.1
 
 exec $WORK/other/gryph doctor --no-color
 stdout '\[!!\]\s+Claude Code hooks'
-stdout 'no hook program at \S+/Cellar/gryph/0.10.1/bin/gryph\.'
+stdout 'hook program \S+/Cellar/gryph/0.10.1/bin/gryph is missing, empty or not executable'
 exec $WORK/other/gryph status --no-color
 stdout 'claude-code\s+installed\s+\S+\s+hooks: not active'
 

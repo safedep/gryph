@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 
@@ -105,7 +106,7 @@ func TestRenderPlugin(t *testing.T) {
 func writeProgram(t *testing.T, path string) string {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, nil, 0o755))
+	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755))
 	return path
 }
 
@@ -130,6 +131,20 @@ func TestGryphCommand_HomebrewOptLink(t *testing.T) {
 	withExecutable(t, cellar, nil)
 	assert.Equal(t, opt, GryphCommand())
 	assert.Equal(t, []string{opt, cellar, optLink}, ProgramFiles())
+}
+
+// A write to <prefix>/bin/gryph follows the link into the Cellar file, so
+// self-protection must cover that link too.
+func TestProgramFiles_HomebrewBinLink(t *testing.T) {
+	prefix := t.TempDir()
+	cellar := writeProgram(t, filepath.Join(prefix, "Cellar", "gryph", "0.10.0", "bin", "gryph"))
+	optLink := symlink(t, filepath.Join(prefix, "Cellar", "gryph", "0.10.0"), filepath.Join(prefix, "opt", "gryph"))
+	binLink := symlink(t, cellar, filepath.Join(prefix, "bin", "gryph"))
+	opt := filepath.Join(optLink, "bin", "gryph")
+
+	withExecutable(t, cellar, nil)
+	assert.Equal(t, opt, GryphCommand())
+	assert.Equal(t, []string{opt, cellar, optLink, binLink}, ProgramFiles())
 }
 
 func TestGryphCommand_NoOptLink(t *testing.T) {
@@ -183,6 +198,9 @@ func TestMissingProgram(t *testing.T) {
 	present := writeProgram(t, filepath.Join(dir, "bin", "gryph"))
 	gone := filepath.Join(dir, "Cellar", "gryph", "0.9.0", "bin", "gryph")
 	spaced := writeProgram(t, filepath.Join(dir, "with space", "gryph"))
+	empty := filepath.Join(dir, "empty", "gryph")
+	require.NoError(t, os.MkdirAll(filepath.Dir(empty), 0o755))
+	require.NoError(t, os.WriteFile(empty, nil, 0o755))
 	directory := filepath.Join(dir, "directory", "gryph")
 	require.NoError(t, os.MkdirAll(directory, 0o755))
 	underFile := filepath.Join(present, "gryph")
@@ -195,6 +213,7 @@ func TestMissingProgram(t *testing.T) {
 	}{
 		{"present", HookCommand(present, "claude-code", "PreToolUse"), "", false},
 		{"removed by an upgrade", HookCommand(gone, "claude-code", "PreToolUse"), gone, true},
+		{"an empty file", HookCommand(empty, "claude-code", "PreToolUse"), empty, true},
 		{"a directory", HookCommand(directory, "claude-code", "PreToolUse"), directory, true},
 		{"a file in place of a directory", HookCommand(underFile, "claude-code", "PreToolUse"), underFile, true},
 		{"quoted path with a space", `"` + spaced + `" _hook claude-code PreToolUse`, "", false},
@@ -209,4 +228,18 @@ func TestMissingProgram(t *testing.T) {
 			assert.Equal(t, tt.program, program)
 		})
 	}
+}
+
+// A same-user process can clear the execute bit of the program. The agent
+// then cannot start the hook, so status must report it.
+func TestMissingProgram_NotExecutable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no execute bit")
+	}
+	program := writeProgram(t, filepath.Join(t.TempDir(), "bin", "gryph"))
+	require.NoError(t, os.Chmod(program, 0o644))
+
+	got, missing := MissingProgram(HookCommand(program, "claude-code", "PreToolUse"))
+	assert.True(t, missing)
+	assert.Equal(t, program, got)
 }

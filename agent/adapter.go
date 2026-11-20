@@ -114,7 +114,7 @@ type HookStatus struct {
 }
 
 // CheckProgram marks the status invalid when the Gryph hook command cmd
-// names a program that does not exist. A package upgrade can remove the
+// names a program that cannot run. A package upgrade can remove the
 // file that an older install named, and the agent then runs every action
 // with no Gryph hook while the hook entries look installed.
 func (s *HookStatus) CheckProgram(cmd string) {
@@ -123,7 +123,7 @@ func (s *HookStatus) CheckProgram(cmd string) {
 		return
 	}
 	s.Valid = false
-	issue := "no hook program at " + program + ". Run gryph install --force to name the current program"
+	issue := "hook program " + program + " is missing, empty or not executable. Reinstall gryph, then run gryph install --force"
 	if !slices.Contains(s.Issues, issue) {
 		s.Issues = append(s.Issues, issue)
 	}

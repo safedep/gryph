@@ -65,6 +65,13 @@ func loadProgram() {
 		if command != resolved {
 			programFiles = append(programFiles, resolved, filepath.Dir(filepath.Dir(command)))
 		}
+		// A write to <prefix>/bin/gryph follows the link into the Cellar
+		// file, and the protection rules match the path, not the file.
+		if prefix := homebrewPrefix(resolved); prefix != "" {
+			if link := filepath.Join(prefix, "bin", filepath.Base(resolved)); sameFile(link, resolved) {
+				programFiles = append(programFiles, link)
+			}
+		}
 	})
 }
 
@@ -92,13 +99,23 @@ func stablePath(resolved string) string {
 // homebrewOptPath returns <prefix>/opt/gryph/bin/<name> for a binary at
 // <prefix>/Cellar/gryph/<version>/bin/<name>, and "" for any other path.
 func homebrewOptPath(resolved string) string {
+	prefix := homebrewPrefix(resolved)
+	if prefix == "" {
+		return ""
+	}
+	return filepath.Join(prefix, "opt", programName, "bin", filepath.Base(resolved))
+}
+
+// homebrewPrefix returns <prefix> for a binary at
+// <prefix>/Cellar/gryph/<version>/bin/<name>, and "" for any other path.
+func homebrewPrefix(resolved string) string {
 	bin := filepath.Dir(resolved)
 	formula := filepath.Dir(filepath.Dir(bin))
 	cellar := filepath.Dir(formula)
 	if filepath.Base(bin) != "bin" || filepath.Base(formula) != programName || filepath.Base(cellar) != "Cellar" {
 		return ""
 	}
-	return filepath.Join(filepath.Dir(cellar), "opt", programName, "bin", filepath.Base(resolved))
+	return filepath.Dir(cellar)
 }
 
 func sameFile(a, b string) bool {
@@ -114,33 +131,40 @@ func sameFile(a, b string) bool {
 }
 
 // MissingProgram returns the program of a hook command when the command
-// names it by an absolute path and no program file is there. A package
-// upgrade can remove the file that an older install named. The agent then
-// cannot start the hook and runs the action with no Gryph hook. A bare
-// program name resolves through the PATH of the agent, which Gryph cannot
-// read, so it never counts as missing.
+// names it by an absolute path and no program can run there. A package
+// upgrade can remove the file that an older install named, and a same-user
+// process can empty the file or clear its execute bit. The agent then runs
+// the action with no Gryph hook. A bare program name resolves through the
+// PATH of the agent, which Gryph cannot read, so it never counts as missing.
 func MissingProgram(cmd string) (string, bool) {
 	program, _, ok := splitCommand(cmd)
-	if !ok || !filepath.IsAbs(program) || programFileExists(program) {
+	if !ok || !filepath.IsAbs(program) || programRuns(program) {
 		return "", false
 	}
 	return program, true
 }
 
-// programFileExists reports whether a file is at program. Windows also
-// runs program.exe for a name with no extension. An error other than a
-// missing path does not prove that the program is gone.
-func programFileExists(program string) bool {
+// programRuns reports whether a program file can run at program: a
+// regular file that is not empty and, outside Windows, has an execute bit.
+// Windows also runs program.exe for a name with no extension. An error
+// other than a missing path does not prove that the program is gone.
+func programRuns(program string) bool {
 	candidates := []string{program}
 	if runtime.GOOS == "windows" && filepath.Ext(program) == "" {
 		candidates = append(candidates, program+".exe")
 	}
 	for _, path := range candidates {
 		info, err := os.Stat(path)
-		if err == nil && !info.IsDir() {
-			return true
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
+				return true
+			}
+			continue
 		}
-		if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
+		if !info.Mode().IsRegular() || info.Size() == 0 {
+			continue
+		}
+		if runtime.GOOS == "windows" || info.Mode().Perm()&0o111 != 0 {
 			return true
 		}
 	}

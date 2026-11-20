@@ -91,7 +91,9 @@ func (s *SQLiteStore) Init(ctx context.Context) error {
 // createSchema runs the ent migration with retries. Concurrent hook
 // processes race on a fresh database: both diff an empty schema and both
 // issue CREATE TABLE, and the loser fails with "already exists". On an
-// upgrade the loser fails the same way with "duplicate column name". A retry
+// upgrade the loser fails the same way with "duplicate column name", or
+// with "was not found for index" when the winner commits between the reads
+// of the columns and of the indexes. A retry
 // re-diffs against the schema the winner created and no-ops. A hook that
 // waits past busy_timeout for another writer also retries. Losing the race
 // must never lose an audit event.
@@ -137,6 +139,7 @@ func retryableSchemaError(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "already exists") ||
 		strings.Contains(msg, "duplicate column name") ||
+		strings.Contains(msg, "was not found for index") ||
 		strings.Contains(msg, "database is locked") ||
 		strings.Contains(msg, "SQLITE_BUSY") ||
 		strings.Contains(msg, "foreign_keys pragma is off")

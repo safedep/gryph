@@ -29,21 +29,24 @@ gryph install --force
 ```
 
 Each hook entry names the `gryph` binary by an absolute path, with symbolic
-links resolved, so the hook does not depend on `PATH`. A Homebrew install is
-the exception: the entry names the `opt` link of the formula, for example
-`/opt/homebrew/opt/gryph/bin/gryph`, when that link resolves to the running
-binary. `brew upgrade` deletes the versioned directory under `Cellar`, but it
-keeps the `opt` link. When the `opt` link is missing or points at another
-version, the entry names the binary under `Cellar`, and an upgrade removes it.
-Self-protection covers the `opt` link and the binary under `Cellar`.
+links resolved. So the hook does not depend on `PATH`. A Homebrew install is
+the exception. The entry names the `opt` link of the formula when that link
+resolves to the running binary, for example
+`/opt/homebrew/opt/gryph/bin/gryph`. `brew upgrade` deletes the versioned
+directory under `Cellar`. It keeps the `opt` link. If the `opt` link is
+missing or points at another version, the entry names the binary under
+`Cellar`. An upgrade then removes that binary. Self-protection covers the
+`opt` link, the `bin/gryph` link of the prefix and the binary under `Cellar`.
 
 Entries from an earlier install that name the bare program `gryph` stay
 valid. Run `gryph install --force` to rewrite them with the path. A binary
 that runs under another name keeps the bare program name.
 
 `gryph status` and `gryph doctor` report the hooks as invalid when an entry
-names a program that does not exist, for example a version that an upgrade
-removed. Run `gryph install --force` to name the current program.
+names a program that cannot run. The program can be missing, for example a
+version that an upgrade removed. It can also be empty or have no execute bit.
+Reinstall Gryph if the file is damaged. Then run `gryph install --force` to
+name the current program.
 
 | Flag          | Type                | Default | Description                                |
 | ------------- | ------------------- | ------- | ------------------------------------------ |

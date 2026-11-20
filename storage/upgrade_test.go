@@ -101,6 +101,7 @@ func TestRetryableSchemaError(t *testing.T) {
 	}{
 		{`table "sessions" already exists`, true},
 		{`add column "imported" to table: "sessions": SQL logic error: duplicate column name: imported (1)`, true},
+		{`sqlite: column "tool_call_id" was not found for index "auditevent_session_id_tool_call_id"`, true},
 		{"database is locked (5) (SQLITE_BUSY)", true},
 		{`sqlite: foreign_keys pragma is off: missing "_fk=1" in the connection string`, true},
 		{"no such table: sessions", false},
