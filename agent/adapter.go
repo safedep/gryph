@@ -113,6 +113,22 @@ type HookStatus struct {
 	Issues []string
 }
 
+// CheckProgram marks the status invalid when the Gryph hook command cmd
+// names a program that does not exist. A package upgrade can remove the
+// file that an older install named, and the agent then runs every action
+// with no Gryph hook while the hook entries look installed.
+func (s *HookStatus) CheckProgram(cmd string) {
+	program, missing := utils.MissingProgram(cmd)
+	if !missing {
+		return
+	}
+	s.Valid = false
+	issue := "hook program " + program + " does not exist. Run gryph install --force to name the current program"
+	if !slices.Contains(s.Issues, issue) {
+		s.Issues = append(s.Issues, issue)
+	}
+}
+
 // HookDecision is the three-valued outcome the CLI maps from the security
 // evaluator before it renders a response.
 type HookDecision int

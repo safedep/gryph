@@ -2,10 +2,13 @@ package utils
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // withExecutable fixes the path of the running binary for GryphCommand and
@@ -96,4 +99,113 @@ func TestRenderPlugin(t *testing.T) {
 
 	withExecutable(t, "/usr/local/bin/gryph", nil)
 	assert.Equal(t, `execFileSync("/usr/local/bin/gryph", ["_hook"])`, string(RenderPlugin(template, "")))
+}
+
+// writeProgram writes an empty file at path and returns path.
+func writeProgram(t *testing.T, path string) string {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path, nil, 0o755))
+	return path
+}
+
+func symlink(t *testing.T, target, link string) string {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(link), 0o755))
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symbolic links are not available: %v", err)
+	}
+	return link
+}
+
+// A package manager deletes the versioned directory on upgrade. A hook that
+// names the versioned file then fails to start, so the hook names a link
+// that the upgrade keeps.
+func TestStablePath(t *testing.T) {
+	prefix := t.TempDir()
+	cellar := writeProgram(t, filepath.Join(prefix, "Cellar", "gryph", "0.10.0", "bin", "gryph"))
+	opt := symlink(t, filepath.Join(prefix, "Cellar", "gryph", "0.10.0"), filepath.Join(prefix, "opt", "gryph"))
+	brewBin := symlink(t, cellar, filepath.Join(prefix, "bin", "gryph"))
+
+	other := t.TempDir()
+	plain := writeProgram(t, filepath.Join(other, "opt", "safedep", "gryph", "bin", "gryph"))
+	usrBin := symlink(t, plain, filepath.Join(other, "usr", "bin", "gryph"))
+	renamed := symlink(t, plain, filepath.Join(other, "usr", "bin", "g"))
+	elsewhere := writeProgram(t, filepath.Join(other, "elsewhere", "gryph"))
+
+	tests := []struct {
+		name    string
+		real    string
+		invoked string
+		want    string
+	}{
+		{"homebrew opt link", cellar, brewBin, filepath.Join(opt, "bin", "gryph")},
+		{"homebrew opt link when started by the cellar path", cellar, cellar, filepath.Join(opt, "bin", "gryph")},
+		{"link that started the process", plain, usrBin, usrBin},
+		{"started by the file itself", plain, plain, plain},
+		{"link with another name", plain, renamed, plain},
+		{"another file with the same name", plain, elsewhere, plain},
+		{"unknown start path", plain, "", plain},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, stablePath(tt.real, tt.invoked))
+		})
+	}
+}
+
+func TestStablePathWithoutOptLink(t *testing.T) {
+	cellar := writeProgram(t, filepath.Join(t.TempDir(), "Cellar", "gryph", "0.10.0", "bin", "gryph"))
+	assert.Equal(t, cellar, stablePath(cellar, ""))
+}
+
+func TestHomebrewOptPath(t *testing.T) {
+	sep := string(filepath.Separator)
+	root := filepath.Join(sep, "opt", "homebrew")
+	tests := []struct {
+		name string
+		real string
+		want string
+	}{
+		{"cellar binary", filepath.Join(root, "Cellar", "gryph", "0.10.0", "bin", "gryph"), filepath.Join(root, "opt", "gryph", "bin", "gryph")},
+		{"revision suffix", filepath.Join(root, "Cellar", "gryph", "0.10.0_1", "bin", "gryph"), filepath.Join(root, "opt", "gryph", "bin", "gryph")},
+		{"another formula", filepath.Join(root, "Cellar", "gryphon", "1.0", "bin", "gryph"), ""},
+		{"not in bin", filepath.Join(root, "Cellar", "gryph", "0.10.0", "libexec", "gryph"), ""},
+		{"no cellar", filepath.Join(sep, "usr", "local", "bin", "gryph"), ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, homebrewOptPath(tt.real))
+		})
+	}
+}
+
+// After an upgrade removed the file that a hook names, status must report
+// the hook as broken. A bare name resolves through the PATH of the agent.
+func TestMissingProgram(t *testing.T) {
+	dir := t.TempDir()
+	present := writeProgram(t, filepath.Join(dir, "bin", "gryph"))
+	gone := filepath.Join(dir, "Cellar", "gryph", "0.9.0", "bin", "gryph")
+	spaced := writeProgram(t, filepath.Join(dir, "with space", "gryph"))
+
+	tests := []struct {
+		name    string
+		cmd     string
+		program string
+		missing bool
+	}{
+		{"present", present + " _hook claude-code PreToolUse", "", false},
+		{"removed by an upgrade", gone + " _hook claude-code PreToolUse", gone, true},
+		{"quoted path with a space", `"` + spaced + `" _hook claude-code PreToolUse`, "", false},
+		{"bare name", "gryph _hook claude-code PreToolUse", "", false},
+		{"relative path", "bin/gryph _hook claude-code PreToolUse", "", false},
+		{"empty", "", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			program, missing := MissingProgram(tt.cmd)
+			assert.Equal(t, tt.missing, missing)
+			assert.Equal(t, tt.program, program)
+		})
+	}
 }

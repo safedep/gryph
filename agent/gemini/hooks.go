@@ -400,6 +400,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 				}
 				cmd, _ := hook["command"].(string)
 				if utils.IsHookCommand(cmd, "gemini", hookType) {
+					status.CheckProgram(cmd)
 					status.Installed = true
 					status.Hooks = append(status.Hooks, hookType)
 					break

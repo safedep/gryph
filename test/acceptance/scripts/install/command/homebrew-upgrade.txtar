@@ -1,0 +1,52 @@
+# gryph install from a Homebrew install names the opt link of the formula,
+# not the versioned binary under Cellar. brew upgrade deletes the old Cellar
+# directory and keeps the opt link, so the hooks still run after an upgrade.
+# A hook entry that names a removed program makes doctor and status report
+# the hooks as invalid, because the agent cannot start them.
+[!unix] skip 'the Homebrew layout needs symbolic links'
+env HOME=$WORK/home
+env XDG_CONFIG_HOME=$WORK/home/.config
+env XDG_DATA_HOME=$WORK/home/.local/share
+mkdir $HOME/.claude
+
+mkdir $WORK/homebrew/Cellar/gryph/0.10.0/bin $WORK/homebrew/opt
+cp $ACCEPTANCE_GRYPH_BIN $WORK/homebrew/Cellar/gryph/0.10.0/bin/gryph
+chmod 755 $WORK/homebrew/Cellar/gryph/0.10.0/bin/gryph
+symlink $WORK/homebrew/opt/gryph -> ../Cellar/gryph/0.10.0
+
+exec $WORK/homebrew/Cellar/gryph/0.10.0/bin/gryph install --agent claude-code
+grep 'homebrew/opt/gryph/bin/gryph _hook claude-code PreToolUse"' $HOME/.claude/settings.json
+! grep 'Cellar' $HOME/.claude/settings.json
+
+# brew upgrade installs the new version, moves the opt link and deletes the
+# old version.
+mkdir $WORK/homebrew/Cellar/gryph/0.10.1/bin
+cp $ACCEPTANCE_GRYPH_BIN $WORK/homebrew/Cellar/gryph/0.10.1/bin/gryph
+chmod 755 $WORK/homebrew/Cellar/gryph/0.10.1/bin/gryph
+rm $WORK/homebrew/opt/gryph
+symlink $WORK/homebrew/opt/gryph -> ../Cellar/gryph/0.10.1
+rm $WORK/homebrew/Cellar/gryph/0.10.0
+
+stdin pre-tool-use.json
+exec $WORK/homebrew/opt/gryph/bin/gryph _hook claude-code PreToolUse
+exec $WORK/homebrew/opt/gryph/bin/gryph doctor --no-color
+stdout '\[ok\]\s+Claude Code hooks'
+
+# Without the opt link, the entry names the versioned binary. When an
+# upgrade deletes it, doctor and status report the hooks as invalid.
+rm $WORK/homebrew/opt/gryph
+exec $WORK/homebrew/Cellar/gryph/0.10.1/bin/gryph install --force --agent claude-code
+grep 'Cellar/gryph/0.10.1/bin/gryph _hook claude-code PreToolUse"' $HOME/.claude/settings.json
+mkdir $WORK/other
+cp $ACCEPTANCE_GRYPH_BIN $WORK/other/gryph
+chmod 755 $WORK/other/gryph
+rm $WORK/homebrew/Cellar/gryph/0.10.1
+
+exec $WORK/other/gryph doctor --no-color
+stdout '\[!!\]\s+Claude Code hooks'
+stdout 'hook program \S+/Cellar/gryph/0.10.1/bin/gryph does not exist'
+exec $WORK/other/gryph status --no-color
+stdout 'claude-code\s+installed\s+\S+\s+hooks: not active'
+
+-- pre-tool-use.json --
+{"session_id": "s1", "cwd": "/tmp", "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "ls"}, "tool_use_id": "t1"}

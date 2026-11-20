@@ -353,6 +353,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 		for _, m := range config.Hooks[hookType] {
 			for _, h := range m.Hooks {
 				if utils.IsHookCommand(h.Command, "codex", hookType) {
+					status.CheckProgram(h.Command)
 					status.Installed = true
 					status.Hooks = append(status.Hooks, hookType)
 					break

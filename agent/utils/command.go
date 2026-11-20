@@ -2,7 +2,10 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -25,11 +28,12 @@ var (
 	command     string
 )
 
-// GryphCommand returns the program that a hook command names: the absolute
-// path of the running binary with symbolic links resolved. A hook that
-// names the path does not depend on PATH, which a same-user process can
-// change. The result is the bare name gryph when the path cannot be read, or
-// when the binary runs under another name, for example a test binary.
+// GryphCommand returns the program that a hook command names: an absolute
+// path of the running binary that stays valid after a package upgrade. A
+// hook that names the path does not depend on PATH, which a same-user
+// process can change. The result is the bare name gryph when the path cannot
+// be read, or when the binary runs under another name, for example a test
+// binary.
 func GryphCommand() string {
 	commandOnce.Do(func() {
 		command = programName
@@ -45,7 +49,93 @@ func resolveExecutable() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.EvalSymlinks(path)
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", err
+	}
+	return stablePath(real, invokedPath()), nil
+}
+
+// stablePath returns a path of the binary at real that a package upgrade
+// does not remove. A package manager keeps each version in its own
+// directory, points a fixed link at the current version, and deletes the old
+// directory on upgrade. A hook that names the versioned file then fails to
+// start, and the agent runs the action with no Gryph hook. So the result is
+// a link that resolves to the same file and has the same name: the Homebrew
+// opt link of the formula, then the path that started this process. With
+// neither, the result is real.
+func stablePath(real, invoked string) string {
+	for _, candidate := range []string{homebrewOptPath(real), invoked} {
+		if candidate == "" || candidate == real || filepath.Base(candidate) != filepath.Base(real) {
+			continue
+		}
+		if sameFile(candidate, real) {
+			return candidate
+		}
+	}
+	return real
+}
+
+// homebrewOptPath returns <prefix>/opt/gryph/bin/<name> for a binary at
+// <prefix>/Cellar/gryph/<version>/bin/<name>, and "" for any other path.
+func homebrewOptPath(real string) string {
+	bin := filepath.Dir(real)
+	formula := filepath.Dir(filepath.Dir(bin))
+	cellar := filepath.Dir(formula)
+	if filepath.Base(bin) != "bin" || filepath.Base(formula) != programName || filepath.Base(cellar) != "Cellar" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(cellar), "opt", programName, "bin", filepath.Base(real))
+}
+
+// invokedPath returns the absolute path that started this process, before
+// the resolution of symbolic links, or "" when it cannot be read.
+func invokedPath() string {
+	if len(os.Args) == 0 || os.Args[0] == "" {
+		return ""
+	}
+	path := os.Args[0]
+	if !strings.ContainsAny(path, `/\`) {
+		found, err := exec.LookPath(path)
+		if err != nil {
+			return ""
+		}
+		path = found
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+	return abs
+}
+
+func sameFile(a, b string) bool {
+	infoA, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	infoB, err := os.Stat(b)
+	if err != nil {
+		return false
+	}
+	return os.SameFile(infoA, infoB)
+}
+
+// MissingProgram returns the program of a hook command when the command
+// names it by an absolute path and no file is there. A package upgrade can
+// remove the file that an older install named. The agent then cannot start
+// the hook and runs the action with no Gryph hook. A bare program name
+// resolves through the PATH of the agent, which Gryph cannot read, so it
+// never counts as missing.
+func MissingProgram(cmd string) (string, bool) {
+	program, _, ok := splitCommand(cmd)
+	if !ok || !filepath.IsAbs(program) {
+		return "", false
+	}
+	if _, err := os.Stat(program); !errors.Is(err, fs.ErrNotExist) {
+		return "", false
+	}
+	return program, true
 }
 
 // HookCommand returns the hook command for agentName and hookType. program
