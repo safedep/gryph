@@ -379,6 +379,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 	for hookType, commands := range config.Hooks {
 		for _, cmd := range commands {
 			if utils.IsGryphCommand(cmd.Command) {
+				status.CheckProgram(cmd.Command)
 				status.Installed = true
 				status.Hooks = append(status.Hooks, hookType)
 				break

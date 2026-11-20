@@ -489,6 +489,7 @@ func GetHookStatus(ctx context.Context) (*agent.HookStatus, error) {
 				}
 				cmd, _ := hook["command"].(string)
 				if isOwnedHookCommand(cmd, hookType) {
+					status.CheckProgram(cmd)
 					status.Installed = true
 					status.Hooks = append(status.Hooks, hookType)
 					break

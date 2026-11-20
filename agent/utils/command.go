@@ -2,10 +2,14 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 // GryphCommandPlaceholder marks the program in the plugin templates that
@@ -17,27 +21,58 @@ const GryphCommandPlaceholder = "__GRYPH_COMMAND__"
 // running binary cannot be read.
 const programName = "gryph"
 
-// executablePath is overridable in tests.
+// executablePath returns the path of the running binary with symbolic
+// links resolved. Tests override it.
 var executablePath = resolveExecutable
 
 var (
-	commandOnce sync.Once
-	command     string
+	programOnce  sync.Once
+	command      string
+	programFiles []string
 )
 
-// GryphCommand returns the program that a hook command names: the absolute
-// path of the running binary with symbolic links resolved. A hook that
-// names the path does not depend on PATH, which a same-user process can
-// change. The result is the bare name gryph when the path cannot be read, or
-// when the binary runs under another name, for example a test binary.
+// GryphCommand returns the program that a hook command names: an absolute
+// path of the running binary that stays valid after a package upgrade. A
+// hook that names the path does not depend on PATH, which a same-user
+// process can change. The result is the bare name gryph when the path cannot
+// be read, or when the binary runs under another name, for example a test
+// binary.
 func GryphCommand() string {
-	commandOnce.Do(func() {
+	loadProgram()
+	return command
+}
+
+// ProgramFiles returns the absolute paths that decide which program the
+// hook entries run: the path that a hook entry names, the file that it
+// resolves to, and the Homebrew opt link on the way. Self-protection covers
+// each one. A write to the file replaces the program, and a change of the
+// link points every hook entry at another program.
+func ProgramFiles() []string {
+	loadProgram()
+	return programFiles
+}
+
+func loadProgram() {
+	programOnce.Do(func() {
 		command = programName
-		if path, err := executablePath(); err == nil && isGryphProgram(path) {
-			command = path
+		programFiles = nil
+		resolved, err := executablePath()
+		if err != nil || !isGryphProgram(resolved) {
+			return
+		}
+		command = stablePath(resolved)
+		programFiles = []string{command}
+		if command != resolved {
+			programFiles = append(programFiles, resolved, filepath.Dir(filepath.Dir(command)))
+		}
+		// A write to <prefix>/bin/gryph follows the link into the Cellar
+		// file, and the protection rules match the path, not the file.
+		if prefix := homebrewPrefix(resolved); prefix != "" {
+			if link := filepath.Join(prefix, "bin", filepath.Base(resolved)); sameFile(link, resolved) {
+				programFiles = append(programFiles, link)
+			}
 		}
 	})
-	return command
 }
 
 func resolveExecutable() (string, error) {
@@ -46,6 +81,94 @@ func resolveExecutable() (string, error) {
 		return "", err
 	}
 	return filepath.EvalSymlinks(path)
+}
+
+// stablePath returns the Homebrew opt link of the formula when it resolves
+// to the binary at resolved, and resolved otherwise. Homebrew keeps each
+// version under Cellar and deletes the old version on upgrade. A hook entry
+// that names the versioned file then fails to start, and the agent runs the
+// action with no Gryph hook. The opt link stays across upgrades. Homebrew
+// owns it with the Cellar, so it is not easier to change than the file.
+func stablePath(resolved string) string {
+	if opt := homebrewOptPath(resolved); opt != "" && sameFile(opt, resolved) {
+		return opt
+	}
+	return resolved
+}
+
+// homebrewOptPath returns <prefix>/opt/gryph/bin/<name> for a binary at
+// <prefix>/Cellar/gryph/<version>/bin/<name>, and "" for any other path.
+func homebrewOptPath(resolved string) string {
+	prefix := homebrewPrefix(resolved)
+	if prefix == "" {
+		return ""
+	}
+	return filepath.Join(prefix, "opt", programName, "bin", filepath.Base(resolved))
+}
+
+// homebrewPrefix returns <prefix> for a binary at
+// <prefix>/Cellar/gryph/<version>/bin/<name>, and "" for any other path.
+func homebrewPrefix(resolved string) string {
+	bin := filepath.Dir(resolved)
+	formula := filepath.Dir(filepath.Dir(bin))
+	cellar := filepath.Dir(formula)
+	if filepath.Base(bin) != "bin" || filepath.Base(formula) != programName || filepath.Base(cellar) != "Cellar" {
+		return ""
+	}
+	return filepath.Dir(cellar)
+}
+
+func sameFile(a, b string) bool {
+	infoA, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	infoB, err := os.Stat(b)
+	if err != nil {
+		return false
+	}
+	return os.SameFile(infoA, infoB)
+}
+
+// MissingProgram returns the program of a hook command when the command
+// names it by an absolute path and no program can run there. A package
+// upgrade can remove the file that an older install named, and a same-user
+// process can empty the file or clear its execute bit. The agent then runs
+// the action with no Gryph hook. A bare program name resolves through the
+// PATH of the agent, which Gryph cannot read, so it never counts as missing.
+func MissingProgram(cmd string) (string, bool) {
+	program, _, ok := splitCommand(cmd)
+	if !ok || !filepath.IsAbs(program) || programRuns(program) {
+		return "", false
+	}
+	return program, true
+}
+
+// programRuns reports whether a program file can run at program: a
+// regular file that is not empty and, outside Windows, has an execute bit.
+// Windows also runs program.exe for a name with no extension. An error
+// other than a missing path does not prove that the program is gone.
+func programRuns(program string) bool {
+	candidates := []string{program}
+	if runtime.GOOS == "windows" && filepath.Ext(program) == "" {
+		candidates = append(candidates, program+".exe")
+	}
+	for _, path := range candidates {
+		info, err := os.Stat(path)
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
+				return true
+			}
+			continue
+		}
+		if !info.Mode().IsRegular() || info.Size() == 0 {
+			continue
+		}
+		if runtime.GOOS == "windows" || info.Mode().Perm()&0o111 != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // HookCommand returns the hook command for agentName and hookType. program

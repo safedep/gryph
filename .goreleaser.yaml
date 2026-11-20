@@ -66,18 +66,21 @@ nfpms:
 
 # Keyless signatures from the release workflow identity, with Sigstore. A
 # verifier checks the certificate identity against this repository and the
-# release workflow, so no long-lived key is stored anywhere.
+# release workflow, so no long-lived key is stored anywhere. Each artifact
+# gets one Sigstore bundle with the signature, the certificate and the
+# transparency log entry. cosign 3 writes only the bundle: it ignores
+# --output-signature and --output-certificate, and fails with no --bundle.
 signs:
   - id: checksum
     cmd: cosign
     artifacts: checksum
-    certificate: "${artifact}.pem"
-    args: ["sign-blob", "--yes", "--output-signature=${signature}", "--output-certificate=${certificate}", "${artifact}"]
+    signature: "${artifact}.sigstore.json"
+    args: ["sign-blob", "--yes", "--bundle=${signature}", "${artifact}"]
   - id: packages
     cmd: cosign
     artifacts: package
-    certificate: "${artifact}.pem"
-    args: ["sign-blob", "--yes", "--output-signature=${signature}", "--output-certificate=${certificate}", "${artifact}"]
+    signature: "${artifact}.sigstore.json"
+    args: ["sign-blob", "--yes", "--bundle=${signature}", "${artifact}"]
 
 universal_binaries:
   - replace: true
