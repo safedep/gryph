@@ -193,10 +193,10 @@ func TestMissingProgram(t *testing.T) {
 		program string
 		missing bool
 	}{
-		{"present", present + " _hook claude-code PreToolUse", "", false},
-		{"removed by an upgrade", gone + " _hook claude-code PreToolUse", gone, true},
-		{"a directory", directory + " _hook claude-code PreToolUse", directory, true},
-		{"a file in place of a directory", underFile + " _hook claude-code PreToolUse", underFile, true},
+		{"present", HookCommand(present, "claude-code", "PreToolUse"), "", false},
+		{"removed by an upgrade", HookCommand(gone, "claude-code", "PreToolUse"), gone, true},
+		{"a directory", HookCommand(directory, "claude-code", "PreToolUse"), directory, true},
+		{"a file in place of a directory", HookCommand(underFile, "claude-code", "PreToolUse"), underFile, true},
 		{"quoted path with a space", `"` + spaced + `" _hook claude-code PreToolUse`, "", false},
 		{"bare name", "gryph _hook claude-code PreToolUse", "", false},
 		{"relative path", "bin/gryph _hook claude-code PreToolUse", "", false},

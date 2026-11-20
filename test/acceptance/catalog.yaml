@@ -24,7 +24,7 @@
   title: "hooks keep running after a Homebrew upgrade"
   category: install
   tier: P0
-  guarantee: "gryph install from a Homebrew install names the opt link of the formula, so the hooks still run after brew upgrade deletes the old version. A hook entry that names a removed program makes doctor and status report the hooks as invalid."
+  guarantee: "gryph install from a Homebrew install names the opt link of the formula when it resolves to the running binary, so the hooks still run after brew upgrade deletes the old version. Without the opt link, the entry names the binary under Cellar. A hook entry that names a removed program makes doctor and status report the hooks as invalid."
   labels: [install, command, claude-code]
 
 - id: install/command/legacy-accepted

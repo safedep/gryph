@@ -31,9 +31,11 @@ gryph install --force
 Each hook entry names the `gryph` binary by an absolute path, with symbolic
 links resolved, so the hook does not depend on `PATH`. A Homebrew install is
 the exception: the entry names the `opt` link of the formula, for example
-`/opt/homebrew/opt/gryph/bin/gryph`. `brew upgrade` deletes the versioned
-directory under `Cellar`, but it keeps the `opt` link. Self-protection covers
-the `opt` link and the binary under `Cellar`.
+`/opt/homebrew/opt/gryph/bin/gryph`, when that link resolves to the running
+binary. `brew upgrade` deletes the versioned directory under `Cellar`, but it
+keeps the `opt` link. When the `opt` link is missing or points at another
+version, the entry names the binary under `Cellar`, and an upgrade removes it.
+Self-protection covers the `opt` link and the binary under `Cellar`.
 
 Entries from an earlier install that name the bare program `gryph` stay
 valid. Run `gryph install --force` to rewrite them with the path. A binary
